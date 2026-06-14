@@ -1,6 +1,6 @@
 /**
- * GET  /api/settings/2fa  — return 2FA status for the authenticated user
- * DELETE /api/settings/2fa — disable 2FA (requires a valid TOTP code in body)
+ * GET  /api/settings/2fa  · return 2FA status for the authenticated user
+ * DELETE /api/settings/2fa · disable 2FA (requires a valid TOTP code in body)
  *
  * Design note: Clerk supports native TOTP MFA (enrollTotpFactor). We
  * deliberately implement a custom TOTP layer instead because:
@@ -76,7 +76,7 @@ async function handleGet2FAStatus(request: NextRequest) {
 }
 
 // ---------------------------------------------------------------------------
-// DELETE /api/settings/2fa  — disable 2FA
+// DELETE /api/settings/2fa  · disable 2FA
 // Requires a valid TOTP code (or backup code) to prevent session-hijack escalation.
 // ---------------------------------------------------------------------------
 
@@ -113,7 +113,7 @@ async function handleDisable2FA(request: NextRequest) {
     }
   }
 
-  // Mark 2FA as disabled — keep the row so re-enroll can detect stale setup
+  // Mark 2FA as disabled · keep the row so re-enroll can detect stale setup
   const db = getNeonDb();
 
   if (backupCodeIndex !== -1) {

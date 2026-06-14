@@ -33,6 +33,10 @@ jest.mock('@react-navigation/native', () => ({
   DrawerActions: {
     openDrawer: jest.fn(() => ({ type: 'OPEN_DRAWER' })),
   },
+  useNavigation: () => ({
+    getParent: () => ({ dispatch: mockDispatch }),
+    dispatch: mockDispatch,
+  }),
 }));
 
 jest.mock('react-native-safe-area-context', () => {

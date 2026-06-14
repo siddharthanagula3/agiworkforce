@@ -1,5 +1,5 @@
 /**
- * GET /api/agents/tools/[id] — get tool details by ID.
+ * GET /api/agents/tools/[id] · get tool details by ID.
  * Returns global tools or tools owned by the authenticated user.
  */
 

@@ -7,6 +7,7 @@ use crate::markdown::MarkdownRenderer;
 use crate::memory::{self, MemoryManager, MemoryTier};
 use crate::output;
 use crate::sessions;
+use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
 // Conversation commands
@@ -88,7 +89,7 @@ pub fn handle_history() {
 
     match crate::runtime::session_control::list_managed_sessions() {
         Ok(summaries) if !summaries.is_empty() => {
-            eprintln!("{}", "Managed Sessions:".cyan().bold());
+            eprintln!("{}", ts::accent_header("Managed Sessions:"));
             for (index, summary) in summaries.iter().take(20).enumerate() {
                 eprintln!(
                     "  {} {} {} ({})",
@@ -117,7 +118,7 @@ pub fn handle_history() {
     // Then show legacy JSON conversations
     match conversations::list_conversations() {
         Ok(summaries) if !summaries.is_empty() => {
-            eprintln!("{}", "Legacy (JSON):".cyan().bold());
+            eprintln!("{}", ts::accent_header("Legacy (JSON):"));
             for (i, s) in summaries.iter().take(20).enumerate() {
                 eprintln!(
                     "  {}. {} {} {} ({})",
@@ -193,7 +194,7 @@ pub fn handle_export(arg: &str, session: &AgentSession) {
 // ---------------------------------------------------------------------------
 
 pub(super) fn handle_providers(config: &CliConfig) {
-    eprintln!("{}", "Providers:".cyan().bold());
+    eprintln!("{}", ts::accent_header("Providers:"));
 
     let mut names: Vec<&String> = config.providers.keys().collect();
     names.sort();
@@ -373,7 +374,7 @@ fn remove_permission_rule(scope: &str, rule: &str) {
 fn print_permissions_help() {
     eprintln!(
         "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
-        "Permissions:".cyan().bold()
+        ts::accent_header("Permissions:")
     );
 }
 
@@ -389,7 +390,7 @@ pub(super) fn handle_sessions(arg: &str) {
     match sub_cmd {
         "" | "list" => match crate::runtime::session_control::list_managed_sessions() {
             Ok(list) if !list.is_empty() => {
-                eprintln!("{}", "Managed Sessions:".cyan().bold());
+                eprintln!("{}", ts::accent_header("Managed Sessions:"));
                 if let Ok(dir) = crate::runtime::session_control::managed_session_dir() {
                     eprintln!("  {}", dir.display().to_string().dimmed());
                 }
@@ -426,7 +427,7 @@ pub(super) fn handle_sessions(arg: &str) {
                 Ok(results) => {
                     eprintln!(
                         "{}",
-                        format!("Search results for '{}':", sub_arg).cyan().bold()
+                        ts::accent_header(format!("Search results for '{}':", sub_arg))
                     );
                     eprintln!("{}", sessions::format_session_list(&results));
                 }
@@ -443,7 +444,7 @@ pub(super) fn handle_sessions(arg: &str) {
             };
             match sessions::db_stats(&conn) {
                 Ok(stats) => {
-                    eprintln!("{}", "Managed Session Stats:".cyan().bold());
+                    eprintln!("{}", ts::accent_header("Managed Session Stats:"));
                     eprintln!("  Sessions:   {}", stats.session_count);
                     eprintln!("  Messages:   {}", stats.message_count);
                     eprintln!("  Tool calls: {}", stats.tool_call_count);
@@ -647,7 +648,7 @@ pub(super) fn handle_diff() {
                 output::print_info("No uncommitted changes.");
                 return;
             }
-            eprintln!("{}", "Git diff summary:".cyan().bold());
+            eprintln!("{}", ts::accent_header("Git diff summary:"));
             eprintln!("{}", stat);
 
             match std::process::Command::new("git").args(["diff"]).output() {
@@ -657,11 +658,11 @@ pub(super) fn handle_diff() {
                     let max_lines = 100;
                     for line in lines.iter().take(max_lines) {
                         if line.starts_with('+') && !line.starts_with("+++") {
-                            eprintln!("{}", line.green());
+                            eprintln!("{}", ts::addition(*line));
                         } else if line.starts_with('-') && !line.starts_with("---") {
-                            eprintln!("{}", line.red());
+                            eprintln!("{}", ts::deletion(*line));
                         } else if line.starts_with("@@") {
-                            eprintln!("{}", line.cyan());
+                            eprintln!("{}", ts::accent(*line));
                         } else {
                             eprintln!("{}", line);
                         }
@@ -696,13 +697,13 @@ pub fn handle_memory(arg: &str) {
 
     match sub_cmd {
         "" | "show" => {
-            eprintln!("{}", "Memory Hierarchy:".cyan().bold());
+            eprintln!("{}", ts::accent_header("Memory Hierarchy:"));
             eprintln!();
 
             let tiers = mgr.list();
             for (tier, path, exists) in &tiers {
                 let status = if *exists {
-                    "found".green().to_string()
+                    ts::success("found").to_string()
                 } else {
                     "not found".dimmed().to_string()
                 };
@@ -795,9 +796,11 @@ pub fn handle_memory(arg: &str) {
                 for entry in matching {
                     eprintln!(
                         "{}",
-                        format!("{} Memory ({}):", entry.source, entry.file_path.display())
-                            .cyan()
-                            .bold()
+                        ts::accent_header(format!(
+                            "{} Memory ({}):",
+                            entry.source,
+                            entry.file_path.display()
+                        ))
                     );
                     eprintln!("{}", entry.content);
                 }
@@ -945,9 +948,10 @@ pub(super) async fn handle_batch_command(
 
     eprintln!(
         "{}",
-        format!("Batch: {} files matched, processing...", entries.len())
-            .cyan()
-            .bold()
+        ts::accent_header(format!(
+            "Batch: {} files matched, processing...",
+            entries.len()
+        ))
     );
     for f in &entries {
         eprintln!("  {}", f);

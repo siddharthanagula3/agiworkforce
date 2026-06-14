@@ -77,7 +77,7 @@ const TOOLS = [
   { id: 'search', label: 'Web Search', icon: Search, color: 'text-green-500' },
 ];
 
-// ~5k tokens at 4 chars/token average — prevents excessive context and API costs
+// ~5k tokens at 4 chars/token average · prevents excessive context and API costs
 const MAX_CHAR_LENGTH = 20000;
 
 const DEFAULT_EMPLOYEES: AIEmployee[] = [
@@ -379,7 +379,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
         </div>
       )}
 
-      {/* Main Input Container — glassmorphic pill */}
+      {/* Main Input Container · glassmorphic pill */}
       <div
         className={cn(
           'relative overflow-visible rounded-2xl',
@@ -390,7 +390,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
           'focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10',
         )}
       >
-        {/* @Mention Dropdown — anchored above the pill */}
+        {/* @Mention Dropdown · anchored above the pill */}
         {showMentions && filteredEmployees.length > 0 && (
           <div
             className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border bg-popover shadow-lg"
@@ -425,7 +425,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
           </div>
         )}
 
-        {/* Textarea — full width, no border, auto-resize */}
+        {/* Textarea · full width, no border, auto-resize */}
         <div className="relative px-3 pt-3">
           <Textarea
             ref={textareaRef}
@@ -448,7 +448,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
           />
         </div>
 
-        {/* Toolbar row — below textarea */}
+        {/* Toolbar row · below textarea */}
         <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
           {/* Left side: tools + attach */}
           <div className="flex items-center gap-1">
@@ -525,7 +525,7 @@ const ChatComposerContent: React.FC<ChatComposerProps> = ({
 
           {/* Right side: char count + voice + send */}
           <div className="flex items-center gap-2">
-            {/* Character count — only shown when approaching limit */}
+            {/* Character count · only shown when approaching limit */}
             {charCount > 0 && (
               <span
                 className={cn(

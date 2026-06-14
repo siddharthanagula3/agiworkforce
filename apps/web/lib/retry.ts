@@ -80,7 +80,7 @@ export function calculateDelay(
   // Add jitter if enabled
   if (options.jitter) {
     const jitterRange = cappedDelay * options.jitterFactor;
-    // WEB-13: Math.random is intentional — retry-backoff jitter, not security-sensitive.
+    // WEB-13: Math.random is intentional · retry-backoff jitter, not security-sensitive.
 
     const jitter = (Math.random() - 0.5) * 2 * jitterRange;
     return Math.max(0, Math.round(cappedDelay + jitter));

@@ -16,6 +16,9 @@ import {
   getModelMetadata,
   isModelAllowedForTier,
 } from '@/constants/llm';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
+import { AgiMark } from '@/components/agi/AgiMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
@@ -87,6 +90,9 @@ function openAIModelSupportsXHigh(modelId: string): boolean {
 }
 
 function isModelSelectableForTier(model: AIModel, tier: string): boolean {
+  // Free users may select any of the cost-efficient tool-capable trial models
+  // (so they can experience the tool-calling UI); the 3-prompt cap covers the set.
+  if (FREE_TRIAL_MODELS.includes(model.id)) return true;
   if (model.providerKey === 'managed_cloud') {
     return getAllowedAutoModesForTier(tier).includes(model.id);
   }
@@ -94,7 +100,7 @@ function isModelSelectableForTier(model: AIModel, tier: string): boolean {
   return isModelAllowedForTier(model.id, tier);
 }
 
-/** True when the model name contains "Opus" — used to show usage-rate tooltip. */
+/** True when the model name contains "Opus" · used to show usage-rate tooltip. */
 function isOpusModel(model: AIModel): boolean {
   return model.name.toLowerCase().includes('opus');
 }
@@ -154,44 +160,49 @@ function partitionModels(
     };
   }
 
-  const autoModels = models.filter((m) => m.providerKey === 'managed_cloud');
-  const manualModels = models.filter((m) => m.providerKey !== 'managed_cloud');
+  // Top group = everything available in the user's tier (Auto modes first, then
+  // manual models). Bottom ("More models") = everything that needs an upgrade,
+  // Auto modes first there too. So free users see Auto (Economy) + their Hobby
+  // models up top, and Auto Balanced/Best + flagships below with an Upgrade link.
+  const isAuto = (m: AIModel) => m.providerKey === 'managed_cloud';
+  const available = models.filter((m) => isModelSelectableForTier(m, tier));
+  const locked = models.filter((m) => !isModelSelectableForTier(m, tier));
 
-  const inTierManual = manualModels.filter((m) => isModelSelectableForTier(m, tier));
-  const lockedManual = manualModels.filter((m) => !isModelSelectableForTier(m, tier));
-
-  // Always surface the Opus model in recommended so free users see the Anthropic flagship upsell.
-  // Show up to 2 locked flagships: the first locked model in provider order, plus the Opus model
-  // if it isn't already included. Fill remaining slots with in-tier models.
-  const opusModel = lockedManual.find((m) => m.name.toLowerCase().includes('opus'));
-  const firstLocked = lockedManual.slice(0, 1);
-  const flagshipLocked =
-    opusModel && !firstLocked.some((m) => m.id === opusModel.id)
-      ? [...firstLocked, opusModel]
-      : firstLocked;
-  const remainingSlots = Math.max(0, 3 - flagshipLocked.length);
-  const inTierSlice = inTierManual.slice(0, remainingSlots);
-  const recommendedManual = [...flagshipLocked, ...inTierSlice];
-
-  const recommendedIds = new Set([
-    ...autoModels.map((m) => m.id),
-    ...recommendedManual.map((m) => m.id),
-  ]);
-  const more = manualModels.filter((m) => !recommendedIds.has(m.id));
-
-  const recommended = [
-    ...autoModels.map((m) => ({ ...m, isLocked: !isModelSelectableForTier(m, tier) })),
-    ...recommendedManual.map((m) => ({
-      ...m,
-      isLocked: !isModelSelectableForTier(m, tier),
-    })),
+  const orderAutoFirst = (list: AIModel[]) => [
+    ...list.filter(isAuto),
+    ...list.filter((m) => !isAuto(m)),
   ];
+
+  const recommended = orderAutoFirst(available).map((m) => ({ ...m, isLocked: false }));
+  const more = orderAutoFirst(locked);
 
   return { recommended, more, isSearching: false };
 }
 
-/** Provider logo: img when SVG exists, brand-color dot as fallback. */
-function ProviderLogo({ providerKey, size = 14 }: { providerKey: string; size?: number }) {
+/** Provider logo: AGI mark for Auto modes → official vector mark → local SVG → brand dot. */
+function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string; size?: number }) {
+  // No resolved provider (e.g. a model without a provider) → render no logo
+  // rather than crashing on providerKey.toLowerCase().
+  if (!providerKey) return null;
+  // Auto modes (managed cloud) carry the AGI brand mark in the brand accent colour.
+  if (providerKey === 'managed_cloud') {
+    return (
+      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-accent-primary)]">
+        <AgiMark size={size} mono />
+      </span>
+    );
+  }
+
+  // Prefer the official, theme-adaptive mark (OpenAI/Claude/Gemini/DeepSeek/etc.).
+  const markKey = toProviderId(providerKey) ?? providerKey;
+  if (hasProviderMark(markKey)) {
+    return (
+      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-text-secondary)]">
+        <ProviderMark providerKey={markKey} size={size} />
+      </span>
+    );
+  }
+
   const logoUrl = providerLogoUrl(providerKey);
   const hex = providerBrandHex(providerKey);
 
@@ -317,6 +328,14 @@ interface ComposerFooterProps {
   showStyleSelector?: boolean;
   /** Free-trial prompt usage label, e.g. "2/3 prompts left". */
   trialUsageLabel?: string | null;
+  /**
+   * Inline mode: render ONLY the model/style selector cluster (no hint, budget,
+   * or usage rows) so it can be dropped directly into the composer's control
+   * row. Used by the empty-state composer to keep everything on one bottom row.
+   */
+  inline?: boolean;
+  /** Extra classes applied to the outer element (e.g. flex order / ml-auto). */
+  className?: string;
 }
 
 export function ComposerFooter({
@@ -327,6 +346,8 @@ export function ComposerFooter({
   lockModelSelector = false,
   showStyleSelector = true,
   trialUsageLabel,
+  inline = false,
+  className,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -384,12 +405,16 @@ export function ComposerFooter({
   };
 
   return (
-    <div className="mt-2 space-y-2">
-      {/* Budget display — renders only when tokens have been used */}
-      <BudgetTrackerDisplay className="mx-1" />
+    <div
+      className={[inline ? 'flex items-center' : 'mt-2 space-y-2', className ?? '']
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {/* Budget display · renders only when tokens have been used */}
+      {!inline && <BudgetTrackerDisplay className="mx-1" />}
 
-      {/* Usage label — trial prompt count takes precedence over daily-cost hints. */}
-      {usageLabel && (
+      {/* Usage label · trial prompt count takes precedence over daily-cost hints. */}
+      {!inline && usageLabel && (
         <div className="flex items-center gap-1.5 px-1">
           <span
             className={[
@@ -411,9 +436,13 @@ export function ComposerFooter({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 px-1">
+      <div
+        className={
+          inline ? 'flex items-center gap-2' : 'flex items-center justify-between gap-2 px-1'
+        }
+      >
         {/* Left: keyboard hint */}
-        <span className="text-xs text-muted-foreground">{hint}</span>
+        {!inline && <span className="text-xs text-muted-foreground">{hint}</span>}
 
         <div className="flex items-center gap-2">
           {/* Response style selector */}
@@ -460,12 +489,12 @@ export function ComposerFooter({
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" sideOffset={6} className="w-72 p-0">
-                {/* Header — model count badge removed per Claude reference */}
+                {/* Header · model count badge removed per Claude reference */}
                 <div className="flex items-center border-b border-border/40 px-3 py-2">
                   <span className="text-xs font-medium text-foreground">Models</span>
                 </div>
 
-                {/* Search input — shown only in code surface */}
+                {/* Search input · shown only in code surface */}
                 {showModelSearch && (
                   <div className="border-b border-border/40 px-3 py-1.5">
                     <input
@@ -482,7 +511,7 @@ export function ComposerFooter({
                   {/* Recommended section label */}
                   {!isSearching && (
                     <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                      Recommended
+                      Available
                     </div>
                   )}
                   {recommended.map((model) => {
@@ -506,7 +535,7 @@ export function ComposerFooter({
                     );
                   })}
 
-                  {/* Adaptive thinking toggle row — sits between model list and "More models" */}
+                  {/* Adaptive thinking toggle row · sits between model list and "More models" */}
                   {!isSearching && (
                     <>
                       <div className="my-1 border-t border-border/40" />
@@ -574,7 +603,7 @@ export function ComposerFooter({
                     </>
                   )}
 
-                  {/* More models section — only shown when not searching */}
+                  {/* More models section · only shown when not searching */}
                   {!isSearching && more.length > 0 && (
                     <>
                       <div className="my-1 border-t border-border/40" />

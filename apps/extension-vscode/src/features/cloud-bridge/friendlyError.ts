@@ -14,7 +14,7 @@ export function friendlyInviteError(code: InviteCodeError): string {
     case 'anon_signin_failed':
       return 'Could not create an anonymous session. Check your network and try again.';
     case 'account_auth_not_wired':
-      return 'AGI account web auth is not wired in the VS Code extension yet. Use AGI Workforce Web for invite access.';
+      return 'AGI Cloud sign-in is not available in the VS Code extension yet. Use AGI Web for invite access.';
     case 'rpc_error':
       return 'A server error occurred. Please try again later.';
   }

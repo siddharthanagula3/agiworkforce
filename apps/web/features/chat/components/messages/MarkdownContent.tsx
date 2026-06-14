@@ -7,6 +7,8 @@ import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import type { Components } from 'react-markdown';
 import { Button } from '@/shared/components/ui/button';
 import { Copy, Check } from 'lucide-react';
@@ -99,7 +101,9 @@ export default function MarkdownContent({ content, isStreaming }: MarkdownConten
     <>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        rehypePlugins={[rehypeHighlight, rehypeRaw]}
+        // Order matters: raw HTML is parsed, then sanitized, then highlighted.
+        // rehypeRaw without a sanitizer is an XSS hazard on this live path.
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA], rehypeHighlight]}
         components={markdownComponents}
       >
         {content}

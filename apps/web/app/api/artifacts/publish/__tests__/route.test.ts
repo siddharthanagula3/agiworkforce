@@ -137,7 +137,7 @@ describe('POST /api/artifacts/publish', () => {
     expect(typeof body['message']).toBe('string');
   });
 
-  it('route does not expose a 503 path — waitlist result is always 200', async () => {
+  it('route does not expose a 503 path · waitlist result is always 200', async () => {
     // This test is a regression guard. The old publisher threw
     // ArtifactPersistenceUnavailableError (42P01) which caused 503s.
     // The new publisher returns { kind: 'waitlist' } instead.

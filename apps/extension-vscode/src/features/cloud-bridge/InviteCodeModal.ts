@@ -14,10 +14,12 @@ import type { InviteCodeModalProps, InviteCodeTab } from './types';
 let _panel: vscode.WebviewPanel | undefined;
 
 function getNonce(): string {
-  let text = '';
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  for (let i = 0; i < 32; i++) text += chars.charAt(Math.floor(Math.random() * chars.length));
-  return text;
+  // CSPRNG nonce for the webview CSP — Math.random() is a predictable PRNG and
+  // would weaken the script-src/style-src nonce (audit 217 M16). 24 bytes →
+  // 32 base64url chars, matching webviewContent.ts.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { randomBytes } = require('crypto') as typeof import('crypto');
+  return randomBytes(24).toString('base64url');
 }
 
 function getModalHtml(nonce: string, defaultTab: InviteCodeTab): string {
@@ -370,7 +372,18 @@ export async function openInviteCodeModal(
   const msgDisposable = panel.webview.onDidReceiveMessage(
     async (msg: { type: string; code?: string; email?: string; name?: string }) => {
       if (msg.type === 'redeemInviteCode' && msg.code) {
-        const result = await redeemInviteCode(msg.code, props.source);
+        // Re-validate host-side: the webview-script length/charset checks are
+        // bypassable by a compromised webview message (audit 217 M370).
+        const code = msg.code.trim();
+        if (code.length < 6 || code.length > 64 || !/^[A-Za-z0-9-]+$/.test(code)) {
+          void panel.webview.postMessage({
+            type: 'redeemResult',
+            success: false,
+            error: 'Invalid invite code.',
+          });
+          return;
+        }
+        const result = await redeemInviteCode(code, props.source);
         if (result.success && result.inviteId) {
           void panel.webview.postMessage({ type: 'redeemResult', success: true });
           props.onRedeemed?.(result.inviteId);
@@ -380,11 +393,22 @@ export async function openInviteCodeModal(
           void panel.webview.postMessage({ type: 'redeemResult', success: false, error: friendly });
         }
       } else if (msg.type === 'joinWaitlist' && msg.email) {
+        // Re-validate host-side (audit 217 M370): email shape + length caps so a
+        // spoofed webview message can't post unbounded/junk values to the service.
+        const email = msg.email.trim();
+        if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          void panel.webview.postMessage({
+            type: 'waitlistResult',
+            success: false,
+            error: 'Please enter a valid email address.',
+          });
+          return;
+        }
         const entry: import('../../lib/waitlistService').WaitlistEntry = {
-          email: msg.email,
+          email,
           referralSource: props.source,
         };
-        if (msg.name) entry.name = msg.name;
+        if (msg.name) entry.name = msg.name.trim().slice(0, 200);
         const result = await joinWaitlist(entry);
         if (result.success) {
           void panel.webview.postMessage({ type: 'waitlistResult', success: true });

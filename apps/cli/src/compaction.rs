@@ -275,9 +275,14 @@ pub fn compact_with_config(
         return (messages.to_vec(), CompressionStatus::Unnecessary);
     }
 
+    // Tool-use ids present BEFORE compaction. Used to repair only the pairs that
+    // compaction itself breaks, leaving any pre-existing malformed blocks alone.
+    let original_tool_use_ids = collect_tool_use_ids(messages);
+
     // Phase 1: Reverse token budget — truncate older tool outputs first.
     let mut msgs = reverse_budget_tool_outputs(messages, config.tool_output_budget);
     if total_tokens(&msgs) <= target_tokens {
+        let msgs = normalize_tool_pairs(msgs, &original_tool_use_ids);
         let final_tokens = total_tokens(&msgs);
         return (
             msgs,
@@ -297,6 +302,7 @@ pub fn compact_with_config(
     compressible = prune_tool_outputs(compressible, config.max_prune_tokens);
     let mut combined = recombine(&compressible, &preserved);
     if total_tokens(&combined) <= target_tokens {
+        let combined = normalize_tool_pairs(combined, &original_tool_use_ids);
         let final_tokens = total_tokens(&combined);
         return (
             combined,
@@ -310,6 +316,7 @@ pub fn compact_with_config(
     compressible = truncate_long_messages(compressible, config.max_truncate_tokens);
     combined = recombine(&compressible, &preserved);
     if total_tokens(&combined) <= target_tokens {
+        let combined = normalize_tool_pairs(combined, &original_tool_use_ids);
         let final_tokens = total_tokens(&combined);
         return (
             combined,
@@ -323,6 +330,7 @@ pub fn compact_with_config(
     compressible = remove_tool_results(compressible);
     combined = recombine(&compressible, &preserved);
     if total_tokens(&combined) <= target_tokens {
+        let combined = normalize_tool_pairs(combined, &original_tool_use_ids);
         let final_tokens = total_tokens(&combined);
         return (
             combined,
@@ -334,7 +342,7 @@ pub fn compact_with_config(
     }
 
     // Phase 6: Last resort — select the most recent messages that fit.
-    msgs = select_recent(combined, target_tokens);
+    msgs = normalize_tool_pairs(select_recent(combined, target_tokens), &original_tool_use_ids);
     let final_tokens = total_tokens(&msgs);
 
     let status = if final_tokens > original_tokens {
@@ -347,6 +355,108 @@ pub fn compact_with_config(
     };
 
     (msgs, status)
+}
+
+/// Collect every `tool_use` block id present in `messages`.
+fn collect_tool_use_ids(messages: &[Message]) -> std::collections::HashSet<String> {
+    let mut ids = std::collections::HashSet::new();
+    for msg in messages {
+        if let MessageContent::Blocks(blocks) = &msg.content {
+            for block in blocks {
+                if let ContentBlock::ToolUse { id, .. } = block {
+                    ids.insert(id.clone());
+                }
+            }
+        }
+    }
+    ids
+}
+
+/// Repair tool-call pairing after compaction so the result is valid for native
+/// tool-use providers (Anthropic and others reject a history that contains a
+/// `tool_use` without a matching `tool_result`, or a `tool_result` whose
+/// `tool_use` was dropped).
+///
+/// Compaction phases 5 (`remove_tool_results`) and 6 (`select_recent`) can drop
+/// `ToolResult` blocks while the matching `ToolUse` survives, or drop a
+/// `ToolUse` while its `ToolResult` survives. This pass:
+///   * appends a synthetic "aborted" `tool_result` (mirroring
+///     `History::normalize_history`) for every surviving `tool_use` that lost
+///     its result, and
+///   * drops any `tool_result` whose `tool_use` existed before compaction but
+///     was dropped by it. `original_tool_use_ids` scopes this to pairs broken
+///     by compaction so pre-existing malformed blocks are left untouched.
+fn normalize_tool_pairs(
+    messages: Vec<Message>,
+    original_tool_use_ids: &std::collections::HashSet<String>,
+) -> Vec<Message> {
+    use std::collections::HashSet;
+
+    // First pass: collect surviving tool_use ids and tool_result ids.
+    let mut tool_use_ids: HashSet<String> = HashSet::new();
+    let mut result_ids: HashSet<String> = HashSet::new();
+    for msg in &messages {
+        if let MessageContent::Blocks(blocks) = &msg.content {
+            for block in blocks {
+                match block {
+                    ContentBlock::ToolUse { id, .. } => {
+                        tool_use_ids.insert(id.clone());
+                    }
+                    ContentBlock::ToolResult { tool_use_id, .. } => {
+                        result_ids.insert(tool_use_id.clone());
+                    }
+                    ContentBlock::Text { .. } | ContentBlock::Image { .. } => {}
+                }
+            }
+        }
+    }
+
+    // Second pass: drop tool_result blocks whose tool_use was dropped by
+    // compaction (the id was a real tool_use originally but no longer survives),
+    // so we do not leave a tool_result orphaned ahead of (or without) its
+    // tool_use. Pre-existing standalone tool_results are left as-is.
+    let mut out: Vec<Message> = Vec::with_capacity(messages.len());
+    for msg in messages {
+        match msg.content {
+            MessageContent::Blocks(blocks) => {
+                let filtered: Vec<ContentBlock> = blocks
+                    .into_iter()
+                    .filter(|b| match b {
+                        ContentBlock::ToolResult { tool_use_id, .. } => {
+                            tool_use_ids.contains(tool_use_id)
+                                || !original_tool_use_ids.contains(tool_use_id)
+                        }
+                        _ => true,
+                    })
+                    .collect();
+                // Preserve messages that still carry content; drop ones that
+                // became empty after filtering orphaned tool_results.
+                if !filtered.is_empty() {
+                    out.push(Message::blocks(&msg.role, filtered));
+                }
+            }
+            MessageContent::Text(_) => out.push(msg),
+        }
+    }
+
+    // Third pass: append a synthetic aborted tool_result for every surviving
+    // tool_use that lost its result, so the orphaned tool_use is paired again.
+    // `tool_use_ids` is already a set, so each orphan is emitted at most once.
+    for id in &tool_use_ids {
+        if !result_ids.contains(id) {
+            out.push(Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: id.clone(),
+                    content: "[Tool call was aborted during context compaction — no output produced]"
+                        .to_string(),
+                    is_error: true,
+                }],
+            ));
+        }
+    }
+
+    out
 }
 
 /// Recombine the compressed older prefix with the preserved tail.

@@ -41,7 +41,7 @@ export const FRIENDLY_MESSAGES = {
  */
 export function getLoadingMessage(): string {
   const messages = FRIENDLY_MESSAGES.loading;
-  // WEB-13: Math.random is intentional — cosmetic loading message picker, no security relevance.
+  // WEB-13: Math.random is intentional · cosmetic loading message picker, no security relevance.
 
   return messages[Math.floor(Math.random() * messages.length)] || messages[0] || 'Thinking...';
 }

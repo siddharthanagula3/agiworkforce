@@ -34,10 +34,10 @@ async function handleGetConversations(request: NextRequest) {
     if (q) {
       conversations = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, project_id, created_at, updated_at
+          select id, title, model, project_id, pinned, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null and title ilike $2
-          order by updated_at desc
+          order by pinned desc, updated_at desc
           limit 50
         `,
         [userId, `%${q}%`],
@@ -45,10 +45,10 @@ async function handleGetConversations(request: NextRequest) {
     } else {
       conversations = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, project_id, created_at, updated_at
+          select id, title, model, project_id, pinned, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null
-          order by updated_at desc
+          order by pinned desc, updated_at desc
           limit 50
         `,
         [userId],

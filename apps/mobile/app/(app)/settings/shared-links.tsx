@@ -6,45 +6,60 @@ import { useCallback, useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Link2, Lock } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
 import { InviteCodeModal } from '@/src/features/cloud-bridge/InviteCodeModal';
 
 export default function SharedLinksScreen() {
   const router = useRouter();
-  const c = useThemeColors();
+  const { colors: c, statusBarStyle } = useTheme();
   const [showModal, setShowModal] = useState(false);
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+    router.navigate('/(app)/settings/data-controls' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
-      <View className="flex-row items-center px-3 h-12">
+      <StatusBar style={statusBarStyle} />
+      <View
+        style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
+      >
         <Pressable
           onPress={handleBack}
+          hitSlop={8}
           style={({ pressed }) => ({
-            padding: 8,
-            borderRadius: 8,
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            alignItems: 'center',
+            justifyContent: 'center',
             backgroundColor: pressed ? c.surfaceHover : c.transparent,
           })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <ArrowLeft size={20} color={c.textSecondary} />
+          <ArrowLeft size={22} color={c.textPrimary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2" style={{ color: c.textPrimary }}>
+        <Text
+          style={{
+            flex: 1,
+            color: c.textPrimary,
+            fontSize: 20,
+            fontWeight: '700',
+            marginLeft: 4,
+          }}
+        >
           Shared Links
         </Text>
       </View>
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingTop: 10, paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Cloud gate banner */}
@@ -58,17 +73,17 @@ export default function SharedLinksScreen() {
             padding: 14,
           }}
           accessible
-          accessibilityLabel="Shared Links is a Cloud feature, waitlisted for v1."
+          accessibilityLabel="Shared Links requires AGI Cloud access."
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <Lock size={14} color={c.agentWarning} />
             <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
-              Cloud feature
+              AGI Cloud
             </Text>
           </View>
           <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-            Shared Links lets you publish conversations and invite collaborators. This feature opens
-            with AGI Cloud access. Join the waitlist to be notified.
+            Shared Links lets you publish conversations and invite collaborators. Enter an invite
+            code or join the waitlist for AGI Cloud access.
           </Text>
         </View>
 
@@ -106,7 +121,7 @@ export default function SharedLinksScreen() {
                 maxWidth: 260,
               }}
             >
-              When Cloud opens, shared conversations will appear here.
+              Shared conversations will appear here after AGI Cloud access is enabled.
             </Text>
           </View>
         </Card>
@@ -120,10 +135,10 @@ export default function SharedLinksScreen() {
             alignItems: 'center',
             backgroundColor: c.teal,
           }}
-          accessibilityLabel="Join the Cloud waitlist or enter invite code"
+          accessibilityLabel="Enter invite code or join the AGI Cloud waitlist"
           accessibilityRole="button"
         >
-          <Text style={{ color: c.white, fontSize: 16, fontWeight: '600' }}>Unlock Cloud</Text>
+          <Text style={{ color: c.white, fontSize: 16, fontWeight: '600' }}>Open AGI Cloud</Text>
         </Pressable>
       </ScrollView>
 

@@ -1,0 +1,22 @@
+---
+source: apps/cli/src/tui/widgets/agent_picker.rs
+expression: terminal.backend()
+---
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"  ┌ Agents  2 agent(s) ──────────────────────────────────────────────────────────┐  "
+"  │/ type to filter agents...                                                    │  "
+"  │──────────────────────────────────────────────────────────────────────────────│  "
+"  │   researcher          Search and synthesize technical material wi…  [project]│  "
+"  │ ❯ long-agent-name-w…  Review implementation details, edge cases, …  [project]│  "
+"  │                                                                              │  "
+"  │──────────────────────────────────────────────────────────────────────────────│  "
+"  │ model: default   tools: all                                                  │  "
+"  └──────────────────────────────────────────────────────────────────────────────┘  "
+"                                                                                    "

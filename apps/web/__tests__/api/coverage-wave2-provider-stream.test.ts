@@ -105,6 +105,7 @@ function makeSseStream(): ReadableStream<Uint8Array> {
 describe('POST /api/v1/providers/[providerId]/stream', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';
     // Default: authenticated user
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc-123' });
     // Default: credits available
@@ -193,6 +194,9 @@ describe('POST /api/v1/providers/[providerId]/stream', () => {
       expect(response.status).toBe(200);
       // Order must be: check → deduct → fetch
       expect(callOrder).toEqual(['checkAvailable', 'deductCredits', 'fetch']);
+      expect(mockDeductCredits.mock.calls[0]?.[4]).toEqual(
+        expect.objectContaining({ provider: 'anthropic', model: 'claude-sonnet-4-6' }),
+      );
     } finally {
       global.fetch = originalFetch;
     }
@@ -222,9 +226,36 @@ describe('POST /api/v1/providers/[providerId]/stream', () => {
     }
   });
 
+  it('blocks managed compute before checking credits when private beta is disabled', async () => {
+    process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '0';
+
+    const mockFetch = vi.fn();
+    const originalFetch = global.fetch;
+    global.fetch = mockFetch;
+
+    try {
+      const request = makeRequest('openai');
+      const response = await POST(request, makeParams('openai'));
+      const body = (await response.json()) as {
+        error: { code: string };
+        managed_compute: { allowed: boolean; provider: string; model: string };
+      };
+
+      expect(response.status).toBe(403);
+      expect(body.error.code).toBe('public_launch_blocked');
+      expect(body.managed_compute.allowed).toBe(false);
+      expect(body.managed_compute.provider).toBe('openai');
+      expect(mockCheckAvailable).not.toHaveBeenCalled();
+      expect(mockDeductCredits).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
   // ── 5. Upstream 4xx is forwarded and credits are refunded ─────────────────
 
-  it('forwards upstream 4xx status and refunds credits', async () => {
+  it('forwards upstream 4xx status, sanitizes raw errors, and refunds credits', async () => {
     // upstream returns 422
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: 'model not found' }), {
@@ -242,6 +273,9 @@ describe('POST /api/v1/providers/[providerId]/stream', () => {
 
       // Status mirrors upstream
       expect(response.status).toBe(422);
+      const body = (await response.json()) as { error: string };
+      expect(body.error).toBe('Upstream error 422');
+      expect(body.error).not.toContain('model not found');
 
       // deductCredits must have been called twice:
       //   1st: positive amount (pre-charge)
@@ -251,6 +285,10 @@ describe('POST /api/v1/providers/[providerId]/stream', () => {
       // second call amount is negative (refund)
       const refundAmount = secondCall?.[2] as number;
       expect(refundAmount).toBeLessThan(0);
+      expect(secondCall?.[4]).toEqual(
+        expect.objectContaining({ provider: 'google', model: 'claude-sonnet-4-6' }),
+      );
+      expect(secondCall?.[5]).toBe('idempotency-key-abc');
     } finally {
       global.fetch = originalFetch;
     }

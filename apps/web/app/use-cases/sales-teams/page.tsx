@@ -2,11 +2,15 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { ProductFrame } from '../../../components/marketing/ProductFrame';
+import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
+import { FinalCta } from '../../../components/marketing/FlagshipSections';
+import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Sales teams — AGI',
+  title: 'Sales teams: AGI',
   description:
-    'How revenue teams use AGI: research, outreach drafts, deal-room briefings, and pipeline triage across every AI provider.',
+    'How revenue teams use AGI: research, outreach drafts, deal-room briefings, and pipeline triage with provider choice and visible routing.',
   alternates: { canonical: 'https://agiworkforce.com/use-cases/sales-teams' },
 };
 
@@ -16,73 +20,98 @@ export default function SalesTeamsPage() {
       <main className="agi-shell">
         <Header />
 
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Sales teams.</h1>
-          <p className="agi-page-lede">
-            Research, outreach drafts, deal-room briefings, and pipeline triage —{' '}
-            <strong>without sending account context to a vendor that owns one model.</strong> Bring
-            your own keys, route to whichever provider answers your shape of question best.
+        <section className="agi-fl-hero" aria-labelledby="agi-sales-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Use case · sales teams</p>
+          <h1 id="agi-sales-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Know the account.</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">Own the context.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            Research, outreach drafts, deal-room briefings, and pipeline triage. Provider choice
+            through your own keys on Desktop and CLI, with a visible label on every route your
+            account context takes.
           </p>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Where it shows up</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Account research</h3>
-              <p className="agi-reason-p">
-                Pull the public record on a target — filings, releases, hiring, news — into a brief.
-                Switch providers depending on what they&rsquo;re strongest at.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Outreach drafts</h3>
-              <p className="agi-reason-p">
-                Draft messages in your team&rsquo;s tone. The model sees your prior outreach as
-                context if you&rsquo;ve given it permission to.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Deal-room prep</h3>
-              <p className="agi-reason-p">
-                Cross-provider continuity matters here: long-context model for the data room, prose
-                model for the narrative summary, all in one thread.
-              </p>
-            </li>
-          </ul>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Posture for revenue teams</p>
-          <table className="agi-ledger">
-            <tbody>
-              <tr>
-                <td>Confidentiality</td>
-                <td>Local mode for sensitive deals. Keys stay on device.</td>
-              </tr>
-              <tr>
-                <td>BYOK</td>
-                <td>Pay providers directly. No markup. Use your existing API budget.</td>
-              </tr>
-              <tr>
-                <td>Tool use</td>
-                <td>CRM and email through MCP plugins. Agent acts, not just suggests.</td>
-              </tr>
-              <tr>
-                <td>Audit</td>
-                <td>Every model call and tool action journaled.</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="agi-cta-row" style={{ marginTop: 28 }}>
-            <Link href="/download" className="agi-cta-primary">
-              Install
+          <div className="agi-fl-cta-row">
+            <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+              Download AGI
             </Link>
-            <Link href="/byok" className="agi-cta-ghost">
-              How BYOK works →
+            <Link href="/byok" className="agi-fl-cta agi-fl-cta--ghost">
+              Set Up BYOK
             </Link>
           </div>
+          <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+            <li>Local · sensitive deals</li>
+            <li>BYOK · your budget</li>
+            <li>Cloud · by invite</li>
+          </ul>
+          <div className="agi-fl-hero-console" aria-hidden="true">
+            <ProductFrame
+              variant="web"
+              title="agiworkforce.com/chat"
+              badge="Web"
+              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+            />
+          </div>
         </section>
+
+        <FeatureGrid
+          eyebrow="Where it shows up"
+          title="From first touch to signed."
+          items={[
+            {
+              meta: 'Research',
+              title: 'Account research',
+              body: 'Pull the public record on a target: filings, releases, hiring, news. Bundle it into a brief and switch providers as the question changes.',
+            },
+            {
+              meta: 'Outreach',
+              title: 'Drafts in your tone',
+              body: "Draft messages in your team's voice. The model sees your prior outreach as context only when you've given it permission to.",
+            },
+            {
+              meta: 'Deals',
+              title: 'Deal-room prep',
+              body: 'Cross-provider continuity matters here: long-context work for the data room, prose for the narrative summary, all in one thread.',
+            },
+          ]}
+        />
+
+        <LedgerSection
+          eyebrow="Posture for revenue teams"
+          title="The boundaries, stated plainly."
+          rows={[
+            {
+              k: 'Confidentiality',
+              v: 'Local Mode for sensitive deals; keys stay encrypted on your device.',
+            },
+            {
+              k: 'BYOK',
+              v: 'Pay providers directly on Desktop and CLI. Use your existing API budget.',
+            },
+            {
+              k: 'Tools',
+              v: 'Connect CRM and email through MCP connectors, behind explicit tool approvals.',
+            },
+            {
+              k: 'Visibility',
+              v: 'Provider labels and tool approvals stay visible on every route.',
+            },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Brief better, route deliberately."
+          body="Install AGI, bring your keys, and keep account context under your control while the team works."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/byok', label: 'Set Up BYOK' },
+            { href: '/apps', label: 'Browse Apps & Connectors' },
+          ]}
+        />
 
         <MarketingFooter />
       </main>

@@ -18,6 +18,9 @@ export interface FileEntry {
 const CACHE_KEY = 'agiWorkforce.workspaceIndex';
 const MAX_FILES = 500;
 const MAX_SYMBOLS_TOTAL = 5000;
+/** Re-index when the cached index is older than this, so retrieval doesn't go
+ *  permanently stale on long-lived windows (audit 217 L132). */
+const MAX_INDEX_AGE_MS = 24 * 60 * 60 * 1000;
 
 interface CacheEntry {
   timestamp: number;
@@ -33,7 +36,9 @@ export class WorkspaceIndexer {
 
   isStale(): boolean {
     const cache = this.context.workspaceState.get<CacheEntry>(CACHE_KEY);
-    return cache === undefined;
+    if (cache === undefined) return true;
+    // Age out so a long-lived window periodically refreshes its index.
+    return Date.now() - cache.timestamp > MAX_INDEX_AGE_MS;
   }
 
   /**

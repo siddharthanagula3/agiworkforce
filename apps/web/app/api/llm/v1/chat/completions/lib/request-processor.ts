@@ -9,15 +9,16 @@ import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
-  AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS,
-  AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
-  AUTO_ECONOMY_TRIAL_MODEL,
-  AUTO_ECONOMY_TRIAL_PROMPT_LIMIT,
-  isAutoEconomyTrialRequest,
+  FREE_TRIAL_MAX_INPUT_CHARS,
+  FREE_TRIAL_MAX_INPUT_TOKENS,
+  FREE_TRIAL_MAX_OUTPUT_TOKENS,
+  FREE_TRIAL_MODEL,
+  FREE_TRIAL_PROMPT_LIMIT,
+  isFreeTrialRequest,
   isFreePlanTier,
-  reserveAutoEconomyTrialPrompt,
-  type AutoEconomyTrialReservation,
-} from '@/lib/services/auto-economy-trial-service';
+  reserveFreeTrialPrompt,
+  type FreeTrialReservation,
+} from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
@@ -58,7 +59,7 @@ export const ChatCompletionRequestSchema = z.object({
             text: z.string().optional(),
             image_url: z
               .object({
-                // AUDIT-FIX: C-3 — schema-level SSRF gate (defense-in-depth, runtime check still at line ~321).
+                // AUDIT-FIX: C-3 · schema-level SSRF gate (defense-in-depth, runtime check still at line ~321).
                 url: z.string().superRefine((value, ctx) => {
                   try {
                     validateUserImageUrl(value);
@@ -89,7 +90,7 @@ export const ChatCompletionRequestSchema = z.object({
   n: z.number().int().positive().optional(),
   stream: z.boolean().optional().default(false),
   stop: z.union([z.string(), z.array(z.string())]).optional(),
-  // SECURITY: cap output token requests — 64 000 is generous for current frontier models.
+  // SECURITY: cap output token requests · 64 000 is generous for current frontier models.
   max_tokens: z.number().int().positive().max(64000).optional(),
   max_completion_tokens: z.number().int().positive().max(64000).optional(),
   presence_penalty: z.number().min(-2).max(2).optional(),
@@ -145,7 +146,7 @@ export type ProcessedRequest = {
   quotaWarningHeader: string | null;
   isFlagshipRequest: boolean;
   indicResult: ReturnType<typeof detectIndicScript>;
-  autoEconomyTrial?: AutoEconomyTrialReservation;
+  freeTrial?: FreeTrialReservation;
   llmRequest: {
     model: string;
     messages: Array<{
@@ -334,7 +335,7 @@ export async function processRequest(
     };
   }
 
-  // Body size guard (actual bytes — Content-Length can be absent or spoofed)
+  // Body size guard (actual bytes · Content-Length can be absent or spoofed)
   let body: unknown;
   try {
     const rawBody = await request.arrayBuffer();
@@ -388,12 +389,12 @@ export async function processRequest(
 
   const chatRequest = validationResult.data;
   const requestedModel = chatRequest.model;
-  const autoEconomyTrialEnabled = isAutoEconomyTrialRequest({
+  const freeTrialEnabled = isFreeTrialRequest({
     requestedModel,
     planTier: subscription.plan_tier,
   });
 
-  if (isFreePlanTier(subscription.plan_tier) && !autoEconomyTrialEnabled) {
+  if (isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled) {
     return {
       ok: false,
       response: NextResponse.json(
@@ -402,7 +403,7 @@ export async function processRequest(
             message:
               'Free managed cloud access currently supports Auto Economy only. Select Auto Economy, upgrade your plan, or use local/BYOK.',
             type: 'invalid_request_error',
-            code: 'free_trial_auto_economy_only',
+            code: 'free_trial_model_only',
           },
         },
         { status: 403 },
@@ -410,31 +411,56 @@ export async function processRequest(
     };
   }
 
-  if (autoEconomyTrialEnabled) {
-    const usesHostedAddOn =
-      chatRequest.web_search ||
-      chatRequest.web_fetch ||
-      chatRequest.code_execution ||
-      chatRequest.thinking_mode ||
-      chatRequest.thinking ||
-      chatRequest.effort ||
+  if (freeTrialEnabled) {
+    // Free = full Hobby experience, gated per-model: a prompt is never wasted on an
+    // action the selected model can't perform (e.g. images to a no-vision model).
+    // The shared 3-prompt cap + per-prompt token budget (below) bound cost.
+    const trialCaps = getModelMetadataById(requestedModel)?.capabilities;
+    const hasImagePart = chatRequest.messages.some((msg) =>
+      Array.isArray(msg.content)
+        ? msg.content.some((part) => part.type === 'image_url' && part.image_url)
+        : false,
+    );
+
+    const unsupportedFeature =
+      ((chatRequest.web_search || chatRequest.web_fetch) && !trialCaps?.search && 'web search') ||
+      (chatRequest.code_execution && !trialCaps?.codeExecution && 'code execution') ||
+      ((chatRequest.thinking_mode || chatRequest.thinking || chatRequest.effort) &&
+        !trialCaps?.thinking &&
+        'extended thinking') ||
+      (hasImagePart && !trialCaps?.vision && 'image input');
+
+    if (unsupportedFeature) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: `The selected model doesn't support ${unsupportedFeature}. Pick a model that does, or turn that option off.`,
+              type: 'invalid_request_error',
+              code: 'free_trial_model_capability',
+            },
+          },
+          { status: 400 },
+        ),
+      };
+    }
+
+    // Custom client tool definitions and multiple completions stay blocked on the
+    // trial — they aren't surfaced in the composer and are token/cost abuse vectors.
+    const usesBlockedAddOn =
       (chatRequest.tools?.length ?? 0) > 0 ||
       (chatRequest.tool_choice !== undefined && chatRequest.tool_choice !== 'none') ||
-      (chatRequest.n ?? 1) > 1 ||
-      chatRequest.messages.some((msg) =>
-        Array.isArray(msg.content)
-          ? msg.content.some((part) => part.type === 'image_url' && part.image_url)
-          : false,
-      );
+      (chatRequest.n ?? 1) > 1;
 
-    if (usesHostedAddOn) {
+    if (usesBlockedAddOn) {
       return {
         ok: false,
         response: NextResponse.json(
           {
             error: {
               message:
-                'The free Auto Economy trial is text-only and does not include tools, web search, code execution, thinking mode, images, or multiple choices.',
+                'The free trial does not support custom tool definitions or multiple completions. Use the built-in web search, images, or thinking instead.',
               type: 'invalid_request_error',
               code: 'free_trial_feature_unavailable',
             },
@@ -445,12 +471,12 @@ export async function processRequest(
     }
 
     chatRequest.max_tokens = Math.min(
-      chatRequest.max_tokens ?? AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
-      AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
+      chatRequest.max_tokens ?? FREE_TRIAL_MAX_OUTPUT_TOKENS,
+      FREE_TRIAL_MAX_OUTPUT_TOKENS,
     );
     chatRequest.max_completion_tokens = Math.min(
-      chatRequest.max_completion_tokens ?? AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
-      AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
+      chatRequest.max_completion_tokens ?? FREE_TRIAL_MAX_OUTPUT_TOKENS,
+      FREE_TRIAL_MAX_OUTPUT_TOKENS,
     );
   }
 
@@ -492,7 +518,7 @@ export async function processRequest(
     }
   }
 
-  // Task-aware classifier (synchronous — no DB/network)
+  // Task-aware classifier (synchronous · no DB/network)
   const lastUserMsg = chatRequest.messages
     .slice()
     .reverse()
@@ -539,7 +565,7 @@ export async function processRequest(
         indicRatio: indicResult.indicRatio,
         dominantScript: indicResult.dominantScript,
       },
-      '[indic-detect] non-Latin Indic script detected — Pool C candidate',
+      '[indic-detect] non-Latin Indic script detected · Pool C candidate',
     );
   }
 
@@ -560,11 +586,34 @@ export async function processRequest(
     );
   }
 
+  // Defense-in-depth (all tiers): never forward image parts to a model without
+  // vision — the provider would reject them and the request/credits would be wasted.
+  const resolvedModelCaps = getModelMetadataById(chatRequest.model)?.capabilities;
+  if (resolvedModelCaps && !resolvedModelCaps.vision) {
+    const hasImagePart = chatRequest.messages.some((msg) =>
+      Array.isArray(msg.content)
+        ? msg.content.some((part) => part.type === 'image_url' && part.image_url)
+        : false,
+    );
+    if (hasImagePart) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: 'The selected model cannot read images. Choose a vision-capable model.',
+              type: 'invalid_request_error',
+              code: 'model_no_vision',
+            },
+          },
+          { status: 400 },
+        ),
+      };
+    }
+  }
+
   // Model tier access check
-  if (
-    !autoEconomyTrialEnabled &&
-    !checkModelTierAccess(chatRequest.model, subscription.plan_tier)
-  ) {
+  if (!freeTrialEnabled && !checkModelTierAccess(chatRequest.model, subscription.plan_tier)) {
     const modelKey = chatRequest.model.toLowerCase();
     const requiredTiers = MODEL_TIER_REQUIREMENTS[modelKey];
     const requiredTier =
@@ -612,7 +661,7 @@ export async function processRequest(
 
   let quotaOutcome: QuotaOutcome = { kind: 'ok' };
   let quotaWarningHeader: string | null = null;
-  if (!autoEconomyTrialEnabled) {
+  if (!freeTrialEnabled) {
     try {
       quotaOutcome = await assertQuota({
         userId: userId,
@@ -751,13 +800,13 @@ export async function processRequest(
     };
   }
 
-  if (autoEconomyTrialEnabled && totalLength > AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS) {
+  if (freeTrialEnabled && totalLength > FREE_TRIAL_MAX_INPUT_CHARS) {
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: {
-            message: `Free Auto Economy prompts are limited to ${AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS.toLocaleString()} input characters.`,
+            message: `Free prompts are limited to ${FREE_TRIAL_MAX_INPUT_CHARS.toLocaleString()} input characters.`,
             type: 'invalid_request_error',
             code: 'free_trial_prompt_too_large',
           },
@@ -774,6 +823,24 @@ export async function processRequest(
     const overheadTokens = 4;
     return sum + baseTokens + overheadTokens;
   }, 0);
+
+  // Per-prompt input-token cap for the free trial — abuse control so a single
+  // free prompt can't burn cost on a giant context across the 3 chances.
+  if (freeTrialEnabled && estimatedPromptTokens > FREE_TRIAL_MAX_INPUT_TOKENS) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `Free prompts are limited to ${FREE_TRIAL_MAX_INPUT_TOKENS.toLocaleString()} input tokens. Shorten your prompt or upgrade for more.`,
+            type: 'invalid_request_error',
+            code: 'free_trial_prompt_too_large',
+          },
+        },
+        { status: 413 },
+      ),
+    };
+  }
 
   const providerLower = provider.toLowerCase();
   const normalizedEffort = normalizeEffort(chatRequest.effort);
@@ -804,11 +871,11 @@ export async function processRequest(
     estimatedPromptTokens,
     maxTokens,
   );
-  let autoEconomyTrial: AutoEconomyTrialReservation | undefined;
+  let freeTrial: FreeTrialReservation | undefined;
 
-  if (autoEconomyTrialEnabled) {
+  if (freeTrialEnabled) {
     estimatedCostCents = 0;
-    const trialReservationResult = await reserveAutoEconomyTrialPrompt({ userId, requestId });
+    const trialReservationResult = await reserveFreeTrialPrompt({ userId, requestId });
     if (!trialReservationResult.ok) {
       return {
         ok: false,
@@ -820,8 +887,8 @@ export async function processRequest(
               type: 'insufficient_quota',
               code: 'website_trial_prompt_limit_reached',
               trial: {
-                model: AUTO_ECONOMY_TRIAL_MODEL,
-                prompt_limit: AUTO_ECONOMY_TRIAL_PROMPT_LIMIT,
+                model: FREE_TRIAL_MODEL,
+                prompt_limit: FREE_TRIAL_PROMPT_LIMIT,
               },
             },
           },
@@ -829,7 +896,7 @@ export async function processRequest(
         ),
       };
     }
-    autoEconomyTrial = trialReservationResult.reservation;
+    freeTrial = trialReservationResult.reservation;
   } else {
     // Credit allocation + availability check
     let existingBalance = await CreditService.getBalance(userId);
@@ -969,8 +1036,10 @@ export async function processRequest(
   }));
 
   // Inject provider-specific built-in tools
+  // Only inject a built-in tool the resolved model can actually use (unknown models
+  // default to allowed so a missing catalog entry never silently drops the tool).
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
-  if (chatRequest.web_search) {
+  if (chatRequest.web_search && (resolvedModelCaps?.search ?? true)) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
         ...(resolvedTools ?? []),
@@ -983,14 +1052,18 @@ export async function processRequest(
     }
   }
 
-  if (chatRequest.web_fetch && providerLower === 'anthropic') {
+  if (
+    chatRequest.web_fetch &&
+    providerLower === 'anthropic' &&
+    (resolvedModelCaps?.search ?? true)
+  ) {
     resolvedTools = [
       ...(resolvedTools ?? []),
       { type: 'web_fetch_20260209', name: 'web_fetch', allowed_callers: ['direct'] },
     ];
   }
 
-  if (chatRequest.code_execution) {
+  if (chatRequest.code_execution && (resolvedModelCaps?.codeExecution ?? true)) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
         ...(resolvedTools ?? []),
@@ -1039,7 +1112,7 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     indicResult,
-    autoEconomyTrial,
+    freeTrial,
     llmRequest,
   };
 }

@@ -33,9 +33,9 @@
  *     Returns 'ok' immediately when pctUsed < warnAt without further work.
  *
  * Role-correctness (WEB-RLS-BYPASS audit requirement):
- *   - Tier: read from JWT claim parameter — zero DB hits.
- *   - Usage read: getUserClient(token) — RLS-bound, user can only see own rows.
- *   - Usage increment: SECURITY DEFINER RPC `increment_usage` — atomic, no
+ *   - Tier: read from JWT claim parameter · zero DB hits.
+ *   - Usage read: getUserClient(token) · RLS-bound, user can only see own rows.
+ *   - Usage increment: SECURITY DEFINER RPC `increment_usage` · atomic, no
  *     direct UPDATE with service_role.
  *
  * DO NOT add this logic to proxy.ts.
@@ -56,10 +56,10 @@ import { logger } from '@/lib/logger';
 /**
  * Possible outcomes from assertQuota.
  *
- * 'ok'         — user is within limits, proceed normally.
- * 'warn'       — approaching cap (pctUsed >= warnAt); continue but surface warning.
- * 'downgrade'  — at or over nominal cap (pctUsed >= downgradeAt); force workhorse model.
- * 'paywall'    — hard cap exceeded (pctUsed >= hardCapAt); refuse request.
+ * 'ok'         · user is within limits, proceed normally.
+ * 'warn'       · approaching cap (pctUsed >= warnAt); continue but surface warning.
+ * 'downgrade'  · at or over nominal cap (pctUsed >= downgradeAt); force workhorse model.
+ * 'paywall'    · hard cap exceeded (pctUsed >= hardCapAt); refuse request.
  */
 export type QuotaOutcome =
   | { kind: 'ok' }
@@ -76,9 +76,9 @@ export type QuotaFeature = 'chat' | 'image' | 'video' | 'computer_use' | 'mcp';
 
 export interface AssertQuotaOptions {
   userId: string;
-  /** User's JWT access token — passed to getUserClient, never logged. */
+  /** User's JWT access token · passed to getUserClient, never logged. */
   token: string;
-  /** Subscription tier parsed from the JWT claim — no DB hit required. */
+  /** Subscription tier parsed from the JWT claim · no DB hit required. */
   tier: ProductTier | string;
   /** Pre-flight token count estimate for the upcoming request. */
   requestedTokens: number;
@@ -159,7 +159,7 @@ function nextTierUp(tier: ProductTier | string): string {
  * Wrapped with `cache()` (Vercel rule: server-cache-react) so multiple
  * assertQuota calls within the same React render request share a single
  * round-trip to the database. The cache key is the composed userId+token
- * string — token uniquely identifies the user's auth context.
+ * string · token uniquely identifies the user's auth context.
  *
  * Returns null if no active credit row exists (treated as 0 usage).
  *
@@ -201,7 +201,7 @@ const _fetchUsageRow = cache(
     } catch (error) {
       logger.warn(
         { userId, error: error instanceof Error ? error.message : String(error) },
-        '[assertQuota] Failed to fetch usage row — treating as 0 used',
+        '[assertQuota] Failed to fetch usage row · treating as 0 used',
       );
       return null;
     }
@@ -211,7 +211,7 @@ const _fetchUsageRow = cache(
 /**
  * Evaluate a single pctUsed value against a TierCapBehavior spec.
  *
- * Vercel rule applied: js-early-exit — returns 'ok' immediately when below
+ * Vercel rule applied: js-early-exit · returns 'ok' immediately when below
  * warnAt without touching the remaining branches.
  */
 function evaluateCapBehavior(
@@ -290,12 +290,12 @@ const _fetchImageUsageCount = cache(async (userId: string, _token: string): Prom
 /**
  * Assert that the user's request is within their tier quota.
  *
- * @returns QuotaOutcome — switch on `kind` to decide how to proceed.
+ * @returns QuotaOutcome · switch on `kind` to decide how to proceed.
  *
  * Call order:
- *   1. Tier policy lookup — pure, synchronous, no DB.
+ *   1. Tier policy lookup · pure, synchronous, no DB.
  *   2. Early exit if tier has no token cap (BYOK, Local, Enterprise).
- *   3. DB read via getUserClient(token) — RLS-bound, cached per request.
+ *   3. DB read via getUserClient(token) · RLS-bound, cached per request.
  *   4. Percentage computation.
  *   5. Threshold comparison with early-exit at 'ok'.
  */
@@ -370,7 +370,7 @@ async function _checkTokenQuota(
   const tokenCapPerMonth = policy.tokenCapPerMonth!; // verified non-null above
   const capBehavior = policy.capBehavior!;
 
-  // Fetch usage row — cached so parallel callers dedup.
+  // Fetch usage row · cached so parallel callers dedup.
   const usageRow = await _fetchUsageRow(userId, token);
 
   // Edge: no row means no usage yet; treat as 0.
@@ -617,7 +617,7 @@ async function _checkFlagshipDailyQuota(
       usedToday = usageRow.flagship_daily_tokens;
     }
     // else: NULL reset_at OR reset_at older than 24h => counter is stale,
-    // treat as 0 — matches the lazy-reset write path in increment_usage.
+    // treat as 0 · matches the lazy-reset write path in increment_usage.
   }
 
   const pctUsed = (usedToday + Math.max(0, requestedTokens)) / cap;
@@ -656,7 +656,7 @@ async function _checkFlagshipDailyQuota(
  * ONLY permitted way to write usage increments. Never call UPDATE on
  * token_credits directly with service_role.
  *
- * This function is fire-and-forget in streaming contexts — the stream has
+ * This function is fire-and-forget in streaming contexts · the stream has
  * already been sent, so errors are logged but not re-thrown.
  */
 export async function reconcileUsage(opts: ReconcileUsageOptions): Promise<void> {
@@ -676,7 +676,7 @@ export async function reconcileUsage(opts: ReconcileUsageOptions): Promise<void>
   } catch (rpcError) {
     const error = rpcError;
     if (error) {
-      // reconcileUsage is called after the stream — cannot surface errors to caller.
+      // reconcileUsage is called after the stream · cannot surface errors to caller.
       // Log for monitoring. The credit_service deductCredits path provides the
       // primary reconciliation; this RPC is the quota-counter update path.
       logger.error(
@@ -687,7 +687,7 @@ export async function reconcileUsage(opts: ReconcileUsageOptions): Promise<void>
           isFlagship,
           error: error instanceof Error ? error.message : String(error),
         },
-        '[reconcileUsage] increment_usage RPC failed — usage counter may drift',
+        '[reconcileUsage] increment_usage RPC failed · usage counter may drift',
       );
     }
   }

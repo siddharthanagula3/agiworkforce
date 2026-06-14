@@ -436,7 +436,7 @@ export class ChatPersistenceService {
    */
   async updateMessage(messageId: string, _newContent: string): Promise<ChatMessage> {
     throw new Error(
-      `updateMessage (id: ${messageId}) is not supported via the API — no content-update route exists`,
+      `updateMessage (id: ${messageId}) is not supported via the API · no content-update route exists`,
     );
   }
 
@@ -456,7 +456,7 @@ export class ChatPersistenceService {
    * No route exists for this operation.
    */
   async deleteMessage(_messageId: string): Promise<void> {
-    throw new Error('deleteMessage is not supported via the API — no delete-message route exists');
+    throw new Error('deleteMessage is not supported via the API · no delete-message route exists');
   }
 
   /**

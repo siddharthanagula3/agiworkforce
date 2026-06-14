@@ -30,3 +30,14 @@ export async function writeTextFile(path: string, content: string): Promise<void
 export async function readTextFile(): Promise<string> {
   throw new Error('Reading local files requires the desktop application');
 }
+
+/**
+ * Web has no persistent filesystem, so directory creation is a no-op. Artifact
+ * writes degrade to a browser download in writeTextFile(), which needs no dir.
+ */
+export async function mkdir(
+  _path: string,
+  _options?: { recursive?: boolean; mode?: number },
+): Promise<void> {
+  // Intentionally empty: nothing to create in the browser sandbox.
+}

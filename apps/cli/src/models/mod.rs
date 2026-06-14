@@ -242,7 +242,7 @@ pub struct ToolDefinition {
     #[serde(default)]
     pub should_defer: bool,
     /// Compatibility aliases accepted by executor/schema lookup. Kept local so
-    /// Claude-style names (`Read`, `Bash`, etc.) do not leak into provider
+    /// reference-compatible names (`Read`, `Bash`, etc.) do not leak into provider
     /// schemas.
     #[serde(skip)]
     #[serde(default)]

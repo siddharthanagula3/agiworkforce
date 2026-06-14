@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
@@ -10,6 +10,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore } from '@/stores/unified/auth';
 import { getBestAutoModeForTier } from '@/constants/llm';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { SendPreview } from '@agiworkforce/unified-chat';
 import {
   summarizeSendPreview,
@@ -19,10 +20,11 @@ import {
 import { Share2, Bell, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
+import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
-import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
+import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { DirectoryModal } from '../components/dialogs/DirectoryModal';
@@ -36,13 +38,11 @@ import {
   type WebHandoffContextCandidate,
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
+import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
-import type { WebChatMessageMetadata } from '../types/message-metadata';
-import {
-  getAutoEconomyTrialRemaining,
-  useAutoEconomyTrialStore,
-} from '../stores/autoEconomyTrialStore';
+import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
+import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
 
 type SendMeta = {
@@ -199,27 +199,34 @@ export default function WebChatPage() {
   const { getToken } = useAuth();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const urlConversationId = params?.['sessionId'] as string | undefined;
+  const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Model from the model store — needed by the access gate below before the composer hooks.
+  // Model from the model store · needed by the access gate below before the composer hooks.
   const availableModels = useModelStore((s) => s.availableModels);
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
   const isWebsiteFreeTrial = subscriptionTier === 'free';
   const freeTrialModelId = getBestAutoModeForTier('free');
-  const activeModelId = isWebsiteFreeTrial ? freeTrialModelId : selectedModelId;
+  const activeModelId =
+    isWebsiteFreeTrial && !FREE_TRIAL_MODELS.includes(selectedModelId)
+      ? freeTrialModelId
+      : selectedModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
-  const trialPromptsUsed = useAutoEconomyTrialStore((s) => s.promptsUsed);
-  const trialPromptLimit = useAutoEconomyTrialStore((s) => s.promptLimit);
-  const trialPromptsRemaining = getAutoEconomyTrialRemaining(trialPromptsUsed, trialPromptLimit);
+  const trialPromptsUsed = useFreeTrialStore((s) => s.promptsUsed);
+  const trialPromptLimit = useFreeTrialStore((s) => s.promptLimit);
+  const trialPromptsRemaining = getFreeTrialRemaining(trialPromptsUsed, trialPromptLimit);
   const isTrialExhausted = isWebsiteFreeTrial && trialPromptsRemaining <= 0;
 
   useEffect(() => {
     if (!isWebsiteFreeTrial) return;
-    if (selectedModelId !== freeTrialModelId) {
+    // Free users may pick any model in the free tool set; only snap back to the
+    // default when they're on something outside the set.
+    if (!FREE_TRIAL_MODELS.includes(selectedModelId)) {
       setSelectedModelId(freeTrialModelId);
     }
   }, [freeTrialModelId, isWebsiteFreeTrial, selectedModelId, setSelectedModelId]);
@@ -243,6 +250,7 @@ export default function WebChatPage() {
   }, []);
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
+  const [isUserTyping, setIsUserTyping] = useState(false);
   const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
   const [selectedHandoffContextIds, setSelectedHandoffContextIds] = useState<string[]>([]);
@@ -310,11 +318,12 @@ export default function WebChatPage() {
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const updateConversationInStore = useChatStore((s) => s.updateConversation);
   const isLoading = useChatStore((s) => s.isLoading);
   const chatError = useChatStore((s) => s.error);
   const setChatError = useChatStore((s) => s.setError);
 
-  // SendPreview presentation — privacy-disclosure card rendered above the
+  // SendPreview presentation · privacy-disclosure card rendered above the
   // composer so users always see where the next turn is going (local device,
   // BYOK provider host, or AGI managed gateway) before they send.
   const sendPreviewPresentation = useMemo<SendPreviewPresentation>(() => {
@@ -323,7 +332,8 @@ export default function WebChatPage() {
       providerMode,
       modelLabel: selectedModel?.name ?? undefined,
       modelId: activeModelId,
-      destinationHost: 'gateway.agiworkforce.com',
+      // User-facing label only — never leak the internal gateway hostname.
+      destinationHost: 'AGI managed cloud',
     });
   }, [activeModelId, selectedModel]);
 
@@ -388,12 +398,14 @@ export default function WebChatPage() {
         meta?: SendMeta;
       } = {},
     ) => {
+      let freshConvId: string | null = null;
       const convId =
         options.conversationId ||
         urlConversationId ||
         bareChatSessionId ||
         (await createConversation('New Chat', activeModelId).then((c) => {
           if (c) {
+            freshConvId = c.id;
             if (!urlConversationId) setBareChatSessionId(c.id);
             return c.id;
           }
@@ -402,6 +414,13 @@ export default function WebChatPage() {
 
       if (!convId) return;
       if (!urlConversationId) setBareChatSessionId(convId);
+
+      // Navigate to the canonical /chat/[id] URL after the first message so the
+      // conversation is bookmarkable and survives a page refresh. Use replace so
+      // the empty /chat entry is removed from browser history.
+      if (freshConvId) {
+        router.replace(`/chat/${freshConvId}`);
+      }
 
       // Read image files as base64 data URLs so the LLM can process them
       const resolvedAttachments = options.attachments
@@ -439,7 +458,7 @@ export default function WebChatPage() {
         skillBody: options.meta?.skillBody,
       });
     },
-    [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId],
+    [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId, router],
   );
 
   const handleSend = useCallback(
@@ -614,18 +633,44 @@ export default function WebChatPage() {
     router.push('/chat');
   }, [router, setActiveConversation]);
 
+  const handleToggleSidebar = useCallback(
+    () => setSidebarCollapsed((c) => !c),
+    [setSidebarCollapsed],
+  );
+
+  const handleOpenSearch = useCallback(() => {
+    window.dispatchEvent(new Event('agi:open-search'));
+  }, []);
+
+  const handleOpenShortcuts = useCallback(() => {
+    window.dispatchEvent(new Event('agi:open-shortcuts'));
+  }, []);
+
+  const handleFocusComposer = useCallback(() => {
+    const textarea = document.querySelector<HTMLTextAreaElement>('[data-composer-textarea]');
+    textarea?.focus();
+  }, []);
+
+  // Wire global keyboard shortcuts. Search and keyboard-shortcuts dialogs live
+  // inside ChatSidebar, so we dispatch custom events that the sidebar listens
+  // for rather than lifting that state to the page level.
+  useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onToggleSidebar: handleToggleSidebar,
+    onSearch: handleOpenSearch,
+    onShowShortcuts: handleOpenShortcuts,
+    onFocusComposer: handleFocusComposer,
+  });
+
   const handleSelectSession = useCallback(
     (id: string) => {
-      setBareChatSessionId(id);
-      void loadConversation(id).then((ok) => {
-        if (!ok) {
-          setBareChatSessionId(null);
-          setActiveConversation(null);
-        }
-      });
-      router.push('/chat');
+      // Navigate to the canonical /chat/[id] URL so the conversation is
+      // bookmarkable and survives a page refresh. The routeInitializedRef
+      // effect will load the conversation from the URL param when the new
+      // route renders (avoiding a double-load when already active).
+      router.push(`/chat/${id}`);
     },
-    [loadConversation, router, setActiveConversation],
+    [router],
   );
 
   const handleDeleteSession = useCallback(
@@ -670,6 +715,33 @@ export default function WebChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayedMessages.length, displayedConversationId, conversations, updateConversation]);
 
+  // Scroll to and flash-highlight a message when navigated from global search results.
+  // GlobalSearchDialog navigates to /chat/[sessionId]?highlightMessage=<msgId>.
+  // We wait for messages to load before scrolling, then clear the param from the URL.
+  useEffect(() => {
+    if (!highlightMessageId || displayedMessages.length === 0) return;
+    const el = document.querySelector<HTMLElement>(`[data-message-id="${highlightMessageId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'outline 0s, outline-color 0.3s';
+    el.style.outline = '2px solid var(--chat-accent-primary)';
+    el.style.borderRadius = '8px';
+    const clear = setTimeout(() => {
+      el.style.outline = '2px solid transparent';
+      const removeParams = setTimeout(() => {
+        el.style.outline = '';
+        el.style.transition = '';
+        el.style.borderRadius = '';
+        // Remove the query param without adding a history entry.
+        const url = new URL(window.location.href);
+        url.searchParams.delete('highlightMessage');
+        router.replace(url.pathname + url.search);
+      }, 400);
+      return () => clearTimeout(removeParams);
+    }, 1800);
+    return () => clearTimeout(clear);
+  }, [highlightMessageId, displayedMessages.length, router]);
+
   const deletePersistedMessages = useCallback(
     async (ids: string[]): Promise<boolean> => {
       if (!displayedConversationId || ids.length === 0) return false;
@@ -703,6 +775,62 @@ export default function WebChatPage() {
       void deletePersistedMessages([id]);
     },
     [deletePersistedMessages],
+  );
+
+  // Paywall cards are synthetic (not persisted in DB). "Try later" should just
+  // remove the card from the local store without hitting the API.
+  const handlePaywallDismiss = useCallback(
+    (id: string) => {
+      deleteMessage(id);
+    },
+    [deleteMessage],
+  );
+
+  const handleTypingChange = useCallback((typing: boolean) => {
+    setIsUserTyping(typing);
+  }, []);
+
+  const handlePinSession = useCallback(
+    (id: string) => {
+      const convo = conversations.find((c) => c.id === id);
+      if (!convo) return;
+      void updateConversation(id, { pinned: !convo.isPinned });
+    },
+    [conversations, updateConversation],
+  );
+
+  const handleStarSession = useCallback(
+    (id: string) => {
+      // Star is client-side only (no DB column). Toggle via store directly.
+      const convo = conversations.find((c) => c.id === id);
+      if (!convo) return;
+      updateConversationInStore(id, { isStarred: !convo.isStarred });
+    },
+    [conversations, updateConversationInStore],
+  );
+
+  const handleArchiveSession = useCallback(
+    (id: string) => {
+      // Archive is client-side only (no DB column). Toggle via store directly.
+      const convo = conversations.find((c) => c.id === id);
+      if (!convo) return;
+      updateConversationInStore(id, { isArchived: !convo.isArchived });
+    },
+    [conversations, updateConversationInStore],
+  );
+
+  // Share from the sidebar dropdown. If the target is not the active
+  // conversation, navigate to it first; the user can then share via the
+  // header share button or re-open the dropdown.
+  const handleShareSession = useCallback(
+    (id: string) => {
+      if (id === displayedConversationId) {
+        void share();
+      } else {
+        router.push(`/chat/${id}`);
+      }
+    },
+    [displayedConversationId, share, router],
   );
 
   const handleEditMessage = useCallback(
@@ -749,13 +877,24 @@ export default function WebChatPage() {
         handleOpenCloudWaitlist();
         return;
       }
+      const assistantMsg = displayedMessages[idx];
+      const replayDecision = getRegenerateReplayDecision({
+        userMetadata: userMsg.metadata,
+        assistantMetadata: assistantMsg?.metadata,
+      });
+      if (!replayDecision.ok) {
+        setChatError(replayDecision.message);
+        return;
+      }
       const rollbackIds = displayedMessages.slice(idx).map((message) => message.id);
       const deleted = await deletePersistedMessages(rollbackIds);
       if (deleted) {
+        const replayOptions = replayToSendOptions(replayDecision.replay);
         await sendMessage(userMsg.content, {
           model: activeModelId,
           conversationId: displayedConversationId,
           attachments: userMsg.attachments,
+          ...replayOptions,
         });
       }
     },
@@ -768,6 +907,7 @@ export default function WebChatPage() {
       activeModelId,
       isTrialExhausted,
       handleOpenCloudWaitlist,
+      setChatError,
     ],
   );
 
@@ -814,21 +954,21 @@ export default function WebChatPage() {
   const isEmptyChat = !displayedConversationId || (chatMessages.length === 0 && !isLoading);
 
   // Count distinct research sources across all messages for the toggle badge.
-  // chatMessages use the unified-chat shape where searchResults is a flat array.
+  // Metadata may contain a flat result list or a legacy SearchResponse object.
   const researchSourceCount = useMemo(() => {
     let count = 0;
     for (const m of chatMessages) {
       const meta = m.metadata as WebChatMessageMetadata | undefined;
-      const sr = meta?.searchResults;
-      if (Array.isArray(sr)) {
-        count += (sr as Array<{ url?: string }>).filter((r) => r.url).length;
-      }
+      count += countWebSearchSources(meta?.searchResults);
     }
     return count;
   }, [chatMessages]);
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
+    <div
+      data-chat-theme="cool"
+      className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
+    >
       {/* Sidebar */}
       <ChatSidebar
         sessions={conversations}
@@ -837,10 +977,14 @@ export default function WebChatPage() {
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
         onRenameSession={handleRenameSession}
-        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        onToggleSidebar={handleToggleSidebar}
         collapsed={sidebarCollapsed}
         onMoveToProjectSession={handleMoveToProjectSession}
         onUpgradeRequest={handleOpenCloudWaitlist}
+        onPinSession={handlePinSession}
+        onStarSession={handleStarSession}
+        onArchiveSession={handleArchiveSession}
+        onShareSession={handleShareSession}
       />
 
       {/* Main area + artifact workbench */}
@@ -848,7 +992,7 @@ export default function WebChatPage() {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div
             className={cn(
-              'flex h-11 shrink-0 items-center justify-between px-4',
+              'relative flex h-11 shrink-0 items-center justify-between px-4',
               isEmptyChat
                 ? 'border-b border-transparent'
                 : 'border-b border-[var(--chat-border-subtle)]',
@@ -869,6 +1013,14 @@ export default function WebChatPage() {
                 </Button>
               )}
             </div>
+
+            {/* Conversation title - centered in header when in an active chat */}
+            {activeConversationTitle && activeConversationTitle !== 'New Chat' && (
+              <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 max-w-[40%] truncate text-sm font-medium text-[var(--chat-text-secondary)]">
+                {activeConversationTitle}
+              </h1>
+            )}
+
             <div className="flex items-center gap-1.5">
               <ResearchToggleButton count={researchSourceCount} />
               <ArtifactsToggleButton />
@@ -893,7 +1045,7 @@ export default function WebChatPage() {
             </div>
           )}
 
-          {/* Notification permission banner — shown during long generations */}
+          {/* Notification permission banner · shown during long generations */}
           {showNotifBanner && (
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
               <div className="flex items-center gap-2">
@@ -925,11 +1077,10 @@ export default function WebChatPage() {
           {/* Message list */}
           {isEmptyChat ? (
             <div className="min-h-0 flex-1 overflow-hidden">
-              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center px-6 pb-[8vh]">
-                <div className="mb-9">
-                  <GreetingBanner onSendMessage={(prompt) => setComposerPrefill(prompt)} />
-                </div>
-                <div className="w-full max-w-[900px]">
+              {/* Empty state: greeting banner + centered composer. */}
+              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
+                <GreetingBanner onSendMessage={setComposerPrefill} />
+                <div className="w-full max-w-[940px]">
                   <ChatComposerNew
                     onSend={handleSend}
                     onStop={stopGeneration}
@@ -938,6 +1089,7 @@ export default function WebChatPage() {
                     placeholder="How can I help you today?"
                     prefillText={composerPrefill}
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
@@ -953,46 +1105,53 @@ export default function WebChatPage() {
             </div>
           ) : (
             <>
-              <div className="min-h-0 flex-1 overflow-hidden pb-60">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <ChatMessageList
                   messages={chatMessages}
                   isLoading={isLoading && !isStreaming}
+                  isUserTyping={isUserTyping}
                   onRegenerate={handleRegenerateMessage}
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
                   onReact={handleReactMessage}
-                  onSendMessage={(text) => setComposerPrefill(text)}
+                  onSendMessage={setComposerPrefill}
                   onPaywallUpgrade={handleOpenCloudWaitlist}
+                  onPaywallDismiss={handlePaywallDismiss}
                 />
               </div>
 
-              {/* Composer + Send Preview disclosure */}
-              <div
-                className={cn(
-                  'absolute inset-x-0 bottom-5 z-20 mx-auto w-full max-w-3xl px-4',
-                  sidebarCollapsed ? 'max-w-4xl' : '',
-                )}
-              >
-                <div className="mb-2">
-                  <SendPreview presentation={sendPreviewPresentation} />
+              {/* Composer + Send Preview disclosure · docked in normal flow (not
+                  absolute) so the banner/composer can never float over and overlap
+                  the follow-up suggestions or message content. */}
+              <div className="shrink-0 pb-4">
+                <div
+                  className={cn(
+                    'mx-auto w-full max-w-3xl px-4',
+                    sidebarCollapsed ? 'max-w-4xl' : '',
+                  )}
+                >
+                  <div className="mb-2">
+                    <SendPreview presentation={sendPreviewPresentation} />
+                  </div>
+                  <ChatComposerNew
+                    onSend={handleSend}
+                    onStop={stopGeneration}
+                    isLoading={isLoading}
+                    isGenerating={isStreaming}
+                    placeholder="How can I help you today?"
+                    prefillText={composerPrefill}
+                    onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    onTypingChange={handleTypingChange}
+                    clearSignal={composerClearSignal}
+                    attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                    onUpgradeRequest={handleOpenCloudWaitlist}
+                    freeTrial={{
+                      enabled: isWebsiteFreeTrial,
+                      promptsUsed: trialPromptsUsed,
+                      promptLimit: trialPromptLimit,
+                    }}
+                  />
                 </div>
-                <ChatComposerNew
-                  onSend={handleSend}
-                  onStop={stopGeneration}
-                  isLoading={isLoading}
-                  isGenerating={isStreaming}
-                  placeholder="How can I help you today?"
-                  prefillText={composerPrefill}
-                  onPrefillConsumed={() => setComposerPrefill(undefined)}
-                  clearSignal={composerClearSignal}
-                  attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                  onUpgradeRequest={handleOpenCloudWaitlist}
-                  freeTrial={{
-                    enabled: isWebsiteFreeTrial,
-                    promptsUsed: trialPromptsUsed,
-                    promptLimit: trialPromptLimit,
-                  }}
-                />
               </div>
             </>
           )}

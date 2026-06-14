@@ -7,7 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 /**
- * GET /api/v1/providers/:providerId/catalog — proxy to api-gateway model catalog.
+ * GET /api/v1/providers/:providerId/catalog · proxy to api-gateway model catalog.
  *
  * Security: API_GATEWAY_URL is validated against https scheme in production
  * (mirrors the guard in [providerId]/stream/route.ts lines 131-142).
@@ -22,7 +22,7 @@ export async function GET(
   const { providerId } = await params;
   const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
 
-  // Validate gateway URL — production must use https, not localhost or plain http.
+  // Validate gateway URL · production must use https, not localhost or plain http.
   if (process.env.NODE_ENV === 'production') {
     try {
       const parsed = new URL(gatewayUrl);

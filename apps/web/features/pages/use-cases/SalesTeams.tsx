@@ -44,14 +44,14 @@ const SalesTeamsPage: React.FC = () => {
       icon: BarChart3,
       title: '3x More Pipeline for 1/100th Cost',
       description:
-        'AI qualifies leads, scores prospects, predicts deal closure, and manages pipeline—freeing your closers to focus on revenue.',
+        'AI qualifies leads, scores prospects, predicts deal closure, and manages pipeline·freeing your closers to focus on revenue.',
       color: 'from-purple-500 to-pink-500',
     },
     {
       icon: Zap,
       title: 'Instant Hiring, Zero Turnover',
       description:
-        'Hire in 60 seconds vs 90 days. No recruiting fees, no ramp time, no resignations. Tell them what you need in natural language—they start working.',
+        'Hire in 60 seconds vs 90 days. No recruiting fees, no ramp time, no resignations. Tell them what you need in natural language·they start working.',
       color: 'from-orange-500 to-red-500',
     },
   ];

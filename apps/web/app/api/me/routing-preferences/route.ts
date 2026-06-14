@@ -1,8 +1,8 @@
 /**
  * /api/me/routing-preferences
  *
- * GET  — return the user's current routing_preferences JSONB.
- * PUT  — replace it (validates shape).
+ * GET  · return the user's current routing_preferences JSONB.
+ * PUT  · replace it (validates shape).
  *
  * Auth: requires Bearer JWT (mobile/desktop) OR cookie session (web).
  *       getUserClient(token) is used for both reads and writes so RLS on
@@ -55,7 +55,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     logger.warn(
       { userId, error: error instanceof Error ? error.message : String(error) },
-      '[routing-preferences] read failed — returning {}',
+      '[routing-preferences] read failed · returning {}',
     );
     return NextResponse.json({});
   }

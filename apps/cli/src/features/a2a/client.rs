@@ -7,16 +7,15 @@ use anyhow::{bail, Context, Result};
 use crate::models::Message;
 
 use super::protocol::{AgentCard, TaskRequest, TaskResponse, TaskResponseStatus};
-use super::security::validate_a2a_endpoint;
+use super::security::a2a_pinned_client;
 use super::server::DEFAULT_TASK_TIMEOUT_SECONDS;
 
 /// Fetch a single agent's card from its network endpoint.
 pub async fn fetch_agent_card(endpoint: &str) -> Result<AgentCard> {
     let url = format!("{}/a2a/card", endpoint.trim_end_matches('/'));
-    validate_a2a_endpoint(&url)?;
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()?;
+    // Validates the endpoint AND pins the connection to the checked IP so DNS
+    // cannot rebind to a private address between the check and the connect.
+    let client = a2a_pinned_client(&url, 10)?;
 
     let resp = client
         .get(&url)
@@ -51,11 +50,9 @@ pub async fn delegate_task(
 ) -> Result<TaskResponse> {
     let base = target.endpoint.trim_end_matches('/');
     let submit_url = format!("{}/a2a/task", base);
-    validate_a2a_endpoint(&submit_url)?;
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()?;
+    // One pinned client for the whole exchange: submit and poll share the same
+    // host, so pinning to the validated IP also covers the poll loop below.
+    let client = a2a_pinned_client(&submit_url, 10)?;
 
     let mut req_builder = client.post(&submit_url).json(&request);
     if let Some(token) = auth_token {
@@ -87,7 +84,8 @@ pub async fn delegate_task(
         .unwrap_or(DEFAULT_TASK_TIMEOUT_SECONDS);
     let deadline = Instant::now() + std::time::Duration::from_secs(timeout_secs);
     let poll_url = format!("{}/a2a/task/{}", base, request.request_id);
-    validate_a2a_endpoint(&poll_url)?;
+    // poll_url shares submit_url's host; the pinned client already enforces the
+    // validated IP, so no separate (re-resolving) validation is needed here.
     let mut last_poll_error: Option<String> = None;
 
     loop {

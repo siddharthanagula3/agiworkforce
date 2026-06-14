@@ -1,4 +1,4 @@
-//! Claude-style command registry contracts for AGI Workforce CLI and TUI.
+//! AGI command registry contracts for the CLI and TUI.
 //!
 //! Pure data types and the built-in slash command catalog. Composition with
 //! cli-internal types (skills, plugins, custom prompts) lives in the cli crate
@@ -587,7 +587,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "stickers",
-            "Manage Claude-style stickers",
+            "Manage session stickers",
             true,
             false,
             vec![],

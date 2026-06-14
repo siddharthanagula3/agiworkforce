@@ -92,7 +92,7 @@ export class OpenAIProvider extends BaseLLMProvider {
         // NOTE: OpenAI does NOT support message-level cache_control markers.
         // Prompt caching on OpenAI is automatic for prefixes >= 1024 tokens on
         // supported models (gpt-4o+, gpt-5 series). Cache hits are reported via
-        // usage.prompt_tokens_details.cached_tokens in the response — see below.
+        // usage.prompt_tokens_details.cached_tokens in the response · see below.
 
         return messageObj;
       }),
@@ -149,7 +149,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -325,7 +325,7 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
     if (request.tool_choice) body['tool_choice'] = request.tool_choice;
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),

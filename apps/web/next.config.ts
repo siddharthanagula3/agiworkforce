@@ -59,6 +59,11 @@ const nextConfig: NextConfig = {
   },
   // Chat app is served as static files from public/chat/ (built from apps/desktop Vite app)
   // SPA fallback rewrite is in vercel.json: /chat/:path* → /chat/index.html
+  // Permanent redirect: /cowork → /agi-work (brand rename 2026-06-13)
+  async redirects() {
+    return [{ source: '/cowork', destination: '/agi-work', permanent: true }];
+  },
+
   // Security headers
   async headers() {
     return [

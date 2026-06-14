@@ -176,7 +176,7 @@ async function handleCreateProject(request: NextRequest) {
     body.color?.trim() || '#3b82f6',
   ];
 
-  // Round-10 fields — only included when present in the request body
+  // Round-10 fields · only included when present in the request body
   const round10Columns: string[] = [];
   const round10Values: unknown[] = [];
   if (body.iconEmoji !== undefined) {
@@ -236,7 +236,7 @@ async function handleCreateProject(request: NextRequest) {
       typeof firstError === 'object' &&
       (firstError as { code?: string }).code === PG_UNDEFINED_COLUMN
     ) {
-      // Migration not yet applied — retry with only legacy fields
+      // Migration not yet applied · retry with only legacy fields
       try {
         const { sql, params } = buildInsertSql(false);
         const [inserted] = await db.query<Record<string, unknown>>(sql, params);

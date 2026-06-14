@@ -116,8 +116,8 @@ describe('AgentsSettings', () => {
       render(<AgentsSettings />);
       expect(screen.getByText(/ask before actions/i)).toBeInTheDocument();
       expect(screen.getByText(/auto-approve safe actions/i)).toBeInTheDocument();
-      // "Auto-approve all" label text
-      expect(screen.getAllByText(/auto-approve all/i).length).toBeGreaterThan(0);
+      // "AGI Mode" label text (the bypass-all approval option)
+      expect(screen.getAllByText(/agi mode/i).length).toBeGreaterThan(0);
     });
 
     it('does not expose unproven sub-agent or team toggles in demo settings', () => {
@@ -159,18 +159,15 @@ describe('AgentsSettings', () => {
       }
     });
 
-    it('clicking "Auto-approve all" calls setAutoApproveTools(true)', async () => {
+    it('clicking "AGI Mode" calls setAutoApproveTools(true)', async () => {
       render(<AgentsSettings />);
-      // Find the "Auto-approve all" radio by finding all radios and clicking the third
+      // Find the "AGI Mode" radio (the bypass-all approval option).
       const radios = screen.getAllByRole('radio');
-      // The third approval-mode radio is "Auto-approve all"
-      const autoApproveAllRadio = radios.find(
-        (r) =>
-          r.closest('label')?.textContent?.toLowerCase().includes('auto-approve all') &&
-          !r.closest('label')?.textContent?.toLowerCase().includes('safe'),
+      const agiModeRadio = radios.find((r) =>
+        r.closest('label')?.textContent?.toLowerCase().includes('agi mode'),
       );
-      expect(autoApproveAllRadio).toBeDefined();
-      await userEvent.click(autoApproveAllRadio!);
+      expect(agiModeRadio).toBeDefined();
+      await userEvent.click(agiModeRadio!);
       expect(mockSetAutoApproveTools).toHaveBeenCalledWith(true);
     });
 

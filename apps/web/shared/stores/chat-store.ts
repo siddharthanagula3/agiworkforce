@@ -606,7 +606,7 @@ export const useChatStore = create<ChatStore>()(
                     : serverError?.code === 'website_trial_prompt_limit_reached'
                       ? (serverError.message ??
                         'You have used the 3 free Auto Economy prompts for this account.')
-                      : serverError?.code === 'free_trial_auto_economy_only' ||
+                      : serverError?.code === 'free_trial_model_only' ||
                           serverError?.code === 'free_trial_feature_unavailable'
                         ? (serverError.message ?? 'Auto Economy is required for free trial access.')
                         : response.status === 429

@@ -6,7 +6,7 @@
 ///   PostToolBatch, TeammateIdle, Setup, WorktreeCreate, WorktreeRemove,
 ///   Elicitation, ElicitationResult.
 ///
-/// Strategy: for each event, build a HooksConfig with a no-op `echo ok` hook
+/// Strategy: for each event, build a HooksConfig with a no-op `true` hook
 /// keyed to the event's string name, call run_hooks(), and assert that at
 /// least one HookResult came back — proving the event-name string maps to the
 /// right HookEvent variant, the hook matcher accepts the input, and the
@@ -16,9 +16,11 @@ use std::collections::HashMap;
 use agiworkforce_cli::hooks::{run_hooks, Hook, HookEvent, HookInput, HooksConfig};
 
 // ---------------------------------------------------------------------------
-// Helper — build a HooksConfig wired to a single no-op echo hook.
-// The command is `true` (POSIX no-op, zero exit) so the test works on all
-// platforms and the result will have success=true.
+// Helper — build a HooksConfig wired to a single no-op `true` hook.
+// The hooks executor always runs commands through `sh -c` (see
+// run_single_hook in features/hooks/hooks.rs), so `true` is available on every
+// platform's hook shell (including Git Bash / MSYS sh on Windows) and the
+// result will have success=true.
 // ---------------------------------------------------------------------------
 fn config_for_event(event_name: &str) -> HooksConfig {
     let hook = Hook {

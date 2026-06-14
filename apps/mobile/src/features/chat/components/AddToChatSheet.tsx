@@ -1,5 +1,5 @@
-import { useCallback, useRef, forwardRef } from 'react';
-import { View, Pressable, Alert } from 'react-native';
+import { useCallback, forwardRef } from 'react';
+import { View, Pressable } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import {
@@ -15,17 +15,15 @@ import {
   ChevronRight,
   EyeOff,
   Lock,
-  Monitor,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useChatStore, type ChatMode } from '@/stores/chatStore';
+import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
-import { StyleSelector } from './StyleSelector';
-import { useWaitlistStore } from '@/src/features/waitlist';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 interface AddToChatSheetProps {
@@ -33,19 +31,10 @@ interface AddToChatSheetProps {
   onPhotos: () => void;
   onFile: () => void;
   onOpenCloudAccess: () => void;
+  onOpenStyleSelector: () => void;
 }
 
 const SNAP_POINTS = ['75%'];
-
-const MODE_OPTIONS: Array<{
-  id: ChatMode;
-  label: string;
-  description: string;
-}> = [
-  { id: 'chat', label: 'Chat', description: 'Standard conversation' },
-  { id: 'research', label: 'Research', description: 'Structure notes and longer answers' },
-  { id: 'create', label: 'Create', description: 'Draft and shape local text outputs' },
-];
 
 /**
  * "Add to Chat" bottom sheet.
@@ -53,24 +42,22 @@ const MODE_OPTIONS: Array<{
  *
  * Sections:
  * 1. Attachment row (Camera, Photos, File)
- * 2. Chat mode selector (Chat, Research, Create)
- * 3. Session toggles (Temporary chat)
- * 4. Tool availability (cloud-gated tools + desktop handoff)
- * 5. Config links (Project, Style, Connectors)
+ * 2. Session toggles (Temporary chat)
+ * 3. Tool availability (cloud-gated tools + desktop handoff)
+ * 4. Config links (Project, Style, Connectors)
  */
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
-  { onCamera, onPhotos, onFile, onOpenCloudAccess },
+  { onCamera, onPhotos, onFile, onOpenCloudAccess, onOpenStyleSelector },
   ref,
 ) {
   const router = useRouter();
   const { colors: themeColors } = useTheme();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
-  const chatMode = useChatStore((s) => s.chatMode);
   const chatStyle = useChatStore((s) => s.chatStyle);
   const features = useChatStore((s) => s.features);
-  const setChatMode = useChatStore((s) => s.setChatMode);
   const setFeature = useChatStore((s) => s.setFeature);
+  const appMode = useChatAppModeStore((s) => s.appMode);
 
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projects = useProjectStore((s) => s.projects);
@@ -78,10 +65,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
   const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
-
-  const styleSelectorRef = useRef<BottomSheet>(null);
-  const waitlistJoined = useWaitlistStore((s) => s.joined);
-  const waitlistRank = useWaitlistStore((s) => s.rank);
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -94,11 +77,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       ref.current.close();
     }
   }, [ref]);
-
-  const openWaitlistAfterSheetClose = useCallback(() => {
-    closeSheet();
-    onOpenCloudAccess();
-  }, [closeSheet, onOpenCloudAccess]);
 
   const handleCamera = useCallback(() => {
     haptic();
@@ -118,18 +96,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onFile();
   }, [haptic, closeSheet, onFile]);
 
-  const handleModeChange = useCallback(
-    (mode: ChatMode) => {
-      haptic();
-      setChatMode(mode);
-    },
-    [haptic, setChatMode],
-  );
-
   const handleOpenStyleSelector = useCallback(() => {
     haptic();
-    styleSelectorRef.current?.snapToIndex(0);
-  }, [haptic]);
+    onOpenStyleSelector();
+  }, [haptic, onOpenStyleSelector]);
 
   const handleWebSearchToggle = useCallback(
     (enabled: boolean) => {
@@ -149,35 +119,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [haptic, setFeature],
   );
 
-  const handleOpenCloudWaitlist = useCallback(() => {
-    haptic();
-    if (waitlistJoined) {
-      const position =
-        typeof waitlistRank === 'number' ? ` You're #${(waitlistRank + 1).toLocaleString()}.` : '';
-      Alert.alert('Already on the waitlist', `Cloud access is not active yet.${position}`);
-      return;
-    }
-    openWaitlistAfterSheetClose();
-  }, [haptic, waitlistJoined, waitlistRank, openWaitlistAfterSheetClose]);
-
-  const handleComputerUseInfo = useCallback(() => {
-    haptic();
-    Alert.alert('Desktop required', 'Computer use is available from paired AGI Desktop sessions.');
-  }, [haptic]);
-
   const handleConnectors = useCallback(() => {
     haptic();
     if (!FEATURES.connectors) {
-      if (waitlistJoined) {
-        Alert.alert('Already on the waitlist', 'Cloud connectors are not active yet.');
-        return;
-      }
-      openWaitlistAfterSheetClose();
+      onOpenCloudAccess();
       return;
     }
     closeSheet();
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [haptic, waitlistJoined, openWaitlistAfterSheetClose, closeSheet, router]);
+  }, [haptic, onOpenCloudAccess, closeSheet, router]);
 
   const renderBackdrop = useCallback(
     (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
@@ -188,85 +138,78 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const cardBg = themeColors.neutralSurface;
   const dividerColor = themeColors.borderLight;
-  const waitlistLabel =
-    waitlistJoined && typeof waitlistRank === 'number'
-      ? `#${(waitlistRank + 1).toLocaleString()}`
-      : waitlistJoined
-        ? 'Joined'
-        : 'Waitlist';
-
   return (
-    <>
-      <BottomSheet
-        ref={ref}
-        index={-1}
-        snapPoints={SNAP_POINTS}
-        enablePanDownToClose
-        backdropComponent={renderBackdrop}
-        backgroundStyle={{ backgroundColor: themeColors.surfaceElevated }}
-        handleIndicatorStyle={{ backgroundColor: themeColors.textMuted }}
+    <BottomSheet
+      ref={ref}
+      index={-1}
+      snapPoints={SNAP_POINTS}
+      enablePanDownToClose
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: themeColors.surfaceElevated }}
+      handleIndicatorStyle={{ backgroundColor: themeColors.textMuted }}
+    >
+      <BottomSheetScrollView
+        testID="add-to-chat-sheet"
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
       >
-        <BottomSheetScrollView
-          testID="add-to-chat-sheet"
-          contentContainerStyle={{ paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 20,
+            paddingBottom: 16,
+          }}
         >
-          {/* Header */}
-          <View
+          <Pressable
+            onPress={closeSheet}
+            testID="add-to-chat-close"
+            accessible
+            style={{ padding: 4 }}
+            accessibilityLabel="Close Add to Chat"
+            accessibilityRole="button"
+            hitSlop={8}
+          >
+            <X size={20} color={themeColors.textMuted} />
+          </Pressable>
+          <Text
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingHorizontal: 20,
-              paddingBottom: 16,
+              fontSize: 16,
+              fontWeight: '600',
+              color: themeColors.textPrimary,
             }}
           >
-            <Pressable
-              onPress={closeSheet}
-              testID="add-to-chat-close"
-              accessible
-              style={{ padding: 4 }}
-              accessibilityLabel="Close Add to Chat"
-              accessibilityRole="button"
-              hitSlop={8}
-            >
-              <X size={20} color={themeColors.textMuted} />
-            </Pressable>
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: '600',
-                color: themeColors.textPrimary,
-              }}
-            >
-              Add to Chat
-            </Text>
-            <View style={{ width: 28 }} />
-          </View>
+            Add to Chat
+          </Text>
+          <View style={{ width: 28 }} />
+        </View>
 
-          {/* Section 1: Attachment Row */}
-          <View
-            style={{
-              flexDirection: 'row',
-              gap: 12,
-              paddingHorizontal: 20,
-              paddingBottom: 20,
-            }}
-          >
-            <AttachmentCard
-              icon={<Camera size={22} color={themeColors.teal} />}
-              label="Camera"
-              onPress={handleCamera}
-              bg={cardBg}
-              textColor={themeColors.textPrimary}
-            />
-            <AttachmentCard
-              icon={<ImageIcon size={22} color={themeColors.teal} />}
-              label="Photos"
-              onPress={handlePhotos}
-              bg={cardBg}
-              textColor={themeColors.textPrimary}
-            />
+        {/* Section 1: Attachment Row */}
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 12,
+            paddingHorizontal: 20,
+            paddingBottom: 20,
+          }}
+        >
+          <AttachmentCard
+            icon={<Camera size={22} color={themeColors.teal} />}
+            label="Camera"
+            onPress={handleCamera}
+            bg={cardBg}
+            textColor={themeColors.textPrimary}
+          />
+          <AttachmentCard
+            icon={<ImageIcon size={22} color={themeColors.teal} />}
+            label="Photos"
+            onPress={handlePhotos}
+            bg={cardBg}
+            textColor={themeColors.textPrimary}
+          />
+          {appMode === 'cloud' ? (
             <AttachmentCard
               icon={<FileText size={22} color={themeColors.teal} />}
               label="File"
@@ -274,138 +217,66 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               bg={cardBg}
               textColor={themeColors.textPrimary}
             />
-          </View>
+          ) : null}
+        </View>
 
-          {/* Divider */}
-          <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 2: Mode Selector */}
-          <View style={{ paddingHorizontal: 20, paddingVertical: 16 }}>
-            {MODE_OPTIONS.map((mode) => {
-              const isSelected = chatMode === mode.id;
-              return (
-                <Pressable
-                  key={mode.id}
-                  onPress={() => handleModeChange(mode.id)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'flex-start',
-                    gap: 12,
-                    paddingVertical: 10,
-                    paddingHorizontal: 4,
-                  }}
-                  accessibilityLabel={`${mode.label} mode${isSelected ? ', selected' : ''}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: isSelected }}
-                >
-                  {/* Radio circle */}
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      borderWidth: 2,
-                      borderColor: isSelected ? themeColors.teal : themeColors.textMuted,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginTop: 2,
-                    }}
-                  >
-                    {isSelected && (
-                      <View
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 5,
-                          backgroundColor: themeColors.teal,
-                        }}
-                      />
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: '500',
-                        color: themeColors.textPrimary,
-                      }}
-                    >
-                      {mode.label}
-                      {mode.id === 'chat' ? ' (default)' : ''}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        color: themeColors.textMuted,
-                        marginTop: 2,
-                      }}
-                    >
-                      {mode.description}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+        {/* Section 2: Session controls */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: '600',
+              color: themeColors.textMuted,
+              letterSpacing: 0,
+              textTransform: 'uppercase',
+              marginBottom: 4,
+            }}
+          >
+            Session
+          </Text>
 
-          {/* Divider */}
-          <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-
-          {/* Section 3: Session controls */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-            <Text
-              style={{
-                fontSize: 11,
-                fontWeight: '600',
-                color: themeColors.textMuted,
-                letterSpacing: 0.6,
-                textTransform: 'uppercase',
-                marginBottom: 4,
-              }}
-            >
-              Session
-            </Text>
-
-            {/* Temporary chat row */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingVertical: 10,
-                paddingHorizontal: 4,
-                minHeight: 44,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <EyeOff
-                  size={18}
-                  color={isTemporaryChat ? themeColors.purple : themeColors.textMuted}
-                />
-                <View>
-                  <Text style={{ fontSize: 15, color: themeColors.textPrimary }}>
-                    Temporary chat
-                  </Text>
-                  <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 1 }}>
-                    Memory will not be saved from this chat
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={isTemporaryChat}
-                onValueChange={(v) => {
-                  haptic();
-                  setTemporaryChat(v);
-                }}
-                accessibilityLabel={`Temporary chat ${isTemporaryChat ? 'on' : 'off'}`}
+          {/* Temporary chat row */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: 10,
+              paddingHorizontal: 4,
+              minHeight: 44,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <EyeOff
+                size={18}
+                color={isTemporaryChat ? themeColors.purple : themeColors.textMuted}
               />
+              <View>
+                <Text style={{ fontSize: 15, color: themeColors.textPrimary }}>Temporary chat</Text>
+                <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 1 }}>
+                  Memory will not be saved from this chat
+                </Text>
+              </View>
             </View>
+            <Switch
+              value={isTemporaryChat}
+              onValueChange={(v) => {
+                haptic();
+                setTemporaryChat(v);
+              }}
+              accessibilityLabel={`Temporary chat ${isTemporaryChat ? 'on' : 'off'}`}
+            />
           </View>
+        </View>
 
-          {/* Divider */}
-          <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 4: Tool availability */}
+        {/* Section 3: Tool availability */}
+        {FEATURES.webSearch || FEATURES.imageGen || FEATURES.computerUse ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
             {FEATURES.webSearch ? (
               <CapabilityRow
@@ -417,19 +288,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
-            ) : (
-              <CapabilityRow
-                icon={<Globe size={18} color={themeColors.textMuted} />}
-                label="Web search"
-                description="Available with Cloud access"
-                enabled={false}
-                status={waitlistLabel}
-                statusTone="waitlist"
-                onStatusPress={handleOpenCloudWaitlist}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            )}
+            ) : null}
             {FEATURES.imageGen ? (
               <CapabilityRow
                 icon={<Paintbrush size={18} color={themeColors.teal} />}
@@ -440,37 +299,30 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
-            ) : (
+            ) : null}
+            {FEATURES.computerUse ? (
               <CapabilityRow
-                icon={<Paintbrush size={18} color={themeColors.textMuted} />}
-                label="Image generation"
-                description="Available with Cloud access"
+                icon={<Lock size={18} color={themeColors.textMuted} />}
+                label="Computer use"
+                description="Use a connected desktop environment"
                 enabled={false}
-                status={waitlistLabel}
-                statusTone="waitlist"
-                onStatusPress={handleOpenCloudWaitlist}
+                status="Desktop"
+                statusTone="desktop"
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
-            )}
-            <CapabilityRow
-              icon={<Monitor size={18} color={themeColors.textMuted} />}
-              label="Computer use"
-              description="Requires paired AGI Workforce Desktop"
-              enabled={false}
-              status="Desktop required"
-              statusTone="desktop"
-              onStatusPress={handleComputerUseInfo}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-            />
+            ) : null}
           </View>
+        ) : null}
 
-          {/* Divider */}
+        {/* Divider */}
+        {FEATURES.webSearch || FEATURES.imageGen || FEATURES.computerUse ? (
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
+        ) : null}
 
-          {/* Section 5: Config Links */}
-          <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+        {/* Section 4: Config Links */}
+        <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+          {appMode === 'local' ? (
             <ConfigLink
               icon={<FolderPlus size={18} color={themeColors.textMuted} />}
               label="Project"
@@ -483,30 +335,27 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 router.push('/(app)/(tabs)/projects' as Parameters<typeof router.push>[0]);
               }}
             />
-            <ConfigLink
-              icon={<Palette size={18} color={themeColors.textMuted} />}
-              label="Choose style"
-              value={chatStyle.charAt(0).toUpperCase() + chatStyle.slice(1)}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-              onPress={handleOpenStyleSelector}
-            />
+          ) : null}
+          <ConfigLink
+            icon={<Palette size={18} color={themeColors.textMuted} />}
+            label="Choose style"
+            value={chatStyle.charAt(0).toUpperCase() + chatStyle.slice(1)}
+            textColor={themeColors.textPrimary}
+            mutedColor={themeColors.textMuted}
+            onPress={handleOpenStyleSelector}
+          />
+          {FEATURES.connectors ? (
             <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
               label="Connectors"
-              value={FEATURES.connectors ? undefined : waitlistLabel}
-              statusTone="waitlist"
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
               onPress={handleConnectors}
             />
-          </View>
-        </BottomSheetScrollView>
-      </BottomSheet>
-
-      {/* Sub-sheet for style selection */}
-      <StyleSelector ref={styleSelectorRef} />
-    </>
+          ) : null}
+        </View>
+      </BottomSheetScrollView>
+    </BottomSheet>
   );
 });
 

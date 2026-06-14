@@ -21,14 +21,14 @@ interface Release {
   body: string[];
 }
 
-// Changelog is the one place versions belong — that's the page's purpose.
+// Changelog is the one place versions belong · that's the page's purpose.
 // Everything else on the marketing site avoids version numbers.
 const RELEASES: Release[] = [
   {
     date: '2026-05-08',
     headline: 'Marketing site redesign · live',
     body: [
-      'Site-wide redesign on the new dark theme — same surface across every marketing route.',
+      'Site-wide redesign on the new dark theme. Same surface across every marketing route.',
       'Single typeface (Geist Sans), 12-spoke brand mark, single amber accent used surgically.',
       'No version numbers, no model IDs, no vanity counts in marketing copy. /changelog is the explicit exception.',
     ],
@@ -50,7 +50,7 @@ const RELEASES: Release[] = [
     ],
   },
   {
-    date: '2026-02 — 2026-05',
+    date: '2026-02 to 2026-05',
     headline: 'Desktop · early releases',
     body: [
       `Tauri + React desktop with release signing and installer publishing aligned to the ${LAUNCH.date} public release path.`,

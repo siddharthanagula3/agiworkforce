@@ -25,17 +25,11 @@ where
     let mut env_map = populate_env(vars, policy, thread_id);
 
     if cfg!(target_os = "windows") {
-        // This is a workaround to address the failures we are seeing in the
-        // following tests when run via Bazel on Windows:
-        //
-        // ```
-        // suite::shell_command::unicode_output::with_login
-        // suite::shell_command::unicode_output::without_login
-        // ```
-        //
-        // Currently, we can only reproduce these failures in CI, which makes
-        // iteration times long, so we include this quick fix for now to unblock
-        // getting the Windows Bazel build running.
+        // On Windows the OS uses `PATHEXT` to resolve executable extensions
+        // (`.COM`/`.EXE`/`.BAT`/`.CMD`). When a restrictive `inherit` policy
+        // (e.g. `None`) drops it, spawned shell commands can fail to locate
+        // batch/console executables. Inject a sane default when the policy did
+        // not already carry one so subprocess command resolution stays sound.
         if !env_map.keys().any(|k| k.eq_ignore_ascii_case("PATHEXT")) {
             env_map.insert("PATHEXT".to_string(), ".COM;.EXE;.BAT;.CMD".to_string());
         }
@@ -78,10 +72,19 @@ where
 
     // Step 2 - Apply the default exclude if not disabled.
     if !policy.ignore_default_excludes {
+        // Cover the common secret-name conventions so live credentials do not
+        // leak into agent-driven shell subprocess environments. Beyond the
+        // original KEY/SECRET/TOKEN set this also catches passwords
+        // (`PGPASSWORD`, `*PASSWD*`), generic credentials, and connection
+        // strings such as `DATABASE_URL` that embed inline passwords.
         let default_excludes = vec![
             EnvironmentVariablePattern::new_case_insensitive("*KEY*"),
             EnvironmentVariablePattern::new_case_insensitive("*SECRET*"),
             EnvironmentVariablePattern::new_case_insensitive("*TOKEN*"),
+            EnvironmentVariablePattern::new_case_insensitive("*PASSWORD*"),
+            EnvironmentVariablePattern::new_case_insensitive("*PASSWD*"),
+            EnvironmentVariablePattern::new_case_insensitive("*CREDENTIAL*"),
+            EnvironmentVariablePattern::new_case_insensitive("*DATABASE_URL*"),
         ];
         env_map.retain(|k, _| !matches_any(k, &default_excludes));
     }
@@ -97,8 +100,11 @@ where
     }
 
     // Step 5 - If include_only is non-empty, keep only the matching vars.
+    // Explicitly `set` keys are exempt from the include_only filter: a user who
+    // configured both an override and an allowlist clearly wants that override
+    // present, so silently dropping it would be surprising (see step ordering).
     if !policy.include_only.is_empty() {
-        env_map.retain(|k, _| matches_any(k, &policy.include_only));
+        env_map.retain(|k, _| matches_any(k, &policy.include_only) || policy.r#set.contains_key(k));
     }
 
     // Step 6 - Populate the thread ID environment variable when provided.
@@ -169,7 +175,7 @@ mod windows_tests {
         let vars = make_vars(&[
             ("Shell", "C:\\Program Files\\Git\\bin\\bash.exe"),
             ("SystemRoot", "C:\\Windows"),
-            ("AppData", "C:\\Users\\codex\\AppData\\Roaming"),
+            ("AppData", "C:\\Users\\agiworkforce\\AppData\\Roaming"),
             ("TmpDir", "C:\\Temp\\custom"),
             ("OPENAI_API_KEY", "secret"),
         ]);
@@ -190,7 +196,7 @@ mod windows_tests {
             ("SystemRoot".to_string(), "C:\\Windows".to_string()),
             (
                 "AppData".to_string(),
-                "C:\\Users\\codex\\AppData\\Roaming".to_string(),
+                "C:\\Users\\agiworkforce\\AppData\\Roaming".to_string(),
             ),
             ("TmpDir".to_string(), "C:\\Temp\\custom".to_string()),
         ]);
@@ -230,7 +236,7 @@ mod non_windows_tests {
     fn core_inherit_preserves_non_windows_core_vars_case_insensitively() {
         let vars = make_vars(&[
             ("path", "/usr/bin"),
-            ("home", "/home/codex"),
+            ("home", "/home/agiworkforce"),
             ("TmpDir", "/tmp/custom"),
             ("OPENAI_API_KEY", "secret"),
         ]);
@@ -244,7 +250,7 @@ mod non_windows_tests {
         let result = populate_env(vars, &policy, /*thread_id*/ None);
         let expected = HashMap::from([
             ("path".to_string(), "/usr/bin".to_string()),
-            ("home".to_string(), "/home/codex".to_string()),
+            ("home".to_string(), "/home/agiworkforce".to_string()),
             ("TmpDir".to_string(), "/tmp/custom".to_string()),
         ]);
 

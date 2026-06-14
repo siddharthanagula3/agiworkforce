@@ -1,5 +1,5 @@
 /**
- * ComposerFooter — integration tests
+ * ComposerFooter · integration tests
  *
  * Verifies that the model selector, style selector, and budget tracker
  * are correctly wired into the ComposerFooter component.
@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ vi.mock('@shared/stores/model-store', () => ({
   ],
 }));
 
-// BudgetTrackerDisplay — lightweight stub
+// BudgetTrackerDisplay · lightweight stub
 vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div data-testid="budget-tracker-display" />,
 }));
@@ -50,7 +51,7 @@ vi.mock('../StyleSelector', () => ({
   StyleSelector: () => <div data-testid="style-selector" />,
 }));
 
-// Shared popover primitives — minimal pass-through
+// Shared popover primitives · minimal pass-through
 vi.mock('@shared/ui/popover', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
@@ -60,7 +61,7 @@ vi.mock('@shared/ui/popover', () => ({
   ),
 }));
 
-// Command components — minimal stubs
+// Command components · minimal stubs
 vi.mock('@shared/ui/command', () => ({
   Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CommandInput: ({ placeholder }: { placeholder: string }) => <input placeholder={placeholder} />,
@@ -76,7 +77,7 @@ vi.mock('@shared/ui/command', () => ({
   ),
 }));
 
-// zustand persist — avoid localStorage in jsdom
+// zustand persist · avoid localStorage in jsdom
 vi.mock('zustand/middleware', async () => {
   const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
   return {
@@ -91,7 +92,7 @@ import { ComposerFooter } from '../ComposerFooter';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('ComposerFooter — model selector integration', () => {
+describe('ComposerFooter · model selector integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -111,13 +112,16 @@ describe('ComposerFooter — model selector integration', () => {
     expect(screen.queryByRole('button', { name: /change model/i })).not.toBeInTheDocument();
   });
 
-  it('renders model options grouped as Recommended and More models sections', () => {
+  it('renders grouped model options (a More models section) when the selector is opened', async () => {
     render(<ComposerFooter />);
-    expect(screen.getByText('Recommended')).toBeInTheDocument();
+    // The grouped options live inside the (closed-by-default) popover. Recommended
+    // models render at the top; the remainder collapse under a "More models" section.
+    await userEvent.click(screen.getByRole('button', { name: /change model/i }));
+    expect(await screen.findByText('More models')).toBeInTheDocument();
   });
 });
 
-describe('ComposerFooter — layout', () => {
+describe('ComposerFooter · layout', () => {
   it('renders keyboard hint text', () => {
     render(<ComposerFooter hint="Enter to send" />);
     expect(screen.getByText('Enter to send')).toBeInTheDocument();

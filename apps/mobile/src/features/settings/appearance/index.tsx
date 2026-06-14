@@ -30,9 +30,9 @@ export default function AppearanceScreen() {
             <Pressable
               key={mode}
               onPress={() => setThemeMode(mode)}
-              accessibilityRole="radio"
+              accessibilityRole="button"
               accessibilityState={{ selected }}
-              accessibilityLabel={label}
+              accessibilityLabel={`Set appearance to ${label}`}
               style={{
                 minHeight: 60,
                 paddingHorizontal: 14,

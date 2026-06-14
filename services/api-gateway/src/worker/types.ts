@@ -30,7 +30,12 @@ export interface WorkSecret {
   session_ingress_token: string;
   /** Base URL for LLM / CCR calls inside this work unit. */
   api_base_url: string;
-  /** Extra CLI args to forward to the worker process (optional). */
+  /** Extra args to forward to the AGI worker process (optional). */
+  worker_args?: string[];
+  /**
+   * Legacy alias retained only for decoding older envelopes produced during
+   * reference-protocol research. New AGI envelopes should use `worker_args`.
+   */
   claude_code_args?: string[];
   /** MCP server configuration blob (optional). */
   mcp_config?: unknown;
@@ -221,6 +226,9 @@ export function decodeWorkSecret(encoded: string): WorkSecret {
   }
   if (secret.expires_at < Math.floor(Date.now() / 1000)) {
     throw new Error('WorkSecret: envelope expired');
+  }
+  if (secret.worker_args === undefined && Array.isArray(secret.claude_code_args)) {
+    return { ...secret, worker_args: secret.claude_code_args };
   }
   return secret;
 }

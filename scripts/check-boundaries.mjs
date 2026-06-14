@@ -17,6 +17,13 @@ const ignoredParts = new Set([
   '.cache',
   '.turbo',
   '.expo',
+  'Pods',
+  '.vercel',
+  'dist-web',
+  '.vscode-test',
+  'public',
+  'playwright-report',
+  'test-results',
 ]);
 
 const uiPackages = new Set(['@agiworkforce/unified-chat', '@agiworkforce/design-tokens']);

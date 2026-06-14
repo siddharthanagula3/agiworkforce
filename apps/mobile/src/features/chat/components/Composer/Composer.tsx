@@ -17,10 +17,15 @@ interface ComposerProps {
   isOnline?: boolean;
   queueSize?: number;
   attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
-  /** Whether to show 6 task chips above the input (shown on empty chat) */
+  /** Whether to show task chips above the input (shown on empty chat) */
   showChips?: boolean;
   /** When false, thread has messages and placeholder reads "Reply to AGI" */
   isThreadActive?: boolean;
+  /**
+   * Pre-fill text for the composer on first render (e.g. from a conversation
+   * starter prompt or URL param). Only applied at mount.
+   */
+  initialText?: string;
 }
 
 export function Composer({
@@ -38,6 +43,7 @@ export function Composer({
   attachRef,
   showChips = false,
   isThreadActive,
+  initialText,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
 
@@ -74,6 +80,7 @@ export function Composer({
         queueSize={queueSize}
         attachRef={attachRef}
         isThreadActive={isThreadActive ?? !showChips}
+        initialText={initialText}
       />
     </View>
   );

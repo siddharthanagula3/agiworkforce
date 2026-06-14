@@ -8,7 +8,7 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 /**
  * Teal sparkle indicator that pulses at the end of streaming text.
@@ -16,6 +16,7 @@ import { colors } from '@/src/ui/theme';
  * Replaces the previous amber cursor (`|`) with a teal sparkle character.
  */
 export function StreamingIndicator() {
+  const colors = useThemeColors();
   const opacity = useSharedValue(0.3);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export function StreamingIndicator() {
       accessibilityLabel="Generating response"
       accessibilityRole="text"
     >
-      {'\u2728'}
+      {'✨'}
     </Animated.Text>
   );
 }

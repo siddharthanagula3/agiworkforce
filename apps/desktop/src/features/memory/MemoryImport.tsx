@@ -108,8 +108,8 @@ function parseChatGptJson(raw: string): ParsedMemory[] {
 }
 
 /**
- * Claude memory export — tries the same AGI Workforce JSON shape first,
- * then falls back to ChatGPT-style parsing.
+ * Claude memory export: tries the same AGI Workforce JSON shape first,
+ * then falls back to a common memory export shape.
  */
 function parseClaudeJson(raw: string): ParsedMemory[] {
   const parsed: unknown = JSON.parse(raw);

@@ -92,13 +92,13 @@ beforeEach(() => {
 
 describe('joinWaitlist — success', () => {
   it('posts a row with the normalised email', async () => {
-    post.mockResolvedValueOnce({ ok: true, joined: true });
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 2 });
 
     await joinWaitlist({ email: '  Test@Example.COM  ' });
 
     expect(post).toHaveBeenCalledWith(
-      '/api/waitlist/cloud-managed',
-      expect.objectContaining({ email: 'test@example.com' }),
+      '/api/waitlist/public',
+      expect.objectContaining({ email: 'test@example.com', source: 'mobile' }),
       expect.objectContaining({
         headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
       }),
@@ -106,7 +106,7 @@ describe('joinWaitlist — success', () => {
   });
 
   it('passes optional country and deviceModel fields when provided', async () => {
-    post.mockResolvedValueOnce({ ok: true, joined: true });
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 3 });
 
     await joinWaitlist({
       email: 'user@test.io',
@@ -116,9 +116,10 @@ describe('joinWaitlist — success', () => {
     });
 
     expect(post).toHaveBeenCalledWith(
-      '/api/waitlist/cloud-managed',
+      '/api/waitlist/public',
       expect.objectContaining({
         email: 'user@test.io',
+        source: 'mobile',
         country: 'US',
         deviceModel: 'iPhone 16',
         deviceTier: 2,
@@ -129,23 +130,30 @@ describe('joinWaitlist — success', () => {
     );
   });
 
-  it('returns rank 0 because the Web/API route does not expose rank', async () => {
-    post.mockResolvedValueOnce({ ok: true, joined: true });
+  it('returns the server-provided zero-indexed rank', async () => {
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 14 });
 
     const result = await joinWaitlist({ email: 'a@b.com' });
 
-    expect(result).toEqual({ rank: 0 });
+    expect(result).toEqual({ rank: 14 });
+  });
+
+  it('resolves {rank: null} when the API omits rank', async () => {
+    post.mockResolvedValueOnce({ ok: true, joined: true });
+
+    const result = await joinWaitlist({ email: 'a@b.com' });
+    expect(result).toEqual({ rank: null });
   });
 
   it('fetches a CSRF token from /api/csrf BEFORE posting (no preflight = 403)', async () => {
-    post.mockResolvedValueOnce({ ok: true });
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 0 });
 
     await joinWaitlist({ email: 'a@b.com' });
 
     expect(get).toHaveBeenCalledWith('/api/csrf');
     // The token must reach the POST so requireCsrfToken passes server-side.
     expect(post).toHaveBeenCalledWith(
-      '/api/waitlist/cloud-managed',
+      '/api/waitlist/public',
       expect.anything(),
       expect.objectContaining({
         headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),

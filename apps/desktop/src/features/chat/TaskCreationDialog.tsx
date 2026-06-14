@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/Select';
 import { useAgentTaskStore } from '../../stores/agentTaskStore';
 import { useModelStore } from '../../stores/modelStore';
+import { ensureAgiInitialized } from '../../api/agi';
 import { cn } from '../../lib/utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
 
     setSubmitting(true);
     try {
+      await ensureAgiInitialized();
       const result = await invoke<SubmitGoalAutoResponse>('agi_submit_goal_auto', {
         goal: trimmedGoal,
         maxIterations,

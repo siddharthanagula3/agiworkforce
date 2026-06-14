@@ -1,109 +1,174 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  LedgerSection,
-} from '../../../components/marketing/LandingSections';
-import { LAUNCH } from '../../../lib/marketing-constants';
+import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
+import { Reveal } from '../../../components/marketing/Reveal';
 
 export const metadata: Metadata = {
-  title: 'AGI Memory - Search, reference, import, manage, and delete context',
+  title: 'AGI Memory | Plain-Language Facts You Control',
   description:
-    'AGI Memory gives users control over remembered context across chats and projects, including search, import, view, edit, and delete controls.',
+    'AGI Memory is a readable list of facts you can view, add to, edit, and delete. Device-local by default. Hosted sync reserved for AGI Cloud by invite.',
   alternates: { canonical: 'https://agiworkforce.com/features/memory' },
 };
+
+const CONTROLS = [
+  {
+    meta: 'See',
+    title: 'Every memory is a sentence.',
+    body: 'Memory is stored as short, readable facts rather than an opaque profile.',
+    points: [
+      'Open the full list any time in Settings → Memory',
+      'A fact can record which conversation it came from',
+      'Facts stay short and readable by design',
+    ],
+  },
+  {
+    meta: 'Shape',
+    title: 'Edit it like a list. Because it is one.',
+    body: 'Add the facts you want remembered, fix the ones that drift, and delete what no longer belongs.',
+    points: [
+      'Add a fact yourself in seconds',
+      'Edit or delete any single fact',
+      '“Forget everything” clears the list in one step',
+    ],
+  },
+  {
+    meta: 'Keep',
+    title: 'On your device by default.',
+    body: 'In the current release, memory lives on the device that created it.',
+    points: [
+      'Facts persist locally on each device',
+      'Hosted memory sync belongs to AGI Cloud, opening by invite',
+      "Incognito conversations aren't saved to disk",
+    ],
+  },
+];
 
 export default function MemoryFeaturePage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Memory`}
-          title="Memory only works if users can see and control it."
-          lede="AGI Memory is designed to remember useful context across chats and projects without becoming a hidden black box. Users get search, reference-chat controls, generated memory controls, import paths from provider exports, and a clear delete path."
-          primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondaryCta={{ href: '/privacy', label: 'Privacy posture' }}
-          chips={['View', 'Search', 'Edit', 'Delete', 'Import']}
-          panelTitle="Memory settings"
-          panelRows={[
-            { k: 'Search chats', v: 'Allow AGI to search relevant past chats when enabled' },
-            { k: 'Generate', v: 'Allow durable memories from chat history when enabled' },
-            { k: 'Manage', v: 'View, edit, pin, delete, and inspect source' },
-            { k: 'Import', v: 'Bring context from another AI provider with user consent' },
-          ]}
-        />
 
-        <FeatureGrid
-          eyebrow="Memory controls"
-          title="Explicit controls for remembered context."
+        <section className="agi-page-hero">
+          <p className="agi-section-eyebrow">Features · Memory</p>
+          <h1 className="agi-page-h1">Memory you can read.</h1>
+          <p className="agi-page-lede">
+            AGI keeps memory as a list of plain-language facts. Open it, add to it, edit it, or
+            clear it entirely. Personal context stays something you hold, not something that happens
+            to you.
+          </p>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-memory-controls">
+          <p className="agi-fl-eyebrow">Controls</p>
+          <h2 id="agi-memory-controls" className="agi-fl-h2">
+            A list, not a black box.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Every remembered fact is a short sentence you can see and change. The controls are the
+            feature.
+          </p>
+          <div className="agi-fl-trust-grid">
+            {CONTROLS.map((card, i) => (
+              <Reveal key={card.meta} delay={i * 80} className="agi-fl-trust-card">
+                <p className="agi-fl-trust-mode">{card.meta}</p>
+                <h3 className="agi-fl-trust-title">{card.title}</h3>
+                <p className="agi-fl-trust-body">{card.body}</p>
+                <ul className="agi-fl-trust-points">
+                  {card.points.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-memory-learning">
+          <p className="agi-fl-eyebrow">Day by day</p>
+          <h2 id="agi-memory-learning" className="agi-fl-h2">
+            Designed to learn carefully.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Memory grows from what you actually say. Conservatively, visibly, and always under your
+            hand.
+          </p>
+          <div className="agi-fl-trust-grid">
+            <Reveal className="agi-fl-trust-card">
+              <p className="agi-fl-trust-mode">Learn</p>
+              <h3 className="agi-fl-trust-title">It learns from your own words.</h3>
+              <p className="agi-fl-trust-body">
+                On Mobile, AGI can turn first-person statements like “I prefer...” or “my name
+                is...” into durable facts after a chat, tuned for precision over recall.
+              </p>
+              <ul className="agi-fl-trust-points">
+                <li>Only clear self-disclosure becomes a candidate fact</li>
+                <li>New facts land in the memory list, ready to edit or delete</li>
+              </ul>
+            </Reveal>
+            <Reveal delay={80} className="agi-fl-trust-card">
+              <p className="agi-fl-trust-mode">Import</p>
+              <h3 className="agi-fl-trust-title">Bring your context with you.</h3>
+              <p className="agi-fl-trust-body">
+                On Mobile, import remembered context from a ChatGPT, Claude, or Gemini export file.
+                Parsing happens entirely on your device.
+              </p>
+              <ul className="agi-fl-trust-points">
+                <li>Works from the export files you already own</li>
+                <li>Nothing in the file leaves the device</li>
+              </ul>
+            </Reveal>
+            <Reveal delay={160} className="agi-fl-trust-card">
+              <p className="agi-fl-trust-mode">Scope</p>
+              <h3 className="agi-fl-trust-title">Standing context, where it belongs.</h3>
+              <p className="agi-fl-trust-body">
+                Project instructions carry per-project context separately, so one project can sound
+                like itself without rewriting your personal memory.
+              </p>
+              <Link href="/features/projects" className="agi-fl-cta agi-fl-cta--ghost">
+                Explore Projects
+              </Link>
+            </Reveal>
+          </div>
+        </section>
+
+        <CapabilityGrid
+          eyebrow="Keep exploring"
+          title="Where memory does its work."
           items={[
             {
-              meta: 'Search',
-              title: 'Search and reference chats',
-              body: 'When enabled, AGI can search relevant details from past chats to improve new answers.',
-            },
-            {
-              meta: 'Generate',
-              title: 'Generate memory from chat history',
-              body: 'When enabled, AGI can extract durable facts and preferences that apply across chats and projects.',
-            },
-            {
-              meta: 'Manage',
-              title: 'View and manage memory',
-              body: 'Users can inspect each memory, see where it came from, edit it, delete it, or pin it.',
-            },
-            {
-              meta: 'Import',
-              title: 'Import from other AI providers',
-              body: 'Migration starts from user-authorized exports so useful context can move from ChatGPT, Claude, Gemini, or other tools.',
-            },
-            {
               meta: 'Projects',
-              title: 'Project-scoped memory',
-              body: 'A project can remember facts relevant to that project without polluting unrelated chats.',
+              title: 'Projects',
+              body: 'Group chats, files, and instructions under one objective.',
               href: '/features/projects',
             },
             {
-              meta: 'Privacy',
-              title: 'Temporary chats stay out',
-              body: 'Incognito or temporary chats stay separate from memory and future personalization.',
+              meta: 'Agents',
+              title: 'Agents',
+              body: 'Delegated, tool-using work with explicit permissions and approvals.',
+              href: '/features/agents',
+            },
+            {
+              meta: 'Research',
+              title: 'Deep Research',
+              body: 'Cited reports across the web, your files, and connected tools.',
+              href: '/features/deep-research',
             },
           ]}
         />
 
-        <LedgerSection
-          eyebrow="Trust language"
-          title="Memory boundaries stay visible."
-          rows={[
-            {
-              k: 'Control',
-              v: 'Memory is user-controlled, inspectable, editable, deletable, and separately configurable for chats and projects.',
-            },
-            {
-              k: 'Modes',
-              v: 'Local, BYOK, and Cloud memory boundaries are visible and governed by mode.',
-            },
-            {
-              k: 'Import',
-              v: 'Provider migration uses export files or user-authorized provider paths, not hidden account scraping.',
-            },
-            {
-              k: 'Privacy',
-              v: 'Privacy language follows the active Local, BYOK, or Cloud mode instead of a single blanket claim.',
-            },
+        <FinalCta
+          eyebrow="Start now"
+          title="Make it personal. Keep it yours."
+          body="Try AGI Web in the browser, or install the apps for Local and BYOK work. Memory stays in your hands either way."
+          ctas={[
+            { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
+            { href: '/download', label: 'Download AGI' },
           ]}
         />
 
-        <LaunchCta
-          title="Memory builds trust when it stays visible."
-          body="Users can make AGI personal while still seeing what it remembers, where that memory came from, and how to remove it."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/trust', label: 'Trust center' }}
-        />
         <MarketingFooter />
       </main>
     </div>

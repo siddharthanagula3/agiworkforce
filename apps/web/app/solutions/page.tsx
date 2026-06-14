@@ -1,18 +1,18 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { RouteMap } from '../../components/marketing/LandingSections';
 import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  RouteMap,
-} from '../../components/marketing/LandingSections';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+  CapabilityGrid,
+  FinalCta,
+  FlagshipHero,
+} from '../../components/marketing/FlagshipSections';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Solutions - AI workflows for teams, developers, and operators',
+  title: 'AGI Solutions: AI workflows for teams, developers, and operators',
   description:
-    'Explore AGI solution pages for business teams, developers, startups, consultants, sales, IT service providers, and enterprise buyers.',
+    'Explore AGI solution pages for business teams, developers, startups, consultants, sales teams, IT service providers, and enterprise buyers.',
   alternates: { canonical: 'https://agiworkforce.com/solutions' },
 };
 
@@ -21,25 +21,23 @@ export default function SolutionsPage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Solutions`}
-          title="One AGI suite, different reasons to switch."
-          lede={`Ads should not send every user to the same homepage. Developers need AGI Code. Teams need governance. Operators need Cowork. Everyone needs the same trust boundary: ${POSITIONING.trustBoundary}`}
-          primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondaryCta={{ href: '/business', label: 'Business overview' }}
-          chips={['Developers', 'Teams', 'Startups', 'Consultants', 'Operators']}
-          panelTitle="Campaign map"
-          panelRows={[
-            { k: 'Developer', v: '/agi-code, /cli, /vscode-extension, /compare/codex' },
-            { k: 'Business', v: '/business, /teams, /enterprise, /apps' },
-            { k: 'Local/BYOK', v: '/local, /byok, /providers, /download' },
-            { k: 'Use cases', v: '/use-cases and role-specific pages' },
+
+        <FlagshipHero
+          eyebrow="Solutions"
+          titleLines={['One suite.', 'Many ways in.']}
+          em="Many ways in."
+          lede="Developers come for the terminal. Teams come for governance. Operators come for scheduled desktop work. Everyone gets the same rule: Local, BYOK, and AGI Cloud are separate, visible routes. Nothing moves between them silently."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/business', label: 'See AGI for Business' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
           ]}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
         />
 
         <RouteMap
           eyebrow="Solution hubs"
-          title="Primary ad destinations."
+          title="Start with the page that matches your work."
           routes={[
             {
               meta: 'Business',
@@ -56,79 +54,79 @@ export default function SolutionsPage() {
             {
               meta: 'Developers',
               title: 'AGI Code',
-              body: 'CLI, VS Code, desktop code, diffs, tests, worktrees, and permissions.',
+              body: 'CLI, VS Code, and desktop coding with diffs, tests, and permissions.',
               href: '/agi-code',
             },
             {
               meta: 'Operators',
-              title: 'AGI Cowork',
-              body: 'Desktop browser, files, apps, scheduled tasks, and mobile dispatch.',
-              href: '/cowork',
+              title: 'AGI Work',
+              body: 'Scheduled desktop work, file workflows, and mobile-to-desktop dispatch.',
+              href: '/agi-work',
             },
             {
               meta: 'Privacy',
               title: 'Local mode',
-              body: 'Run supported local models on your own device where available.',
+              body: 'Run local models on your own hardware. Free and offline-capable.',
               href: '/local',
             },
             {
               meta: 'Provider choice',
               title: 'BYOK mode',
-              body: 'Bring provider keys and route work explicitly to the selected provider.',
+              body: 'Bring provider keys on Desktop and CLI and route work explicitly.',
               href: '/byok',
             },
           ]}
         />
 
-        <FeatureGrid
-          eyebrow="Ad group ideas"
-          title="Build campaigns around intent, not features alone."
+        <CapabilityGrid
+          eyebrow="By intent"
+          title="Find your path by what you need."
           items={[
             {
-              meta: 'High intent',
-              title: 'Alternatives',
-              body: 'Target users comparing ChatGPT, Claude, Codex, Claude Code, Gemini, Perplexity, local LLM apps, and OpenRouter frontends.',
-              href: '/compare',
-            },
-            {
-              meta: 'Problem intent',
+              meta: 'Privacy',
               title: 'Private AI chat',
-              body: 'Route to Local or BYOK pages with explicit boundary language instead of blanket privacy claims.',
+              body: 'Keep sensitive work on the device with Local Mode across Desktop, Mobile, and CLI.',
               href: '/local',
             },
             {
-              meta: 'Developer intent',
+              meta: 'Developers',
               title: 'AI coding agent',
-              body: 'Route to AGI Code, CLI, VS Code, Codex comparison, and Claude Code comparison pages.',
+              body: 'Sessions, code review, sandboxed execution, hooks, and MCP in the terminal and IDE.',
               href: '/agi-code',
             },
             {
-              meta: 'Workflow intent',
-              title: 'Research and reports',
-              body: 'Route to deep research, artifacts, consulting, and business pages.',
+              meta: 'Research',
+              title: 'Reports with sources',
+              body: 'Deep research flows that cite what they read.',
               href: '/features/deep-research',
             },
             {
-              meta: 'Procurement intent',
-              title: 'Enterprise AI workspace',
-              body: 'Route to Business, Teams, Enterprise, Trust, Security, and contact-sales pages.',
+              meta: 'Procurement',
+              title: 'Enterprise rollout',
+              body: 'SSO, audit, retention, and BYOK enforcement scoped by contract.',
               href: '/enterprise',
             },
             {
-              meta: 'Role intent',
-              title: 'Use case pages',
-              body: 'Use role-specific pages for startups, IT providers, sales teams, and consulting firms.',
+              meta: 'Roles',
+              title: 'Use cases',
+              body: 'Pages for startups, consultants, sales teams, and IT providers.',
               href: '/use-cases',
             },
           ]}
         />
 
-        <LaunchCta
-          title="This is the map for scaling beyond one ad group."
-          body="Use 50+ ad groups only if each group has a matching landing page, a matching promise, and a matching next action."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/use-cases', label: 'Use cases' }}
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Pick a door. The workspace is the same inside."
+          body="Whichever page brings you in, you land in one product with visible routes, your choice of providers, and a cloud that opens by invite."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/use-cases', label: 'Browse Use Cases' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
         />
+
         <MarketingFooter />
       </main>
     </div>

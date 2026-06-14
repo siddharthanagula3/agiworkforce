@@ -1,8 +1,7 @@
-use colored::Colorize;
-
 use crate::agent::AgentSession;
 use crate::config::CliConfig;
 use crate::output;
+use crate::terminal_style as ts;
 
 use super::dialogs;
 use super::registry;
@@ -176,7 +175,7 @@ pub(super) fn handle_slash_command(
             eprintln!("{}", session.context_report());
         }
         "/status" => {
-            eprintln!("{}", "Status:".cyan().bold());
+            eprintln!("{}", ts::accent_header("Status:"));
             eprintln!("  Version:    {}", env!("CARGO_PKG_VERSION"));
             eprintln!("  Model:      {}", session.model);
             eprintln!("  Provider:   {:?}", session.provider);
@@ -418,7 +417,7 @@ pub(super) fn handle_slash_command(
                 if statuses.is_empty() {
                     eprintln!("No authentication configured. Use /login to authenticate.");
                 } else {
-                    eprintln!("{}", "Auth Status:".cyan().bold());
+                    eprintln!("{}", ts::accent_header("Auth Status:"));
                     for s in &statuses {
                         eprintln!(
                             "  {:<18} {:<10} {}{}",

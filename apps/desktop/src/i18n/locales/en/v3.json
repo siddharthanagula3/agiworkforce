@@ -38,6 +38,25 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "Pinned",
+    "actions": {
+      "more": "More options",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "rename": "Rename",
+      "delete": "Delete",
+      "confirmDelete": "Confirm delete"
+    },
+    "projects": {
+      "newChat": "New chat in project",
+      "open": "Open project",
+      "newProject": "New project"
+    },
+    "mode": {
+      "local": "Local",
+      "cloud": "Cloud",
+      "aria": "Switch between Local and Cloud"
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
@@ -47,7 +66,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "cowork": "Cowork",
+      "work": "AGI Work",
       "code": "Code"
     },
     "nav": {
@@ -64,6 +83,7 @@
     "cloudSync": "Cloud sync"
   },
   "emptyChat": {
+    "neutralHeadline": "How can I help you today?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
@@ -318,16 +338,16 @@
       "tsDesc": "Bun-powered TS execution in a sandbox"
     }
   },
-  "cowork": {
+  "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use Cowork safely.",
+      "learnLink": "Learn how to use AGI Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know Cowork",
+      "onboardingTitle": "Get to know AGI Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -341,9 +361,9 @@
     },
     "dispatch": {
       "title": "Dispatch",
-      "subtitle": "Send tasks from your phone, run them on this Mac. Outputs land in Live artifacts.",
+      "subtitle": "Send tasks from your phone, run them on this Mac. Outputs land in Artifacts.",
       "sendFromAnywhere": "Send from anywhere",
-      "sendFromAnywhereDesc": "Dispatch a task from the mobile app, your wrist, or a shortcut. This Mac picks it up, runs it, returns the artifact.",
+      "sendFromAnywhereDesc": "Dispatch a task from mobile or a shortcut. This Mac runs it and returns the artifact.",
       "getMobileApp": "Get mobile app",
       "acceptTasks": "Accept dispatched tasks",
       "acceptTasksDesc": "When off, your phone won't be able to dispatch work here.",
@@ -353,14 +373,16 @@
       "noOutputs": "No task outputs yet. Dispatch a task from the mobile app to get started."
     },
     "artifacts": {
-      "title": "Live artifacts",
-      "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
+      "title": "Artifacts",
+      "subtitle": "Saved outputs, generated files, and reusable work.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Run a scheduled task to generate outputs."
+      "empty": "No artifacts yet. Generate or save an artifact to see it here."
     },
     "projects": {
-      "title": "Cowork projects",
+      "title": "Projects",
       "newProject": "New project",
+      "untitled": "Untitled project",
+      "empty": "No projects yet",
       "updated": "Updated {{when}}",
       "sessions": "{{count}} sessions"
     },
@@ -368,11 +390,11 @@
       "title": "Scheduled tasks",
       "scheduleNew": "Schedule new task",
       "keepAwake": "Keep this Mac awake for scheduled tasks",
-      "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
+      "keepAwakeDesc": "Prevents sleep during scheduled runs. Plug in for long tasks.",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started."
+      "empty": "No scheduled tasks yet."
     }
   },
   "time": {

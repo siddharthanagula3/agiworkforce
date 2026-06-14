@@ -4,7 +4,7 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Mobile Legal — Privacy Policy and Terms of Service',
+  title: 'Mobile Legal · Privacy Policy and Terms of Service',
   description:
     'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local and Cloud invite modes.',
   alternates: { canonical: 'https://agiworkforce.com/mobile/legal' },
@@ -23,7 +23,7 @@ export default function MobileLegalPage() {
         <Header />
 
         <section className="agi-page-hero">
-          <p className="agi-section-eyebrow">Mobile — legal</p>
+          <p className="agi-section-eyebrow">Mobile · legal</p>
           <h1 className="agi-page-h1">Privacy policy and terms of service.</h1>
           <p className="agi-page-lede">
             Effective {EFFECTIVE_DATE}. Applies to AGI Mobile on iOS and Android.{' '}
@@ -44,7 +44,7 @@ export default function MobileLegalPage() {
 
         {/* ---- PRIVACY POLICY ---- */}
         <section className="agi-section" id="privacy">
-          <p className="agi-section-eyebrow">01 — Privacy policy</p>
+          <p className="agi-section-eyebrow">01 · Privacy policy</p>
           <h2 className="agi-section-h2">How AGI Mobile handles your data.</h2>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
             {COMPANY} ({COMPANY_STATE}) operates AGI Mobile. This policy describes what data the app
@@ -87,20 +87,20 @@ export default function MobileLegalPage() {
               <tr>
                 <td>Crash reports</td>
                 <td>
-                  Stack traces, app version, device model, OS version. All strings longer than 40
-                  characters are stripped before transmission.
+                  Stack traces, app version, device model, OS version, and diagnostic metadata.
+                  Conversation content should not be included.
                 </td>
-                <td>Sentry (crash monitoring). US servers.</td>
+                <td>Crash monitoring provider.</td>
                 <td>To diagnose and fix bugs.</td>
               </tr>
               <tr>
                 <td>Usage analytics</td>
                 <td>
-                  Feature usage events (e.g., &ldquo;voice input used&rdquo;). All text input is
-                  masked. No session replay on AI screens. Telemetry is off by default.
+                  Feature usage events, if analytics are enabled. Text input and conversation
+                  content should not be collected.
                 </td>
-                <td>PostHog (analytics). EU-region option available.</td>
-                <td>To understand which features are valuable. Opt-in.</td>
+                <td>Analytics provider.</td>
+                <td>To understand which features are valuable when the user allows analytics.</td>
               </tr>
               <tr>
                 <td>Account data</td>
@@ -231,9 +231,8 @@ export default function MobileLegalPage() {
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
             Conversation data is stored locally on your device and is deleted when you uninstall the
-            app or delete it from within the app. Crash report data is retained by Sentry for 90
-            days. Analytics data is retained by PostHog for 12 months. Account data is retained
-            until you request deletion.
+            app or delete it from within the app. Diagnostic, analytics, and account retention
+            periods are governed by the active production configuration and user deletion controls.
           </p>
 
           <h3
@@ -284,7 +283,7 @@ export default function MobileLegalPage() {
 
         {/* ---- TERMS OF SERVICE ---- */}
         <section className="agi-section" id="terms">
-          <p className="agi-section-eyebrow">02 — Terms of service</p>
+          <p className="agi-section-eyebrow">02 · Terms of service</p>
           <h2 className="agi-section-h2">Terms governing use of AGI Mobile.</h2>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
             These terms are a legal agreement between you and {COMPANY} ({COMPANY_STATE}).
@@ -338,10 +337,10 @@ export default function MobileLegalPage() {
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Third-party models</span>
               <span className="agi-colophon-val">
-                The App integrates third-party on-device models including Apple Foundation Models,
-                Gemini Nano, Gemma, and Qwen3-4B. Use of these models is subject to the respective
-                provider&rsquo;s terms. AGI Automation LLC is not responsible for the output of
-                third-party models.
+                The App may use system local runtimes, downloadable local models, or invite-gated
+                Cloud providers depending on the mode and device. Use of third-party models is
+                subject to the respective provider&rsquo;s terms. AGI Automation LLC is not
+                responsible for the output of third-party models.
               </span>
             </div>
             <div className="agi-colophon-row">

@@ -17,7 +17,8 @@ export interface JoinWaitlistInput {
 }
 
 export interface JoinWaitlistResult {
-  rank: number;
+  /** Queue position when the backend returns one; null for the anonymous public route. */
+  rank: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,12 +90,16 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
   const email = validateEmail(input.email);
 
   try {
-    // /api/waitlist/cloud-managed is CSRF-protected (requireCsrfToken); without
-    // this preflight every mobile signup 403'd and no row was ever written.
+    // Mobile waitlist signups are ANONYMOUS (no Clerk session on this surface),
+    // so they must hit /api/waitlist/public — the account-bound
+    // /api/waitlist/cloud-managed route calls requireCurrentUserId() and 401s
+    // every unauthenticated mobile request (which is why no row was ever
+    // written). The public route stores the email with a null user_id.
+    // Both routes are CSRF-protected (requireCsrfToken), so the preflight stays.
     const csrfToken = await fetchCsrfToken();
 
-    await api.post<{ ok?: boolean; joined?: boolean }>(
-      '/api/waitlist/cloud-managed',
+    const response = await api.post<{ ok?: boolean; joined?: boolean; rank?: unknown }>(
+      '/api/waitlist/public',
       {
         email,
         // Separate mobile AGI Cloud waitlist source; rolls up into the shared
@@ -106,11 +111,19 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
       },
       { headers: { 'x-csrf-token': csrfToken } },
     );
+
+    if (response.ok !== true || response.joined !== true) {
+      throw new Error('Cloud waitlist signup was not confirmed.');
+    }
+
+    // The public route confirms storage but does not return a queue position.
+    // Treat rank as optional: surface it when present, otherwise null (the UI
+    // shows a generic confirmation rather than a fabricated "#1 in line").
+    const rank = Number(response.rank);
+    return { rank: Number.isFinite(rank) && rank >= 0 ? Math.floor(rank) : null };
   } catch (err) {
     throw new WaitlistNetworkError(err);
   }
-
-  return { rank: 0 };
 }
 
 /**

@@ -1,7 +1,14 @@
-import { Pressable, type PressableProps } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  type PressableProps,
+  type PressableStateCallbackType,
+  type ViewStyle,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from './text';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface ButtonProps extends Omit<PressableProps, 'children'> {
   title: string;
@@ -10,26 +17,10 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
   loading?: boolean;
 }
 
-const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'bg-teal-500 active:bg-teal-600',
-  secondary: 'bg-terra-cotta-500 active:bg-terra-cotta-600',
-  outline: 'border border-white/10 active:bg-white/5',
-  ghost: 'active:bg-white/5',
-  destructive: 'bg-red-500/20 active:bg-red-500/30',
-};
-
-const sizeClasses: Record<NonNullable<ButtonProps['size']>, string> = {
-  sm: 'h-9 px-3 rounded-md',
-  md: 'h-11 px-4 rounded-lg',
-  lg: 'h-13 px-6 rounded-xl',
-};
-
-const textVariantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'text-white font-medium',
-  secondary: 'text-white font-medium',
-  outline: 'text-white font-medium',
-  ghost: 'text-white/80 font-medium',
-  destructive: 'text-red-400 font-medium',
+const sizeStyles: Record<NonNullable<ButtonProps['size']>, ViewStyle> = {
+  sm: { minHeight: 36, paddingHorizontal: 12, borderRadius: 8 },
+  md: { minHeight: 44, paddingHorizontal: 16, borderRadius: 10 },
+  lg: { minHeight: 52, paddingHorizontal: 24, borderRadius: 14 },
 };
 
 export function Button({
@@ -42,6 +33,7 @@ export function Button({
   className = '',
   ...props
 }: ButtonProps) {
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const handlePress = (e: Parameters<NonNullable<PressableProps['onPress']>>[0]) => {
@@ -51,19 +43,65 @@ export function Button({
     onPress?.(e);
   };
 
+  const { style, ...rest } = props;
+
+  const variantStyle = (pressed: boolean): ViewStyle => {
+    switch (variant) {
+      case 'secondary':
+        return {
+          backgroundColor: pressed ? colors.surfaceHover : colors.terraCotta,
+        };
+      case 'outline':
+        return {
+          backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          borderWidth: 1,
+          borderColor: colors.border,
+        };
+      case 'ghost':
+        return {
+          backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+        };
+      case 'destructive':
+        return {
+          backgroundColor: pressed ? colors.dangerBorder : colors.dangerSurface,
+          borderWidth: 1,
+          borderColor: colors.dangerBorder,
+        };
+      case 'primary':
+      default:
+        return {
+          backgroundColor: pressed ? colors.textPrimary : colors.teal,
+        };
+    }
+  };
+
+  const textColor = {
+    primary: colors.accentText,
+    secondary: colors.accentText,
+    outline: colors.textPrimary,
+    ghost: colors.textSecondary,
+    destructive: colors.agentError,
+  }[variant];
+
   return (
     <Pressable
-      className={`items-center justify-center flex-row ${variantClasses[variant]} ${sizeClasses[size]} ${
-        disabled || loading ? 'opacity-50' : ''
-      } ${className}`}
+      className={`items-center justify-center flex-row ${className}`}
+      style={(state: PressableStateCallbackType) =>
+        StyleSheet.flatten([
+          sizeStyles[size],
+          variantStyle(state.pressed),
+          disabled || loading ? { opacity: 0.5 } : null,
+          typeof style === 'function' ? style(state) : style,
+        ])
+      }
       disabled={disabled || loading}
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled: disabled || loading }}
-      {...props}
+      {...rest}
     >
-      <Text className={`text-sm ${textVariantClasses[variant]}`}>
+      <Text style={{ color: textColor, fontSize: 14, fontWeight: '500' }}>
         {loading ? 'Loading...' : title}
       </Text>
     </Pressable>

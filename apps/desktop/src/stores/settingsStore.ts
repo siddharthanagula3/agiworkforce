@@ -1323,6 +1323,7 @@ export const useSettingsStore = create<SettingsState>()(
               allowedDirectories,
               customModels,
               features,
+              personalization,
             } = get();
             await invoke('settings_save', {
               settings: {
@@ -1334,6 +1335,7 @@ export const useSettingsStore = create<SettingsState>()(
                 allowedDirectories,
                 customModels,
                 featureFlags: features,
+                personalization,
               },
             });
 

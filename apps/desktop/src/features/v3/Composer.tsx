@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowUp, Mic, Plus, Square, ChevronDown } from 'lucide-react';
 import { cn, useChatStore, useChatModelStore } from '@agiworkforce/unified-chat';
 import { PlusMenu } from './PlusMenu';
+import { FolderSelector } from '../chat/FolderSelector';
 import { ModelPopover } from './ModelPopover';
 import { MicSettings } from './MicSettings';
 
@@ -147,7 +148,7 @@ export function Composer({
           'overflow-visible border transition-shadow',
           'bg-[var(--chat-surface-elevated)]',
           isFocused
-            ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_rgba(33,128,141,0.25)]'
+            ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_var(--chat-focus-ring)]'
             : 'border-[var(--chat-border)]',
         )}
         style={{ borderRadius: 16 }}
@@ -171,25 +172,28 @@ export function Composer({
 
         {/* Toolbar */}
         <div className="relative flex items-center justify-between px-3 py-2">
-          {/* Left: Plus button */}
-          <button
-            type="button"
-            aria-label={t('composer.addAriaLabel')}
-            aria-expanded={plusOpen}
-            className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-lg',
-              'text-[var(--chat-text-secondary)] transition-colors duration-150',
-              'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-              plusOpen && 'bg-[var(--chat-surface-hover)] text-[var(--chat-accent-primary)]',
-            )}
-            onClick={() => {
-              setPlusOpen((o) => !o);
-              setModelOpen(false);
-            }}
-          >
-            <Plus size={16} />
-          </button>
+          {/* Left: Plus button + project folder selector (the one extra composer control) */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={t('composer.addAriaLabel')}
+              aria-expanded={plusOpen}
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-lg',
+                'text-[var(--chat-text-secondary)] transition-colors duration-150',
+                'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                plusOpen && 'bg-[var(--chat-surface-hover)] text-[var(--chat-accent-primary)]',
+              )}
+              onClick={() => {
+                setPlusOpen((o) => !o);
+                setModelOpen(false);
+              }}
+            >
+              <Plus size={16} />
+            </button>
+            <FolderSelector compact />
+          </div>
 
           {/* Right: Model pill + Mic + Send/Stop */}
           <div className="flex items-center gap-2">
@@ -217,7 +221,10 @@ export function Composer({
                 className="rounded px-1 py-0.5 text-[10px] font-semibold"
                 style={
                   thinkingEnabled
-                    ? { background: 'rgba(33,128,141,0.15)', color: 'var(--chat-accent-primary)' }
+                    ? {
+                        background: 'var(--chat-accent-secondary-soft)',
+                        color: 'var(--chat-accent-primary)',
+                      }
                     : { background: 'var(--chat-surface-hover)', color: 'var(--chat-text-muted)' }
                 }
               >
@@ -252,7 +259,7 @@ export function Composer({
                 type="button"
                 onClick={onStop}
                 aria-label={t('composer.stopAriaLabel')}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[var(--chat-accent-primary-contrast)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
               >
                 <Square size={13} />
               </button>
@@ -261,7 +268,7 @@ export function Composer({
                 type="button"
                 onClick={handleSend}
                 aria-label={t('composer.sendAriaLabel')}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[var(--chat-accent-primary-contrast)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
               >
                 <ArrowUp size={16} strokeWidth={2} />
               </button>

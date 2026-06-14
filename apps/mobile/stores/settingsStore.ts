@@ -61,7 +61,7 @@ interface SettingsState {
   speechLanguage: string;
   /** Auto-listen after AI speaks in voice conversation mode */
   autoListenEnabled: boolean;
-  /** Temporary chat mode: conversations won't be saved */
+  /** Temporary chat mode: local memory learning is disabled for new turns */
   isTemporaryChat: boolean;
   /** User personalization preferences */
   personalization: Personalization;

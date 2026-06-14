@@ -2,57 +2,32 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, CheckCircle2, GitBranch, Wrench } from 'lucide-react';
+import { ChevronDown, CircleCheck, GitBranch, Wrench } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
+import { FileTypeIcon } from './FileTypeIcon';
 
-// ─── File-type badge helpers ──────────────────────────────────────────────────
-
-/** Known file extension -> badge label + Tailwind color classes */
-const EXT_BADGE_MAP: Record<string, { label: string; classes: string }> = {
-  html: { label: 'HTML', classes: 'bg-orange-500/20 text-orange-300' },
-  htm: { label: 'HTML', classes: 'bg-orange-500/20 text-orange-300' },
-  css: { label: 'CSS', classes: 'bg-blue-500/20 text-blue-300' },
-  scss: { label: 'SCSS', classes: 'bg-pink-500/20 text-pink-300' },
-  less: { label: 'LESS', classes: 'bg-indigo-500/20 text-indigo-300' },
-  js: { label: 'JS', classes: 'bg-yellow-400/20 text-yellow-300' },
-  jsx: { label: 'JSX', classes: 'bg-yellow-400/20 text-yellow-300' },
-  ts: { label: 'TS', classes: 'bg-blue-400/20 text-blue-300' },
-  tsx: { label: 'TSX', classes: 'bg-blue-400/20 text-blue-300' },
-  py: { label: 'Python', classes: 'bg-sky-500/20 text-sky-300' },
-  rs: { label: 'Rust', classes: 'bg-rose-500/20 text-rose-300' },
-  sh: { label: 'Script', classes: 'bg-emerald-500/20 text-emerald-300' },
-  bash: { label: 'Script', classes: 'bg-emerald-500/20 text-emerald-300' },
-  json: { label: 'JSON', classes: 'bg-amber-500/20 text-amber-300' },
-  md: { label: 'MD', classes: 'bg-zinc-500/20 text-zinc-300' },
-  mdx: { label: 'MDX', classes: 'bg-zinc-500/20 text-zinc-300' },
-  sql: { label: 'SQL', classes: 'bg-purple-500/20 text-purple-300' },
-  yaml: { label: 'YAML', classes: 'bg-teal-500/20 text-teal-300' },
-  yml: { label: 'YAML', classes: 'bg-teal-500/20 text-teal-300' },
-  toml: { label: 'TOML', classes: 'bg-teal-500/20 text-teal-300' },
-  env: { label: 'ENV', classes: 'bg-rose-500/20 text-rose-300' },
-  go: { label: 'Go', classes: 'bg-cyan-500/20 text-cyan-300' },
-  java: { label: 'Java', classes: 'bg-orange-600/20 text-orange-300' },
-  rb: { label: 'Ruby', classes: 'bg-red-500/20 text-red-300' },
-  php: { label: 'PHP', classes: 'bg-violet-500/20 text-violet-300' },
-  swift: { label: 'Swift', classes: 'bg-orange-400/20 text-orange-300' },
-  kt: { label: 'Kotlin', classes: 'bg-purple-400/20 text-purple-300' },
-  txt: { label: 'TXT', classes: 'bg-zinc-500/20 text-zinc-300' },
-  csv: { label: 'CSV', classes: 'bg-green-500/20 text-green-300' },
-  xml: { label: 'XML', classes: 'bg-orange-400/20 text-orange-300' },
-};
+// ─── File reference helper ──────────────────────────────────────────────────
 
 /**
- * Extract a file-type badge from a tool's args string.
- * Returns null when no recognizable file extension is found.
+ * Extract the first file-name-like segment (name.ext) from a tool's args string.
+ * Used to render a FileTypeIcon + filename pill on file-operation steps. Returns
+ * null when the args contain no recognizable filename (e.g. a bare shell command).
  */
-function getFileBadge(args?: string): { label: string; classes: string } | null {
+function getFileName(args?: string): string | null {
   if (!args) return null;
-  // Match the last path-like segment and extract its extension
-  const match = args.match(/[^\s/\\]+\.([a-z0-9]+)(?:\s|$)/i);
-  if (!match) return null;
-  const ext = match[1]!.toLowerCase();
-  return EXT_BADGE_MAP[ext] ?? null;
+  const match = args.match(/([^\s/\\]+\.[a-z0-9]+)(?:\s|$)/i);
+  return match?.[1] ?? null;
+}
+
+/** Shared file-name pill: FileTypeIcon + truncated filename (Claude-style). */
+function FileBadge({ filename }: { filename: string }) {
+  return (
+    <span className="absolute right-0 top-0.5 z-10 inline-flex max-w-[55%] items-center gap-1 rounded-md bg-muted/70 px-1.5 py-px">
+      <FileTypeIcon filename={filename} className="h-3 w-3" />
+      <span className="truncate font-mono text-[10px] text-muted-foreground">{filename}</span>
+    </span>
+  );
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -220,7 +195,7 @@ const COMPACT_THRESHOLD = 3;
 function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
-  // Compact expanded state — separate from the regular isExpanded
+  // Compact expanded state · separate from the regular isExpanded
   const [compactExpanded, setCompactExpanded] = useState(false);
 
   const hasRunning = useMemo(() => tools.some((t) => t.status === 'running'), [tools]);
@@ -251,11 +226,11 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
 
   const handleToggle = useCallback(() => {
     if (isOpen) {
-      // User is collapsing — if tools are running, force closed
+      // User is collapsing · if tools are running, force closed
       setUserForcedClosed(true);
       setIsExpanded(false);
     } else {
-      // User is expanding — clear forced close
+      // User is expanding · clear forced close
       setUserForcedClosed(false);
       setIsExpanded(true);
     }
@@ -289,7 +264,7 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
   // ── Full / expanded render ────────────────────────────────────────────────
   return (
     <div className={cn('border border-border/30 rounded-lg overflow-hidden', className)}>
-      {/* Compact collapse button — shown when user has expanded from compact mode */}
+      {/* Compact collapse button · shown when user has expanded from compact mode */}
       {isCompact && compactExpanded && (
         <button
           type="button"
@@ -301,7 +276,7 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
           <span>Collapse</span>
         </button>
       )}
-      {/* Header — always visible */}
+      {/* Header · always visible */}
       <button
         type="button"
         onClick={handleToggle}
@@ -372,19 +347,10 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                             durationMs: tool.durationMs,
                             parameters: buildParameters(tool.args, tool.parameters),
                           };
-                          const fileBadge = getFileBadge(tool.args);
+                          const fileName = getFileName(tool.args);
                           return (
                             <div key={id} className="relative">
-                              {fileBadge && (
-                                <span
-                                  className={cn(
-                                    'absolute right-0 top-0.5 z-10 rounded px-1 py-px text-[9px] font-semibold tracking-wide',
-                                    fileBadge.classes,
-                                  )}
-                                >
-                                  {fileBadge.label}
-                                </span>
-                              )}
+                              {fileName && <FileBadge filename={fileName} />}
                               <ToolCallCard
                                 toolCall={toolCall}
                                 showParameters={Boolean(tool.args ?? tool.parameters)}
@@ -405,19 +371,10 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                       durationMs: tool.durationMs,
                       parameters: buildParameters(tool.args, tool.parameters),
                     };
-                    const fileBadge = getFileBadge(tool.args);
+                    const fileName = getFileName(tool.args);
                     return (
                       <div key={id} className="relative">
-                        {fileBadge && (
-                          <span
-                            className={cn(
-                              'absolute right-0 top-0.5 z-10 rounded px-1 py-px text-[9px] font-semibold tracking-wide',
-                              fileBadge.classes,
-                            )}
-                          >
-                            {fileBadge.label}
-                          </span>
-                        )}
+                        {fileName && <FileBadge filename={fileName} />}
                         <ToolCallCard
                           toolCall={toolCall}
                           showParameters={Boolean(tool.args ?? tool.parameters)}
@@ -427,10 +384,10 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                   });
                 })}
 
-                {/* Done row — shown when every tool completed without error */}
+                {/* Done row · shown when every tool completed without error */}
                 {!hasRunning && errorCount === 0 && (
                   <div className="flex items-center gap-1.5 pt-0.5">
-                    <CheckCircle2
+                    <CircleCheck
                       className="w-3.5 h-3.5 shrink-0 text-emerald-500"
                       aria-hidden="true"
                     />

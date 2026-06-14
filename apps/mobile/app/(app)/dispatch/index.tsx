@@ -252,8 +252,8 @@ function DispatchInput({ onSend }: { onSend: (text: string) => void }) {
       )}
 
       <View className="flex-row items-end gap-2">
-        {/* dispatch attachment button intentionally absent until decision E5 in
-            docs/superpowers/specs/2026-05-05-ui-audit/mobile.md is resolved */}
+        {/* Dispatch attachments stay hidden until the current mobile release plan
+            defines upload scope, privacy labels, and approval behavior. */}
 
         {/* Text input */}
         <View

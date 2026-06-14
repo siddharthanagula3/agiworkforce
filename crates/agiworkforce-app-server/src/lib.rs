@@ -306,7 +306,13 @@ fn request_token(headers: &HeaderMap, uri: &Uri, allow_query_token: bool) -> Opt
 
 fn origin_allowed(headers: &HeaderMap, addr: SocketAddr, configured: &[String]) -> bool {
     let Some(origin) = headers.get(ORIGIN).and_then(|v| v.to_str().ok()) else {
-        return true;
+        // Defense-in-depth: when an explicit allowlist is configured, treat a
+        // missing Origin as untrusted (reject) so a non-browser client cannot
+        // skip the cross-site origin check by omitting the header. When no
+        // explicit allowlist is set we fall back to permissive loopback defaults
+        // (local dev / native tooling legitimately omit Origin); token auth in
+        // `validate_ws_request` remains the mandatory boundary for that case.
+        return configured.is_empty();
     };
     let origin = normalize_origin(origin);
     let allowed = if configured.is_empty() {
@@ -600,6 +606,36 @@ mod tests {
         assert_eq!(
             validate_ws_request(&headers, &uri, addr, &ws_security()),
             Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    fn ws_security_rejects_missing_origin_when_allowlist_configured() {
+        // Defense-in-depth: with an explicit allowlist set, a request that omits
+        // the Origin header must not bypass the cross-site origin check.
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        let mut security = ws_security();
+        security.allowed_origins = vec!["https://trusted.example".into()];
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &security),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    fn ws_security_allows_missing_origin_without_explicit_allowlist() {
+        // With no explicit allowlist (defaults), missing Origin stays permissive
+        // for native/local tooling; token auth remains the mandatory boundary.
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security()),
+            Ok(())
         );
     }
 

@@ -6,7 +6,6 @@ export interface SkillItem {
   name: string;
   description: string;
   body?: string;
-  location: string;
   source: string;
 }
 
