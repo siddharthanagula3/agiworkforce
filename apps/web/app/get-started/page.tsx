@@ -25,23 +25,36 @@ export default function GetStartedPage() {
         </section>
         <section className="agi-section">
           <p className="agi-section-eyebrow">01 / Install</p>
-          <div className="agi-terminal">
-            <div className="agi-terminal-bar">~/agi-workforce — three install paths</div>
-            <pre className="agi-terminal-pre">{`# Homebrew (macOS, Linux)
-$ brew install agiworkforce/tap/agiworkforce
-
-# cargo from source (Rust 1.94+)
-$ cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi
-
-# curl (macOS, Linux, WSL)
-$ curl -fsSL https://agiworkforce.com/install.sh | bash`}</pre>
-          </div>
+          <ul className="agi-reasons">
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">In the browser. Nothing to install.</h3>
+              <p className="agi-reason-p">
+                <Link href="/login?redirectTo=%2Fchat">Try AGI Web</Link> for hosted chat, projects,
+                and artifacts today.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Desktop &amp; CLI: Local and BYOK hosts</h3>
+              <p className="agi-reason-p">
+                Grab the right build for your platform from the{' '}
+                <Link href="/download">download page</Link>. Desktop covers macOS, Windows, and
+                Linux; the <code>agi</code> CLI covers macOS and Linux.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Mobile, Chrome &amp; VS Code</h3>
+              <p className="agi-reason-p">
+                Availability per surface lives on the <Link href="/download">download page</Link>{' '}
+                with honest status labels.
+              </p>
+            </li>
+          </ul>
         </section>
         <section className="agi-section">
           <p className="agi-section-eyebrow">02 / Pick a mode</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
-              <h3 className="agi-reason-h">{localLabel} — free forever</h3>
+              <h3 className="agi-reason-h">{localLabel}: free forever</h3>
               <p className="agi-reason-p">
                 Run <code>agi models scan</code>, then{' '}
                 <code>agi --provider ollama --model &lt;model&gt;</code> after installing Ollama. No
@@ -49,7 +62,7 @@ $ curl -fsSL https://agiworkforce.com/install.sh | bash`}</pre>
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">{byokLabel} — free forever</h3>
+              <h3 className="agi-reason-h">{byokLabel}: free forever</h3>
               <p className="agi-reason-p">
                 <code>agi login</code>. Paste your provider key. Encrypted on device.
               </p>

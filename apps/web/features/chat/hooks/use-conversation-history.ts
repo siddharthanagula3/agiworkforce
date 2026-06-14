@@ -49,7 +49,7 @@ export const useChatHistory = () => {
         if (user) setUserId(user.id);
       })
       .catch(() => {
-        // User not authenticated — leave userId as null
+        // User not authenticated · leave userId as null
       });
   });
 

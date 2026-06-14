@@ -25,10 +25,10 @@ Read root `AGENTS.md`, then this file, then `apps/cli/README.md`.
 
 ## TUI Module Ownership
 
-`apps/cli/src/tui/mod.rs` declares exactly 8 live submodules:
-`color`, `cost_hud`, `icons`, `shimmer`, `terminal_palette`, `markdown_renderer`, `tui_app`, `widgets`.
+`apps/cli/src/tui/mod.rs` declares exactly 12 live submodules (see `tui/mod.rs` for the canonical declaration set):
+`app_event`, `approval_broker`, `color`, `cost_hud`, `icons`, `pane_view`, `shimmer`, `terminal_palette`, `transcript_cell`, `markdown_renderer`, `tui_app`, `widgets`.
 
-The actual live ratatui implementation is `tui_app.rs`. All other TUI features are implemented within `widgets/`.
+The actual live ratatui implementation is `tui_app.rs`. All other TUI features are implemented within `widgets/` and the supporting submodules above.
 
 **Rule:** Any new `.rs` file added under `apps/cli/src/tui/` MUST have a corresponding `mod` declaration in `tui/mod.rs` in the same commit. Files without a declaration are never compiled — `cargo check` will not catch the error.
 

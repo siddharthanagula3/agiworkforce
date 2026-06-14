@@ -19,7 +19,7 @@ export default function BlogPage() {
           <p className="agi-page-lede">
             We post when we have something to say.{' '}
             <strong>
-              Engineering deep-dives, security postures, and design notes — not content marketing.
+              Engineering deep-dives, security postures, and design notes · not content marketing.
             </strong>{' '}
             Posts will appear here when they exist.
           </p>

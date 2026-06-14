@@ -76,7 +76,7 @@ pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
 
     let total = cells.len();
     let serialized = serde_json::to_string_pretty(&nb)?;
-    std::fs::write(path, serialized)
+    write_atomic(path, serialized.as_bytes())
         .with_context(|| format!("write notebook {}", path.display()))?;
 
     Ok(NotebookEditResult {
@@ -85,6 +85,43 @@ pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
         affected_index: result.1,
         total_cells: total,
     })
+}
+
+/// Write `bytes` to `path` atomically: write to a temp file in the same
+/// directory, fsync it, then `rename` it over `path`. The rename is atomic on
+/// POSIX and Windows so a crash mid-write leaves the original notebook intact
+/// rather than truncated. Keeping the temp file in the same directory ensures
+/// the rename stays on one filesystem.
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "notebook".to_string());
+    let tmp_path = dir.join(format!(".{file_name}.{}.tmp", uuid::Uuid::new_v4()));
+
+    // Scope the file handle so it is closed before the rename.
+    let write_result = (|| {
+        let mut f = std::fs::File::create(&tmp_path)?;
+        f.write_all(bytes)?;
+        f.flush()?;
+        f.sync_all()?;
+        Ok::<(), std::io::Error>(())
+    })();
+
+    if let Err(e) = write_result {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+
+    if let Err(e) = std::fs::rename(&tmp_path, path) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+
+    Ok(())
 }
 
 fn apply_insert(

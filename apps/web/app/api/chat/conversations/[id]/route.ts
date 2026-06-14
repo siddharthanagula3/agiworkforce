@@ -116,6 +116,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (body['model']) updates['model'] = body['model'];
   const hasProjectIdUpdate = Object.prototype.hasOwnProperty.call(body, 'projectId');
   if (hasProjectIdUpdate) updates['projectId'] = body['projectId'];
+  const hasPinnedUpdate = Object.prototype.hasOwnProperty.call(body, 'pinned');
+  if (hasPinnedUpdate) updates['pinned'] = body['pinned'];
 
   const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
     `
@@ -124,9 +126,10 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         title = coalesce($3, title),
         model = coalesce($4, model),
         project_id = case when $5::boolean then $6::text else project_id end,
+        pinned = case when $7::boolean then $8::boolean else pinned end,
         updated_at = now()
       where id = $1 and user_id = $2 and deleted_at is null
-      returning id, title, model, project_id, created_at, updated_at
+      returning id, title, model, project_id, pinned, created_at, updated_at
     `,
     [
       id,
@@ -135,6 +138,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       updates['model'] ?? null,
       hasProjectIdUpdate,
       updates['projectId'] ?? null,
+      hasPinnedUpdate,
+      updates['pinned'] ?? false,
     ],
   );
 

@@ -1,5 +1,6 @@
 import {
   MOBILE_REMOTE_CHAT_DISABLED_MESSAGE,
+  MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE,
   RemoteChatDisabledError,
   assertRemoteChatAllowed,
   getRemoteChatDisabledReason,
@@ -19,27 +20,33 @@ describe('remoteChatGate', () => {
     ).toBe(MOBILE_REMOTE_CHAT_DISABLED_MESSAGE);
   });
 
-  it('allows remote chat only after Cloud Managed mode is enabled', () => {
+  it('requires invite access when Cloud chat is enabled but still gated', () => {
     expect(
       getRemoteChatDisabledReason({ v1LocalOnly: true, cloudChat: true, byokKeys: false }),
-    ).toBeNull();
+    ).toBe(MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE);
+  });
+
+  it('allows remote chat when Cloud chat is enabled and invite access is present', () => {
     expect(
-      getRemoteChatDisabledReason({ v1LocalOnly: false, cloudChat: false, byokKeys: false }),
+      getRemoteChatDisabledReason(
+        { v1LocalOnly: true, cloudChat: true, byokKeys: false },
+        { cloudUnlocked: true },
+      ),
     ).toBeNull();
   });
 
-  it('allows remote chat after explicit invite access', () => {
+  it('does not allow invite access to bypass a disabled Cloud chat build', () => {
     expect(
       getRemoteChatDisabledReason(
         { v1LocalOnly: true, cloudChat: false, byokKeys: false },
         { cloudUnlocked: true },
       ),
-    ).toBeNull();
+    ).toBe(MOBILE_REMOTE_CHAT_DISABLED_MESSAGE);
     expect(() =>
       assertRemoteChatAllowed(
         { v1LocalOnly: true, cloudChat: false, byokKeys: false },
         { cloudUnlocked: true },
       ),
-    ).not.toThrow();
+    ).toThrow(RemoteChatDisabledError);
   });
 });

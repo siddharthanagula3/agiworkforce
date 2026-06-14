@@ -800,38 +800,6 @@
       "speedOverride": "fast",
       "releasedOverride": "March 2026"
     },
-    "gemini-3-ultra": {
-      "id": "gemini-3-ultra",
-      "apiModelId": "gemini-3-ultra",
-      "name": "Gemini 3 Ultra",
-      "provider": "google",
-      "modelType": "reasoning",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Complex Reasoning", "Research", "Enterprise"],
-      "deprecation_date": null,
-      "costOverride": {
-        "inputCost": 3.5,
-        "outputCost": 14
-      },
-      "contextOverride": 2000000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "January 2026"
-    },
     "grok-4.3": {
       "id": "grok-4.3",
       "apiModelId": "grok-4.3",
@@ -1843,50 +1811,6 @@
       "speedOverride": "medium",
       "releasedOverride": "2025"
     },
-    "anthropic/claude-opus-4": {
-      "id": "anthropic/claude-opus-4",
-      "apiModelId": "anthropic/claude-opus-4",
-      "name": "Claude Opus 4 (via OpenRouter)",
-      "provider": "open_router",
-      "modelType": "chat",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Complex Reasoning", "Research", "Agentic Tasks"],
-      "deprecation_date": null
-    },
-    "openai/gpt-4o": {
-      "id": "openai/gpt-4o",
-      "apiModelId": "openai/gpt-4o",
-      "name": "GPT-4o (via OpenRouter)",
-      "provider": "open_router",
-      "modelType": "chat",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Vision Tasks", "Tool Use", "General Chat"],
-      "deprecation_date": null
-    },
-    "google/gemini-2.5-pro": {
-      "id": "google/gemini-2.5-pro",
-      "apiModelId": "google/gemini-2.5-pro",
-      "name": "Gemini 2.5 Pro (via OpenRouter)",
-      "provider": "open_router",
-      "modelType": "chat",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Long Context", "Research", "Multimodal"],
-      "deprecation_date": null
-    },
-    "deepseek/deepseek-r1": {
-      "id": "deepseek/deepseek-r1",
-      "apiModelId": "deepseek/deepseek-r1",
-      "name": "DeepSeek R1 (via OpenRouter)",
-      "provider": "open_router",
-      "modelType": "reasoning",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Complex Reasoning", "STEM", "Research"],
-      "deprecation_date": null
-    },
     "gpt-5.4-mini": {
       "id": "gpt-5.4-mini",
       "apiModelId": "gpt-5.4-mini",
@@ -2067,22 +1991,6 @@
     ],
     "nvidia_nim": [],
     "open_router": [
-      {
-        "value": "anthropic/claude-opus-4",
-        "label": "Claude Opus 4 (via OpenRouter)"
-      },
-      {
-        "value": "openai/gpt-4o",
-        "label": "GPT-4o (via OpenRouter)"
-      },
-      {
-        "value": "google/gemini-2.5-pro",
-        "label": "Gemini 2.5 Pro (via OpenRouter)"
-      },
-      {
-        "value": "deepseek/deepseek-r1",
-        "label": "DeepSeek R1 (via OpenRouter)"
-      },
       {
         "value": "meta-llama/llama-3.3-70b-instruct:free",
         "label": "Llama 3.3 70B (Free)"

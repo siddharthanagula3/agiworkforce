@@ -96,23 +96,28 @@ export class CheckpointManager {
 
     const workspaceRoot = this._workspaceRoot!;
 
+    // Unique id, embedded in the stash message, so a checkpoint always resolves
+    // to its OWN stash even when two checkpoints share a label (audit 216 M353).
+    const id = `ckpt-${Date.now()}`;
+
     try {
-      // Stage all changes (including untracked) so stash captures everything.
-      // Use --include-untracked to capture new files.
-      const stashMessage = `${CHECKPOINT_PREFIX} ${label}`;
+      // Stash all changes (including untracked) so the snapshot captures everything.
+      const stashMessage = `${CHECKPOINT_PREFIX} [${id}] ${label}`;
 
       await this._git(['stash', 'push', '--include-untracked', '-m', stashMessage], workspaceRoot);
 
-      // Check if a stash was actually created (git stash push is a no-op on clean trees).
-      const stashList = await this._git(['stash', 'list', '--format=%gd %s', '-1'], workspaceRoot);
+      // Read the top stash with its commit SHA. `git stash push` is a no-op on a
+      // clean tree, so the unique id token will be absent when nothing was saved.
+      const stashList = await this._git(
+        ['stash', 'list', '--format=%gd %H %s', '-1'],
+        workspaceRoot,
+      );
       const topLine = stashList.trim();
 
-      if (!topLine.includes(CHECKPOINT_PREFIX)) {
-        // No stash was created — working tree was clean.
-        // Create an empty-diff stash by making a trivial change and reverting.
+      if (!topLine.includes(`[${id}]`)) {
+        // Working tree was clean — record a marker checkpoint (restore = clean to HEAD).
         log(`Working tree clean — creating marker checkpoint for "${label}"`);
 
-        const id = `ckpt-${Date.now()}`;
         const checkpoint: Checkpoint = {
           id,
           label,
@@ -127,26 +132,27 @@ export class CheckpointManager {
         return id;
       }
 
-      // Pop the stash immediately so the user's working tree is restored.
-      // The stash entry remains in the reflog even after pop — but we re-push it
-      // to keep it accessible. Instead, we just read the stash ref before popping.
-      const stashRef = topLine.split(' ')[0] ?? 'stash@{0}';
+      // Stable identity = the stash commit SHA. Positional `stash@{N}` refs drift
+      // whenever any other stash is pushed/popped, so we resolve by SHA instead
+      // of by index or by human label (audit 216 M133/M353).
+      const stashSha = topLine.split(/\s+/)[1] ?? '';
 
-      // Re-apply the stashed changes so the user's working tree is unchanged.
-      await this._git(['stash', 'pop', '--index'], workspaceRoot);
+      // Re-apply (NOT pop) so the stash PERSISTS for a later restore while the
+      // user's working tree is left exactly as it was. `pop` would drop it,
+      // leaving restore with nothing to apply.
+      await this._git(['stash', 'apply', '--index'], workspaceRoot);
 
-      const id = `ckpt-${Date.now()}`;
       const checkpoint: Checkpoint = {
         id,
         label,
         createdAt: Date.now(),
-        stashRef,
+        stashRef: stashSha,
       };
 
       this._checkpoints.push(checkpoint);
       await this._pruneAndPersist();
 
-      log(`Checkpoint created: ${id} — "${label}" (ref: ${stashRef})`);
+      log(`Checkpoint created: ${id} — "${label}" (sha: ${stashSha.slice(0, 8)})`);
       return id;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -200,9 +206,9 @@ export class CheckpointManager {
         return true;
       }
 
-      // Find the stash entry by scanning the stash list for our checkpoint message.
-      const stashIndex = await this._findStashIndex(checkpoint.label);
-      if (stashIndex === undefined) {
+      // Resolve the checkpoint's stash by its stored commit SHA (stable across
+      // index shifts), not by label substring (audit 216 M133/M353).
+      if ((await this._findStashIndex(checkpoint.stashRef)) === undefined) {
         log(`Stash entry not found for checkpoint: ${id}`);
         vscode.window.showWarningMessage(
           `AGI Workforce: Checkpoint "${checkpoint.label}" stash entry is no longer available.`,
@@ -210,14 +216,37 @@ export class CheckpointManager {
         return false;
       }
 
-      // Restore by first cleaning, then applying the stash.
+      // Defensive safety stash of the CURRENT working tree before the destructive
+      // checkout/clean, so uncommitted + untracked work is recoverable — matching
+      // the marker-checkpoint path and the UI's promise (audit 216 H214).
+      try {
+        await this._git(
+          ['stash', 'push', '--include-untracked', '-m', `agi-restore-backup: ${checkpoint.label}`],
+          workspaceRoot,
+        );
+      } catch {
+        // best-effort — proceed even if the safety stash fails
+      }
+
+      // Pushing the safety stash shifts every other stash's positional index, so
+      // re-resolve the target by SHA AFTER the push.
+      const targetIndex = await this._findStashIndex(checkpoint.stashRef);
+      if (targetIndex === undefined) {
+        log(`Stash entry vanished after safety stash for checkpoint: ${id}`);
+        vscode.window.showWarningMessage(
+          `AGI Workforce: Checkpoint "${checkpoint.label}" stash entry could not be resolved.`,
+        );
+        return false;
+      }
+
+      // Restore by first cleaning, then applying the resolved stash.
       await this._git(['checkout', '--', '.'], workspaceRoot);
       await this._git(['clean', '-fd'], workspaceRoot);
-      await this._git(['stash', 'apply', '--index', `stash@{${stashIndex}}`], workspaceRoot);
+      await this._git(['stash', 'apply', '--index', `stash@{${targetIndex}}`], workspaceRoot);
 
       log(`Restored to checkpoint: ${id} — "${checkpoint.label}"`);
       vscode.window.showInformationMessage(
-        `AGI Workforce: Restored to checkpoint "${checkpoint.label}".`,
+        `AGI Workforce: Restored to checkpoint "${checkpoint.label}". A safety stash of your prior work was created — run "git stash list" to recover it.`,
       );
       return true;
     } catch (err) {
@@ -250,7 +279,7 @@ export class CheckpointManager {
 
       if (oldest.stashRef !== '') {
         try {
-          const stashIndex = await this._findStashIndex(oldest.label);
+          const stashIndex = await this._findStashIndex(oldest.stashRef);
           if (stashIndex !== undefined) {
             await this._git(['stash', 'drop', `stash@{${stashIndex}}`], workspaceRoot);
             log(`Pruned stash for checkpoint: ${oldest.id}`);
@@ -281,7 +310,7 @@ export class CheckpointManager {
       const checkpoint = this._checkpoints[i]!;
       if (checkpoint.stashRef !== '') {
         try {
-          const stashIndex = await this._findStashIndex(checkpoint.label);
+          const stashIndex = await this._findStashIndex(checkpoint.stashRef);
           if (stashIndex !== undefined) {
             await this._git(['stash', 'drop', `stash@{${stashIndex}}`], workspaceRoot);
           }
@@ -338,21 +367,24 @@ export class CheckpointManager {
   }
 
   /**
-   * Find the stash index for a checkpoint by scanning git stash list
-   * for an entry with matching CHECKPOINT_PREFIX + label.
+   * Resolve the current positional index of a checkpoint's stash by its stable
+   * commit SHA. Positional `stash@{N}` indices shift as other stashes are
+   * pushed/dropped, so callers store the SHA and resolve it fresh each time
+   * (audit 216 M133/M353). Returns undefined when the stash no longer exists.
    */
-  private async _findStashIndex(label: string): Promise<number | undefined> {
+  private async _findStashIndex(stashSha: string): Promise<number | undefined> {
+    if (!stashSha) return undefined;
     const workspaceRoot = this._workspaceRoot!;
-    const needle = `${CHECKPOINT_PREFIX} ${label}`;
 
     try {
-      const output = await this._git(['stash', 'list', '--format=%gd %s'], workspaceRoot);
+      const output = await this._git(['stash', 'list', '--format=%gd %H'], workspaceRoot);
       const lines = output.trim().split('\n');
 
       for (const line of lines) {
-        if (line.includes(needle)) {
+        const [gd, sha] = line.trim().split(/\s+/);
+        if (sha === stashSha && gd !== undefined) {
           // Extract index from "stash@{N}" format.
-          const match = /stash@\{(\d+)\}/.exec(line);
+          const match = /stash@\{(\d+)\}/.exec(gd);
           if (match?.[1] !== undefined) {
             return parseInt(match[1], 10);
           }

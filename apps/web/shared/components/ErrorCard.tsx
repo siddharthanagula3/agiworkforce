@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ErrorCard — consistent error state with optional retry button.
+ * ErrorCard · consistent error state with optional retry button.
  *
  * Matches the glassmorphism card style used across the web dashboard.
  *

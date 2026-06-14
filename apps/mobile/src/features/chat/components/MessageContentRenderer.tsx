@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
+import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 
 /**
  * Render inline math: $...$ (not $$)
@@ -65,14 +66,20 @@ export function renderInlineMarkdown(
     if (inlineMatch[2]) {
       // **bold**
       parts.push(
-        <Text key={`bold-${keyBase}-${inlineKey++}`} style={{ fontWeight: '700' }}>
+        <Text
+          key={`bold-${keyBase}-${inlineKey++}`}
+          style={{ color: renderColors.textPrimary, fontWeight: '700' }}
+        >
           {inlineMatch[2]}
         </Text>,
       );
     } else if (inlineMatch[3]) {
       // *italic*
       parts.push(
-        <Text key={`italic-${keyBase}-${inlineKey++}`} style={{ fontStyle: 'italic' }}>
+        <Text
+          key={`italic-${keyBase}-${inlineKey++}`}
+          style={{ color: renderColors.textPrimary, fontStyle: 'italic' }}
+        >
           {inlineMatch[3]}
         </Text>,
       );
@@ -113,14 +120,8 @@ export function renderInlineMarkdown(
             textDecorationLine: 'underline',
           }}
           onPress={() => {
-            try {
-              const parsed = new URL(linkUrl);
-              if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-                Linking.openURL(linkUrl);
-              }
-            } catch {
-              // invalid URL — ignore
-            }
+            if (!isValidExternalHttpUrl(linkUrl)) return;
+            Linking.openURL(linkUrl).catch(() => undefined);
           }}
           accessibilityRole="link"
           accessibilityLabel={linkText}

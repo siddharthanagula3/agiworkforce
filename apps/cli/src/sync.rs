@@ -190,11 +190,25 @@ impl ConfigSync {
         })
     }
 
+    /// Relative paths whose contents can carry provider API keys / BYOK
+    /// secrets and are therefore exported verbatim (unencrypted) in the bundle.
+    /// Exporting these warrants an explicit credential-leak warning so the user
+    /// does not share the bundle over an insecure channel (cloud drive, chat,
+    /// email) without realizing it may contain secrets.
+    const SECRET_BEARING_FILES: &'static [&'static str] = &["config.toml", "mcp.json"];
+
     /// Export synced files into a portable JSON bundle.
+    ///
+    /// The bundle is **unencrypted plaintext**. `config.toml` / `mcp.json` may
+    /// embed provider API keys or BYOK secrets, so when those files are present
+    /// a one-line warning is printed to stderr advising the user to treat the
+    /// export as sensitive. Callers that surface the bundle to an untrusted
+    /// channel should redact or encrypt secret-bearing content first.
     pub fn export(home: &Path) -> Result<SyncBundle> {
         let device_id = Self::device_id(home)?;
         let now = chrono::Utc::now().to_rfc3339();
         let mut files = HashMap::new();
+        let mut secret_bearing_included: Vec<&str> = Vec::new();
 
         for rel_path in Self::SYNCED_FILES {
             let abs_path = home.join(rel_path);
@@ -204,7 +218,19 @@ impl ConfigSync {
             let content = fs::read_to_string(&abs_path)
                 .with_context(|| format!("failed to read {} for export", rel_path))?;
             let sha256 = Self::sha256_hex(content.as_bytes());
+            if Self::SECRET_BEARING_FILES.contains(rel_path) {
+                secret_bearing_included.push(rel_path);
+            }
             files.insert(rel_path.to_string(), SyncedFile { content, sha256 });
+        }
+
+        if !secret_bearing_included.is_empty() {
+            eprintln!(
+                "  [sync] WARNING: this export is UNENCRYPTED and includes {} — which may contain \
+                 provider API keys or BYOK secrets. Do not share the bundle over an insecure \
+                 channel (cloud drive, chat, email); treat it like a credential file.",
+                secret_bearing_included.join(", ")
+            );
         }
 
         // Update manifest after export

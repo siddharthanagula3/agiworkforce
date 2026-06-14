@@ -28,7 +28,7 @@ export const publicRoutes: SitemapEntry[] = [
   // Product
   { path: '/apps', priority: 0.9, changefreq: 'weekly' },
   { path: '/agi-code', priority: 0.9, changefreq: 'weekly' },
-  { path: '/cowork', priority: 0.8, changefreq: 'weekly' },
+  { path: '/agi-work', priority: 0.8, changefreq: 'weekly' },
 
   // Use Cases
   { path: '/use-cases', priority: 0.7, changefreq: 'weekly' },

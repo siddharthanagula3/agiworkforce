@@ -272,6 +272,19 @@ async fn mitm_blocking_response(
                 "host mismatch",
             )));
         }
+        // Also flag a CONNECT-vs-inner port divergence. The inner request is
+        // always HTTPS here, so an absent explicit port implies 443.
+        let request_port = extract_request_port(&request_host).unwrap_or(443);
+        if !normalized.is_empty() && request_port != policy.target_port {
+            warn!(
+                "MITM port mismatch (target={}:{}, request_port={request_port})",
+                policy.target_host, policy.target_port
+            );
+            return Ok(Some(text_response(
+                StatusCode::BAD_REQUEST,
+                "host mismatch",
+            )));
+        }
     }
 
     // CONNECT already handled allowlist/denylist + decider policy. Re-check local/private
@@ -444,6 +457,34 @@ fn extract_request_host(req: &Request) -> Option<String> {
         .and_then(|v| v.to_str().ok())
         .map(ToString::to_string)
         .or_else(|| req.uri().authority().map(|a| a.as_str().to_string()))
+}
+
+/// Extract the explicit port from a `Host` header / authority value, returning
+/// `None` when no port is present (the caller substitutes the scheme default).
+///
+/// Handles `host:port`, `[ipv6]:port`, and bare hosts (no port). Unbracketed
+/// IPv6 literals (more than one `:` and no brackets) are treated as having no
+/// explicit port, mirroring `normalize_host`'s defensive single-colon rule.
+fn extract_request_port(request_host: &str) -> Option<u16> {
+    let host = request_host.trim();
+    if host.starts_with('[') {
+        // Bracketed IPv6: a port, if present, follows the closing bracket.
+        if let Some(end) = host.find(']') {
+            return host[end + 1..]
+                .strip_prefix(':')
+                .and_then(|p| p.parse::<u16>().ok());
+        }
+        return None;
+    }
+    // Only treat `:port` as a port when there is exactly one colon, so we do not
+    // misparse an unbracketed IPv6 literal.
+    if host.bytes().filter(|b| *b == b':').count() == 1 {
+        return host
+            .rsplit(':')
+            .next()
+            .and_then(|p| p.parse::<u16>().ok());
+    }
+    None
 }
 
 fn authority_header_value(host: &str, port: u16) -> String {

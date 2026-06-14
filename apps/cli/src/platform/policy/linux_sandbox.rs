@@ -42,6 +42,14 @@ pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
         return vec![];
     }
     // Common safe syscalls: process / time / mmap / signals / fd / read.
+    //
+    // This base set lists only syscalls that exist on every supported
+    // architecture (x86_64, aarch64). Architecture-specific legacy syscalls —
+    // e.g. `open`/`stat`/`pipe`/`select`/`fork`, which were dropped on aarch64
+    // in favour of the `*at`/`*2` variants already present below — are added via
+    // the `#[cfg(target_arch = "x86_64")]` block so the compiled filter never
+    // references a syscall number that `syscall_number_for` cannot resolve on
+    // the target arch (which would otherwise make `compile_bpf` bail).
     let mut allow: Vec<&'static str> = vec![
         "read",
         "write",
@@ -56,9 +64,6 @@ pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
         "rt_sigprocmask",
         "rt_sigreturn",
         "ioctl",
-        "access",
-        "pipe",
-        "select",
         "sched_yield",
         "mremap",
         "msync",
@@ -68,11 +73,8 @@ pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
         "shmat",
         "shmctl",
         "dup",
-        "dup2",
-        "pause",
         "nanosleep",
         "getpid",
-        "sendfile",
         "exit",
         "exit_group",
         "wait4",
@@ -84,61 +86,66 @@ pub fn allowed_syscalls(preset: LinuxSandboxPreset) -> Vec<&'static str> {
         "fdatasync",
         "truncate",
         "ftruncate",
-        "getdents",
+        "getdents64",
         "getcwd",
-        "readlink",
+        "readlinkat",
         "fchdir",
         "chdir",
-        "stat",
-        "lstat",
-        "open",
         "openat",
+        "faccessat",
         "getuid",
         "getgid",
         "geteuid",
         "getegid",
         "setpgid",
         "getppid",
-        "getpgrp",
         "rt_sigpending",
         "rt_sigtimedwait",
         "sigaltstack",
         "futex",
         "set_tid_address",
-        "epoll_create",
-        "epoll_wait",
+        "epoll_create1",
+        "epoll_pwait",
         "epoll_ctl",
         "tgkill",
         "clock_gettime",
         "clock_getres",
         "clock_nanosleep",
-        "exit",
-        "wait4",
         "set_robust_list",
         "prlimit64",
         "newfstatat",
         "statx",
     ];
+    // Legacy syscalls that exist on x86_64 but were removed on aarch64. Keeping
+    // them satisfies x86_64 glibc/musl callers that still use the legacy forms;
+    // aarch64 relies on the `*at`/`*2`/`*64` variants in the base set above.
+    #[cfg(target_arch = "x86_64")]
+    allow.extend([
+        "access",
+        "pipe",
+        "select",
+        "dup2",
+        "pause",
+        "sendfile",
+        "getdents",
+        "readlink",
+        "stat",
+        "lstat",
+        "open",
+        "getpgrp",
+        "epoll_create",
+        "epoll_wait",
+    ]);
     if !matches!(preset, LinuxSandboxPreset::ReadOnly) {
         // Contained: also allow writes + process spawn for /tmp + workspace.
         // (The actual filesystem-path filtering is enforced by Landlock or by
         // the wrapping permission layer — seccomp only filters syscalls, not
-        // paths.)
-        allow.extend([
-            "execve",
-            "clone",
-            "fork",
-            "vfork",
-            "wait4",
-            "rt_sigsuspend",
-            "rt_sigreturn",
-            "pipe2",
-            "socketpair",
-        ]);
-    }
-    if !matches!(preset, LinuxSandboxPreset::ReadOnly) {
-        // Plus signal-handling for child reaping.
-        allow.extend(["rt_sigtimedwait", "tgkill"]);
+        // paths.) `wait4`, `rt_sigreturn`, `rt_sigtimedwait`, and `tgkill` are
+        // already in the portable base set, so they are not repeated here.
+        allow.extend(["execve", "clone", "rt_sigsuspend", "pipe2", "socketpair"]);
+        // `fork`/`vfork` exist on x86_64 but not aarch64 (which uses `clone`).
+        #[cfg(target_arch = "x86_64")]
+        allow.extend(["fork", "vfork"]);
     }
     allow
 }
@@ -184,9 +191,18 @@ pub fn compile_bpf(opts: &LinuxSandboxOptions) -> anyhow::Result<seccompiler::Bp
     let mut rules: BTreeMap<i64, Vec<seccompiler::SeccompRule>> = BTreeMap::new();
     for name in allowed_syscalls(opts.preset) {
         let nr = syscall_number_for(name);
-        if nr >= 0 {
-            rules.insert(nr, vec![]);
+        if nr < 0 {
+            // A syscall in the allow-list has no number mapping for the target
+            // architecture. Fail loudly instead of silently dropping it from the
+            // compiled filter (which would EACCES/kill sandboxed children on an
+            // operation the allow-list claims to permit). If a future allow-list
+            // entry is genuinely unavailable on this arch, it must be cfg-gated
+            // out of `allowed_syscalls` rather than left unmapped here.
+            anyhow::bail!(
+                "seccomp allow-list syscall {name:?} has no number mapping for this architecture"
+            );
         }
+        rules.insert(nr, vec![]);
     }
     let filter = SeccompFilter::new(
         rules,
@@ -226,13 +242,19 @@ fn target_arch() -> anyhow::Result<seccompiler::TargetArch> {
     })
 }
 
+/// Map every syscall name in `allowed_syscalls` to its libc number for the
+/// target architecture. Returns `-1` only for a name that has no mapping here;
+/// `compile_bpf` treats that as a hard error rather than silently dropping the
+/// syscall from the filter. Architecture-divergent legacy syscalls are gated to
+/// the architectures where libc actually defines them (matching the cfg-gated
+/// entries in `allowed_syscalls`).
 #[cfg(all(target_os = "linux", feature = "linux-seccomp"))]
 fn syscall_number_for(name: &str) -> i64 {
     match name {
+        // --- Portable across x86_64 + aarch64 ---
         "read" => libc::SYS_read,
         "write" => libc::SYS_write,
         "close" => libc::SYS_close,
-        "openat" => libc::SYS_openat,
         "fstat" => libc::SYS_fstat,
         "lseek" => libc::SYS_lseek,
         "mmap" => libc::SYS_mmap,
@@ -242,19 +264,98 @@ fn syscall_number_for(name: &str) -> i64 {
         "rt_sigaction" => libc::SYS_rt_sigaction,
         "rt_sigprocmask" => libc::SYS_rt_sigprocmask,
         "rt_sigreturn" => libc::SYS_rt_sigreturn,
+        "rt_sigpending" => libc::SYS_rt_sigpending,
+        "rt_sigtimedwait" => libc::SYS_rt_sigtimedwait,
+        "rt_sigsuspend" => libc::SYS_rt_sigsuspend,
+        "sigaltstack" => libc::SYS_sigaltstack,
         "ioctl" => libc::SYS_ioctl,
+        "sched_yield" => libc::SYS_sched_yield,
+        "mremap" => libc::SYS_mremap,
+        "msync" => libc::SYS_msync,
+        "mincore" => libc::SYS_mincore,
+        "madvise" => libc::SYS_madvise,
+        "shmget" => libc::SYS_shmget,
+        "shmat" => libc::SYS_shmat,
+        "shmctl" => libc::SYS_shmctl,
+        "dup" => libc::SYS_dup,
+        "nanosleep" => libc::SYS_nanosleep,
+        "getpid" => libc::SYS_getpid,
         "exit" => libc::SYS_exit,
         "exit_group" => libc::SYS_exit_group,
-        "execve" => libc::SYS_execve,
-        "clone" => libc::SYS_clone,
-        "fork" => libc::SYS_fork,
         "wait4" => libc::SYS_wait4,
-        "futex" => libc::SYS_futex,
-        "tgkill" => libc::SYS_tgkill,
-        "clock_gettime" => libc::SYS_clock_gettime,
-        "getpid" => libc::SYS_getpid,
+        "kill" => libc::SYS_kill,
+        "uname" => libc::SYS_uname,
+        "fcntl" => libc::SYS_fcntl,
+        "flock" => libc::SYS_flock,
+        "fsync" => libc::SYS_fsync,
+        "fdatasync" => libc::SYS_fdatasync,
+        "truncate" => libc::SYS_truncate,
+        "ftruncate" => libc::SYS_ftruncate,
+        "getdents64" => libc::SYS_getdents64,
+        "getcwd" => libc::SYS_getcwd,
+        "readlinkat" => libc::SYS_readlinkat,
+        "fchdir" => libc::SYS_fchdir,
+        "chdir" => libc::SYS_chdir,
+        "openat" => libc::SYS_openat,
+        "faccessat" => libc::SYS_faccessat,
         "getuid" => libc::SYS_getuid,
         "getgid" => libc::SYS_getgid,
+        "geteuid" => libc::SYS_geteuid,
+        "getegid" => libc::SYS_getegid,
+        "setpgid" => libc::SYS_setpgid,
+        "getppid" => libc::SYS_getppid,
+        "futex" => libc::SYS_futex,
+        "set_tid_address" => libc::SYS_set_tid_address,
+        "set_robust_list" => libc::SYS_set_robust_list,
+        "epoll_create1" => libc::SYS_epoll_create1,
+        "epoll_pwait" => libc::SYS_epoll_pwait,
+        "epoll_ctl" => libc::SYS_epoll_ctl,
+        "tgkill" => libc::SYS_tgkill,
+        "clock_gettime" => libc::SYS_clock_gettime,
+        "clock_getres" => libc::SYS_clock_getres,
+        "clock_nanosleep" => libc::SYS_clock_nanosleep,
+        "prlimit64" => libc::SYS_prlimit64,
+        "newfstatat" => libc::SYS_newfstatat,
+        "statx" => libc::SYS_statx,
+        "execve" => libc::SYS_execve,
+        "clone" => libc::SYS_clone,
+        "pipe2" => libc::SYS_pipe2,
+        "socketpair" => libc::SYS_socketpair,
+
+        // --- x86_64-only legacy syscalls (removed on aarch64) ---
+        #[cfg(target_arch = "x86_64")]
+        "access" => libc::SYS_access,
+        #[cfg(target_arch = "x86_64")]
+        "pipe" => libc::SYS_pipe,
+        #[cfg(target_arch = "x86_64")]
+        "select" => libc::SYS_select,
+        #[cfg(target_arch = "x86_64")]
+        "dup2" => libc::SYS_dup2,
+        #[cfg(target_arch = "x86_64")]
+        "pause" => libc::SYS_pause,
+        #[cfg(target_arch = "x86_64")]
+        "sendfile" => libc::SYS_sendfile,
+        #[cfg(target_arch = "x86_64")]
+        "getdents" => libc::SYS_getdents,
+        #[cfg(target_arch = "x86_64")]
+        "readlink" => libc::SYS_readlink,
+        #[cfg(target_arch = "x86_64")]
+        "stat" => libc::SYS_stat,
+        #[cfg(target_arch = "x86_64")]
+        "lstat" => libc::SYS_lstat,
+        #[cfg(target_arch = "x86_64")]
+        "open" => libc::SYS_open,
+        #[cfg(target_arch = "x86_64")]
+        "getpgrp" => libc::SYS_getpgrp,
+        #[cfg(target_arch = "x86_64")]
+        "epoll_create" => libc::SYS_epoll_create,
+        #[cfg(target_arch = "x86_64")]
+        "epoll_wait" => libc::SYS_epoll_wait,
+        #[cfg(target_arch = "x86_64")]
+        "fork" => libc::SYS_fork,
+        #[cfg(target_arch = "x86_64")]
+        "vfork" => libc::SYS_vfork,
+
         _ => -1,
     }
 }
@@ -292,8 +393,27 @@ mod tests {
         let allow = allowed_syscalls(LinuxSandboxPreset::ReadOnly);
         assert!(allow.contains(&"read"));
         assert!(allow.contains(&"openat"));
-        assert!(allow.contains(&"stat"));
+        // `newfstatat` is the architecture-portable stat syscall (the legacy
+        // `stat` is only present on x86_64).
+        assert!(allow.contains(&"newfstatat"));
         assert!(!allow.contains(&"execve"));
+    }
+
+    #[test]
+    fn allowlist_has_no_duplicate_syscall_names() {
+        for preset in [
+            LinuxSandboxPreset::ReadOnly,
+            LinuxSandboxPreset::Contained,
+        ] {
+            let allow = allowed_syscalls(preset);
+            let mut seen = std::collections::BTreeSet::new();
+            for name in &allow {
+                assert!(
+                    seen.insert(*name),
+                    "duplicate syscall {name:?} in {preset:?} allow-list"
+                );
+            }
+        }
     }
 
     #[test]

@@ -1,112 +1,242 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, TextInput } from 'react-native';
-import BottomSheet, {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-} from '@gorhom/bottom-sheet';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  TextInput,
+  View,
+} from 'react-native';
 import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
 
 interface AddMemorySheetProps {
-  sheetRef: React.RefObject<BottomSheet | null>;
   editingMemory: MemoryEntry | null;
+  onClose: () => void;
+  onDelete?: (id: string) => void;
   onSave: (content: string, category?: string) => void;
   onUpdate: (id: string, content: string) => void;
+  open: boolean;
 }
 
-export function AddMemorySheet({ sheetRef, editingMemory, onSave, onUpdate }: AddMemorySheetProps) {
-  const snapPoints = useMemo(() => ['50%'], []);
+export function AddMemorySheet({
+  editingMemory,
+  onClose,
+  onDelete,
+  onSave,
+  onUpdate,
+  open,
+}: AddMemorySheetProps) {
+  const colors = useThemeColors();
   const [content, setContent] = useState('');
 
   useEffect(() => {
+    if (!open) return;
     setContent(editingMemory ? editingMemory.fact : '');
-  }, [editingMemory]);
+  }, [editingMemory, open]);
 
   const isEditing = editingMemory !== null;
   const canSave = content.trim().length > 0;
 
+  const handleClose = useCallback(() => {
+    setContent('');
+    onClose();
+  }, [onClose]);
+
   const handleSave = useCallback(() => {
-    if (!canSave) return;
+    const trimmed = content.trim();
+    if (!trimmed) return;
+
     if (isEditing && editingMemory) {
-      onUpdate(editingMemory.id, content.trim());
+      onUpdate(editingMemory.id, trimmed);
     } else {
-      onSave(content.trim());
+      onSave(trimmed);
     }
-    setContent('');
-    sheetRef.current?.close();
-  }, [canSave, isEditing, editingMemory, content, onSave, onUpdate, sheetRef]);
 
-  const handleCancel = useCallback(() => {
     setContent('');
-    sheetRef.current?.close();
-  }, [sheetRef]);
+    onClose();
+  }, [content, editingMemory, isEditing, onClose, onSave, onUpdate]);
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.6}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
+  const handleDelete = useCallback(() => {
+    if (!editingMemory || !onDelete) return;
+
+    Alert.alert('Delete memory?', 'This removes the memory from this device.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          onDelete(editingMemory.id);
+          setContent('');
+          onClose();
+        },
+      },
+    ]);
+  }, [editingMemory, onClose, onDelete]);
 
   return (
-    <BottomSheet
-      ref={sheetRef as React.RefObject<BottomSheet>}
-      index={-1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      enableDynamicSizing={false}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: colors.surfaceElevated }}
-      handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
+    <Modal
+      animationType="fade"
+      onRequestClose={handleClose}
+      statusBarTranslucent
+      transparent
+      visible={open}
     >
-      <View className="px-4 pt-1 pb-2">
-        <Text variant="subheading">{isEditing ? 'Edit Memory' : 'Add Memory'}</Text>
-      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close memory editor"
+          onPress={handleClose}
+          style={{
+            backgroundColor: colors.scrim,
+            bottom: 0,
+            left: 0,
+            position: 'absolute',
+            right: 0,
+            top: 0,
+          }}
+        />
 
-      {/* Content input */}
-      <View className="px-4 mb-3">
-        <TextInput
-          className="bg-surface-base border border-white/10 rounded-xl px-3 py-3 text-white text-sm min-h-[120px]"
-          placeholder="What should your AI remember?"
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          multiline
-          textAlignVertical="top"
-          value={content}
-          onChangeText={setContent}
-          selectionColor={colors.teal}
-          autoCorrect={false}
-          maxLength={10_000}
-          accessibilityLabel="Memory content"
-          accessibilityHint="Enter what the AI should remember"
-        />
-      </View>
+        <View
+          accessibilityViewIsModal
+          style={{
+            backgroundColor: colors.surfaceElevated,
+            borderTopLeftRadius: 18,
+            borderTopRightRadius: 18,
+            paddingBottom: 20,
+            paddingHorizontal: 14,
+            paddingTop: 10,
+          }}
+        >
+          <View
+            style={{
+              alignSelf: 'center',
+              backgroundColor: colors.textMuted,
+              borderRadius: 999,
+              height: 4,
+              marginBottom: 12,
+              width: 36,
+            }}
+          />
 
-      {/* Action buttons */}
-      <View className="flex-row gap-3 px-4">
-        <Button
-          title="Cancel"
-          variant="ghost"
-          size="md"
-          onPress={handleCancel}
-          className="flex-1"
-        />
-        <Button
-          title={isEditing ? 'Update' : 'Save'}
-          variant="primary"
-          size="md"
-          onPress={handleSave}
-          disabled={!canSave}
-          className="flex-1"
-        />
-      </View>
-    </BottomSheet>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 16,
+              fontWeight: '700',
+              marginBottom: 10,
+            }}
+          >
+            {isEditing ? 'Edit Memory' : 'Add Memory'}
+          </Text>
+
+          <TextInput
+            accessible
+            accessibilityHint="Enter what AGI should remember"
+            accessibilityLabel="Memory content"
+            accessibilityValue={{ text: content }}
+            autoCorrect={false}
+            maxLength={10_000}
+            multiline
+            onChangeText={setContent}
+            placeholder="What should AGI remember?"
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="default"
+            selectionColor={colors.teal}
+            style={{
+              backgroundColor: colors.surfaceBase,
+              borderColor: colors.border,
+              borderRadius: 12,
+              borderWidth: 1,
+              color: colors.textPrimary,
+              fontSize: 14,
+              letterSpacing: 0,
+              minHeight: 118,
+              paddingHorizontal: 12,
+              paddingVertical: 12,
+              textAlignVertical: 'top',
+            }}
+            value={content}
+          />
+
+          {isEditing && onDelete ? (
+            <Pressable
+              accessibilityLabel="Delete memory"
+              accessibilityRole="button"
+              onPress={handleDelete}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                backgroundColor: pressed ? colors.dangerBorder : colors.dangerSurface,
+                borderColor: colors.dangerBorder,
+                borderRadius: 12,
+                borderWidth: 1,
+                justifyContent: 'center',
+                marginTop: 12,
+                minHeight: 44,
+              })}
+            >
+              <Text style={{ color: colors.agentError, fontSize: 14, fontWeight: '600' }}>
+                Delete Memory
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+            <Pressable
+              accessibilityLabel="Cancel"
+              accessibilityRole="button"
+              onPress={handleClose}
+              style={{
+                alignItems: 'center',
+                backgroundColor: colors.surfaceBase,
+                borderColor: colors.border,
+                borderRadius: 12,
+                borderWidth: 1,
+                flex: 1,
+                justifyContent: 'center',
+                minHeight: 44,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+                Cancel
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel={isEditing ? 'Update memory' : 'Save memory'}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSave }}
+              disabled={!canSave}
+              onPress={handleSave}
+              style={{
+                alignItems: 'center',
+                backgroundColor: canSave ? colors.textPrimary : colors.surfaceHover,
+                borderColor: canSave ? colors.textPrimary : colors.border,
+                borderRadius: 12,
+                borderWidth: 1,
+                flex: 1,
+                justifyContent: 'center',
+                minHeight: 44,
+                opacity: canSave ? 1 : 0.72,
+              }}
+            >
+              <Text
+                style={{
+                  color: canSave ? colors.surfaceElevated : colors.textMuted,
+                  fontSize: 14,
+                  fontWeight: '600',
+                }}
+              >
+                {isEditing ? 'Update' : 'Save'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

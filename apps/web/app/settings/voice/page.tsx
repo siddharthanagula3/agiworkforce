@@ -6,19 +6,13 @@ import Link from 'next/link';
 
 const byokLabel = formatPrivacyModeLabel('byok');
 
-const VOICE_CAPS: Record<string, string> = {
-  free: `${byokLabel} only`,
-  hobby: '60 min/mo',
-  pro: '300 min/mo',
-  max: 'Unlimited',
-  enterprise: 'Unlimited',
-};
-
 export default function VoiceSettingsPage() {
   const subscription = useBillingStore((s) => s.subscription);
   const tier = subscription?.tier ?? 'free';
-  const voiceCap = VOICE_CAPS[tier] ?? `${byokLabel} only`;
-  const hasVoice = tier !== 'free';
+  void tier;
+  // Voice transcription quotas and managed Whisper are not yet enforced or
+  // billed, so we do not advertise tier minute caps or live capabilities.
+  const hasVoice = false;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -39,7 +33,7 @@ export default function VoiceSettingsPage() {
         </p>
       </div>
 
-      {/* Paywall banner for free tier */}
+      {/* Honest "coming soon" banner: voice transcription is not yet available */}
       {!hasVoice && (
         <div
           style={{
@@ -56,28 +50,27 @@ export default function VoiceSettingsPage() {
         >
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', marginBottom: 4 }}>
-              Voice transcription requires Hobby or higher
+              Voice transcription is coming soon
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-              Hobby includes {VOICE_CAPS['hobby']} of voice transcription. BYOK users can bring
-              their own Whisper key.
+              Managed voice transcription is not available yet. When it ships you will be able to
+              bring your own provider key on Desktop and CLI via {byokLabel}.
             </div>
           </div>
-          <Link
-            href="/pricing"
+          <span
             style={{
               padding: '8px 18px',
-              background: 'var(--teal)',
+              background: 'var(--bg-elev)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius)',
-              color: '#fff',
+              color: 'var(--text-3)',
               fontSize: 13,
               fontWeight: 600,
-              textDecoration: 'none',
               flexShrink: 0,
             }}
           >
-            Upgrade to Hobby
-          </Link>
+            Coming soon
+          </span>
         </div>
       )}
 
@@ -105,22 +98,13 @@ export default function VoiceSettingsPage() {
         </div>
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Row label="Monthly allowance">
-            <span
-              style={{
-                fontSize: 14,
-                fontFamily: 'var(--mono)',
-                color: hasVoice ? 'var(--teal)' : 'var(--text-3)',
-                fontWeight: 600,
-              }}
-            >
-              {voiceCap}
-            </span>
+            <span style={{ fontSize: 14, color: 'var(--text-3)' }}>Not available yet</span>
           </Row>
           <Row label="Transcription model">
-            <span style={{ fontSize: 14, color: 'var(--text-2)' }}>Whisper (managed)</span>
+            <span style={{ fontSize: 14, color: 'var(--text-3)' }}>Not available yet</span>
           </Row>
           <Row label="AI cleanup">
-            <span style={{ fontSize: 14, color: 'var(--text-2)' }}>Enabled</span>
+            <span style={{ fontSize: 14, color: 'var(--text-3)' }}>Not available yet</span>
           </Row>
         </div>
       </section>
@@ -147,8 +131,9 @@ export default function VoiceSettingsPage() {
         </div>
         <div style={{ padding: '16px 20px' }}>
           <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 12px' }}>
-            Plug in your own OpenAI API key to use Whisper transcription directly with no cap. Your
-            requests go to OpenAI without any proxy.
+            When voice ships, you will be able to plug in your own OpenAI API key on Desktop and CLI
+            to use Whisper transcription directly, with requests going to OpenAI without any proxy.
+            BYOK lives on Desktop and CLI today.
           </p>
           <Link
             href="/byok"

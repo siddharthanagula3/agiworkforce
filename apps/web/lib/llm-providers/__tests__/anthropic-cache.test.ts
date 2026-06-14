@@ -55,7 +55,7 @@ describe('AnthropicProvider cache_control', () => {
     provider = new AnthropicProvider(MOCK_KEY);
   });
 
-  describe('sendRequest — system message cache_control', () => {
+  describe('sendRequest · system message cache_control', () => {
     it('applies ephemeral cache_control to system message when usePromptCache=true', async () => {
       mockFetch.mockResolvedValueOnce(okAnthropicJson());
 
@@ -107,7 +107,7 @@ describe('AnthropicProvider cache_control', () => {
     });
   });
 
-  describe('sendRequest — last user message cache_control', () => {
+  describe('sendRequest · last user message cache_control', () => {
     it('applies cache_control to last user message content block', async () => {
       mockFetch.mockResolvedValueOnce(okAnthropicJson());
 
@@ -122,7 +122,7 @@ describe('AnthropicProvider cache_control', () => {
     });
   });
 
-  describe('sendRequest — response usage parsing', () => {
+  describe('sendRequest · response usage parsing', () => {
     it('surfaces cache_creation_input_tokens from response', async () => {
       mockFetch.mockResolvedValueOnce(okAnthropicJson());
 
@@ -165,7 +165,7 @@ describe('AnthropicProvider cache_control', () => {
     });
   });
 
-  describe('streamRequest — system message cache_control', () => {
+  describe('streamRequest · system message cache_control', () => {
     it('applies cache_control in streaming mode', async () => {
       const mockBody = {} as ReadableStream;
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockBody, headers: { get: () => null } });

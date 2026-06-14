@@ -353,7 +353,7 @@ export class GoogleProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -537,7 +537,7 @@ export class GoogleProvider extends BaseLLMProvider {
       body['tools'] = [transformToolsToGoogleFormat(request.tools)];
     }
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),

@@ -45,11 +45,11 @@ export async function buildNonStreamResponse(
     classifierConfidence,
     resolvedSlot,
     indicResult,
-    autoEconomyTrial,
+    freeTrial,
   } = processed;
 
   // Cost reconciliation
-  const actualCostCents = autoEconomyTrial
+  const actualCostCents = freeTrial
     ? 0
     : LLMCostCalculator.calculateCost(provider, llmResponse.model, {
         promptTokens: llmResponse.promptTokens,
@@ -60,7 +60,7 @@ export async function buildNonStreamResponse(
   const costDifference = actualCostCents - estimatedCostCents;
 
   try {
-    if (!autoEconomyTrial && costDifference !== 0) {
+    if (!freeTrial && costDifference !== 0) {
       const reconciliationKey = CreditService.generateIdempotencyKey(
         userId,
         'reconciliation',
@@ -141,7 +141,7 @@ export async function buildNonStreamResponse(
   }
 
   // Tier-quota counter update (fire-and-forget)
-  if (!autoEconomyTrial && llmResponse.totalTokens > 0) {
+  if (!freeTrial && llmResponse.totalTokens > 0) {
     void reconcileUsage({
       userId,
       token,
@@ -169,9 +169,9 @@ export async function buildNonStreamResponse(
   if (quotaWarningHeader) {
     responseHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
-  if (autoEconomyTrial) {
-    responseHeaders['X-AGI-Trial-Prompts-Used'] = String(autoEconomyTrial.promptCount);
-    responseHeaders['X-AGI-Trial-Prompts-Limit'] = String(autoEconomyTrial.promptLimit);
+  if (freeTrial) {
+    responseHeaders['X-AGI-Trial-Prompts-Used'] = String(freeTrial.promptCount);
+    responseHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
   }
 
   return NextResponse.json(
@@ -224,11 +224,11 @@ export async function buildNonStreamResponse(
             reason: processed.fallbackReason,
           },
         }),
-        ...(autoEconomyTrial && {
+        ...(freeTrial && {
           trial: {
-            type: autoEconomyTrial.kind,
-            prompts_used: autoEconomyTrial.promptCount,
-            prompt_limit: autoEconomyTrial.promptLimit,
+            type: freeTrial.kind,
+            prompts_used: freeTrial.promptCount,
+            prompt_limit: freeTrial.promptLimit,
           },
         }),
         cache: {

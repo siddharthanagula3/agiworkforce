@@ -67,7 +67,7 @@ describe('OrganizationService.getOrganizationMembers (WEB-31)', () => {
     expect(params).toEqual(['org-target']);
   });
 
-  // Note: error-propagation test omitted — the `indexOf on undefined` flake
+  // Note: error-propagation test omitted · the `indexOf on undefined` flake
   // in vi.fn().mockResolvedValue with an Error value is a known issue in this
   // repo's test env (see core/security/gradual-rollout.test.ts for the same
   // flake). The error path is exercised by integration tests in __tests__/api/.

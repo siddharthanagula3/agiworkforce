@@ -1,5 +1,5 @@
 /**
- * GET /api/support/articles — list support articles.
+ * GET /api/support/articles · list support articles.
  * Optionally filter by category_id via ?category=<id>.
  * Static data; no DB required.
  */

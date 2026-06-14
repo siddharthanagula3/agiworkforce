@@ -156,14 +156,31 @@ export interface ModelProviderInfo {
   brandColor: string;
 }
 
+/**
+ * Brand colors for provider badges. Centralized here (single source) so they no
+ * longer drift as inline hex literals across files (audit 218 L162/L684). The
+ * AGI Cloud accent is the website's Linear indigo; the unknown-provider fallback
+ * is a neutral grey.
+ */
+export const AGI_CLOUD_BRAND_COLOR = '#5e6ad2';
+export const UNKNOWN_PROVIDER_BRAND_COLOR = '#71717a';
+
 export function getModelProviderInfo(modelId: string): ModelProviderInfo {
   const metadata = getModelMetadataById(modelId);
   if (!metadata) {
-    return { providerId: 'agi-cloud', providerLabel: 'AGI Cloud', brandColor: '#F59E0B' };
+    return {
+      providerId: 'agi-cloud',
+      providerLabel: 'AGI Cloud',
+      brandColor: AGI_CLOUD_BRAND_COLOR,
+    };
   }
   const providerId = resolveProviderId(String(metadata.provider));
   if (!providerId) {
-    return { providerId: null, providerLabel: String(metadata.provider), brandColor: '#71717A' };
+    return {
+      providerId: null,
+      providerLabel: String(metadata.provider),
+      brandColor: UNKNOWN_PROVIDER_BRAND_COLOR,
+    };
   }
   const display = PROVIDER_DISPLAY[providerId];
   return { providerId, providerLabel: display.label, brandColor: display.brandColor };

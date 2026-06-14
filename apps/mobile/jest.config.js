@@ -26,6 +26,8 @@ module.exports = {
     '^react$': '<rootDir>/node_modules/react',
     // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
     '^@agiworkforce/local-llm$': '<rootDir>/../../packages/local-llm/src/index',
+    // expo-clipboard is a native Expo module; keep Jest from loading native glue.
+    '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     // expo-sqlite stub for storage tests until the native module is linked.
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
   },

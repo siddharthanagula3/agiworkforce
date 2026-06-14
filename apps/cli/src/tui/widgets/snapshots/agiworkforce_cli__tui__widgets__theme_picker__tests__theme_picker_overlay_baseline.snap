@@ -1,0 +1,26 @@
+---
+source: apps/cli/src/tui/widgets/theme_picker.rs
+expression: terminal.backend()
+---
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"                                                                                    "
+"      ┌ Theme ───────────────────────────────────────────────────────────────┐      "
+"      │                                                                      │      "
+"      │●  Dark              Neutral dark background                          │      "
+"      │   Light             Light background for bright terminals            │      "
+"      │   Ansi              Pure 16-color ANSI compatible                    │      "
+"      │   Solarized Dark    Solarized palette, dark variant                  │      "
+"      │   Solarized Light   Solarized palette, light variant                 │      "
+"      │   Colorblind        High-contrast deuteranopia-friendly              │      "
+"      │                                                                      │      "
+"      │  Preview: Solarized Dark                                             │      "
+"      │  fn hello() -> &'static str {                                        │      "
+"      │      "world"  // returns a greeting                                  │      "
+"      │  }                                                                   │      "
+"      │                                                                      │      "
+"      └──────────────────────────────────────────────────────────────────────┘      "
+"                                                                                    "

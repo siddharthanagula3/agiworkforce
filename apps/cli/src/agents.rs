@@ -11,8 +11,7 @@
 //! system prompt.
 
 // Module API surface is intentionally broad: used by the REPL /agents command
-// and will be wired into the --agent CLI flag. Tests exercise all public items.
-#![allow(dead_code)]
+// and the --agent CLI flag. Tests exercise all public items.
 
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};

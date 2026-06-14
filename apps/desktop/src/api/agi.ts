@@ -97,6 +97,35 @@ export async function agiInit(config?: AGICoreConfig): Promise<void> {
   });
 }
 
+// Module-level flag so ensureAgiInitialized is idempotent across calls.
+let _agiInitialized = false;
+
+/**
+ * Idempotent AGI init guard.
+ *
+ * Calls agi_init once per renderer lifetime.  Safe to call before every goal
+ * submission — subsequent calls are no-ops (module flag + early return).
+ * In non-Tauri environments (web/test) it returns immediately without error.
+ *
+ * The honest 'grant accessibility permissions' toast on Tauri failure is
+ * acceptable — it tells the user what to do.
+ */
+export async function ensureAgiInitialized(config?: AGICoreConfig): Promise<void> {
+  if (_agiInitialized) return;
+  if (!isTauri) {
+    _agiInitialized = true;
+    return;
+  }
+  try {
+    await invoke<void>('agi_init', { config: config ?? {} });
+    _agiInitialized = true;
+  } catch (err) {
+    // Do NOT set _agiInitialized — allow retry on next goal submission.
+    console.warn('[agi] ensureAgiInitialized failed:', err);
+    throw err;
+  }
+}
+
 /**
  * Stop the AGI core engine.
  * Gracefully shuts down the AGI loop and all managed agents.

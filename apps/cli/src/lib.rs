@@ -89,6 +89,7 @@ pub mod powershell_tool;
 pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
+pub mod terminal_style;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
@@ -126,6 +127,7 @@ pub mod file_state;
 #[allow(dead_code)]
 pub mod platform;
 
+use crate::terminal_style as ts;
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
@@ -239,7 +241,7 @@ pub struct Cli {
     )]
     output: Option<OutputFormat>,
 
-    /// Generate shell completions and exit
+    /// Deprecated alias for `agi completion <SHELL>`.
     #[arg(long, value_name = "SHELL", value_enum)]
     completions: Option<ShellType>,
 
@@ -317,18 +319,6 @@ pub struct Cli {
     #[arg(long)]
     no_sandbox: bool,
 
-    /// Input format for print/SDK mode.
-    /// Hidden: only text is supported in this build; stream-json is rejected at
-    /// runtime until NDJSON command parsing is wired to stdin.
-    #[arg(
-        long,
-        value_name = "FORMAT",
-        value_enum,
-        default_value = "text",
-        hide = true
-    )]
-    input_format: cli_options::InputFormat,
-
     /// Permission mode for tool use.
     #[arg(long, value_name = "MODE", value_enum)]
     permission_mode: Option<cli_options::PermissionMode>,
@@ -404,8 +394,8 @@ pub struct Cli {
     /// Use automatic model routing (mutually exclusive with --model).
     ///
     /// Sends `model: "auto-economy"` to the AGI managed-cloud API,
-    /// which delegates routing to the server-side classifier.  The CLI never
-    /// discloses which model was actually used (silent routing).
+    /// which delegates routing to the server-side classifier. Responses must
+    /// show the selected provider/model label when the server returns it.
     ///
     /// Only applies to managed-cloud sessions; BYOK and local (Ollama / LMStudio)
     /// providers always require an explicit --model.
@@ -420,11 +410,6 @@ pub struct Cli {
     /// Append the contents of a file to the system prompt.
     #[arg(long = "append-system-prompt-file", value_name = "FILE")]
     append_system_prompt_file: Option<String>,
-
-    /// Reserved for future per-token stream-json deltas. Hidden and rejected at
-    /// runtime until NDJSON forwarding is implemented.
-    #[arg(long = "include-partial-messages", hide = true)]
-    include_partial_messages: bool,
 
     /// Stop the session when total spend exceeds this many USD.
     /// Returns a `status_update` event with reason `budget_exhausted`.
@@ -498,11 +483,26 @@ pub fn resolve_oneshot_output_mode(
 }
 
 /// Shell type for completions generation.
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum ShellType {
     Bash,
     Zsh,
     Fish,
+}
+
+impl ShellType {
+    fn to_clap_shell(self) -> clap_complete::Shell {
+        match self {
+            ShellType::Bash => clap_complete::Shell::Bash,
+            ShellType::Zsh => clap_complete::Shell::Zsh,
+            ShellType::Fish => clap_complete::Shell::Fish,
+        }
+    }
+}
+
+fn generate_shell_completion(shell: ShellType, bin_name: &str, out: &mut impl std::io::Write) {
+    let mut cmd = Cli::command();
+    clap_complete::generate(shell.to_clap_shell(), &mut cmd, bin_name, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -547,6 +547,13 @@ enum Command {
     },
     /// Run as MCP server (stdio).
     McpServer,
+    /// Generate shell completion scripts.
+    #[command(alias = "completions")]
+    Completion {
+        /// Shell to generate completions for.
+        #[arg(value_name = "SHELL", value_enum)]
+        shell: ShellType,
+    },
     /// Run app server for IDE integration.
     AppServer {
         #[arg(long, default_value = "stdio")]
@@ -1088,7 +1095,6 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 async fn handle_session_action(action: SessionAction) -> Result<()> {
-    use colored::Colorize;
     match action {
         SessionAction::List { limit } => {
             let mut summaries =
@@ -1099,7 +1105,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                 println!("No sessions found.");
                 return Ok(());
             }
-            println!("{}", "Recent sessions:".cyan().bold());
+            println!("{}", ts::accent_header("Recent sessions:"));
             for s in summaries {
                 println!(
                     "  {}  {:>4} msgs  {}",
@@ -1112,7 +1118,11 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
         }
         SessionAction::Show { session_id } => {
             let (messages, _) = resolve_resume_payload(&session_id, false)?;
-            println!("{}: {} messages", session_id.cyan().bold(), messages.len());
+            println!(
+                "{}: {} messages",
+                ts::accent_header(session_id),
+                messages.len()
+            );
             for (i, msg) in messages.iter().enumerate() {
                 let preview: String = msg.text_content().chars().take(120).collect();
                 println!("  [{:>3}] {:<10}  {}", i, msg.role, preview);
@@ -1124,7 +1134,9 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             at_turn,
             as_name,
         } => {
-            let (mut messages, _) = resolve_resume_payload(&session_id, true)?;
+            // Load source session without creating a fork copy (fork=false avoids
+            // the UUID-named phantom copy that the old path wrote).
+            let (mut messages, _) = resolve_resume_payload(&session_id, false)?;
             if let Some(turn) = at_turn {
                 // Truncate to the first `turn` user→assistant pairs.
                 let mut user_seen = 0usize;
@@ -1145,18 +1157,46 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                 }
                 messages.truncate(keep_to);
             }
-            let new_name = as_name
-                .clone()
-                .unwrap_or_else(|| format!("{}-fork", session_id));
+            // Derive a safe session ID from --as (slugify) or auto-generate.
+            let new_id = if let Some(ref name) = as_name {
+                // Slugify: lowercase, replace non-alphanumeric with '-', collapse runs.
+                let raw: String = name
+                    .chars()
+                    .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+                    .collect();
+                let slug = raw
+                    .split('-')
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("-");
+                if slug.is_empty() {
+                    format!("{}-fork", session_id)
+                } else {
+                    slug
+                }
+            } else {
+                format!("{}-fork", session_id)
+            };
+            // Persist the forked (and optionally truncated) session to disk under
+            // the user-chosen ID so `agi --resume <as_name>` works immediately.
+            let resolved = runtime::session_control::create_managed_session_with_id(
+                new_id.clone(),
+                messages.clone(),
+            )?;
+            let saved_id = resolved.summary.session_id.clone();
             println!(
                 "{} Forked '{}' → '{}' ({} messages{}).",
-                "fork:".green().bold(),
+                ts::success_header("fork:"),
                 session_id,
-                new_name,
+                saved_id,
                 messages.len(),
                 at_turn
                     .map(|t| format!(", at turn {t}"))
                     .unwrap_or_default(),
+            );
+            println!(
+                "  Resume with: {}",
+                ts::accent_header(format!("agi --resume {saved_id}"))
             );
             Ok(())
         }
@@ -1203,21 +1243,8 @@ async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
 /// Main async entry point — called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
-    if cli.include_partial_messages {
-        anyhow::bail!(
-            "--include-partial-messages is not implemented in this CLI build; use --json-events for final assistant/tool events."
-        );
-    }
     sandbox::set_sandbox_disabled(cli.no_sandbox);
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
-    if matches!(
-        normalized_cli_options.input_format,
-        cli_options::InputFormat::StreamJson
-    ) {
-        anyhow::bail!(
-            "--input-format stream-json is not implemented in this CLI build; stdin is currently accepted as text only."
-        );
-    }
 
     for dir in &normalized_cli_options.additional_dirs {
         crate::path_security::register_additional_workspace_root(dir)
@@ -1414,7 +1441,9 @@ pub async fn run_main() -> Result<()> {
                                 out_tokens: turn.output_tokens,
                                 cache_read: turn.cache_read_tokens,
                                 cache_creation: turn.cache_creation_tokens,
-                                cumulative_dollars: 0.0,
+                                // Read accumulated cost from the session ledger instead of
+                                // hardcoding 0.0 — the ledger is updated by send() internally.
+                                cumulative_dollars: session.cost_ledger.total_usd,
                             }
                             .emit_stdout();
                             agent_events::AgentEvent::Finished {
@@ -1489,6 +1518,7 @@ pub async fn run_main() -> Result<()> {
                     normalized_cli_options.allowed_tools.clone(),
                     normalized_cli_options.disallowed_tools.clone(),
                     normalized_cli_options.mcp_config_load_options(),
+                    None,
                 )
                 .await
             }
@@ -1496,7 +1526,7 @@ pub async fn run_main() -> Result<()> {
                 let (messages, managed_session) = resolve_resume_payload(session_id, true)?;
                 eprintln!(
                     "{} Forked session '{}' ({} messages)",
-                    "fork:".cyan().bold(),
+                    ts::accent_header("fork:"),
                     session_id,
                     messages.len()
                 );
@@ -1521,6 +1551,7 @@ pub async fn run_main() -> Result<()> {
                     normalized_cli_options.allowed_tools.clone(),
                     normalized_cli_options.disallowed_tools.clone(),
                     normalized_cli_options.mcp_config_load_options(),
+                    None,
                 )
                 .await
             }
@@ -1575,6 +1606,10 @@ pub async fn run_main() -> Result<()> {
                 std::process::exit(out.status.code().unwrap_or(1));
             }
             Command::McpServer => app_server::run_mcp_server().await,
+            Command::Completion { shell } => {
+                generate_shell_completion(*shell, "agi", &mut io::stdout());
+                Ok(())
+            }
             Command::AppServer {
                 listen,
                 allow_public_listen,
@@ -1649,9 +1684,9 @@ pub async fn run_main() -> Result<()> {
                         mgr.load_all(std::env::current_dir().ok().as_deref())?;
                         for p in mgr.plugins() {
                             let st = if p.enabled {
-                                "enabled".green()
+                                ts::success("enabled")
                             } else {
-                                "disabled".red()
+                                ts::danger("disabled")
                             };
                             // Sprint B6: surface manifest format origin so users can
                             // tell at a glance whether a plugin is using the AGI,
@@ -2015,13 +2050,7 @@ pub async fn run_main() -> Result<()> {
 
     // --completions: generate shell completions and exit
     if let Some(shell) = cli.completions {
-        let mut cmd = Cli::command();
-        let shell_type = match shell {
-            ShellType::Bash => clap_complete::Shell::Bash,
-            ShellType::Zsh => clap_complete::Shell::Zsh,
-            ShellType::Fish => clap_complete::Shell::Fish,
-        };
-        clap_complete::generate(shell_type, &mut cmd, "agi", &mut io::stdout());
+        generate_shell_completion(shell, "agi", &mut io::stdout());
         return Ok(());
     }
 
@@ -2071,7 +2100,7 @@ pub async fn run_main() -> Result<()> {
             println!(
                 "{} session(s) matching \"{}\":\n",
                 results.len().to_string().bold(),
-                query.cyan()
+                ts::accent(query)
             );
             for s in &results {
                 let title = if s.title.is_empty() {
@@ -2097,8 +2126,16 @@ pub async fn run_main() -> Result<()> {
                         if text_lower.contains(&query_lower) {
                             // Find the match position and show surrounding context
                             if let Some(pos) = text_lower.find(&query_lower) {
-                                let start = pos.saturating_sub(40);
-                                let end = (pos + query.len() + 40).min(text.len());
+                                // Clamp the context window to UTF-8 char boundaries so
+                                // multibyte content cannot panic the slice below.
+                                let mut start = pos.saturating_sub(40);
+                                while start > 0 && !text.is_char_boundary(start) {
+                                    start -= 1;
+                                }
+                                let mut end = (pos + query.len() + 40).min(text.len());
+                                while end < text.len() && !text.is_char_boundary(end) {
+                                    end += 1;
+                                }
                                 let snippet = &text[start..end];
                                 let prefix = if start > 0 { "..." } else { "" };
                                 let suffix = if end < text.len() { "..." } else { "" };
@@ -2397,6 +2434,7 @@ pub async fn run_main() -> Result<()> {
             cli.max_budget_usd,
             cli.session_id_override.clone(),
             cli.json_events,
+            cli.agent.clone(),
         )
         .await;
     }
@@ -2424,7 +2462,7 @@ pub async fn run_main() -> Result<()> {
         } else if fork_session {
             eprintln!(
                 "{} Forked session '{}' ({} messages). Changes will not modify the original.",
-                "fork:".cyan().bold(),
+                ts::accent_header("fork:"),
                 session_id,
                 message_count
             );
@@ -2537,6 +2575,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
+            cli.agent.clone(),
         )
         .await
     } else {
@@ -2561,6 +2600,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
+            cli.agent.clone(),
         )
         .await
     }
@@ -2774,6 +2814,7 @@ pub async fn run_oneshot(
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
     json_events: bool,
+    agent_name: Option<String>,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new_checked(
         model,
@@ -2800,6 +2841,17 @@ pub async fn run_oneshot(
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
+    }
+    // Wire --agent: load the named agent definition and apply overrides to the session.
+    if let Some(ref name) = agent_name {
+        match agents::find_agent(name) {
+            Some(agent_def) => {
+                agent_def.apply_to_session(&mut session);
+            }
+            None => {
+                eprintln!("Warning: agent '{}' not found. Continuing without agent.", name);
+            }
+        }
     }
     session.enable_managed_session()?;
     // Wire --session-id: override the auto-generated session UUID with the
@@ -3059,8 +3111,6 @@ mod tests {
         let cli = Cli::try_parse_from([
             "agiworkforce",
             "--print",
-            "--input-format",
-            "stream-json",
             "--permission-mode",
             "acceptEdits",
             "--allowedTools",
@@ -3083,14 +3133,10 @@ mod tests {
             "project,user",
             "fix bug",
         ])
-        .expect("Claude-style options should parse");
+        .expect("reference-compatible options should parse");
 
         let options = crate::cli_options::CliOptions::from_cli(&cli);
 
-        assert_eq!(
-            options.input_format,
-            crate::cli_options::InputFormat::StreamJson
-        );
         assert_eq!(
             options.permission_mode,
             Some(crate::cli_options::PermissionMode::AcceptEdits)
@@ -3161,7 +3207,10 @@ mod tests {
         // Behavioral test: override_session_id() actually mutates the managed
         // session's session_id so managed_session_id() returns the caller value.
         let sys_ctx = context::gather_system_context();
-        let mut session = agent::AgentSession::new("claude-sonnet-4-6", &sys_ctx, None);
+        // Source the model ID from the canonical catalog (models.json) rather than
+        // a hardcoded literal, per the locked no-hardcoded-model-IDs rule.
+        let model = model_catalog::default_model();
+        let mut session = agent::AgentSession::new(model, &sys_ctx, None);
         session
             .enable_managed_session()
             .expect("enable_managed_session should succeed");
@@ -3191,11 +3240,53 @@ mod tests {
     }
 
     #[test]
-    fn include_partial_messages_is_hidden_and_parses_for_runtime_rejection() {
-        // The flag remains parseable so runtime validation can return the
-        // explicit "not implemented" error instead of clap's generic unknown flag.
-        let cli = Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"])
-            .expect("--include-partial-messages should remain parseable");
-        assert!(cli.include_partial_messages);
+    fn unsupported_bidirectional_sdk_flags_are_not_active_cli_surface() {
+        assert!(
+            Cli::try_parse_from([
+                "agiworkforce",
+                "--input-format",
+                "stream-json",
+                "hello",
+            ])
+            .is_err(),
+            "--input-format must not be accepted until bidirectional SDK input is wired"
+        );
+        assert!(
+            Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"])
+                .is_err(),
+            "--include-partial-messages must not be accepted until partial deltas are wired"
+        );
+    }
+
+    #[test]
+    fn completion_subcommand_parses_shell() {
+        let cli = Cli::try_parse_from(["agiworkforce", "completion", "zsh"])
+            .expect("completion subcommand should parse");
+        match cli.command {
+            Some(Command::Completion { shell }) => assert_eq!(shell, ShellType::Zsh),
+            other => panic!("expected completion command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn completions_alias_subcommand_parses_shell() {
+        let cli = Cli::try_parse_from(["agiworkforce", "completions", "fish"])
+            .expect("completions alias should parse");
+        match cli.command {
+            Some(Command::Completion { shell }) => assert_eq!(shell, ShellType::Fish),
+            other => panic!("expected completion command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn completion_output_is_generated_for_agi_binary_name() {
+        let mut out = Vec::new();
+        generate_shell_completion(ShellType::Bash, "agi", &mut out);
+        let rendered =
+            String::from_utf8(out).expect("bash completion output should be valid utf-8");
+        assert!(
+            rendered.contains("_agi()"),
+            "expected bash completion function for agi, got:\n{rendered}"
+        );
     }
 }

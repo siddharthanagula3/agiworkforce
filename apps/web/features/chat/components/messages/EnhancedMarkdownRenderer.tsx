@@ -28,6 +28,8 @@ import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import type { PluggableList } from 'unified';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
@@ -46,8 +48,19 @@ interface EnhancedMarkdownRendererProps {
 // Pre-computed plugin configurations - memoized at module level
 const REMARK_PLUGINS_BASE: PluggableList = [remarkGfm, remarkBreaks];
 const REMARK_PLUGINS_WITH_MATH: PluggableList = [remarkGfm, remarkBreaks, remarkMath];
-const REHYPE_PLUGINS_BASE: PluggableList = [rehypeHighlight, rehypeRaw];
-const REHYPE_PLUGINS_WITH_MATH: PluggableList = [rehypeHighlight, rehypeRaw, rehypeKatex];
+// Order matters: raw HTML is parsed, then sanitized, then highlight/KaTeX run
+// on the cleaned tree. rehypeRaw without a sanitizer is an XSS hazard.
+const REHYPE_PLUGINS_BASE: PluggableList = [
+  rehypeRaw,
+  [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
+  rehypeHighlight,
+];
+const REHYPE_PLUGINS_WITH_MATH: PluggableList = [
+  rehypeRaw,
+  [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
+  rehypeHighlight,
+  rehypeKatex,
+];
 
 // Custom code block component with copy button and syntax highlighting
 const CodeBlock = ({
@@ -159,15 +172,32 @@ const LinkComponent = ({ href, children }: { href?: string; children: React.Reac
 };
 
 // Custom image component with lazy loading
-const ImageComponent = ({ src, alt }: { src?: string; alt?: string }) => (
-  <NextImage
-    src={src || ''}
-    alt={alt || ''}
-    width={800}
-    height={600}
-    className="my-4 max-w-full rounded-lg border border-border shadow-sm"
-  />
-);
+const ImageComponent = ({ src, alt }: { src?: string; alt?: string }) => {
+  // Only render http(s) URLs. Untrusted markdown can carry junk or hostile
+  // srcs; next/image's loader throws on invalid URLs, which would crash the
+  // whole message render. Anything else degrades to the alt text.
+  let isRenderable = false;
+  try {
+    const url = new URL(src ?? '');
+    isRenderable = url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    isRenderable = false;
+  }
+
+  if (!isRenderable) {
+    return alt ? <span className="text-muted-foreground italic">[image: {alt}]</span> : null;
+  }
+
+  return (
+    <NextImage
+      src={src as string}
+      alt={alt || ''}
+      width={800}
+      height={600}
+      className="my-4 max-w-full rounded-lg border border-border shadow-sm"
+    />
+  );
+};
 
 // Custom blockquote component
 const BlockquoteComponent = ({ children }: { children: React.ReactNode }) => (

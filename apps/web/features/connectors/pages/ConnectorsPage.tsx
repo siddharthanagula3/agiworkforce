@@ -518,7 +518,7 @@ export function ConnectorsPage() {
       try {
         const res = await fetch('/api/connectors');
         if (!res.ok) {
-          // User may not be authenticated — degrade gracefully to empty set
+          // User may not be authenticated · degrade gracefully to empty set
           setLoading(false);
           return;
         }
@@ -534,7 +534,7 @@ export function ConnectorsPage() {
           setConnectedAtMap(atMap);
         }
       } catch {
-        // Network error — degrade gracefully
+        // Network error · degrade gracefully
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -29,6 +29,12 @@ pub struct LocalProviderProbe {
 struct OllamaTagsResponse {
     #[serde(default)]
     models: Vec<OllamaModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaShowResponse {
+    #[serde(default)]
+    capabilities: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -235,6 +241,46 @@ pub async fn ensure_local_model_available(
     )
 }
 
+pub async fn ollama_model_supports_tools(
+    client: &reqwest::Client,
+    base_url: &str,
+    model: &str,
+) -> Result<bool> {
+    let safe_base = normalize_ollama_host_root(base_url);
+    if !is_safe_local_base_url(&safe_base) {
+        bail!(
+            "blocked unsafe Ollama URL for model capability check: {}",
+            safe_base
+        );
+    }
+
+    let url = format!("{}/api/show", safe_base.trim_end_matches('/'));
+    let resp = client
+        .post(&url)
+        .json(&serde_json::json!({ "model": model }))
+        .send()
+        .await
+        .with_context(|| format!("failed to query Ollama model capabilities at {url}"))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        bail!("/api/show returned HTTP {status}: {body}");
+    }
+
+    let body = resp
+        .json::<OllamaShowResponse>()
+        .await
+        .context("invalid Ollama /api/show JSON")?;
+    Ok(ollama_capabilities_support_tools(&body.capabilities))
+}
+
+fn ollama_capabilities_support_tools(capabilities: &[String]) -> bool {
+    capabilities
+        .iter()
+        .any(|capability| capability.eq_ignore_ascii_case("tools"))
+}
+
 pub fn format_probe_report(probes: &[LocalProviderProbe]) -> String {
     let mut out = String::from("Local model servers\n");
     for probe in probes {
@@ -339,5 +385,27 @@ fn failed_probe(provider: &str, base_url: String, error: String) -> LocalProvide
         running: false,
         models: Vec::new(),
         error: Some(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ollama_capabilities_support_tools;
+
+    #[test]
+    fn ollama_capabilities_detect_tool_support() {
+        let capabilities = vec![
+            "completion".to_string(),
+            "vision".to_string(),
+            "tools".to_string(),
+        ];
+        assert!(ollama_capabilities_support_tools(&capabilities));
+    }
+
+    #[test]
+    fn ollama_capabilities_missing_tools_disables_tool_schemas() {
+        let capabilities = vec!["completion".to_string(), "vision".to_string()];
+        assert!(!ollama_capabilities_support_tools(&capabilities));
+        assert!(!ollama_capabilities_support_tools(&[]));
     }
 }

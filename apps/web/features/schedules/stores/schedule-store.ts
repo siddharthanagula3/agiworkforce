@@ -213,7 +213,7 @@ export const useScheduleStore = create<ScheduleState & ScheduleActions>()(
         state.editingId = null;
         state.dialogOpen = true;
       });
-      // Return the form data pre-filled — SchedulesPage will pick this up
+      // Return the form data pre-filled · SchedulesPage will pick this up
       // via openCreate with prefill. We expose it via a special key.
       // Since the form lives in the page, we signal via store state.
       // We store the prefill data on the store so ScheduleForm can read it.

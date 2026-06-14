@@ -15,11 +15,10 @@
   entries to your privacy manifest") and the per-category index at
   https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api
 
-  AGI default install collects NO personal data (Local mode is the
-  default; Cloud-mode account creation is opt-in).
-  NSPrivacyCollectedDataTypes is intentionally
-  empty. NSPrivacyTracking is false. AGI does not include the
-  AdSupport / IDFA APIs.
+  AGI Local Mode collects no personal data by default. Optional AGI
+  Cloud waitlist access collects email address and optional name for
+  app-functionality access notifications. NSPrivacyTracking is false.
+  AGI does not include the AdSupport / IDFA APIs.
 -->
 <plist version="1.0">
 <dict>
@@ -93,14 +92,33 @@
         </dict>
     </array>
 
-    <!--
-      AGI does not collect any data by default. Cloud-mode account
-      creation (email, name) is opt-in and is declared by the
-      Clerk-authenticated Web/API account surface; the mobile bundle itself collects
-      nothing until the user explicitly creates a Cloud account.
-    -->
     <key>NSPrivacyCollectedDataTypes</key>
-    <array/>
+    <array>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeEmailAddress</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeName</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+    </array>
 
     <!--
       Tracking: AGI never tracks across apps or websites. We do not

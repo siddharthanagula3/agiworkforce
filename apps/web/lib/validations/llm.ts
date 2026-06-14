@@ -18,7 +18,7 @@ const MAX_OUTPUT_TOKENS = 32_768;
  * (≈ 25k tokens before tokenization, larger than the legal/contract
  * extracts users typically paste) but short enough to bound parse + bill
  * cost. Used by `/api/llm/completion` and the OpenAI-compat
- * `/api/llm/v1/chat/completions` gateways — both gates must enforce the
+ * `/api/llm/v1/chat/completions` gateways · both gates must enforce the
  * same limit; this constant is the single source of truth.
  *
  * 2026-05-22 ultrathink audit unified two duplicate inline definitions.

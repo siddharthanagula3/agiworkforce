@@ -211,7 +211,7 @@ Desktop:
 
 - Desktop has a strong v3 chat shell with sidebar, model popover, composer, artifact workbench, connectors/MCP direction, local generated files, and focused settings modals.
 - `apps/desktop/src/features/v3/DesktopShellV3.tsx` no longer exposes separate
-  Cowork and Code mode placeholders. It exposes chat plus Cowork Projects,
+  AGI Work and AGI Code mode placeholders. It exposes chat plus AGI Work Projects,
   Artifacts, Scheduled, and Dispatch subpanels. AGI Code remains missing or
   unmounted in V3; `CodeModeHome.tsx` exists but is not mounted.
 - Desktop settings currently includes General, Account,
@@ -254,7 +254,7 @@ Services:
 
 These are the highest-risk gaps before calling v1 competitive.
 
-1. Desktop Cowork subpanels need demo-path verification, and AGI Code must be
+1. Desktop AGI Work subpanels need demo-path verification, and AGI Code must be
    mounted into the V3 shell or clearly gated before demo.
 2. Desktop settings must match the locked IA: General, Account, Privacy,
    Billing, Usage, Capabilities, Connectors, AGI Code, AGI in Chrome,

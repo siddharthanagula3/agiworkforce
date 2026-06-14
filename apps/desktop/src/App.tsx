@@ -171,7 +171,7 @@ import { InviteCodeModal, type InviteCodeTab } from './features/cloud-bridge';
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">
     <div className="animate-pulse flex flex-col items-center gap-4">
-      <Bot className="h-12 w-12 text-blue-500" />
+      <Bot className="h-12 w-12 text-[var(--chat-accent-secondary)]" />
       <span className="text-2xl font-bold tracking-tighter text-foreground">AGI</span>
       <span className="text-sm text-muted-foreground">Loading your workspace...</span>
       <button
@@ -609,13 +609,17 @@ const DesktopShell = () => {
           provider: string;
           available: boolean;
         }
-        let rustModels = await invoke<RustModelInfo[]>('llm_get_available_models');
+        const rawRustModels = await invoke<unknown>('llm_get_available_models');
+        let rustModels = Array.isArray(rawRustModels) ? (rawRustModels as RustModelInfo[]) : [];
         if (
           currentMode === 'local' &&
           !rustModels.some((model) => model.provider.toLowerCase() === 'ollama')
         ) {
           try {
-            const directOllamaModels = await invoke<RustModelInfo[]>('llm_list_ollama_models');
+            const rawDirectOllamaModels = await invoke<unknown>('llm_list_ollama_models');
+            const directOllamaModels = Array.isArray(rawDirectOllamaModels)
+              ? (rawDirectOllamaModels as RustModelInfo[])
+              : [];
             const seenModelIds = new Set(rustModels.map((model) => model.id));
             rustModels = [
               ...rustModels,
@@ -1357,25 +1361,29 @@ const DesktopShell = () => {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <div
-        className="flex h-screen w-full flex-col overflow-hidden bg-surface-base text-foreground font-sans"
+        className="flex h-screen w-full flex-col overflow-hidden bg-[var(--chat-surface-base)] text-[var(--chat-text-primary)] font-sans"
         data-theme-managed=""
       >
         {!isTauri && import.meta.env.DEV && (
-          <div className="bg-amber-500/20 border-b border-amber-500/50 px-4 py-2 text-center text-sm text-amber-200">
+          <div className="border-b border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] px-4 py-2 text-center text-sm text-[var(--chat-warning-fg)]">
             <strong>Web Development Mode</strong> - Running without Tauri. Some features are mocked.
           </div>
         )}
         {!isTauri && !import.meta.env.DEV && (
-          <div className="bg-gradient-to-r from-teal-600 to-blue-600 px-4 py-2 flex items-center justify-between">
+          <div className="border-b border-[var(--chat-border)] bg-[var(--chat-accent-secondary)] px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-white font-semibold text-sm">AGI Workforce</span>
-              <span className="text-white/60 text-xs">Web Chat</span>
+              <span className="text-[var(--chat-accent-primary-contrast)] font-semibold text-sm">
+                AGI Workforce
+              </span>
+              <span className="text-[var(--chat-accent-primary-contrast)]/70 text-xs">
+                Web Chat
+              </span>
             </div>
             <a
               href="https://agiworkforce.com/download"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-white/90 hover:text-white bg-white/15 hover:bg-white/25 px-3 py-1 rounded-full transition-colors"
+              className="text-xs text-[var(--chat-accent-primary-contrast)]/90 hover:text-[var(--chat-accent-primary-contrast)] bg-[var(--chat-accent-primary-contrast)]/15 hover:bg-[var(--chat-accent-primary-contrast)]/25 px-3 py-1 rounded-full transition-colors"
             >
               Download Desktop App
             </a>
@@ -1399,7 +1407,7 @@ const DesktopShell = () => {
             <OfflineIndicator position="top" />
           </Suspense>
           {isCloudMode && subscriptionFetchFailed && (
-            <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
+            <div className="border-b border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] px-4 py-2 flex items-center justify-between text-sm text-[var(--chat-warning-fg)]">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 <span>Using cached account data. Subscription status may be outdated.</span>
@@ -1415,18 +1423,18 @@ const DesktopShell = () => {
                       setSubscriptionFetchFailed(true);
                     });
                 }}
-                className="text-amber-200 underline hover:text-amber-100 text-xs"
+                className="text-[var(--chat-warning-fg)] underline hover:opacity-80 text-xs"
               >
                 Retry
               </button>
             </div>
           )}
         </div>
-        <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">
+        <main className="flex flex-1 min-h-0 min-w-0 bg-[var(--chat-surface-base)]">
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary
               fallback={(error, errorInfo) => (
-                <div className="flex h-full w-full items-center justify-center bg-surface-base">
+                <div className="flex h-full w-full items-center justify-center bg-[var(--chat-surface-base)]">
                   <div className="max-w-xl px-6 text-center">
                     <p className="mb-4 text-lg font-semibold text-foreground">
                       Chat interface encountered an error
@@ -1444,7 +1452,7 @@ const DesktopShell = () => {
                     <button
                       type="button"
                       onClick={() => window.location.reload()}
-                      className="rounded bg-primary px-4 py-2 text-white hover:bg-primary/90"
+                      className="rounded bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
                     >
                       Reload Application
                     </button>

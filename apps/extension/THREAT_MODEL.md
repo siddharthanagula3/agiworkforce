@@ -1,7 +1,7 @@
 # AGI Workforce Chrome Extension — Threat Model
 
 **Surface:** `apps/extension/` (Chrome MV3 v1.2.0)
-**Last updated:** 2026-05-19
+**Last updated:** 2026-06-11
 **Owners:** Chrome extension engineer (delegated). Audit owner per `docs/current/agent-and-repo-operability.md`.
 
 This document declares the trust planes, data classes, and flow rules that
@@ -39,6 +39,28 @@ mitigation is shaped the way it is.
 | Recorded actions     | `chrome.storage.local.agi_recorded_actions`       | Replay against recorder's own tab.                                                                                 | Default selector-only (C-05). Opt-in to values drops passwords, redacts `cc-*` / `one-time-code`, runs `redactSecrets`. |
 | Page innerText       | Sent to desktop LLM via native port / HTTP bridge | Allowlisted origins only (H-06b).                                                                                  | Invisible Unicode stripped + secrets redacted via `sanitizePageText`. Capped at `MAX_CONTEXT_HTML_CHARS` (100 KB).      |
 | Conversation history | `chrome.storage.local.agi_conversation_history`   | Same as page innerText (forwarded as LLM context).                                                                 | 100 entries cap, 30-day TTL.                                                                                            |
+
+---
+
+## 2.1 Demo Permission Story
+
+The Chrome extension is not the main public demo path until install, pairing,
+and site approval are shown on-screen. The manifest intentionally contains broad
+browser permissions because MV3 needs them for the side panel, native messaging,
+active-tab capture, tab grouping, context menus, and content-script discovery.
+Runtime access is narrower than the manifest:
+
+- Page-originated messages are rejected unless the tab origin is in the
+  user-managed `agi_site_allowlist`.
+- DOM-writing actions are restricted to the sender's own tab.
+- Persistent shortcuts, scheduled tasks, recording value capture, and stream
+  cancellation are extension-page-only.
+- Local bridge access is limited to loopback URLs validated by `validateBridgeUrl`.
+- Desktop bridge calls require explicit pairing before an `X-Bridge-Token` is
+  attached to local bridge requests.
+
+Demo rule: show Chrome as an approved-site companion for AGI Desktop, not as an
+ungated web automation product.
 
 ---
 

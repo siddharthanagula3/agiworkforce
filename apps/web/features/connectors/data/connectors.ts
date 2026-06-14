@@ -66,7 +66,7 @@ export function getConnectorAvailabilityLabel(connector: Connector): string {
 }
 
 export const CONNECTORS: Connector[] = [
-  // Phase 1 — Core Productivity
+  // Phase 1 · Core Productivity
   {
     id: 'gmail',
     name: 'Gmail',
@@ -200,7 +200,7 @@ export const CONNECTORS: Connector[] = [
     iconEmoji: '🎯',
   },
 
-  // Phase 2 — Collaboration
+  // Phase 2 · Collaboration
   {
     id: 'teams',
     name: 'Microsoft Teams',
@@ -250,7 +250,7 @@ export const CONNECTORS: Connector[] = [
     iconEmoji: '📹',
   },
 
-  // Phase 3 — CRM
+  // Phase 3 · CRM
   {
     id: 'hubspot',
     name: 'HubSpot',
@@ -300,7 +300,7 @@ export const CONNECTORS: Connector[] = [
     iconEmoji: '💬',
   },
 
-  // Phase 5 — Marketing
+  // Phase 5 · Marketing
   {
     id: 'google-analytics',
     name: 'Google Analytics',
@@ -326,7 +326,7 @@ export const CONNECTORS: Connector[] = [
     iconEmoji: '🐒',
   },
 
-  // Phase 6 — Finance
+  // Phase 6 · Finance
   {
     id: 'stripe',
     name: 'Stripe',
@@ -352,7 +352,7 @@ export const CONNECTORS: Connector[] = [
     iconEmoji: '🛍️',
   },
 
-  // Phase 7 — Social
+  // Phase 7 · Social
   {
     id: 'linkedin',
     name: 'LinkedIn',
@@ -390,7 +390,7 @@ export const CONNECTORS: Connector[] = [
     iconEmoji: '🎮',
   },
 
-  // Phase 8 — AI
+  // Phase 8 · AI
   {
     id: 'openai',
     name: 'OpenAI',

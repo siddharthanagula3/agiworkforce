@@ -34,7 +34,12 @@ export interface ChatRouteParams {
 
 /** Params for agent detail screen: /(app)/agents/[id] */
 export interface AgentDetailRouteParams {
-  agentId: string;
+  /**
+   * Expo Router supplies this from the `[id]` segment. The field name must
+   * match the segment key (`id`), not the domain term `agentId`, or any code
+   * typed against this interface reading `params.agentId` would get `undefined`.
+   */
+  id: string;
 }
 
 /** Params for companion screen when opened via deep link */

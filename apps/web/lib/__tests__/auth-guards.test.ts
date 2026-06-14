@@ -5,7 +5,7 @@ import { AppError, ErrorCode } from '@agiworkforce/utils';
 
 vi.mock('server-only', () => ({}));
 
-// Mock getClerkAuthUser — controls the auth result
+// Mock getClerkAuthUser · controls the auth result
 vi.mock('../api-auth', () => ({
   getClerkAuthUser: vi.fn(),
 }));
@@ -13,7 +13,7 @@ vi.mock('../api-auth', () => ({
 // Mock @clerk/nextjs/server for getUserRole.
 // clerkClient is a plain async function (not vi.fn()) so that the global
 // mockReset:true config does not wipe its return value between tests.
-// Only mockGetUser needs to be a vi.fn() — it is the only spy under test.
+// Only mockGetUser needs to be a vi.fn() · it is the only spy under test.
 const mockGetUser = vi.fn();
 vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: async () => ({

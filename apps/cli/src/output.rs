@@ -1,10 +1,10 @@
-use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::env;
 use std::time::Duration;
 
 use crate::markdown::MarkdownRenderer;
 use crate::model_catalog;
+use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
 // Color depth detection
@@ -99,7 +99,7 @@ pub fn format_duration_ms(ms: u64) -> String {
 // Progress bar
 // ---------------------------------------------------------------------------
 
-/// Create a progress bar with a cyan bar style.
+/// Create a progress bar with the shared terminal progress style.
 ///
 /// Useful for file downloads, bulk operations, or any task with a known total.
 #[allow(dead_code)]
@@ -107,7 +107,7 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
     let pb = ProgressBar::new(total);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{msg} [{bar:30.cyan/dim}] {pos}/{len}")
+            .template(ts::PROGRESS_BAR_TEMPLATE)
             .expect("valid bar template"),
     );
     pb.set_message(message.to_string());
@@ -193,7 +193,7 @@ pub fn create_spinner(message: &str) -> ProgressBar {
                 "\u{2840}", "\u{28c0}", "\u{28c4}", "\u{28e4}", "\u{28f0}", "\u{28b0}", "\u{2830}",
                 "\u{2810}",
             ])
-            .template("{spinner:.cyan} {msg}")
+            .template(ts::SPINNER_TEMPLATE)
             .expect("valid spinner template"),
     );
     spinner.set_message(message.to_string());
@@ -207,7 +207,7 @@ pub fn create_spinner(message: &str) -> ProgressBar {
 
 /// Format and print a user prompt line.
 pub fn print_user_prompt() {
-    eprint!("{}", "> ".green().bold());
+    eprint!("{}", ts::prompt("> "));
 }
 
 /// Print assistant text chunk. Called incrementally during streaming (raw mode).
@@ -222,17 +222,17 @@ pub fn print_assistant_end() {
 
 /// Print a system/info message.
 pub fn print_info(message: &str) {
-    eprintln!("{} {}", "info:".cyan().bold(), message);
+    eprintln!("{} {}", ts::info_label(), message);
 }
 
 /// Print a warning message.
 pub fn print_warn(message: &str) {
-    eprintln!("{} {}", "warn:".yellow().bold(), message);
+    eprintln!("{} {}", ts::warn_label(), message);
 }
 
 /// Print an error message.
 pub fn print_error(message: &str) {
-    eprintln!("{} {}", "error:".red().bold(), message);
+    eprintln!("{} {}", ts::error_label(), message);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,13 +276,13 @@ pub fn format_subscription_cost(input_tokens: u32, output_tokens: u32) -> String
 /// Print a cost summary line.
 pub fn print_cost(model: &str, input_tokens: u32, output_tokens: u32) {
     let summary = format_cost(model, input_tokens, output_tokens);
-    eprintln!("{} {}", "cost:".dimmed(), summary.dimmed());
+    eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
 }
 
 /// Print a cost summary line for a subscription-routed request.
 pub fn print_subscription_cost(input_tokens: u32, output_tokens: u32) {
     let summary = format_subscription_cost(input_tokens, output_tokens);
-    eprintln!("{} {}", "cost:".dimmed(), summary.dimmed());
+    eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
 }
 
 /// Print a session total cost.
@@ -290,7 +290,7 @@ pub fn print_session_cost(model: &str, total_input: u32, total_output: u32, turn
     let summary = format_cost(model, total_input, total_output);
     eprintln!(
         "\n{}\n  {} turns | {} in / {} out\n  {}",
-        "Session Summary".cyan().bold(),
+        ts::accent_header("Session Summary"),
         turn_count,
         format_tokens(total_input),
         format_tokens(total_output),
@@ -306,15 +306,15 @@ pub fn print_session_cost(model: &str, total_input: u32, total_output: u32, turn
 #[allow(dead_code)]
 pub fn print_tool_execution_summary(tool_name: &str, duration_ms: u64, success: bool) {
     let status = if success {
-        "OK".green().bold()
+        ts::success_header("OK")
     } else {
-        "FAIL".red().bold()
+        ts::danger_header("FAIL")
     };
-    let duration = format!("{}ms", duration_ms).dimmed();
+    let duration = ts::muted(format!("{}ms", duration_ms));
     eprintln!(
         "  {} {} {} {}",
-        "tool:".dimmed(),
-        tool_name.cyan(),
+        ts::muted("tool:"),
+        ts::accent(tool_name),
         duration,
         status
     );
@@ -330,23 +330,23 @@ pub fn print_context_warning(usage_pct: f64, used_tokens: usize, limit: usize) {
     if usage_pct >= 90.0 {
         eprintln!(
             "{} Context window {} ({}) — consider compacting",
-            "warn:".red().bold(),
-            pct_display.red().bold(),
-            detail.dimmed()
+            ts::danger_header("warn:"),
+            ts::danger_header(pct_display),
+            ts::muted(detail)
         );
     } else if usage_pct >= 75.0 {
         eprintln!(
             "{} Context window {} ({})",
-            "warn:".yellow().bold(),
-            pct_display.yellow().bold(),
-            detail.dimmed()
+            ts::warn_label(),
+            ts::warning_header(pct_display),
+            ts::muted(detail)
         );
     } else {
         eprintln!(
             "{} Context window {} ({})",
-            "info:".cyan().bold(),
+            ts::info_label(),
             pct_display,
-            detail.dimmed()
+            ts::muted(detail)
         );
     }
 }
@@ -361,9 +361,9 @@ pub fn print_mcp_status(server_name: &str, tool_count: usize) {
     };
     eprintln!(
         "  {} {} ({})",
-        "mcp:".dimmed(),
-        server_name.cyan(),
-        tools_display.dimmed()
+        ts::muted("mcp:"),
+        ts::accent(server_name),
+        ts::muted(tools_display)
     );
 }
 
@@ -377,17 +377,17 @@ pub fn print_session_loaded(id: &str, msg_count: usize, model: &str) {
     };
     eprintln!(
         "{} Resumed session {} — {} ({})",
-        "info:".cyan().bold(),
-        id.dimmed(),
+        ts::info_label(),
+        ts::muted(id),
         msgs,
-        model.dimmed()
+        ts::muted(model)
     );
 }
 
 /// Print a horizontal divider.
 #[allow(dead_code)]
 pub fn print_divider() {
-    eprintln!("{}", "─".repeat(50).dimmed());
+    eprintln!("{}", ts::muted("─".repeat(50)));
 }
 
 // ---------------------------------------------------------------------------
@@ -417,11 +417,10 @@ pub fn print_compact_header(provider: &str) {
 
     eprintln!(
         "{}",
-        format!(
+        ts::muted(format!(
             "agiworkforce {} · provider: {} · {}",
             version, provider, auth_path
-        )
-        .dimmed()
+        ))
     );
 }
 
@@ -434,12 +433,12 @@ pub fn print_banner(model: &str, provider: &str) {
     };
     eprintln!(
         "{} {} {}{}",
-        "AGI CLI".bold(),
-        format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
-        format!("({} via {})", model, provider).dimmed(),
-        color_info.dimmed()
+        ts::brand_header("AGI CLI"),
+        ts::muted(format!("v{}", env!("CARGO_PKG_VERSION"))),
+        ts::muted(format!("({} via {})", model, provider)),
+        ts::muted(color_info)
     );
-    eprintln!("{}", "Type /help for commands, /exit to quit.".dimmed());
+    eprintln!("{}", ts::muted("Type /help for commands, /exit to quit."));
     eprintln!();
 }
 
@@ -450,7 +449,7 @@ pub fn print_banner(model: &str, provider: &str) {
 /// Example output: `  Hobby · 1.3M/2.0M tokens`
 pub fn print_tier_status() {
     if let Some(cached) = crate::tier_cache::read_tier_cache() {
-        eprintln!("{}", format!("  {}", cached.status_label()).dimmed());
+        eprintln!("{}", ts::muted(format!("  {}", cached.status_label())));
     }
 }
 

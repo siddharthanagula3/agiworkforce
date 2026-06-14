@@ -158,9 +158,13 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
         const parsedSchema = tool.inputSchema
           ? safeJsonParse<Record<string, unknown>>(tool.inputSchema, MAX_WEBMCP_SCHEMA_BYTES)
           : undefined;
+        // SECURITY (audit batch-223 [LOW] validation bypass, fixed 2026-06-13):
+        // imperative page-supplied tool names/descriptions must get the same
+        // isValidToolName + length-cap hardening the declarative path applies.
+        if (!isValidToolName(tool.name)) continue;
         tools.push({
           name: tool.name,
-          description: tool.description,
+          description: (tool.description ?? '').slice(0, TOOL_DESCRIPTION_MAX_CHARS),
           inputSchema: parsedSchema,
           source: 'imperative',
         });
@@ -188,9 +192,10 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
     try {
       const registered = mc.listTools();
       for (const tool of registered) {
+        if (!isValidToolName(tool.name)) continue;
         tools.push({
           name: tool.name,
-          description: tool.description || '',
+          description: (tool.description || '').slice(0, TOOL_DESCRIPTION_MAX_CHARS),
           inputSchema: tool.inputSchema,
           source: 'imperative',
         });

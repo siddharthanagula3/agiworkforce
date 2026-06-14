@@ -98,4 +98,32 @@ export const MIGRATION_SQL: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_doc_chunks_conv ON doc_chunks(conversation_id, chunk_index);
     `,
   },
+  {
+    version: 3,
+    sql: `
+      PRAGMA foreign_keys = OFF;
+
+      CREATE TABLE IF NOT EXISTS memory_facts_v3 (
+        id TEXT PRIMARY KEY,
+        fact TEXT NOT NULL,
+        source_conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+
+      INSERT OR IGNORE INTO memory_facts_v3 (id, fact, source_conversation_id, pinned, created_at)
+      SELECT id, fact, source_conversation_id, pinned, created_at
+      FROM memory_facts;
+
+      DROP TABLE IF EXISTS memory_facts;
+      ALTER TABLE memory_facts_v3 RENAME TO memory_facts;
+
+      PRAGMA foreign_keys = ON;
+
+      CREATE TABLE IF NOT EXISTS memory_vectors (
+        fact_id TEXT PRIMARY KEY REFERENCES memory_facts(id) ON DELETE CASCADE,
+        embedding BLOB NOT NULL
+      );
+    `,
+  },
 ];

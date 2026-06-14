@@ -27,6 +27,8 @@ expression: rendered
 
     Editor
       Ctrl+E       Open external editor for current input
-      Alt+Enter    Insert newline without submitting
+      Enter        Send message
+      Shift+Enter  Insert newline (multiline)
+      Alt+Enter    Insert newline (multiline, alternate)
 
   Esc to close

@@ -162,4 +162,4 @@ export async function getUserTokenBalance(_userId: string): Promise<number> {
   }
 }
 
-// Note: isStripeConfigured() is exported from stripe-payments.ts — do not duplicate here.
+// Note: isStripeConfigured() is exported from stripe-payments.ts · do not duplicate here.

@@ -1,24 +1,21 @@
 /**
  * @file Shared-package MCP client for the api-gateway.
  *
- * Replaces the legacy hand-rolled JSON-RPC implementation in `mcpProxy.ts`
- * with the official `@modelcontextprotocol/sdk` via the shared
- * `@agiworkforce/mcp` package's transport-discriminated client.
+ * Uses the official `@modelcontextprotocol/sdk` via the shared
+ * `@agiworkforce/mcp` package's transport-discriminated client. This replaced
+ * an earlier hand-rolled JSON-RPC proxy, which has since been removed — all
+ * MCP traffic in the gateway now goes through the official SDK client.
  *
- * Why the migration:
- *   - The legacy `mcpProxy.ts` implements stdio framing and HTTP polling by
- *     hand. The shared package uses the official MCP SDK, which now
- *     supports `streamable-http` (modern bidi stream), `sse` (legacy), AND
- *     stdio behind a single `Client` API. Less code, fewer bugs.
- *   - Tool catalogs across many servers can be built with a single
+ * Why the SDK:
+ *   - It supports `streamable-http` (modern bidi stream), `sse` (legacy), AND
+ *     stdio behind a single `Client` API — less code and fewer bugs than
+ *     hand-rolling stdio framing and HTTP polling.
+ *   - Tool catalogs across many servers build with a single
  *     `buildMcpToolCatalog()` call, and per-server failures are isolated.
  *   - Config validation already happens in `mcpConfig.ts`'s allowlist;
- *     this module assumes an already-validated config and focuses on
- *     lifecycle.
+ *     this module assumes an already-validated config and focuses on lifecycle.
  *
- * Backward compatibility: `mcpProxy.ts` remains for existing callers; it
- * emits a deprecation warning on first use. New code should consume this
- * module's `getSharedMcpProxy()`.
+ * Consume this module's `getSharedMcpProxy()` for gateway MCP access.
  */
 
 import {

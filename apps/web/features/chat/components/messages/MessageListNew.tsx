@@ -288,7 +288,7 @@ const MessageItemComponent = ({
           }),
         });
       } catch {
-        // Best-effort — local state is already updated
+        // Best-effort · local state is already updated
       }
     },
     [message.id, message.conversationId],
@@ -356,21 +356,21 @@ const MessageItemComponent = ({
             )}
           </div>
 
-          {/* Reasoning accordion — shown before message content */}
+          {/* Reasoning accordion · shown before message content */}
           {!isUser && hasThinkingSteps && (
             <div className="mb-3">
               <ReasoningAccordion steps={meta!.thinkingSteps!} isStreaming={message.isStreaming} />
             </div>
           )}
 
-          {/* Web search indicator — shown while server-side search is running */}
+          {/* Web search indicator · shown while server-side search is running */}
           {!isUser && meta?.isSearching && (
             <div className="mb-3">
               <SearchingIndicator />
             </div>
           )}
 
-          {/* Web search results — shown after search completes */}
+          {/* Web search results · shown after search completes */}
           {!isUser && meta?.searchResults && (meta.searchResults as unknown[]).length > 0 && (
             <div className="mb-3">
               <CompactSearchResults
@@ -385,7 +385,7 @@ const MessageItemComponent = ({
             </div>
           )}
 
-          {/* Code execution block — shown while executing or after result arrives */}
+          {/* Code execution block · shown while executing or after result arrives */}
           {!isUser && (meta?.isExecutingCode || Boolean(meta?.codeExecutionResult)) && (
             <CodeExecutionBlock
               isExecuting={meta?.isExecutingCode}
@@ -425,7 +425,7 @@ const MessageItemComponent = ({
             </div>
           )}
 
-          {/* Citation footer — shown after content when web search results are available */}
+          {/* Citation footer · shown after content when web search results are available */}
           {!isUser &&
             !message.isStreaming &&
             meta?.searchResults &&
@@ -444,7 +444,7 @@ const MessageItemComponent = ({
               />
             )}
 
-          {/* Tool timeline — shown after content for assistant messages */}
+          {/* Tool timeline · shown after content for assistant messages */}
           {!isUser && meta?.tools && meta.tools.length > 0 && (
             <div className="mt-3">
               <ToolTimeline tools={meta.tools} />

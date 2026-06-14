@@ -60,6 +60,24 @@ describe('tier2: LLMModule loading', () => {
     expect(mockFromModelName).toHaveBeenCalledOnce();
   });
 
+  it('deduplicates concurrent loads for the same preset', async () => {
+    let resolveLoad: (instance: ReturnType<typeof makeInstance>) => void = () => undefined;
+    mockFromModelName.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    const first = tier2LoadModel(QWEN3_PRESET);
+    const second = tier2LoadModel(QWEN3_PRESET);
+    expect(mockFromModelName).toHaveBeenCalledOnce();
+
+    resolveLoad(mockInstance);
+    await Promise.all([first, second]);
+    expect(mockFromModelName).toHaveBeenCalledOnce();
+  });
+
   it('reloads and deletes old instance when switching models', async () => {
     const firstInstance = makeInstance();
     const secondInstance = makeInstance();
@@ -72,6 +90,27 @@ describe('tier2: LLMModule loading', () => {
 
     expect(mockFromModelName).toHaveBeenCalledTimes(2);
     expect(firstInstance.delete).toHaveBeenCalledOnce();
+  });
+
+  it('deletes a late native instance when release happens during load', async () => {
+    const lateInstance = makeInstance();
+    let resolveLoad: (instance: ReturnType<typeof makeInstance>) => void = () => undefined;
+    mockFromModelName.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    const pending = tier2LoadModel(QWEN3_PRESET);
+    tier2Release();
+    resolveLoad(lateInstance);
+    await pending;
+
+    expect(lateInstance.delete).toHaveBeenCalledOnce();
+
+    await tier2LoadModel(QWEN3_PRESET);
+    expect(mockFromModelName).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -105,9 +144,11 @@ describe('tier2: generate — basic', () => {
     expect(mockInstance.setTokenCallback).toHaveBeenCalledWith({ tokenCallback: onToken });
   });
 
-  it('does not call setTokenCallback when no onToken', async () => {
+  it('resets token callback to a no-op when no onToken is provided', async () => {
     await tier2Generate(QWEN3_PRESET, { prompt: 'Hi' });
-    expect(mockInstance.setTokenCallback).not.toHaveBeenCalled();
+    expect(mockInstance.setTokenCallback).toHaveBeenCalledWith({
+      tokenCallback: expect.any(Function),
+    });
   });
 
   it('calls onDone after generate resolves', async () => {
@@ -165,5 +206,26 @@ describe('tier2: tier2Release', () => {
     tier2Release();
     await tier2Generate(QWEN3_PRESET, { prompt: 'Hi again' });
     expect(mockFromModelName).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('tier2: cancellation', () => {
+  it('interrupts generation when the caller aborts', async () => {
+    let resolveGenerate: (text: string) => void = () => undefined;
+    mockInstance.generate.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveGenerate = resolve;
+        }),
+    );
+
+    const controller = new AbortController();
+    const pending = tier2Generate(QWEN3_PRESET, { prompt: 'Hi', signal: controller.signal });
+    controller.abort();
+    resolveGenerate('late text');
+
+    const result = await pending;
+    expect(mockInstance.interrupt).toHaveBeenCalledOnce();
+    expect(result).toEqual({ text: '', runtime: 'executorch', aborted: true });
   });
 });

@@ -15,10 +15,10 @@
 
 Hello — thank you for reviewing AGI (package: com.agiworkforce.app).
 
-AGI is an on-device AI chat client. In v1.0.0 the app runs entirely
-locally: conversations are processed by a small open-source language
-model that the user downloads to their device. No account, no login,
-no Google Play billing, and no cloud service is active in this binary.
+AGI is an AI chat client with a Local Mode path that runs without an
+account. In v1.0.0 reviewer access can use Local Mode without login,
+API keys, or Google Play Billing. AGI Cloud is present only as an
+invite/waitlist flow and is not public cloud access in this binary.
 
 ---
 
@@ -45,9 +45,9 @@ output.
 
 In AGI v1: long-press any assistant message bubble → "Report this
 response" → sheet with three options ("Harmful or dangerous", "False
-or misleading", "Other") → submit. In v1 (local-only) the report is
-stored locally; in v1.1 (cloud mode) it routes to
-/api/report/flag on the AGI backend.
+or misleading", "Other") → submit. In Local Mode the report is stored
+locally; when Cloud reporting is enabled behind invite access, it routes
+through the AGI backend.
 
 ---
 
@@ -56,11 +56,10 @@ stored locally; in v1.1 (cloud mode) it routes to
 AGI v1 default install collects **no data**. The Data Safety form
 (`android/data-safety.md` in the submission package) declares:
 
-- "Data Linked to You": none in v1 (cloud account is opt-in, not
-  active in v1).
-- "Data Not Linked to You": in-app messages shared with the AI
-  provider the user picks per message (user-initiated; explicit
-  consent obtained in onboarding step 2).
+- "Data Linked to You": none for Local Mode reviewer flow.
+- "Data Not Linked to You": only applies when the user explicitly unlocks
+  and uses a non-local Cloud route; explicit consent is obtained before
+  non-local AI-provider data sharing.
 - No advertising IDs (GAID). No device fingerprinting. No analytics
   by default (opt-in toggle in Settings → Privacy).
 - API keys stored in Android Keystore, hardware-backed. AGI never

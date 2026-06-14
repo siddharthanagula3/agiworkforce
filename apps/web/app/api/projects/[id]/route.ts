@@ -177,7 +177,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.color !== undefined) addBase('color', body.color.trim());
   if (body.isArchived !== undefined) addBase('is_archived', body.isArchived);
 
-  // Round-10 fields — isolated so we can retry without them if migration not applied
+  // Round-10 fields · isolated so we can retry without them if migration not applied
   const round10SetClauses: string[] = [];
   const round10Params: unknown[] = [];
 
@@ -232,7 +232,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
       typeof firstError === 'object' &&
       (firstError as { code?: string }).code === PG_UNDEFINED_COLUMN
     ) {
-      // Migration not yet applied — retry with only legacy fields
+      // Migration not yet applied · retry with only legacy fields
       try {
         const { sql, params } = buildUpdateSql(false);
         const [updated] = await db.query<Record<string, unknown>>(sql, params);

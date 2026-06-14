@@ -26,9 +26,9 @@ import { requireCurrentUserId } from '@/lib/server/neon-chat';
  * by the database policy.
  */
 
-// 'mobile' is a SEPARATE list (the mobile local-only beta cloud-waitlist) that still
-// rolls up into the countable cloud_managed_waitlist total — separate list via the
-// `source` column, shared rollup via a count across all sources.
+// 'mobile' is a separate AGI Cloud invite source that still rolls up into the
+// countable cloud_managed_waitlist total. Keep the route account-bound across
+// all sources; mobile anonymous invite capture belongs in a separate endpoint.
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
 
 const VALID_SOURCES = new Set<WaitlistSource>(['byok', 'sync', 'billing', 'mobile', 'other']);
@@ -52,7 +52,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   if (csrfError) return csrfError as NextResponse;
 
   // Use the dedicated 'waitlist' rate limit key: 5/hour per IP, fail-closed.
-  // The unauthenticated PII intake warrants a tighter limit than 'default'.
+  // The account-bound PII intake warrants a tighter limit than 'default'.
   const rateLimitResponse = await withRateLimit(request, 'waitlist');
   if (rateLimitResponse) return rateLimitResponse;
 

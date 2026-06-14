@@ -82,5 +82,7 @@
   "menuOpen": "Abrir menu",
   "menuClose": "Cerrar menu",
   "agiHome": "Inicio de AGI",
-  "navContactSales": "Contactar ventas"
+  "navContactSales": "Contactar ventas",
+  "navProducts": "Productos",
+  "navDocs": "Documentación"
 }

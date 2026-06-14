@@ -18,6 +18,7 @@ import {
   getProviderById as getCloudProviderById,
   type ModelDef as CloudModelDef,
 } from '@/lib/models';
+import { getProviderProbeModel } from '@agiworkforce/types';
 
 export type ModelTier = PickerModelTier;
 export type ModelSurface = 'local' | 'cloud_managed';
@@ -196,7 +197,22 @@ function safeGetDefaultModel(models: OnDeviceModel[]): OnDeviceModel {
 
 const SHIPPABLE_LOCAL_MODELS = safeGetShippableModels();
 const DEFAULT_LOCAL_MODEL = safeGetDefaultModel(SHIPPABLE_LOCAL_MODELS);
-const CLOUD_MODEL_SOURCE = Array.isArray(CLOUD_MODEL_LIST) ? CLOUD_MODEL_LIST : [];
+const MOBILE_CLOUD_PROVIDER_IDS = [
+  'openai',
+  'anthropic',
+  'google',
+  'xai',
+  'deepseek',
+  'qwen',
+  'moonshot',
+] as const;
+const MOBILE_CLOUD_PROVIDER_SET = new Set<string>(MOBILE_CLOUD_PROVIDER_IDS);
+const CLOUD_MODEL_SOURCE = Array.isArray(CLOUD_MODEL_LIST)
+  ? CLOUD_MODEL_LIST.filter((model) => MOBILE_CLOUD_PROVIDER_SET.has(model.provider))
+  : [];
+const cloudModelSourceById = new Map<string, CloudModelDef>(
+  CLOUD_MODEL_SOURCE.map((model) => [model.id, model]),
+);
 
 export const DEFAULT_LOCAL_MODEL_ID = DEFAULT_LOCAL_MODEL.id;
 
@@ -214,13 +230,6 @@ export const AUTO_MODES: AutoModeDef[] = [
     description: 'Small local model when battery matters',
     icon: 'Zap',
     tier: 'economy',
-  },
-  {
-    id: 'auto-premium',
-    name: 'Vision',
-    description: 'On-device vision when available',
-    icon: 'ScanEye',
-    tier: 'premium',
   },
 ];
 
@@ -321,31 +330,26 @@ function firstCloudModelByProvider(providerId: string): CloudModelDef | undefine
   return CLOUD_MODEL_SOURCE.find((model) => model.provider === providerId);
 }
 
+function cloudPreviewModelByProvider(providerId: string): CloudModelDef | undefined {
+  const probeModelId = getProviderProbeModel(providerId);
+  const probeModel = probeModelId ? cloudModelSourceById.get(probeModelId) : undefined;
+  if (probeModel?.provider === providerId) return probeModel;
+  return firstCloudModelByProvider(providerId);
+}
+
 export const LOCAL_MODEL_LIST: ModelDef[] = SHIPPABLE_LOCAL_MODELS.map(toLocalModelDef);
 
-export const LOCKED_CLOUD_MODELS: ModelDef[] = [
-  'openai',
-  'anthropic',
-  'google',
-  'xai',
-  'deepseek',
-  'qwen',
-  'moonshot',
-]
-  .map(firstCloudModelByProvider)
+export const LOCKED_CLOUD_MODELS: ModelDef[] = [...MOBILE_CLOUD_PROVIDER_IDS]
+  .map(cloudPreviewModelByProvider)
   .filter((model): model is CloudModelDef => Boolean(model))
   .map((model) => toCloudModelDef(model, false));
 
 export const MODEL_LIST: ModelDef[] = [...LOCAL_MODEL_LIST, ...LOCKED_CLOUD_MODELS];
-export const DEFAULT_CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id;
+export const DEFAULT_CLOUD_MODEL_ID =
+  cloudPreviewModelByProvider('openai')?.id ?? LOCKED_CLOUD_MODELS[0]?.id;
 
 const localModelMap = new Map<string, ModelDef>(LOCAL_MODEL_LIST.map((model) => [model.id, model]));
-const cloudModelSourceMap = new Map<string, CloudModelDef>(
-  LOCKED_CLOUD_MODELS.map((model): [string, CloudModelDef | undefined] => [
-    model.id,
-    CLOUD_MODEL_SOURCE.find((item) => item.id === model.id),
-  ]).filter((entry): entry is [string, CloudModelDef] => Boolean(entry[1])),
-);
+const cloudModelSourceMap = cloudModelSourceById;
 const allModelMap = new Map<string, ModelDef>(MODEL_LIST.map((model) => [model.id, model]));
 const providerMap = new Map<string, ProviderDef>(
   PROVIDERS.map((provider) => [provider.id, provider]),

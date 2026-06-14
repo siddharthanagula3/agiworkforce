@@ -8,7 +8,7 @@
  *
  * Providers marked `pendingAdapter: true` are expected from R23 lane D
  * (Mistral, Groq, OpenRouter adapters). The env-key-status route does not
- * require adapter code to exist — it only reads process.env — so listing
+ * require adapter code to exist · it only reads process.env · so listing
  * them here is safe before lane D merges.
  */
 

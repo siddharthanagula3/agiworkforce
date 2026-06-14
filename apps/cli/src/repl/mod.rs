@@ -13,6 +13,7 @@ use crate::context::SystemContext;
 use crate::markdown::MarkdownRenderer;
 use crate::memory::{MemoryManager, MemoryTier};
 use crate::output;
+use crate::terminal_style as ts;
 
 use slash_commands::{handle_slash_command, SlashResult};
 
@@ -49,6 +50,7 @@ pub async fn run_repl(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: crate::mcp::McpConfigLoadOptions,
+    agent_name: Option<String>,
 ) -> Result<()> {
     let provider_override = crate::models::selection_provider_override(
         model,
@@ -77,12 +79,24 @@ pub async fn run_repl(
     if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
+    // Wire --agent: load the named agent definition and apply overrides to the session.
+    if let Some(ref name) = agent_name {
+        match crate::agents::find_agent(name) {
+            Some(agent_def) => {
+                agent_def.apply_to_session(&mut session);
+                eprintln!("Agent '{}' loaded.", agent_def.name);
+            }
+            None => {
+                eprintln!("Warning: agent '{}' not found. Run /agents to list available agents.", name);
+            }
+        }
+    }
 
     if team_mode {
         session.enable_team_mode();
         eprintln!(
             "{}",
-            "Team mode enabled. Teammate messaging and shared tasks are active.".cyan()
+            ts::accent("Team mode enabled. Teammate messaging and shared tasks are active.")
         );
     }
 
@@ -185,9 +199,9 @@ pub async fn run_repl(
                         SlashResult::Voice(lang) => {
                             eprintln!(
                                 "{}",
-                                "Entering voice mode. Press SPACE to talk, ESC to exit."
-                                    .cyan()
-                                    .bold()
+                                ts::accent_header(
+                                    "Entering voice mode. Press SPACE to talk, ESC to exit."
+                                )
                             );
                             if let Err(e) =
                                 crate::voice::run_voice_mode(&mut session, config, &lang).await
@@ -607,7 +621,7 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
                 if result.success {
                     eprintln!("{}", result.output);
                 } else {
-                    eprintln!("{}", result.output.red());
+                    eprintln!("{}", ts::danger(&result.output));
                 }
             }
 
@@ -621,9 +635,9 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
                 .push(crate::models::Message::text("user", context_msg));
 
             let exit_str = if result.success {
-                "0".green().to_string()
+                ts::success("0").to_string()
             } else {
-                "non-zero".red().to_string()
+                ts::danger("non-zero").to_string()
             };
             eprintln!("{}", format!("(tool result {})", exit_str).dimmed());
         }

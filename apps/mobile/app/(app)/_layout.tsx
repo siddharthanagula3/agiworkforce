@@ -45,7 +45,7 @@ export default function AppLayout() {
           borderRightColor: colors.border,
           borderRightWidth: 1,
         },
-        overlayColor: 'rgba(0,0,0,0.6)',
+        overlayColor: colors.scrim,
         swipeEnabled: !isTablet,
         swipeEdgeWidth: 40,
       }}

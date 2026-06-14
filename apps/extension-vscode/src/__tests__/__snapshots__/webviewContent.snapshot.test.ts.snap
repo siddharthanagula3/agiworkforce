@@ -17,17 +17,17 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <style nonce="NONCE">
     :root {
       /* VS Code theme variables with AGI dark-mode fallbacks */
-      --agi-vscode-bg: var(--vscode-sideBar-background, #1a1915);
---agi-vscode-surface: var(--vscode-editorWidget-background, #242220);
---agi-vscode-overlay: var(--vscode-input-background, #2e2b28);
---agi-vscode-text: var(--vscode-foreground, #e8e4db);
---agi-vscode-text-muted: var(--vscode-descriptionForeground, #8b8680);
---agi-vscode-border: var(--vscode-input-border, rgba(255, 235, 205, 0.15));
---agi-vscode-button: var(--vscode-button-background, #21808d);
---agi-vscode-button-text: var(--vscode-button-foreground, #ffffff);
---agi-vscode-focus: var(--vscode-focusBorder, #21808d);
---agi-vscode-hover: var(--vscode-list-hoverBackground, rgba(255, 235, 205, 0.08));
---agi-vscode-terra: var(--vscode-button-secondaryBackground, #da7756);
+      --agi-vscode-bg: #09090b;
+--agi-vscode-surface: #151518;
+--agi-vscode-overlay: #202024;
+--agi-vscode-text: #fafafa;
+--agi-vscode-text-muted: #a1a1aa;
+--agi-vscode-border: #242428;
+--agi-vscode-button: #5e6ad2;
+--agi-vscode-button-text: #ffffff;
+--agi-vscode-focus: #5e6ad2;
+--agi-vscode-hover: #26262b;
+--agi-vscode-terra: #828fff;
 --agi-vscode-danger: var(--vscode-errorForeground, #ef4444);
 --agi-vscode-danger-bg: rgba(239, 68, 68, 0.12);
 --agi-vscode-danger-border: rgba(239, 68, 68, 0.3);
@@ -77,8 +77,42 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     .header-title {
       font-size: 13px;
       font-weight: 600;
-      color: var(--accent-teal);
-      letter-spacing: 0.3px;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+
+    /* Brand mark — the 12-spoke AGI symbol, rendered mono. */
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      color: var(--text-primary);
+      flex-shrink: 0;
+      line-height: 0;
+    }
+    .brand-mark svg { display: block; width: 18px; height: 18px; }
+
+    /* Cloud identity pill — always-on "AGI Cloud" (cloud-only surface). */
+    .cloud-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: var(--text-secondary);
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cloud-pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-teal);
+      flex-shrink: 0;
     }
 
     .header-left {
@@ -868,10 +902,24 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 </head>
 <body>
 
+  <!-- The real AGI mark: 12 spokes, rendered mono via currentColor. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="agimark" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <line x1="12" y1="7.40" x2="12" y2="3.00"/><line x1="14.30" y1="8.02" x2="16.50" y2="4.21"/>
+      <line x1="15.98" y1="9.70" x2="19.79" y2="7.50"/><line x1="16.60" y1="12.00" x2="21.00" y2="12.00"/>
+      <line x1="15.98" y1="14.30" x2="19.79" y2="16.50"/><line x1="14.30" y1="15.98" x2="16.50" y2="19.79"/>
+      <line x1="12.00" y1="16.60" x2="12.00" y2="21.00"/><line x1="9.70" y1="15.98" x2="7.50" y2="19.79"/>
+      <line x1="8.02" y1="14.30" x2="4.21" y2="16.50"/><line x1="7.40" y1="12.00" x2="3.00" y2="12.00"/>
+      <line x1="8.02" y1="9.70" x2="4.21" y2="7.50"/><line x1="9.70" y1="8.02" x2="7.50" y2="4.21"/>
+    </g>
+  </symbol></svg>
+
   <!-- ── Header ── -->
   <div class="header">
     <div class="header-left">
-      <span class="header-title">AGI Workforce</span>
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
+      <span class="header-title">AGI</span>
+      <span class="cloud-pill"><span class="cloud-pill-dot"></span>AGI Cloud</span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -912,14 +960,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage meter">&#9660; Usage</button>
   </div>
 
-  <!-- ── API key banner (hidden when key is present) ── -->
+  <!-- ── Sign-in CTA (shown when not signed in) ── -->
   <div class="api-key-banner" id="apiKeyBanner" style="display:none">
-    <p>Enter your AGI Workforce API key to start chatting.<br/>
-       Get one at <strong>agiworkforce.com</strong></p>
+    <p><strong>Sign in to AGI</strong><br/>
+       Your AGI Cloud workspace — chat, projects &amp; memory, across every device.</p>
     <div class="api-key-input-row">
-      <input type="password" class="api-key-input" id="apiKeyInput"
-             placeholder="sk-agi-…" autocomplete="off" spellcheck="false" />
-      <button class="save-key-btn" id="saveKeyBtn">Save</button>
+      <button class="save-key-btn" id="signInBtn">Sign in to AGI Cloud</button>
     </div>
   </div>
 
@@ -940,7 +986,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="auto">Auto (Best Available)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-balanced">Auto Balanced</option><option value="auto-premium">Auto (Best Model)</option><option value="gpt-5.5">GPT-5.5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-4.6">Claude 4.6 Sonnet</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option><option value="gemini-3.1-flash-image">Gemini 3.1 Flash Image</option><option value="gemini-3-ultra">Gemini 3 Ultra</option><option value="grok-4.3">Grok 4.3</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-max">Qwen Max</option><option value="qwen-3.6-plus">Qwen 3.6 Plus</option><option value="qwen-flash">Qwen Flash</option><option value="qwen-turbo">Qwen Turbo</option><option value="qwen-coder-flash">Qwen Coder Flash</option><option value="qwen-coder-plus">Qwen Coder Plus</option><option value="kimi-k2.6">Kimi K2.6</option><option value="mistral-large-3">Mistral Large 3</option><option value="mistral-medium-3">Mistral Medium 3.1</option><option value="mistral-small-3">Mistral Small 4</option><option value="codestral-2">Codestral 2</option><option value="pixtral-large">Pixtral Large</option><option value="glm-5.1">GLM-5.1</option><option value="imagen-4">Imagen 4</option><option value="imagen-4-fast">Imagen 4 Fast</option><option value="runway-gen-4">Runway Gen-4</option><option value="imagen-4-ultra">Imagen 4 Ultra</option><option value="ideogram-2">Ideogram 2.0</option><option value="veo-3">Veo 3.1</option><option value="stable-diffusion-xl">Stable Diffusion XL</option><option value="gpt-image-2">GPT Image 2</option><option value="tts-1">OpenAI TTS Standard</option><option value="tts-1-hd">OpenAI TTS HD</option><option value="whisper-1">Whisper</option><option value="nvidia/llama-3.1-nemotron-ultra-253b-v1">Llama Nemotron Ultra 253B</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama Nemotron Super 49B</option><option value="nvidia/llama-3.1-nemotron-nano-8b-v1">Llama Nemotron Nano 8B</option><option value="nvidia/llama-3.3-70b-instruct">Llama 3.3 70B Instruct</option><option value="groq-llama-3.3-70b">Llama 3.3 70B (Groq)</option><option value="groq-llama-3.1-8b">Llama 3.1 8B Instant (Groq)</option><option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Free)</option><option value="mistralai/mistral-small-3.1-24b-instruct:free">Mistral Small 3.1 24B (Free)</option><option value="qwen/qwen3-coder:free">Qwen3 Coder (Free)</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1:free">Nemotron Super 49B (Free)</option><option value="anthropic/claude-opus-4">Claude Opus 4 (via OpenRouter)</option><option value="openai/gpt-4o">GPT-4o (via OpenRouter)</option><option value="google/gemini-2.5-pro">Gemini 2.5 Pro (via OpenRouter)</option><option value="deepseek/deepseek-r1">DeepSeek R1 (via OpenRouter)</option><option value="gpt-5.4-mini">GPT-5.4 Mini</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="auto">Auto (Best Available)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-balanced">Auto Balanced</option><option value="auto-premium">Auto (Best Model)</option><option value="gpt-5.5">GPT-5.5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-4.6">Claude 4.6 Sonnet</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option><option value="gemini-3.1-flash-image">Gemini 3.1 Flash Image</option><option value="grok-4.3">Grok 4.3</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-max">Qwen Max</option><option value="qwen-3.6-plus">Qwen 3.6 Plus</option><option value="qwen-flash">Qwen Flash</option><option value="qwen-turbo">Qwen Turbo</option><option value="qwen-coder-flash">Qwen Coder Flash</option><option value="qwen-coder-plus">Qwen Coder Plus</option><option value="kimi-k2.6">Kimi K2.6</option><option value="mistral-large-3">Mistral Large 3</option><option value="mistral-medium-3">Mistral Medium 3.1</option><option value="mistral-small-3">Mistral Small 4</option><option value="codestral-2">Codestral 2</option><option value="pixtral-large">Pixtral Large</option><option value="glm-5.1">GLM-5.1</option><option value="imagen-4">Imagen 4</option><option value="imagen-4-fast">Imagen 4 Fast</option><option value="runway-gen-4">Runway Gen-4</option><option value="imagen-4-ultra">Imagen 4 Ultra</option><option value="ideogram-2">Ideogram 2.0</option><option value="veo-3">Veo 3.1</option><option value="stable-diffusion-xl">Stable Diffusion XL</option><option value="gpt-image-2">GPT Image 2</option><option value="tts-1">OpenAI TTS Standard</option><option value="tts-1-hd">OpenAI TTS HD</option><option value="whisper-1">Whisper</option><option value="nvidia/llama-3.1-nemotron-ultra-253b-v1">Llama Nemotron Ultra 253B</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama Nemotron Super 49B</option><option value="nvidia/llama-3.1-nemotron-nano-8b-v1">Llama Nemotron Nano 8B</option><option value="nvidia/llama-3.3-70b-instruct">Llama 3.3 70B Instruct</option><option value="groq-llama-3.3-70b">Llama 3.3 70B (Groq)</option><option value="groq-llama-3.1-8b">Llama 3.1 8B Instant (Groq)</option><option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Free)</option><option value="mistralai/mistral-small-3.1-24b-instruct:free">Mistral Small 3.1 24B (Free)</option><option value="qwen/qwen3-coder:free">Qwen3 Coder (Free)</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1:free">Nemotron Super 49B (Free)</option><option value="gpt-5.4-mini">GPT-5.4 Mini</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -974,7 +1020,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Switch model" aria-haspopup="true" aria-expanded="false">Auto (Balanced)</button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">AGI Cloud · Auto</button>
         <button class="mode-chip" id="modeChip" title="Agent mode">Edit automatically</button>
         <button class="effort-chip" id="effortChip" title="Reasoning effort">Medium</button>
         <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
@@ -999,8 +1045,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const apiKeyBanner = document.getElementById('apiKeyBanner');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const signInBtn = document.getElementById('signInBtn');
     const actionsBtn = document.getElementById('actionsBtn');
     const historyBtn = document.getElementById('historyBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -1452,16 +1497,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       vscode.postMessage({ type: 'openEffortPicker' });
     });
 
-    saveKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput.value.trim();
-      if (!key) return;
-      vscode.postMessage({ type: 'setApiKey', payload: { key } });
-      apiKeyInput.value = '';
-    });
-
-    apiKeyInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') saveKeyBtn.click();
-    });
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'signIn' });
+      });
+    }
 
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
     var composerCard = document.getElementById('composerCard');
@@ -1620,13 +1660,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           accumulatedContent = '';
         }
         accumulatedContent += msg.payload.text;
-        currentAssistantEl.textContent = accumulatedContent;
+        // Render markdown incrementally so there is no raw-markdown → HTML
+        // flash at stream completion. renderAssistant falls back to escaped
+        // plain text if window.agiRender is not yet loaded.
+        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
+          // Content is already rendered; re-render once to ensure the final
+          // token is flushed, then bind copy buttons on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCopyButtons(currentAssistantEl);
         }
@@ -1676,7 +1721,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
 
       else if (msg.type === 'model') {
-        const opt = modelSelect.querySelector('option[value="' + msg.payload.model + '"]');
+        // Match by comparing option.value directly rather than building a CSS
+        // selector via string concat — a model id containing a quote/"]" would
+        // throw a SyntaxError and break model display (audit 218 L1726).
+        let opt = null;
+        for (const o of modelSelect.options) {
+          if (o.value === msg.payload.model) { opt = o; break; }
+        }
         if (opt) {
           modelSelect.value = msg.payload.model;
           if (modelPill) modelPill.textContent = opt.text;
@@ -1970,17 +2021,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <style nonce="NONCE">
     :root {
       /* VS Code theme variables with AGI dark-mode fallbacks */
-      --agi-vscode-bg: var(--vscode-sideBar-background, #1a1915);
---agi-vscode-surface: var(--vscode-editorWidget-background, #242220);
---agi-vscode-overlay: var(--vscode-input-background, #2e2b28);
---agi-vscode-text: var(--vscode-foreground, #e8e4db);
---agi-vscode-text-muted: var(--vscode-descriptionForeground, #8b8680);
---agi-vscode-border: var(--vscode-input-border, rgba(255, 235, 205, 0.15));
---agi-vscode-button: var(--vscode-button-background, #21808d);
---agi-vscode-button-text: var(--vscode-button-foreground, #ffffff);
---agi-vscode-focus: var(--vscode-focusBorder, #21808d);
---agi-vscode-hover: var(--vscode-list-hoverBackground, rgba(255, 235, 205, 0.08));
---agi-vscode-terra: var(--vscode-button-secondaryBackground, #da7756);
+      --agi-vscode-bg: #09090b;
+--agi-vscode-surface: #151518;
+--agi-vscode-overlay: #202024;
+--agi-vscode-text: #fafafa;
+--agi-vscode-text-muted: #a1a1aa;
+--agi-vscode-border: #242428;
+--agi-vscode-button: #5e6ad2;
+--agi-vscode-button-text: #ffffff;
+--agi-vscode-focus: #5e6ad2;
+--agi-vscode-hover: #26262b;
+--agi-vscode-terra: #828fff;
 --agi-vscode-danger: var(--vscode-errorForeground, #ef4444);
 --agi-vscode-danger-bg: rgba(239, 68, 68, 0.12);
 --agi-vscode-danger-border: rgba(239, 68, 68, 0.3);
@@ -2030,8 +2081,42 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     .header-title {
       font-size: 13px;
       font-weight: 600;
-      color: var(--accent-teal);
-      letter-spacing: 0.3px;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+
+    /* Brand mark — the 12-spoke AGI symbol, rendered mono. */
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      color: var(--text-primary);
+      flex-shrink: 0;
+      line-height: 0;
+    }
+    .brand-mark svg { display: block; width: 18px; height: 18px; }
+
+    /* Cloud identity pill — always-on "AGI Cloud" (cloud-only surface). */
+    .cloud-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: var(--text-secondary);
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cloud-pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-teal);
+      flex-shrink: 0;
     }
 
     .header-left {
@@ -2821,10 +2906,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 </head>
 <body>
 
+  <!-- The real AGI mark: 12 spokes, rendered mono via currentColor. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="agimark" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <line x1="12" y1="7.40" x2="12" y2="3.00"/><line x1="14.30" y1="8.02" x2="16.50" y2="4.21"/>
+      <line x1="15.98" y1="9.70" x2="19.79" y2="7.50"/><line x1="16.60" y1="12.00" x2="21.00" y2="12.00"/>
+      <line x1="15.98" y1="14.30" x2="19.79" y2="16.50"/><line x1="14.30" y1="15.98" x2="16.50" y2="19.79"/>
+      <line x1="12.00" y1="16.60" x2="12.00" y2="21.00"/><line x1="9.70" y1="15.98" x2="7.50" y2="19.79"/>
+      <line x1="8.02" y1="14.30" x2="4.21" y2="16.50"/><line x1="7.40" y1="12.00" x2="3.00" y2="12.00"/>
+      <line x1="8.02" y1="9.70" x2="4.21" y2="7.50"/><line x1="9.70" y1="8.02" x2="7.50" y2="4.21"/>
+    </g>
+  </symbol></svg>
+
   <!-- ── Header ── -->
   <div class="header">
     <div class="header-left">
-      <span class="header-title">AGI Workforce</span>
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
+      <span class="header-title">AGI</span>
+      <span class="cloud-pill"><span class="cloud-pill-dot"></span>AGI Cloud</span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -2865,14 +2964,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage meter">&#9660; Usage</button>
   </div>
 
-  <!-- ── API key banner (hidden when key is present) ── -->
+  <!-- ── Sign-in CTA (shown when not signed in) ── -->
   <div class="api-key-banner" id="apiKeyBanner" style="display:none">
-    <p>Enter your AGI Workforce API key to start chatting.<br/>
-       Get one at <strong>agiworkforce.com</strong></p>
+    <p><strong>Sign in to AGI</strong><br/>
+       Your AGI Cloud workspace — chat, projects &amp; memory, across every device.</p>
     <div class="api-key-input-row">
-      <input type="password" class="api-key-input" id="apiKeyInput"
-             placeholder="sk-agi-…" autocomplete="off" spellcheck="false" />
-      <button class="save-key-btn" id="saveKeyBtn">Save</button>
+      <button class="save-key-btn" id="signInBtn">Sign in to AGI Cloud</button>
     </div>
   </div>
 
@@ -2893,7 +2990,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="auto">Auto (Best Available)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-balanced">Auto Balanced</option><option value="auto-premium">Auto (Best Model)</option><option value="gpt-5.5">GPT-5.5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-4.6">Claude 4.6 Sonnet</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option><option value="gemini-3.1-flash-image">Gemini 3.1 Flash Image</option><option value="gemini-3-ultra">Gemini 3 Ultra</option><option value="grok-4.3">Grok 4.3</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-max">Qwen Max</option><option value="qwen-3.6-plus">Qwen 3.6 Plus</option><option value="qwen-flash">Qwen Flash</option><option value="qwen-turbo">Qwen Turbo</option><option value="qwen-coder-flash">Qwen Coder Flash</option><option value="qwen-coder-plus">Qwen Coder Plus</option><option value="kimi-k2.6">Kimi K2.6</option><option value="mistral-large-3">Mistral Large 3</option><option value="mistral-medium-3">Mistral Medium 3.1</option><option value="mistral-small-3">Mistral Small 4</option><option value="codestral-2">Codestral 2</option><option value="pixtral-large">Pixtral Large</option><option value="glm-5.1">GLM-5.1</option><option value="imagen-4">Imagen 4</option><option value="imagen-4-fast">Imagen 4 Fast</option><option value="runway-gen-4">Runway Gen-4</option><option value="imagen-4-ultra">Imagen 4 Ultra</option><option value="ideogram-2">Ideogram 2.0</option><option value="veo-3">Veo 3.1</option><option value="stable-diffusion-xl">Stable Diffusion XL</option><option value="gpt-image-2">GPT Image 2</option><option value="tts-1">OpenAI TTS Standard</option><option value="tts-1-hd">OpenAI TTS HD</option><option value="whisper-1">Whisper</option><option value="nvidia/llama-3.1-nemotron-ultra-253b-v1">Llama Nemotron Ultra 253B</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama Nemotron Super 49B</option><option value="nvidia/llama-3.1-nemotron-nano-8b-v1">Llama Nemotron Nano 8B</option><option value="nvidia/llama-3.3-70b-instruct">Llama 3.3 70B Instruct</option><option value="groq-llama-3.3-70b">Llama 3.3 70B (Groq)</option><option value="groq-llama-3.1-8b">Llama 3.1 8B Instant (Groq)</option><option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Free)</option><option value="mistralai/mistral-small-3.1-24b-instruct:free">Mistral Small 3.1 24B (Free)</option><option value="qwen/qwen3-coder:free">Qwen3 Coder (Free)</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1:free">Nemotron Super 49B (Free)</option><option value="anthropic/claude-opus-4">Claude Opus 4 (via OpenRouter)</option><option value="openai/gpt-4o">GPT-4o (via OpenRouter)</option><option value="google/gemini-2.5-pro">Gemini 2.5 Pro (via OpenRouter)</option><option value="deepseek/deepseek-r1">DeepSeek R1 (via OpenRouter)</option><option value="gpt-5.4-mini">GPT-5.4 Mini</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="auto">Auto (Best Available)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-balanced">Auto Balanced</option><option value="auto-premium">Auto (Best Model)</option><option value="gpt-5.5">GPT-5.5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-4.6">Claude 4.6 Sonnet</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option><option value="gemini-3.1-flash-image">Gemini 3.1 Flash Image</option><option value="grok-4.3">Grok 4.3</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-max">Qwen Max</option><option value="qwen-3.6-plus">Qwen 3.6 Plus</option><option value="qwen-flash">Qwen Flash</option><option value="qwen-turbo">Qwen Turbo</option><option value="qwen-coder-flash">Qwen Coder Flash</option><option value="qwen-coder-plus">Qwen Coder Plus</option><option value="kimi-k2.6">Kimi K2.6</option><option value="mistral-large-3">Mistral Large 3</option><option value="mistral-medium-3">Mistral Medium 3.1</option><option value="mistral-small-3">Mistral Small 4</option><option value="codestral-2">Codestral 2</option><option value="pixtral-large">Pixtral Large</option><option value="glm-5.1">GLM-5.1</option><option value="imagen-4">Imagen 4</option><option value="imagen-4-fast">Imagen 4 Fast</option><option value="runway-gen-4">Runway Gen-4</option><option value="imagen-4-ultra">Imagen 4 Ultra</option><option value="ideogram-2">Ideogram 2.0</option><option value="veo-3">Veo 3.1</option><option value="stable-diffusion-xl">Stable Diffusion XL</option><option value="gpt-image-2">GPT Image 2</option><option value="tts-1">OpenAI TTS Standard</option><option value="tts-1-hd">OpenAI TTS HD</option><option value="whisper-1">Whisper</option><option value="nvidia/llama-3.1-nemotron-ultra-253b-v1">Llama Nemotron Ultra 253B</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama Nemotron Super 49B</option><option value="nvidia/llama-3.1-nemotron-nano-8b-v1">Llama Nemotron Nano 8B</option><option value="nvidia/llama-3.3-70b-instruct">Llama 3.3 70B Instruct</option><option value="groq-llama-3.3-70b">Llama 3.3 70B (Groq)</option><option value="groq-llama-3.1-8b">Llama 3.1 8B Instant (Groq)</option><option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Free)</option><option value="mistralai/mistral-small-3.1-24b-instruct:free">Mistral Small 3.1 24B (Free)</option><option value="qwen/qwen3-coder:free">Qwen3 Coder (Free)</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1:free">Nemotron Super 49B (Free)</option><option value="gpt-5.4-mini">GPT-5.4 Mini</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -2927,7 +3024,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Switch model" aria-haspopup="true" aria-expanded="false">Auto (Balanced)</button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">AGI Cloud · Auto</button>
         <button class="mode-chip" id="modeChip" title="Agent mode">Edit automatically</button>
         <button class="effort-chip" id="effortChip" title="Reasoning effort" style="display:none">Medium</button>
         <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
@@ -2952,8 +3049,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const apiKeyBanner = document.getElementById('apiKeyBanner');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const signInBtn = document.getElementById('signInBtn');
     const actionsBtn = document.getElementById('actionsBtn');
     const historyBtn = document.getElementById('historyBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -3405,16 +3501,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       vscode.postMessage({ type: 'openEffortPicker' });
     });
 
-    saveKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput.value.trim();
-      if (!key) return;
-      vscode.postMessage({ type: 'setApiKey', payload: { key } });
-      apiKeyInput.value = '';
-    });
-
-    apiKeyInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') saveKeyBtn.click();
-    });
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'signIn' });
+      });
+    }
 
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
     var composerCard = document.getElementById('composerCard');
@@ -3573,13 +3664,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           accumulatedContent = '';
         }
         accumulatedContent += msg.payload.text;
-        currentAssistantEl.textContent = accumulatedContent;
+        // Render markdown incrementally so there is no raw-markdown → HTML
+        // flash at stream completion. renderAssistant falls back to escaped
+        // plain text if window.agiRender is not yet loaded.
+        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
+          // Content is already rendered; re-render once to ensure the final
+          // token is flushed, then bind copy buttons on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCopyButtons(currentAssistantEl);
         }
@@ -3629,7 +3725,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
 
       else if (msg.type === 'model') {
-        const opt = modelSelect.querySelector('option[value="' + msg.payload.model + '"]');
+        // Match by comparing option.value directly rather than building a CSS
+        // selector via string concat — a model id containing a quote/"]" would
+        // throw a SyntaxError and break model display (audit 218 L1726).
+        let opt = null;
+        for (const o of modelSelect.options) {
+          if (o.value === msg.payload.model) { opt = o; break; }
+        }
         if (opt) {
           modelSelect.value = msg.payload.model;
           if (modelPill) modelPill.textContent = opt.text;
@@ -3923,17 +4025,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <style nonce="NONCE">
     :root {
       /* VS Code theme variables with AGI dark-mode fallbacks */
-      --agi-vscode-bg: var(--vscode-sideBar-background, #1a1915);
---agi-vscode-surface: var(--vscode-editorWidget-background, #242220);
---agi-vscode-overlay: var(--vscode-input-background, #2e2b28);
---agi-vscode-text: var(--vscode-foreground, #e8e4db);
---agi-vscode-text-muted: var(--vscode-descriptionForeground, #8b8680);
---agi-vscode-border: var(--vscode-input-border, rgba(255, 235, 205, 0.15));
---agi-vscode-button: var(--vscode-button-background, #21808d);
---agi-vscode-button-text: var(--vscode-button-foreground, #ffffff);
---agi-vscode-focus: var(--vscode-focusBorder, #21808d);
---agi-vscode-hover: var(--vscode-list-hoverBackground, rgba(255, 235, 205, 0.08));
---agi-vscode-terra: var(--vscode-button-secondaryBackground, #da7756);
+      --agi-vscode-bg: #09090b;
+--agi-vscode-surface: #151518;
+--agi-vscode-overlay: #202024;
+--agi-vscode-text: #fafafa;
+--agi-vscode-text-muted: #a1a1aa;
+--agi-vscode-border: #242428;
+--agi-vscode-button: #5e6ad2;
+--agi-vscode-button-text: #ffffff;
+--agi-vscode-focus: #5e6ad2;
+--agi-vscode-hover: #26262b;
+--agi-vscode-terra: #828fff;
 --agi-vscode-danger: var(--vscode-errorForeground, #ef4444);
 --agi-vscode-danger-bg: rgba(239, 68, 68, 0.12);
 --agi-vscode-danger-border: rgba(239, 68, 68, 0.3);
@@ -3983,8 +4085,42 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     .header-title {
       font-size: 13px;
       font-weight: 600;
-      color: var(--accent-teal);
-      letter-spacing: 0.3px;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+
+    /* Brand mark — the 12-spoke AGI symbol, rendered mono. */
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      color: var(--text-primary);
+      flex-shrink: 0;
+      line-height: 0;
+    }
+    .brand-mark svg { display: block; width: 18px; height: 18px; }
+
+    /* Cloud identity pill — always-on "AGI Cloud" (cloud-only surface). */
+    .cloud-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: var(--text-secondary);
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cloud-pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-teal);
+      flex-shrink: 0;
     }
 
     .header-left {
@@ -4774,10 +4910,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 </head>
 <body>
 
+  <!-- The real AGI mark: 12 spokes, rendered mono via currentColor. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="agimark" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <line x1="12" y1="7.40" x2="12" y2="3.00"/><line x1="14.30" y1="8.02" x2="16.50" y2="4.21"/>
+      <line x1="15.98" y1="9.70" x2="19.79" y2="7.50"/><line x1="16.60" y1="12.00" x2="21.00" y2="12.00"/>
+      <line x1="15.98" y1="14.30" x2="19.79" y2="16.50"/><line x1="14.30" y1="15.98" x2="16.50" y2="19.79"/>
+      <line x1="12.00" y1="16.60" x2="12.00" y2="21.00"/><line x1="9.70" y1="15.98" x2="7.50" y2="19.79"/>
+      <line x1="8.02" y1="14.30" x2="4.21" y2="16.50"/><line x1="7.40" y1="12.00" x2="3.00" y2="12.00"/>
+      <line x1="8.02" y1="9.70" x2="4.21" y2="7.50"/><line x1="9.70" y1="8.02" x2="7.50" y2="4.21"/>
+    </g>
+  </symbol></svg>
+
   <!-- ── Header ── -->
   <div class="header">
     <div class="header-left">
-      <span class="header-title">AGI Workforce</span>
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
+      <span class="header-title">AGI</span>
+      <span class="cloud-pill"><span class="cloud-pill-dot"></span>AGI Cloud</span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -4818,14 +4968,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage meter">&#9660; Usage</button>
   </div>
 
-  <!-- ── API key banner (hidden when key is present) ── -->
+  <!-- ── Sign-in CTA (shown when not signed in) ── -->
   <div class="api-key-banner" id="apiKeyBanner" style="display:none">
-    <p>Enter your AGI Workforce API key to start chatting.<br/>
-       Get one at <strong>agiworkforce.com</strong></p>
+    <p><strong>Sign in to AGI</strong><br/>
+       Your AGI Cloud workspace — chat, projects &amp; memory, across every device.</p>
     <div class="api-key-input-row">
-      <input type="password" class="api-key-input" id="apiKeyInput"
-             placeholder="sk-agi-…" autocomplete="off" spellcheck="false" />
-      <button class="save-key-btn" id="saveKeyBtn">Save</button>
+      <button class="save-key-btn" id="signInBtn">Sign in to AGI Cloud</button>
     </div>
   </div>
 
@@ -4846,7 +4994,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="auto">Auto (Best Available)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-balanced">Auto Balanced</option><option value="auto-premium">Auto (Best Model)</option><option value="gpt-5.5">GPT-5.5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-4.6">Claude 4.6 Sonnet</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option><option value="gemini-3.1-flash-image">Gemini 3.1 Flash Image</option><option value="gemini-3-ultra">Gemini 3 Ultra</option><option value="grok-4.3">Grok 4.3</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-max">Qwen Max</option><option value="qwen-3.6-plus">Qwen 3.6 Plus</option><option value="qwen-flash">Qwen Flash</option><option value="qwen-turbo">Qwen Turbo</option><option value="qwen-coder-flash">Qwen Coder Flash</option><option value="qwen-coder-plus">Qwen Coder Plus</option><option value="kimi-k2.6">Kimi K2.6</option><option value="mistral-large-3">Mistral Large 3</option><option value="mistral-medium-3">Mistral Medium 3.1</option><option value="mistral-small-3">Mistral Small 4</option><option value="codestral-2">Codestral 2</option><option value="pixtral-large">Pixtral Large</option><option value="glm-5.1">GLM-5.1</option><option value="imagen-4">Imagen 4</option><option value="imagen-4-fast">Imagen 4 Fast</option><option value="runway-gen-4">Runway Gen-4</option><option value="imagen-4-ultra">Imagen 4 Ultra</option><option value="ideogram-2">Ideogram 2.0</option><option value="veo-3">Veo 3.1</option><option value="stable-diffusion-xl">Stable Diffusion XL</option><option value="gpt-image-2">GPT Image 2</option><option value="tts-1">OpenAI TTS Standard</option><option value="tts-1-hd">OpenAI TTS HD</option><option value="whisper-1">Whisper</option><option value="nvidia/llama-3.1-nemotron-ultra-253b-v1">Llama Nemotron Ultra 253B</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama Nemotron Super 49B</option><option value="nvidia/llama-3.1-nemotron-nano-8b-v1">Llama Nemotron Nano 8B</option><option value="nvidia/llama-3.3-70b-instruct">Llama 3.3 70B Instruct</option><option value="groq-llama-3.3-70b">Llama 3.3 70B (Groq)</option><option value="groq-llama-3.1-8b">Llama 3.1 8B Instant (Groq)</option><option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Free)</option><option value="mistralai/mistral-small-3.1-24b-instruct:free">Mistral Small 3.1 24B (Free)</option><option value="qwen/qwen3-coder:free">Qwen3 Coder (Free)</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1:free">Nemotron Super 49B (Free)</option><option value="anthropic/claude-opus-4">Claude Opus 4 (via OpenRouter)</option><option value="openai/gpt-4o">GPT-4o (via OpenRouter)</option><option value="google/gemini-2.5-pro">Gemini 2.5 Pro (via OpenRouter)</option><option value="deepseek/deepseek-r1">DeepSeek R1 (via OpenRouter)</option><option value="gpt-5.4-mini">GPT-5.4 Mini</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="auto">Auto (Best Available)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-balanced">Auto Balanced</option><option value="auto-premium">Auto (Best Model)</option><option value="gpt-5.5">GPT-5.5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-4.6">Claude 4.6 Sonnet</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option><option value="gemini-3.1-flash-image">Gemini 3.1 Flash Image</option><option value="grok-4.3">Grok 4.3</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-max">Qwen Max</option><option value="qwen-3.6-plus">Qwen 3.6 Plus</option><option value="qwen-flash">Qwen Flash</option><option value="qwen-turbo">Qwen Turbo</option><option value="qwen-coder-flash">Qwen Coder Flash</option><option value="qwen-coder-plus">Qwen Coder Plus</option><option value="kimi-k2.6">Kimi K2.6</option><option value="mistral-large-3">Mistral Large 3</option><option value="mistral-medium-3">Mistral Medium 3.1</option><option value="mistral-small-3">Mistral Small 4</option><option value="codestral-2">Codestral 2</option><option value="pixtral-large">Pixtral Large</option><option value="glm-5.1">GLM-5.1</option><option value="imagen-4">Imagen 4</option><option value="imagen-4-fast">Imagen 4 Fast</option><option value="runway-gen-4">Runway Gen-4</option><option value="imagen-4-ultra">Imagen 4 Ultra</option><option value="ideogram-2">Ideogram 2.0</option><option value="veo-3">Veo 3.1</option><option value="stable-diffusion-xl">Stable Diffusion XL</option><option value="gpt-image-2">GPT Image 2</option><option value="tts-1">OpenAI TTS Standard</option><option value="tts-1-hd">OpenAI TTS HD</option><option value="whisper-1">Whisper</option><option value="nvidia/llama-3.1-nemotron-ultra-253b-v1">Llama Nemotron Ultra 253B</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1">Llama Nemotron Super 49B</option><option value="nvidia/llama-3.1-nemotron-nano-8b-v1">Llama Nemotron Nano 8B</option><option value="nvidia/llama-3.3-70b-instruct">Llama 3.3 70B Instruct</option><option value="groq-llama-3.3-70b">Llama 3.3 70B (Groq)</option><option value="groq-llama-3.1-8b">Llama 3.1 8B Instant (Groq)</option><option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct (Free)</option><option value="mistralai/mistral-small-3.1-24b-instruct:free">Mistral Small 3.1 24B (Free)</option><option value="qwen/qwen3-coder:free">Qwen3 Coder (Free)</option><option value="nvidia/llama-3.3-nemotron-super-49b-v1:free">Nemotron Super 49B (Free)</option><option value="gpt-5.4-mini">GPT-5.4 Mini</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -4880,7 +5028,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Switch model" aria-haspopup="true" aria-expanded="false">Auto (Balanced)</button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">AGI Cloud · Auto</button>
         <button class="mode-chip" id="modeChip" title="Agent mode">Edit automatically</button>
         <button class="effort-chip" id="effortChip" title="Reasoning effort">Medium</button>
         <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
@@ -4905,8 +5053,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const apiKeyBanner = document.getElementById('apiKeyBanner');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const signInBtn = document.getElementById('signInBtn');
     const actionsBtn = document.getElementById('actionsBtn');
     const historyBtn = document.getElementById('historyBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -5358,16 +5505,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       vscode.postMessage({ type: 'openEffortPicker' });
     });
 
-    saveKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput.value.trim();
-      if (!key) return;
-      vscode.postMessage({ type: 'setApiKey', payload: { key } });
-      apiKeyInput.value = '';
-    });
-
-    apiKeyInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') saveKeyBtn.click();
-    });
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'signIn' });
+      });
+    }
 
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
     var composerCard = document.getElementById('composerCard');
@@ -5526,13 +5668,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           accumulatedContent = '';
         }
         accumulatedContent += msg.payload.text;
-        currentAssistantEl.textContent = accumulatedContent;
+        // Render markdown incrementally so there is no raw-markdown → HTML
+        // flash at stream completion. renderAssistant falls back to escaped
+        // plain text if window.agiRender is not yet loaded.
+        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
+          // Content is already rendered; re-render once to ensure the final
+          // token is flushed, then bind copy buttons on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCopyButtons(currentAssistantEl);
         }
@@ -5582,7 +5729,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
 
       else if (msg.type === 'model') {
-        const opt = modelSelect.querySelector('option[value="' + msg.payload.model + '"]');
+        // Match by comparing option.value directly rather than building a CSS
+        // selector via string concat — a model id containing a quote/"]" would
+        // throw a SyntaxError and break model display (audit 218 L1726).
+        let opt = null;
+        for (const o of modelSelect.options) {
+          if (o.value === msg.payload.model) { opt = o; break; }
+        }
         if (opt) {
           modelSelect.value = msg.payload.model;
           if (modelPill) modelPill.textContent = opt.text;

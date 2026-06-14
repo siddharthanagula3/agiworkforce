@@ -292,9 +292,32 @@ pub fn managed_session_dir() -> Result<PathBuf> {
     managed_session_root_dir()
 }
 
-/// Create a new managed session under the CLI config directory.
+/// Create a new managed session under the CLI config directory (UUID session id).
 pub fn create_managed_session(messages: Vec<Message>) -> Result<ResolvedManagedSessionReference> {
     create_managed_session_in(&CliConfig::config_dir()?, messages)
+}
+
+/// Create a new managed session with an explicit session id (e.g. a user-chosen slug
+/// from `agi session fork --as <name>`). The id becomes the filename so
+/// `agi --resume <id>` resolves immediately.
+pub fn create_managed_session_with_id(
+    session_id: impl Into<String>,
+    messages: Vec<Message>,
+) -> Result<ResolvedManagedSessionReference> {
+    create_managed_session_with_id_in(&CliConfig::config_dir()?, session_id.into(), messages)
+}
+
+fn create_managed_session_with_id_in(
+    base_dir: &Path,
+    session_id: String,
+    messages: Vec<Message>,
+) -> Result<ResolvedManagedSessionReference> {
+    let now = Utc::now();
+    let session = ManagedSession::with_messages(session_id, now, messages);
+    let path = save_session_in(base_dir, &session)?;
+    Ok(reference_from_summary(ManagedSessionSummary::from_session(
+        &session, path,
+    )))
 }
 
 /// List managed sessions stored under the CLI config directory.

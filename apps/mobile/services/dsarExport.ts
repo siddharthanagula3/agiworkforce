@@ -91,7 +91,7 @@ try {
  * Uses the provider/model from the last assistant message in the conversation
  * (most representative for a mixed-provider thread).
  */
-function buildMarkedTranscript(
+export function buildMarkedTranscript(
   messages: Array<{
     role: string;
     content: string;
@@ -123,7 +123,7 @@ function buildMarkedTranscript(
 
 const DSAR_SCHEMA_VERSION = 1;
 
-interface DsarMessage {
+export interface DsarMessage {
   id: string;
   role: string;
   content: string;
@@ -136,7 +136,7 @@ interface DsarMessage {
   created_at: string; // ISO-8601
 }
 
-interface DsarConversation {
+export interface DsarConversation {
   id: string;
   title: string;
   default_mode: string;
@@ -149,6 +149,53 @@ interface DsarConversation {
   messages: DsarMessage[];
   /** Plain-text transcript with EU AI Act Article 50(2) provenance markers on AI turns */
   marked_transcript: string;
+}
+
+export interface DsarLocalProject {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  created_at: string;
+  updated_at: string;
+  sources: Array<{
+    id: string;
+    name: string;
+    mime_type: string;
+    size_bytes: number;
+    added_at: string;
+  }>;
+}
+
+export interface DsarMobileSettings {
+  app_mode: 'local' | 'cloud';
+  selected_model: string;
+  selected_provider: string;
+  theme_mode: string;
+  accent_color: string;
+  font_preference: string;
+  haptics_enabled: boolean;
+  notifications_enabled: boolean;
+  voice_enabled: boolean;
+  background_fetch_enabled: boolean;
+  temporary_chat_enabled: boolean;
+  personalization: {
+    full_name: string;
+    nickname: string;
+    occupation: string;
+    instructions: string;
+    warmth: number;
+    enthusiasm: number;
+    headers_lists: number;
+    emoji: number;
+  };
+  capabilities: Record<string, boolean>;
+  chat_preferences: {
+    mode: string;
+    style: string;
+    tool_access: string;
+    features: Record<string, boolean>;
+  };
 }
 
 interface DsarMemoryFact {
@@ -192,9 +239,23 @@ interface DsarExportPayload {
     active: boolean;
     created_at: string;
   }>;
+  local_projects: DsarLocalProject[];
   settings: Record<string, string>;
+  mobile_settings: DsarMobileSettings | null;
+  local_artifacts: unknown[];
   installed_models_manifest: DsarInstalledModel[];
   compliance_ledger: DsarComplianceLedger;
+}
+
+export interface DsarSupplementalLocalData {
+  conversations?: DsarConversation[];
+  local_projects?: DsarLocalProject[];
+  mobile_settings?: DsarMobileSettings | null;
+  local_artifacts?: unknown[];
+}
+
+export interface WipeAllLocalDataOptions {
+  afterPersistentWipe?: () => Promise<void> | void;
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +343,7 @@ async function collectConversations(): Promise<DsarConversation[]> {
       marked_transcript,
     });
   }
+
   return result;
 }
 
@@ -341,13 +403,29 @@ function collectComplianceLedger(): DsarComplianceLedger {
 const EXPORT_DIR = `${cacheDirectory}dsar_exports/`;
 const EXPORT_FILE = `${EXPORT_DIR}agi_data_export.json`;
 
-export async function exportAllUserData(onProgress?: DsarProgressCallback): Promise<void> {
+function mergeSupplementalConversations(
+  conversations: DsarConversation[],
+  supplemental: DsarConversation[] | undefined,
+): DsarConversation[] {
+  if (!supplemental || supplemental.length === 0) return conversations;
+  const seen = new Set(conversations.map((conversation) => conversation.id));
+  const novel = supplemental.filter((conversation) => !seen.has(conversation.id));
+  return [...conversations, ...novel];
+}
+
+export async function exportAllUserData(
+  onProgress?: DsarProgressCallback,
+  supplemental: DsarSupplementalLocalData = {},
+): Promise<void> {
   const notify = (stage: DsarExportProgress['stage'], done: number, total: number) =>
     onProgress?.({ stage, done, total });
 
   // Conversations + messages (most time-consuming)
   notify('conversations', 0, 1);
-  const conversations = await collectConversations();
+  const conversations = mergeSupplementalConversations(
+    await collectConversations(),
+    supplemental.conversations,
+  );
   notify('conversations', 1, 1);
 
   // Memory facts
@@ -363,6 +441,9 @@ export async function exportAllUserData(onProgress?: DsarProgressCallback): Prom
   // Settings
   notify('settings', 0, 1);
   const settings = await getAllSettings();
+  const local_projects = supplemental.local_projects ?? [];
+  const mobile_settings = supplemental.mobile_settings ?? null;
+  const local_artifacts = supplemental.local_artifacts ?? [];
   notify('settings', 1, 1);
 
   // Installed models manifest
@@ -393,7 +474,10 @@ export async function exportAllUserData(onProgress?: DsarProgressCallback): Prom
       active: ci.active,
       created_at: tsToIso(ci.created_at),
     })),
+    local_projects,
     settings,
+    mobile_settings,
+    local_artifacts,
     installed_models_manifest,
     compliance_ledger,
   };
@@ -430,7 +514,7 @@ export async function exportAllUserData(onProgress?: DsarProgressCallback): Prom
 // Wipe all local user data (Settings → Privacy → Delete everything)
 // ---------------------------------------------------------------------------
 
-export async function wipeAllLocalData(): Promise<void> {
+export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): Promise<void> {
   const { closeDb, getDb } = await import('@/storage/db');
 
   const db = await getDb();
@@ -460,6 +544,8 @@ export async function wipeAllLocalData(): Promise<void> {
   // Wipe MMKV
   const { storage } = await import('@/lib/mmkv');
   storage.clearAll();
+
+  await options.afterPersistentWipe?.();
 
   // Delete downloaded model files
   await deleteAsync(`${documentDirectory}models/`, { idempotent: true });

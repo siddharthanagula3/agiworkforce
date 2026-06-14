@@ -11,9 +11,9 @@
  *   const publishArtifact = makeDesktopPublishArtifact();
  *   <UnifiedArtifactPanel publishArtifact={publishArtifact} ... />
  *
- * v1 LOCAL ONLY (lock: v1-local-only-cloud-waitlist-2026-05-18):
- *   This adapter only handles the local path. Cloud publish is deferred
- *   until the Cloud Managed tier launches (TODO: EXEC-SUMMARY-r2 hours).
+ * Current boundary:
+ *   This adapter only handles the local path. Cloud publish is gated until the
+ *   managed artifact publishing path is proven.
  */
 
 import { appDataDir, join } from '@tauri-apps/api/path';

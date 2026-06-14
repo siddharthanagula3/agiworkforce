@@ -20,7 +20,7 @@ import {
   Loader2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import type { StatusStep as StatusStepType, StepIcon } from '@/types/chat';
 
 interface StatusStepProps {
@@ -29,13 +29,13 @@ interface StatusStepProps {
   totalSteps?: number;
 }
 
-const ICON_CONFIG: Record<StepIcon, { icon: typeof Brain; color: string }> = {
-  thinking: { icon: Brain, color: colors.agentThinking },
-  searching: { icon: Search, color: colors.teal },
-  coding: { icon: Code, color: colors.agentActive },
-  command: { icon: Terminal, color: colors.agentSuccess },
-  success: { icon: CheckCircle2, color: colors.agentSuccess },
-  error: { icon: XCircle, color: colors.agentError },
+const ICON_CONFIG: Record<StepIcon, { icon: typeof Brain; colorToken: keyof ColorScheme }> = {
+  thinking: { icon: Brain, colorToken: 'agentThinking' },
+  searching: { icon: Search, colorToken: 'teal' },
+  coding: { icon: Code, colorToken: 'agentActive' },
+  command: { icon: Terminal, colorToken: 'agentSuccess' },
+  success: { icon: CheckCircle2, colorToken: 'agentSuccess' },
+  error: { icon: XCircle, colorToken: 'agentError' },
 };
 
 function PulsingIndicator({ color }: { color: string }) {
@@ -62,7 +62,13 @@ function PulsingIndicator({ color }: { color: string }) {
   );
 }
 
-function StepStatusIndicator({ status }: { status: StatusStepType['status'] }) {
+function StepStatusIndicator({
+  status,
+  colors,
+}: {
+  status: StatusStepType['status'];
+  colors: ColorScheme;
+}) {
   switch (status) {
     case 'running':
       return <PulsingIndicator color={colors.agentActive} />;
@@ -74,11 +80,12 @@ function StepStatusIndicator({ status }: { status: StatusStepType['status'] }) {
 }
 
 export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
+  const colors = useThemeColors();
   const [expanded, setExpanded] = useState(false);
 
   const iconConfig = ICON_CONFIG[step.icon];
   const StepIconComponent = iconConfig.icon;
-  const iconColor = iconConfig.color;
+  const iconColor = colors[iconConfig.colorToken];
 
   const hasDetail = Boolean(step.detail);
 
@@ -99,7 +106,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
       >
         <View
           className="flex-row items-start gap-2.5 px-3 py-2 rounded-lg my-0.5"
-          style={{ backgroundColor: `${colors.surfaceOverlay}80` }}
+          style={{ backgroundColor: colors.surfaceOverlay }}
         >
           {/* Icon */}
           <View className="mt-0.5">
@@ -115,24 +122,32 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
             {/* Message row */}
             <View className="flex-row items-center gap-2">
               <Text
-                className="text-[13px] text-white/80 flex-1 flex-shrink"
+                className="text-[13px] flex-1 flex-shrink"
+                style={{ color: colors.textSecondary }}
                 numberOfLines={expanded ? undefined : 2}
               >
                 {step.message}
               </Text>
-              <StepStatusIndicator status={step.status} />
+              <StepStatusIndicator status={step.status} colors={colors} />
             </View>
 
             {/* Step counter */}
             {stepNumber != null && totalSteps != null ? (
-              <Text variant="caption" className="text-white/30 text-[10px] mt-0.5">
+              <Text
+                variant="caption"
+                className="text-[10px] mt-0.5"
+                style={{ color: colors.textMuted }}
+              >
                 Step {stepNumber} of {totalSteps}
               </Text>
             ) : null}
 
             {/* Progress bar */}
             {step.progress != null ? (
-              <View className="h-1 bg-white/10 rounded-full mt-1.5 overflow-hidden">
+              <View
+                className="h-1 rounded-full mt-1.5 overflow-hidden"
+                style={{ backgroundColor: colors.progressTrack }}
+              >
                 <View
                   className="h-full rounded-full"
                   style={{
@@ -151,15 +166,22 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
                 ) : (
                   <ChevronRight size={10} color={colors.textMuted} />
                 )}
-                <Text variant="caption" className="text-white/30 text-[10px]">
+                <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
                   {expanded ? 'Hide details' : 'Show details'}
                 </Text>
               </View>
             ) : null}
 
             {expanded && step.detail ? (
-              <View className="mt-1.5 bg-black/20 rounded-md px-2 py-1.5">
-                <Text variant="mono" className="text-[11px] text-white/50">
+              <View
+                className="mt-1.5 rounded-md px-2 py-1.5"
+                style={{ backgroundColor: colors.inputSurface }}
+              >
+                <Text
+                  variant="mono"
+                  className="text-[11px]"
+                  style={{ color: colors.textSecondary }}
+                >
                   {step.detail}
                 </Text>
               </View>

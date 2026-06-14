@@ -2,14 +2,27 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import { POSITIONING } from '../../../lib/marketing-constants';
+import { ProductFrame } from '../../../components/marketing/ProductFrame';
+import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
+import { FinalCta } from '../../../components/marketing/FlagshipSections';
+import {
+  LAUNCH,
+  MARKETING,
+  MARKETING_FEATURE_MATRIX,
+  POSITIONING,
+} from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Startups — AGI',
+  title: 'Startups: AGI',
   description:
-    'How startups use AGI: ship product faster with multi-provider AI, BYOK, and a CLI that fits CI.',
+    'How startups use AGI: ship product faster with multi-provider AI, BYOK on Desktop and CLI, and a CLI that fits CI.',
   alternates: { canonical: 'https://agiworkforce.com/use-cases/startups' },
 };
+
+const PLAN_ROWS = MARKETING_FEATURE_MATRIX.individual.map((plan) => ({
+  k: plan.label,
+  v: `${plan.price} · ${plan.billingInterval}. ${plan.bestFor}.`,
+}));
 
 export default function StartupsPage() {
   return (
@@ -17,75 +30,92 @@ export default function StartupsPage() {
       <main className="agi-shell">
         <Header />
 
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Startups.</h1>
-          <p className="agi-page-lede">
-            Ship faster. Pay for inference at provider rates, not someone else&rsquo;s margin.{' '}
-            <strong>
-              Use the CLI in CI, the desktop for hard problems, the Chrome extension for inbox and
-              docs — same chat history, same model picker, three keys in your vault.
-            </strong>
+        <section className="agi-fl-hero" aria-labelledby="agi-startups-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Use case · startups</p>
+          <h1 id="agi-startups-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Ship faster.</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">Spend deliberately.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            Use the CLI in CI, the Desktop app for hard problems, and the Chrome side panel for
+            inbox and docs. One product, one chat history, with provider spend you control through
+            your own keys on Desktop and CLI.
           </p>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Why startups pick this shape</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">No lock-in</h3>
-              <p className="agi-reason-p">
-                Provider preferences change quarterly. We let you switch without moving your
-                conversation history or rebuilding your tool integrations.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Real CI</h3>
-              <p className="agi-reason-p">
-                <code>agi exec</code> works as a Unix tool. Pipe a task, get JSON. Use in GitHub
-                Actions, in scripts, anywhere a shell runs.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Cheap experiments</h3>
-              <p className="agi-reason-p">
-                Local mode is free forever. BYOK pays providers at their public rate. The expensive
-                tier is opt-in, not the default.
-              </p>
-            </li>
-          </ul>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What you actually get</p>
-          <table className="agi-ledger">
-            <tbody>
-              <tr>
-                <td>Cost posture</td>
-                <td>Local + BYOK free forever. Hobby $10/mo or $5/mo annual.</td>
-              </tr>
-              <tr>
-                <td>Surface coverage</td>
-                <td>Desktop, CLI, web, mobile, Chrome extension, VS Code extension.</td>
-              </tr>
-              <tr>
-                <td>Provider count</td>
-                <td>10+ wired in. Plus any OpenAI-compatible BYO endpoint.</td>
-              </tr>
-              <tr>
-                <td>Privacy</td>
-                <td>{POSITIONING.trustBoundary}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="agi-cta-row" style={{ marginTop: 28 }}>
-            <Link href="/download" className="agi-cta-primary">
-              Install
+          <div className="agi-fl-cta-row">
+            <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+              Download AGI
             </Link>
-            <Link href="/pricing" className="agi-cta-ghost">
-              See pricing →
+            <Link href="/pricing" className="agi-fl-cta agi-fl-cta--ghost">
+              See Pricing
             </Link>
           </div>
+          <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+            <li>Local · free forever</li>
+            <li>BYOK · provider rates</li>
+            <li>Cloud · by invite</li>
+          </ul>
+          <div className="agi-fl-hero-console" aria-hidden="true">
+            <ProductFrame
+              variant="terminal"
+              title="agi · zsh"
+              badge="sandboxed"
+              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+            />
+          </div>
         </section>
+
+        <FeatureGrid
+          eyebrow="Why startups pick this shape"
+          title="Three reasons this fits a small team."
+          items={[
+            {
+              meta: 'Routing',
+              title: 'No lock-in',
+              body: 'Provider preferences change quarterly. Switch without losing your conversation history or rebuilding your tool integrations.',
+            },
+            {
+              meta: 'Automation',
+              title: 'Real CI',
+              body: 'agi exec works as a Unix tool. Pipe a task in, get structured output back, in GitHub Actions or anywhere a shell runs.',
+            },
+            {
+              meta: 'Cost',
+              title: 'Cheap experiments',
+              body: 'Local mode is free. BYOK pays providers at their public rates. Managed compute is opt-in by invite, never the default.',
+            },
+          ]}
+        />
+
+        <LedgerSection
+          eyebrow="What you actually get"
+          title="The posture, in one table."
+          rows={[
+            ...PLAN_ROWS,
+            {
+              k: 'Surfaces',
+              v: `${MARKETING.surfaces.count} surfaces: Desktop, Web, Mobile, CLI, Chrome extension, VS Code extension.`,
+            },
+            {
+              k: 'Providers',
+              v: `${MARKETING.providers.display} providers wired in, plus any OpenAI-compatible endpoint.`,
+            },
+            { k: 'Privacy', v: POSITIONING.trustBoundary },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Start free, route deliberately."
+          body="Install AGI, run Local and BYOK from day one, and join the waitlist if you want hosted compute later."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/pricing', label: 'See Pricing' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+        />
 
         <MarketingFooter />
       </main>

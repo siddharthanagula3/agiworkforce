@@ -162,7 +162,7 @@ async function handleDownload(request: NextRequest) {
     // SEV-WEB-M-2 fix (2026-05-05): when filename falls back to `asset.name`
     // from GitHub's Releases API, an attacker-controlled release-asset name
     // containing `"` or CR/LF would land in the Content-Disposition header
-    // verbatim — header injection / response-splitting risk. Encode per
+    // verbatim · header injection / response-splitting risk. Encode per
     // RFC 5987: strip control chars + quotes from the ASCII fallback and use
     // `filename*=UTF-8''<percent-encoded>` for the canonical name.
     const safeAsciiFilename = Array.from(filename, (char) => {

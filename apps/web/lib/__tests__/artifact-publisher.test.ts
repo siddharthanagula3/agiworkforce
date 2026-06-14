@@ -7,7 +7,7 @@
  *   - byok bundle missing transfer evidence throws byok-transfer-preview-required
  *   - Calling twice returns the same waitlist shape (idempotent, no DB)
  *
- * The ArtifactPersistenceUnavailableError / 42P01 path is gone — the publisher
+ * The ArtifactPersistenceUnavailableError / 42P01 path is gone · the publisher
  * no longer calls the DB. The 503 is replaced by 200 + { kind: 'waitlist' }.
  */
 
@@ -105,7 +105,7 @@ describe('publishArtifact (web adapter)', () => {
   });
 
   it('waitlist result has no DB side-effects (no upsert called)', async () => {
-    // No DB mock needed — the new publisher never calls the DB.
+    // No DB mock needed · the new publisher never calls the DB.
     // This test is a regression guard: if a DB call were accidentally
     // re-introduced it would fail at the import stage (no NeonClient).
     const result = await publishArtifact({

@@ -69,11 +69,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: 'AGI | Beyond one model. Beyond one surface.',
+    default: 'AGI | One AI workspace across models and tools.',
     template: '%s | AGI',
   },
   description:
-    'AGI is a multi-provider AI application suite across web, mobile, desktop, CLI, Chrome, and VS Code with Local, BYOK, and invite-only managed cloud modes.',
+    'AGI is an AI workspace for chat, coding, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and invite-gated Cloud boundaries.',
   keywords: [
     'AI agents',
     'automation',
@@ -100,9 +100,9 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: APP_URL,
     siteName: 'AGI',
-    title: 'AGI | Beyond one model. Beyond one surface.',
+    title: 'AGI | One AI workspace across models and tools.',
     description:
-      'A multi-provider AI application suite across web, mobile, desktop, CLI, Chrome, and VS Code.',
+      'A practical AI workspace for chat, code, research, files, tools, artifacts, connectors, and automation.',
     images: [
       {
         url: '/app-preview.png',
@@ -114,9 +114,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI | Beyond one model. Beyond one surface.',
+    title: 'AGI | One AI workspace across models and tools.',
     description:
-      'A multi-provider AI application suite with Local, BYOK, and invite-only managed cloud modes.',
+      'Chat, code, research, files, artifacts, tools, connectors, and automation in one AGI workspace.',
     creator: '@agiworkforce',
     images: ['/app-preview.png'],
   },
@@ -146,7 +146,7 @@ export default async function RootLayout({
     url: APP_URL,
     logo: `${APP_URL}/logo.png`,
     description:
-      'Multi-provider AI application suite across web, mobile, desktop, CLI, Chrome, and VS Code.',
+      'AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation.',
     sameAs: ['https://twitter.com/agiworkforce', 'https://github.com/agiworkforce'],
     contactPoint: {
       '@type': 'ContactPoint',
@@ -160,8 +160,7 @@ export default async function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: 'AGI',
-    description:
-      'Multi-provider AI applications with Local, BYOK, and invite-only managed cloud modes',
+    description: 'AI workspace with explicit Local, BYOK, and invite-gated managed cloud modes',
     applicationCategory: 'Business Application',
     operatingSystem: 'macOS, Windows, Linux, Web',
     offers: {

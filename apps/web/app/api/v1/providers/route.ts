@@ -7,7 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 /**
- * GET /api/v1/providers — proxy to api-gateway provider availability list.
+ * GET /api/v1/providers · proxy to api-gateway provider availability list.
  *
  * Server-side proxy avoids cross-origin headaches from the client and lets us
  * inject the gateway auth token without exposing it to the browser.
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
 
-  // Validate gateway URL — production must use https, not localhost or plain http.
+  // Validate gateway URL · production must use https, not localhost or plain http.
   if (process.env.NODE_ENV === 'production') {
     try {
       const parsed = new URL(gatewayUrl);

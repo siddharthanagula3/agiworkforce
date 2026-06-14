@@ -161,8 +161,8 @@ export function composeFirstRunDisclosure(inputs: DisclosureInputs): DisclosureC
 
   const summary = [
     'You are interacting with an AI system.',
-    'Responses may be inaccurate or fabricated. Treat them as suggestions, not professional advice.',
-    'Outputs of AI-generated text, audio, image, or video are marked as machine-generated when you export or share them.',
+    'Responses can be inaccurate. Review important output before using it.',
+    'AI-generated text, audio, image, or video is marked when you export or share it.',
     managedCloudSentence,
     chineseHqSentence,
   ]
@@ -176,7 +176,7 @@ export function composeFirstRunDisclosure(inputs: DisclosureInputs): DisclosureC
     penaltyNotice: ARTICLE_50_PENALTY_TEXT,
     sourceUrl: ARTICLE_50_SOURCE_URL,
     summary,
-    acceptLabel: 'I understand — continue',
+    acceptLabel: 'I understand, continue',
     declineLabel: 'Not now',
     chineseHqProviderRows: CHINESE_HQ_PROVIDER_IDS.map((id) => ({
       id,

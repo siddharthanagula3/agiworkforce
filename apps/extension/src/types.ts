@@ -934,6 +934,36 @@ export interface PermissionResponseMessage extends BaseMessage {
   decision: 'allow' | 'deny' | 'always';
 }
 
+/**
+ * Sent from the side panel to the CONTENT SCRIPT to trigger the fast-path
+ * autofill + escalation-decision sequence. Content script runs the autofill,
+ * calls makeEscalationDecision, and returns the result as the sendResponse.
+ *
+ * SECURITY: gated by sender.id === chrome.runtime.id in the content-script
+ * handleMessage guard (line ~191). Only the extension itself can send this.
+ */
+export interface RunAutofillMessage {
+  type: 'AGI_RUN_AUTOFILL';
+  /** Optional — preserved for compatibility with ExtensionMessage union members
+   *  that expect a tabId field on the shared message type. */
+  tabId?: number;
+}
+
+/**
+ * Sent from the SIDE PANEL (trusted extension UI) to the BACKGROUND service
+ * worker to start the computer-use agent loop. The background re-validates the
+ * tab's origin against siteAllowlistCache before invoking runAgentLoop().
+ *
+ * SECURITY: 'AGI_START_COMPUTER_USE' is added to EXTENSION_PAGE_ONLY_MESSAGE_TYPES
+ * in policy.ts, so a content script on an allowlisted site cannot trigger the
+ * CDP loop — only the extension UI can.
+ */
+export interface StartComputerUseMessage {
+  type: 'AGI_START_COMPUTER_USE';
+  goal: string;
+  tabId: number;
+}
+
 export type ExtensionMessage =
   | CaptureScreenshotMessage
   | ClickMessage
@@ -1005,7 +1035,9 @@ export type ExtensionMessage =
   | SetActionModeMessage
   | GetQuickModeMessage
   | SetQuickModeMessage
-  | PermissionResponseMessage;
+  | PermissionResponseMessage
+  | RunAutofillMessage
+  | StartComputerUseMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse

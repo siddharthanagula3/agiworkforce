@@ -9,50 +9,42 @@
 
 ## Headline options (pick one)
 
-1. The on-device AI that works on the Android phone you already own — not just Pixel 9 and Galaxy S26
-2. 96% of EU Android users locked out of Gemini on-device: AGI Mobile fills the gap on launch day
-3. EU AI Act disclosure-ready, privacy-by-architecture, free: AGI Mobile launches on iOS and Android 2026-07-12
+1. Local Mode AI with explicit device-state labels, not silent Cloud fallback
+2. AGI Mobile starts with Local Mode and adds AGI Cloud by invite
+3. EU AI Act disclosure-aware, privacy-by-architecture, free: AGI Mobile launches on iOS and Android 2026-07-12
 
 ---
 
-## The Gemini Nano gap — the single most important fact for EU Android coverage
+## The local runtime gap
 
-Google's on-device AI (Gemini Nano, accessed via Android AICore) requires:
+On-device AI support varies by OS, runtime, RAM, model size, battery, and device generation. AGI Mobile should show clear supported, unavailable, downloadable, and invite-gated states instead of pretending every phone can run every local model.
 
-- Pixel 9 series (2024), Pixel 9a, or later
-- Samsung Galaxy S26 series, Galaxy S26 Edge, or later (market launch: Jan 2026)
-- OnePlus 15 or later (market launch: Jan 2026)
-- 12 GB RAM minimum
-- Android 14+
+AGI Mobile does not claim universal local coverage. Local mode is on-device where supported and is not silently routed to Cloud.
 
-The result: fewer than 5% of EU Android handsets in active use as of mid-2026 meet all four requirements. A user with a Samsung Galaxy S23, a OnePlus 13, a Pixel 7, any Xiaomi, any Motorola, any Nokia, or virtually any device from 2024 or earlier cannot run Gemini Nano on-device.
-
-AGI Mobile covers all of them. The path: Gemma + LiteRT (Google's own canonical local inference stack, recommended by Google for non-Nano Android devices) as primary, Qwen3-4B as a universal fallback for devices with 4 GB+ RAM. Local mode is on-device where supported and is not silently routed to Cloud.
-
-For iOS, Apple Foundation Models work on iPhone 15 Pro and later. AGI falls through to Qwen3-4B via executorch/llama.rn on iPhone 15 (non-Pro), 14 series, and earlier supported hardware.
+For iOS and Android, local model availability remains device-dependent and must be shown explicitly in the app.
 
 ---
 
-## EU AI Act compliance
+## EU AI Act posture
 
 AGI Mobile v1 is a general-purpose AI system serving consumers. Applicable obligations under Regulation (EU) 2024/1689:
 
-| Obligation                                           | AGI Mobile status                                                                                                       |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Art. 50(1) — Disclosure that content is AI-generated | Built in: conversation interface includes persistent disclosure chip                                                    |
-| Art. 50(2) — Marking of synthetic content on export  | Conversation exports include a machine-readable `x-agi-ai-generated: true` header and a human-readable disclosure block |
-| Prohibited practices (Art. 5)                        | Not applicable: no biometric categorisation, no social scoring, no subliminal manipulation                              |
-| High-risk classification (Annex III)                 | Not applicable to general-purpose chat assistant use case                                                               |
-| GPAI model obligations (Art. 51-56)                  | AGI wraps third-party foundation models; obligations apply to model providers, not to AGI as a system integrator        |
+| Obligation                                           | AGI Mobile status                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Art. 50(1) — Disclosure that content is AI-generated | Launch-review item: keep AI disclosure visible in the interface                            |
+| Art. 50(2) — Marking of synthetic content on export  | Launch-review item: exported AI-generated content should carry a human-readable disclosure |
+| Prohibited practices (Art. 5)                        | Product should avoid biometric categorisation, social scoring, and subliminal manipulation |
+| High-risk classification (Annex III)                 | Legal review required before making a final classification claim                           |
+| GPAI model obligations (Art. 51-56)                  | Legal review required for provider and system-integrator obligations                       |
 
 ---
 
 ## GDPR posture
 
 - **Mode-specific processing.** Local-mode inference is on-device where supported. Cloud uses explicit provider labels and the user-selected trust boundary.
-- **Crash telemetry is minimal.** Sentry strips all strings longer than 40 characters before transmission. No conversation content reaches Sentry servers.
+- **Crash telemetry is minimal.** Diagnostics should stay separated from conversation content.
 - **No behavioural advertising.** User data is not sold, licensed, or shared with advertising platforms.
-- **Analytics.** PostHog masks all text input. No session replay on AI screens. Telemetry is off by default; users opt in.
+- **Analytics.** Analytics should avoid text input and AI-screen session replay, with clear user controls.
 - **EU representative.** AGI Automation LLC will appoint an EU representative per Art. 27 GDPR before the 2026-07-12 launch. Name and contact to be published at agiworkforce.com/legal/eu-representative.
 
 ---
@@ -65,28 +57,25 @@ Most AI assistants require users to accept one cloud path for every task. AGI Mo
 
 ## Feature set (v1 local)
 
-| Feature                                                                | Status                    |
-| ---------------------------------------------------------------------- | ------------------------- |
-| On-device chat (text)                                                  | Live                      |
-| Image + question (visual QA)                                           | Live                      |
-| Voice input                                                            | Live                      |
-| OCR / document scan                                                    | Live                      |
-| Translate (60+ language pairs, including all 24 EU official languages) | Live                      |
-| Memory (persistent context)                                            | Live                      |
-| Projects (topic workspaces)                                            | Live                      |
-| Skills catalog                                                         | Live                      |
-| HealthKit week recap (iOS)                                             | Live                      |
-| Cloud models / sync                                                    | Waitlist — future release |
+| Feature                                        | Status       |
+| ---------------------------------------------- | ------------ |
+| Local chat with visible model state            | Demo focus   |
+| Voice input where device support is available  | Demo focus   |
+| Memory and personalization controls            | Demo focus   |
+| Projects and artifacts preview                 | Demo focus   |
+| App lock, age gate, privacy, and data controls | Demo focus   |
+| Cloud invite and waitlist flow                 | Demo focus   |
+| Cloud models / sync                            | Invite-gated |
 
 ---
 
 ## On-device AI stack (EU Android detail)
 
-1. **Gemini Nano via AICore** — for the ~5% of EU Android users on supported 2025-2026 flagships
-2. **Gemma + LiteRT** — Google's own canonical path for non-Nano Android devices; covers virtually all Android handsets with 4 GB+ RAM
-3. **Qwen3-4B** — universal fallback; also the primary model on devices where Gemma is not yet available via LiteRT
+1. **System local runtimes** — when available on the device
+2. **Downloadable local models** — when size, runtime, and device capability allow
+3. **Invite-gated Cloud** — for hosted models, sync, and managed tools
 
-The Gemma + LiteRT path is maintained by Google (see developer.android.com/ai/google-ai-edge), not a workaround. AGI integrates it as the intended non-Nano inference path for Android.
+The app must show which route is actually available instead of hiding unsupported local runtimes behind a Cloud fallback.
 
 ---
 

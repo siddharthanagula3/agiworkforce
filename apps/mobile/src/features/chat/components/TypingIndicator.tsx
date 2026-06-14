@@ -10,19 +10,19 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 const DOT_SIZE = 8;
-const DOT_COLOR = colors.teal;
 const BOUNCE_HEIGHT = 6;
 const CYCLE_MS = 900;
 const STAGGER_MS = 160;
 
 interface DotProps {
   delayMs: number;
+  color: string;
 }
 
-function BouncingDot({ delayMs }: DotProps) {
+function BouncingDot({ delayMs, color }: DotProps) {
   const translateY = useSharedValue(0);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ function BouncingDot({ delayMs }: DotProps) {
           width: DOT_SIZE,
           height: DOT_SIZE,
           borderRadius: DOT_SIZE / 2,
-          backgroundColor: DOT_COLOR,
+          backgroundColor: color,
           opacity: 0.7,
         },
         style,
@@ -74,6 +74,7 @@ function BouncingDot({ delayMs }: DotProps) {
  * a response but no tokens have arrived yet.
  */
 export function TypingIndicator() {
+  const colors = useThemeColors();
   return (
     <View
       style={{
@@ -86,9 +87,9 @@ export function TypingIndicator() {
       accessibilityLabel="Assistant is typing"
       accessibilityRole="progressbar"
     >
-      <BouncingDot delayMs={0} />
-      <BouncingDot delayMs={STAGGER_MS} />
-      <BouncingDot delayMs={STAGGER_MS * 2} />
+      <BouncingDot delayMs={0} color={colors.teal} />
+      <BouncingDot delayMs={STAGGER_MS} color={colors.teal} />
+      <BouncingDot delayMs={STAGGER_MS * 2} color={colors.teal} />
     </View>
   );
 }

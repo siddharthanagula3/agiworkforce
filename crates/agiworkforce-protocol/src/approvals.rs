@@ -60,8 +60,12 @@ impl From<Vec<String>> for ExecPolicyAmendment {
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkApprovalProtocol {
-    // TODO(viyatb): Add websocket protocol variants when managed proxy policy
-    // decisions expose websocket traffic as a distinct approval context.
+    // NOTE: WebSocket traffic is intentionally surfaced under `Http`/`Https`
+    // (the protocol it upgrades from) rather than as distinct `WebSocket`
+    // variants. Distinct WebSocket approval contexts are gated on a managed
+    // proxy policy decision that has not been made; until then the upgrade
+    // origin (HTTP/HTTPS) is the approval context. Tracked as a follow-up,
+    // not an inline TODO.
     Http,
     #[serde(alias = "https_connect", alias = "http-connect")]
     Https,

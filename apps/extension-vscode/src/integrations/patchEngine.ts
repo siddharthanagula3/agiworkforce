@@ -620,6 +620,15 @@ export async function undoPatchBatch(batchId: string): Promise<boolean> {
   let allSucceeded = true;
 
   for (const [filePath, originalContent] of batch.snapshots) {
+    // Defense-in-depth: re-run the same containment check apply enforces, so undo
+    // can never write outside the workspace even if a snapshot path were ever
+    // stored unvalidated (audit 218 L623).
+    if (!resolveContained(rootUri.fsPath, filePath).ok) {
+      logPatch(`  Skipping out-of-workspace undo target: ${filePath}`);
+      allSucceeded = false;
+      continue;
+    }
+
     const fileUri = vscode.Uri.joinPath(rootUri, filePath);
 
     if (originalContent === '') {

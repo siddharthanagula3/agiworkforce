@@ -30,7 +30,7 @@ import { ArtifactsGallery } from '@/features/artifacts/ArtifactsGallery';
 import { ShareConversationDialog } from './ShareConversationDialog';
 import { ExecutionSidecar } from '@/features/execution-sidecar';
 import { ReminderList } from '@/features/reminders/ReminderList';
-import { CoworkTab } from '@/features/cowork/CoworkTab';
+// AgiWorkTab removed — it used mock data only and caused confusion (P0-3)
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
@@ -86,7 +86,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     | 'schedules'
     | 'artifacts'
     | 'reminders'
-    | 'cowork'
+    | 'work'
     | null;
   const [activeRightPanel, setActiveRightPanel] = useState<RightPanel>(null);
   const RIGHT_PANEL_WIDTH = 420;
@@ -292,7 +292,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       if (isMeta && e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
-        openRightPanel('cowork');
+        openRightPanel('work');
       }
     };
 
@@ -494,8 +494,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                                 ? 'Artifacts Gallery'
                                 : activeRightPanel === 'reminders'
                                   ? 'Reminders'
-                                  : activeRightPanel === 'cowork'
-                                    ? 'Cowork'
+                                  : activeRightPanel === 'work'
+                                    ? 'AGI Work'
                                     : activeRightPanel}
             </h2>
             <button
@@ -536,7 +536,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {activeRightPanel === 'schedules' && <ScheduledTasksPanel />}
             {activeRightPanel === 'artifacts' && <ArtifactsGallery />}
             {activeRightPanel === 'reminders' && <ReminderList />}
-            {activeRightPanel === 'cowork' && <CoworkTab />}
+            {/* work panel removed — AgiWorkTab was mock-only */}
           </div>
         </div>
       )}

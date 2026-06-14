@@ -31,3 +31,12 @@ export async function getDeviceId(): Promise<string> {
   cachedDeviceId = newId;
   return newId;
 }
+
+export async function clearDeviceId(): Promise<void> {
+  cachedDeviceId = null;
+  try {
+    await SecureStore.deleteItemAsync(DEVICE_ID_KEY);
+  } catch (err) {
+    console.warn('[deviceId] SecureStore delete failed:', err);
+  }
+}

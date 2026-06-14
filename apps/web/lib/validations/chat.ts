@@ -38,6 +38,8 @@ export const UpdateConversationSchema = z.object({
     })
     .optional(),
   projectId: z.string().max(200, 'Project ID must be 200 characters or less').nullable().optional(),
+  /** Pin or unpin the conversation. Persisted in web_conversations.pinned. */
+  pinned: z.boolean().optional(),
 });
 
 export type UpdateConversationInput = z.infer<typeof UpdateConversationSchema>;

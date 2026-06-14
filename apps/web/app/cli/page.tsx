@@ -2,11 +2,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { FeatureGrid } from '../../components/marketing/LandingSections';
+import { DevBand, FinalCta, TrustTriptych } from '../../components/marketing/FlagshipSections';
+import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'CLI: agi, the operator command line',
-  description: `Pure Rust CLI for AGI developer workflows. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
+  title: 'AGI CLI: the agi agent in your terminal',
+  description: `agi is a Rust-native developer agent: resumable sessions, code review, sandboxed execution, hooks, skills, and MCP, offline-capable with local models. ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/cli' },
 };
 
@@ -30,254 +33,110 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
 
 const FEATURES = [
   {
-    label: 'Non-interactive exec',
-    body: 'agi exec is the headless mode. Pipe a task in, get an answer out. Ships to CI without a TUI.',
+    meta: 'Headless',
+    title: 'agi exec for CI',
+    body: 'Run any task non-interactively and stream typed JSON events. Every tool call, fallback, and turn usage arrives as machine-readable JSONL your pipeline can parse.',
   },
   {
-    label: 'Ratatui TUI',
-    body: 'Full interactive terminal UI in 256-color. Model switcher, tool call trace, and diff viewer built in.',
+    meta: 'Sessions',
+    title: 'Resume, fork, replay',
+    body: 'Every session persists with a turn-by-turn journal. Continue with agi resume. Branch with agi fork. Fork any past turn into a new named session.',
   },
   {
-    label: 'Session replay',
-    body: 'Every tool call is journaled. Resume, fork, and branch any past session. Full reproducibility.',
+    meta: 'Safety',
+    title: 'Sandboxed by default',
+    body: 'Tool execution runs inside macOS Seatbelt or Linux bubblewrap. Opting out is loud: the TUI shows a red “no sandbox” indicator whenever sandboxing is off.',
   },
   {
-    label: 'Sandboxed by default',
-    body: 'macOS Seatbelt + Linux bwrap on by default for dangerous tools: file writes, shell exec, network.',
+    meta: 'Extensibility',
+    title: 'Hooks, skills & plugins',
+    body: 'Lifecycle hooks fire across the session. /skills lists every discovered skill. Custom slash commands are plain markdown files in your project or home directory.',
   },
   {
-    label: 'MCP server mode',
-    body: 'Run as an MCP server over stdio. Connects AGI to Claude Code, Cursor, and any MCP client.',
+    meta: 'MCP',
+    title: 'MCP in both directions',
+    body: 'Connect MCP servers over stdio, SSE, or Streamable HTTP with optional OAuth. Or expose agi itself to any MCP client with agi mcp-server.',
   },
   {
-    label: 'Plugin system',
-    body: `${MARKETING.skills.display} built-in skills. Extend with your own plugins via the plugin manifest format.`,
+    meta: 'Routing',
+    title: 'Multi-model fallback',
+    body: 'Pass a comma-separated model list and the CLI fails over on rate limits, network errors, and stream disconnects. A visible banner and a JSON event fire on each switch.',
   },
   {
-    label: 'BYOK across providers',
-    body: '10+ providers. Keys stored in system keychain. Switch provider per session with --provider flag.',
+    meta: 'Cost',
+    title: 'Live cost HUD',
+    body: 'Running tokens in and out, dollar spend, and context usage sit in the corner of the TUI. Pricing comes from the model catalog. Never hardcoded.',
   },
   {
-    label: 'Multi-platform',
-    body: 'macOS, Linux, WSL. Install via Homebrew, cargo, or the one-line curl installer.',
+    meta: 'Migration',
+    title: 'Bring your setup',
+    body: 'agi migrate imports your settings from Claude Code, and imported commands and prompts are recognized where they already live.',
   },
 ];
-
-function TerminalProductView({ title, description }: { title: string; description: string }) {
-  return (
-    <div
-      style={{
-        background: 'var(--agi-card)',
-        border: '1px solid var(--agi-rule-strong)',
-        borderRadius: 10,
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          background: 'var(--agi-bg-3)',
-          borderBottom: '1px solid var(--agi-rule)',
-          padding: '8px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--agi-rule-strong)',
-            display: 'inline-block',
-          }}
-        />
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--agi-rule-strong)',
-            display: 'inline-block',
-          }}
-        />
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--agi-rule-strong)',
-            display: 'inline-block',
-          }}
-        />
-        <span
-          style={{
-            marginLeft: 8,
-            fontSize: 11,
-            color: 'var(--agi-ink-quiet)',
-            fontFamily: 'var(--mono)',
-          }}
-        >
-          zsh - {title}
-        </span>
-      </div>
-      <div
-        style={{
-          padding: '28px 20px',
-          minHeight: 140,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          background: 'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
-        }}
-      >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-            color: 'var(--agi-amber)',
-            margin: 0,
-          }}
-        >
-          Product view
-        </p>
-        <p
-          style={{
-            fontSize: 13,
-            color: 'var(--agi-ink-2)',
-            textAlign: 'center',
-            maxWidth: 300,
-            lineHeight: 1.5,
-            margin: 0,
-          }}
-        >
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 export default function CliPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
-            {LAUNCH.publicLabel}
+
+        <section className="agi-fl-hero" aria-labelledby="agi-fl-cli-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">AGI CLI · developer preview</p>
+              <h1 id="agi-fl-cli-hero-title" className="agi-fl-h1">
+                <span className="agi-fl-h1-line">An agent in</span>
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">your terminal.</em>
+                </span>
+              </h1>
+              <p className="agi-fl-lede">
+                The agi binary is a Rust developer agent. Resume and fork sessions. Run
+                non-interactive code review. Execute in a sandbox with explicit approvals. Works
+                offline with local models.
+              </p>
+              <div className="agi-fl-cta-row">
+                <a href="#agi-fl-cli-install-title" className="agi-fl-cta agi-fl-cta--primary">
+                  Install AGI CLI
+                </a>
+                <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
+                  Explore AGI Code
+                </Link>
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="CLI highlights">
+                <li>Local · offline-capable</li>
+                <li>BYOK · your keys</li>
+                <li>Sandboxed · by default</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <ProductFrame
+                variant="terminal"
+                title="agi · zsh"
+                badge="sandboxed"
+                image={{
+                  src: '/screens/cli-welcome.png',
+                  width: 2940,
+                  height: 1912,
+                  alt: 'The agi terminal UI: local model via Ollama, cost HUD, sandbox on',
+                }}
+              />
+            </div>
+          </div>
+        </section>
+
+        <FeatureGrid eyebrow="Capabilities" title="A full agent runtime." items={FEATURES} />
+
+        <section className="agi-fl-section" aria-labelledby="agi-fl-cli-subcommands-title">
+          <p className="agi-fl-eyebrow">Subcommands</p>
+          <h2 id="agi-fl-cli-subcommands-title" className="agi-fl-h2">
+            One binary. 15 core subcommands.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Everything below ships in the agi binary today. Short aliases where it counts: e for
+            exec, a for apply.
           </p>
-          <h1 className="agi-page-h1">agi: the operator&rsquo;s CLI.</h1>
-          <p className="agi-page-lede">
-            Pure Rust. Ratatui TUI. Same engine that powers the rest of AGI.{' '}
-            <strong>
-              Local developer sessions stay local unless the user explicitly selects BYOK or Cloud.
-            </strong>
-          </p>
-          <div className="agi-cta-row">
-            <Link href="/download" className="agi-cta-primary">
-              Install
-            </Link>
-            <a
-              href="https://github.com/siddharthanagula3/agiworkforce"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="agi-cta-ghost"
-            >
-              Source on GitHub &rarr;
-            </a>
-          </div>
-        </section>
-
-        {/* ---- SCREENSHOTS ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">How it looks</p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 16,
-            }}
-          >
-            <TerminalProductView
-              title="interactive TUI"
-              description="Ratatui interactive mode with model switcher, streaming output, and tool call trace visible in the sidebar."
-            />
-            <TerminalProductView
-              title="agi exec"
-              description="Headless exec mode running a code review task in CI. stdin task, stdout structured diff, exit 0."
-            />
-            <TerminalProductView
-              title="agi session"
-              description="Session browser showing past runs with fork and resume options. Every tool call is journaled and replayable."
-            />
-          </div>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Install: pick one</p>
-          <div className="agi-terminal">
-            <div className="agi-terminal-bar">~/agi-workforce: install</div>
-            <pre className="agi-terminal-pre">{`# Homebrew (macOS, Linux)
-$ brew install agiworkforce/tap/agiworkforce
-
-# cargo from source (Rust 1.94+)
-$ cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi
-
-# curl (macOS, Linux, WSL)
-$ curl -fsSL https://agiworkforce.com/install.sh | bash
-
-# first run
-$ agi login
-$ agi exec "your first task"`}</pre>
-          </div>
-        </section>
-
-        {/* ---- FEATURES GRID ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Features</p>
-          <ul className="agi-perks-grid" style={{ marginTop: 24 }} aria-label="CLI features">
-            {FEATURES.map((f) => (
-              <li key={f.label} className="agi-perk-card">
-                <p className="agi-perk-title">{f.label}</p>
-                <p className="agi-perk-description">{f.body}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What it does</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Non-interactive runs</h3>
-              <p className="agi-reason-p">
-                <code>agi exec</code> is the headless mode. Pipe a task, get an answer, ship to CI.
-                No TUI, no editor, just stdin/stdout.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Sessions you can replay</h3>
-              <p className="agi-reason-p">
-                Resume, fork, and branch any past session. Every run is reproducible because every
-                tool call is journaled.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Sandboxed by default</h3>
-              <p className="agi-reason-p">
-                macOS Seatbelt and Linux bwrap on by default for dangerous tools: file writes, shell
-                execution, network access.
-              </p>
-            </li>
-          </ul>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Subcommands</p>
           <table className="agi-ledger">
             <tbody>
               {SUBCOMMANDS.map((s) => (
@@ -291,6 +150,98 @@ $ agi exec "your first task"`}</pre>
             </tbody>
           </table>
         </section>
+
+        <DevBand
+          eyebrow="Sandbox"
+          title="Risky actions run inside a box."
+          body="On Linux the sandbox is bubblewrap. On macOS it's Seatbelt. Tool execution runs under OS-level sandboxing by default. Riskier actions ask for explicit approval. Turning the sandbox off is a visible, deliberate choice."
+          ctas={[{ href: '/agi-code', label: 'Explore AGI Code' }]}
+        />
+
+        <TrustTriptych
+          eyebrow="Trust modes"
+          title="Your terminal, your boundary."
+          lede="Local, BYOK, and AGI Cloud stay separate in the CLI too. /privacy-mode shows the active trust boundary. A Local session only continues elsewhere when you explicitly ask."
+          cards={[
+            {
+              mode: 'Local',
+              glyph: '◆',
+              title: 'Offline with local models.',
+              body: 'Point agi at Ollama or LM Studio and work entirely on your machine.',
+              points: [
+                'Local sessions never silently leave your device',
+                '/privacy-mode shows the active trust boundary',
+                'Session journals live under ~/.agiworkforce/',
+                'No account required',
+              ],
+              cta: { href: '/local', label: 'Run AGI Locally' },
+            },
+            {
+              mode: 'BYOK',
+              glyph: '◇',
+              title: 'Your keys, your billing.',
+              body: 'Sign in with agi login. Device-code OAuth or an API key.',
+              points: [
+                `${MARKETING.providers.display} providers plus custom OpenAI-compatible endpoints`,
+                'Traffic goes directly to your provider',
+                '/continue-with-byok is an explicit, visible step',
+                'agi auth-status shows every configured provider',
+              ],
+              cta: { href: '/byok', label: 'Set Up BYOK' },
+            },
+            {
+              mode: 'AGI Cloud',
+              glyph: '●',
+              title: 'Managed compute, by invite.',
+              body: 'Cloud execution is waitlist-gated and fails closed in the developer preview.',
+              points: [
+                'Private beta via waitlist and invite codes',
+                'agi cloud reports beta status and the model catalog only',
+                'Clear labels before anything routes to cloud',
+                'One email when your access opens',
+              ],
+              cta: { label: 'Join the Waitlist', waitlist: true },
+            },
+          ]}
+        />
+
+        <section className="agi-fl-section" aria-labelledby="agi-fl-cli-install-title">
+          <p className="agi-fl-eyebrow">Install</p>
+          <h2 id="agi-fl-cli-install-title" className="agi-fl-h2">
+            Build from source, sign in, go.
+          </h2>
+          <p className="agi-fl-section-lede">
+            The agi binary builds with a standard Rust toolchain from the AGI source tree. For
+            Desktop, Mobile, and the extensions, head to the download page.
+          </p>
+          <div className="agi-terminal">
+            <div className="agi-terminal-bar">agi · install</div>
+            <pre className="agi-terminal-pre">{`# from the AGI source tree (Rust toolchain)
+$ cargo install --path apps/cli --bin agi
+
+# first run
+$ agi login
+$ agi auth-status`}</pre>
+          </div>
+          <div className="agi-fl-cta-row">
+            <Link href="/download" className="agi-fl-cta agi-fl-cta--secondary">
+              Go to Downloads
+            </Link>
+          </div>
+        </section>
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Open a terminal. Start working."
+          body="Build the agi binary from source on macOS or Linux. Keep your sessions replayable from day one. AGI Cloud opens by invite."
+          ctas={[
+            { href: '/download', label: 'Go to Downloads' },
+            { href: '/agi-code', label: 'Explore AGI Code' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
+        />
+
         <MarketingFooter />
       </main>
     </div>

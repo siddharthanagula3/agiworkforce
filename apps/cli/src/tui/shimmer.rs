@@ -2,7 +2,6 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use std::time::Instant;
 
-use ratatui::style::Color;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Span;
@@ -10,6 +9,7 @@ use ratatui::text::Span;
 use super::color::blend;
 use super::terminal_palette::default_bg;
 use super::terminal_palette::default_fg;
+use super::terminal_palette::rgb_color;
 
 static PROCESS_START: OnceLock<Instant> = OnceLock::new();
 
@@ -57,7 +57,7 @@ pub(crate) fn shimmer_spans(text: &str) -> Vec<Span<'static>> {
             #[allow(clippy::disallowed_methods)]
             {
                 Style::default()
-                    .fg(Color::Rgb(r, g, b))
+                    .fg(rgb_color((r, g, b)))
                     .add_modifier(Modifier::BOLD)
             }
         } else {

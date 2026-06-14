@@ -53,6 +53,7 @@ import {
 } from './browserTool';
 import { migrateAutofillProfile } from './autofill/filler';
 import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
+import { runAgentLoop } from './features/computer-use/agentLoop';
 import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
@@ -369,6 +370,11 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
 
 function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
+  // Claude-style front door: clicking the toolbar icon opens the side-panel chat
+  // (no popup). Persistent + idempotent, so calling it on every SW start is safe.
+  chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
+    logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
+  });
   setupContextMenu();
   connectToNativeHost();
   checkDesktopConnection();
@@ -1666,6 +1672,138 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'AGI_START_COMPUTER_USE' as ExtensionMessage['type']: {
+      // SECURITY: 'AGI_START_COMPUTER_USE' is in EXTENSION_PAGE_ONLY_MESSAGE_TYPES —
+      // the handleMessage guard above already rejected any non-UI sender before we
+      // reach this case. Here we additionally re-validate the target tab's origin
+      // against siteAllowlistCache before starting the CDP loop.
+      const cuMsg = message as import('./types').StartComputerUseMessage;
+      const cuTabId = cuMsg.tabId;
+      const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.slice(0, 4096) : '';
+
+      if (!cuGoal) {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: goal is required',
+        } as ExtensionResponse;
+      }
+      if (typeof cuTabId !== 'number') {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: tabId is required',
+        } as ExtensionResponse;
+      }
+
+      // Re-validate the tab's origin against the allowlist (belt-and-suspenders).
+      let cuTab: chrome.tabs.Tab | undefined;
+      try {
+        cuTab = await chrome.tabs.get(cuTabId);
+      } catch {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: tab not found',
+        } as ExtensionResponse;
+      }
+      if (!cuTab?.url) {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: tab has no URL',
+        } as ExtensionResponse;
+      }
+      let cuOrigin: string;
+      try {
+        cuOrigin = new URL(cuTab.url).origin;
+      } catch {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: invalid tab URL',
+        } as ExtensionResponse;
+      }
+      if (!siteAllowlistCache.has(cuOrigin)) {
+        return {
+          success: false,
+          error:
+            `AGI_START_COMPUTER_USE: tab origin "${cuOrigin}" is not on the site allowlist. ` +
+            'Add it via the extension popup before starting computer use.',
+        } as ExtensionResponse;
+      }
+
+      // Read the "ask before acting" preference stored by the side panel.
+      // The side panel writes 'agi_cu_ask_before_acting' (boolean) to
+      // chrome.storage.local when the toggle changes. Default: false (allow-all).
+      const askPref = await chrome.storage.local.get('agi_cu_ask_before_acting');
+      const askBeforeActing = askPref['agi_cu_ask_before_acting'] === true;
+
+      // onBeforeAction wiring:
+      //   - When askBeforeActing is false (default): no gate — every action is
+      //     allowed immediately (lowest-friction path for automated scenarios).
+      //   - When askBeforeActing is true: the background sends an AGI_CU_APPROVE_REQUEST
+      //     message to the side panel, then waits for an AGI_CU_APPROVE_RESPONSE
+      //     (allow/deny). The side panel's showApprovalCard() provides the UI.
+      //     A 30 s timeout is applied; no response = DENY (fail-CLOSED) so a
+      //     closed/unresponsive panel can never auto-approve an action. Matches
+      //     agentLoop's fail-closed contract (commit security review 2026-06-13).
+      const onBeforeAction = askBeforeActing
+        ? async (toolName: string, args: Record<string, unknown>): Promise<boolean> => {
+            // SECURITY (commit review 2026-06-13): CSPRNG request id, not Math.random,
+            // so a prompt-injected page cannot guess an in-flight approval id.
+            const requestId = `cu_approve_${crypto.randomUUID()}`;
+            // Notify the side panel to show an approval card
+            void chrome.runtime.sendMessage({
+              type: 'AGI_CU_APPROVE_REQUEST',
+              requestId,
+              toolName,
+              description: `${toolName}(${Object.entries(args)
+                .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+                .join(', ')})`,
+            });
+            // Wait for the side panel's response (or timeout after 30 s → DENY)
+            const decision = await new Promise<boolean>((resolve) => {
+              const timeout = setTimeout(() => {
+                chrome.runtime.onMessage.removeListener(listener);
+                resolve(false); // fail-CLOSED: deny if no approval arrives in time
+              }, 30_000);
+              function listener(msg: unknown, sender: chrome.runtime.MessageSender): void {
+                // SECURITY (commit review 2026-06-13): only honor approval responses
+                // from a trusted extension page (popup/side panel/options) — these
+                // have no sender.tab. Reject content-script / external senders so a
+                // prompt-injected page cannot forge an AGI_CU_APPROVE_RESPONSE and
+                // bypass the human approval gate.
+                if (sender.id !== chrome.runtime.id || sender.tab) return;
+                if (
+                  typeof msg === 'object' &&
+                  msg !== null &&
+                  (msg as Record<string, unknown>)['type'] === 'AGI_CU_APPROVE_RESPONSE' &&
+                  (msg as Record<string, unknown>)['requestId'] === requestId
+                ) {
+                  clearTimeout(timeout);
+                  chrome.runtime.onMessage.removeListener(listener);
+                  resolve((msg as Record<string, unknown>)['allowed'] === true);
+                }
+              }
+              chrome.runtime.onMessage.addListener(listener);
+            });
+            return decision;
+          }
+        : undefined; // allow-all (no gate)
+
+      // Run the agent loop in a detached promise so we can return immediately.
+      // Progress updates are broadcast via AGI_CU_STEP messages so the side
+      // panel's existing listener (side_panel.ts:3781) picks them up.
+      void runAgentLoop(cuGoal, cuTabId, {
+        onBeforeAction,
+        onProgress: (step) => {
+          void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
+        },
+      }).catch((err) => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logger.error('Computer-use agent loop error', err);
+        void chrome.runtime.sendMessage({ type: 'AGI_CU_ESCALATE', reason: errMsg });
+      });
+
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'BRIDGE_URL_CHANGED': {
       // Validate the new URL before accepting it
       const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
@@ -2269,25 +2407,30 @@ async function checkDesktopConnection(): Promise<void> {
 }
 
 async function notifyConnectionStatusChange(): Promise<void> {
+  const statusPayload = {
+    type: 'CONNECTION_STATUS_CHANGED',
+    connected: state.isNativeConnected,
+    status: state.connectionStatus,
+  };
+
+  // Broadcast to extension views (side panel, popup, options).
+  // chrome.runtime.sendMessage reaches all live extension pages; ignore the
+  // error that fires when no listener is registered (panel not open).
+  chrome.runtime.sendMessage(statusPayload).catch(() => {});
+
   try {
+    // Also deliver to content scripts in open tabs (they listen on
+    // chrome.runtime.onMessage inside the tab context).
     // Skip discarded tabs — they have no active content script to receive messages.
     const tabs = await chrome.tabs.query({ discarded: false });
 
     for (const tab of tabs) {
       if (tab.id) {
-        chrome.tabs.sendMessage(
-          tab.id,
-          {
-            type: 'CONNECTION_STATUS_CHANGED',
-            connected: state.isNativeConnected,
-            status: state.connectionStatus,
-          },
-          () => {
-            // Reading chrome.runtime.lastError clears the error state (Chrome API
-            // quirk). Without this, Chrome logs "Unchecked runtime.lastError".
-            void chrome.runtime.lastError;
-          },
-        );
+        chrome.tabs.sendMessage(tab.id, statusPayload, () => {
+          // Reading chrome.runtime.lastError clears the error state (Chrome API
+          // quirk). Without this, Chrome logs "Unchecked runtime.lastError".
+          void chrome.runtime.lastError;
+        });
       }
     }
   } catch (error) {
@@ -2321,6 +2464,8 @@ function setupContextMenu(): void {
     { id: 'get-element-info', title: 'Get Element Info', contexts: ['all'] },
     { id: 'discover-webmcp-tools', title: 'Discover AI Tools on Page', contexts: ['all'] },
     { id: 'add-to-tab-group', title: 'Add Tab to AGI Workforce Group', contexts: ['page'] },
+    // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
+    // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
   ];
 
   for (const item of menuItems) {
@@ -2876,10 +3021,14 @@ async function handleChatMessage(
         }
       }
 
-      // Nothing available — send a helpful offline message
-      const offlineMsg =
-        'The AGI Workforce desktop app is not running. Please start it and try again.';
-      broadcastChunk(offlineMsg, true);
+      // Nothing available — surface as an error bubble so it renders in red,
+      // not as a normal assistant reply. The side panel already has an offline
+      // onboarding screen; this error is the fallback for in-session disconnects.
+      broadcastChunk(
+        '',
+        true,
+        'Desktop bridge not available. Start the AGI desktop app and try again.',
+      );
     }
   } catch (error) {
     logger.error('handleChatMessage error', error);
@@ -2985,16 +3134,22 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith(TASK_ALARM_PREFIX)) {
     const taskId = alarm.name.slice(TASK_ALARM_PREFIX.length);
     void loadScheduledTasks()
-      .then((tasks) => {
+      .then(async (tasks) => {
         const task = tasks.find((t) => t.id === taskId);
         if (!task?.enabled) return;
-        chrome.notifications.create(`agi_task_notif_${taskId}`, {
-          type: 'basic',
-          iconUrl: 'icons/icon48.png',
-          title: 'AGI Task Running',
-          message: task.name,
-          priority: 0,
+        // Respect the user's "Task notifications" preference (Options page). Defaults to on.
+        const { agi_task_notifications: notificationsEnabled } = await chrome.storage.local.get({
+          agi_task_notifications: true,
         });
+        if (notificationsEnabled !== false) {
+          chrome.notifications.create(`agi_task_notif_${taskId}`, {
+            type: 'basic',
+            iconUrl: 'icons/icon48.png',
+            title: 'AGI Task Running',
+            message: task.name,
+            priority: 0,
+          });
+        }
         void executeScheduledTask(task);
       })
       .catch((err) => {

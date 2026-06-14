@@ -58,6 +58,80 @@ const DEFAULT_PLATFORMS: MessagingPlatform[] = [
   },
 ];
 
+function stripPlatformSecrets(platform: MessagingPlatform): MessagingPlatform {
+  return {
+    ...platform,
+    config: {},
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isActiveConnection(value: unknown): value is {
+  is_active: boolean;
+  connected_at?: unknown;
+} {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as Record<string, unknown>).is_active === 'boolean'
+  );
+}
+
+function normalizeConnectedAt(value: unknown): string {
+  if (typeof value === 'string' && value.trim().length > 0) return value;
+  return new Date().toISOString();
+}
+
+function normalizePersistedConnectedAt(value: unknown, fallback: string | null): string | null {
+  if (typeof value === 'string' && value.trim().length > 0) return value;
+  if (value === null) return null;
+  return fallback;
+}
+
+function normalizePersistedCount(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function normalizePersistedStats(
+  value: unknown,
+  fallback: MessagingPlatform['stats'],
+): MessagingPlatform['stats'] {
+  if (!isRecord(value)) return fallback;
+  return {
+    messagesSent: normalizePersistedCount(value.messagesSent, fallback.messagesSent),
+    messagesReceived: normalizePersistedCount(value.messagesReceived, fallback.messagesReceived),
+    lastActive:
+      typeof value.lastActive === 'string' || value.lastActive === null
+        ? value.lastActive
+        : fallback.lastActive,
+  };
+}
+
+function mergePersistedPlatforms(
+  currentPlatforms: MessagingPlatform[],
+  persistedPlatforms: unknown,
+): MessagingPlatform[] {
+  if (!Array.isArray(persistedPlatforms)) return currentPlatforms;
+
+  return currentPlatforms.map((platform) => {
+    const persisted = persistedPlatforms.find(
+      (candidate) => isRecord(candidate) && candidate.id === platform.id,
+    );
+    if (!isRecord(persisted)) return platform;
+
+    return stripPlatformSecrets({
+      ...platform,
+      connected:
+        typeof persisted.connected === 'boolean' ? persisted.connected : platform.connected,
+      connectedAt: normalizePersistedConnectedAt(persisted.connectedAt, platform.connectedAt),
+      stats: normalizePersistedStats(persisted.stats, platform.stats),
+    });
+  });
+}
+
 export const useMessagingStore = create<MessagingState>()(
   persist(
     (set, get) => ({
@@ -79,7 +153,7 @@ export const useMessagingStore = create<MessagingState>()(
                 ...platform,
                 connected: serverConn.is_active,
                 connectedAt: serverConn.connected_at,
-                config: serverConn.config as Record<string, string>,
+                config: {},
               };
             }
             // No server data — keep local state as-is instead of wiping
@@ -99,7 +173,11 @@ export const useMessagingStore = create<MessagingState>()(
       connectPlatform: async (id, config) => {
         set({ loading: true, error: null });
         try {
-          await connectMessagingPlatform(id, config);
+          const result = await connectMessagingPlatform(id, config);
+          if (!isActiveConnection(result.connection) || !result.connection.is_active) {
+            throw new Error('Messaging provider did not confirm an active connection');
+          }
+          const connectedAt = normalizeConnectedAt(result.connection.connected_at);
 
           set((state) => ({
             platforms: state.platforms.map((p) =>
@@ -107,8 +185,8 @@ export const useMessagingStore = create<MessagingState>()(
                 ? {
                     ...p,
                     connected: true,
-                    connectedAt: new Date().toISOString(),
-                    config,
+                    connectedAt,
+                    config: {},
                   }
                 : p,
             ),
@@ -173,8 +251,17 @@ export const useMessagingStore = create<MessagingState>()(
       partialize: (state) => ({
         // Persist platform connection state for offline access
         // Do NOT persist loading or error state
-        platforms: state.platforms,
+        platforms: state.platforms.map(stripPlatformSecrets),
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = isRecord(persistedState) ? persistedState : {};
+        return {
+          ...currentState,
+          platforms: mergePersistedPlatforms(currentState.platforms, persisted.platforms),
+          loading: false,
+          error: null,
+        };
+      },
     },
   ),
 );

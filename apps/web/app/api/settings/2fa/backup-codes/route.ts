@@ -5,9 +5,9 @@
  * Requires a valid TOTP code to prevent session-hijack escalation.
  *
  * The existing backup codes are invalidated atomically.  New codes are
- * returned in plaintext exactly once — they are stored as SHA-256 hashes.
+ * returned in plaintext exactly once · they are stored as SHA-256 hashes.
  *
- * Body: { code: string }  — current TOTP code to authorize regeneration
+ * Body: { code: string }  · current TOTP code to authorize regeneration
  * Returns: { backup_codes: string[] }
  */
 

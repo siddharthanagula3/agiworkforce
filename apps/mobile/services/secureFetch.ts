@@ -23,13 +23,13 @@
  * The "actually pin" step happens at the platform layer; this module is
  * the JS-side gate that prevents pin-coverage drift.
  */
-import { PINNING_ENFORCED, pinsForUrl } from '@/lib/pinning';
+import { PINNING_ENFORCED, pinsAreProvisionedForUrl } from '@/lib/pinning';
 
 export class PinningError extends Error {
   constructor(url: string) {
     super(
-      `secureFetch refused: pinning is enforced but no pins are configured for "${url}". ` +
-        `Add SPKI hashes to lib/pinning.ts → PINS_BY_HOST.`,
+      `secureFetch refused: pinning is enforced but no provisioned pins are configured for "${url}". ` +
+        `Add provisioned SPKI hashes to lib/pinning.ts → PINS_BY_HOST.`,
     );
     this.name = 'PinningError';
   }
@@ -39,9 +39,15 @@ export class PinningError extends Error {
  * Drop-in replacement for `fetch`. Use this everywhere the mobile app
  * makes an outbound HTTPS request.
  */
-export async function secureFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
-  const url = typeof input === 'string' ? input : input.url;
-  if (PINNING_ENFORCED && pinsForUrl(url).length === 0) {
+function normalizeRequestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+export async function secureFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = normalizeRequestUrl(input);
+  if (PINNING_ENFORCED && !pinsAreProvisionedForUrl(url)) {
     throw new PinningError(url);
   }
   return fetch(input, init);

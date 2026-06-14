@@ -295,7 +295,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          // Logout from auth service — proceed with cleanup even if this fails
+          // Logout from auth service · proceed with cleanup even if this fails
           await authService.logout();
         } catch (err) {
           console.warn('[Auth] authService.logout() failed, proceeding with cleanup:', err);

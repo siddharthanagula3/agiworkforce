@@ -116,7 +116,7 @@ export class AttachmentHandler {
 
     // Generate unique filename
     // WEB-16: secureFilenameSegment uses crypto.getRandomValues (rejection-
-    // sampled, unbiased) instead of Math.random — prevents URL-enumeration
+    // sampled, unbiased) instead of Math.random · prevents URL-enumeration
     // attacks against neighboring uploads when sessionId is known to attacker.
     const timestamp = Date.now();
     const randomString = secureFilenameSegment(13);

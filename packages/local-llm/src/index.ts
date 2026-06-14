@@ -22,6 +22,4 @@ export type {
   GenerateOptions,
   GenerateResult,
   LLMTool,
-  LocalModel,
-  LocalModelId,
 } from './types';

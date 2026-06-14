@@ -1,6 +1,7 @@
 use crate::agent::AgentSession;
 use crate::config::CliConfig;
 use crate::context::SystemContext;
+use crate::terminal_style as ts;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -42,7 +43,7 @@ pub async fn run_review(
 ) -> Result<ReviewOutput> {
     let diff = gather_diff(options).await?;
     if diff.trim().is_empty() {
-        println!("{}", "No changes to review.".green());
+        println!("{}", ts::success("No changes to review."));
         return Ok(ReviewOutput {
             overall_explanation: "No changes.".into(),
             severity: "clean".into(),
@@ -78,11 +79,7 @@ pub async fn run_review(
         .unwrap_or_default();
     let prompt = format!(
         "Review this diff:\n```diff\n{}\n```{}",
-        if diff.len() > 100_000 {
-            &diff[..100_000]
-        } else {
-            &diff
-        },
+        truncate_on_char_boundary(&diff, 100_000),
         extra_instructions
     );
     let result = session.send(config, &prompt, Box::new(|_chunk| {})).await?;
@@ -121,6 +118,22 @@ async fn gather_diff(opts: &ReviewOptions) -> Result<String> {
     ))
 }
 
+/// Truncate `s` to at most `max_bytes`, never splitting a multi-byte UTF-8
+/// character. Byte-index slicing (`&s[..max_bytes]`) panics when the boundary
+/// falls inside a multi-byte char; this walks back to the nearest char start.
+fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    // Walk down from max_bytes to the nearest valid char boundary (always
+    // found at or before index 0, which is always a boundary).
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 fn parse_review(text: &str) -> ReviewOutput {
     if let Ok(r) = serde_json::from_str::<ReviewOutput>(text) {
         return r;
@@ -145,10 +158,11 @@ fn print_review(review: &ReviewOutput) {
     println!(
         "Severity: {}",
         match review.severity.as_str() {
-            "clean" => "CLEAN".green().bold(),
-            "minor" => "MINOR".yellow().bold(),
-            "major" | "critical" => "CRITICAL".red().bold(),
-            _ => review.severity.white().bold(),
+            "clean" => ts::success_header("CLEAN"),
+            "minor" => ts::warning_header("MINOR"),
+            "major" => ts::danger_header("MAJOR"),
+            "critical" => ts::danger_header("CRITICAL"),
+            _ => ts::header(&review.severity),
         }
     );
     println!("{}", review.overall_explanation);

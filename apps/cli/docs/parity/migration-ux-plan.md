@@ -160,7 +160,7 @@ TRUST-BOUNDARY / COMPAT NOTES (locked rules):
 
 **Files:** `apps/cli/src/tui/tui_app.rs`
 
-> NOTE: real file is `apps/cli/src/tui/tui_app.rs` (3362 lines); the task's "tui_app.rs:2657" maps to send_message's `select!` loop at lines 2737-2768, idle Ctrl+C is at 1178-1182, loading-Esc is at 1154-1159, idle-Esc is at 1162.
+> NOTE: real file is `apps/cli/src/tui/tui_app.rs`. ANCHOR BY SYMBOL, NOT LINE NUMBER — this file grows steadily, so the absolute line numbers cited throughout this spec (written 2026-06-01 against ~3362 lines; the file is well over 3700 lines now) WILL be stale. Re-locate each edit target by its function/symbol: the in-turn interrupt branch belongs in `send_message`'s `tokio::select!` loop; idle/loading Ctrl+C and Esc are arms inside `handle_key_event` (find the `Char('c') + CONTROL` arm and the `is_loading` early-return); the parked event loop is `run_event_loop`. `grep` the symbol and read the surrounding code before editing; treat every `:NNNN` below as a hint, not a target.
 
 **Approach:**
 
