@@ -916,7 +916,16 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: 'Open file picker and insert mention into @agi chat',
           detail: 'mention-file-project',
         },
-        { label: '$(history) Rewind', description: 'Undo the last AI turn', detail: 'rewind' },
+        {
+          label: '$(discard) Rewind last message',
+          description: 'Remove the last AI reply from chat (does not undo file edits)',
+          detail: 'rewind',
+        },
+        {
+          label: '$(git-stash-pop) Restore checkpoint…',
+          description: 'Revert file changes to a saved checkpoint',
+          detail: 'restore-checkpoint',
+        },
         {
           label: '$(trash) Clear conversation',
           description: 'Start a fresh conversation',
@@ -975,6 +984,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         }
         case 'rewind':
           await vscode.commands.executeCommand('agi-workforce.rewindLast');
+          break;
+        case 'restore-checkpoint':
+          await vscode.commands.executeCommand('agi-workforce.restoreCheckpoint');
           break;
         case 'clear':
           sidebarProvider.resetConversation();
