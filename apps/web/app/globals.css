@@ -719,6 +719,21 @@
 }
 
 @layer base {
+  /* Restore AGI amber accent on the cool-palette theme variants.
+     design-tokens/chat.css sets --chat-accent-primary to #0b84ff (ChatGPT blue)
+     for [data-chat-theme='cool']. We re-assert amber here with equal specificity
+     so AGI's brand colour is consistent across both warm and cool palettes. */
+  [data-chat-theme='cool'] {
+    --chat-accent-primary: #c8892a;
+  }
+
+  .dark [data-chat-theme='cool'],
+  .dark[data-chat-theme='cool'] {
+    --chat-accent-primary: #c8892a;
+  }
+}
+
+@layer base {
   /* Editorial specimen drop-cap */
   .specimen--dropcap > p:first-of-type::first-letter {
     font-family: var(--font-display);
