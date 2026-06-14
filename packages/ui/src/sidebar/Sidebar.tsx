@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * <Sidebar> — the framework-agnostic chat sidebar shared by AGI Desktop and
  * AGI Web. Design ported faithfully from
