@@ -25,18 +25,21 @@ const BASE_STYLES =
   `body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: CanvasText; background: Canvas; } ` +
   `</style>`;
 
-// CSP <meta> tags are stripped in two linear passes to avoid ReDoS. A single
-// regex like `<meta\s+[^>]*http-equiv...` places two unbounded quantifiers over
-// overlapping classes (whitespace is a subset of non-`>`) next to each other,
-// which CodeQL flags as js/polynomial-redos (hostile input: `<meta ` followed
-// by many spaces). Here the only `*` is `[^>]*>` — a single quantifier
-// hard-anchored by `>`, so it backtracks linearly — and the CSP attribute test
-// runs once per already-bounded tag.
+// CSP <meta> tags are stripped in two ReDoS-free passes. The only regex applied
+// to (untrusted) artifact content is META_TAG_PATTERN, whose single unbounded
+// quantifier `[^>]*` is hard-anchored by `>` — linear, the canonical safe form.
+// The CSP check then uses plain substring `.includes()` (no quantifier, so no
+// polynomial backtracking is possible) instead of a regex over the matched tag.
+// An earlier `\s*["']?\s*content-security-policy` form put two `\s*` adjacent
+// whenever the optional quote was absent — that is the polynomial CodeQL
+// (correctly) flagged.
 const META_TAG_PATTERN = /<meta\b[^>]*>/gi;
-const CSP_HTTP_EQUIV_PATTERN = /http-equiv\s*=\s*["']?\s*content-security-policy\b/i;
 
 function stripCspMetaTags(content: string): string {
-  return content.replace(META_TAG_PATTERN, (tag) => (CSP_HTTP_EQUIV_PATTERN.test(tag) ? '' : tag));
+  return content.replace(META_TAG_PATTERN, (tag) => {
+    const lower = tag.toLowerCase();
+    return lower.includes('http-equiv') && lower.includes('content-security-policy') ? '' : tag;
+  });
 }
 
 function injectHeadContent(documentHtml: string, headContent: string): string {
