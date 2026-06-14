@@ -391,7 +391,29 @@ export async function callCloud(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    throw new Error(`callCloud: gateway returned ${response.status}: ${errText}`);
+    // Detect the managed-compute private-beta gate (403 with public_launch_blocked).
+    // This gate is controlled by the AGI_MANAGED_COMPUTE_PRIVATE_BETA=1 server env
+    // var and is not account-specific — the server must have it set for ANY account
+    // to use the computer-use agent. When the founder's demo server has the env var
+    // set, this 403 will not occur. Providing a clear error here avoids confusion.
+    if (
+      response.status === 403 &&
+      (errText.includes('public_launch_blocked') ||
+        errText.includes('managed_compute_private_beta'))
+    ) {
+      throw new Error(
+        'callCloud: managed-compute private-beta gate active (403). ' +
+          'The server requires AGI_MANAGED_COMPUTE_PRIVATE_BETA=1 to be set. ' +
+          'Contact the server admin to enable this for the demo deployment.',
+      );
+    }
+    if (response.status === 401) {
+      throw new Error(
+        'callCloud: authentication failed (401). ' +
+          'Paste a fresh Clerk session token via AGI Cloud sign-in in the drawer.',
+      );
+    }
+    throw new Error(`callCloud: gateway returned ${response.status}: ${errText.slice(0, 300)}`);
   }
 
   // Consume SSE stream
