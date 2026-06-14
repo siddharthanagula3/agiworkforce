@@ -36,7 +36,7 @@ import { ReportFlagButton } from './ReportFlagButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
-import { getModelById, isAutoMode, PROVIDERS } from '@/src/features/model-picker/service';
+import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
@@ -68,10 +68,7 @@ function getProvenance(model?: string): { provider?: string; model?: string } | 
     return { provider: 'Local Mode', model: def.name };
   }
 
-  const providerDef = PROVIDERS.find((p) => p.id === def.provider);
-  const providerLabel = providerDef?.name ?? def.providerLabel ?? def.provider;
-
-  return { provider: `AGI Cloud · ${providerLabel}` };
+  return { provider: 'AGI Cloud' };
 }
 
 interface MessageBubbleProps {
@@ -102,7 +99,9 @@ export const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
-  const provenance = isAssistant && !message.isStreaming ? getProvenance(message.model) : null;
+  const assistantProvenance = isAssistant ? getProvenance(message.model) : null;
+  const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
+  const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
   const hasReasoning =
     isAssistant && message.reasoning !== undefined && modelSupportsThinking(message.model);
   const [expandedArtifact, setExpandedArtifact] = useState<Artifact | null>(null);
@@ -286,7 +285,7 @@ export const MessageBubble = memo(function MessageBubble({
         onLongPress={handleLongPress}
         delayLongPress={400}
         accessible={true}
-        accessibilityLabel={`${isUser ? 'Your' : (message.model ?? 'Assistant')} message: ${message.content?.slice(0, 100) || 'empty'}`}
+        accessibilityLabel={`${isUser ? 'Your' : roleLabel} message: ${message.content?.slice(0, 100) || 'empty'}`}
         accessibilityRole="text"
       >
         <View className="flex-row gap-3">
@@ -298,7 +297,7 @@ export const MessageBubble = memo(function MessageBubble({
             {/* Role label + offline queued badge */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={{ color: themeColors.textMuted, fontSize: 12, fontWeight: '500' }}>
-                {isUser ? 'You' : (message.model ?? 'Assistant')}
+                {roleLabel}
               </Text>
               {isUser && message.isQueued && (
                 <View

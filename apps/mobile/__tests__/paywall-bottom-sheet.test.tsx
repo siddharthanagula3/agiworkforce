@@ -49,16 +49,13 @@ jest.mock('@/lib/safeOpenURL', () => ({
 }));
 
 // NativeWind / theme
-jest.mock('../src/ui/theme', () => ({
-  colors: {
-    surfaceElevated: '#1e2025',
-    textPrimary: '#ffffff',
-    textSecondary: '#9ca3af',
-    border: 'rgba(255,255,255,0.1)',
-    teal: '#00b8a9',
-    textMuted: '#6b7280',
-  },
-}));
+jest.mock('../src/ui/theme', () => {
+  const { colors } = jest.requireActual('../src/ui/theme/tokens');
+  return {
+    colors,
+    useThemeColors: jest.fn(() => colors),
+  };
+});
 
 // Button component — render a Pressable with testID so tests can find it
 jest.mock('../components/ui/button', () => {

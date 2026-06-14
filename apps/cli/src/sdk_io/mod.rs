@@ -1,6 +1,6 @@
-//! Stream-JSON I/O surface used when the CLI is driven by an embedder
-//! (Tauri desktop, Vite web, mobile, IDE extension, or third-party Node/Python
-//! host) instead of a human at a terminal.
+//! Reserved stream-JSON protocol surface for future embedder-driven sessions
+//! (desktop, mobile, IDE extension, or third-party Node/Python host) instead
+//! of a human at a terminal.
 //!
 //! Wire shape: line-delimited JSON in both directions over stdio.
 //! Each outbound event is one of [`SdkEvent`]; each inbound message is one of
@@ -8,8 +8,9 @@
 //! / [`SdkInputMessage::ControlResponse`]) carry permission decisions, hook
 //! callbacks, and MCP elicitations between the embedder and this process.
 //!
-//! Activated by `--output-format stream-json` (and optionally
-//! `--input-format stream-json` for multi-turn input over stdin).
+//! The current CLI exposes one-way JSONL events through `--json-events` and
+//! `--output-format stream-json`. Bidirectional stdin/control-channel input is
+//! not an active command-line surface until the session loop consumes it.
 
 pub(crate) mod ndjson;
 pub(crate) mod protocol;

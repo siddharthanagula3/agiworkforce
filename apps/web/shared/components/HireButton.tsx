@@ -63,7 +63,7 @@ export const HireButton: React.FC<HireButtonProps> = ({
 
     startTransition(async () => {
       try {
-        // Insert hire record — server returns 409 on duplicate
+        // Insert hire record · server returns 409 on duplicate
         const token = await getAuthToken();
         const res = await fetch('/api/workforce', {
           method: 'POST',

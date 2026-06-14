@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * WelcomeBanner — first-run experience for new web users
+ * WelcomeBanner · first-run experience for new web users
  *
  * Shows a progress checklist of key onboarding steps:
  *   1. Account created (always checked)
@@ -47,7 +47,7 @@ interface ChecklistItem {
 interface OnboardingProgress {
   dismissed: boolean;
   completed: Record<string, boolean>;
-  /** ISO timestamp of first banner render — used to suppress for older accounts */
+  /** ISO timestamp of first banner render · used to suppress for older accounts */
   shownAt: string;
 }
 
@@ -256,7 +256,7 @@ export function WelcomeBanner({ displayName, suppress }: WelcomeBannerProps) {
         />
       </div>
 
-      {/* Checklist — always visible on desktop, toggled on mobile */}
+      {/* Checklist · always visible on desktop, toggled on mobile */}
       <ul
         className={[
           'mt-3 space-y-1 transition-all duration-200',

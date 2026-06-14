@@ -20,7 +20,7 @@ import {
  * Fallback: when `NEXT_PUBLIC_SANDBOX_ORIGIN` is unset (e.g. in a dev branch
  * before the subdomain is provisioned), this falls back to a same-origin
  * `<iframe sandbox="allow-scripts" srcDoc=…>`. That fallback is strictly
- * safer than the pre-WEB-13 state because `allow-same-origin` is gone —
+ * safer than the pre-WEB-13 state because `allow-same-origin` is gone ·
  * scripts in the iframe still can't reach `parent.document`, cookies, or
  * localStorage. But it loses the cross-origin guarantee; deploy the sandbox
  * subdomain to upgrade.
@@ -66,7 +66,7 @@ export function SandboxedIframe({
         try {
           postRenderToSandbox(iframeRef.current, payload);
         } catch {
-          // ignore — payload re-posts on the onLoad path below
+          // ignore · payload re-posts on the onLoad path below
         }
       } else if (data.type === 'render-error') {
         setRenderError(data.error ?? 'unknown render error');
@@ -102,7 +102,7 @@ export function SandboxedIframe({
     );
   }
 
-  // Fallback — no sandbox subdomain configured.
+  // Fallback · no sandbox subdomain configured.
   // allow-modals: lets window.print() and alert/confirm/prompt work inside artifacts.
   return (
     <iframe

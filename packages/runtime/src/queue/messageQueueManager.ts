@@ -11,8 +11,8 @@
  * `createMessageQueue()` once at boot and routes its own send pipeline through
  * the resulting instance.
  *
- * Reference: tasks/research/deep/u2-utils-direct-h-n.md §2.5 + §5
- *           ~/Desktop/reference/src/utils/messageQueueManager.ts
+ * Reference: tasks/research/deep/u2-utils-direct-h-n.md §2.5 + §5 plus local
+ * reference research on priority message queues.
  */
 
 import { createStore } from '../state/createStore';
@@ -381,7 +381,8 @@ export function createMessageQueue(options: CreateMessageQueueOptions = {}): Mes
 
       // Cursor offset = length of joined queued texts + 1 (the joining \n) +
       // the user's current cursor offset. Matches reference algorithm at
-      // ~/Desktop/reference/src/utils/messageQueueManager.ts:450.
+      // Local reference research showed this edge case can happen when editable
+      // messages are drained while non-editable system events are still queued.
       const cursorOffset = queuedTexts.join('\n').length + 1 + currentCursorOffset;
 
       // Reconstruct PastedContent — preserve original IDs (so imageStore

@@ -37,7 +37,7 @@ test.describe('@smoke v3 shell', () => {
     if ((await sidebar.count()) === 0) test.skip();
     await expect(sidebar.first()).toBeVisible();
     // Mode switcher exposes data-mode attribute on the sidebar root
-    await expect(sidebar.first()).toHaveAttribute('data-mode', /chat|cowork|code/);
+    await expect(sidebar.first()).toHaveAttribute('data-mode', /chat|work|code/);
   });
 
   test('composer textarea is reachable via aria-label', async ({ page }) => {

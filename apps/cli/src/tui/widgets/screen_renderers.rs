@@ -702,10 +702,9 @@ pub fn render_sandbox(mode: SandboxMode) -> String {
         format!("    Allowed: {}", allowed),
         format!("    Blocked: {}", blocked),
         String::new(),
-        "    Toggle with: --sandbox=<read-only|contained|unrestricted>".to_string(),
-        "                 or env AGIWORKFORCE_SANDBOX=<mode>".to_string(),
-        "                 or /sandbox <mode> inline".to_string(),
-        "    Enforced by: agiworkforce-sandbox-policy".to_string(),
+        "    Set via:     --permission-mode <auto|approve|skip> at startup".to_string(),
+        "                 or --no-sandbox to disable OS-level sandbox".to_string(),
+        "    Enforced by: agiworkforce-sandbox-policy (macOS Seatbelt / bwrap)".to_string(),
     ];
     frame("Sandbox".to_string(), &body, "Esc to close")
 }
@@ -847,7 +846,9 @@ pub fn render_keybindings() -> String {
         String::new(),
         "    Editor".to_string(),
         "      Ctrl+E       Open external editor for current input".to_string(),
-        "      Alt+Enter    Insert newline without submitting".to_string(),
+        "      Enter        Send message".to_string(),
+        "      Shift+Enter  Insert newline (multiline)".to_string(),
+        "      Alt+Enter    Insert newline (multiline, alternate)".to_string(),
     ];
     frame("Keybindings".to_string(), &body, "Esc to close")
 }
@@ -1224,7 +1225,7 @@ mod tests {
             assert!(s.contains(mode.label()));
             assert!(s.contains("Allowed:"));
             assert!(s.contains("Blocked:"));
-            assert!(s.contains("AGIWORKFORCE_SANDBOX"));
+            assert!(s.contains("--permission-mode"));
             assert!(s.contains("agiworkforce-sandbox-policy"));
         }
     }

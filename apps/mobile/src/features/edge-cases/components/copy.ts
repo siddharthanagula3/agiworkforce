@@ -31,7 +31,7 @@ export const EDGE_COPY = {
 
   /** OfflineBanner */
   offline: {
-    banner: "You're offline — and AGI still works. No data is leaving your device.",
+    banner: "You're offline. Local chats still work on this device.",
   },
 
   /** BatteryLowModal */

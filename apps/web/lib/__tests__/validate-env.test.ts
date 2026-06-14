@@ -21,7 +21,7 @@ vi.mock('../pricing', () => ({
 // Import after mocks are registered
 import { validateRequiredEnvVars } from '../validate-env';
 
-describe('validateRequiredEnvVars — database URL either-or check', () => {
+describe('validateRequiredEnvVars · database URL either-or check', () => {
   let savedEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {

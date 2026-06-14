@@ -1,8 +1,11 @@
 /**
  * Image Generation Service
  *
- * Handles image generation requests to the API gateway.
- * Supports multiple models (GPT Image 2, GPT Image 1, Stable Diffusion XL).
+ * Handles image generation requests to the API gateway. The set of supported
+ * image models is owned by the gateway and the canonical model catalog
+ * (`packages/types/src/models.json`); this client does not pin model IDs so it
+ * cannot drift from the catalog. `request.model` is an optional override the
+ * gateway validates server-side.
  */
 
 import { api } from '@/services/api';
@@ -22,10 +25,21 @@ export interface ImageGenRequest {
 }
 
 export interface ImageGenResponse {
-  id: string;
-  status: 'pending' | 'generating' | 'completed' | 'failed';
-  images: Array<{ url: string; revisedPrompt?: string }>;
+  success?: boolean;
+  id?: string;
+  status?: 'pending' | 'generating' | 'completed' | 'failed';
+  images?: GeneratedImage[];
+  provider?: string;
+  model?: string;
+  cost_estimate?: number;
+  latency_ms?: number;
   error?: string;
+}
+
+export interface GeneratedImage {
+  url?: string;
+  b64_json?: string;
+  revisedPrompt?: string;
 }
 
 export interface ImageGenProgress {
@@ -50,6 +64,13 @@ export async function generateImage(request: ImageGenRequest): Promise<ImageGenR
     throw new Error('Image generation requires a non-empty prompt');
   }
   return api.post<ImageGenResponse>('/api/media/image/generate', request);
+}
+
+export function getGeneratedImageUri(image: GeneratedImage | undefined): string | null {
+  if (!image) return null;
+  if (image.url) return image.url;
+  if (image.b64_json) return `data:image/png;base64,${image.b64_json}`;
+  return null;
 }
 
 /**

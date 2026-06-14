@@ -2,11 +2,15 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { CapabilityGrid, FinalCta } from '../../components/marketing/FlagshipSections';
+import { LedgerSection } from '../../components/marketing/LandingSections';
+import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Integrations',
   description:
-    'How AGI connects to other tools — MCP plugins, native messaging bridge, BYOK against any cloud provider.',
+    'How AGI connects to other tools: MCP plugins, the native messaging bridge, and BYOK provider keys on Desktop and CLI.',
   alternates: { canonical: 'https://agiworkforce.com/integrations' },
 };
 
@@ -15,80 +19,101 @@ export default function IntegrationsPage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Integrations.</h1>
-          <p className="agi-page-lede">
-            Three patterns connect AGI to the rest of your stack: MCP plugins, the native messaging
-            bridge, and BYOK across cloud providers.{' '}
-            <strong>
-              The model picker is one of the integrations — every wired provider counts.
-            </strong>
+
+        <section className="agi-fl-hero" aria-labelledby="agi-integrations-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Integrations</p>
+          <h1 id="agi-integrations-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Plug AGI into</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">your stack.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            Three patterns connect AGI to the tools you already use: MCP plugins for the agent, the
+            native messaging bridge between Chrome and Desktop, and BYOK provider keys on Desktop
+            and CLI. Every connection runs behind explicit, visible permissions.
           </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">The three patterns</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">MCP plugins</h3>
-              <p className="agi-reason-p">
-                Plug Model Context Protocol servers into the agent. stdio is the first shipped
-                transport; SSE and streamable HTTP stay on the planned public-release path. Discover
-                plugins, mount them, scope their access.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Native messaging bridge</h3>
-              <p className="agi-reason-p">
-                The Chrome extension talks to the desktop on localhost:8787. Browser captures
-                intent; desktop runs the model and the tool calls.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Provider BYOK</h3>
-              <p className="agi-reason-p">
-                Bring keys to Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot,
-                Zhipu, Ollama, LM Studio, or any OpenAI-compatible BYO endpoint.
-              </p>
-            </li>
-          </ul>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What&rsquo;s wired today</p>
-          <table className="agi-ledger">
-            <tbody>
-              <tr>
-                <td>Cloud providers</td>
-                <td>10+ wired natively. BYOK only — pay providers directly.</td>
-              </tr>
-              <tr>
-                <td>Local providers</td>
-                <td>Ollama, LM Studio. Free forever, fully offline.</td>
-              </tr>
-              <tr>
-                <td>MCP transports</td>
-                <td>
-                  stdio shipped first. SSE + streamable HTTP are planned for the release path.
-                </td>
-              </tr>
-              <tr>
-                <td>Native messaging</td>
-                <td>Chrome MV3 extension ↔ desktop on localhost:8787.</td>
-              </tr>
-              <tr>
-                <td>Editor</td>
-                <td>VS Code extension with @agi chat participant.</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="agi-cta-row" style={{ marginTop: 28 }}>
-            <Link href="/providers" className="agi-cta-primary">
-              See providers
+          <div className="agi-fl-cta-row">
+            <Link href="/apps" className="agi-fl-cta agi-fl-cta--primary">
+              Browse Apps &amp; Connectors
             </Link>
-            <Link href="/api-docs" className="agi-cta-ghost">
-              API docs →
+            <Link href="/providers" className="agi-fl-cta agi-fl-cta--ghost">
+              See Providers
             </Link>
           </div>
+          <div className="agi-fl-hero-console" aria-hidden="true">
+            <ProductFrame
+              variant="browser"
+              title="AGI · side panel"
+              badge="scoped"
+              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+            />
+          </div>
         </section>
+
+        <CapabilityGrid
+          eyebrow="The three patterns"
+          title="How the pieces connect."
+          items={[
+            {
+              meta: 'Tools',
+              title: 'MCP plugins',
+              body: 'Mount Model Context Protocol servers and scope their access. stdio is the shipped transport; SSE and streamable HTTP are planned.',
+              href: '/features/plugins',
+            },
+            {
+              meta: 'Bridge',
+              title: 'Native messaging bridge',
+              body: 'The Chrome side panel pairs with Desktop on localhost:8787. The browser captures intent. Desktop runs the model and the tool calls.',
+              href: '/chrome-extension',
+            },
+            {
+              meta: 'Keys',
+              title: 'Provider BYOK',
+              body: 'Bring keys for Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, or Zhipu on Desktop and CLI. Or any OpenAI-compatible endpoint.',
+              href: '/byok',
+            },
+          ]}
+        />
+
+        <LedgerSection
+          eyebrow="What's wired today"
+          title="The honest inventory."
+          rows={[
+            {
+              k: 'Providers',
+              v: `${MARKETING.providers.display} providers across cloud APIs and local runtimes. BYOK on Desktop and CLI. Pay providers directly.`,
+            },
+            {
+              k: 'Local runtimes',
+              v: 'Ollama and LM Studio. Free, offline-capable, no account required.',
+            },
+            {
+              k: 'MCP transports',
+              v: 'stdio shipped first. SSE and streamable HTTP are planned for the release path.',
+            },
+            {
+              k: 'Native messaging',
+              v: 'Chrome MV3 extension ↔ Desktop on localhost:8787. Extension availability tracks the Desktop release.',
+            },
+            {
+              k: 'Editor',
+              v: 'VS Code extension with the @agi chat participant. Developer preview. Not yet listed on the marketplace.',
+            },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Connect one tool, then the next."
+          body="Start with a provider key or a local runtime, add MCP plugins as the work demands, and keep every permission visible."
+          ctas={[
+            { href: '/providers', label: 'See Providers' },
+            { href: '/api-docs', label: 'Read API Docs' },
+          ]}
+        />
+
         <MarketingFooter />
       </main>
     </div>

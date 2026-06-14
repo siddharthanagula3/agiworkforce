@@ -15,20 +15,27 @@ import { render } from '@testing-library/react-native';
 // Shared mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('@/src/ui/theme', () => ({
-  colors: {
+jest.mock('@/src/ui/theme', () => {
+  const colors = {
     teal: '#21808D',
     textPrimary: '#fff',
     textSecondary: '#aaa',
     textMuted: '#777',
     border: '#333',
     borderLight: '#2a2a2a',
+    background: '#080808',
     surfaceBase: '#111',
     surfaceElevated: '#1a1a1a',
+    neutralSurface: '#242424',
+    accentSurface: '#162b31',
     agentError: '#ef4444',
     agentSuccess: '#22c55e',
-  },
-}));
+  };
+  return {
+    colors,
+    useThemeColors: () => colors,
+  };
+});
 
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');

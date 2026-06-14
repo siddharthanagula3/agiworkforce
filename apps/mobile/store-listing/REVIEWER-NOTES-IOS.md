@@ -17,10 +17,10 @@
 
 Hello — thank you for reviewing AGI (bundle id: com.agiworkforce.app).
 
-AGI is an on-device AI chat client. In v1.0.0 the app runs entirely
-locally: conversations are processed by a small open-source language
-model that the user downloads to their device. No account, no login,
-no cloud service is required or active in this binary.
+AGI is an AI chat client with a Local Mode path that runs without an
+account. In v1.0.0 reviewer access can use Local Mode without login or
+API keys. AGI Cloud is present only as an invite/waitlist flow and is not
+public cloud access in this binary.
 
 ---
 
@@ -60,10 +60,9 @@ AGI is a chat client, not a code-execution environment.
 
 ### 3. Guideline 5.1.2(i) — Explicit consent before third-party AI data sharing
 
-v1 is local-only — no conversation content leaves the device. The
-first-run disclosure modal satisfies 5.1.2(i) by naming every
-provider the app may route to in future versions and obtaining
-explicit acceptance before the user can send a message.
+Local Mode conversations stay on the device. The first-run disclosure
+modal satisfies 5.1.2(i) by explaining AI-provider data sharing before
+any non-local Cloud route can be used.
 
 The modal fires in onboarding step 2 (above). It:
 
@@ -105,17 +104,11 @@ Section 11 right-to-access requirement.
 
 ---
 
-### 6. HealthKit (iOS only, optional connector)
+### 6. Device permissions
 
-Settings → Integrations → Health shows the HealthKit connector. When
-the user taps "Connect", the standard iOS HealthKit permission sheet
-appears. If granted, the user can ask the chat "What were my steps
-this week?" and the model answers using locally read data. No health
-data is sent to AGI servers. The `NSHealthShareUsageDescription`
-usage string states that data is for in-conversation context only and
-that AGI is not a medical device.
-
-HealthKit is an opt-in connector. It is not requested at launch.
+Microphone, camera, photos, files, notifications, contacts, and other
+device permissions are requested only after the user chooses a feature
+that needs that permission. Local Mode does not require account sign-in.
 
 ---
 
@@ -123,14 +116,15 @@ HealthKit is an opt-in connector. It is not requested at launch.
 
 | Demo                      | Steps                                                | Expected result                                  |
 | ------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
-| Local chat (default path) | Launch → complete 3-screen onboarding → type "Hello" | Model responds on-device; no network call to AGI |
+| Local chat (default path) | Launch → complete 3-screen onboarding → type "Hello" | Model responds on-device; no AGI Cloud chat call |
 | Disclosure modal          | Fresh install → step 1 → tap "Get started"           | Disclosure modal renders before step 2           |
 | Decline disclosure        | Tap "Not now"                                        | Returns to step 1; no API call made              |
 | Model download cancel     | Step 3 → tap Cancel during download                  | Download stops; model not installed              |
 | DSAR export               | Settings → Storage → Export all my data              | Share sheet opens with JSON file                 |
-| HealthKit                 | Settings → Integrations → Health → Connect           | iOS HealthKit permission sheet appears           |
+| Permissions               | Settings → Safety & Security → Permissions           | Permission rows explain what each access is for  |
 
-No demo account or API key is required because v1 is local-only.
+No demo account or API key is required for Local Mode. AGI Cloud requires
+invite access.
 
 ---
 

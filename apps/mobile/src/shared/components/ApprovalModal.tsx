@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {
@@ -33,10 +33,13 @@ interface ApprovalModalProps {
   onDismiss: () => void;
 }
 
-const RISK_CONFIG: Record<RiskLevel, { icon: typeof ShieldCheck; label: string; color: string }> = {
-  low: { icon: ShieldCheck, label: 'Low Risk', color: colors.agentSuccess },
-  medium: { icon: Shield, label: 'Medium Risk', color: colors.agentWarning },
-  high: { icon: ShieldAlert, label: 'High Risk', color: colors.agentError },
+const RISK_CONFIG: Record<
+  RiskLevel,
+  { icon: typeof ShieldCheck; label: string; token: 'agentSuccess' | 'agentWarning' | 'agentError' }
+> = {
+  low: { icon: ShieldCheck, label: 'Low Risk', token: 'agentSuccess' },
+  medium: { icon: Shield, label: 'Medium Risk', token: 'agentWarning' },
+  high: { icon: ShieldAlert, label: 'High Risk', token: 'agentError' },
 };
 
 const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
@@ -54,6 +57,7 @@ const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
  */
 export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: ApprovalModalProps) {
   const reducedMotion = useReducedMotion();
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
@@ -98,6 +102,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
   if (!approval) return null;
 
   const riskConfig = RISK_CONFIG[approval.riskLevel];
+  const riskColor = colors[riskConfig.token];
   const RiskIcon = riskConfig.icon;
   const TypeIcon = TYPE_ICONS[approval.type];
 
@@ -109,7 +114,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
       onRequestClose={handleDismiss}
       statusBarTranslucent
     >
-      <View className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+      <View className="flex-1 justify-end" style={{ backgroundColor: colors.scrim }}>
         {/* Tap outside to dismiss */}
         <Pressable className="flex-1" onPress={handleDismiss} />
 
@@ -120,7 +125,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
         >
           {/* Handle bar */}
           <View className="items-center pt-3 pb-2">
-            <View className="w-10 h-1 rounded-full bg-white/20" />
+            <View
+              className="w-10 h-1 rounded-full"
+              style={{ backgroundColor: colors.neutralBorder }}
+            />
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} bounces={false}>
@@ -128,11 +136,21 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
             <View className="items-center mb-5">
               <View
                 className="w-14 h-14 rounded-2xl items-center justify-center mb-3"
-                style={{ backgroundColor: `${riskConfig.color}15` }}
+                style={{
+                  backgroundColor:
+                    approval.riskLevel === 'low'
+                      ? colors.successSurface
+                      : approval.riskLevel === 'medium'
+                        ? colors.warningSurface
+                        : colors.dangerSurface,
+                }}
               >
-                <TypeIcon size={28} color={riskConfig.color} />
+                <TypeIcon size={28} color={riskColor} />
               </View>
-              <Text className="text-xs uppercase tracking-wider text-white/40 font-medium">
+              <Text
+                className="text-xs uppercase tracking-wider font-medium"
+                style={{ color: colors.textMuted }}
+              >
                 Approval Required
               </Text>
             </View>
@@ -140,8 +158,8 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
             {/* Risk level + tool name */}
             <View className="flex-row items-center justify-center gap-3 mb-4">
               <View className="flex-row items-center gap-1.5">
-                <RiskIcon size={14} color={riskConfig.color} />
-                <Text className="text-[13px] font-semibold" style={{ color: riskConfig.color }}>
+                <RiskIcon size={14} color={riskColor} />
+                <Text className="text-[13px] font-semibold" style={{ color: riskColor }}>
                   {riskConfig.label}
                 </Text>
               </View>
@@ -151,22 +169,33 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
             <Separator className="mb-4" />
 
             {/* Description */}
-            <Text className="text-[14px] text-white/80 leading-[20px] text-center mb-6">
+            <Text
+              className="text-[14px] leading-[20px] text-center mb-6"
+              style={{ color: colors.textSecondary }}
+            >
               {approval.description}
             </Text>
 
             {/* Reject reason input */}
             {showRejectInput && (
               <Animated.View entering={FadeIn.duration(200)} className="mb-4">
-                <Text className="text-xs text-white/40 mb-2">Rejection reason (optional)</Text>
+                <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
+                  Rejection reason (optional)
+                </Text>
                 <TextInput
                   value={rejectReason}
                   onChangeText={setRejectReason}
                   placeholder="Why are you rejecting this action?"
-                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  placeholderTextColor={colors.textMuted}
                   multiline
                   maxLength={500}
-                  className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-[13px] min-h-[60px]"
+                  className="rounded-xl px-4 py-3 text-[13px] min-h-[60px]"
+                  style={{
+                    backgroundColor: colors.inputSurface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    color: colors.textPrimary,
+                  }}
                   autoFocus
                   selectionColor={colors.teal}
                 />
@@ -183,8 +212,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                   accessibilityLabel={`Approve ${approval.toolName} action`}
                   accessibilityRole="button"
                 >
-                  <Check size={18} color="#fff" />
-                  <Text className="text-[15px] font-semibold text-white">Approve</Text>
+                  <Check size={18} color={colors.accentText} />
+                  <Text className="text-[15px] font-semibold" style={{ color: colors.accentText }}>
+                    Approve
+                  </Text>
                 </Pressable>
               )}
 
@@ -192,8 +223,8 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                 onPress={handleReject}
                 className="flex-row items-center justify-center gap-2 py-4 rounded-2xl border active:opacity-80"
                 style={{
-                  borderColor: showRejectInput ? colors.agentError : 'rgba(239,68,68,0.3)',
-                  backgroundColor: showRejectInput ? colors.agentError : 'transparent',
+                  borderColor: showRejectInput ? colors.agentError : colors.dangerBorder,
+                  backgroundColor: showRejectInput ? colors.agentError : colors.transparent,
                 }}
                 accessibilityLabel={
                   showRejectInput
@@ -202,10 +233,10 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                 }
                 accessibilityRole="button"
               >
-                <X size={18} color={showRejectInput ? '#fff' : colors.agentError} />
+                <X size={18} color={showRejectInput ? colors.accentText : colors.agentError} />
                 <Text
                   className="text-[15px] font-semibold"
-                  style={{ color: showRejectInput ? '#fff' : colors.agentError }}
+                  style={{ color: showRejectInput ? colors.accentText : colors.agentError }}
                 >
                   {showRejectInput ? 'Confirm Reject' : 'Reject'}
                 </Text>
@@ -221,7 +252,9 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                   accessibilityLabel="Cancel rejection"
                   accessibilityRole="button"
                 >
-                  <Text className="text-sm text-white/50">Cancel</Text>
+                  <Text className="text-sm" style={{ color: colors.textMuted }}>
+                    Cancel
+                  </Text>
                 </Pressable>
               )}
             </View>

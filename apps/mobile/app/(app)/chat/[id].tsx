@@ -13,7 +13,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
-import { DrawerActions } from '@react-navigation/native';
 import { MoreHorizontal, WifiOff, SquarePen, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -27,10 +26,15 @@ import {
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
+import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
+import {
+  createMessageIdSet,
+  findNewAssistantResponse,
+} from '@/src/features/voice/utils/assistantResponse';
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
@@ -41,15 +45,34 @@ import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
-import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
+import {
+  DEFAULT_CLOUD_MODEL_ID,
+  DEFAULT_LOCAL_MODEL_ID,
+  getModelById,
+  isAutoMode,
+} from '@/src/features/model-picker/service';
+import {
+  executionModeForConversation,
+  executionModeForModel,
+} from '@/src/features/chat/utils/conversationMode';
+import {
+  imageAssetsToChatAttachments,
+  pickImageAssetsFromLibrary,
+} from '@/src/features/media/photo-picker';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
-import { generateImage } from '@/src/features/image/services/imagegen';
+import { generateImage, getGeneratedImageUri } from '@/src/features/image/services/imagegen';
 import { useThemeColors } from '@/src/ui/theme';
 import { useProjectStore } from '@/src/features/projects/store';
+import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import type { ChatMessage } from '@/types/chat';
+
+const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
+const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
 
 /**
  * Chat conversation screen.
@@ -57,9 +80,11 @@ import type { ChatMessage } from '@/types/chat';
  */
 export default function ChatScreen() {
   const colors = useThemeColors();
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; prompt?: string }>();
   // useLocalSearchParams can return string | string[] -- narrow to string
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  // Prompt pre-fill from ConversationStarters or deep link
+  const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const activeProject = useProjectStore((s) =>
     s.activeProjectId ? s.projects.find((p) => p.id === s.activeProjectId) : undefined,
@@ -69,6 +94,8 @@ export default function ChatScreen() {
   const modelPickerRef = useRef<BottomSheet>(null);
   const exportSheetRef = useRef<BottomSheet>(null);
   const addToChatRef = useRef<BottomSheet>(null);
+  const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
+  const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const chatInputAttachRef = useRef<{
     addAttachments: (
       items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
@@ -84,7 +111,9 @@ export default function ChatScreen() {
   const paywallSheetRef = useRef<import('@gorhom/bottom-sheet').default>(null);
   const { isOnline, queueSize } = useNetworkStatus();
 
-  const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
+  const conversationMessages = useChatStore((s) =>
+    id ? (s.messages[id] ?? EMPTY_CHAT_MESSAGES) : EMPTY_CHAT_MESSAGES,
+  );
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
@@ -102,15 +131,22 @@ export default function ChatScreen() {
   const sendError = useChatStore((s) => s.error);
   const clearError = useChatStore((s) => s.clearError);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
+  const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
+  const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
+  const failImageGeneration = useChatStore((s) => s.failImageGeneration);
   const markConversationRead = useChatStore((s) => s.markConversationRead);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const approveRequest = useAgentStore((s) => s.approveRequest);
   const rejectRequest = useAgentStore((s) => s.rejectRequest);
 
   // Find current conversation title
   const conversation = conversations.find((c) => c.id === id);
   const title = conversation?.title ?? 'Chat';
+  const conversationExecutionMode = conversation
+    ? executionModeForConversation(conversation)
+    : executionModeForModel(selectedModel);
 
   // Set current conversation and load messages on mount
   useEffect(() => {
@@ -129,6 +165,7 @@ export default function ChatScreen() {
   // Declared early so handleSend / handleBack can reference stopSpeaking.
   // ---------------------------------------------------------------------------
   const { speak, stop: stopSpeaking } = useVoicePlayback();
+  const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
 
   /**
    * Track the ID of the last assistant message we started speaking so we
@@ -139,8 +176,10 @@ export default function ChatScreen() {
   useEffect(() => {
     const lastMsg = conversationMessages[conversationMessages.length - 1];
 
-    // Only speak completed (non-streaming) assistant messages with content.
+    // Only speak completed (non-streaming) assistant messages with content,
+    // and only when the user has voice playback enabled in Voice Settings.
     if (
+      voiceEnabled &&
       lastMsg &&
       lastMsg.role === 'assistant' &&
       !lastMsg.isStreaming &&
@@ -150,7 +189,7 @@ export default function ChatScreen() {
       lastSpokenIdRef.current = lastMsg.id;
       speak(lastMsg.content);
     }
-  }, [conversationMessages, speak]);
+  }, [conversationMessages, speak, voiceEnabled]);
 
   // Stop any ongoing speech when the user navigates away from this screen.
   useEffect(() => {
@@ -174,6 +213,13 @@ export default function ChatScreen() {
     ) => {
       if (!id) return;
       stopSpeaking?.();
+      if (conversationExecutionMode === 'cloud' && !FEATURES.cloudChat) {
+        Alert.alert(
+          'AGI Cloud is not ready on mobile',
+          'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
+        );
+        return;
+      }
 
       // Prepend quoted context if replying to a message
       let finalText = text;
@@ -186,6 +232,62 @@ export default function ChatScreen() {
             : quotedMessage.content;
         finalText = `> ${quoteLabel}: ${quotePreview}\n\n${text}`;
         setQuotedMessage(null);
+      }
+
+      // Handle /image command — generate an image and add result to conversation
+      if (finalText.trimStart().startsWith('/image')) {
+        const prompt = finalText.trimStart().slice('/image'.length).trim();
+        if (!prompt) {
+          Alert.alert('Add an image prompt', 'Type what you want AGI to create after /image.');
+          return;
+        }
+        if (conversationExecutionMode !== 'cloud') {
+          Alert.alert(
+            'Image generation uses AGI Cloud',
+            'Start an AGI Cloud chat to generate images. Local Mode can attach and inspect images without uploading them.',
+          );
+          return;
+        }
+        if (!FEATURES.imageGen) {
+          Alert.alert(
+            'Image generation uses AGI Cloud',
+            'You can attach and inspect local images now. Image generation is available with Cloud access.',
+          );
+          return;
+        }
+        if (!isOnline) {
+          Alert.alert(
+            'Network connection required',
+            'Image generation needs AGI Cloud. Connect to the internet and try again.',
+          );
+          return;
+        }
+
+        const assistantMessageId = beginImageGeneration(id, finalText, prompt, selectedModel);
+        generateImage({ prompt })
+          .then((result) => {
+            const image = result.images?.[0];
+            const imageUrl = getGeneratedImageUri(image);
+            if (result.success === false || !imageUrl) {
+              failImageGeneration(
+                id,
+                assistantMessageId,
+                result.error ?? 'AGI Cloud did not return an image.',
+              );
+              return;
+            }
+            completeImageGeneration(id, assistantMessageId, {
+              imageUrl,
+              revisedPrompt: image?.revisedPrompt,
+              model: result.model,
+            });
+          })
+          .catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn('[ChatScreen] Image generation failed:', err);
+            failImageGeneration(id, assistantMessageId, message);
+          });
+        return;
       }
 
       // When offline, enqueue and show an optimistic queued message bubble
@@ -201,38 +303,26 @@ export default function ChatScreen() {
 
       const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
 
-      // Handle /image command — generate an image and add result to conversation
-      if (finalText.startsWith('/image ')) {
-        if (!FEATURES.imageGen) {
-          Alert.alert(
-            'Image generation uses AGI Cloud',
-            'You can attach and inspect local images now. Image generation is available with Cloud access.',
-          );
-          return;
-        }
-        const prompt = finalText.slice(7).trim();
-        if (prompt) {
-          // Add user message immediately, then kick off generation
-          sendMessage(id, finalText, selectedModel, attachments, sendOptions);
-          generateImage({ prompt }).catch((err) => {
-            console.warn('[ChatScreen] Image generation failed:', err);
-          });
-          return;
-        }
-      }
-
       sendMessage(id, finalText, selectedModel, attachments, sendOptions);
     },
-    [id, selectedModel, sendMessage, stopSpeaking, quotedMessage, isOnline, enqueueOfflineMessage],
+    [
+      id,
+      conversationExecutionMode,
+      selectedModel,
+      sendMessage,
+      beginImageGeneration,
+      completeImageGeneration,
+      failImageGeneration,
+      stopSpeaking,
+      quotedMessage,
+      isOnline,
+      enqueueOfflineMessage,
+    ],
   );
 
   const handleStop = useCallback(() => {
     stopStreaming();
   }, [stopStreaming]);
-
-  const handleOpenModelPicker = useCallback(() => {
-    modelPickerRef.current?.snapToIndex(0);
-  }, []);
 
   const resolveAppMode = useCallback((modelId: string): AppMode => {
     if (isAutoMode(modelId)) return 'local';
@@ -241,23 +331,67 @@ export default function ChatScreen() {
     return def.surface === 'local' ? 'local' : 'cloud';
   }, []);
 
+  const handleOpenModelPicker = useCallback(
+    (scope?: 'local' | 'cloud') => {
+      setModelPickerScope(scope ?? conversationExecutionMode);
+      setModelPickerOpenSignal((value) => value + 1);
+      modelPickerRef.current?.snapToIndex(0);
+    },
+    [conversationExecutionMode],
+  );
+
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const waitlistJoined = useWaitlistStore((s) => s.joined);
+  const waitlistRank = useWaitlistStore((s) => s.rank);
+  const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
+  const [waitlistDefaultTab, setWaitlistDefaultTab] = useState<'invite' | 'waitlist'>('waitlist');
+
+  useEffect(() => {
+    if (!conversation) return;
+    setAppMode(conversationExecutionMode);
+    const preferredModel =
+      conversationExecutionMode === 'cloud'
+        ? conversation.model && executionModeForModel(conversation.model) === 'cloud'
+          ? conversation.model
+          : DEFAULT_CLOUD_MODEL_ID
+        : conversation.model && executionModeForModel(conversation.model) === 'local'
+          ? conversation.model
+          : DEFAULT_LOCAL_MODEL_ID;
+
+    if (!preferredModel) return;
+    if (conversationExecutionMode === 'cloud' && !cloudUnlocked) return;
+    if (useModelStore.getState().selectedModel !== preferredModel) {
+      useModelStore.getState().setModel(preferredModel);
+    }
+  }, [cloudUnlocked, conversation, conversationExecutionMode, setAppMode]);
+
+  const handleOpenWaitlist = useCallback((defaultTab: 'invite' | 'waitlist' = 'waitlist') => {
+    setWaitlistDefaultTab(defaultTab);
+    setWaitlistSheetVisible(true);
+  }, []);
 
   const handleModelSelect = useCallback(
     (newModelId: string) => {
       const hasMessages = conversationMessages.length > 0;
       if (!hasMessages) {
+        setAppMode(resolveAppMode(newModelId) === 'cloud' ? 'cloud' : 'local');
         useModelStore.getState().setModel(newModelId);
         modelPickerRef.current?.close();
         return;
       }
 
-      const currentMode = resolveAppMode(selectedModel);
+      const currentMode = conversationExecutionMode;
       const nextMode = resolveAppMode(newModelId);
 
-      if (nextMode === 'cloud' && !FEATURES.cloudChat && !cloudUnlocked) {
+      if (nextMode === 'cloud' && !FEATURES.cloudChat) {
         modelPickerRef.current?.close();
-        setWaitlistSheetVisible(true);
+        if (!cloudUnlocked) setWaitlistSheetVisible(true);
+        else {
+          Alert.alert(
+            'AGI Cloud is not ready on mobile',
+            'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
+          );
+        }
         return;
       }
 
@@ -275,22 +409,35 @@ export default function ChatScreen() {
       useModelStore.getState().setModel(newModelId);
       modelPickerRef.current?.close();
     },
-    [conversationMessages.length, selectedModel, resolveAppMode, cloudUnlocked],
+    [
+      conversationExecutionMode,
+      conversationMessages.length,
+      resolveAppMode,
+      cloudUnlocked,
+      setAppMode,
+    ],
   );
 
   const handleModeSwitchConfirm = useCallback(async () => {
     const nextModelId = modeSwitchState.pendingModelId;
     if (!nextModelId) return;
 
-    if (modeSwitchState.toMode === 'cloud' && !FEATURES.cloudChat && !cloudUnlocked) {
+    if (modeSwitchState.toMode === 'cloud' && !FEATURES.cloudChat) {
       setModeSwitchState((s) => ({ ...s, visible: false }));
-      setWaitlistSheetVisible(true);
+      if (!cloudUnlocked) setWaitlistSheetVisible(true);
+      else {
+        Alert.alert(
+          'AGI Cloud is not ready on mobile',
+          'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
+        );
+      }
       return;
     }
 
     useModelStore.getState().setModel(nextModelId);
+    setAppMode(modeSwitchState.toMode === 'cloud' ? 'cloud' : 'local');
     setModeSwitchState((s) => ({ ...s, visible: false }));
-  }, [modeSwitchState.pendingModelId, modeSwitchState.toMode, cloudUnlocked]);
+  }, [modeSwitchState.pendingModelId, modeSwitchState.toMode, cloudUnlocked, setAppMode]);
 
   const handleModeSwitchCancel = useCallback(() => {
     setModeSwitchState((s) => ({ ...s, visible: false }));
@@ -300,16 +447,20 @@ export default function ChatScreen() {
     addToChatRef.current?.snapToIndex(0);
   }, []);
 
+  const handleOpenStyleSelector = useCallback(() => {
+    addToChatRef.current?.close();
+    setTimeout(() => {
+      setStyleSelectorOpenSignal((value) => value + 1);
+    }, STYLE_SHEET_HANDOFF_DELAY_MS);
+  }, []);
+
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
-      Alert.alert(
-        'Connectors are available with AGI Cloud',
-        'Join the waitlist or enter an invitation code to use connected sources on mobile.',
-      );
+      handleOpenWaitlist('invite');
       return;
     }
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [router]);
+  }, [handleOpenWaitlist, router]);
 
   // Attachment handlers lifted from AttachmentButton for AddToChatSheet
   const handleSheetCamera = useCallback(async () => {
@@ -343,34 +494,18 @@ export default function ChatScreen() {
   }, []);
 
   const handleSheetPhotos = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Photo Library Access',
-        'Photo library permission is required. Please enable it in Settings.',
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      allowsMultipleSelection: true,
-      selectionLimit: 5,
-      orderedSelection: true,
-      exif: false,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
-        result.assets.map((asset) => ({
-          id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? 'image/jpeg',
-          fileName: asset.fileName ?? 'image.jpg',
-          width: asset.width,
-          height: asset.height,
-          fileSize: asset.fileSize,
-        }));
-      chatInputAttachRef.current?.addAttachments(attachments);
+    try {
+      const assets = await pickImageAssetsFromLibrary({
+        allowsMultipleSelection: true,
+        selectionLimit: 5,
+        orderedSelection: true,
+      });
+      if (assets.length > 0) {
+        const attachments = imageAssetsToChatAttachments(assets);
+        chatInputAttachRef.current?.addAttachments(attachments);
+      }
+    } catch {
+      Alert.alert('Photos', 'Could not open Photos. Please try again.');
     }
   }, []);
 
@@ -406,31 +541,40 @@ export default function ChatScreen() {
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameText, setRenameText] = useState('');
-  const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
-  const [waitlistDefaultTab, setWaitlistDefaultTab] = useState<'invite' | 'waitlist'>('waitlist');
-
-  const waitlistJoined = useWaitlistStore((s) => s.joined);
-  const waitlistRank = useWaitlistStore((s) => s.rank);
-
-  const handleOpenWaitlist = useCallback((defaultTab: 'invite' | 'waitlist' = 'waitlist') => {
-    setWaitlistDefaultTab(defaultTab);
-    setWaitlistSheetVisible(true);
-  }, []);
-
+  const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleTapCloudMode = useCallback(() => {
-    if (cloudUnlocked) {
-      handleOpenModelPicker();
+    if (!cloudUnlocked || !DEFAULT_CLOUD_MODEL_ID) {
+      handleOpenWaitlist('invite');
       return;
     }
-    handleOpenWaitlist();
-  }, [cloudUnlocked, handleOpenModelPicker, handleOpenWaitlist]);
+    setAppMode('cloud');
+    useModelStore.getState().setModel(DEFAULT_CLOUD_MODEL_ID);
+    if (conversationExecutionMode === 'cloud') {
+      handleOpenModelPicker('cloud');
+      return;
+    }
+    router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+  }, [
+    cloudUnlocked,
+    conversationExecutionMode,
+    handleOpenModelPicker,
+    handleOpenWaitlist,
+    router,
+    setAppMode,
+  ]);
+
+  const handleTapLocalMode = useCallback(() => {
+    setAppMode('local');
+    useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
+    router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+  }, [router, setAppMode]);
 
   const handleNewChat = useCallback(() => {
     router.push('/(app)' as Parameters<typeof router.push>[0]);
   }, [router]);
 
   const handleOpenDrawer = useCallback(() => {
-    navigation.dispatch(DrawerActions.openDrawer());
+    openNearestDrawer(navigation);
   }, [navigation]);
 
   const handleQuoteReply = useCallback((message: ChatMessage) => {
@@ -472,11 +616,12 @@ export default function ChatScreen() {
     async (text: string): Promise<string> => {
       if (!id) throw new Error('No conversation');
       stopSpeaking();
-      sendMessage(id, text, selectedModel);
-      // Return the user text as acknowledgement -- streaming response will be
-      // spoken separately by VoiceConversationScreen via the TTS onDone callback
-      // once the next assistant message arrives in the store.
-      return `Got it. Processing: "${text}"`;
+      const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[id] ?? []);
+      await sendMessage(id, text, selectedModel);
+      return (
+        findNewAssistantResponse(useChatStore.getState().messages[id] ?? [], previousMessageIds) ??
+        ''
+      );
     },
     [id, sendMessage, selectedModel, stopSpeaking],
   );
@@ -593,7 +738,7 @@ export default function ChatScreen() {
     );
   }
 
-  const currentAppMode = resolveAppMode(selectedModel);
+  const currentAppMode = conversationExecutionMode;
 
   return (
     <SafeAreaView
@@ -629,7 +774,7 @@ export default function ChatScreen() {
           </Pressable>
 
           {/* Active project chip — tappable, navigates to project detail */}
-          {activeProjectId && activeProject ? (
+          {conversationExecutionMode === 'local' && activeProjectId && activeProject ? (
             <Pressable
               onPress={() =>
                 router.push({
@@ -668,6 +813,8 @@ export default function ChatScreen() {
               cloudJoined={waitlistJoined}
               cloudUnlocked={cloudUnlocked}
               waitlistRank={waitlistRank}
+              compact
+              onTapLocal={conversationExecutionMode === 'cloud' ? handleTapLocalMode : undefined}
               onTapCloud={handleTapCloudMode}
             />
           </View>
@@ -765,11 +912,12 @@ export default function ChatScreen() {
           onOpenCompare={handleOpenCompare}
           onOpenExport={handleOpenExport}
           onOpenAddToChat={handleOpenAddToChat}
-          onOpenConnectors={handleOpenConnectors}
+          onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
           isOnline={isOnline}
           queueSize={queueSize}
           attachRef={chatInputAttachRef}
-          showChips={false}
+          showChips={conversationMessages.length === 0}
+          initialText={initialPrompt || undefined}
         />
 
         {/* Add to Chat bottom sheet */}
@@ -779,11 +927,16 @@ export default function ChatScreen() {
           onPhotos={handleSheetPhotos}
           onFile={handleSheetFile}
           onOpenCloudAccess={handleOpenWaitlist}
+          onOpenStyleSelector={handleOpenStyleSelector}
         />
+
+        <StyleSelector openSignal={styleSelectorOpenSignal} />
 
         {/* Model picker bottom sheet */}
         <ModelPickerSheet
           sheetRef={modelPickerRef}
+          openSignal={modelPickerOpenSignal}
+          modelScope={modelPickerScope}
           onSelect={handleModelSelect}
           onOpenCloudAccess={handleOpenWaitlist}
         />

@@ -72,6 +72,22 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isPersistedQueueEntry(value: unknown): value is PersistedQueueEntry {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.id === 'string' &&
+    typeof entry.conversationId === 'string' &&
+    typeof entry.content === 'string' &&
+    typeof entry.model === 'string' &&
+    typeof entry.queuedAt === 'string' &&
+    typeof entry.retryCount === 'number' &&
+    Number.isInteger(entry.retryCount) &&
+    entry.retryCount >= 0 &&
+    entry.retryCount <= MAX_RETRY_COUNT
+  );
+}
+
 class OfflineMessageQueue {
   private queue: QueuedMessage[] = [];
   private _isProcessing: boolean = false;
@@ -104,8 +120,15 @@ class OfflineMessageQueue {
     try {
       const raw = storage.getString(QUEUE_STORAGE_KEY);
       if (!raw) return;
-      const entries = JSON.parse(raw) as PersistedQueueEntry[];
-      if (!Array.isArray(entries)) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        storage.delete(QUEUE_STORAGE_KEY);
+        return;
+      }
+      const entries = parsed.filter(isPersistedQueueEntry).slice(0, MAX_QUEUE_SIZE);
+      if (entries.length !== parsed.length) {
+        storage.set(QUEUE_STORAGE_KEY, JSON.stringify(entries));
+      }
       // Only restore entries that aren't already in the queue (idempotent)
       for (const entry of entries) {
         if (!this.queue.some((q) => q.id === entry.id)) {

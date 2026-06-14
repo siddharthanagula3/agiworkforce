@@ -112,7 +112,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onMenuClick, classNam
 
         {/* Right: Credit monitor + Theme toggle + User dropdown */}
         <div className="flex items-center gap-1.5">
-          {/* Credit Monitor — shows alerts when usage is high */}
+          {/* Credit Monitor · shows alerts when usage is high */}
           {user && billingData && (
             <CreditMonitor
               userId={user.id}

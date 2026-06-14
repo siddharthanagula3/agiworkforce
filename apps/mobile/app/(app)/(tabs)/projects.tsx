@@ -10,20 +10,24 @@ import {
   ScrollView,
   FlatList,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FolderOpen, Plus, X } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { FolderOpen, Menu, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { ProjectCard } from '@/src/features/projects';
 import { useProjectStore, type Project } from '@/src/features/projects/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
+import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 
 /**
  * Projects tab -- manage project contexts that apply instructions to chat.
  * Tap a project to set it active, long-press for edit/delete.
  */
 export default function ProjectsTabScreen() {
-  const colors = useThemeColors();
+  const { colors, statusBarStyle } = useTheme();
+  const navigation = useNavigation();
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const createProject = useProjectStore((s) => s.createProject);
@@ -107,12 +111,33 @@ export default function ProjectsTabScreen() {
     [projects, openEditModal, deleteProject],
   );
 
+  const handleOpenDrawer = useCallback(() => {
+    openNearestDrawer(navigation);
+  }, [navigation]);
+
   return (
-    <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }} edges={['top']}>
+      <StatusBar style={statusBarStyle} />
       {/* Header */}
-      <View className="flex-row items-center px-4 h-12 gap-3">
+      <View className="flex-row items-center px-3 h-12 gap-2">
+        <Pressable
+          onPress={handleOpenDrawer}
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          })}
+          accessibilityLabel="Open navigation drawer"
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Menu size={20} color={colors.textSecondary} />
+        </Pressable>
         <View className="flex-row items-center gap-2 flex-1">
-          <Text variant="subheading" className="text-white">
+          <Text variant="subheading" style={{ color: colors.textPrimary }}>
             Projects
           </Text>
           {projects.length > 0 && (
@@ -122,8 +147,12 @@ export default function ProjectsTabScreen() {
 
         <Pressable
           onPress={openCreateModal}
-          className="w-8 h-8 rounded-lg items-center justify-center active:bg-white/5"
-          style={{ backgroundColor: `${colors.teal}15` }}
+          className="w-8 h-8 rounded-lg items-center justify-center"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceHover : colors.accentSurface,
+            borderWidth: 1,
+            borderColor: colors.accentBorder,
+          })}
           accessibilityLabel="Create new project"
           accessibilityRole="button"
         >
@@ -135,7 +164,11 @@ export default function ProjectsTabScreen() {
       {activeProjectId && (
         <View
           className="mx-4 mb-2 px-3 py-2 rounded-lg flex-row items-center gap-2"
-          style={{ backgroundColor: `${colors.teal}10` }}
+          style={{
+            backgroundColor: colors.accentSurface,
+            borderWidth: 1,
+            borderColor: colors.accentBorder,
+          }}
         >
           <FolderOpen size={14} color={colors.teal} />
           <Text className="text-[12px] flex-1" style={{ color: colors.teal }} numberOfLines={1}>
@@ -143,10 +176,16 @@ export default function ProjectsTabScreen() {
           </Text>
           <Pressable
             onPress={() => setActiveProject(null)}
-            className="px-2 py-0.5 rounded active:bg-white/5"
+            className="px-2 py-0.5 rounded"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+            })}
             accessibilityLabel="Clear active project"
+            accessibilityRole="button"
           >
-            <Text className="text-[11px] text-white/40">Clear</Text>
+            <Text className="text-[11px]" style={{ color: colors.textSecondary }}>
+              Clear
+            </Text>
           </Pressable>
         </View>
       )}
@@ -156,19 +195,26 @@ export default function ProjectsTabScreen() {
         <View className="flex-1 items-center justify-center px-8">
           <View
             className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-            style={{ backgroundColor: `${colors.teal}15` }}
+            style={{ backgroundColor: colors.accentSurface }}
           >
             <FolderOpen size={32} color={colors.teal} />
           </View>
-          <Text className="text-[15px] text-white/60 text-center leading-[22px] mb-4">
+          <Text
+            className="text-[15px] text-center leading-[22px] mb-4"
+            style={{ color: colors.textSecondary }}
+          >
             No projects yet.{'\n'}Create one to add custom instructions to your chats.
           </Text>
           <Pressable
             onPress={openCreateModal}
             className="px-5 py-2.5 rounded-xl active:opacity-80"
-            style={{ backgroundColor: colors.teal }}
+            style={{ backgroundColor: colors.textPrimary }}
+            accessibilityRole="button"
+            accessibilityLabel="Create project"
           >
-            <Text className="text-[14px] font-medium text-white">Create Project</Text>
+            <Text className="text-[14px] font-medium" style={{ color: colors.surfaceElevated }}>
+              Create Project
+            </Text>
           </Pressable>
         </View>
       ) : (
@@ -210,11 +256,16 @@ export default function ProjectsTabScreen() {
           >
             <Pressable
               onPress={() => setModalVisible(false)}
-              className="w-8 h-8 items-center justify-center rounded-lg active:bg-white/5"
+              className="w-8 h-8 items-center justify-center rounded-lg"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+              })}
+              accessibilityRole="button"
+              accessibilityLabel="Close project editor"
             >
               <X size={20} color={colors.textMuted} />
             </Pressable>
-            <Text variant="subheading" className="text-white">
+            <Text variant="subheading" style={{ color: colors.textPrimary }}>
               {editingProject ? 'Edit Project' : 'New Project'}
             </Text>
             <Pressable
@@ -222,12 +273,16 @@ export default function ProjectsTabScreen() {
               disabled={!formName.trim()}
               className="px-3 py-1.5 rounded-lg active:opacity-80"
               style={{
-                backgroundColor: formName.trim() ? colors.teal : `${colors.teal}30`,
+                backgroundColor: formName.trim() ? colors.textPrimary : colors.surfaceHover,
               }}
+              accessibilityRole="button"
+              accessibilityLabel={editingProject ? 'Save project' : 'Create project'}
             >
               <Text
                 className="text-[13px] font-medium"
-                style={{ color: formName.trim() ? colors.white : colors.textMuted }}
+                style={{
+                  color: formName.trim() ? colors.surfaceElevated : colors.textMuted,
+                }}
               >
                 {editingProject ? 'Save' : 'Create'}
               </Text>
@@ -237,7 +292,12 @@ export default function ProjectsTabScreen() {
           <ScrollView className="flex-1 px-4 pt-5" keyboardShouldPersistTaps="handled">
             {/* Name field */}
             <View className="mb-5">
-              <Text className="text-[13px] font-medium text-white/60 mb-2">Name</Text>
+              <Text
+                className="text-[13px] font-medium mb-2"
+                style={{ color: colors.textSecondary }}
+              >
+                Name
+              </Text>
               <TextInput
                 value={formName}
                 onChangeText={setFormName}
@@ -247,6 +307,8 @@ export default function ProjectsTabScreen() {
                 style={{
                   backgroundColor: colors.surfaceElevated,
                   color: colors.textPrimary,
+                  borderWidth: 1,
+                  borderColor: colors.border,
                 }}
                 autoFocus
                 maxLength={100}
@@ -255,7 +317,12 @@ export default function ProjectsTabScreen() {
 
             {/* Description field */}
             <View className="mb-5">
-              <Text className="text-[13px] font-medium text-white/60 mb-2">Description</Text>
+              <Text
+                className="text-[13px] font-medium mb-2"
+                style={{ color: colors.textSecondary }}
+              >
+                Description
+              </Text>
               <TextInput
                 value={formDescription}
                 onChangeText={setFormDescription}
@@ -265,6 +332,8 @@ export default function ProjectsTabScreen() {
                 style={{
                   backgroundColor: colors.surfaceElevated,
                   color: colors.textPrimary,
+                  borderWidth: 1,
+                  borderColor: colors.border,
                 }}
                 multiline
                 numberOfLines={2}
@@ -274,10 +343,13 @@ export default function ProjectsTabScreen() {
 
             {/* Instructions field */}
             <View className="mb-5">
-              <Text className="text-[13px] font-medium text-white/60 mb-2">
+              <Text
+                className="text-[13px] font-medium mb-2"
+                style={{ color: colors.textSecondary }}
+              >
                 Custom Instructions
               </Text>
-              <Text className="text-[11px] text-white/30 mb-2">
+              <Text className="text-[11px] mb-2" style={{ color: colors.textMuted }}>
                 These instructions will be included as system context when this project is active.
               </Text>
               <TextInput
@@ -289,6 +361,8 @@ export default function ProjectsTabScreen() {
                 style={{
                   backgroundColor: colors.surfaceElevated,
                   color: colors.textPrimary,
+                  borderWidth: 1,
+                  borderColor: colors.border,
                   minHeight: 120,
                   textAlignVertical: 'top',
                 }}

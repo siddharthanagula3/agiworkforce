@@ -62,10 +62,23 @@ describe('on-device catalog: getShippableModels', () => {
     expect(shippable.some((m) => m.family === 'gemma4')).toBe(false);
   });
 
+  it('excludes the vision pack until runtime artifacts are wired', () => {
+    const shippable = getShippableModels();
+    expect(shippable.some((m) => m.id === 'qwen2.5-vl-3b-instruct')).toBe(false);
+  });
+
   it('includes system-multimodal entries', () => {
     const shippable = getShippableModels();
     expect(shippable.some((m) => m.id === 'apple-foundation-models')).toBe(true);
     expect(shippable.some((m) => m.id === 'gemini-nano-aicore')).toBe(true);
+  });
+
+  it('requires install presets for shippable downloadable ExecuTorch models', () => {
+    for (const model of getShippableModels()) {
+      if (model.fileSizeBytes <= 0) continue;
+      if (!model.supportedRuntimes.includes('executorch')) continue;
+      expect(model.executorchPreset).toBeDefined();
+    }
   });
 });
 

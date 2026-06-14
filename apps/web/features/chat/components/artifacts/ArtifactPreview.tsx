@@ -635,7 +635,7 @@ export function ArtifactPreview({
           </TabsList>
         )}
 
-        {/* Preview Tab — HTML/React/SVG/Mermaid */}
+        {/* Preview Tab · HTML/React/SVG/Mermaid */}
         {canPreview && (
           <TabsContent value="preview" className="m-0 p-0">
             <div className={cn('bg-white', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}>
@@ -650,7 +650,7 @@ export function ArtifactPreview({
           </TabsContent>
         )}
 
-        {/* Preview Tab — PDF inline viewer (Fix 39) */}
+        {/* Preview Tab · PDF inline viewer (Fix 39) */}
         {isPdf && (
           <TabsContent value="preview" className="m-0 p-0">
             <div className={cn(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}>
@@ -665,7 +665,7 @@ export function ArtifactPreview({
           </TabsContent>
         )}
 
-        {/* Preview Tab — DOCX viewer via mammoth (Fix 40) */}
+        {/* Preview Tab · DOCX viewer via mammoth (Fix 40) */}
         {isDocx && (
           <TabsContent value="preview" className="m-0 p-0">
             {docxError ? (

@@ -1,5 +1,5 @@
 /**
- * Workforce Store — Wave 4 Feature Tests
+ * Workforce Store · Wave 4 Feature Tests
  *
  * Tests the Wave 2 workforce management additions:
  *  - Employee status indicators update correctly
@@ -19,7 +19,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Auth store mock — must be declared before imports
+// Auth store mock · must be declared before imports
 // ---------------------------------------------------------------------------
 
 const mockUser = { id: 'wave4-user-123', email: 'wave4@example.com' };

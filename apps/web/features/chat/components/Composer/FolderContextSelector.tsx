@@ -53,7 +53,7 @@ const FolderContextSelectorComponent = ({
       const data = await folderManagementService.getUserFolders(user.id);
       setFolders(data);
     } catch {
-      // Silently degrade — folder context is optional
+      // Silently degrade · folder context is optional
     }
   }, [user?.id]);
 

@@ -22,7 +22,7 @@ const FREE_PLAN_FEATURES = [
   'Ability to search the web',
   'Create files and execute code',
   'Connect local models via Ollama or LM Studio',
-  'Bring your own API keys (10+ providers)',
+  'Bring your own API keys (every major provider)',
 ];
 
 // Plan icon/illustration for paid tiers

@@ -24,7 +24,7 @@ import { SandboxedIframe } from './SandboxedIframe';
 import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 
 // Mermaid is ~250KB. Only loaded when a message actually contains a `mermaid`
-// fenced code block — saves the cost on every chat session without diagrams.
+// fenced code block · saves the cost on every chat session without diagrams.
 const MermaidRenderer = dynamic(() => import('./MermaidRenderer'), {
   ssr: false,
   loading: () => (
@@ -100,7 +100,7 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
  * sandbox (`sandbox.agiworkforce.com`) when `NEXT_PUBLIC_SANDBOX_ORIGIN`
  * is configured. Falls back to a same-origin `srcDoc` iframe with
  * `sandbox="allow-scripts"` (no `allow-same-origin`) when the subdomain
- * isn't deployed yet — strictly safer than the previous dual-flag state.
+ * isn't deployed yet · strictly safer than the previous dual-flag state.
  */
 function HtmlBlock({ code }: { code: string }) {
   const [refreshKey, setRefreshKey] = useState(0);

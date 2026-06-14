@@ -84,7 +84,7 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
   // desktop codebase asserts that origin in production. Accept BOTH the
   // pinned `https://tauri.localhost` (macOS / Tauri v2 https mode) and the
   // pinned `tauri://localhost` (Tauri v2 legacy scheme on other platforms).
-  // The host-id is now hard-pinned to the literal `localhost` — no charset
+  // The host-id is now hard-pinned to the literal `localhost` · no charset
   // wildcard, no length surface.
   const tauriOriginPattern = /^(?:https:\/\/tauri\.localhost|tauri:\/\/localhost)(?::\d+)?$/;
   if (tauriOriginPattern.test(origin)) {

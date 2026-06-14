@@ -8,7 +8,7 @@
  *  - Reference persists to project config (CLI pattern). Web runs serverless;
  *    localStorage is unreachable from Next.js API routes. Module-level state
  *    survives warm Lambda instances and resets on cold start.
- *  - Durable cross-session persistence requires Neon wiring — out of scope
+ *  - Durable cross-session persistence requires Neon wiring · out of scope
  *    for R24; flagged as follow-up.
  *  - LRU eviction after MAX_SESSIONS prevents unbounded growth on warm instances.
  *
@@ -98,7 +98,7 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   const inputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
   // Reasoning tokens are billed at the same rate as output tokens.
-  // Reference: codex-cli TokenUsage.reasoning_output_tokens — counted at output rate.
+  // Reference: codex-cli TokenUsage.reasoning_output_tokens · counted at output rate.
   const reasoningTokens = usage.reasoningOutputTokens ?? 0;
   const cacheRead = usage.cacheReadInputTokens ?? 0;
   const cacheCreation = usage.cacheCreationInputTokens ?? 0;
@@ -149,7 +149,7 @@ export function recordModelUsage(sessionId: string, modelId: string, usage: Norm
 /**
  * Retrieve a snapshot of all model usage for the given session.
  * Returns an empty Map if the session has not been seen.
- * The returned Map is a deep copy — mutations do not affect the store.
+ * The returned Map is a deep copy · mutations do not affect the store.
  */
 export function getModelUsageReport(sessionId: string): Map<string, ModelUsage> {
   const source = sessionStore.get(sessionId);
@@ -216,14 +216,14 @@ export function inferGenAiSystem(provider: string): string {
  * Produce an OpenTelemetry attribute bag for a single LLM usage event.
  *
  * Standard GenAI semantic conventions (spec-stable):
- *   gen_ai.usage.input_tokens         — total prompt tokens (includes cache-read hits)
- *   gen_ai.usage.output_tokens        — completion tokens (excludes reasoning)
- *   gen_ai.usage.cache_read.input_tokens  — tokens served from cache (10% cost)
+ *   gen_ai.usage.input_tokens         · total prompt tokens (includes cache-read hits)
+ *   gen_ai.usage.output_tokens        · completion tokens (excludes reasoning)
+ *   gen_ai.usage.cache_read.input_tokens  · tokens served from cache (10% cost)
  *
  * Vendor extensions (codex.usage.* namespace, aligned with codex-cli):
- *   codex.usage.cache_creation_input_tokens — tokens written to cache (125% cost)
- *   codex.usage.reasoning_output_tokens    — thinking/reasoning tokens (output rate)
- *   codex.usage.total_tokens               — sum of all categories for cost attribution
+ *   codex.usage.cache_creation_input_tokens · tokens written to cache (125% cost)
+ *   codex.usage.reasoning_output_tokens    · thinking/reasoning tokens (output rate)
+ *   codex.usage.total_tokens               · sum of all categories for cost attribution
  *
  * Returns a plain Record so callers have zero opentelemetry package dependency.
  * Reference: codex-cli otel-attributes.ts toOtelAttributes().

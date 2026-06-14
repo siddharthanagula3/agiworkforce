@@ -6,7 +6,11 @@ import type {
   DeleteScheduledTaskMessage,
 } from '../../types';
 import { logger } from '../../utils';
-import { ORIGIN_EXTENSION_PAGE, generateRecordId } from '../../background/policy';
+import {
+  ORIGIN_EXTENSION_PAGE,
+  generateRecordId,
+  validateShortcutActions,
+} from '../../background/policy';
 
 const TASKS_STORAGE_KEY = 'agi_scheduled_tasks';
 const MAX_TASKS = 50;
@@ -93,7 +97,22 @@ export async function handleUpdateScheduledTask(
   if (idx === -1) {
     return { success: false, error: 'Task not found' } as ExtensionResponse;
   }
-  const updated = { ...tasks[idx]!, ...message.updates };
+  // SECURITY (audit batch-220 [MEDIUM] validation bypass, fixed 2026-06-13): the
+  // update path must validate any updated `actions` with the same check the
+  // create path uses, and must never let a caller rewrite the task's identity or
+  // origin stamp (which gates fire-time allowlist re-checks).
+  const safeUpdates: Record<string, unknown> = { ...(message.updates as Record<string, unknown>) };
+  if (
+    'actions' in safeUpdates &&
+    !validateShortcutActions(
+      safeUpdates['actions'] as Parameters<typeof validateShortcutActions>[0],
+    )
+  ) {
+    return { success: false, error: 'Invalid task actions' } as ExtensionResponse;
+  }
+  delete safeUpdates['id'];
+  delete safeUpdates['createdByOrigin'];
+  const updated = { ...tasks[idx]!, ...safeUpdates } as (typeof tasks)[number];
   tasks[idx] = updated;
   await saveScheduledTasks(tasks);
   await unregisterTaskAlarm(message.taskId);

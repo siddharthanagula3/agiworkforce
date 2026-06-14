@@ -90,6 +90,13 @@ export interface SendMessageParams {
   provider?: string;
   attachments?: FileRef[];
   signal?: AbortSignal;
+  /** Forwarded composer controls — the desktop TauriRuntime maps these onto the
+   *  chat_send_message request so the toggles stop being inert facade. */
+  thinkingEnabled?: boolean;
+  webSearch?: boolean;
+  systemPrompt?: string;
+  agentMode?: string;
+  effort?: string;
 }
 
 /**

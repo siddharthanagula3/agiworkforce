@@ -142,7 +142,7 @@ async function handleInvite(request: NextRequest) {
     // Return a pending-invite placeholder; real invitation flow (email) is external.
     logger.info(
       { userId, organizationId, email },
-      'Team invite for unknown user — email not found in profiles',
+      'Team invite for unknown user · email not found in profiles',
     );
     return NextResponse.json(
       {
@@ -160,7 +160,7 @@ async function handleInvite(request: NextRequest) {
           lastActiveAt: null,
           permissions: [],
         },
-        message: 'Invitation queued — user will receive an email when the invite system is active',
+        message: 'Invitation queued · user will receive an email when the invite system is active',
       },
       { status: 202 },
     );

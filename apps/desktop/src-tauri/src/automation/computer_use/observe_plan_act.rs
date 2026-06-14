@@ -66,7 +66,7 @@ pub struct ComputerUseConfig {
     /// model). Setting this to e.g. `"claude-opus-4.8"`, `"gpt-5.5"`,
     /// `"gemini-3.1-pro"`, or `"grok-4.3-vision"` lets the user choose
     /// any vision-capable model from the catalog — this is the multi-
-    /// provider differentiator vs Cowork's Anthropic-only computer use.
+    /// provider differentiator vs Claude Cowork's Anthropic-only computer use.
     pub model: Option<String>,
     /// Stream 2: explicit provider override paired with `model`. When
     /// `Some`, the router targets this provider; when `None`, lets the

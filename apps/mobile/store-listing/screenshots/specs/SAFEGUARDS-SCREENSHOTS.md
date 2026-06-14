@@ -16,8 +16,8 @@
 
 ### S-01 — Cloud mode locked (waitlist gate)
 
-**Purpose:** Shows that Cloud mode is not active in v1; the user is
-on a waitlist, not a paying subscriber with access to cloud routing.
+**Purpose:** Shows that Cloud mode is invite-gated; the user is on a
+waitlist or invite screen, not a public subscriber with default cloud routing.
 
 **What should be visible:**
 
@@ -102,9 +102,8 @@ tap "Report this response" → observe report sheet.
 
 ### S-05 — On-device shield badge in chat header
 
-**Purpose:** Shows that the app visually communicates local-only
-operation to the user. Useful for demonstrating privacy-first design
-to reviewers.
+**Purpose:** Shows that the app visually communicates Local Mode operation to
+the user. Useful for demonstrating privacy-first design to reviewers.
 
 **What should be visible:**
 
@@ -114,7 +113,7 @@ to reviewers.
   (e.g., "Qwen3-4B").
 - No network activity indicator or "Cloud" indicator visible.
 
-**Navigation path:** Any active chat in v1 (all chats are local-only).
+**Navigation path:** Any active Local Mode chat.
 
 **Filename:** `S-05-ondevice-shield-badge.png`
 

@@ -189,8 +189,18 @@ fn project_local_plugin_hooks_are_untrusted() {
         }"#,
     );
 
-    // PluginsManager scans global dir (which may not exist on CI — that is
-    // fine; it skips gracefully) and then the project dir.
+    // Hermetic global root: PluginsManager::new() derives its global plugin
+    // directory from the home dir (dirs::home_dir() -> $HOME/.agiworkforce/
+    // plugins). Point HOME at an empty temp dir for the duration of the call
+    // so the test never scans the developer's / runner's real global plugins
+    // (which would otherwise leak into trusted_entries/blocked_map and make
+    // the assertions machine-dependent).
+    let fake_home = tempfile::tempdir().unwrap();
+    let _home_guard = HomeEnvGuard::set(fake_home.path());
+
+    // PluginsManager scans the (now-empty temp) global dir and then the
+    // project dir. The global dir does not exist under the temp home, so it
+    // is skipped gracefully — only the fixture plugin is loaded.
     let mut manager = PluginsManager::new();
     manager
         .load_all(Some(project_dir.path()))
@@ -239,4 +249,43 @@ fn project_local_plugin_hooks_are_untrusted() {
          found leaked command(s): {:?}",
         pre_tool_use_cmds
     );
+}
+
+// ---------------------------------------------------------------------------
+// HOME env override guard
+//
+// PluginsManager has no public constructor parameter / env hook for its global
+// plugin root, so the only way to make the test hermetic from an integration
+// test (separate crate, public API only) is to redirect the home dir while the
+// manager is constructed. HOME is process-global; serialize mutations with a
+// file-local mutex and restore the previous value on drop so other tests in
+// this binary are unaffected.
+// ---------------------------------------------------------------------------
+struct HomeEnvGuard {
+    previous: Option<std::ffi::OsString>,
+    _lock: std::sync::MutexGuard<'static, ()>,
+}
+
+impl HomeEnvGuard {
+    fn set(path: &std::path::Path) -> Self {
+        static HOME_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        // Recover a poisoned lock: a panicking test still leaves HOME state we
+        // want to restore, and the guard itself holds no invariant to protect.
+        let lock = HOME_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var_os("HOME");
+        std::env::set_var("HOME", path);
+        Self {
+            previous,
+            _lock: lock,
+        }
+    }
+}
+
+impl Drop for HomeEnvGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(val) => std::env::set_var("HOME", val),
+            None => std::env::remove_var("HOME"),
+        }
+    }
 }

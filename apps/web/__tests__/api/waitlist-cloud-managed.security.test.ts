@@ -161,6 +161,17 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       expect(data.ok).toBe(true);
     });
 
+    it('requires a signed-in user before durable insert', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
+
+      const request = makePostRequest({ email: 'test@example.com', source: 'billing' });
+      const response = await POST(request);
+
+      expect(response.status).toBe(401);
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+
     it('CSRF bypass via ?csrf=skip query param does not work', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
 

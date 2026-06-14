@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`PermissionDetailScreen — location (4-level) locks the location detail with all 4 applicable levels (undetermined state) 1`] = `
+exports[`PermissionDetailScreen — camera locks the camera detail with native-backed levels 1`] = `
 <View
   className="flex-1"
   style={
@@ -10,7 +10,14 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
   }
 >
   <View
-    className="flex-row items-center px-3 h-12"
+    style={
+      {
+        "alignItems": "center",
+        "flexDirection": "row",
+        "height": 58,
+        "paddingHorizontal": 8,
+      }
+    }
   >
     <View
       accessibilityLabel="Go back"
@@ -33,9 +40,9 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
         }
       }
       accessible={true}
-      className="p-2 rounded-lg active:bg-white/5"
       collapsable={false}
       focusable={true}
+      hitSlop={8}
       onBlur={[Function]}
       onClick={[Function]}
       onFocus={[Function]}
@@ -45,92 +52,128 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
       onResponderTerminate={[Function]}
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "transparent",
+          "borderRadius": 21,
+          "height": 42,
+          "justifyContent": "center",
+          "width": 42,
+        }
+      }
     >
       <View
-        color="#aaa"
-        size={20}
+        color="#fff"
+        size={22}
         testID="icon-ArrowLeft"
       />
     </View>
     <Text
-      className="ml-2 flex-1"
       style={
         {
           "color": "#fff",
+          "flex": 1,
+          "fontSize": 20,
+          "fontWeight": "700",
+          "marginLeft": 4,
         }
       }
-      variant="subheading"
     >
-      Location
+      Camera
     </Text>
   </View>
   <RCTScrollView
     className="flex-1 px-4"
     contentContainerStyle={
       {
-        "paddingBottom": 40,
+        "paddingBottom": 44,
       }
     }
     showsVerticalScrollIndicator={false}
   >
     <View>
       <View
-        className="mt-3 p-4 rounded-xl flex-row items-center gap-4"
         style={
           {
-            "backgroundColor": "#77710",
+            "alignItems": "center",
+            "backgroundColor": "#1a1a1a",
             "borderColor": "#333",
+            "borderRadius": 18,
             "borderWidth": 1,
+            "flexDirection": "row",
+            "gap": 14,
+            "marginTop": 10,
+            "padding": 16,
           }
         }
       >
         <View
-          className="w-12 h-12 rounded-2xl items-center justify-center"
           style={
             {
-              "backgroundColor": "#77718",
+              "alignItems": "center",
+              "backgroundColor": undefined,
+              "borderRadius": 16,
+              "height": 48,
+              "justifyContent": "center",
+              "width": 48,
             }
           }
         >
           <View
-            color="#777"
-            size={24}
-            testID="icon-MapPin"
+            color="#aaa"
+            size={23}
+            testID="icon-Camera"
           />
         </View>
         <View
-          className="flex-1"
+          style={
+            {
+              "flex": 1,
+              "minWidth": 0,
+            }
+          }
         >
           <Text
-            className="text-[13px] font-semibold"
             style={
               {
-                "color": "#777",
+                "color": "#fff",
+                "fontSize": 17,
+                "fontWeight": "700",
               }
             }
           >
             Access Denied
           </Text>
           <Text
-            className="text-[11px] mt-1 leading-4"
             style={
               {
-                "color": "#aaa",
+                "color": "#777",
+                "fontSize": 13,
+                "lineHeight": 18,
+                "marginTop": 3,
               }
             }
           >
-            Used for location-aware queries and context.
+            Used for photo capture and document scanning.
           </Text>
         </View>
       </View>
       <View
-        className="mt-5 mb-2"
+        style={
+          {
+            "marginBottom": 12,
+            "marginTop": 22,
+          }
+        }
       >
         <Text
-          className="text-[11px] uppercase tracking-wider"
           style={
             {
               "color": "#777",
+              "fontSize": 12,
+              "fontWeight": "700",
+              "textTransform": "uppercase",
             }
           }
         >
@@ -142,24 +185,24 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
           {
             "backgroundColor": "#1a1a1a",
             "borderColor": "#333",
-            "borderRadius": 14,
+            "borderRadius": 18,
             "borderWidth": 1,
             "overflow": "hidden",
-            "paddingHorizontal": 12,
+            "paddingHorizontal": 10,
           }
         }
       >
         <View>
           <View
             accessibilityLabel="Never. App cannot access this permission."
-            accessibilityRole="radio"
+            accessibilityRole="button"
             accessibilityState={
               {
                 "busy": undefined,
-                "checked": true,
+                "checked": undefined,
                 "disabled": undefined,
                 "expanded": undefined,
-                "selected": undefined,
+                "selected": true,
               }
             }
             accessibilityValue={
@@ -171,7 +214,6 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -183,42 +225,68 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 74,
+                "paddingHorizontal": 10,
+                "paddingVertical": 12,
+              }
+            }
           >
             <View
-              className="w-5 h-5 rounded-full items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "#2dd4bf",
-                  "borderColor": "#333",
-                  "borderWidth": 0,
+                  "alignItems": "center",
+                  "backgroundColor": "#1a1a1a",
+                  "borderColor": "#fff",
+                  "borderRadius": 12,
+                  "borderWidth": 1.5,
+                  "height": 24,
+                  "justifyContent": "center",
+                  "width": 24,
                 }
               }
             >
               <View
-                color="#fff"
-                fill="#fff"
-                size={14}
-                testID="icon-CheckCircle"
+                style={
+                  {
+                    "backgroundColor": "#fff",
+                    "borderRadius": 5,
+                    "height": 10,
+                    "width": 10,
+                  }
+                }
               />
             </View>
             <View
-              className="flex-1"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 Never
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
@@ -233,14 +301,14 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
         <View>
           <View
             accessibilityLabel="Ask each time. The OS will ask each time the app needs access."
-            accessibilityRole="radio"
+            accessibilityRole="button"
             accessibilityState={
               {
                 "busy": undefined,
-                "checked": false,
+                "checked": undefined,
                 "disabled": undefined,
                 "expanded": undefined,
-                "selected": undefined,
+                "selected": false,
               }
             }
             accessibilityValue={
@@ -252,7 +320,6 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -264,35 +331,57 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 74,
+                "paddingHorizontal": 10,
+                "paddingVertical": 12,
+              }
+            }
           >
             <View
-              className="w-5 h-5 rounded-full items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "transparent",
+                  "alignItems": "center",
+                  "backgroundColor": "#1a1a1a",
                   "borderColor": "#333",
+                  "borderRadius": 12,
                   "borderWidth": 1.5,
+                  "height": 24,
+                  "justifyContent": "center",
+                  "width": 24,
                 }
               }
             />
             <View
-              className="flex-1"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 Ask each time
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
@@ -307,14 +396,14 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
         <View>
           <View
             accessibilityLabel="While using the app. Access is granted only while the app is in the foreground."
-            accessibilityRole="radio"
+            accessibilityRole="button"
             accessibilityState={
               {
                 "busy": undefined,
-                "checked": false,
+                "checked": undefined,
                 "disabled": undefined,
                 "expanded": undefined,
-                "selected": undefined,
+                "selected": false,
               }
             }
             accessibilityValue={
@@ -326,7 +415,6 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -338,35 +426,57 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 74,
+                "paddingHorizontal": 10,
+                "paddingVertical": 12,
+              }
+            }
           >
             <View
-              className="w-5 h-5 rounded-full items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "transparent",
+                  "alignItems": "center",
+                  "backgroundColor": "#1a1a1a",
                   "borderColor": "#333",
+                  "borderRadius": 12,
                   "borderWidth": 1.5,
+                  "height": 24,
+                  "justifyContent": "center",
+                  "width": 24,
                 }
               }
             />
             <View
-              className="flex-1"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 While using the app
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
@@ -374,99 +484,31 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
               </Text>
             </View>
           </View>
-          <View
-            testID="separator"
-          />
-        </View>
-        <View>
-          <View
-            accessibilityLabel="Always. Access is granted in foreground and background."
-            accessibilityRole="radio"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": false,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-          >
-            <View
-              className="w-5 h-5 rounded-full items-center justify-center mr-3"
-              style={
-                {
-                  "backgroundColor": "transparent",
-                  "borderColor": "#333",
-                  "borderWidth": 1.5,
-                }
-              }
-            />
-            <View
-              className="flex-1"
-            >
-              <Text
-                className="text-sm font-medium"
-                style={
-                  {
-                    "color": "#fff",
-                  }
-                }
-              >
-                Always
-              </Text>
-              <Text
-                className="text-[11px] mt-0.5"
-                style={
-                  {
-                    "color": "#777",
-                  }
-                }
-              >
-                Access is granted in foreground and background.
-              </Text>
-            </View>
-          </View>
         </View>
       </View>
       <View
-        className="mt-4 px-3 py-2.5 rounded-xl"
         style={
           {
-            "backgroundColor": "rgba(255,255,255,0.04)",
+            "backgroundColor": "#1a1a1a",
+            "borderColor": "#333",
+            "borderRadius": 18,
+            "borderWidth": 1,
+            "marginTop": 16,
+            "paddingHorizontal": 14,
+            "paddingVertical": 12,
           }
         }
       >
         <Text
-          className="text-[11px] leading-4"
           style={
             {
               "color": "#777",
+              "fontSize": 13,
+              "lineHeight": 18,
             }
           }
         >
-          Changing access levels that require OS-level changes will open your device Settings app. AGI cannot revoke or grant OS permissions directly.
+          Some permission changes may open Settings. AGI cannot change device permissions without your approval.
         </Text>
       </View>
     </View>
@@ -474,7 +516,7 @@ exports[`PermissionDetailScreen — location (4-level) locks the location detail
 </View>
 `;
 
-exports[`PermissionsScreen — index locks the permission list card (6 rows, undetermined state) 1`] = `
+exports[`PermissionsScreen — index locks the native-backed permission list card 1`] = `
 <View
   className="flex-1"
   style={
@@ -484,7 +526,14 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
   }
 >
   <View
-    className="flex-row items-center px-3 h-12"
+    style={
+      {
+        "alignItems": "center",
+        "flexDirection": "row",
+        "height": 58,
+        "paddingHorizontal": 8,
+      }
+    }
   >
     <View
       accessibilityLabel="Go back"
@@ -507,9 +556,9 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
         }
       }
       accessible={true}
-      className="p-2 rounded-lg active:bg-white/5"
       collapsable={false}
       focusable={true}
+      hitSlop={8}
       onBlur={[Function]}
       onClick={[Function]}
       onFocus={[Function]}
@@ -519,21 +568,33 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
       onResponderTerminate={[Function]}
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "transparent",
+          "borderRadius": 21,
+          "height": 42,
+          "justifyContent": "center",
+          "width": 42,
+        }
+      }
     >
       <View
-        color="#aaa"
-        size={20}
+        color="#fff"
+        size={22}
         testID="icon-ArrowLeft"
       />
     </View>
     <Text
-      className="ml-2 flex-1"
       style={
         {
           "color": "#fff",
+          "flex": 1,
+          "fontSize": 20,
+          "fontWeight": "700",
+          "marginLeft": 4,
         }
       }
-      variant="subheading"
     >
       Permissions
     </Text>
@@ -542,20 +603,27 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
     className="flex-1 px-4"
     contentContainerStyle={
       {
-        "paddingBottom": 40,
+        "paddingBottom": 44,
       }
     }
     showsVerticalScrollIndicator={false}
   >
     <View>
       <View
-        className="mt-3 mb-2"
+        style={
+          {
+            "marginBottom": 12,
+            "marginTop": 10,
+          }
+        }
       >
         <Text
-          className="text-[11px] uppercase tracking-wider mb-3"
           style={
             {
               "color": "#777",
+              "fontSize": 12,
+              "fontWeight": "700",
+              "textTransform": "uppercase",
             }
           }
         >
@@ -567,10 +635,10 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
           {
             "backgroundColor": "#1a1a1a",
             "borderColor": "#333",
-            "borderRadius": 14,
+            "borderRadius": 18,
             "borderWidth": 1,
             "overflow": "hidden",
-            "paddingHorizontal": 12,
+            "paddingHorizontal": 10,
           }
         }
       >
@@ -596,7 +664,6 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -608,39 +675,63 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 72,
+                "paddingHorizontal": 10,
+                "paddingVertical": 10,
+              }
+            }
           >
             <View
-              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "#77718",
+                  "alignItems": "center",
+                  "alignSelf": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 10,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "width": 32,
                 }
               }
             >
               <View
-                color="#777"
-                size={18}
+                color="#aaa"
+                size={19}
                 testID="icon-Mic"
               />
             </View>
             <View
-              className="flex-1 mr-2"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 Microphone
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
+                numberOfLines={2}
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
@@ -648,26 +739,39 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               </Text>
             </View>
             <View
-              className="mr-2"
+              style={
+                {
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexShrink": 0,
+                  "gap": 6,
+                  "justifyContent": "flex-end",
+                  "minWidth": 50,
+                }
+              }
             >
-              <RCTSwitch
-                accessibilityRole="switch"
-                onChange={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
+              <Text
                 style={
                   {
-                    "alignSelf": "flex-start",
+                    "color": "#777",
+                    "fontSize": 13,
+                    "fontWeight": "600",
                   }
                 }
-                value={false}
+              >
+                Ask
+              </Text>
+              <View
+                color="#777"
+                size={17}
+                style={
+                  {
+                    "flexShrink": 0,
+                  }
+                }
+                testID="icon-ChevronRight"
               />
             </View>
-            <View
-              color="#777"
-              size={14}
-              testID="icon-ChevronRight"
-            />
           </View>
           <View
             testID="separator"
@@ -695,7 +799,6 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -707,39 +810,63 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 72,
+                "paddingHorizontal": 10,
+                "paddingVertical": 10,
+              }
+            }
           >
             <View
-              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "#77718",
+                  "alignItems": "center",
+                  "alignSelf": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 10,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "width": 32,
                 }
               }
             >
               <View
-                color="#777"
-                size={18}
+                color="#aaa"
+                size={19}
                 testID="icon-Camera"
               />
             </View>
             <View
-              className="flex-1 mr-2"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 Camera
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
+                numberOfLines={2}
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
@@ -747,125 +874,39 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               </Text>
             </View>
             <View
-              className="mr-2"
-            >
-              <RCTSwitch
-                accessibilityRole="switch"
-                onChange={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
-                style={
-                  {
-                    "alignSelf": "flex-start",
-                  }
-                }
-                value={false}
-              />
-            </View>
-            <View
-              color="#777"
-              size={14}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            testID="separator"
-          />
-        </View>
-        <View>
-          <View
-            accessibilityLabel="Location permission. Currently denied. Tap to manage."
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-          >
-            <View
-              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "#77718",
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexShrink": 0,
+                  "gap": 6,
+                  "justifyContent": "flex-end",
+                  "minWidth": 50,
                 }
               }
             >
-              <View
-                color="#777"
-                size={18}
-                testID="icon-MapPin"
-              />
-            </View>
-            <View
-              className="flex-1 mr-2"
-            >
               <Text
-                className="text-sm font-medium"
-                style={
-                  {
-                    "color": "#fff",
-                  }
-                }
-              >
-                Location
-              </Text>
-              <Text
-                className="text-[11px] mt-0.5"
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "fontWeight": "600",
                   }
                 }
               >
-                Used for location-aware queries and context.
+                Ask
               </Text>
-            </View>
-            <View
-              className="mr-2"
-            >
-              <RCTSwitch
-                accessibilityRole="switch"
-                onChange={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
+              <View
+                color="#777"
+                size={17}
                 style={
                   {
-                    "alignSelf": "flex-start",
+                    "flexShrink": 0,
                   }
                 }
-                value={false}
+                testID="icon-ChevronRight"
               />
             </View>
-            <View
-              color="#777"
-              size={14}
-              testID="icon-ChevronRight"
-            />
           </View>
           <View
             testID="separator"
@@ -893,7 +934,6 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -905,39 +945,63 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 72,
+                "paddingHorizontal": 10,
+                "paddingVertical": 10,
+              }
+            }
           >
             <View
-              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "#77718",
+                  "alignItems": "center",
+                  "alignSelf": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 10,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "width": 32,
                 }
               }
             >
               <View
-                color="#777"
-                size={18}
+                color="#aaa"
+                size={19}
                 testID="icon-Image"
               />
             </View>
             <View
-              className="flex-1 mr-2"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 Photos & Files
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
+                numberOfLines={2}
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
@@ -945,26 +1009,39 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               </Text>
             </View>
             <View
-              className="mr-2"
+              style={
+                {
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexShrink": 0,
+                  "gap": 6,
+                  "justifyContent": "flex-end",
+                  "minWidth": 50,
+                }
+              }
             >
-              <RCTSwitch
-                accessibilityRole="switch"
-                onChange={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
+              <Text
                 style={
                   {
-                    "alignSelf": "flex-start",
+                    "color": "#777",
+                    "fontSize": 13,
+                    "fontWeight": "600",
                   }
                 }
-                value={false}
+              >
+                Ask
+              </Text>
+              <View
+                color="#777"
+                size={17}
+                style={
+                  {
+                    "flexShrink": 0,
+                  }
+                }
+                testID="icon-ChevronRight"
               />
             </View>
-            <View
-              color="#777"
-              size={14}
-              testID="icon-ChevronRight"
-            />
           </View>
           <View
             testID="separator"
@@ -992,7 +1069,6 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -1004,66 +1080,103 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 72,
+                "paddingHorizontal": 10,
+                "paddingVertical": 10,
+              }
+            }
           >
             <View
-              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "#77718",
+                  "alignItems": "center",
+                  "alignSelf": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 10,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "width": 32,
                 }
               }
             >
               <View
-                color="#777"
-                size={18}
+                color="#aaa"
+                size={19}
                 testID="icon-Bell"
               />
             </View>
             <View
-              className="flex-1 mr-2"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 Notifications
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
+                numberOfLines={2}
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
-                Used for agent status, approvals, and task alerts.
+                Used for local model, download, and reminder alerts.
               </Text>
             </View>
             <View
-              className="mr-2"
+              style={
+                {
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexShrink": 0,
+                  "gap": 6,
+                  "justifyContent": "flex-end",
+                  "minWidth": 50,
+                }
+              }
             >
-              <RCTSwitch
-                accessibilityRole="switch"
-                onChange={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
+              <Text
                 style={
                   {
-                    "alignSelf": "flex-start",
+                    "color": "#777",
+                    "fontSize": 13,
+                    "fontWeight": "600",
                   }
                 }
-                value={false}
+              >
+                Ask
+              </Text>
+              <View
+                color="#777"
+                size={17}
+                style={
+                  {
+                    "flexShrink": 0,
+                  }
+                }
+                testID="icon-ChevronRight"
               />
             </View>
-            <View
-              color="#777"
-              size={14}
-              testID="icon-ChevronRight"
-            />
           </View>
           <View
             testID="separator"
@@ -1091,7 +1204,6 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
               }
             }
             accessible={true}
-            className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
             collapsable={false}
             focusable={true}
             onBlur={[Function]}
@@ -1103,86 +1215,129 @@ exports[`PermissionsScreen — index locks the permission list card (6 rows, und
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 72,
+                "paddingHorizontal": 10,
+                "paddingVertical": 10,
+              }
+            }
           >
             <View
-              className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
               style={
                 {
-                  "backgroundColor": "#77718",
+                  "alignItems": "center",
+                  "alignSelf": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 10,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "width": 32,
                 }
               }
             >
               <View
-                color="#777"
-                size={18}
+                color="#aaa"
+                size={19}
                 testID="icon-Users"
               />
             </View>
             <View
-              className="flex-1 mr-2"
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
             >
               <Text
-                className="text-sm font-medium"
                 style={
                   {
                     "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
                   }
                 }
               >
                 Contacts
               </Text>
               <Text
-                className="text-[11px] mt-0.5"
+                numberOfLines={2}
                 style={
                   {
                     "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
                   }
                 }
               >
-                Used for contact lookup in agent tasks.
+                Optional. Used only when you choose contact lookup.
               </Text>
             </View>
             <View
-              className="mr-2"
+              style={
+                {
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexShrink": 0,
+                  "gap": 6,
+                  "justifyContent": "flex-end",
+                  "minWidth": 50,
+                }
+              }
             >
-              <RCTSwitch
-                accessibilityRole="switch"
-                onChange={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
+              <Text
                 style={
                   {
-                    "alignSelf": "flex-start",
+                    "color": "#777",
+                    "fontSize": 13,
+                    "fontWeight": "600",
                   }
                 }
-                value={false}
+              >
+                Ask
+              </Text>
+              <View
+                color="#777"
+                size={17}
+                style={
+                  {
+                    "flexShrink": 0,
+                  }
+                }
+                testID="icon-ChevronRight"
               />
             </View>
-            <View
-              color="#777"
-              size={14}
-              testID="icon-ChevronRight"
-            />
           </View>
         </View>
       </View>
       <View
-        className="mt-4 px-3 py-2.5 rounded-xl"
         style={
           {
-            "backgroundColor": "rgba(255,255,255,0.04)",
+            "backgroundColor": "#1a1a1a",
+            "borderColor": "#333",
+            "borderRadius": 18,
+            "borderWidth": 1,
+            "marginTop": 16,
+            "paddingHorizontal": 14,
+            "paddingVertical": 12,
           }
         }
       >
         <Text
-          className="text-[11px] leading-4"
           style={
             {
               "color": "#777",
+              "fontSize": 13,
+              "lineHeight": 18,
             }
           }
         >
-          Permissions are managed by your device OS. Toggling a permission may open your device Settings app.
+          Permissions are managed by your device. Changing a permission may open Settings.
         </Text>
       </View>
     </View>

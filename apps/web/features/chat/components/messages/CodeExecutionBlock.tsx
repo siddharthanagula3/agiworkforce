@@ -92,7 +92,7 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
           {result.images?.map((img, i) => (
             <div key={i}>
               <p className="text-xs font-medium text-muted-foreground mb-1">Plot {i + 1}</p>
-              {/* Base64 plot output — not a navigable URL, raw img is intentional here */}
+              {/* Base64 plot output · not a navigable URL, raw img is intentional here */}
               <img
                 src={`data:${img.mediaType};base64,${img.data}`}
                 alt={`Code execution output ${i + 1}`}

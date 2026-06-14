@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { toast } from 'sonner';
 import { invoke, isTauri, listen } from '../lib/tauri-mock';
+import { ensureAgiInitialized } from '../api/agi';
 
 const MAX_LIVE_TASK_ENTRIES = 100;
 
@@ -220,6 +221,7 @@ export const useAgentTaskStore = create<AgentTaskState>()(
 
         submitGoal: async (goal, options = {}) => {
           try {
+            await ensureAgiInitialized();
             if (options.parallel) {
               const result = await invoke<{ bestResult: { score: number } }>(
                 'agi_submit_goal_parallel',
@@ -280,6 +282,7 @@ export const useAgentTaskStore = create<AgentTaskState>()(
 
         submitGoalSwarm: async (goal, options = {}) => {
           try {
+            await ensureAgiInitialized();
             const result = await invoke<SwarmGoalResponse>('agi_submit_goal_swarm', {
               request: {
                 description: goal,
@@ -323,6 +326,7 @@ export const useAgentTaskStore = create<AgentTaskState>()(
 
         submitGoalAuto: async (goal, options = {}) => {
           try {
+            await ensureAgiInitialized();
             const result = await invoke<SubmitGoalResponse>('agi_submit_goal_auto', {
               request: {
                 description: goal,

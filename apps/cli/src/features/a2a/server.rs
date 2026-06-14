@@ -4,8 +4,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use colored::Colorize;
 use tokio::sync::Semaphore;
+
+use crate::terminal_style as ts;
 
 use super::protocol::{
     A2aState, AgentCard, InFlightTask, TaskRequest, TaskResponse, TaskResponseStatus,
@@ -31,15 +32,21 @@ const MAX_RETAINED_COMPLETED_TASKS: usize = 200;
 /// Maximum byte size for an A2A HTTP request (headers + body). Prevents DoS via huge uploads.
 const MAX_A2A_REQUEST_BYTES: usize = 2 * 1024 * 1024; // 2 MiB
 
-/// Tools that are safe for delegated A2A tasks.
+/// Tools exposed to delegated A2A tasks.
+///
+/// Delegated tasks run with `auto_approve_safe = true` (no per-action human
+/// approval), so an authenticated remote peer drives these tools directly. The
+/// list is therefore READ-ONLY by default: filesystem-mutating tools
+/// (`write_file`, `edit_file`) are intentionally excluded so a peer holding the
+/// bearer token cannot mutate local files without explicit, interactive
+/// approval. Do not add write/edit tools here without also gating them behind a
+/// config opt-in plus human approval.
 const DELEGATED_TASK_ALLOWED_TOOLS: &[&str] = &[
     "read_file",
     "search_files",
     "list_directory",
     "web_search",
     "web_fetch",
-    "write_file",
-    "edit_file",
 ];
 
 // ---------------------------------------------------------------------------
@@ -78,7 +85,7 @@ pub async fn serve_a2a(state: A2aState, port: u16) -> Result<()> {
 
     eprintln!(
         "  {} A2A server listening on http://127.0.0.1:{}",
-        "[a2a]".cyan().bold(),
+        ts::accent_header("[a2a]"),
         port
     );
 
@@ -86,7 +93,7 @@ pub async fn serve_a2a(state: A2aState, port: u16) -> Result<()> {
         let (stream, addr) = match listener.accept().await {
             Ok(conn) => conn,
             Err(e) => {
-                eprintln!("  {} Accept error: {}", "[a2a]".red(), e);
+                eprintln!("  {} Accept error: {}", ts::danger("[a2a]"), e);
                 continue;
             }
         };
@@ -94,7 +101,12 @@ pub async fn serve_a2a(state: A2aState, port: u16) -> Result<()> {
         let state = state.clone();
         tokio::spawn(async move {
             if let Err(e) = handle_connection(stream, addr, state).await {
-                eprintln!("  {} Connection error from {}: {}", "[a2a]".red(), addr, e);
+                eprintln!(
+                    "  {} Connection error from {}: {}",
+                    ts::danger("[a2a]"),
+                    addr,
+                    e
+                );
             }
         });
     }

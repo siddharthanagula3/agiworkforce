@@ -5,8 +5,11 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import { MARKETING_FEATURE_MATRIX, type PricingTabId } from '@/lib/marketing-constants';
+import { FREE_TRIAL_PROMPT_LIMIT } from '@/lib/free-trial-config';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Reveal } from '../../components/marketing/Reveal';
+import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { WaitlistForm } from '../byok/WaitlistForm';
 
 function CheckIcon() {
@@ -31,11 +34,28 @@ function CheckIcon() {
   );
 }
 
-const PRICING_TABS: { id: PricingTabId; label: string }[] = [
-  { id: 'individual', label: 'Individual' },
-  { id: 'team', label: 'Team' },
-  { id: 'api', label: 'API' },
+const PRICING_TABS: { id: PricingTabId; labelKey: string }[] = [
+  { id: 'individual', labelKey: 'tabIndividual' },
+  { id: 'team', labelKey: 'tabTeam' },
+  { id: 'api', labelKey: 'tabApi' },
 ];
+
+/** Hosted plans shown on the Team tab. Waitlist-gated; never purchasable today. */
+const TEAM_PLAN_IDS = ['pro', 'max'] as const;
+
+/**
+ * Annual savings vs monthly billing for one plan, from the canonical
+ * billing catalog. Per-plan on purpose: Hobby's annual discount differs
+ * from Pro/Max, so a single Hobby-derived badge overstated Pro/Max savings.
+ */
+function annualSavingsPct(plan: { monthlyPriceUsd: number; yearlyPriceUsd: number }): number {
+  if (plan.monthlyPriceUsd <= 0) return 0;
+  return Math.round((1 - plan.yearlyPriceUsd / 12 / plan.monthlyPriceUsd) * 100);
+}
+
+const TEAM_MAX_SAVINGS_PCT = Math.max(
+  ...TEAM_PLAN_IDS.map((id) => annualSavingsPct(BILLING_PLAN_PRICING[id])),
+);
 
 export default function PricingPage() {
   const { t } = useTranslation('pricing');
@@ -44,11 +64,6 @@ export default function PricingPage() {
 
   const localLabel = formatPrivacyModeLabel('local');
   const byokLabel = formatPrivacyModeLabel('byok');
-  const managedLabel = formatPrivacyModeLabel('managed');
-  const hobbyMonthly = BILLING_PLAN_PRICING.hobby.monthlyPriceUsd;
-  const hobbyYearly = BILLING_PLAN_PRICING.hobby.yearlyPriceUsd;
-  const hobbyAnnualPerMonth = hobbyYearly / 12;
-  const hobbySavingsPct = Math.round((1 - hobbyAnnualPerMonth / hobbyMonthly) * 100);
 
   const comparisonRows = MARKETING_FEATURE_MATRIX[activeTab];
 
@@ -57,95 +72,110 @@ export default function PricingPage() {
       <main className="agi-shell">
         <Header />
 
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">{t('pageTitle')}</h1>
-          <p className="agi-page-lede">
-            {t('pageLedePart1', { localLabel, byokLabel })}{' '}
-            {t('pageLedePart2', {
-              managedLabel: managedLabel.toLowerCase(),
-              hobbyMonthly,
-              hobbyAnnualPerMonth: hobbyAnnualPerMonth.toFixed(2),
-            })}{' '}
+        {/* ───────────────────────────── Hero ───────────────────────────── */}
+        <section className="agi-page-hero" aria-labelledby="pricing-hero-title">
+          <p className="agi-fl-eyebrow">{t('heroEyebrow')}</p>
+          <h1 id="pricing-hero-title" className="agi-fl-h1">
+            {t('pageTitle')}
+          </h1>
+          <p className="agi-fl-section-lede">
+            {t('pageLedePart1', { localLabel, byokLabel })} {t('pageLedePart2')}{' '}
             <strong>{t('pageLedePart3')}</strong>
           </p>
+          <div className="agi-fl-cta-row">
+            <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+              {t('installCta')}
+            </Link>
+            <Link href="/chat" className="agi-fl-cta agi-fl-cta--secondary">
+              {t('tryAgiCta')}
+            </Link>
+            <WaitlistTrigger
+              label={t('joinCloudWaitlistCta')}
+              source="billing"
+              className="agi-fl-cta agi-fl-cta--ghost"
+            />
+          </div>
+          <ul className="agi-fl-mode-ribbon" aria-label={t('modeRibbonLabel')}>
+            <li>{t('ribbonLocal')}</li>
+            <li>{t('ribbonByok')}</li>
+            <li>{t('ribbonCloud')}</li>
+          </ul>
         </section>
 
-        <section className="agi-section">
-          {/* Plan audience tabs */}
+        {/* ───────────────────────────── Plans ──────────────────────────── */}
+        <section className="agi-fl-section" aria-labelledby="pricing-plans-title">
+          <p className="agi-fl-eyebrow">{t('plansEyebrow')}</p>
+          <h2 id="pricing-plans-title" className="agi-fl-h2">
+            {t('plansHeading')}
+          </h2>
+          <p className="agi-fl-section-lede">{t('plansLede')}</p>
+
           <div
-            role="tablist"
-            aria-label={t('planTabsLabel')}
             style={{
-              display: 'inline-flex',
-              gap: 0,
-              border: '1px solid var(--agi-rule)',
-              borderRadius: 8,
-              padding: 4,
-              marginBottom: 32,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 12,
+              alignItems: 'center',
+              marginTop: 40,
             }}
           >
-            {PRICING_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: '7px 20px',
-                  borderRadius: 5,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  fontFamily: 'inherit',
-                  transition:
-                    'background var(--agi-dur-fast) var(--agi-ease-out), color var(--agi-dur-fast) var(--agi-ease-out)',
-                  background: activeTab === tab.id ? 'var(--agi-ink)' : 'transparent',
-                  color: activeTab === tab.id ? 'var(--agi-bg)' : 'var(--agi-ink-2)',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+            <div className="agi-tier-toggle" role="group" aria-label={t('planTabsLabel')}>
+              {PRICING_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={activeTab === tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={
+                    activeTab === tab.id
+                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                      : 'agi-tier-toggle-btn'
+                  }
+                >
+                  {t(tab.labelKey)}
+                </button>
+              ))}
+            </div>
+
+            {/* Billing cadence toggle for hosted team tiers. */}
+            {activeTab === 'team' && (
+              <div className="agi-tier-toggle" role="group" aria-label={t('billingCadenceLabel')}>
+                <button
+                  type="button"
+                  aria-pressed={!annual}
+                  onClick={() => setAnnual(false)}
+                  className={
+                    annual
+                      ? 'agi-tier-toggle-btn'
+                      : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  }
+                >
+                  {t('monthly')}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={annual}
+                  onClick={() => setAnnual(true)}
+                  className={
+                    annual
+                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                      : 'agi-tier-toggle-btn'
+                  }
+                >
+                  {t('annual')}{' '}
+                  <span className="agi-tier-toggle-save">
+                    {t('annualSaveUpTo', { pct: TEAM_MAX_SAVINGS_PCT })}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Billing cadence toggle for hosted team tiers. */}
-          {activeTab === 'team' && (
-            <div className="agi-tier-toggle" role="tablist" aria-label={t('billingCadenceLabel')}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={!annual}
-                onClick={() => setAnnual(false)}
-                className={
-                  annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                }
-              >
-                {t('monthly')}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={annual}
-                onClick={() => setAnnual(true)}
-                className={
-                  annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
-                }
-              >
-                {t('annual')}{' '}
-                <span className="agi-tier-toggle-save">
-                  {t('annualSave', { pct: hobbySavingsPct })}
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* Individual tab: tier cards */}
+          {/* Individual tab: Local + BYOK free forever, Hobby web trial */}
           {activeTab === 'individual' && (
             <div className="agi-tier-grid">
-              <article className="agi-tier">
-                <h2 className="agi-tier-name">{localLabel}</h2>
+              <Reveal as="article" className="agi-tier">
+                <h3 className="agi-tier-name">{localLabel}</h3>
                 <p className="agi-tier-price">
                   <span className="agi-tier-price-num">{t('free')}</span>
                   <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
@@ -172,10 +202,10 @@ export default function PricingPage() {
                 <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
                   {t('installCta')}
                 </Link>
-              </article>
+              </Reveal>
 
-              <article className="agi-tier">
-                <h2 className="agi-tier-name">{byokLabel}</h2>
+              <Reveal as="article" delay={60} className="agi-tier">
+                <h3 className="agi-tier-name">{byokLabel}</h3>
                 <p className="agi-tier-price">
                   <span className="agi-tier-price-num">{t('free')}</span>
                   <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
@@ -202,19 +232,21 @@ export default function PricingPage() {
                 <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
                   {t('installCta')}
                 </Link>
-              </article>
+              </Reveal>
 
-              <article className="agi-tier">
-                <h2 className="agi-tier-name">{t('hobby')}</h2>
+              <Reveal as="article" delay={120} className="agi-tier">
+                <h3 className="agi-tier-name">{t('hobby')}</h3>
                 <p className="agi-tier-price">
                   <span className="agi-tier-price-num">{t('free')}</span>
-                  <span className="agi-tier-price-sub">{t('webTrialSub')}</span>
+                  <span className="agi-tier-price-sub">
+                    {t('webTrialSub', { cap: FREE_TRIAL_PROMPT_LIMIT })}
+                  </span>
                 </p>
                 <p className="agi-tier-body">{t('hobbyTierBody')}</p>
                 <ul className="agi-tier-features">
                   <li>
                     <CheckIcon />
-                    {t('hobbyFeature1')}
+                    {t('hobbyFeature1', { cap: FREE_TRIAL_PROMPT_LIMIT })}
                   </li>
                   <li>
                     <CheckIcon />
@@ -235,140 +267,97 @@ export default function PricingPage() {
                   </Link>
                   <p className="agi-tier-cta-note">{t('managedWaitlistNote')}</p>
                 </div>
-              </article>
+              </Reveal>
             </div>
           )}
 
-          {/* Team tab: hosted tier cards */}
+          {/* Team tab: hosted tiers, waitlist-gated · never purchasable today */}
           {activeTab === 'team' && (
             <div className="agi-tier-grid">
-              {(['pro', 'max'] as const).map((planId) => {
+              {TEAM_PLAN_IDS.map((planId, i) => {
                 const plan = BILLING_PLAN_PRICING[planId];
-                const monthlyPrice = plan.monthlyPriceUsd;
-                const yearlyPerMonth = plan.yearlyPriceUsd / 12;
+                const planSavingsPct = annualSavingsPct(plan);
                 const displayPrice = annual
-                  ? `$${yearlyPerMonth.toFixed(2)}`
-                  : `$${monthlyPrice.toFixed(2)}`;
+                  ? `$${(plan.yearlyPriceUsd / 12).toFixed(2)}`
+                  : `$${plan.monthlyPriceUsd.toFixed(2)}`;
                 const sub = annual ? t('perMonthBilledAnnually') : t('perMonthBilledMonthly');
 
                 return (
-                  <article key={planId} className="agi-tier">
-                    <h2 className="agi-tier-name">{plan.label}</h2>
+                  <Reveal as="article" key={planId} delay={i * 60} className="agi-tier">
+                    <h3 className="agi-tier-name">
+                      {plan.label} <span className="agi-chip">{t('waitlistChip')}</span>
+                    </h3>
                     <p className="agi-tier-price">
                       <span className="agi-tier-price-num">{displayPrice}</span>
-                      <span className="agi-tier-price-sub">{sub}</span>
+                      <span className="agi-tier-price-sub">
+                        {sub}
+                        {annual && planSavingsPct > 0 ? (
+                          <>
+                            {' · '}
+                            <span className="agi-tier-toggle-save">
+                              {t('annualSave', { pct: planSavingsPct })}
+                            </span>
+                          </>
+                        ) : null}
+                      </span>
                     </p>
                     <p className="agi-tier-body">
                       {t(`${planId}TierBody`, { defaultValue: t('waitlistTierBody') })}
                     </p>
                     <div className="agi-tier-cta-group">
-                      <Link href="/pricing#waitlist" className="agi-tier-cta">
-                        {t('requestAccessCta')}
-                      </Link>
+                      <WaitlistTrigger
+                        label={t('joinPlanWaitlistCta', { plan: plan.label })}
+                        source="billing"
+                        className="agi-fl-cta agi-fl-cta--primary"
+                      />
                       <p className="agi-tier-cta-note">{t('waitlistNote')}</p>
                     </div>
-                  </article>
+                  </Reveal>
                 );
               })}
             </div>
           )}
 
-          {/* API / Enterprise tab */}
+          {/* API tab: Enterprise, contact sales */}
           {activeTab === 'api' && (
-            <div
-              style={{
-                maxWidth: 560,
-                margin: '0 auto',
-                padding: '48px 0',
-                textAlign: 'center',
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 12,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: 'var(--agi-ink-quiet)',
-                  marginBottom: 16,
-                  fontFamily: 'var(--agi-font-mono)',
-                }}
-              >
-                {t('enterpriseEyebrow')}
-              </p>
-              <h2
-                style={{
-                  fontSize: 36,
-                  fontWeight: 700,
-                  letterSpacing: '-0.03em',
-                  color: 'var(--agi-ink)',
-                  marginBottom: 16,
-                }}
-              >
-                {t('enterpriseHeading')}
-              </h2>
-              <p
-                style={{
-                  fontSize: 15,
-                  color: 'var(--agi-ink-2)',
-                  lineHeight: 1.6,
-                  marginBottom: 32,
-                }}
-              >
-                {t('enterpriseBody')}
-              </p>
-              <Link
-                href="/contact-sales"
-                className="agi-cta-primary"
-                style={{ textDecoration: 'none' }}
-              >
-                {t('contactSalesCta')}
-              </Link>
-            </div>
+            <Reveal className="agi-tier" as="div">
+              <p className="agi-fl-eyebrow">{t('enterpriseEyebrow')}</p>
+              <h3 className="agi-fl-h2">{t('enterpriseHeading')}</h3>
+              <p className="agi-fl-section-lede">{t('enterpriseBody')}</p>
+              <div className="agi-fl-cta-row">
+                <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--primary">
+                  {t('contactSalesCta')}
+                </Link>
+              </div>
+            </Reveal>
           )}
         </section>
 
+        {/* ──────────────── Hosted cloud waitlist (anchor target) ─────────────── */}
         <section
           id="waitlist"
-          className="agi-section"
-          style={{ borderTop: '1px solid var(--agi-rule)', paddingTop: 48 }}
+          className="agi-fl-section"
+          aria-labelledby="pricing-waitlist-title"
+          style={{ scrollMarginTop: 96 }}
         >
-          <p className="agi-section-eyebrow">{t('waitlistBadge')}</p>
-          <h2 className="agi-section-h2">Request hosted cloud access</h2>
-          <p
-            style={{
-              maxWidth: 620,
-              fontSize: 15,
-              lineHeight: 1.65,
-              color: 'var(--agi-ink-2)',
-              marginBottom: 18,
-            }}
-          >
-            Web users can already try AGI with a small Auto Economy cap. Request access here for
-            higher hosted capacity, team plans, and AGI-managed provider compute once usage
-            ledgering, abuse controls, retention, and provider-cost controls are enabled for your
-            account.
-          </p>
-          <WaitlistForm source="billing" ctaLabel="Request hosted access" />
+          <p className="agi-fl-eyebrow">{t('waitlistEyebrow')}</p>
+          <h2 id="pricing-waitlist-title" className="agi-fl-h2">
+            {t('waitlistHeading')}
+          </h2>
+          <p className="agi-fl-section-lede">{t('waitlistBody')}</p>
+          <div style={{ marginTop: 28, maxWidth: 560 }}>
+            <WaitlistForm source="billing" ctaLabel={t('requestHostedAccessCta')} />
+          </div>
         </section>
 
-        {/* W1-05: Plan comparison table */}
-        <section
-          className="agi-section"
-          style={{ borderTop: '1px solid var(--agi-rule)', paddingTop: 48 }}
-        >
-          <h2 className="agi-section-h2" style={{ marginBottom: 8 }}>
+        {/* ───────────────────────── Plan comparison ────────────────────── */}
+        <section className="agi-fl-section" aria-labelledby="pricing-compare-title">
+          <p className="agi-fl-eyebrow">{t('compareEyebrow')}</p>
+          <h2 id="pricing-compare-title" className="agi-fl-h2">
             {t('compareHeading')}
           </h2>
-          <p
-            style={{
-              fontSize: 14,
-              color: 'var(--agi-ink-2)',
-              marginBottom: 32,
-            }}
-          >
-            {t('compareSubheading')}
-          </p>
-          <div style={{ overflowX: 'auto' }}>
+          <p className="agi-fl-section-lede">{t('compareSubheading')}</p>
+          <div style={{ overflowX: 'auto', marginTop: 36 }}>
             <table
               style={{
                 width: '100%',
@@ -418,25 +407,13 @@ export default function PricingPage() {
                         borderBottom: '1px solid var(--agi-rule)',
                         fontWeight: 600,
                         color: row.highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {row.label}
                       {row.waitlist && (
-                        <span
-                          style={{
-                            marginLeft: 8,
-                            fontSize: 10,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            background: 'var(--agi-rule)',
-                            color: 'var(--agi-bg)',
-                            fontWeight: 500,
-                            letterSpacing: '0.04em',
-                            textTransform: 'uppercase',
-                            fontFamily: 'var(--agi-font-mono)',
-                          }}
-                        >
-                          {t('waitlistBadge')}
+                        <span className="agi-chip" style={{ marginLeft: 8 }}>
+                          {t('waitlistChip')}
                         </span>
                       )}
                     </td>

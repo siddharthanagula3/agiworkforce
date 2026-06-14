@@ -4,6 +4,7 @@ import { Database, Download, Link2, Trash2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { exportAllUserData } from '@/services/dsarExport';
 import { useThemeColors } from '@/src/ui/theme';
+import { buildLocalDataExportSnapshot } from './localDataSnapshot';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -20,7 +21,7 @@ export default function DataControlsScreen() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await exportAllUserData();
+      await exportAllUserData(undefined, buildLocalDataExportSnapshot());
     } catch {
       Alert.alert('Export failed', 'AGI could not create the local data export.');
     } finally {
@@ -32,7 +33,7 @@ export default function DataControlsScreen() {
     <SettingsScreenShell title="Data Controls">
       <SettingsInfo
         title="Local data"
-        body="Device-side export runs locally and includes chats, memory, settings, and installed model metadata."
+        body="Export runs on this device and includes chats, memory, settings, and installed model details."
         icon={Database}
       />
       <SettingsGroup>
@@ -69,7 +70,10 @@ export default function DataControlsScreen() {
           icon={Trash2}
           isLast
           onPress={() =>
-            router.push('/(app)/settings/storage' as Parameters<typeof router.push>[0])
+            router.push({
+              pathname: '/(app)/settings/storage',
+              params: { returnTo: '/(app)/settings/data-controls' },
+            } as Parameters<typeof router.push>[0])
           }
         />
       </SettingsGroup>

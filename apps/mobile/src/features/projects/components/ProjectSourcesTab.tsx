@@ -4,11 +4,10 @@
  * Shows attached files (name, size, date), "Add sources" CTA using
  * expo-document-picker, and an empty state when no sources are present.
  *
- * This is a v1 LOCAL-ONLY surface: sources live in MMKV via useProjectStore.
- * Cloud sync is out of scope until the cloud bridge ships.
+ * Sources live in the local project store.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { FileText, Plus, Trash2 } from 'lucide-react-native';
@@ -22,6 +21,8 @@ import { formatRelativeTime } from '@agiworkforce/utils/format';
 interface ProjectSourcesTabProps {
   projectId: string;
 }
+
+const EMPTY_PROJECT_SOURCES: ProjectSource[] = [];
 
 function SourceRow({
   source,
@@ -112,7 +113,11 @@ function EmptyState() {
 
 export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   const colors = useThemeColors();
-  const sources = useProjectStore((s) => s.projects.find((p) => p.id === projectId)?.sources ?? []);
+  const projects = useProjectStore((s) => s.projects);
+  const sources = useMemo(
+    () => projects.find((project) => project.id === projectId)?.sources ?? EMPTY_PROJECT_SOURCES,
+    [projectId, projects],
+  );
   const addSource = useProjectStore((s) => s.addSource);
   const removeSource = useProjectStore((s) => s.removeSource);
 

@@ -75,16 +75,17 @@ impl InteractionMode {
         }
     }
 
-    /// Status-bar color per the UI audit spec.
-    ///
-    /// Default=grey, Plan=blue, AcceptEdits=green, Bypass=yellow, FullAuto=red.
+    /// Status-bar badge background from the semantic terminal palette.
     fn color(self) -> Color {
+        use crate::tui::terminal_palette::{
+            ui_mode_accept_edits, ui_mode_bypass, ui_mode_default, ui_mode_full_auto, ui_mode_plan,
+        };
         match self {
-            Self::Chat => Color::DarkGray,
-            Self::Plan => Color::Blue,
-            Self::AcceptEdits => Color::Green,
-            Self::BypassPermissions => Color::Yellow,
-            Self::FullAuto => Color::Red,
+            Self::Chat => ui_mode_default(),
+            Self::Plan => ui_mode_plan(),
+            Self::AcceptEdits => ui_mode_accept_edits(),
+            Self::BypassPermissions => ui_mode_bypass(),
+            Self::FullAuto => ui_mode_full_auto(),
         }
     }
 }
@@ -517,13 +518,15 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
     terminal.draw(|frame| {
         let area = frame.area();
 
+        // Dynamic input height: border(2) + content rows (1..=8)
+        let input_height = 2 + composer_content_rows(&app.input);
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // header
-                Constraint::Min(5),    // chat area
-                Constraint::Length(3), // input
-                Constraint::Length(1), // status bar
+                Constraint::Length(3),            // header
+                Constraint::Min(5),               // chat area
+                Constraint::Length(input_height), // input (grows with content)
+                Constraint::Length(1),            // status bar
             ])
             .split(area);
 
@@ -578,6 +581,7 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
 }
 
 fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
+    use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_danger, ui_muted};
     let provider_display = match app.provider_name.as_str() {
         "ollama" => "Local",
         other => other,
@@ -586,30 +590,26 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let mut spans = vec![
         Span::styled(
             " AGI ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!(" v{} ", env!("CARGO_PKG_VERSION")),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         ),
         Span::raw(" │ "),
         Span::styled(
             &app.model_name,
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
+            Style::default().add_modifier(Modifier::BOLD),
         ),
         Span::raw(" │ "),
-        Span::styled(provider_display, Style::default().fg(Color::Green)),
+        Span::styled(provider_display, Style::default().fg(ui_accent())),
     ];
 
     if let Some(ref branch) = app.git_branch {
         spans.push(Span::raw(" │ "));
         spans.push(Span::styled(
             format!(" {branch}"),
-            Style::default().fg(Color::Magenta),
+            Style::default().fg(ui_muted()),
         ));
     }
 
@@ -617,9 +617,9 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     spans.push(Span::styled(
         format!("{}% ctx", app.context_percent()),
         Style::default().fg(if app.context_percent() > 80 {
-            Color::Red
+            ui_danger()
         } else {
-            Color::DarkGray
+            ui_muted()
         }),
     ));
 
@@ -634,10 +634,10 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray))
+        .border_style(Style::default().fg(ui_muted()))
         .title_bottom(Line::from(Span::styled(
             tokens_text,
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         )));
 
     let header = Paragraph::new(header_text).block(block);
@@ -645,51 +645,49 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 }
 
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
+    use crate::tui::terminal_palette::{
+        ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
+    };
     let mut lines: Vec<Line> = Vec::new();
 
     if app.chat_messages.is_empty() && !app.is_loading {
         use crate::design_system::AccessMode;
-        use crate::tui::terminal_palette::{v3_success, v3_teal, v3_terracotta};
         // Access-mode colors match the status-bar chip so the visual identity is
         // consistent across the app.
         let (mode_label, mode_color) = match provider_access_mode(&app.session.provider) {
-            AccessMode::Local => ("local · on-device & private", v3_success()),
-            AccessMode::Byok => ("your own key · BYOK", v3_teal()),
-            AccessMode::Cloud => ("AGI cloud subscription", v3_terracotta()),
+            AccessMode::Local => ("local · on-device & private", ui_success()),
+            AccessMode::Byok => ("your own key · BYOK", ui_accent()),
+            AccessMode::Cloud => ("AGI cloud subscription", ui_cloud()),
         };
 
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "  Welcome to AGI",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
         )));
         lines.push(Line::from(""));
         // Orient the user: which model are they on, reached via which mode.
         lines.push(Line::from(vec![
-            Span::styled("  Model  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("  Model  ", Style::default().fg(ui_muted())),
             Span::styled(
                 app.model_name.clone(),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled("   ◉ ", Style::default().fg(mode_color)),
             Span::styled(mode_label, Style::default().fg(mode_color)),
         ]));
         lines.push(Line::from(Span::styled(
-            "  Run models on-device, with your own key, or on AGI cloud — /model to switch.",
-            Style::default().fg(Color::DarkGray),
+            "  Choose Local, BYOK, or Cloud with /model.",
+            Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "  Type a message and press Enter to send.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
             "  Type / for commands · Shift+Tab to switch modes · Esc to quit.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         )));
     } else {
         for msg in &app.chat_messages {
@@ -701,22 +699,20 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                 ChatRole::User => (
                     "  > ",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(ui_accent())
                         .add_modifier(Modifier::BOLD),
                 ),
                 ChatRole::Assistant => (
                     "  ✦ ",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
                 ),
                 ChatRole::System => (
                     "  ℹ ",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(ui_accent())
                         .add_modifier(Modifier::BOLD),
                 ),
-                ChatRole::Tool => ("  ▸ ", Style::default().fg(Color::Magenta)),
+                ChatRole::Tool => ("  ▸ ", Style::default().fg(ui_accent())),
             };
 
             // Render prefix line
@@ -730,13 +726,13 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                 // Simple rendering for user/system/tool messages
                 for text_line in msg.text.lines() {
                     let style = match msg.role {
-                        ChatRole::User => Style::default().fg(Color::White),
-                        ChatRole::System => Style::default().fg(Color::Yellow),
-                        ChatRole::Tool => Style::default().fg(Color::DarkGray),
+                        ChatRole::User => Style::default(),
+                        ChatRole::System => Style::default(),
+                        ChatRole::Tool => Style::default().fg(ui_muted()),
                         // Assistant is handled by the outer if-branch; reaching
                         // here would be a logic error but we render it as plain
-                        // white rather than panicking so the TUI stays responsive.
-                        ChatRole::Assistant => Style::default().fg(Color::White),
+                        // default foreground rather than panicking so the TUI stays responsive.
+                        ChatRole::Assistant => Style::default(),
                     };
                     let content = format!("    {text_line}");
                     lines.push(Line::from(parse_inline_md(&content, style)));
@@ -748,37 +744,34 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     // Tool-call rows: a visible record of what the agent did this turn
     // (running → succeeded/failed), instead of vanishing into swallowed stderr.
     if !app.tool_cells.is_empty() {
-        use crate::tui::terminal_palette::{v3_muted, v3_success, v3_terracotta};
         use crate::tui::transcript_cell::TranscriptCellState;
         lines.push(Line::from(""));
         for cell in &app.tool_cells {
             let (glyph, glyph_color) = match cell.state {
-                TranscriptCellState::Running => (app.spinner_char(), v3_muted()),
-                TranscriptCellState::Complete => ("✔", v3_success()),
-                TranscriptCellState::Failed => ("✗", v3_terracotta()),
-                TranscriptCellState::Cancelled => ("⊘", v3_muted()),
-                TranscriptCellState::Pending => ("•", v3_muted()),
+                TranscriptCellState::Running => (app.spinner_char(), ui_muted()),
+                TranscriptCellState::Complete => ("✔", ui_success()),
+                TranscriptCellState::Failed => ("✗", ui_danger()),
+                TranscriptCellState::Cancelled => ("⊘", ui_muted()),
+                TranscriptCellState::Pending => ("•", ui_muted()),
             };
             let mut spans = vec![
                 Span::styled(format!("  {glyph} "), Style::default().fg(glyph_color)),
                 Span::styled(
                     cell.name.clone(),
-                    Style::default()
-                        .fg(Color::Magenta)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().add_modifier(Modifier::BOLD),
                 ),
             ];
             if !cell.summary.is_empty() {
                 spans.push(Span::styled(
                     format!("  {}", cell.summary),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(ui_muted()),
                 ));
             }
             lines.push(Line::from(spans));
             if let Some(preview) = &cell.output_preview {
                 lines.push(Line::from(vec![
                     Span::raw("    "),
-                    Span::styled(preview.clone(), Style::default().fg(Color::DarkGray)),
+                    Span::styled(preview.clone(), Style::default().fg(ui_muted())),
                 ]));
             }
         }
@@ -796,12 +789,12 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         lines.push(Line::from(vec![
             Span::styled(
                 format!("  {} ", app.spinner_char()),
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(ui_accent()),
             ),
             Span::styled(
                 format!("Thinking... {elapsed_str}"),
                 Style::default()
-                    .fg(Color::DarkGray)
+                    .fg(ui_muted())
                     .add_modifier(Modifier::ITALIC),
             ),
         ]));
@@ -811,7 +804,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
             for line in app.stream_buffer.lines().take(5) {
                 lines.push(Line::from(Span::styled(
                     format!("    {line}"),
-                    Style::default().fg(Color::White),
+                    Style::default(),
                 )));
             }
         }
@@ -826,7 +819,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let block = Block::default()
         .borders(Borders::LEFT | Borders::RIGHT)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(Style::default().fg(ui_muted()));
 
     let chat = Paragraph::new(lines)
         .block(block)
@@ -840,7 +833,7 @@ fn parse_inline_md(text: &str, base_style: Style) -> Vec<Span<'static>> {
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut remaining = text.to_string();
     let bold_style = base_style.add_modifier(Modifier::BOLD);
-    let code_style = Style::default().fg(Color::Yellow);
+    let code_style = Style::default().fg(crate::tui::terminal_palette::ui_accent());
 
     while !remaining.is_empty() {
         if let Some(start) = remaining.find("**") {
@@ -882,17 +875,7 @@ fn parse_inline_md(text: &str, base_style: Style) -> Vec<Span<'static>> {
 }
 
 fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
-    let display_text = if app.input.is_empty() && !app.is_loading {
-        "Type your message... (/ for commands, Shift+Tab to switch mode)"
-    } else {
-        &app.input
-    };
-
-    let style = if app.input.is_empty() && !app.is_loading {
-        Style::default().fg(Color::DarkGray)
-    } else {
-        Style::default().fg(Color::White)
-    };
+    use crate::tui::terminal_palette::ui_muted;
 
     let prompt_char = match app.mode {
         InteractionMode::Chat => "> ",
@@ -902,46 +885,102 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         InteractionMode::FullAuto => "F ",
     };
 
-    let input_line = Line::from(vec![
-        Span::styled(
-            prompt_char,
-            Style::default()
-                .fg(app.mode.color())
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(display_text.to_string(), style),
-    ]);
+    let prompt_width = prompt_char_width(prompt_char);
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray))
+        .border_style(Style::default().fg(ui_muted()))
         .title(format!(" {} ", app.mode.label()));
 
-    let input_widget = Paragraph::new(input_line).block(block);
-    frame.render_widget(input_widget, area);
-
-    if !app.is_loading {
-        let cursor_x =
-            area.x + 1 + prompt_char_width(prompt_char) + input_cursor_display_width(app);
+    if app.input.is_empty() && !app.is_loading {
+        // Show placeholder on single line
+        let placeholder_line = Line::from(vec![
+            Span::styled(
+                prompt_char,
+                Style::default()
+                    .fg(app.mode.color())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Message AGI...  Enter to send · Shift+Enter for newline · / for commands",
+                Style::default().fg(ui_muted()),
+            ),
+        ]);
+        let widget = Paragraph::new(placeholder_line).block(block);
+        frame.render_widget(widget, area);
+        // Position cursor after prompt character
+        let cursor_x = area.x + 1 + prompt_width;
         let cursor_y = area.y + 1;
         frame.set_cursor_position((cursor_x, cursor_y));
+        return;
     }
+
+    // Multiline: split input by '\n' and render each line.
+    let style = Style::default();
+    let prompt_style = Style::default()
+        .fg(app.mode.color())
+        .add_modifier(Modifier::BOLD);
+
+    let lines_text: Vec<&str> = app.input.split('\n').collect();
+    let lines: Vec<Line> = lines_text
+        .iter()
+        .enumerate()
+        .map(|(i, &text)| {
+            if i == 0 {
+                Line::from(vec![
+                    Span::styled(prompt_char, prompt_style),
+                    Span::styled(text.to_string(), style),
+                ])
+            } else {
+                // Indent continuation lines to align with text after prompt
+                let indent = " ".repeat(prompt_width as usize);
+                Line::from(vec![
+                    Span::styled(indent, style),
+                    Span::styled(text.to_string(), style),
+                ])
+            }
+        })
+        .collect();
+
+    let widget = Paragraph::new(lines).block(block);
+    frame.render_widget(widget, area);
+
+    if !app.is_loading {
+        // Compute cursor (row, col) within the multiline content
+        let cursor_byte = floor_char_boundary(&app.input, app.cursor);
+        let text_before = &app.input[..cursor_byte];
+        let cursor_row = text_before.chars().filter(|&c| c == '\n').count();
+        let line_start_byte = text_before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        let col_text_width =
+            Line::from(text_before[line_start_byte..].to_string()).width() as u16;
+
+        // Continuation rows align under the first line's text, same as row 0.
+        let indent_width = prompt_width;
+        let cursor_x = area.x + 1 + indent_width + col_text_width;
+        let cursor_y = area.y + 1 + cursor_row as u16;
+        frame.set_cursor_position((cursor_x, cursor_y));
+    }
+}
+
+/// Return the number of display rows needed for the input composer content
+/// (excluding the 2 border rows). Minimum 1, maximum 8.
+fn composer_content_rows(input: &str) -> u16 {
+    let newlines = input.chars().filter(|&c| c == '\n').count() as u16;
+    (newlines + 1).clamp(1, 8)
 }
 
 fn prompt_char_width(prompt_char: &str) -> u16 {
     Line::from(prompt_char.to_string()).width() as u16
 }
 
-fn input_cursor_display_width(app: &TuiApp) -> u16 {
-    input_prefix_display_width(&app.input, app.cursor)
-}
-
+#[cfg(test)]
 fn input_prefix_display_width(input: &str, cursor: usize) -> u16 {
     let cursor = floor_char_boundary(input, cursor);
     Line::from(input[..cursor].to_string()).width() as u16
 }
 
 fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp) {
+    use crate::tui::terminal_palette::{ui_on_light, ui_warning};
     let Some(banner) = app.current_fallback_banner() else {
         return;
     };
@@ -962,8 +1001,8 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
     let banner_widget = Paragraph::new(Line::from(Span::styled(
         text,
         Style::default()
-            .fg(Color::Black)
-            .bg(Color::Yellow)
+            .fg(ui_on_light())
+            .bg(ui_warning())
             .add_modifier(Modifier::BOLD),
     )));
     frame.render_widget(banner_widget, area);
@@ -1006,13 +1045,13 @@ fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_sys
 
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     use crate::tui::terminal_palette::{
-        v3_danger, v3_muted, v3_on_dark, v3_on_light, v3_status_bar_bg, v3_success, v3_teal,
-        v3_terracotta,
+        ui_accent, ui_cloud, ui_danger, ui_muted, ui_on_dark, ui_on_light, ui_status_bar_bg,
+        ui_success,
     };
     let badge_fg = if app.mode == InteractionMode::Chat {
-        v3_on_dark()
+        ui_on_dark()
     } else {
-        v3_on_light()
+        ui_on_light()
     };
     let mode_span = Span::styled(
         format!(" {} ", app.mode.label()),
@@ -1027,13 +1066,13 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let effort_str = format!("effort:{}", app.effort.label());
 
-    // Sandbox indicator: success-green when a sandbox backend is active, danger-red otherwise.
+    // Sandbox indicator: positive when a sandbox backend is active, critical otherwise.
     let (sandbox_label, sandbox_color) = match app.sandbox_type {
-        Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", v3_success()),
-        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", v3_success()),
-        Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", v3_success()),
-        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => ("sandbox: win", v3_success()),
-        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", v3_danger()),
+        Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", ui_success()),
+        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", ui_success()),
+        Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", ui_success()),
+        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => ("sandbox: win", ui_success()),
+        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", ui_danger()),
     };
 
     // Access-mode chip: always show whether the active model is reached via
@@ -1043,9 +1082,9 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let access_span = {
         use crate::design_system::AccessMode;
         let (label, color) = match provider_access_mode(&app.session.provider) {
-            AccessMode::Local => ("local", v3_success()),
-            AccessMode::Byok => ("byok", v3_teal()),
-            AccessMode::Cloud => ("cloud", v3_terracotta()),
+            AccessMode::Local => ("local", ui_success()),
+            AccessMode::Byok => ("byok", ui_accent()),
+            AccessMode::Cloud => ("cloud", ui_cloud()),
         };
         Span::styled(
             format!("◉ {label}"),
@@ -1055,22 +1094,22 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let mut spans: Vec<Span> = vec![mode_span, Span::raw(" "), access_span, Span::raw("  ")];
     spans.extend([
-        Span::styled(cost_str, Style::default().fg(v3_muted())),
+        Span::styled(cost_str, Style::default().fg(ui_muted())),
         Span::raw("  "),
-        Span::styled(effort_str, Style::default().fg(v3_muted())),
+        Span::styled(effort_str, Style::default().fg(ui_muted())),
         Span::raw("  "),
         Span::styled(sandbox_label, Style::default().fg(sandbox_color)),
         Span::raw("  "),
-        Span::styled("Shift+Tab: mode", Style::default().fg(v3_muted())),
+        Span::styled("Shift+Tab: mode", Style::default().fg(ui_muted())),
         Span::raw("  "),
-        Span::styled("/: commands", Style::default().fg(v3_muted())),
+        Span::styled("/: commands", Style::default().fg(ui_muted())),
         Span::raw("  "),
-        Span::styled("Esc: quit", Style::default().fg(v3_muted())),
+        Span::styled("Esc: quit", Style::default().fg(ui_muted())),
     ]);
     let status = Line::from(spans);
 
     let bar =
-        Paragraph::new(status).style(Style::default().bg(v3_status_bar_bg()).fg(v3_on_dark()));
+        Paragraph::new(status).style(Style::default().bg(ui_status_bar_bg()).fg(ui_on_dark()));
     frame.render_widget(bar, area);
 }
 
@@ -1093,12 +1132,13 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
         width,
         height: 1,
     };
-    // Use the same color as the mode badge, white text for legibility on grey
+    use crate::tui::terminal_palette::{ui_on_dark, ui_on_light};
+    // Use the same color as the mode badge, with semantic foreground contrast.
     let bg = app.mode.color();
     let fg = if app.mode == InteractionMode::Chat {
-        Color::White
+        ui_on_dark()
     } else {
-        Color::Black
+        ui_on_light()
     };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
@@ -1132,11 +1172,12 @@ fn render_overlay(
     let visible_lines = overlay_area.height.saturating_sub(2) as usize;
     let max_scroll = lines.len().saturating_sub(visible_lines) as u16;
     let scroll = scroll_offset.min(max_scroll);
+    let border_color = crate::tui::terminal_palette::ui_warning();
     let para = Paragraph::new(lines)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow)),
+                .border_style(Style::default().fg(border_color)),
         )
         .scroll((scroll, 0))
         .wrap(Wrap { trim: false });
@@ -1199,6 +1240,16 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         // Shift+Tab → cycle mode
         KeyCode::BackTab => InputAction::CycleMode,
 
+        // Shift+Enter or Alt+Enter → insert newline (multiline composer)
+        KeyCode::Enter
+            if key.modifiers.contains(KeyModifiers::SHIFT)
+                || key.modifiers.contains(KeyModifiers::ALT) =>
+        {
+            insert_char_at_cursor(&mut app.input, &mut app.cursor, '\n');
+            InputAction::None
+        }
+
+        // Plain Enter → submit message (claude.ai / ChatGPT parity)
         KeyCode::Enter => {
             let text = app.input.trim().to_string();
             if text.is_empty() {
@@ -1251,19 +1302,99 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         }
 
         KeyCode::Home => {
-            app.cursor = 0;
+            // Move to start of current line (not start of whole buffer).
+            let cursor = floor_char_boundary(&app.input, app.cursor);
+            let line_start = app.input[..cursor]
+                .rfind('\n')
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            app.cursor = line_start;
             InputAction::None
         }
         KeyCode::End => {
-            app.cursor = app.input.len();
+            // Move to end of current line (not end of whole buffer).
+            let cursor = floor_char_boundary(&app.input, app.cursor);
+            let line_end = app.input[cursor..]
+                .find('\n')
+                .map(|p| cursor + p)
+                .unwrap_or(app.input.len());
+            app.cursor = line_end;
             InputAction::None
         }
 
-        KeyCode::Up => InputAction::ScrollUp,
-        KeyCode::Down => InputAction::ScrollDown,
+        // Up/Down: navigate within multiline composer when applicable,
+        // otherwise scroll the chat area.
+        KeyCode::Up => {
+            if composer_move_up(app) {
+                InputAction::None
+            } else {
+                InputAction::ScrollUp
+            }
+        }
+        KeyCode::Down => {
+            if composer_move_down(app) {
+                InputAction::None
+            } else {
+                InputAction::ScrollDown
+            }
+        }
 
         _ => InputAction::None,
     }
+}
+
+/// Try to move the composer cursor up one line. Returns true if a line move
+/// was performed (cursor was not already on the first line), false otherwise.
+fn composer_move_up(app: &mut TuiApp) -> bool {
+    let cursor = floor_char_boundary(&app.input, app.cursor);
+    // Find start of current line
+    let line_start = app.input[..cursor]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    if line_start == 0 {
+        // Already on the first line — let the event fall through to scroll chat.
+        return false;
+    }
+    // Column offset within current line
+    let col_offset = cursor - line_start;
+    // Find start of previous line
+    let prev_line_start = app.input[..line_start.saturating_sub(1)]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    let prev_line_end = line_start - 1; // the '\n' itself
+    let prev_line_len = prev_line_end - prev_line_start;
+    // Land at same column or end of prev line
+    app.cursor = prev_line_start + col_offset.min(prev_line_len);
+    true
+}
+
+/// Try to move the composer cursor down one line. Returns true if a line move
+/// was performed (cursor was not already on the last line), false otherwise.
+fn composer_move_down(app: &mut TuiApp) -> bool {
+    let cursor = floor_char_boundary(&app.input, app.cursor);
+    // Find end of current line (next '\n' or end of buffer)
+    let line_start = app.input[..cursor]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    let col_offset = cursor - line_start;
+    // Find start of next line
+    let next_newline = app.input[cursor..].find('\n');
+    let Some(rel) = next_newline else {
+        // Already on last line.
+        return false;
+    };
+    let next_line_start = cursor + rel + 1;
+    // Find end of next line
+    let next_line_end = app.input[next_line_start..]
+        .find('\n')
+        .map(|p| next_line_start + p)
+        .unwrap_or(app.input.len());
+    let next_line_len = next_line_end - next_line_start;
+    app.cursor = next_line_start + col_offset.min(next_line_len);
+    true
 }
 
 fn open_command_popup(app: &mut TuiApp) {
@@ -1449,14 +1580,9 @@ fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.effort = effort;
             app.input.clear();
             app.cursor = 0;
-            let budget = effort.anthropic_budget_tokens();
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
-                text: format!(
-                    "Effort set to {} (anthropic budget: {} tokens)",
-                    effort.label(),
-                    budget,
-                ),
+                text: format!("Effort set to {}", effort.label()),
             });
             InputAction::None
         }
@@ -1493,10 +1619,23 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 // ---------------------------------------------------------------------------
 
 /// Detect if user is asking to switch modes via natural language.
+///
+/// SECURITY: Permission-*escalating* modes (AcceptEdits, BypassPermissions,
+/// FullAuto) are only triggered by an explicit, command-style utterance whose
+/// entire (trimmed) text is the trigger phrase — never by a fuzzy substring
+/// buried in conversational prose. This prevents a user who merely *discusses*
+/// those words (e.g. "don't give me no prompts about this") from silently
+/// disabling tool-approval prompts for the rest of the session. The
+/// non-escalating modes (Plan, Chat) — which only restrict or normalize
+/// behavior — keep the more permissive natural-language matching.
 fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     let lower = text.to_lowercase();
+    // Normalize to the bare command phrase: trim surrounding whitespace and a
+    // single leading slash so both "/yolo" and "yolo mode" map to one trigger.
+    let exact = lower.trim();
+    let exact = exact.strip_prefix('/').unwrap_or(exact).trim();
 
-    // Plan mode triggers — require explicit intent, not just the word "plan"
+    // Plan mode triggers — non-escalating (read-only), natural language allowed.
     if lower == "/plan"
         || lower.contains("go to plan mode")
         || lower.contains("enter plan mode")
@@ -1511,31 +1650,44 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         return Some(InteractionMode::Plan);
     }
 
-    // Accept edits mode triggers
-    if lower.contains("accept edits")
-        || lower.contains("auto accept")
-        || lower.contains("accept all edits")
-        || lower.contains("auto-accept")
-        || lower.contains("yolo mode")
-    {
+    // Accept edits mode — escalating: require the message to BE the command.
+    if matches!(
+        exact,
+        "accept edits"
+            | "accept-edits"
+            | "auto accept"
+            | "auto-accept"
+            | "accept all edits"
+            | "accept edits mode"
+            | "yolo"
+            | "yolo mode"
+    ) {
         return Some(InteractionMode::AcceptEdits);
     }
 
-    // Bypass permissions triggers
-    if lower.contains("bypass permission")
-        || lower.contains("skip permission")
-        || lower.contains("dangerously skip")
-        || lower.contains("no prompts")
-    {
+    // Bypass permissions — escalating: require the message to BE the command.
+    if matches!(
+        exact,
+        "bypass permissions"
+            | "bypass permission"
+            | "bypass permissions mode"
+            | "skip permissions"
+            | "skip permission"
+            | "dangerously skip permissions"
+            | "no prompts"
+    ) {
         return Some(InteractionMode::BypassPermissions);
     }
 
-    // FullAuto mode
-    if lower.contains("full auto") || lower.contains("fullauto") || lower.contains("full-auto") {
+    // FullAuto — escalating: require the message to BE the command.
+    if matches!(
+        exact,
+        "full auto" | "fullauto" | "full-auto" | "full auto mode" | "full-auto mode"
+    ) {
         return Some(InteractionMode::FullAuto);
     }
 
-    // Back to chat mode
+    // Back to chat mode — non-escalating (de-escalates), natural language allowed.
     if lower.contains("normal mode")
         || lower.contains("chat mode")
         || lower.contains("exit plan")
@@ -1545,6 +1697,18 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     }
 
     None
+}
+
+/// True for modes that disable or weaken the tool-approval gate. A pure
+/// utterance that switches into one of these is treated strictly as a command
+/// and is NOT also forwarded to the model as a chat turn.
+fn mode_is_permission_escalating(mode: InteractionMode) -> bool {
+    matches!(
+        mode,
+        InteractionMode::AcceptEdits
+            | InteractionMode::BypassPermissions
+            | InteractionMode::FullAuto
+    )
 }
 
 /// Apply a mode change to the app and session.
@@ -2135,12 +2299,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match new_effort {
                     Some(e) => {
                         app.effort = e;
-                        let budget = e.anthropic_budget_tokens();
-                        SlashResult::SystemMessage(format!(
-                            "Effort set to {} (anthropic budget: {} tokens)",
-                            e.label(),
-                            budget,
-                        ))
+                        SlashResult::SystemMessage(format!("Effort set to {}", e.label()))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown effort level '{arg}'. Use: low | medium | high | max"
@@ -2218,23 +2377,45 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/diff-review" => {
             use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
             // Gather changed files from `git status --porcelain` synchronously.
-            let files: Vec<FileDiff> = std::process::Command::new("git")
+            let status_out = std::process::Command::new("git")
                 .args(["status", "--porcelain"])
                 .output()
                 .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                .unwrap_or_default()
+                .unwrap_or_default();
+            let changed_paths: Vec<String> = status_out
                 .lines()
                 .filter_map(|line| {
                     let path = line.get(3..)?;
-                    if path.is_empty() {
-                        return None;
-                    }
-                    Some(FileDiff::new(path, vec![], 0, 0))
+                    if path.is_empty() { None } else { Some(path.to_string()) }
                 })
                 .collect();
-            if files.is_empty() {
+            if changed_paths.is_empty() {
                 SlashResult::SystemMessage("No changed files (working tree clean).".into())
             } else {
+                // For each changed file, run `git diff HEAD -- <path>` to get real hunks.
+                // Untracked files use an empty diff body (no HEAD revision to compare).
+                let files: Vec<FileDiff> = changed_paths.iter().map(|path| {
+                    let diff_text = std::process::Command::new("git")
+                        .args(["diff", "HEAD", "--", path])
+                        .output()
+                        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                        .unwrap_or_default();
+                    let mut additions = 0usize;
+                    let mut deletions = 0usize;
+                    let mut hunks: Vec<String> = Vec::new();
+                    for line in diff_text.lines() {
+                        if line.starts_with('+') && !line.starts_with("+++") {
+                            additions += 1;
+                            hunks.push(line.to_string());
+                        } else if line.starts_with('-') && !line.starts_with("---") {
+                            deletions += 1;
+                            hunks.push(line.to_string());
+                        } else if line.starts_with("@@") {
+                            hunks.push(line.to_string());
+                        }
+                    }
+                    FileDiff::new(path.as_str(), hunks, additions, deletions)
+                }).collect();
                 let view = DiffReviewView::new(files);
                 app.open_overlay(Box::new(view));
                 SlashResult::SystemMessage(
@@ -2396,6 +2577,7 @@ pub async fn run(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: crate::mcp::McpConfigLoadOptions,
+    agent_name: Option<String>,
 ) -> Result<()> {
     let effective_provider_override = crate::models::selection_provider_override(
         model,
@@ -2425,6 +2607,18 @@ pub async fn run(
     }
     if team_mode {
         session.enable_team_mode();
+    }
+    // Wire --agent: load the named agent definition and apply overrides to the session.
+    if let Some(ref name) = agent_name {
+        match crate::agents::find_agent(name) {
+            Some(agent_def) => {
+                agent_def.apply_to_session(&mut session);
+                eprintln!("Agent '{}' loaded.", agent_def.name);
+            }
+            None => {
+                eprintln!("Warning: agent '{}' not found. Run /agents to list available agents.", name);
+            }
+        }
     }
 
     match (resume_messages, resume_managed_session) {
@@ -2603,7 +2797,8 @@ async fn run_event_loop(
                 }
 
                 InputAction::SendMessage(text) => {
-                    // Detect natural language mode switches
+                    // Detect natural language mode switches.
+                    let mut handled_as_mode_command = false;
                     if let Some(new_mode) = detect_mode_intent(&text) {
                         apply_mode(app, new_mode);
                         let hcfg = app.session.hooks_config().clone();
@@ -2626,9 +2821,21 @@ async fn run_event_loop(
                             role: ChatRole::System,
                             text: format!("{} — {}", app.mode.label(), mode_description(app.mode)),
                         });
-                        // Still send the message to the LLM for context
+                        // A pure utterance that escalates into a permission-weakening
+                        // mode is a command, not a chat turn: do NOT also forward it
+                        // to the model (avoids an unintended extra turn + the mode
+                        // change being a side effect of normal chat input). Plan/Chat
+                        // switches still fall through so the message is sent for
+                        // context.
+                        if mode_is_permission_escalating(new_mode) {
+                            handled_as_mode_command = true;
+                        }
                     }
 
+                    // A pure permission-escalating mode-switch utterance is fully
+                    // handled above; skip slash/prompt dispatch (the loop still
+                    // renders below).
+                    if !handled_as_mode_command {
                     match handle_slash(&text, app) {
                         SlashResult::Quit => {
                             app.should_quit = true;
@@ -2718,6 +2925,7 @@ async fn run_event_loop(
                                 text,
                             });
                         }
+                    }
                     }
                 }
 
@@ -2893,6 +3101,13 @@ async fn send_message(
     // decision the frozen UI can never deliver). `biased` polls the turn future
     // first; a pending approval can only exist while the turn is still in
     // flight, so this never strands a queued request.
+    // Thread the current effort level's thinking budget into the session before
+    // every send. Only Anthropic respects this field; other providers ignore it.
+    // Low/Medium → None (standard inference), High/Max → Some(N tokens).
+    app.session.thinking_budget_tokens = app
+        .effort
+        .thinking_budget_for_anthropic();
+
     let result = {
         let callback = Box::new(move |chunk: &str| {
             if let Ok(mut buf) = buf_for_callback.lock() {

@@ -20,6 +20,7 @@ import { useChatViewStore, type ChatMode, type ChatStyle } from './chatViewStore
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
 import { consolidateFactsFromTurn } from '@/src/features/memory/services/consolidation';
+import { recognizeText } from '@/src/features/image/services/ocr';
 import {
   executionModeForConversation,
   executionModeForModel,
@@ -105,6 +106,28 @@ function createLocalAttachmentReferences(
     mimeType: attachment.mimeType,
     fileName: attachment.fileName,
   }));
+}
+
+async function buildLocalImageOcrContext(imageUploads: MessageAttachment[]): Promise<string[]> {
+  const context: string[] = [];
+  for (const image of imageUploads) {
+    try {
+      const ocr = await recognizeText(image.url);
+      const text = ocr.text.trim();
+      if (text.length > 0) {
+        context.push(
+          `[Image: ${image.fileName ?? 'attached image'}]\nOn-device OCR text:\n${text}`,
+        );
+        continue;
+      }
+    } catch {
+      // Fall through to the honest no-text message below.
+    }
+    context.push(
+      `[Image: ${image.fileName ?? 'attached image'}]\nOn-device OCR found no readable text. The local text model cannot inspect the image pixels directly.`,
+    );
+  }
+  return context;
 }
 
 function normalizeLocalMessageContent(
@@ -472,6 +495,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       messageContent = fileRefs + (content ? '\n\n' + content : '');
     }
 
+    if (shouldUseLocalRuntime && imageUploads && imageUploads.length > 0) {
+      const imageContext = await buildLocalImageOcrContext(imageUploads);
+      messageContent = [messageContent, ...imageContext].filter(Boolean).join('\n\n');
+    }
+
     if (imageUploads && imageUploads.length > 0) {
       historyMessages.push({
         role: 'user',
@@ -485,7 +513,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
 
     const projectState = executionMode === 'local' ? useProjectStore.getState() : null;
-    const localProjectId = projectState?.activeProjectId ?? null;
+    const localProjectId = executionMode === 'local' ? (conversation?.projectId ?? null) : null;
     if (projectState && localProjectId) {
       const activeProject = projectState.projects.find((p) => p.id === localProjectId);
       if (activeProject?.instructions?.trim()) {
@@ -633,6 +661,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           prompt: messageContent,
           messages: localMessages,
           requestId: assistantMessageId,
+          signal: controller.signal,
           onToken: (token) => {
             if (controller.signal.aborted) return;
             if (localFirstTokenAt === 0) localFirstTokenAt = Date.now();

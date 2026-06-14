@@ -26,12 +26,7 @@ import {
 } from './features/background/conversation-history';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import { setupVoiceInput } from './features/side-panel/voice';
-import {
-  ALLOWED_BRIDGE_HOSTS,
-  DEFAULT_AGI_BRIDGE_URL,
-  validateBridgeUrl,
-  sanitizePageText,
-} from './background/policy';
+import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
 import {
   Terminal,
   FileText,
@@ -40,7 +35,6 @@ import {
   Globe,
   CircleCheck,
   Loader2,
-  Settings,
   Folder,
   Plug,
   ChevronRight,
@@ -57,8 +51,31 @@ import {
   Square,
   renderIcon,
 } from './assets/icons';
+import {
+  buildComputerUsePanel,
+  COMPUTER_USE_PANEL_CSS,
+  type ComputerUsePanelAPI,
+} from './features/side-panel/computerUsePanel';
+import {
+  loadPairingState,
+  requestPairing,
+  unpair,
+  type PairingState,
+} from './features/native-bridge/pairing';
+import { isMemoryItem, MEMORY_STORAGE_KEY } from './background/memory-bridge';
+import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 
 const extensionSendQueue = getExtensionSendQueue();
+
+// ── Drawer: shared storage keys ──────────────────────────────────────────────
+/** Storage key matching inPagePanel/setup.ts IN_PAGE_PANEL_ENABLED_KEY */
+const SP_IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
+/** Storage key matching background.ts siteAllowlistCache + inPagePanel/setup.ts */
+const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
+
+/** Session timer for the stats footer in the drawer */
+let _drawerSessionStart = Date.now();
+let _drawerSessionTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Side-panel UI message shape.
@@ -212,7 +229,7 @@ const pendingAttachments: string[] = [];
  */
 let currentPageHostname = '';
 
-type SidePanelTab = 'chat' | 'workflows';
+type SidePanelTab = 'chat' | 'workflows' | 'computer-use';
 
 const STORAGE_KEY = 'agi_side_panel_messages';
 const MAX_STORED_MESSAGES = 50;
@@ -311,8 +328,8 @@ function injectStyles(): void {
     #sp-model-badge {
       font-size: 10px;
       color: var(--agi-ext-accent);
-      background: rgba(33, 128, 141, 0.12);
-      border: 1px solid rgba(33, 128, 141, 0.3);
+      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
       border-radius: 4px;
       padding: 1px 6px;
       white-space: nowrap;
@@ -350,15 +367,15 @@ function injectStyles(): void {
     #sp-messages::-webkit-scrollbar-track { background: transparent; }
     #sp-messages::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
 
-    /* ── Empty state — composer-first per design-spec §8 ── */
+    /* ── Empty state — Claude-style calm centered ── */
     #sp-empty {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       flex: 1;
-      padding: 24px 16px 8px;
-      gap: 8px;
+      padding: 40px 20px 16px;
+      gap: 10px;
       text-align: center;
     }
     #sp-empty.hidden { display: none; }
@@ -366,19 +383,20 @@ function injectStyles(): void {
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
+      opacity: 0.7;
     }
     #sp-empty-headline {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 600;
       color: var(--agi-ext-text);
-      letter-spacing: -0.01em;
+      letter-spacing: -0.015em;
     }
     #sp-empty-subtext {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--agi-ext-text-muted);
-      line-height: 1.5;
-      max-width: 200px;
+      line-height: 1.55;
+      max-width: 220px;
     }
 
     /* ── Inline prompt chips under the composer (design-spec §8.2) ── */
@@ -451,7 +469,7 @@ function injectStyles(): void {
       white-space: pre-wrap;
     }
     .sp-bubble-user {
-      background: rgba(33, 128, 141, 0.18);
+      background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
       color: var(--agi-ext-text);
       border-bottom-right-radius: 3px;
     }
@@ -692,8 +710,8 @@ function injectStyles(): void {
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .sp-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
-    .sp-tool-btn.active { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.15); }
+    .sp-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-tool-btn.active { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 15%, transparent); }
     .sp-tool-btn.has-context { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
 
     /* ── Mic pulsing indicator ── */
@@ -913,12 +931,12 @@ function injectStyles(): void {
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     #sp-composer-shell:focus-within {
-      border-color: rgba(33,128,141,0.5);
-      box-shadow: 0 0 0 2px rgba(33,128,141,0.18);
+      border-color: color-mix(in srgb, var(--agi-ext-accent) 50%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
     }
     #sp-composer-shell.dragover {
-      border-color: rgba(33,128,141,0.8);
-      box-shadow: 0 0 0 2px rgba(33,128,141,0.35);
+      border-color: color-mix(in srgb, var(--agi-ext-accent) 80%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--agi-ext-accent) 35%, transparent);
     }
     #sp-input-row {
       display: flex;
@@ -980,7 +998,7 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: color 0.15s, background 0.15s;
     }
-    .sp-attach-btn:hover { color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
+    .sp-attach-btn:hover { color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     #sp-attach-menu {
       display: none;
       position: absolute;
@@ -1094,7 +1112,7 @@ function injectStyles(): void {
       background: var(--agi-ext-success-bg);
     }
     .sp-context-chip.has-context::before { background: var(--agi-ext-success); }
-    .sp-context-chip:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
+    .sp-context-chip:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-context-chip:hover::before { background: var(--agi-ext-accent); }
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
 
@@ -1231,56 +1249,7 @@ function injectStyles(): void {
     }
     #sp-offline-onboarding-cta:hover { background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent); }
 
-    /* ── Settings bar ── */
-    #sp-settings-bar {
-      display: none; /* shown when settings are open */
-      flex-direction: column;
-      gap: 5px;
-      padding: 6px 10px 8px;
-      background: var(--agi-ext-bg);
-      border-bottom: 1px solid var(--agi-ext-border);
-      flex-shrink: 0;
-    }
-    #sp-settings-bar.open { display: flex; }
-    .sp-settings-label {
-      font-size: 10px;
-      color: var(--agi-ext-text-muted);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .sp-settings-row {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-    }
-    .sp-settings-input {
-      flex: 1;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
-      color: var(--agi-ext-text);
-      font-size: 11px;
-      padding: 5px 9px;
-      outline: none;
-      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-      transition: border-color 0.15s;
-      min-width: 0;
-    }
-    .sp-settings-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-settings-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-settings-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
-    .sp-settings-btn {
-      background: var(--agi-ext-hover);
-      color: var(--agi-ext-text-muted);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 6px;
-      padding: 5px 10px;
-      font-size: 11px;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s;
-      white-space: nowrap;
-    }
-    .sp-settings-btn:hover { color: var(--agi-ext-text); border-color: var(--agi-ext-accent); }
+    /* ── Settings bar (Phase 3: removed — bridge URL now in drawer) ── */
 
     /* ── Auth bar ── */
     #sp-auth-bar {
@@ -1361,6 +1330,50 @@ function injectStyles(): void {
     }
     #sp-status-pill.cloud .sp-status-dot { background: var(--agi-ext-accent); }
 
+    /* ── Bridge-offline notice (shown above composer when desktop not connected) ── */
+    #sp-bridge-notice {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: color-mix(in srgb, var(--agi-ext-danger) 8%, transparent);
+      border-top: 1px solid var(--agi-ext-danger-border);
+      font-size: 11px;
+      color: var(--agi-ext-danger);
+      flex-shrink: 0;
+    }
+    #sp-bridge-notice.visible { display: flex; }
+    #sp-bridge-notice-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--agi-ext-danger);
+      flex-shrink: 0;
+    }
+    #sp-bridge-notice-text { flex: 1; line-height: 1.4; }
+    #sp-bridge-notice-reconnect {
+      background: none;
+      border: 1px solid var(--agi-ext-danger-border);
+      color: var(--agi-ext-danger);
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-size: 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: background 0.12s;
+    }
+    #sp-bridge-notice-reconnect:hover {
+      background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent);
+    }
+    /* Model picker dims when bridge is offline — selection is persisted but has no
+       immediate effect until the desktop bridge is connected. */
+    .sp-model-selector-wrap.bridge-offline #sp-model-selector-btn {
+      opacity: 0.45;
+      cursor: default;
+      pointer-events: none;
+    }
+
     /* ── Tab bar ── */
     #sp-tab-bar {
       display: flex;
@@ -1401,23 +1414,23 @@ function injectStyles(): void {
     .sp-wf-shortcut-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sp-wf-shortcut-meta { font-size: 10px; color: var(--agi-ext-text-muted); margin-top: 1px; }
     .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
-    .sp-wf-btn-replay { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
-    .sp-wf-btn-replay:hover { background: rgba(33, 128, 141, 0.22); }
+    .sp-wf-btn-replay { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-btn-replay:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
     .sp-wf-btn-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
     .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-task-info { flex: 1; min-width: 0; }
     .sp-wf-task-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
+    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
     .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
     .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
     .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.2s; }
     .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
     .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
     .sp-wf-task-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
-    .sp-wf-new-task-btn { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
-    .sp-wf-new-task-btn:hover { background: rgba(33, 128, 141, 0.22); }
+    .sp-wf-new-task-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-new-task-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-new-task-form.open { display: flex; }
     .sp-wf-form-label { font-size: 10px; color: var(--agi-ext-text-muted); margin-bottom: 1px; }
@@ -1433,8 +1446,8 @@ function injectStyles(): void {
     .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
     .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
-    .sp-wf-create-shortcut-btn { background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
-    .sp-wf-create-shortcut-btn:hover { background: rgba(33, 128, 141, 0.22); }
+    .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-create-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: 9999; align-items: center; justify-content: center; }
     .sp-create-shortcut-overlay.open { display: flex; }
     .sp-create-shortcut-modal { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 10px; padding: 18px 18px 14px; width: 290px; max-width: 95vw; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 32px var(--agi-ext-modal-shadow); }
@@ -1468,7 +1481,7 @@ function injectStyles(): void {
     .sp-wf-group-desc { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.55; }
     .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 6px; color: var(--agi-ext-text-muted); font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
-    .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.08); }
+    .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-wf-group-action-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
     .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
     .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: white; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
@@ -1480,13 +1493,13 @@ function injectStyles(): void {
     .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse 1s infinite; }
     .sp-wf-action-counter { font-size: 11px; color: var(--agi-ext-text-muted); flex: 1; }
     .sp-wf-action-counter strong { color: var(--agi-ext-text); }
-    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 8px; }
+    .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 8px; }
     .sp-wf-save-dialog.open { display: flex; }
     .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent); }
-    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: rgba(33, 128, 141, 0.2); color: var(--agi-ext-accent); border-radius: 9px; padding: 0 5px; }
+    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); color: var(--agi-ext-accent); border-radius: 9px; padding: 0 5px; }
     .sp-model-selector-wrap { position: relative; }
-    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: rgba(33, 128, 141, 0.12); border: 1px solid rgba(33, 128, 141, 0.3); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
-    #sp-model-selector-btn:hover { background: rgba(33, 128, 141, 0.22); border-color: var(--agi-ext-accent); }
+    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; }
+    #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; }
     #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
@@ -1494,7 +1507,7 @@ function injectStyles(): void {
     #sp-model-dropdown.open { display: block; }
     .sp-model-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 11px; color: var(--agi-ext-text-muted); }
     .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
-    .sp-model-option.selected { color: var(--agi-ext-accent); background: rgba(33, 128, 141, 0.12); }
+    .sp-model-option.selected { color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); }
     .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
     .sp-model-option-label { flex: 1; }
 
@@ -1707,6 +1720,423 @@ function injectStyles(): void {
       transition: color 0.12s, background 0.12s;
     }
     .sp-history-item-del:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
+
+    /* ── Phase 2: Tab bar hidden (Workflows / CU are drawer launchers now) ── */
+    #sp-tab-bar { display: none; }
+
+    /* ── Phase 2: Settings drawer ──────────────────────────────────────────── */
+    #sp-drawer-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--agi-ext-scrim);
+      z-index: 1000;
+    }
+    #sp-drawer-overlay.open { display: block; }
+    #sp-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      max-width: 100%;
+      background: var(--agi-ext-bg);
+      border-left: 1px solid var(--agi-ext-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: translateX(100%);
+      transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1001;
+    }
+    #sp-drawer.open { transform: translateX(0); }
+    #sp-drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--agi-ext-border);
+      flex-shrink: 0;
+    }
+    #sp-drawer-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--agi-ext-text);
+    }
+    #sp-drawer-close {
+      background: transparent;
+      border: none;
+      color: var(--agi-ext-text-muted);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.12s, background 0.12s;
+    }
+    #sp-drawer-close:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
+    #sp-drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 0 8px;
+    }
+    #sp-drawer-body::-webkit-scrollbar { width: 4px; }
+    #sp-drawer-body::-webkit-scrollbar-track { background: transparent; }
+    #sp-drawer-body::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
+    /* Drawer sections */
+    .sp-drawer-section {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--agi-ext-border);
+    }
+    .sp-drawer-section-title {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--agi-ext-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+    /* Launcher buttons (Workflows / Computer Use) */
+    .sp-drawer-launcher-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      text-align: left;
+      margin-bottom: 6px;
+    }
+    .sp-drawer-launcher-btn:last-child { margin-bottom: 0; }
+    .sp-drawer-launcher-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-drawer-launcher-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; background: var(--agi-ext-hover); }
+    .sp-drawer-launcher-label { flex: 1; }
+    .sp-drawer-launcher-desc { font-size: 10px; color: var(--agi-ext-text-muted); margin-top: 1px; font-weight: 400; }
+    .sp-drawer-launcher-chevron { font-size: 10px; color: var(--agi-ext-text-muted); flex-shrink: 0; }
+    /* Tools row */
+    .sp-drawer-tools-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .sp-drawer-tool-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 7px;
+      color: var(--agi-ext-text-muted);
+      font-size: 11px;
+      padding: 6px 11px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .sp-drawer-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-drawer-tool-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    /* Connection / pairing */
+    .sp-drawer-pairing-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .sp-drawer-pairing-label { font-size: 12px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-pairing-fingerprint {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      color: var(--agi-ext-success);
+      background: var(--agi-ext-success-bg);
+      border: 1px solid var(--agi-ext-success-border);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+    .sp-drawer-pairing-error {
+      font-size: 11px;
+      color: var(--agi-ext-danger);
+      min-height: 16px;
+      margin-bottom: 6px;
+    }
+    .sp-drawer-btn-row { display: flex; gap: 6px; }
+    .sp-drawer-btn {
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      color: var(--agi-ext-text-muted);
+      font-size: 11px;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .sp-drawer-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .sp-drawer-btn-primary { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-btn-primary:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-btn-danger { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-btn-danger:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    /* Allowlist */
+    .sp-drawer-allowlist-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
+    .sp-drawer-allowlist-current-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .sp-drawer-allowlist-origin {
+      flex: 1;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      color: var(--agi-ext-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-drawer-allowlist-toggle-btn {
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 5px;
+      color: var(--agi-ext-text-muted);
+      font-size: 11px;
+      padding: 3px 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: color 0.12s, border-color 0.12s, background 0.12s;
+    }
+    .sp-drawer-allowlist-toggle-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-allowlist-toggle-btn.is-remove { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-allowlist-toggle-btn.is-remove:hover { background: var(--agi-ext-danger-bg); }
+    .sp-drawer-allowlist-toggle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .sp-drawer-allowlist-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+    .sp-drawer-allowlist-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 5px;
+      font-size: 11px;
+    }
+    .sp-drawer-allowlist-item.is-current { border-color: var(--agi-ext-accent); }
+    .sp-drawer-allowlist-item-origin {
+      flex: 1;
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      color: var(--agi-ext-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-drawer-allowlist-item-remove {
+      background: none;
+      border: none;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      cursor: pointer;
+      padding: 1px 5px;
+      border-radius: 3px;
+      transition: color 0.12s, background 0.12s;
+      flex-shrink: 0;
+    }
+    .sp-drawer-allowlist-item-remove:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
+    .sp-drawer-allowlist-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
+    /* Memory */
+    .sp-drawer-memory-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
+    .sp-drawer-memory-add-btn {
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      color: var(--agi-ext-text-muted);
+      font-size: 11px;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: color 0.12s, border-color 0.12s;
+      margin-bottom: 8px;
+    }
+    .sp-drawer-memory-add-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-memory-editor { display: none; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .sp-drawer-memory-editor.open { display: flex; }
+    .sp-drawer-memory-textarea {
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      color: var(--agi-ext-text);
+      font-size: 12px;
+      padding: 6px 9px;
+      outline: none;
+      font-family: inherit;
+      resize: none;
+      height: 64px;
+      line-height: 1.4;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .sp-drawer-memory-textarea:focus { border-color: var(--agi-ext-focus); }
+    .sp-drawer-memory-textarea::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-drawer-memory-editor-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .sp-drawer-memory-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .sp-drawer-memory-item {
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .sp-drawer-memory-item-content { font-size: 11px; color: var(--agi-ext-text); line-height: 1.4; }
+    .sp-drawer-memory-item-meta { font-size: 9px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-memory-item-row { display: flex; gap: 5px; margin-top: 2px; }
+    .sp-drawer-memory-item-edit-btn {
+      background: none; border: 1px solid var(--agi-ext-border); border-radius: 4px;
+      color: var(--agi-ext-text-muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    .sp-drawer-memory-item-edit-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-memory-item-delete-btn {
+      background: none; border: 1px solid var(--agi-ext-border); border-radius: 4px;
+      color: var(--agi-ext-text-muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
+      transition: color 0.12s, border-color 0.12s, background 0.12s;
+    }
+    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-memory-item-delete-btn.is-confirm { color: white; background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+    .sp-drawer-memory-item-textarea {
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 5px;
+      color: var(--agi-ext-text);
+      font-size: 11px;
+      padding: 5px 7px;
+      outline: none;
+      font-family: inherit;
+      resize: none;
+      height: 52px;
+      line-height: 1.4;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .sp-drawer-memory-item-textarea:focus { border-color: var(--agi-ext-focus); }
+    .sp-drawer-memory-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
+    /* In-page panel toggle */
+    .sp-drawer-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sp-drawer-toggle-label { font-size: 12px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-toggle-switch {
+      appearance: none;
+      width: 34px;
+      height: 18px;
+      border-radius: 9px;
+      background: var(--agi-ext-hover);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+      border: none;
+      outline: none;
+    }
+    .sp-drawer-toggle-switch:checked { background: var(--agi-ext-accent); }
+    .sp-drawer-toggle-switch:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-drawer-toggle-switch::after {
+      content: '';
+      position: absolute;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: white;
+      top: 2.5px;
+      left: 2.5px;
+      transition: transform 0.2s;
+    }
+    .sp-drawer-toggle-switch:checked::after { transform: translateX(16px); }
+    /* Bridge URL inside drawer */
+    .sp-drawer-bridge-row { display: flex; gap: 6px; margin-top: 4px; }
+    .sp-drawer-bridge-input {
+      flex: 1;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      color: var(--agi-ext-text);
+      font-size: 11px;
+      padding: 5px 8px;
+      outline: none;
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      transition: border-color 0.15s;
+      min-width: 0;
+    }
+    .sp-drawer-bridge-input:focus { border-color: var(--agi-ext-focus); }
+    .sp-drawer-bridge-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-drawer-bridge-error { font-size: 10px; color: var(--agi-ext-danger); padding: 2px 0; margin-top: 2px; }
+    /* Cloud unlock */
+    .sp-drawer-cloud-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
+      border-radius: 7px;
+      color: var(--agi-ext-accent);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 8px 14px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .sp-drawer-cloud-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); border-color: var(--agi-ext-accent); }
+    /* Drawer footer */
+    #sp-drawer-footer {
+      padding: 10px 14px;
+      border-top: 1px solid var(--agi-ext-border);
+      flex-shrink: 0;
+      background: var(--agi-ext-bg);
+    }
+    .sp-drawer-stats-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .sp-drawer-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      flex: 1;
+    }
+    .sp-drawer-stat-value { font-size: 14px; font-weight: 600; color: var(--agi-ext-text); }
+    .sp-drawer-stat-label { font-size: 9px; color: var(--agi-ext-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .sp-drawer-about-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--agi-ext-text-muted);
+      gap: 4px;
+    }
+    .sp-drawer-about-url {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 140px;
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    }
+    /* ⋮ button in header */
+    #sp-menu-btn {
+      position: relative;
+    }
   `;
   // M-08 audit 2026-05-19: Constructable Stylesheet — CSP-compliant
   // because it's a DOM API call, not a <style> tag.
@@ -1715,7 +2145,7 @@ function injectStyles(): void {
     typeof (CSSStyleSheet.prototype as { replaceSync?: unknown }).replaceSync === 'function'
   ) {
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(cssText);
+    sheet.replaceSync(cssText + '\n' + COMPUTER_USE_PANEL_CSS);
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
     // Fallback path for environments without Constructable Stylesheets
@@ -2322,6 +2752,55 @@ function updateConnectionStatus(): void {
     dot.className = 'sp-status-dot';
     pill.replaceChildren(dot, 'Offline');
   }
+  // Keep composer gate and model picker in sync whenever connection changes.
+  updateComposerGatedByConnection();
+}
+
+/**
+ * Gate the chat composer based on bridge availability.
+ *
+ * When the desktop bridge is offline:
+ *  - The bridge-notice banner is shown above the input.
+ *  - The textarea placeholder explains why input is blocked.
+ *  - The send button is disabled (unless already streaming, which has its own stop).
+ *  - The model picker is dimmed (selection is stored but has no immediate effect).
+ *
+ * When connected, all restrictions are lifted.  setBlockedState() may
+ * separately disable the composer on restricted URLs; that takes precedence
+ * because a restricted URL means AGI can't read the page at all.
+ */
+function updateComposerGatedByConnection(): void {
+  const notice = document.getElementById('sp-bridge-notice');
+  const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  const sendBtnEl = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
+  const modelWrap = document.querySelector('.sp-model-selector-wrap');
+
+  const offline = !_ctx.isConnected;
+
+  if (notice) {
+    notice.classList.toggle('visible', offline);
+  }
+
+  if (modelWrap) {
+    modelWrap.classList.toggle('bridge-offline', offline);
+  }
+
+  // Only change the input/send state when the page is NOT already blocked
+  // by setBlockedState (blocked = input.disabled set because of restricted URL).
+  // We detect this by checking if input is already disabled for a non-connection reason:
+  // setBlockedState sets placeholder to "Can't access this page" — if that is set, leave it.
+  if (inputEl && inputEl.placeholder !== "Can't access this page") {
+    if (offline) {
+      inputEl.placeholder = 'Start the AGI desktop app to enable chat…';
+    } else {
+      inputEl.placeholder = 'Ask anything... (/ for commands)';
+    }
+  }
+
+  // Disable send unless we're actively streaming (stop button must remain enabled)
+  if (sendBtnEl && sendBtnEl.getAttribute('data-mode') !== 'stop') {
+    sendBtnEl.disabled = offline;
+  }
 }
 
 // BLOCKER-02b: show/hide the offline onboarding screen
@@ -2770,7 +3249,14 @@ function buildUI(): void {
     // 0. Provider count badge header
     const pickerHeader = el('div', { class: 'sp-model-picker-header' });
     pickerHeader.appendChild(el('span', { class: 'sp-model-picker-title' }, 'Select model'));
-    pickerHeader.appendChild(el('span', { class: 'provider-count-badge' }, '13+ providers'));
+    // FIX (audit batch-222 [LOW] documentation drift, 2026-06-13): derive the
+    // provider count from the actual model options instead of a hardcoded "13+".
+    const providerCount = new Set(
+      SIDE_PANEL_MODEL_OPTIONS.map((o) => o.provider).filter((p): p is string => Boolean(p)),
+    ).size;
+    pickerHeader.appendChild(
+      el('span', { class: 'provider-count-badge' }, `${providerCount} providers`),
+    );
     modelDropdownEl.appendChild(pickerHeader);
 
     // 1. "Best (auto)" as the first option, visually distinct
@@ -2874,132 +3360,16 @@ function buildUI(): void {
   header.appendChild(headerLeft);
 
   const headerRight = el('div', { id: 'sp-header-right' });
-  const summarizeBtn = el('button', {
+
+  // ── ＋ new chat button ─────────────────────────────────────────────────────
+  const newChatBtn = el('button', {
     class: 'sp-icon-btn',
-    id: 'sp-summarize-btn',
-    title: 'Summarize current page',
+    id: 'sp-new-chat-btn',
+    title: 'New chat',
+    'aria-label': 'New chat',
   });
-  summarizeBtn.appendChild(renderIcon(FileEdit, 16));
-  summarizeBtn.addEventListener('click', () => {
-    if (_ctx.isStreaming) return;
-    sendMessage('/summarize');
-  });
-  headerRight.appendChild(summarizeBtn);
-
-  // ── History button + dropdown ──────────────────────────────────────────────
-  const historyWrapper = el('div', { class: 'sp-history-wrapper' });
-  const historyBtn = el('button', {
-    class: 'sp-icon-btn',
-    id: 'sp-history-btn',
-    title: 'Conversation history',
-  });
-  historyBtn.appendChild(renderIcon(Clock, 16));
-  const historyDropdown = el('div', { id: 'sp-history-dropdown' });
-
-  function formatHistoryDate(ts: number): string {
-    const d = new Date(ts);
-    const now = new Date();
-    const sameDay =
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate();
-    return sameDay
-      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  }
-
-  function renderHistoryDropdown(entries: ConversationEntry[]): void {
-    clearChildren(historyDropdown);
-    const hdr = el('div', { class: 'sp-history-header' });
-    hdr.appendChild(el('span', { class: 'sp-history-title' }, 'History'));
-    historyDropdown.appendChild(hdr);
-
-    if (entries.length === 0) {
-      historyDropdown.appendChild(
-        el('div', { class: 'sp-history-empty' }, 'No saved conversations'),
-      );
-      return;
-    }
-
-    for (const entry of entries) {
-      const item = el('div', { class: 'sp-history-item' });
-      const textCol = el('div', { class: 'sp-history-item-text' });
-      textCol.appendChild(el('div', { class: 'sp-history-item-title' }, entry.title));
-      textCol.appendChild(
-        el('div', { class: 'sp-history-item-date' }, formatHistoryDate(entry.savedAt)),
-      );
-      item.appendChild(textCol);
-
-      const delBtn = el('button', { class: 'sp-history-item-del', title: 'Delete' }, '✕');
-      delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteConversation(entry.id)
-          .then(() => listConversations())
-          .then((updated) => renderHistoryDropdown(updated))
-          .catch((err) => console.warn('[SidePanel] history delete failed:', err));
-      });
-      item.appendChild(delBtn);
-
-      item.addEventListener('click', () => {
-        historyDropdown.classList.remove('open');
-        historyBtn.classList.remove('active');
-        if (_ctx.isStreaming) return;
-        if (_ctx.streamTimeoutHandle) {
-          clearTimeout(_ctx.streamTimeoutHandle);
-          _ctx.streamTimeoutHandle = null;
-        }
-        _ctx.messages.length = 0;
-        _ctx.lastRenderedCount = 0;
-        _ctx.isStreaming = false;
-        _ctx.currentStreamId = null;
-        _ctx.pendingPageContext = null;
-        for (const hm of entry.messages) {
-          _ctx.messages.push({
-            id: `h-${hm.timestamp}-${Math.random().toString(36).slice(2, 5)}`,
-            role: hm.role,
-            content: hm.content,
-            timestamp: hm.timestamp,
-          });
-        }
-        saveMessages();
-        updateContextButton();
-        updateSendButton();
-        renderMessages();
-        scrollToBottom();
-      });
-      historyDropdown.appendChild(item);
-    }
-  }
-
-  historyBtn.addEventListener('click', () => {
-    const isOpen = historyDropdown.classList.toggle('open');
-    historyBtn.classList.toggle('active', isOpen);
-    if (isOpen) {
-      listConversations()
-        .then((entries) => renderHistoryDropdown(entries))
-        .catch((err) => console.warn('[SidePanel] history list failed:', err));
-    }
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!historyWrapper.contains(e.target as Node)) {
-      historyDropdown.classList.remove('open');
-      historyBtn.classList.remove('active');
-    }
-  });
-
-  historyWrapper.appendChild(historyBtn);
-  historyWrapper.appendChild(historyDropdown);
-  headerRight.appendChild(historyWrapper);
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const clearBtn = el('button', {
-    class: 'sp-icon-btn',
-    id: 'sp-clear-btn',
-    title: 'Clear conversation',
-  });
-  clearBtn.appendChild(renderIcon(Trash2, 16));
-  clearBtn.addEventListener('click', () => {
+  newChatBtn.appendChild(renderIcon(FilePen, 16));
+  newChatBtn.addEventListener('click', () => {
     if (_ctx.streamTimeoutHandle) {
       clearTimeout(_ctx.streamTimeoutHandle);
       _ctx.streamTimeoutHandle = null;
@@ -3024,70 +3394,1102 @@ function buildUI(): void {
     updateSendButton();
     renderMessages();
   });
-  const settingsToggleBtn = el('button', {
+  headerRight.appendChild(newChatBtn);
+
+  // ── ⋮ menu button (opens settings drawer) ─────────────────────────────────
+  const menuBtn = el('button', {
     class: 'sp-icon-btn',
-    id: 'sp-settings-btn',
+    id: 'sp-menu-btn',
     title: 'Settings',
+    'aria-label': 'Open settings',
   });
-  settingsToggleBtn.appendChild(renderIcon(Settings, 16));
-  settingsToggleBtn.addEventListener('click', () => {
-    const bar = document.getElementById('sp-settings-bar');
-    if (bar) bar.classList.toggle('open');
+  menuBtn.textContent = '⋮';
+  headerRight.appendChild(menuBtn);
+  header.appendChild(headerRight);
+  document.body.appendChild(header);
+
+  // ── Helper: history load+restore (shared by drawer history section) ────────
+  function formatHistoryDate(ts: number): string {
+    const d = new Date(ts);
+    const now = new Date();
+    const sameDay =
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate();
+    return sameDay
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  function restoreHistoryEntry(entry: ConversationEntry): void {
+    if (_ctx.isStreaming) return;
+    if (_ctx.streamTimeoutHandle) {
+      clearTimeout(_ctx.streamTimeoutHandle);
+      _ctx.streamTimeoutHandle = null;
+    }
+    _ctx.messages.length = 0;
+    _ctx.lastRenderedCount = 0;
+    _ctx.isStreaming = false;
+    _ctx.currentStreamId = null;
+    _ctx.pendingPageContext = null;
+    for (const hm of entry.messages) {
+      _ctx.messages.push({
+        id: `h-${hm.timestamp}-${Math.random().toString(36).slice(2, 5)}`,
+        role: hm.role,
+        content: hm.content,
+        timestamp: hm.timestamp,
+      });
+    }
+    saveMessages();
+    updateContextButton();
+    updateSendButton();
+    renderMessages();
+    scrollToBottom();
+  }
+
+  // #sp-settings-bar removed in Phase 3: the drawer's Bridge URL section
+  // supersedes it. The bridge-url save logic is in the drawer (drawerSaveBridgeUrl).
+  // bridgeUrlInput stub kept as an invisible element for legacy code that calls
+  // document.getElementById('sp-bridge-url-input').
+  const bridgeUrlInput = el('input', {
+    id: 'sp-bridge-url-input',
+    type: 'hidden',
+  }) as HTMLInputElement;
+  document.body.appendChild(bridgeUrlInput);
+
+  // ── Phase 3: Settings Drawer (all popup controls now live here) ──────────────
+  // The popup has been retired. All pairing, allowlist, memory, cloud-unlock,
+  // bridge-URL, tools, and chat-action controls live exclusively in this drawer.
+
+  const drawerOverlay = el('div', { id: 'sp-drawer-overlay' });
+  const drawer = el('div', { id: 'sp-drawer', role: 'dialog', 'aria-label': 'Settings' });
+
+  function openDrawer(): void {
+    drawerOverlay.classList.add('open');
+    drawer.classList.add('open');
+    // Refresh dynamic content when drawer opens
+    void refreshDrawerPairingState();
+    void refreshDrawerAllowlist();
+    void refreshDrawerMemory();
+    void refreshDrawerStats();
+    void refreshDrawerTabInfo();
+  }
+  function closeDrawer(): void {
+    drawerOverlay.classList.remove('open');
+    drawer.classList.remove('open');
+  }
+
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (drawer.classList.contains('open')) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
   });
-  const consoleToggleBtn = el('button', {
-    class: 'sp-icon-btn',
-    id: 'sp-console-toggle-btn',
+  drawerOverlay.addEventListener('click', closeDrawer);
+
+  // ── Drawer header ──────────────────────────────────────────────────────────
+  const drawerHeader = el('div', { id: 'sp-drawer-header' });
+  drawerHeader.appendChild(el('div', { id: 'sp-drawer-title' }, 'Settings'));
+  const drawerClose = el('button', { id: 'sp-drawer-close', 'aria-label': 'Close settings' }, '✕');
+  drawerClose.addEventListener('click', closeDrawer);
+  drawerHeader.appendChild(drawerClose);
+  drawer.appendChild(drawerHeader);
+
+  const drawerBody = el('div', { id: 'sp-drawer-body' });
+
+  // ── Section 0: Chat actions (History / Summarize / Clear / Console / Open-in-Desktop) ──
+  const chatActionsSection = el('div', { class: 'sp-drawer-section' });
+  chatActionsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Chat'));
+  const chatActionsRow = el('div', { class: 'sp-drawer-tools-row' });
+
+  // History button — opens the conversation history dropdown (now inside drawer)
+  const drawerHistoryBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-history-btn',
+    title: 'Conversation history',
+  });
+  drawerHistoryBtn.appendChild(renderIcon(Clock, 13));
+  drawerHistoryBtn.appendChild(document.createTextNode(' History'));
+
+  // History sub-list inside drawer (inline, not a floating dropdown)
+  const drawerHistoryList = el('div', { id: 'sp-drawer-history-list', hidden: '' });
+  drawerHistoryList.style.cssText =
+    'margin-top: 6px; display: flex; flex-direction: column; gap: 3px;';
+
+  function renderDrawerHistory(entries: ConversationEntry[]): void {
+    clearChildren(drawerHistoryList);
+    if (entries.length === 0) {
+      const empty = el('div', {}, 'No saved conversations');
+      empty.style.cssText = 'font-size:11px;color:var(--agi-ext-text-muted);padding:4px 2px;';
+      drawerHistoryList.appendChild(empty);
+      return;
+    }
+    for (const entry of entries) {
+      const item = el('div', {});
+      item.style.cssText =
+        'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:pointer;background:var(--agi-ext-surface);border:1px solid var(--agi-ext-border);';
+      const textCol = el('div', {});
+      textCol.style.cssText = 'flex:1;min-width:0;';
+      const title = el('div', {}, entry.title);
+      title.style.cssText =
+        'font-size:11px;color:var(--agi-ext-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      const date = el('div', {}, formatHistoryDate(entry.savedAt));
+      date.style.cssText = 'font-size:9px;color:var(--agi-ext-text-muted);margin-top:1px;';
+      textCol.appendChild(title);
+      textCol.appendChild(date);
+      item.appendChild(textCol);
+
+      const delBtn = el('button', { title: 'Delete' }, '✕');
+      delBtn.style.cssText =
+        'background:none;border:none;color:var(--agi-ext-text-muted);font-size:12px;cursor:pointer;padding:2px 4px;border-radius:3px;line-height:1;flex-shrink:0;';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteConversation(entry.id)
+          .then(() => listConversations())
+          .then((updated) => renderDrawerHistory(updated))
+          .catch((err) => console.warn('[SidePanel] history delete failed:', err));
+      });
+      item.appendChild(delBtn);
+
+      item.addEventListener('click', () => {
+        restoreHistoryEntry(entry);
+        closeDrawer();
+      });
+      drawerHistoryList.appendChild(item);
+    }
+  }
+
+  drawerHistoryBtn.addEventListener('click', () => {
+    const isHidden = drawerHistoryList.hasAttribute('hidden');
+    if (isHidden) {
+      drawerHistoryList.removeAttribute('hidden');
+      listConversations()
+        .then((entries) => renderDrawerHistory(entries))
+        .catch((err) => console.warn('[SidePanel] history list failed:', err));
+    } else {
+      drawerHistoryList.setAttribute('hidden', '');
+    }
+  });
+  chatActionsRow.appendChild(drawerHistoryBtn);
+
+  // Summarize button
+  const drawerSummarizeBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-summarize-btn',
+    title: 'Summarize current page',
+  });
+  drawerSummarizeBtn.appendChild(renderIcon(FileEdit, 13));
+  drawerSummarizeBtn.appendChild(document.createTextNode(' Summarize'));
+  drawerSummarizeBtn.addEventListener('click', () => {
+    closeDrawer();
+    if (!_ctx.isStreaming) sendMessage('/summarize');
+  });
+  chatActionsRow.appendChild(drawerSummarizeBtn);
+
+  // Clear conversation button
+  const drawerClearChatBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-clear-chat-btn',
+    title: 'Clear conversation',
+  });
+  drawerClearChatBtn.appendChild(renderIcon(Trash2, 13));
+  drawerClearChatBtn.appendChild(document.createTextNode(' Clear'));
+  drawerClearChatBtn.addEventListener('click', () => {
+    closeDrawer();
+    if (_ctx.streamTimeoutHandle) {
+      clearTimeout(_ctx.streamTimeoutHandle);
+      _ctx.streamTimeoutHandle = null;
+    }
+    if (_ctx.messages.length > 0) {
+      const toSave: HistoryMessage[] = _ctx.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+      }));
+      saveConversation(toSave).catch((err) =>
+        console.warn('[SidePanel] failed to save on clear:', err),
+      );
+    }
+    _ctx.messages.length = 0;
+    _ctx.lastRenderedCount = 0;
+    _ctx.isStreaming = false;
+    _ctx.currentStreamId = null;
+    _ctx.pendingPageContext = null;
+    clearStoredMessages();
+    updateContextButton();
+    updateSendButton();
+    renderMessages();
+  });
+  chatActionsRow.appendChild(drawerClearChatBtn);
+
+  // Console toggle button
+  const drawerConsoleBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-console-btn',
     title: 'Toggle console logs',
   });
-  consoleToggleBtn.appendChild(renderIcon(Monitor, 16));
-  consoleToggleBtn.addEventListener('click', () => {
+  drawerConsoleBtn.appendChild(renderIcon(Monitor, 13));
+  drawerConsoleBtn.appendChild(document.createTextNode(' Console'));
+  drawerConsoleBtn.addEventListener('click', () => {
+    closeDrawer();
     const panel = document.getElementById('sp-console-panel');
     if (panel) {
       const isOpen = panel.classList.toggle('open');
       if (isOpen) refreshConsoleLogs();
     }
   });
+  chatActionsRow.appendChild(drawerConsoleBtn);
 
-  const openInDesktopBtn = el('button', {
-    class: 'sp-icon-btn',
-    id: 'sp-open-in-desktop-btn',
+  // Open-in-desktop button
+  const drawerOpenDesktopBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-open-desktop-btn',
     title: 'Open in desktop app',
   });
-  openInDesktopBtn.appendChild(renderIcon(Monitor, 16));
-  openInDesktopBtn.addEventListener('click', () => {
+  drawerOpenDesktopBtn.appendChild(renderIcon(Monitor, 13));
+  drawerOpenDesktopBtn.appendChild(document.createTextNode(' Open Desktop'));
+  drawerOpenDesktopBtn.addEventListener('click', () => {
+    closeDrawer();
     chrome.runtime
       .sendMessage({ type: 'OPEN_IN_DESKTOP' })
       .catch((err: unknown) => console.warn('[SidePanel] OPEN_IN_DESKTOP failed:', err));
   });
+  chatActionsRow.appendChild(drawerOpenDesktopBtn);
 
-  headerRight.appendChild(openInDesktopBtn);
-  headerRight.appendChild(consoleToggleBtn);
-  headerRight.appendChild(settingsToggleBtn);
-  headerRight.appendChild(clearBtn);
-  header.appendChild(headerRight);
-  document.body.appendChild(header);
+  chatActionsSection.appendChild(chatActionsRow);
+  chatActionsSection.appendChild(drawerHistoryList);
+  drawerBody.appendChild(chatActionsSection);
 
-  const settingsBar = el('div', { id: 'sp-settings-bar' });
+  // ── Section 1: Views (Workflows + Computer Use launchers) ──────────────────
+  const viewsSection = el('div', { class: 'sp-drawer-section' });
+  viewsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Views'));
 
-  const bridgeUrlLabel = el('div', { class: 'sp-settings-label' }, 'Bridge URL');
-  const bridgeUrlRow = el('div', { class: 'sp-settings-row' });
+  const wfLaunchBtn = el('button', {
+    class: 'sp-drawer-launcher-btn',
+    id: 'sp-drawer-wf-btn',
+    title: 'Open Workflows',
+  });
+  const wfIcon = el('div', { class: 'sp-drawer-launcher-icon' });
+  wfIcon.appendChild(renderIcon(Zap, 14));
+  const wfTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
+  wfTextBlock.appendChild(el('div', {}, 'Workflows'));
+  wfTextBlock.appendChild(
+    el('div', { class: 'sp-drawer-launcher-desc' }, 'Shortcuts and scheduled tasks'),
+  );
+  wfLaunchBtn.appendChild(wfIcon);
+  wfLaunchBtn.appendChild(wfTextBlock);
+  wfLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '›'));
+  wfLaunchBtn.addEventListener('click', () => {
+    closeDrawer();
+    switchTab('workflows');
+  });
+  viewsSection.appendChild(wfLaunchBtn);
 
-  const bridgeUrlInput = el('input', {
-    class: 'sp-settings-input',
-    id: 'sp-bridge-url-input',
+  const cuLaunchBtn = el('button', {
+    class: 'sp-drawer-launcher-btn',
+    id: 'sp-drawer-cu-btn',
+    title: 'Open Computer Use',
+  });
+  const cuIcon = el('div', { class: 'sp-drawer-launcher-icon' });
+  cuIcon.appendChild(renderIcon(Monitor, 14));
+  const cuTextBlock = el('div', { class: 'sp-drawer-launcher-label' });
+  cuTextBlock.appendChild(el('div', {}, 'Computer Use'));
+  cuTextBlock.appendChild(
+    el('div', { class: 'sp-drawer-launcher-desc' }, 'Browser automation agent'),
+  );
+  cuLaunchBtn.appendChild(cuIcon);
+  cuLaunchBtn.appendChild(cuTextBlock);
+  cuLaunchBtn.appendChild(el('span', { class: 'sp-drawer-launcher-chevron' }, '›'));
+  cuLaunchBtn.addEventListener('click', () => {
+    closeDrawer();
+    switchTab('computer-use');
+  });
+  viewsSection.appendChild(cuLaunchBtn);
+  drawerBody.appendChild(viewsSection);
+
+  // ── Section 2: Tools (Capture / Refresh / Group) ───────────────────────────
+  const toolsSection = el('div', { class: 'sp-drawer-section' });
+  toolsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Tools'));
+  const toolsRow = el('div', { class: 'sp-drawer-tools-row' });
+
+  const drawerCaptureBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-capture-btn',
+    title: 'Capture page screenshot',
+  });
+  drawerCaptureBtn.appendChild(renderIcon(Camera, 13));
+  drawerCaptureBtn.appendChild(document.createTextNode(' Capture'));
+  drawerCaptureBtn.addEventListener('click', async () => {
+    drawerCaptureBtn.textContent = ' Capturing…';
+    (drawerCaptureBtn as HTMLButtonElement).disabled = true;
+    try {
+      const res = (await chrome.runtime.sendMessage({
+        type: 'CAPTURE_SCREENSHOT',
+        format: 'png',
+        quality: 90,
+      })) as { success: boolean; error?: string };
+      if (res.success) {
+        drawerCaptureBtn.textContent = ' Captured!';
+        drawerCaptureBtn.classList.add('active');
+        setTimeout(() => {
+          drawerCaptureBtn.replaceChildren(
+            renderIcon(Camera, 13),
+            document.createTextNode(' Capture'),
+          );
+          drawerCaptureBtn.classList.remove('active');
+          (drawerCaptureBtn as HTMLButtonElement).disabled = false;
+        }, 1500);
+      } else {
+        throw new Error(res.error ?? 'Failed');
+      }
+    } catch {
+      drawerCaptureBtn.textContent = ' Failed';
+      setTimeout(() => {
+        drawerCaptureBtn.replaceChildren(
+          renderIcon(Camera, 13),
+          document.createTextNode(' Capture'),
+        );
+        (drawerCaptureBtn as HTMLButtonElement).disabled = false;
+      }, 1500);
+    }
+  });
+  toolsRow.appendChild(drawerCaptureBtn);
+
+  const drawerRefreshBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-refresh-btn',
+    title: 'Refresh panel data',
+  });
+  drawerRefreshBtn.appendChild(renderIcon(Loader2, 13));
+  drawerRefreshBtn.appendChild(document.createTextNode(' Refresh'));
+  drawerRefreshBtn.addEventListener('click', async () => {
+    (drawerRefreshBtn as HTMLButtonElement).disabled = true;
+    try {
+      await Promise.all([
+        refreshDrawerPairingState(),
+        refreshDrawerAllowlist(),
+        refreshDrawerMemory(),
+        refreshDrawerStats(),
+        refreshDrawerTabInfo(),
+      ]);
+    } finally {
+      (drawerRefreshBtn as HTMLButtonElement).disabled = false;
+    }
+  });
+  toolsRow.appendChild(drawerRefreshBtn);
+
+  // Group button mirrors the toolbar's sp-group-btn
+  const drawerGroupBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-group-btn',
+    title: 'Add current tab to group',
+  });
+  drawerGroupBtn.appendChild(renderIcon(Folder, 13));
+  let drawerGrouped = false;
+  const drawerGroupLabel = document.createTextNode(' Group');
+  drawerGroupBtn.appendChild(drawerGroupLabel);
+  drawerGroupBtn.addEventListener('click', () => {
+    const msgType = drawerGrouped ? 'REMOVE_TAB_FROM_GROUP' : 'ADD_TAB_TO_GROUP';
+    chrome.runtime.sendMessage(
+      { type: msgType },
+      (response: { success?: boolean; grouped?: boolean } | undefined) => {
+        if (chrome.runtime.lastError || !response?.success) return;
+        drawerGrouped = response.grouped ?? false;
+        drawerGroupLabel.textContent = drawerGrouped ? ' Ungroup' : ' Group';
+        drawerGroupBtn.classList.toggle('active', drawerGrouped);
+      },
+    );
+  });
+  toolsRow.appendChild(drawerGroupBtn);
+  toolsSection.appendChild(toolsRow);
+  drawerBody.appendChild(toolsSection);
+
+  // ── Section 3: Connection / Pairing ───────────────────────────────────────
+  const pairingSection = el('div', { class: 'sp-drawer-section' });
+  pairingSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Desktop Pairing'));
+
+  const pairingRow = el('div', { class: 'sp-drawer-pairing-row' });
+  const pairingLabel = el(
+    'span',
+    { class: 'sp-drawer-pairing-label', id: 'sp-drawer-pairing-label' },
+    'Not paired',
+  );
+  const pairingFingerprint = el('span', {
+    class: 'sp-drawer-pairing-fingerprint',
+    id: 'sp-drawer-pairing-fingerprint',
+    hidden: '',
+  });
+  pairingRow.appendChild(pairingLabel);
+  pairingRow.appendChild(pairingFingerprint);
+  pairingSection.appendChild(pairingRow);
+
+  const pairingError = el('div', {
+    class: 'sp-drawer-pairing-error',
+    id: 'sp-drawer-pairing-error',
+  });
+  pairingSection.appendChild(pairingError);
+
+  const pairingBtnRow = el('div', { class: 'sp-drawer-btn-row' });
+  const drawerPairBtn = el(
+    'button',
+    {
+      class: 'sp-drawer-btn sp-drawer-btn-primary',
+      id: 'sp-drawer-pair-btn',
+    },
+    'Pair with Desktop',
+  );
+  const drawerUnpairBtn = el(
+    'button',
+    {
+      class: 'sp-drawer-btn sp-drawer-btn-danger',
+      id: 'sp-drawer-unpair-btn',
+      hidden: '',
+    },
+    'Unpair',
+  );
+
+  function applyDrawerPairingState(state: PairingState): void {
+    pairingError.textContent = '';
+    switch (state.phase) {
+      case 'idle':
+        pairingLabel.textContent = 'Not paired';
+        pairingFingerprint.setAttribute('hidden', '');
+        drawerPairBtn.textContent = 'Pair with Desktop';
+        (drawerPairBtn as HTMLButtonElement).disabled = false;
+        drawerPairBtn.removeAttribute('hidden');
+        drawerUnpairBtn.setAttribute('hidden', '');
+        break;
+      case 'requesting':
+        pairingLabel.textContent = 'Pairing…';
+        pairingFingerprint.setAttribute('hidden', '');
+        drawerPairBtn.textContent = 'Pairing…';
+        (drawerPairBtn as HTMLButtonElement).disabled = true;
+        drawerUnpairBtn.setAttribute('hidden', '');
+        break;
+      case 'paired':
+        pairingLabel.textContent = 'Paired';
+        if (state.fingerprint) {
+          pairingFingerprint.textContent = state.fingerprint;
+          pairingFingerprint.removeAttribute('hidden');
+        } else {
+          pairingFingerprint.setAttribute('hidden', '');
+        }
+        drawerPairBtn.setAttribute('hidden', '');
+        drawerUnpairBtn.removeAttribute('hidden');
+        break;
+      case 'error':
+        pairingLabel.textContent = 'Pairing failed';
+        pairingFingerprint.setAttribute('hidden', '');
+        if (state.error) pairingError.textContent = state.error;
+        drawerPairBtn.textContent = 'Retry Pairing';
+        (drawerPairBtn as HTMLButtonElement).disabled = false;
+        drawerPairBtn.removeAttribute('hidden');
+        drawerUnpairBtn.setAttribute('hidden', '');
+        break;
+    }
+  }
+
+  drawerPairBtn.addEventListener('click', async () => {
+    applyDrawerPairingState({ phase: 'requesting', fingerprint: null, error: null });
+    const next = await requestPairing();
+    applyDrawerPairingState(next);
+  });
+  drawerUnpairBtn.addEventListener('click', async () => {
+    const next = await unpair();
+    applyDrawerPairingState(next);
+  });
+
+  pairingBtnRow.appendChild(drawerPairBtn);
+  pairingBtnRow.appendChild(drawerUnpairBtn);
+  pairingSection.appendChild(pairingBtnRow);
+  drawerBody.appendChild(pairingSection);
+
+  async function refreshDrawerPairingState(): Promise<void> {
+    const state = await loadPairingState();
+    applyDrawerPairingState(state);
+  }
+
+  // ── Section 4: In-Page Panel toggle ───────────────────────────────────────
+  const inPageSection = el('div', { class: 'sp-drawer-section' });
+  inPageSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
+  const inPageRow = el('div', { class: 'sp-drawer-toggle-row' });
+  inPageRow.appendChild(el('span', { class: 'sp-drawer-toggle-label' }, 'Page chat overlay'));
+  const inPageToggle = el('input', {
+    type: 'checkbox',
+    class: 'sp-drawer-toggle-switch',
+    id: 'sp-drawer-in-page-toggle',
+    'aria-label': 'Toggle in-page panel',
+  }) as HTMLInputElement;
+  inPageToggle.checked = true; // default on
+  chrome.storage.local.get(SP_IN_PAGE_PANEL_ENABLED_KEY, (result) => {
+    if (chrome.runtime.lastError) return;
+    const val = result[SP_IN_PAGE_PANEL_ENABLED_KEY] as boolean | undefined;
+    inPageToggle.checked = val !== false;
+  });
+  inPageToggle.addEventListener('change', () => {
+    chrome.storage.local
+      .set({ [SP_IN_PAGE_PANEL_ENABLED_KEY]: inPageToggle.checked })
+      .catch(() => {});
+  });
+  inPageRow.appendChild(inPageToggle);
+  inPageSection.appendChild(inPageRow);
+  drawerBody.appendChild(inPageSection);
+
+  // ── Section 5: Site Allowlist ──────────────────────────────────────────────
+  const allowlistSection = el('div', { class: 'sp-drawer-section' });
+  allowlistSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Site Allowlist'));
+  allowlistSection.appendChild(
+    el(
+      'p',
+      { class: 'sp-drawer-allowlist-help' },
+      'Pages on these origins can run AGI automation in their tab. Add the current site, then reload it.',
+    ),
+  );
+
+  const allowlistCurrentRow = el('div', { class: 'sp-drawer-allowlist-current-row' });
+  const allowlistOriginLabel = el(
+    'span',
+    {
+      class: 'sp-drawer-allowlist-origin',
+      id: 'sp-drawer-allowlist-origin',
+    },
+    '—',
+  );
+  const allowlistToggleBtn = el(
+    'button',
+    {
+      class: 'sp-drawer-allowlist-toggle-btn',
+      id: 'sp-drawer-allowlist-toggle',
+    },
+    'Add',
+  ) as HTMLButtonElement;
+  (allowlistToggleBtn as HTMLButtonElement).disabled = true;
+  allowlistCurrentRow.appendChild(allowlistOriginLabel);
+  allowlistCurrentRow.appendChild(allowlistToggleBtn);
+  allowlistSection.appendChild(allowlistCurrentRow);
+
+  const allowlistList = el('ul', {
+    class: 'sp-drawer-allowlist-list',
+    id: 'sp-drawer-allowlist-list',
+    'aria-label': 'Allowlisted origins',
+  });
+  const allowlistEmpty = el(
+    'div',
+    { class: 'sp-drawer-allowlist-empty', id: 'sp-drawer-allowlist-empty', hidden: '' },
+    'No sites allowlisted yet.',
+  );
+  allowlistSection.appendChild(allowlistList);
+  allowlistSection.appendChild(allowlistEmpty);
+  drawerBody.appendChild(allowlistSection);
+
+  async function drawerReadAllowlist(): Promise<string[]> {
+    try {
+      const res = await chrome.storage.local.get(SP_SITE_ALLOWLIST_KEY);
+      const list = (res as Record<string, unknown>)[SP_SITE_ALLOWLIST_KEY];
+      return Array.isArray(list) ? (list as string[]).filter((s) => typeof s === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  async function drawerWriteAllowlist(next: string[]): Promise<void> {
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const raw of next) {
+      if (typeof raw !== 'string') continue;
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      try {
+        const u = new URL(trimmed);
+        const origin = u.origin;
+        if (!seen.has(origin)) {
+          seen.add(origin);
+          cleaned.push(origin);
+        }
+      } catch {
+        /* drop malformed */
+      }
+    }
+    cleaned.sort();
+    await chrome.storage.local.set({ [SP_SITE_ALLOWLIST_KEY]: cleaned });
+  }
+  function drawerCurrentTabOrigin(): Promise<string | null> {
+    return new Promise((resolve) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const url = tabs[0]?.url;
+        if (!url) return resolve(null);
+        try {
+          resolve(new URL(url).origin);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+  }
+  async function renderDrawerAllowlistList(
+    list: string[],
+    currentOrigin: string | null,
+  ): Promise<void> {
+    clearChildren(allowlistList);
+    if (list.length === 0) {
+      allowlistEmpty.removeAttribute('hidden');
+      return;
+    }
+    allowlistEmpty.setAttribute('hidden', '');
+    for (const origin of list) {
+      const li = el('li', {
+        class: `sp-drawer-allowlist-item${origin === currentOrigin ? ' is-current' : ''}`,
+      });
+      const originSpan = el('span', { class: 'sp-drawer-allowlist-item-origin' }, origin);
+      li.appendChild(originSpan);
+      const removeBtn = el(
+        'button',
+        {
+          type: 'button',
+          class: 'sp-drawer-allowlist-item-remove',
+          'aria-label': `Remove ${origin} from allowlist`,
+        },
+        'Remove',
+      );
+      removeBtn.addEventListener('click', async () => {
+        const cur = await drawerReadAllowlist();
+        await drawerWriteAllowlist(cur.filter((o) => o !== origin));
+        await refreshDrawerAllowlist();
+      });
+      li.appendChild(removeBtn);
+      allowlistList.appendChild(li);
+    }
+  }
+  async function refreshDrawerAllowlist(): Promise<void> {
+    const [list, origin] = await Promise.all([drawerReadAllowlist(), drawerCurrentTabOrigin()]);
+    allowlistOriginLabel.textContent = origin ?? 'No active tab';
+    (allowlistToggleBtn as HTMLButtonElement).disabled = !origin;
+    if (origin) {
+      const present = list.includes(origin);
+      allowlistToggleBtn.textContent = present ? 'Remove' : 'Add';
+      allowlistToggleBtn.classList.toggle('is-remove', present);
+    } else {
+      allowlistToggleBtn.textContent = 'Add';
+      allowlistToggleBtn.classList.remove('is-remove');
+    }
+    await renderDrawerAllowlistList(list, origin);
+  }
+  allowlistToggleBtn.addEventListener('click', async () => {
+    const origin = await drawerCurrentTabOrigin();
+    if (!origin) return;
+    const list = await drawerReadAllowlist();
+    const present = list.includes(origin);
+    await drawerWriteAllowlist(present ? list.filter((o) => o !== origin) : [...list, origin]);
+    await refreshDrawerAllowlist();
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[SP_SITE_ALLOWLIST_KEY] && drawer.classList.contains('open')) {
+      void refreshDrawerAllowlist();
+    }
+  });
+
+  // ── Section 6: Memory ──────────────────────────────────────────────────────
+  const DRAWER_DELETE_CONFIRM_MS = 3000;
+  const memorySection = el('div', { class: 'sp-drawer-section' });
+  memorySection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Memory'));
+  memorySection.appendChild(
+    el(
+      'p',
+      { class: 'sp-drawer-memory-help' },
+      'Saved facts and preferences reused across sessions. Stored on this device only.',
+    ),
+  );
+
+  const memoryAddBtn = el(
+    'button',
+    {
+      class: 'sp-drawer-memory-add-btn',
+      id: 'sp-drawer-memory-add-btn',
+    },
+    'Add memory',
+  );
+  memorySection.appendChild(memoryAddBtn);
+
+  const memoryEditor = el('div', {
+    class: 'sp-drawer-memory-editor',
+    id: 'sp-drawer-memory-editor',
+  });
+  const memoryTextarea = el('textarea', {
+    class: 'sp-drawer-memory-textarea',
+    id: 'sp-drawer-memory-textarea',
+    placeholder: 'Enter a fact, preference, or pattern to remember…',
+    rows: '3',
+    maxlength: '2000',
+  }) as HTMLTextAreaElement;
+  const memoryEditorActions = el('div', { class: 'sp-drawer-memory-editor-actions' });
+  const memorySaveBtn = el(
+    'button',
+    { class: 'sp-drawer-btn sp-drawer-btn-primary', id: 'sp-drawer-memory-save-btn' },
+    'Save',
+  );
+  const memoryCancelBtn = el(
+    'button',
+    { class: 'sp-drawer-btn', id: 'sp-drawer-memory-cancel-btn' },
+    'Cancel',
+  );
+  memoryEditorActions.appendChild(memorySaveBtn);
+  memoryEditorActions.appendChild(memoryCancelBtn);
+  memoryEditor.appendChild(memoryTextarea);
+  memoryEditor.appendChild(memoryEditorActions);
+  memorySection.appendChild(memoryEditor);
+
+  const memoryList = el('ul', {
+    class: 'sp-drawer-memory-list',
+    id: 'sp-drawer-memory-list',
+    'aria-label': 'Saved memories',
+  });
+  const memoryEmpty = el(
+    'div',
+    { class: 'sp-drawer-memory-empty', id: 'sp-drawer-memory-empty', hidden: '' },
+    'No saved memories yet.',
+  );
+  memorySection.appendChild(memoryList);
+  memorySection.appendChild(memoryEmpty);
+  drawerBody.appendChild(memorySection);
+
+  type DrawerMemoryMessageType = 'LIST_MEMORIES' | 'ADD_MEMORY' | 'UPDATE_MEMORY' | 'DELETE_MEMORY';
+  async function sendDrawerMemoryMsg(
+    type: DrawerMemoryMessageType,
+    payload: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> {
+    try {
+      const res = (await chrome.runtime.sendMessage({ type, ...payload })) as Record<
+        string,
+        unknown
+      >;
+      return res ?? {};
+    } catch {
+      return { success: false };
+    }
+  }
+  function drawerFormatRelTime(iso: string): string {
+    try {
+      const diff = Date.now() - new Date(iso).getTime();
+      if (diff < 60_000) return 'just now';
+      const m = Math.floor(diff / 60_000);
+      if (m < 60) return `${m} min ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h} h ago`;
+      return `${Math.floor(h / 24)} d ago`;
+    } catch {
+      return '';
+    }
+  }
+
+  type DrawerMemoryItem = { id: string; content: string; createdAt: string; updatedAt?: string };
+
+  function buildDrawerMemoryItem(item: DrawerMemoryItem): HTMLLIElement {
+    const li = el('li', { class: 'sp-drawer-memory-item' });
+    li.dataset['id'] = item.id;
+    const contentEl = el('span', { class: 'sp-drawer-memory-item-content' }, item.content);
+    const metaEl = el(
+      'span',
+      { class: 'sp-drawer-memory-item-meta' },
+      drawerFormatRelTime(item.updatedAt || item.createdAt),
+    );
+    const actionRow = el('div', { class: 'sp-drawer-memory-item-row' });
+
+    const editBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-memory-item-edit-btn' },
+      'Edit',
+    );
+    const deleteBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-memory-item-delete-btn' },
+      'Delete',
+    ) as HTMLButtonElement;
+
+    let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+    deleteBtn.addEventListener('click', () => {
+      if (deleteBtn.classList.contains('is-confirm')) {
+        if (confirmTimer !== null) {
+          clearTimeout(confirmTimer);
+          confirmTimer = null;
+        }
+        sendDrawerMemoryMsg('DELETE_MEMORY', { id: item.id })
+          .then(() => refreshDrawerMemory())
+          .catch(() => {});
+      } else {
+        deleteBtn.classList.add('is-confirm');
+        deleteBtn.textContent = 'Confirm?';
+        confirmTimer = setTimeout(() => {
+          deleteBtn.classList.remove('is-confirm');
+          deleteBtn.textContent = 'Delete';
+          confirmTimer = null;
+        }, DRAWER_DELETE_CONFIRM_MS);
+      }
+    });
+
+    editBtn.addEventListener('click', () => {
+      if (li.querySelector('.sp-drawer-memory-item-textarea')) return;
+      contentEl.hidden = true;
+      editBtn.hidden = true;
+      deleteBtn.hidden = true;
+      const editArea = el('textarea', {
+        class: 'sp-drawer-memory-item-textarea',
+        rows: '2',
+        maxlength: '2000',
+      }) as HTMLTextAreaElement;
+      editArea.value = item.content;
+      const editSave = el(
+        'button',
+        { type: 'button', class: 'sp-drawer-btn sp-drawer-btn-primary' },
+        'Save',
+      );
+      const editCancel = el('button', { type: 'button', class: 'sp-drawer-btn' }, 'Cancel');
+      const editActions = el('div', { class: 'sp-drawer-memory-editor-actions' });
+      editActions.appendChild(editSave);
+      editActions.appendChild(editCancel);
+      editSave.addEventListener('click', async () => {
+        const txt = editArea.value.trim();
+        if (!txt) return;
+        (editSave as HTMLButtonElement).disabled = true;
+        await sendDrawerMemoryMsg('UPDATE_MEMORY', { id: item.id, content: txt });
+        await refreshDrawerMemory();
+      });
+      editCancel.addEventListener('click', () => {
+        editArea.remove();
+        editActions.remove();
+        contentEl.hidden = false;
+        editBtn.hidden = false;
+        deleteBtn.hidden = false;
+      });
+      li.insertBefore(editArea, actionRow);
+      li.insertBefore(editActions, actionRow);
+      editArea.focus();
+    });
+
+    actionRow.appendChild(editBtn);
+    actionRow.appendChild(deleteBtn);
+    li.appendChild(contentEl);
+    li.appendChild(metaEl);
+    li.appendChild(actionRow);
+    return li;
+  }
+
+  async function refreshDrawerMemory(): Promise<void> {
+    const res = await sendDrawerMemoryMsg('LIST_MEMORIES');
+    const raw = Array.isArray(res['memories']) ? (res['memories'] as unknown[]) : [];
+    const items = raw.filter(isMemoryItem);
+    clearChildren(memoryList);
+    if (items.length === 0) {
+      memoryEmpty.removeAttribute('hidden');
+      return;
+    }
+    memoryEmpty.setAttribute('hidden', '');
+    for (const item of items) {
+      memoryList.appendChild(buildDrawerMemoryItem(item as DrawerMemoryItem));
+    }
+  }
+
+  function showDrawerMemoryEditor(show: boolean): void {
+    memoryEditor.classList.toggle('open', show);
+    if (show) {
+      memoryTextarea.value = '';
+      memoryTextarea.focus();
+    }
+  }
+  memoryAddBtn.addEventListener('click', () => showDrawerMemoryEditor(true));
+  memoryCancelBtn.addEventListener('click', () => showDrawerMemoryEditor(false));
+  memorySaveBtn.addEventListener('click', async () => {
+    const content = memoryTextarea.value.trim();
+    if (!content) return;
+    (memorySaveBtn as HTMLButtonElement).disabled = true;
+    await sendDrawerMemoryMsg('ADD_MEMORY', { content });
+    showDrawerMemoryEditor(false);
+    (memorySaveBtn as HTMLButtonElement).disabled = false;
+    await refreshDrawerMemory();
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[MEMORY_STORAGE_KEY] && drawer.classList.contains('open')) {
+      void refreshDrawerMemory();
+    }
+  });
+
+  // ── Section 7: Bridge URL ──────────────────────────────────────────────────
+  const bridgeSection = el('div', { class: 'sp-drawer-section' });
+  bridgeSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Bridge URL'));
+  const drawerBridgeInput = el('input', {
+    class: 'sp-drawer-bridge-input',
+    id: 'sp-drawer-bridge-input',
     type: 'text',
     placeholder: 'ws://localhost:8787',
     spellcheck: 'false',
   }) as HTMLInputElement;
+  chrome.storage.local.get('agi_bridge_url', (result) => {
+    if (chrome.runtime.lastError) return;
+    const stored = result['agi_bridge_url'] as string | undefined;
+    if (stored) drawerBridgeInput.value = stored;
+  });
+  const drawerBridgeRow = el('div', { class: 'sp-drawer-bridge-row' });
+  drawerBridgeRow.appendChild(drawerBridgeInput);
+  const drawerBridgeSaveBtn = el(
+    'button',
+    { class: 'sp-drawer-btn', id: 'sp-drawer-bridge-save-btn' },
+    'Apply',
+  );
+  drawerBridgeRow.appendChild(drawerBridgeSaveBtn);
+  bridgeSection.appendChild(drawerBridgeRow);
+  const drawerBridgeError = el('div', { class: 'sp-drawer-bridge-error', hidden: '' });
+  bridgeSection.appendChild(drawerBridgeError);
+  drawerBody.appendChild(bridgeSection);
 
-  const bridgeUrlSaveBtn = el('button', { class: 'sp-settings-btn' }, 'Apply');
+  function drawerSaveBridgeUrl(): void {
+    const raw = (drawerBridgeInput as HTMLInputElement).value.trim();
+    if (!raw) {
+      chrome.storage.local.remove('agi_bridge_url');
+    } else {
+      const validated = validateBridgeUrl(raw);
+      if (!validated) {
+        const allowed = Array.from(ALLOWED_BRIDGE_HOSTS).join(', ');
+        drawerBridgeError.textContent = `Only local URLs (${allowed}) are allowed`;
+        drawerBridgeError.removeAttribute('hidden');
+        setTimeout(() => drawerBridgeError.setAttribute('hidden', ''), 8000);
+        return;
+      }
+      chrome.storage.local
+        .set({ agi_bridge_url: raw })
+        .catch((err: unknown) => console.warn('[SidePanel] drawer bridge save failed:', err));
+    }
+    drawerBridgeError.setAttribute('hidden', '');
+    chrome.runtime
+      .sendMessage({ type: 'BRIDGE_URL_CHANGED', url: raw })
+      .catch((err: unknown) => console.warn('[SidePanel] drawer bridge notify failed:', err));
+    // Also sync the old settings-bar input so both stay in sync
+    const oldInput = document.getElementById('sp-bridge-url-input') as HTMLInputElement | null;
+    if (oldInput) oldInput.value = raw;
+  }
+  drawerBridgeSaveBtn.addEventListener('click', drawerSaveBridgeUrl);
+  drawerBridgeInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') drawerSaveBridgeUrl();
+  });
 
-  bridgeUrlRow.appendChild(bridgeUrlInput);
-  bridgeUrlRow.appendChild(bridgeUrlSaveBtn);
-  settingsBar.appendChild(bridgeUrlLabel);
-  settingsBar.appendChild(bridgeUrlRow);
+  // ── Section 8: Unlock AGI Cloud ───────────────────────────────────────────
+  const cloudSection = el('div', { class: 'sp-drawer-section' });
+  cloudSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
+  const drawerCloudBtn = el(
+    'button',
+    {
+      class: 'sp-drawer-cloud-btn',
+      id: 'sp-drawer-cloud-btn',
+    },
+    'Unlock AGI Cloud',
+  );
+  let drawerCloudModal: ReturnType<typeof mountInviteCodeModal> | null = null;
+  drawerCloudBtn.addEventListener('click', () => {
+    if (!drawerCloudModal) {
+      drawerCloudModal = mountInviteCodeModal(document.body, {
+        open: true,
+        source: 'computer-use',
+        defaultTab: 'invite',
+        onClose: () => drawerCloudModal?.update({ open: false }),
+        onRedeemed: (_inviteId) => {
+          // Could refresh tier display here in future
+        },
+      });
+    } else {
+      drawerCloudModal.show();
+    }
+  });
+  cloudSection.appendChild(drawerCloudBtn);
+  drawerBody.appendChild(cloudSection);
 
-  document.body.appendChild(settingsBar);
+  drawer.appendChild(drawerBody);
+
+  // ── Drawer footer: stats + about ───────────────────────────────────────────
+  const drawerFooter = el('div', { id: 'sp-drawer-footer' });
+  const statsRow = el('div', { class: 'sp-drawer-stats-row' });
+  const tabCountStat = el('div', { class: 'sp-drawer-stat' });
+  const tabCountVal = el('div', { class: 'sp-drawer-stat-value', id: 'sp-drawer-tab-count' }, '-');
+  tabCountStat.appendChild(tabCountVal);
+  tabCountStat.appendChild(el('div', { class: 'sp-drawer-stat-label' }, 'Tabs'));
+  const actionCountStat = el('div', { class: 'sp-drawer-stat' });
+  const actionCountVal = el(
+    'div',
+    { class: 'sp-drawer-stat-value', id: 'sp-drawer-action-count' },
+    '-',
+  );
+  actionCountStat.appendChild(actionCountVal);
+  actionCountStat.appendChild(el('div', { class: 'sp-drawer-stat-label' }, 'Actions'));
+  const sessionTimeStat = el('div', { class: 'sp-drawer-stat' });
+  const sessionTimeVal = el(
+    'div',
+    { class: 'sp-drawer-stat-value', id: 'sp-drawer-session-time' },
+    '0:00',
+  );
+  sessionTimeStat.appendChild(sessionTimeVal);
+  sessionTimeStat.appendChild(el('div', { class: 'sp-drawer-stat-label' }, 'Session'));
+  statsRow.appendChild(tabCountStat);
+  statsRow.appendChild(actionCountStat);
+  statsRow.appendChild(sessionTimeStat);
+  drawerFooter.appendChild(statsRow);
+
+  const aboutRow = el('div', { class: 'sp-drawer-about-row' });
+  aboutRow.appendChild(el('span', {}, `v${chrome.runtime.getManifest().version}`));
+  const aboutUrlSpan = el('span', { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' }, '—');
+  aboutRow.appendChild(aboutUrlSpan);
+  const aboutTabId = el('span', { id: 'sp-drawer-tab-id' }, '');
+  aboutRow.appendChild(aboutTabId);
+  drawerFooter.appendChild(aboutRow);
+  drawer.appendChild(drawerFooter);
+
+  async function refreshDrawerStats(): Promise<void> {
+    try {
+      const tabs = await chrome.tabs.query({});
+      tabCountVal.textContent = String(tabs.length);
+      const statsData = await chrome.storage.local.get('stats');
+      const count = (statsData['stats'] as { actionCount?: number } | undefined)?.actionCount ?? 0;
+      actionCountVal.textContent = String(count);
+    } catch {
+      /* ignore */
+    }
+  }
+  async function refreshDrawerTabInfo(): Promise<void> {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tab = tabs[0];
+      if (tab?.url) {
+        try {
+          const url = new URL(tab.url);
+          const chars = [...`${url.hostname}${url.pathname}`];
+          aboutUrlSpan.textContent =
+            chars.length > 28 ? chars.slice(0, 28).join('') + '…' : chars.join('');
+          aboutUrlSpan.title = tab.url;
+        } catch {
+          aboutUrlSpan.textContent = 'Unknown';
+        }
+      }
+      if (tab?.id != null) aboutTabId.textContent = `#${tab.id}`;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Session timer for drawer stats footer
+  function startDrawerSessionTimer(): void {
+    if (_drawerSessionTimer !== null) return;
+    _drawerSessionStart = Date.now();
+    const update = (): void => {
+      const elapsed = Math.floor((Date.now() - _drawerSessionStart) / 1000);
+      const m = Math.floor(elapsed / 60);
+      const s = elapsed % 60;
+      const el2 = document.getElementById('sp-drawer-session-time');
+      if (el2) el2.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    };
+    update();
+    _drawerSessionTimer = setInterval(update, 1000);
+  }
+  startDrawerSessionTimer();
+
+  document.body.appendChild(drawerOverlay);
+  document.body.appendChild(drawer);
 
   const consolePanel = el('div', { id: 'sp-console-panel' });
   const consoleHeader = el('div', { class: 'sp-console-header' });
@@ -3108,60 +4510,10 @@ function buildUI(): void {
   consolePanel.appendChild(el('div', { class: 'sp-console-entries' }));
   document.body.appendChild(consolePanel);
 
-  chrome.storage.local.get('agi_bridge_url', (result) => {
-    if (chrome.runtime.lastError) return;
-    const stored = result['agi_bridge_url'] as string | undefined;
-    if (stored && bridgeUrlInput instanceof HTMLInputElement) {
-      bridgeUrlInput.value = stored;
-    }
-  });
-
-  // Save bridge URL and reconnect — only local URLs allowed.
-  // SECURITY (H-02 audit 2026-05-19): validateBridgeUrl is now sourced from
-  // `src/background/policy.ts` so the UI and the background service worker
-  // share the EXACT same allowlist semantics (rejecting `0.0.0.0`, accepting
-  // `[::1]` with brackets). Previous inline Set diverged on `0.0.0.0`.
-  const saveBridgeUrl = (): void => {
-    const raw = (bridgeUrlInput as HTMLInputElement).value.trim();
-    if (!raw) {
-      chrome.storage.local.remove('agi_bridge_url');
-    } else {
-      const validated = validateBridgeUrl(raw);
-      if (!validated) {
-        const bar = document.getElementById('sp-settings-bar');
-        if (bar) {
-          const existing = bar.querySelector('.sp-bridge-error');
-          if (existing) existing.remove();
-          const errEl = document.createElement('div');
-          errEl.className = 'sp-bridge-error';
-          errEl.style.cssText = 'color: var(--agi-ext-danger); font-size: 10px; padding: 2px 0;';
-          const allowed = Array.from(ALLOWED_BRIDGE_HOSTS).join(', ');
-          errEl.textContent = `Only local URLs (${allowed}) are allowed`;
-          bar.appendChild(errEl);
-          // L-16 audit 2026-05-19: 8s gives the user time to read the
-          // error before it disappears (previous 4s was too short).
-          setTimeout(() => errEl.remove(), 8000);
-        }
-        return;
-      }
-      chrome.storage.local
-        .set({ agi_bridge_url: raw })
-        .catch((err: unknown) => console.warn('[SidePanel] Failed to save bridge URL:', err));
-    }
-    // Notify background to reconnect with new URL
-    chrome.runtime
-      .sendMessage({ type: 'BRIDGE_URL_CHANGED', url: raw })
-      .catch((err: unknown) =>
-        console.warn('[SidePanel] Failed to notify bridge URL change:', err),
-      );
-    const bar = document.getElementById('sp-settings-bar');
-    if (bar) bar.classList.remove('open');
-  };
-
-  bridgeUrlSaveBtn.addEventListener('click', saveBridgeUrl);
-  bridgeUrlInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') saveBridgeUrl();
-  });
+  // Phase 3: #sp-settings-bar removed; bridge URL is managed exclusively via the
+  // drawer's Bridge URL section (drawerSaveBridgeUrl). The hidden bridgeUrlInput
+  // element is kept in the DOM so that the drawer's sync line (oldInput?.value = raw)
+  // remains a silent no-op rather than a querySelector miss.
 
   const statusPill = el('div', { id: 'sp-status-pill', class: 'disconnected' });
   const statusDot0 = document.createElement('span');
@@ -3173,11 +4525,20 @@ function buildUI(): void {
   document.body.appendChild(authBar);
 
   const tabBar = el('div', { id: 'sp-tab-bar' });
-  const chatTabBtn = el('button', { class: 'sp-tab sp-tab-active', 'data-tab': 'chat' }, 'Chat');
+  const chatTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'chat' }, 'Chat');
   const workflowsTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'workflows' }, 'Workflows');
+  const cuTabBtn = el(
+    'button',
+    { class: 'sp-tab sp-tab-active', 'data-tab': 'computer-use' },
+    'Computer Use',
+  );
   tabBar.appendChild(chatTabBtn);
   tabBar.appendChild(workflowsTabBtn);
+  tabBar.appendChild(cuTabBtn);
   document.body.appendChild(tabBar);
+
+  // Build computer-use panel (kept in module scope so event handlers can reach it)
+  const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
 
   function switchTab(tab: SidePanelTab): void {
     const chatPanelEl = document.getElementById('sp-chat-panel');
@@ -3186,17 +4547,23 @@ function buildUI(): void {
     const toolbarEl = document.getElementById('sp-toolbar');
     chatTabBtn.classList.toggle('sp-tab-active', tab === 'chat');
     workflowsTabBtn.classList.toggle('sp-tab-active', tab === 'workflows');
+    cuTabBtn.classList.toggle('sp-tab-active', tab === 'computer-use');
     if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
     if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
+    cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
     if (tab === 'workflows') {
       refreshWorkflowsShortcuts();
       refreshWorkflowsTasks();
     }
+    if (tab === 'computer-use') {
+      cuPanel.refreshAuthChip();
+    }
   }
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
   workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
+  cuTabBtn.addEventListener('click', () => switchTab('computer-use'));
 
   const chatPanel = el('div', { id: 'sp-chat-panel' });
 
@@ -3215,12 +4582,12 @@ function buildUI(): void {
   </svg>`;
   appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
-  emptyState.appendChild(el('div', { id: 'sp-empty-headline' }, 'What can I help with?'));
+  emptyState.appendChild(el('div', { id: 'sp-empty-headline' }, 'How can I help you today?'));
   emptyState.appendChild(
     el(
       'div',
       { id: 'sp-empty-subtext' },
-      'Ask about this page, summarize content, or start a conversation.',
+      'Ask a question, summarize a page, or type / for commands.',
     ),
   );
   msgsArea.appendChild(emptyState);
@@ -3760,6 +5127,111 @@ function buildUI(): void {
   workflowsPanel.appendChild(groupsSection);
   document.body.appendChild(workflowsPanel);
 
+  // Computer Use panel — append after workflows; shown/hidden by switchTab()
+  document.body.appendChild(cuPanel.panelEl);
+
+  // Wire escalation events from content scripts / background into the panel UI.
+  // The background relays 'agi:escalate' CustomEvents as runtime messages.
+  chrome.runtime.onMessage.addListener((msg: unknown) => {
+    if (!msg || typeof msg !== 'object') return;
+    const m = msg as Record<string, unknown>;
+    if (m['type'] === 'AGI_CU_STEP') {
+      const step = m['step'] as Parameters<ComputerUsePanelAPI['appendStep']>[0];
+      cuPanel.appendStep(step);
+      // Auto-switch to Computer Use tab when the agent starts
+      switchTab('computer-use');
+    } else if (m['type'] === 'AGI_CU_ESCALATE') {
+      const reason = typeof m['reason'] === 'string' ? m['reason'] : 'Fast-path autofill stalled.';
+      cuPanel.showHandoffBanner(reason);
+      switchTab('computer-use');
+    } else if (m['type'] === 'AGI_CU_APPROVE_REQUEST') {
+      // Background is asking the panel to show an approval card for an action.
+      // The panel resolves the card and replies with AGI_CU_APPROVE_RESPONSE.
+      const requestId = typeof m['requestId'] === 'string' ? m['requestId'] : '';
+      const toolName = typeof m['toolName'] === 'string' ? m['toolName'] : 'action';
+      const description = typeof m['description'] === 'string' ? m['description'] : '';
+      switchTab('computer-use');
+      cuPanel.showApprovalCard(toolName, description, (allowed: boolean) => {
+        void chrome.runtime.sendMessage({
+          type: 'AGI_CU_APPROVE_RESPONSE',
+          requestId,
+          allowed,
+        });
+      });
+    }
+  });
+
+  // ── "Run Autofill" button orchestration ───────────────────────────────────
+  // Message flow (secure 3-context design):
+  //   1. User clicks "Run Autofill" in the Computer Use tab controls bar.
+  //   2. Side panel sends AGI_RUN_AUTOFILL to the content script of the
+  //      active tab (DOM work only — no CDP).
+  //   3. Content script returns { success, platform, autofill, escalation }.
+  //   4. If escalation.shouldEscalate, side panel:
+  //      a. Shows the handoff banner.
+  //      b. Switches to the Computer Use tab.
+  //      c. Sends AGI_START_COMPUTER_USE to the BACKGROUND (CDP-capable).
+  //   5. Background validates the tab's origin against siteAllowlistCache,
+  //      then starts runAgentLoop() and streams AGI_CU_STEP events back.
+  cuPanel.onRunAutofill(() => {
+    void (async () => {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const activeTabId = activeTab?.id;
+      if (!activeTabId) {
+        cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.');
+        return;
+      }
+
+      let resp: Record<string, unknown> | null = null;
+      try {
+        resp = (await chrome.tabs.sendMessage(activeTabId, {
+          type: 'AGI_RUN_AUTOFILL',
+        })) as Record<string, unknown> | null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        cuPanel.showHandoffBanner(`Autofill failed: ${msg}`);
+        return;
+      }
+
+      if (!resp || !resp['success']) {
+        const errMsg = typeof resp?.['error'] === 'string' ? resp['error'] : 'Autofill failed';
+        cuPanel.showHandoffBanner(String(errMsg));
+        return;
+      }
+
+      const escalation = resp['escalation'] as
+        | { shouldEscalate?: boolean; agentGoal?: string; triggers?: unknown[] }
+        | undefined;
+
+      if (!escalation?.shouldEscalate) {
+        // Fast-path completed cleanly — no agent loop needed.
+        cuPanel.showHandoffBanner('Autofill complete. No agent escalation needed.');
+        switchTab('computer-use');
+        return;
+      }
+
+      // Fast-path stalled → hand off to the computer-use agent loop.
+      const goal = typeof escalation.agentGoal === 'string' ? escalation.agentGoal : '';
+      cuPanel.showHandoffBanner(
+        `Fast-path autofill stalled (${String(escalation.triggers?.length ?? 0)} trigger(s)). ` +
+          `Switching to computer use…`,
+      );
+      switchTab('computer-use');
+
+      // Persist the "ask before acting" preference so the background can read it.
+      await chrome.storage.local.set({
+        agi_cu_ask_before_acting: cuPanel.isAskBeforeActing(),
+      });
+
+      // Ask background to start the CDP agent loop.
+      void chrome.runtime.sendMessage({
+        type: 'AGI_START_COMPUTER_USE',
+        goal,
+        tabId: activeTabId,
+      });
+    })();
+  });
+
   const toolbar = el('div', { id: 'sp-toolbar' });
 
   // Context button is now rendered as a persistent chip in the composer bar (see below).
@@ -3861,7 +5333,7 @@ function buildUI(): void {
 
   const inputEl = el('textarea', {
     id: 'sp-input',
-    placeholder: 'Ask about this page',
+    placeholder: 'Type / for commands',
     rows: '1',
   }) as HTMLTextAreaElement;
 
@@ -4087,6 +5559,28 @@ function buildUI(): void {
   }
 
   composerShell.appendChild(composerBar);
+
+  // Bridge-offline notice — shown at the top of the input area when the
+  // desktop bridge is not connected. Includes a reconnect button that
+  // triggers the same flow as the popup's manual reconnect.
+  const bridgeNotice = el('div', { id: 'sp-bridge-notice' });
+  const bridgeNoticeDot = el('span', { id: 'sp-bridge-notice-dot' });
+  const bridgeNoticeText = el('span', { id: 'sp-bridge-notice-text' }, 'Desktop not connected');
+  const bridgeNoticeReconnect = el(
+    'button',
+    { id: 'sp-bridge-notice-reconnect', type: 'button' },
+    'Reconnect',
+  );
+  bridgeNoticeReconnect.addEventListener('click', () => {
+    chrome.runtime
+      .sendMessage({ type: 'RECONNECT_NATIVE' })
+      .catch((err: unknown) => console.warn('[SidePanel] RECONNECT_NATIVE failed:', err));
+  });
+  bridgeNotice.appendChild(bridgeNoticeDot);
+  bridgeNotice.appendChild(bridgeNoticeText);
+  bridgeNotice.appendChild(bridgeNoticeReconnect);
+
+  inputArea.appendChild(bridgeNotice);
   inputArea.appendChild(attachmentBar);
   inputArea.appendChild(composerShell);
   inputArea.appendChild(promptChipsRow);
@@ -4125,6 +5619,11 @@ function buildUI(): void {
 
   setupVoiceInput(micBtn, inputEl, autoResizeInput);
   renderMessages();
+
+  // Claude-style front door: default to Chat. The panel is now the extension's
+  // primary surface (opened on toolbar click), so it must read as a chat first.
+  // Computer-Use still auto-activates when a CU event actually arrives.
+  switchTab('chat');
 }
 
 function refreshConsoleLogs(): void {
@@ -4426,6 +5925,23 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
+  // Live connection-status updates from the background service worker.
+  // Background now also broadcasts these via chrome.runtime.sendMessage so
+  // extension views (side panel, popup) receive them — not just content scripts.
+  if (envelope.type === 'CONNECTION_STATUS_CHANGED') {
+    const statusMsg = msg as { connected?: boolean; status?: string };
+    const nowConnected = statusMsg.connected === true;
+    if (nowConnected !== _ctx.isConnected) {
+      _ctx.isConnected = nowConnected;
+      updateConnectionStatus();
+      if (nowConnected) {
+        chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
+        setOfflineOnboardingVisible(false);
+      }
+    }
+    return;
+  }
+
   const chunk = msg as ChatChunk;
   if (chunk.type !== 'CHAT_CHUNK') return;
   if (chunk.id !== _ctx.currentStreamId) return;
@@ -4494,36 +6010,40 @@ Promise.all([
   });
 
 async function probeBridgeStatus(): Promise<void> {
+  // Ask the background service worker for the live native-connection status.
+  // This is the only authoritative source: the desktop `:8787` server only
+  // serves `POST /pair` and WebSocket upgrades — a direct HTTP GET to
+  // `/v1/status` always fails (404 or ECONNREFUSED), so the side panel used
+  // to permanently show "Offline" even when the desktop app was running.
+  //
+  // GET_CONNECTION_STATUS also triggers a fresh native ping in background
+  // (background.ts:1033) so the status it returns is up-to-date.
   try {
-    const stored = await new Promise<string | undefined>((resolve) => {
-      chrome.storage.local.get({ agi_bridge_url: '' }, (items) => {
-        resolve((items['agi_bridge_url'] as string | undefined) || undefined);
-      });
-    });
-    // SECURITY (H-08 audit 2026-05-19): never fetch a stored bridge URL
-    // without first running it through `validateBridgeUrl`. Storage is
-    // writable by the side panel UI and (in principle) by future code
-    // paths; a poisoned value here used to be fetched verbatim. Fall
-    // back to the canonical default when the stored value is invalid.
-    const validated = stored ? validateBridgeUrl(stored.trim()) : null;
-    const baseUrl = validated ?? DEFAULT_AGI_BRIDGE_URL;
-    const resp = await fetch(`${baseUrl}/v1/status`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000),
-    });
-    if (resp.ok) {
-      if (!_ctx.isConnected) {
-        _ctx.isConnected = true;
-        updateConnectionStatus();
-      }
-      // Connected — mark ever-connected so we don't show onboarding on future opens
+    const result = (await chrome.runtime.sendMessage({
+      type: 'GET_CONNECTION_STATUS',
+    })) as { success?: boolean; nativeConnected?: boolean; connectionStatus?: string } | undefined;
+
+    const connected = result?.nativeConnected === true;
+    if (connected !== _ctx.isConnected) {
+      _ctx.isConnected = connected;
+      updateConnectionStatus();
+    }
+    if (connected) {
+      // Mark ever-connected so the onboarding screen is not shown on future
+      // opens even if the desktop is temporarily closed.
       chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
       setOfflineOnboardingVisible(false);
+    } else {
+      // BLOCKER-02b: not connected. Show offline onboarding on first use.
+      chrome.storage.local.get({ agi_ever_connected: false }, (items) => {
+        if (!items['agi_ever_connected']) {
+          setOfflineOnboardingVisible(true);
+        }
+      });
     }
   } catch {
-    // BLOCKER-02b: bridge not running. Show offline onboarding on first use
-    // (agi_ever_connected not set). Returning users see the standard "Not Connected"
-    // status pill — they know how to start the app.
+    // Background not available (e.g. service worker restarting) — show
+    // onboarding only on first use; otherwise leave current state unchanged.
     chrome.storage.local.get({ agi_ever_connected: false }, (items) => {
       if (!items['agi_ever_connected']) {
         setOfflineOnboardingVisible(true);

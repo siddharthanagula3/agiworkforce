@@ -1,4 +1,4 @@
-// Browser stub for @agiworkforce/runtime/context — AsyncLocalStorage is node-only.
+// Browser stub for @agiworkforce/runtime/context · AsyncLocalStorage is node-only.
 // Client components that import @agiworkforce/runtime get no-op implementations
 // for the agentContext APIs (they are Tauri/desktop-only features).
 

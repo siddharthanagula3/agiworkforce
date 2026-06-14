@@ -119,7 +119,7 @@ pub enum SafetyReason {
     AppDenied { app_name: String },
     /// Active foreground app is on the hardcoded always-blocked refuse-list
     /// (investment / crypto / banking / payments). Cannot be overridden by
-    /// user settings — matches Cowork's hard-blocked categories.
+    /// user settings — matches Claude Cowork's hard-blocked categories.
     AppHardBlocked {
         app_name: String,
         bundle_id: Option<String>,
@@ -384,7 +384,7 @@ impl ComputerUseSafetyLayer {
     /// gating is disabled), or `Some(SafetyReason)` describing why it must
     /// be blocked / require approval.
     ///
-    /// This is the wiring that closes the gap from Cowork: the agent now
+    /// This is the wiring that closes the gap from Claude Cowork: the agent now
     /// knows which app is in front and refuses to operate on always-blocked
     /// apps (investment / crypto / banking) and on apps the user has denied,
     /// and asks the user before the first interaction with a new app.

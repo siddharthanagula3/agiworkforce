@@ -1,15 +1,12 @@
 /**
- * Skills API — list skills loaded via `@agiworkforce/skills`.
+ * Skills API · list skills loaded via `@agiworkforce/skills`.
  *
  * Routes:
- *   GET /api/skills          — list metadata only (progressive disclosure).
- *   GET /api/skills/[name]   — fetch the body for a named skill.
+ *   GET /api/skills          · list metadata only (progressive disclosure).
+ *   GET /api/skills/[name]   · fetch the body for a named skill.
  *
- * Skills source: a layered scan of skill directories on the gateway host.
- * Today the route reads the `SKILLS_LAYERS` env var as a JSON list of
- * `{rootDir, source}` entries. In production, the path would be
- * supplemented by per-user / per-project skills uploaded via Neon
- * storage; that wiring is deferred.
+ * Skills source: a layered scan of configured skill directories on the
+ * gateway host. Host paths are never returned to the browser.
  *
  * Progressive disclosure: this endpoint never returns body content for
  * the index. The body is fetched lazily by the consumer UI from the
@@ -31,6 +28,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 export const runtime = 'nodejs';
 
@@ -87,12 +85,12 @@ async function getSkills(): Promise<Skill[]> {
 async function handleListSkills(request: NextRequest) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
+  await getClerkAuthUser(request);
   const skills = await getSkills();
   return NextResponse.json({
     skills: skills.map((s) => ({
       name: s.name,
       description: s.description,
-      location: s.filePath,
       source: s.source,
     })),
   });

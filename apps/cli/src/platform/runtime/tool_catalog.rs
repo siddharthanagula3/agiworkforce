@@ -66,7 +66,7 @@ impl ToolDefinition {
     }
 }
 
-/// Canonicalize Claude-style and AGI compatibility aliases to executor names.
+/// Canonicalize reference-compatible and AGI compatibility aliases to executor names.
 pub fn canonical_tool_name(tool_name: &str) -> &str {
     match tool_name {
         "Read" | "read" | "ReadFile" => "read_file",
@@ -872,7 +872,7 @@ pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
 /// - team tools are appended when team mode is enabled
 /// - MCP tools are appended last when present
 /// - `allowed_tools`, when provided, filters the final tool list by canonical
-///   name, Claude-style alias, or pattern-qualified rule like `Bash(cargo *)`
+///   name, reference-compatible alias, or pattern-qualified rule like `Bash(cargo *)`
 ///
 /// Phase E: deferred tools are excluded from the initial schema list here.
 /// They remain executable; the model loads their schema via `tool_search`.

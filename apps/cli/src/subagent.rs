@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 
 use crate::config::CliConfig;
 use crate::context::SystemContext;
+use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,7 +168,7 @@ impl SubagentManager {
 
         eprintln!(
             "  {} Spawning subagent {} — {}",
-            "[task]".cyan().bold(),
+            ts::accent_header("[task]"),
             task_id.bold(),
             task_description.dimmed()
         );
@@ -195,6 +196,7 @@ impl SubagentManager {
                         &task_sys_context,
                         &task_prompt,
                         task_skip_permissions,
+                        &task_cancelled,
                     )
                     .await;
 
@@ -219,7 +221,7 @@ impl SubagentManager {
 
                             eprintln!(
                                 "  {} Subagent {} completed",
-                                "[task]".green().bold(),
+                                ts::success_header("[task]"),
                                 task_id.bold()
                             );
                         }
@@ -229,7 +231,7 @@ impl SubagentManager {
 
                             eprintln!(
                                 "  {} Subagent {} failed: {}",
-                                "[task]".red().bold(),
+                                ts::danger_header("[task]"),
                                 task_id.bold(),
                                 err_msg.dimmed()
                             );
@@ -302,7 +304,7 @@ impl SubagentManager {
                 *status = SubagentStatus::Cancelled;
                 eprintln!(
                     "  {} Subagent {} cancelled",
-                    "[task]".yellow().bold(),
+                    ts::warning_header("[task]"),
                     id.bold()
                 );
                 Ok(())
@@ -336,7 +338,7 @@ impl SubagentManager {
             if let Err(_e) = handle.join() {
                 eprintln!(
                     "  {} Subagent {} thread panicked",
-                    "[task]".red().bold(),
+                    ts::danger_header("[task]"),
                     id.bold()
                 );
             }
@@ -364,9 +366,9 @@ impl SubagentManager {
         let mut out = format!("Subagents ({}):\n", items.len());
         for (id, description, status) in &items {
             let status_str = match status {
-                SubagentStatus::Running => "running".yellow().to_string(),
-                SubagentStatus::Completed => "completed".green().to_string(),
-                SubagentStatus::Failed(msg) => format!("{}: {}", "failed".red(), msg),
+                SubagentStatus::Running => ts::warning("running").to_string(),
+                SubagentStatus::Completed => ts::success("completed").to_string(),
+                SubagentStatus::Failed(msg) => format!("{}: {}", ts::danger("failed"), msg),
                 SubagentStatus::Cancelled => "cancelled".dimmed().to_string(),
             };
             out.push_str(&format!("  {} — {} [{}]\n", id, description, status_str));
@@ -387,6 +389,7 @@ async fn run_subagent(
     sys_context: &SystemContext,
     prompt: &str,
     skip_permissions: bool,
+    cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<String> {
     let mut session = crate::agent::AgentSession::new_checked(
         model,
@@ -403,18 +406,38 @@ async fn run_subagent(
     // Subagents get a reasonable max turns to avoid runaway loops
     session.max_turns = Some(15);
 
-    let result = session
-        .send(
-            config,
-            prompt,
-            Box::new(|_chunk| {
-                // Subagent output is collected silently -- not streamed to terminal.
-                // The parent agent receives the full result.
-            }),
-        )
-        .await?;
+    let send_fut = session.send(
+        config,
+        prompt,
+        Box::new(|_chunk| {
+            // Subagent output is collected silently -- not streamed to terminal.
+            // The parent agent receives the full result.
+        }),
+    );
+    tokio::pin!(send_fut);
+
+    // Race the turn against cancellation. If `cancel()` (or the parent's
+    // timeout) sets the flag, the cancel branch wins and `send_fut` is dropped
+    // on return — which aborts the in-flight provider request, so a cancelled
+    // subagent actually stops generating instead of running its turn (and any
+    // in-flight tool side effects) to completion.
+    let result = tokio::select! {
+        biased;
+        () = wait_until_cancelled(cancelled) => {
+            anyhow::bail!("subagent cancelled");
+        }
+        r = &mut send_fut => r?,
+    };
 
     Ok(result.response)
+}
+
+/// Resolve once the cancellation flag is set, polling cooperatively (every
+/// 100ms) so the racing `send` future keeps getting driven until then.
+async fn wait_until_cancelled(flag: &std::sync::atomic::AtomicBool) {
+    while !flag.load(std::sync::atomic::Ordering::Acquire) {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -474,12 +497,21 @@ fn extract_modified_files(output: &str) -> Vec<String> {
 // Tool execution for the `Task` tool
 // ---------------------------------------------------------------------------
 
+/// Maximum time `execute_task` will wait for a single subagent to leave the
+/// `Running` state before surfacing a timeout. Guards against a subagent stuck
+/// on a non-returning provider call or hung tool blocking the parent forever.
+const SUBAGENT_EXECUTE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
+
 /// Execute the `Task` tool: spawn a subagent, wait for it, return its output.
 ///
 /// This is a blocking execution -- the subagent runs to completion before
 /// returning the result to the caller. For true parallelism, multiple Task
 /// tool calls in the same LLM turn will be executed concurrently by the
 /// agent loop.
+///
+/// The wait is bounded by `SUBAGENT_EXECUTE_TIMEOUT`; if the subagent has not
+/// finished by then, a failed (timeout) `ToolResult` is returned so the parent
+/// agent's Task tool cannot hang the whole session indefinitely.
 #[allow(dead_code)]
 pub async fn execute_task(
     manager: &SubagentManager,
@@ -488,11 +520,26 @@ pub async fn execute_task(
 ) -> crate::tools::ToolResult {
     match manager.spawn(description, prompt).await {
         Ok(id) => {
+            let deadline = std::time::Instant::now() + SUBAGENT_EXECUTE_TIMEOUT;
             // Wait for this specific subagent to complete
             loop {
                 let status = manager.get_status(&id).await;
                 match status {
                     Some(SubagentStatus::Running) => {
+                        if std::time::Instant::now() >= deadline {
+                            // Signal cancellation so the spawned thread stops
+                            // updating shared state, then surface a timeout.
+                            let _ = manager.cancel(&id).await;
+                            return crate::tools::ToolResult {
+                                tool_name: "task".to_string(),
+                                success: false,
+                                output: format!(
+                                    "Subagent {} timed out after {}s and was cancelled.",
+                                    id,
+                                    SUBAGENT_EXECUTE_TIMEOUT.as_secs()
+                                ),
+                            };
+                        }
                         // Brief yield to let the task make progress
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }

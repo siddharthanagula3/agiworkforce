@@ -65,6 +65,15 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock: video task ownership
+// ---------------------------------------------------------------------------
+const mockGetVideoTaskOwner = vi.fn();
+
+vi.mock('@/lib/video-task-store', () => ({
+  getVideoTaskOwner: (...args: unknown[]) => mockGetVideoTaskOwner(...args),
+}));
+
+// ---------------------------------------------------------------------------
 // Mock: global fetch (used for Runway / Google Veo status calls)
 // ---------------------------------------------------------------------------
 const mockFetch = vi.fn();
@@ -111,6 +120,7 @@ describe('GET /api/media/video/status', () => {
 
     // Happy-path defaults — Clerk auth succeeds
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
+    mockGetVideoTaskOwner.mockReturnValue(TEST_USER.userId);
 
     // Set env vars
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
@@ -262,6 +272,33 @@ describe('GET /api/media/video/status', () => {
 
       expect(response.status).toBe(400);
       expect(data.error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  // =========================================================================
+  // Ownership
+  // =========================================================================
+  describe('Task ownership', () => {
+    it('should fail closed when task ownership is missing', async () => {
+      mockGetVideoTaskOwner.mockReturnValueOnce(undefined);
+
+      const response = await GET(makeRequest('runway_task-abc123'));
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error.code).toBe('FORBIDDEN');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should reject status checks for tasks created by another user', async () => {
+      mockGetVideoTaskOwner.mockReturnValueOnce('user-other-id');
+
+      const response = await GET(makeRequest('google_12345678'));
+      const data = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(data.error.code).toBe('FORBIDDEN');
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 

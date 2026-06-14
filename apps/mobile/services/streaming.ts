@@ -1,7 +1,7 @@
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
-import type { Effort } from '@agiworkforce/types';
+import { getModelMetadataById, type Effort, type Provider } from '@agiworkforce/types';
 import {
   streamFromProvider,
   type ProviderStreamProvider,
@@ -192,27 +192,43 @@ const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
   'anthropic',
   'openai',
   'google',
+  'xai',
+  'deepseek',
+  'qwen',
+  'moonshot',
   'ollama',
 ]);
 
-function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
-  if (!modelId) return 'anthropic';
-  const m = modelId.toLowerCase();
-  if (m.startsWith('claude-')) return 'anthropic';
-  if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('codex-')) return 'openai';
-  if (m.startsWith('gemini-')) return 'google';
-  if (
-    m === 'ollama-local' ||
-    m.startsWith('llama') ||
-    m.startsWith('qwen') ||
-    m.startsWith('mistral')
-  ) {
-    return 'ollama';
+const PROVIDER_STREAM_MAP: Partial<Record<Provider, ProviderStreamProvider>> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  google: 'google',
+  xai: 'xai',
+  deepseek: 'deepseek',
+  qwen: 'qwen',
+  moonshot: 'moonshot',
+  ollama: 'ollama',
+};
+
+function resolveProviderFromModel(modelId: string | undefined): Provider {
+  const metadata = getModelMetadataById(modelId);
+  if (!metadata) {
+    throw new Error(`Unsupported model: ${modelId ?? 'missing model'}`);
   }
-  return 'anthropic';
+  return metadata.provider;
+}
+
+function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
+  const provider = resolveProviderFromModel(modelId);
+  const streamProvider = PROVIDER_STREAM_MAP[provider];
+  if (!streamProvider) {
+    throw new Error(`Provider stream is not available for provider: ${provider}`);
+  }
+  return streamProvider;
 }
 
 function getProviderOverride(): 'auto' | ProviderStreamProvider {
+  if (!__DEV__) return 'auto';
   const raw = process.env.EXPO_PUBLIC_PROVIDER_STREAM_PROVIDER?.trim().toLowerCase();
   if (!raw || raw === 'auto') return 'auto';
   return VALID_PROVIDER_IDS.has(raw as ProviderStreamProvider)
@@ -330,7 +346,7 @@ export async function streamChat(
   assertRemoteChatAllowed(undefined, {
     cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
   });
-  ensureLlmGateOpen(inferProviderFromModel(body.model));
+  ensureLlmGateOpen(resolveProviderFromModel(body.model));
 
   // Per-attempt timeout — each stream attempt gets a fresh timeout so backoff
   // waits don't eat into the next attempt's time budget.

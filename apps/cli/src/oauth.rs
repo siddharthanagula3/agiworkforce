@@ -5,6 +5,8 @@ use anyhow::{Context, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use sha2::{Digest, Sha256};
 
+use crate::terminal_style as ts;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider OAuth Configurations
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,6 +20,11 @@ pub struct OAuthProvider {
     pub token_url: &'static str,
     pub redirect_uri: &'static str,
     pub scopes: &'static str,
+    /// True when the provider echoes the CSRF `state` back appended to the
+    /// authorization code as `code#state` (Anthropic's convention). When true,
+    /// the returned state fragment is REQUIRED and validated against our nonce —
+    /// it can never be silently skipped (an attacker omitting it must fail).
+    pub echoes_state_in_code: bool,
 }
 
 pub const ANTHROPIC_OAUTH: OAuthProvider = OAuthProvider {
@@ -29,6 +36,7 @@ pub const ANTHROPIC_OAUTH: OAuthProvider = OAuthProvider {
     token_url: "https://console.anthropic.com/v1/oauth/token",
     redirect_uri: "https://console.anthropic.com/oauth/code/callback",
     scopes: "org:create_api_key user:profile user:inference",
+    echoes_state_in_code: true,
 };
 
 pub const OPENAI_OAUTH: OAuthProvider = OAuthProvider {
@@ -40,6 +48,9 @@ pub const OPENAI_OAUTH: OAuthProvider = OAuthProvider {
     token_url: "https://auth.openai.com/oauth/token",
     redirect_uri: "http://127.0.0.1:1455/callback",
     scopes: "openid profile email offline_access",
+    // OpenAI uses a loopback callback; the pasted code does not carry a
+    // `#state` fragment, so the code-fragment check does not apply here.
+    echoes_state_in_code: false,
 };
 
 pub const AGIWORKFORCE_OAUTH: OAuthProvider = OAuthProvider {
@@ -51,6 +62,8 @@ pub const AGIWORKFORCE_OAUTH: OAuthProvider = OAuthProvider {
     token_url: "https://api.agiworkforce.com/auth/device/token",
     redirect_uri: "",
     scopes: "",
+    // Device-code flow: no redirect, no `code#state` fragment.
+    echoes_state_in_code: false,
 };
 
 pub const ALL_PROVIDERS: &[&OAuthProvider] =
@@ -63,22 +76,40 @@ pub const ALL_PROVIDERS: &[&OAuthProvider] =
 pub struct PkceCodes {
     pub verifier: String,
     pub challenge: String,
+    /// Independent CSRF nonce for the `state` parameter. MUST stay distinct
+    /// from `verifier` — RFC 7636 requires the code_verifier to remain secret
+    /// on the client until token exchange, so it must never travel in the
+    /// authorize URL.
+    pub state: String,
 }
 
 pub fn generate_pkce() -> PkceCodes {
     let verifier = generate_random_string(43);
     let hash = Sha256::digest(verifier.as_bytes());
     let challenge = URL_SAFE_NO_PAD.encode(hash);
+    let state = generate_random_string(32);
     PkceCodes {
         verifier,
         challenge,
+        state,
     }
 }
 
 pub fn generate_random_string(len: usize) -> String {
     let chars = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    let alphabet_len = chars.len();
     let mut result = String::with_capacity(len);
     let mut remaining = len;
+
+    // Rejection-sampling cutoff: keep only byte values below the largest
+    // multiple of `alphabet_len` that is <= 256 so the `% alphabet_len` mapping
+    // is uniform. Plain `byte % len` would bias the low end of the alphabet (for a
+    // 66-char set, 256 % 66 = 58 → values 0..58 would be ~1.5% more likely),
+    // weakening the PKCE verifier / CSRF state entropy. Bytes at or above the
+    // cutoff are discarded. Computed in u16 to avoid the u8 overflow when the
+    // alphabet length divides 256 (256 % len == 0 → cutoff stays 256, accept
+    // all bytes instead of rejecting everything).
+    let cutoff: u16 = 256 - (256 % alphabet_len as u16);
 
     // Use UUID v4 as a CSPRNG source (backed by OS randomness via getrandom).
     // Each UUID yields 16 random bytes; loop until we have enough.
@@ -88,7 +119,12 @@ pub fn generate_random_string(len: usize) -> String {
             if remaining == 0 {
                 break;
             }
-            result.push(chars[(byte as usize) % chars.len()] as char);
+            // Discard biased bytes; the next UUID refills the pool so output
+            // length is unaffected.
+            if u16::from(byte) >= cutoff {
+                continue;
+            }
+            result.push(chars[(byte as usize) % alphabet_len] as char);
             remaining -= 1;
         }
     }
@@ -124,7 +160,7 @@ pub fn build_authorize_url(provider: &OAuthProvider, pkce: &PkceCodes) -> String
         percent_encode(provider.redirect_uri),
         percent_encode(provider.scopes),
         pkce.challenge,
-        pkce.verifier,
+        percent_encode(&pkce.state),
     );
 
     // OpenAI-specific params
@@ -233,24 +269,22 @@ pub async fn refresh_token(provider: &OAuthProvider, refresh_token: &str) -> Res
 /// Run the OAuth login flow for a provider.
 /// Opens browser → user authorizes → pastes code → exchanges for tokens.
 pub async fn oauth_login(provider: &OAuthProvider) -> Result<crate::auth::AuthEntry> {
-    use colored::Colorize;
-
     let pkce = generate_pkce();
     let auth_url = build_authorize_url(provider, &pkce);
 
     eprintln!(
         "\n  {} Authenticating with {} ({})\n",
-        "→".cyan().bold(),
-        provider.name.cyan(),
+        ts::prompt("→"),
+        ts::accent(provider.name),
         provider.description,
     );
     eprintln!("  Opening browser for authorization...\n");
-    eprintln!("  {}\n", auth_url.dimmed());
+    eprintln!("  {}\n", ts::muted(&auth_url));
 
     // Try to open browser (explicit user-initiated auth flow).
     if !open_external_url(&auth_url, UserActionContext::user_initiated()) {
         eprintln!("  Could not open browser. Copy this URL manually:\n");
-        eprintln!("  {}\n", auth_url.cyan());
+        eprintln!("  {}\n", ts::link(&auth_url));
     }
 
     eprintln!("  After authorizing, paste the code from the callback URL below.\n");
@@ -260,6 +294,18 @@ pub async fn oauth_login(provider: &OAuthProvider) -> Result<crate::auth::AuthEn
         .with_prompt("  Authorization code")
         .interact()
         .context("Failed to read authorization code")?;
+
+    // CSRF: a provider that echoes `state` back (Anthropic returns `code#state`)
+    // MUST return our exact nonce. Require the fragment and validate it — never
+    // silently skip, so an attacker cannot bypass the check by omitting `#state`.
+    if provider.echoes_state_in_code {
+        let (_, returned_state) = code
+            .split_once('#')
+            .context("authorization code is missing the required state fragment")?;
+        if returned_state != pkce.state {
+            anyhow::bail!("OAuth state mismatch — possible CSRF; aborting login");
+        }
+    }
 
     eprintln!("\n  Exchanging code for tokens...");
 
@@ -272,7 +318,7 @@ pub async fn oauth_login(provider: &OAuthProvider) -> Result<crate::auth::AuthEn
 
     eprintln!(
         "  {} Authenticated with {}!",
-        "✓".green().bold(),
+        ts::success_header("✓"),
         provider.name
     );
 
@@ -325,12 +371,10 @@ struct DeviceTokenResponse {
 /// 2. Show code to user + verification URL
 /// 3. Poll for token until approved or timeout
 pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry> {
-    use colored::Colorize;
-
     let client = reqwest::Client::new();
 
     // Step 1: Request device code
-    eprintln!("\n  {} Connecting to AGI...\n", "→".cyan().bold(),);
+    eprintln!("\n  {} Connecting to AGI...\n", ts::prompt("→"),);
 
     let resp = client
         .post(format!("{api_base}/auth/device/code"))
@@ -360,17 +404,17 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string());
 
     // Step 2: Show instructions
-    eprintln!("  {}", "━".repeat(50).dimmed());
+    eprintln!("  {}", ts::muted("━".repeat(50)));
     eprintln!();
     eprintln!("  1. Open this link in your browser:");
-    eprintln!("     {}", verification_url.cyan().underline());
+    eprintln!("     {}", ts::link(&verification_url));
     eprintln!();
     eprintln!("  2. Enter this code:");
-    eprintln!("     {}", device.user_code.green().bold());
+    eprintln!("     {}", ts::success_header(&device.user_code));
     eprintln!();
-    eprintln!("  {}", "━".repeat(50).dimmed());
+    eprintln!("  {}", ts::muted("━".repeat(50)));
     eprintln!();
-    eprintln!("  {} Waiting for authorization...", "⏳".dimmed());
+    eprintln!("  {} Waiting for authorization...", ts::muted("⏳"));
 
     // Try to open browser (explicit user-initiated device-code flow).
     let _ = open_external_url(&verification_url, UserActionContext::user_initiated());
@@ -405,7 +449,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
             if attempt % 6 == 0 {
                 eprintln!(
                     "  {} Still waiting... ({}s elapsed)",
-                    "⏳".dimmed(),
+                    ts::muted("⏳"),
                     attempt * device.interval
                 );
             }
@@ -427,7 +471,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
                 .map(|s| chrono::Utc::now().timestamp_millis() + (s as i64 * 1000))
                 .unwrap_or(0);
 
-            eprintln!("\n  {} Authenticated with AGI!", "✓".green().bold());
+            eprintln!("\n  {} Authenticated with AGI!", ts::success_header("✓"));
 
             return Ok(crate::auth::AuthEntry::OAuth {
                 refresh: tokens.refresh_token.unwrap_or_default(),

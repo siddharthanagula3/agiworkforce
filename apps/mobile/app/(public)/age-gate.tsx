@@ -27,11 +27,13 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Shield } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ArrowLeft, Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { confirmAgeGate, getAgeThreshold } from '@/src/features/auth/services/ageGate';
+
+const PARENTAL_CONTROLS_RETURN_PATH = '/(app)/settings/parental-controls' as const;
 
 // ---------------------------------------------------------------------------
 // Main screen
@@ -40,6 +42,7 @@ import { confirmAgeGate, getAgeThreshold } from '@/src/features/auth/services/ag
 export default function AgeGateScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
   const [ageText, setAgeText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [minorNotice, setMinorNotice] = useState(false);
@@ -50,6 +53,18 @@ export default function AgeGateScreen() {
   const primaryButtonTextColor = isDark ? colors.black : colors.white;
   const disabledButtonBg = isDark ? colors.surfaceHover : colors.surfaceHover;
   const disabledButtonTextColor = colors.textMuted;
+  const returnTo =
+    params.returnTo === PARENTAL_CONTROLS_RETURN_PATH ? PARENTAL_CONTROLS_RETURN_PATH : null;
+
+  const handleBack = useCallback(() => {
+    if (returnTo) {
+      router.replace(returnTo);
+    }
+  }, [returnTo, router]);
+
+  const handleComplete = useCallback(() => {
+    router.replace(returnTo ?? ('/(public)/onboarding' as const));
+  }, [returnTo, router]);
 
   const handleContinue = useCallback(() => {
     const parsed = parseInt(ageText.trim(), 10);
@@ -62,13 +77,31 @@ export default function AgeGateScreen() {
     if (record.isMinor) {
       setMinorNotice(true);
     } else {
-      router.replace({ pathname: '/(public)/onboarding' as const });
+      handleComplete();
     }
-  }, [ageText, router]);
+  }, [ageText, handleComplete]);
 
   const handleMinorContinue = useCallback(() => {
-    router.replace({ pathname: '/(public)/onboarding' as const });
-  }, [router]);
+    handleComplete();
+  }, [handleComplete]);
+
+  const header = returnTo ? (
+    <View style={styles.header}>
+      <Pressable
+        onPress={handleBack}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        hitSlop={8}
+        style={({ pressed }) => [
+          styles.backButton,
+          { backgroundColor: pressed ? colors.surfaceHover : colors.transparent },
+        ]}
+      >
+        <ArrowLeft size={22} color={colors.textPrimary} />
+      </Pressable>
+      <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Review Age Settings</Text>
+    </View>
+  ) : null;
 
   if (minorNotice) {
     return (
@@ -76,6 +109,7 @@ export default function AgeGateScreen() {
         testID="age-gate-minor-notice"
         style={{ flex: 1, backgroundColor: colors.background }}
       >
+        {header}
         <ScrollView
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
@@ -119,6 +153,7 @@ export default function AgeGateScreen() {
 
   return (
     <SafeAreaView testID="age-gate-root" style={{ flex: 1, backgroundColor: colors.background }}>
+      {header}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -224,6 +259,25 @@ export default function AgeGateScreen() {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  header: {
+    height: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    marginLeft: 4,
+  },
   scrollContent: {
     flexGrow: 1,
     alignItems: 'center',

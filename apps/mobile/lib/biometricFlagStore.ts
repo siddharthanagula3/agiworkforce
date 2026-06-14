@@ -85,3 +85,13 @@ export const useBiometricFlag = create<BiometricFlagState>((set) => ({
 export function hydrateBiometricFlag(): Promise<void> {
   return useBiometricFlag.getState().hydrate();
 }
+
+export async function clearBiometricFlag(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(STORAGE_KEY);
+  } catch (err) {
+    console.warn('[biometricFlag] SecureStore delete failed:', err);
+  } finally {
+    useBiometricFlag.setState({ hydrated: true, enabled: false });
+  }
+}

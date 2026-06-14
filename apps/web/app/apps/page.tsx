@@ -1,19 +1,18 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LedgerSection } from '../../components/marketing/LandingSections';
 import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  LedgerSection,
-  RouteMap,
-} from '../../components/marketing/LandingSections';
+  CapabilityGrid,
+  FinalCta,
+  FlagshipHero,
+} from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Apps and Connectors - MCP tools across Local, BYOK, and Cloud',
+  title: 'AGI Apps & Connectors | MCP servers, OAuth connectors, tool permissions',
   description:
-    'Connect AGI to files, browsers, GitHub, Gmail, Slack, Linear, databases, desktop tools, and custom MCP servers with explicit permissions.',
+    'Connect AGI to your tools three ways: MCP servers, an OAuth connector directory with honest availability labels, and a Chrome-to-Desktop native bridge. Every tool call behind explicit permissions.',
   alternates: { canonical: 'https://agiworkforce.com/apps' },
 };
 
@@ -22,119 +21,98 @@ export default function AppsPage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Apps + connectors`}
-          title="Connect the tools people already use."
-          lede="OpenAI calls them Apps. Anthropic calls them connectors and desktop extensions. AGI supports the same product category with a sharper boundary: local extensions for your machine, remote connectors for SaaS tools, and MCP for custom systems."
-          primaryCta={{ href: '/connectors', label: 'Browse connectors' }}
-          secondaryCta={{ href: '/integrations', label: 'Integration docs' }}
-          chips={['MCP', 'OAuth apps', 'Desktop extensions', 'Tool permissions']}
-          panelTitle="Tool access"
-          panelRows={[
-            { k: 'Local', v: 'Filesystem, desktop apps, browser, and local MCP servers' },
-            { k: 'Remote', v: 'OAuth SaaS connectors and app-directory services' },
-            { k: 'Custom', v: 'User-defined MCP servers with explicit tool scope' },
-            { k: 'Control', v: 'Always allow, ask first, block, or custom rules' },
+
+        <FlagshipHero
+          eyebrow="AGI · apps & connectors"
+          titleLines={['Your tools,', 'connected on', 'your terms.']}
+          em="your terms."
+          lede="AGI reaches your tools three ways: MCP servers that run as local processes, an OAuth connector directory with honest availability labels, and a native-messaging bridge that pairs Chrome with Desktop. Every tool sits behind an explicit permission. The provider label stays visible before anything runs."
+          ctas={[
+            { href: '/connectors', label: 'Browse Connectors' },
+            { href: '/download', label: 'Download AGI Desktop' },
+            { href: '/integrations', label: 'Read Integration Docs' },
           ]}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
         />
 
-        <FeatureGrid
-          eyebrow="Connector classes"
-          title="Do not make users choose between chat and work."
+        <CapabilityGrid
+          eyebrow="Ways to connect"
+          title="Three connection paths, one permission model."
           items={[
             {
-              meta: 'Cloud apps',
-              title: 'Work apps',
-              body: 'Gmail, Google Drive, Slack, Notion, Linear, GitHub, Jira, and other services become available only when the user connects and enables them.',
-            },
-            {
-              meta: 'Desktop',
-              title: 'Local extensions',
-              body: 'Filesystem, Apple Notes, Excel, browser, and computer-use extensions run through the desktop host for local workflows.',
-            },
-            {
               meta: 'MCP',
-              title: 'Custom servers',
-              body: 'Teams can bring internal tools through MCP rather than waiting for AGI to build every integration first.',
+              title: 'MCP servers',
+              body: 'Run local MCP servers as stdio processes on Desktop and CLI. Desktop also accepts remote HTTP/SSE server configs with your own tokens.',
+              href: '/connectors/mcp-directory',
             },
             {
-              meta: 'Permissions',
-              title: 'Read, write, and destructive actions are different',
-              body: 'Tool approval should show what the model wants to do, which provider is in use, and whether the action changes external state.',
+              meta: 'Directory',
+              title: 'Connector directory',
+              body: 'Gmail, Slack, GitHub, Notion, Linear, and more. Each labeled Ready, Request access, or Planned, so you always know what works today.',
+              href: '/connectors',
             },
             {
-              meta: 'Discovery',
-              title: 'Relevant apps surface inside the composer',
-              body: 'The plus menu and slash menu should expose files, apps, connectors, skills, web search, research, and styles without splitting chat surfaces.',
+              meta: 'Browser',
+              title: 'Chrome-to-Desktop bridge',
+              body: 'The Chrome side panel hands real work to Desktop over a paired native-messaging bridge. Page context moves only on request.',
+              href: '/chrome-extension',
             },
             {
-              meta: 'Governance',
-              title: 'Workspace owners can restrict actions',
-              body: 'Team and enterprise plans need org-wide app policy so users get power without bypassing review.',
+              meta: 'Keys',
+              title: 'BYOK providers',
+              body: 'Bring your own provider keys on Desktop and CLI. Keys stay encrypted on your machine, and traffic goes directly to your provider.',
+              href: '/byok',
+            },
+            {
+              meta: 'Plugins',
+              title: 'CLI plugins',
+              body: 'Plugins bundle commands, skills, and MCP servers for the agi CLI. stdio servers today.',
+              href: '/cli',
+            },
+            {
+              meta: 'Control',
+              title: 'Tool permissions',
+              body: 'Set every connector tool to Always allow, Needs approval, or Blocked. Review what a tool wants to do before it runs.',
+              href: '/connectors',
             },
           ]}
         />
 
         <LedgerSection
           eyebrow="Product rule"
-          title="Apps must respect mode boundaries."
+          title="Apps respect mode boundaries."
           rows={[
             {
               k: 'Local apps',
-              v: 'Operate through the local desktop host and should not silently upload local files or screenshots to BYOK or Cloud.',
+              v: 'Operate through the local Desktop host and never silently upload local files or screenshots to BYOK or Cloud.',
             },
             {
               k: 'BYOK apps',
-              v: 'Use the selected provider key only after the user sees the provider label and approves the relevant context.',
+              v: 'Use your selected provider key only after you see the provider label and approve the relevant context.',
             },
             {
               k: 'Cloud apps',
-              v: 'Remain invite-only for managed compute workflows until metering, abuse, retention, and deletion controls are proven.',
+              v: 'Remain invite-only for managed-compute workflows while metering, abuse, retention, and deletion controls are proven.',
             },
             {
               k: 'Custom MCP',
-              v: 'Needs handshake, tool list preview, permission rules, logs, and disconnect controls.',
+              v: 'Added explicitly, with tool discovery and per-tool permission rules: Always allow, Needs approval, or Blocked.',
             },
           ]}
         />
 
-        <RouteMap
-          eyebrow="Related pages"
-          title="Apps connect the rest of the product."
-          routes={[
-            {
-              meta: 'Directory',
-              title: 'Connectors',
-              body: 'The product directory and management surface.',
-              href: '/connectors',
-            },
-            {
-              meta: 'Docs',
-              title: 'Integrations',
-              body: 'Implementation and setup guidance.',
-              href: '/integrations',
-            },
-            {
-              meta: 'Desktop',
-              title: 'Cowork',
-              body: 'Computer-use and local extension workflows.',
-              href: '/cowork',
-            },
-            {
-              meta: 'Teams',
-              title: 'Team policy',
-              body: 'Workspace controls for connected services.',
-              href: '/teams',
-            },
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Bring your tools into the conversation."
+          body="Browse the connector directory, wire up your own MCP servers, and keep every tool call behind a permission you set. The route stays visible at every step."
+          ctas={[
+            { href: '/connectors', label: 'Browse Connectors' },
+            { href: '/download', label: 'Download AGI Desktop' },
+            { href: '/integrations', label: 'Read Integration Docs' },
           ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
         />
 
-        <LaunchCta
-          title="Apps should appear where the work happens: inside one chat."
-          body="The marketing promise is not a separate app store. It is a single AGI composer where files, apps, connectors, models, artifacts, research, and code can be selected without making the user roam."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/connectors', label: 'Browse connectors' }}
-        />
         <MarketingFooter />
       </main>
     </div>

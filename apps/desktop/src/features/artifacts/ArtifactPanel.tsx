@@ -338,9 +338,9 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   /**
    * Publish via the canonical artifact-publish service.
    *
-   * R20 lane 2: wires @agiworkforce/services publishArtifact with the Tauri
-   * localFileWriter adapter. v1 LOCAL ONLY — cloud is waitlist-gated.
-   * Versioning + inline editor deferred (TODO: EXEC-SUMMARY-r2 hours).
+   * Wires @agiworkforce/services publishArtifact with the Tauri localFileWriter
+   * adapter. Cloud publish is waitlist-gated until managed artifact publishing is
+   * proven. Versioning and inline edit-in-place remain open product gaps.
    */
   const handlePublish = useCallback(async () => {
     if (!activeArtifactId) return;
@@ -363,7 +363,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
           type: artifact.artifact_type,
           language,
         },
-        'local', // v1 LOCAL ONLY
+        'local',
       );
 
       const result = await publishFn();

@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
-import { useAutoEconomyTrialStore } from '@/features/chat/stores/autoEconomyTrialStore';
+import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { useChatStream } from './useChatStream';
 
 const authMocks = vi.hoisted(() => ({
@@ -41,7 +41,7 @@ function mockLlmErrorResponse(body: unknown, status = 503) {
 describe('useChatStream', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
-    useAutoEconomyTrialStore.getState().resetUsage();
+    useFreeTrialStore.getState().resetUsage();
     useChatStore.setState({
       activeConversationId: TEMP_CONVERSATION.id,
       conversations: [TEMP_CONVERSATION],

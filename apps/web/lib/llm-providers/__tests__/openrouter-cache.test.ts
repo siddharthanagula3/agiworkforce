@@ -47,7 +47,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
     provider = new OpenRouterProvider(MOCK_KEY);
   });
 
-  describe('sendRequest — Anthropic-routed model', () => {
+  describe('sendRequest · Anthropic-routed model', () => {
     it('injects cache_control on system message for anthropic/* model', async () => {
       mockFetch.mockResolvedValueOnce(okOpenRouterJson());
 
@@ -91,7 +91,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
     });
   });
 
-  describe('sendRequest — Non-Anthropic routed model', () => {
+  describe('sendRequest · Non-Anthropic routed model', () => {
     it('does NOT inject cache_control for google/* models', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -114,7 +114,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
       const systemMsg = findMsg(body.messages, 'system');
-      // System message should be plain string — no cache_control array wrapping.
+      // System message should be plain string · no cache_control array wrapping.
       expect(typeof systemMsg['content']).toBe('string');
     });
 
@@ -143,7 +143,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
     });
   });
 
-  describe('sendRequest — cache tokens from response', () => {
+  describe('sendRequest · cache tokens from response', () => {
     it('surfaces cache_read_input_tokens as cachedInputTokens', async () => {
       mockFetch.mockResolvedValueOnce(okOpenRouterJson());
 
@@ -187,7 +187,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
     });
   });
 
-  describe('streamRequest — system cache_control for anthropic/* models', () => {
+  describe('streamRequest · system cache_control for anthropic/* models', () => {
     it('injects cache_control in system message during streaming', async () => {
       const mockBody = {} as ReadableStream;
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockBody });

@@ -292,7 +292,7 @@ export function useCreateChatSession(): UseMutationResult<
           return [newSession, ...filtered];
         });
       }
-      // No toast — session creation is silent background behavior
+      // No toast · session creation is silent background behavior
     },
     onError: (error: Error, _variables, context): void => {
       // Rollback on error

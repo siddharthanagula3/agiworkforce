@@ -10,7 +10,7 @@ import { AgentCard } from '@/src/features/agents/components/AgentCard';
 import { ConnectionStatusBar } from '@/src/shared/components/ConnectionStatus';
 import { useAgentStore } from '@/stores/agentStore';
 import { useConnectionStore } from '@/stores/connectionStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 /**
@@ -19,6 +19,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
  */
 export default function AgentsTabScreen() {
   const router = useRouter();
+  const colors = useThemeColors();
   const agents = useAgentStore((s) => s.agents);
 
   // Redirect to Dispatch when no agents are active
@@ -61,11 +62,15 @@ export default function AgentsTabScreen() {
   if (!FEATURES.agents) return null;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
+    <SafeAreaView
+      className="flex-1"
+      edges={['top']}
+      style={{ backgroundColor: colors.surfaceBase }}
+    >
       {/* Header */}
       <View className="flex-row items-center px-4 h-12 gap-3">
         <View className="flex-row items-center gap-2 flex-1">
-          <Text variant="subheading" className="text-white">
+          <Text variant="subheading" style={{ color: colors.textPrimary }}>
             Agents
           </Text>
           {agents.length > 0 && (
@@ -77,8 +82,14 @@ export default function AgentsTabScreen() {
         </View>
 
         {agents.some((a) => a.status === 'completed') && (
-          <Pressable onPress={clearCompleted} className="px-3 py-1 rounded-lg active:bg-white/5">
-            <Text className="text-[12px] text-white/40">Clear done</Text>
+          <Pressable
+            onPress={clearCompleted}
+            className="px-3 py-1 rounded-lg"
+            style={({ pressed }) => pressed && { backgroundColor: colors.surfaceHover }}
+          >
+            <Text className="text-[12px]" style={{ color: colors.textMuted }}>
+              Clear done
+            </Text>
           </Pressable>
         )}
       </View>
@@ -93,10 +104,10 @@ export default function AgentsTabScreen() {
         <Pressable
           onPress={() => router.push('/(app)/agents' as Parameters<typeof router.push>[0])}
           className="mx-4 mb-2 px-3 py-2 rounded-lg flex-row items-center gap-2"
-          style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+          style={{ backgroundColor: colors.dangerSurface }}
         >
           <Badge label={`${pendingApprovals.length}`} color="red" />
-          <Text className="text-[12px] text-red-400 flex-1">
+          <Text className="text-[12px] flex-1" style={{ color: colors.agentError }}>
             {pendingApprovals.length === 1
               ? '1 action needs approval'
               : `${pendingApprovals.length} actions need approval`}
@@ -109,11 +120,14 @@ export default function AgentsTabScreen() {
         <View className="flex-1 items-center justify-center px-8">
           <View
             className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-            style={{ backgroundColor: `${colors.agentActive}15` }}
+            style={{ backgroundColor: colors.accentSurface }}
           >
             <Bot size={32} color={colors.agentActive} />
           </View>
-          <Text className="text-[15px] text-white/60 text-center leading-[22px]">
+          <Text
+            className="text-[15px] text-center leading-[22px]"
+            style={{ color: colors.textSecondary }}
+          >
             No active agents.{'\n'}Connect your desktop to see agents here.
           </Text>
         </View>

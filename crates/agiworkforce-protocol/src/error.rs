@@ -104,7 +104,7 @@ pub enum AgiworkforceErr {
     #[error("{0}")]
     InvalidRequest(String),
     /// Invalid image.
-    #[error("Image poisoning")]
+    #[error("The attached image could not be processed. Remove or replace it and retry.")]
     InvalidImageRequest(),
     #[error("{0}")]
     UsageLimitReached(UsageLimitReachedError),
@@ -119,7 +119,7 @@ pub enum AgiworkforceErr {
     #[error("Quota exceeded. Check your plan and billing details.")]
     QuotaExceeded,
     #[error(
-        "To use Agiworkforce with your ChatGPT plan, upgrade to Plus: https://chatgpt.com/explore/plus."
+        "This account does not include Agiworkforce managed-cloud access. Use a local model or your own provider key (BYOK), or join the managed cloud waitlist."
     )]
     UsageNotIncluded,
     #[error("We're currently experiencing high demand, which may cause temporary errors.")]
@@ -197,9 +197,25 @@ impl AgiworkforceErr {
             | AgiworkforceErr::ConnectionFailed(_)
             | AgiworkforceErr::InternalServerError
             | AgiworkforceErr::InternalAgentDied
-            | AgiworkforceErr::Io(_)
-            | AgiworkforceErr::Json(_)
             | AgiworkforceErr::TokioJoin(_) => true,
+            // Retry only genuinely transient IO failures. Deterministic IO
+            // errors (permission denied, not found, malformed persisted state)
+            // would just fail again, wasting requests and delaying a clear
+            // error to the user.
+            AgiworkforceErr::Io(err) => matches!(
+                err.kind(),
+                io::ErrorKind::TimedOut
+                    | io::ErrorKind::ConnectionReset
+                    | io::ErrorKind::ConnectionAborted
+                    | io::ErrorKind::BrokenPipe
+                    | io::ErrorKind::Interrupted
+                    | io::ErrorKind::WouldBlock
+                    | io::ErrorKind::UnexpectedEof
+            ),
+            // JSON deserialization failures are deterministic; the same bytes
+            // will not parse on retry. Transport-level stream disconnects are
+            // already represented by the retryable `Stream` variant.
+            AgiworkforceErr::Json(_) => false,
             #[cfg(target_os = "linux")]
             AgiworkforceErr::LandlockRuleset(_) | AgiworkforceErr::LandlockPathFd(_) => false,
         }
@@ -480,8 +496,14 @@ impl std::fmt::Display for UsageLimitReachedError {
         }
 
         let message = match self.plan_type.as_ref() {
-            Some(PlanType::Known(KnownPlan::Plus)) => format!(
-                "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits{}",
+            Some(PlanType::Known(
+                KnownPlan::Free
+                | KnownPlan::Go
+                | KnownPlan::Plus
+                | KnownPlan::Pro
+                | KnownPlan::ProLite,
+            )) => format!(
+                "You've hit your usage limit. Switch to a local model or your own provider key (BYOK), or join the managed cloud waitlist{}",
                 retry_suffix_after_or(self.resets_at.as_ref())
             ),
             Some(PlanType::Known(
@@ -495,16 +517,6 @@ impl std::fmt::Display for UsageLimitReachedError {
                     retry_suffix_after_or(self.resets_at.as_ref())
                 )
             }
-            Some(PlanType::Known(KnownPlan::Free)) | Some(PlanType::Known(KnownPlan::Go)) => {
-                format!(
-                    "You've hit your usage limit. Upgrade to Plus to continue using Agiworkforce (https://chatgpt.com/explore/plus),{}",
-                    retry_suffix_after_or(self.resets_at.as_ref())
-                )
-            }
-            Some(PlanType::Known(KnownPlan::Pro | KnownPlan::ProLite)) => format!(
-                "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits{}",
-                retry_suffix_after_or(self.resets_at.as_ref())
-            ),
             Some(PlanType::Known(KnownPlan::Enterprise))
             | Some(PlanType::Known(KnownPlan::Edu)) => format!(
                 "You've hit your usage limit.{}",
