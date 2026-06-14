@@ -20,9 +20,11 @@ import {
 import { Share2, Bell, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
+import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
+import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { DirectoryModal } from '../components/dialogs/DirectoryModal';
@@ -618,18 +620,44 @@ export default function WebChatPage() {
     router.push('/chat');
   }, [router, setActiveConversation]);
 
+  const handleToggleSidebar = useCallback(
+    () => setSidebarCollapsed((c) => !c),
+    [setSidebarCollapsed],
+  );
+
+  const handleOpenSearch = useCallback(() => {
+    window.dispatchEvent(new Event('agi:open-search'));
+  }, []);
+
+  const handleOpenShortcuts = useCallback(() => {
+    window.dispatchEvent(new Event('agi:open-shortcuts'));
+  }, []);
+
+  const handleFocusComposer = useCallback(() => {
+    const textarea = document.querySelector<HTMLTextAreaElement>('[data-composer-textarea]');
+    textarea?.focus();
+  }, []);
+
+  // Wire global keyboard shortcuts. Search and keyboard-shortcuts dialogs live
+  // inside ChatSidebar, so we dispatch custom events that the sidebar listens
+  // for rather than lifting that state to the page level.
+  useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onToggleSidebar: handleToggleSidebar,
+    onSearch: handleOpenSearch,
+    onShowShortcuts: handleOpenShortcuts,
+    onFocusComposer: handleFocusComposer,
+  });
+
   const handleSelectSession = useCallback(
     (id: string) => {
-      setBareChatSessionId(id);
-      void loadConversation(id).then((ok) => {
-        if (!ok) {
-          setBareChatSessionId(null);
-          setActiveConversation(null);
-        }
-      });
-      router.push('/chat');
+      // Navigate to the canonical /chat/[id] URL so the conversation is
+      // bookmarkable and survives a page refresh. The routeInitializedRef
+      // effect will load the conversation from the URL param when the new
+      // route renders (avoiding a double-load when already active).
+      router.push(`/chat/${id}`);
     },
-    [loadConversation, router, setActiveConversation],
+    [router],
   );
 
   const handleDeleteSession = useCallback(
@@ -853,7 +881,7 @@ export default function WebChatPage() {
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
         onRenameSession={handleRenameSession}
-        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        onToggleSidebar={handleToggleSidebar}
         collapsed={sidebarCollapsed}
         onMoveToProjectSession={handleMoveToProjectSession}
         onUpgradeRequest={handleOpenCloudWaitlist}
@@ -941,8 +969,9 @@ export default function WebChatPage() {
           {/* Message list */}
           {isEmptyChat ? (
             <div className="min-h-0 flex-1 overflow-hidden">
-              {/* Empty state: a single centered composer (ChatGPT-style), no greeting/chips. */}
-              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center px-6">
+              {/* Empty state: greeting banner + centered composer. */}
+              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
+                <GreetingBanner onSendMessage={setComposerPrefill} />
                 <div className="w-full max-w-[940px]">
                   <ChatComposerNew
                     onSend={handleSend}

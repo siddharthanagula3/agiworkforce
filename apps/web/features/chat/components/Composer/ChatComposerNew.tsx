@@ -1254,6 +1254,7 @@ const ChatComposerNewComponent = ({
 
             <textarea
               ref={textareaRef}
+              data-composer-textarea
               value={message}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
