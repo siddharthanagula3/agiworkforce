@@ -3,17 +3,25 @@
 //! Each provider normalizes messages, tool definitions, and streaming responses
 //! into a common format. Provider-specific quirks are handled here.
 
-// Provider catalog mixes live helpers (find_model, format_model_list, ModelInfo
-// — used by output.rs, repl.rs, --list-models) with reserved-for-deprecation-
-// warnings/heuristics helpers (models_for_provider, supports_tool_use, …).
-// File-level allow stays until those secondary surfaces are wired.
-#![allow(dead_code)]
+// Provider catalog mixes live helpers (find_model, provider_for_model,
+// format_model_list[_with_local] — used by lib.rs, doctor.rs, slash_commands.rs,
+// --list-models) with reserved-for-future-wiring helpers
+// (models_for_provider, supports_tool_use, default_temperature, …). Rather than
+// a blanket file-level `#![allow(dead_code)]`, each currently-unwired item
+// carries its own scoped `#[allow(dead_code)]` so a genuinely orphaned *new*
+// helper still trips the dead-code lint instead of rotting unnoticed.
 
 use crate::model_catalog;
 use serde_json::Value;
 
 /// Static model catalog entry.
+///
+/// Some capability fields (`supports_audio_input`, `supports_audio_output`,
+/// `supports_pdf`, `release_date`) are currently only surfaced by the reserved
+/// `format_model_detail` view, so the struct carries a scoped `dead_code` allow
+/// for its not-yet-wired fields rather than a module-wide suppression.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // reserved capability fields surfaced only by format_model_detail
 pub struct ModelInfo {
     pub id: String,
     pub provider: String,
@@ -61,7 +69,14 @@ impl From<&model_catalog::Model> for ModelInfo {
     }
 }
 
-/// Look up a model by ID (case-insensitive, exact match preferred, then prefix match).
+/// Look up a model by ID (case-insensitive, exact match preferred, then an
+/// *unambiguous* prefix match).
+///
+/// The prefix fallback only resolves when exactly one catalog entry matches the
+/// bidirectional prefix relation. An ambiguous query like `gpt-5` that matches
+/// several entries returns `None` rather than silently binding to whichever
+/// model happens to come first in catalog order — otherwise capability,
+/// pricing, and deprecation lookups could bind to the wrong model.
 pub fn find_model(model_id: &str) -> Option<ModelInfo> {
     let lower = model_id.to_lowercase();
     let catalog = model_catalog();
@@ -71,13 +86,22 @@ pub fn find_model(model_id: &str) -> Option<ModelInfo> {
         return Some(exact.clone());
     }
 
-    // Fall back to prefix match
-    catalog.into_iter().find(|m| {
-        lower.starts_with(&m.id.to_lowercase()) || m.id.to_lowercase().starts_with(&lower)
-    })
+    // Fall back to prefix match, but only when it is unambiguous.
+    let mut matches = catalog.iter().filter(|m| {
+        let id = m.id.to_lowercase();
+        lower.starts_with(&id) || id.starts_with(&lower)
+    });
+    let first = matches.next()?;
+    match matches.next() {
+        // Exactly one prefix match → safe to resolve.
+        None => Some(first.clone()),
+        // Two or more candidates → ambiguous, refuse to guess.
+        Some(_) => None,
+    }
 }
 
 /// List all models for a given provider.
+#[allow(dead_code)] // reserved: provider-scoped catalog views (exercised by tests)
 pub fn models_for_provider(provider: &str) -> Vec<ModelInfo> {
     model_catalog()
         .into_iter()
@@ -126,20 +150,35 @@ pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
 ///
 /// Returns `false` for unknown models (safe default — avoids sending tool
 /// schemas to models that would reject or ignore them).
+#[allow(dead_code)] // reserved: tool-schema gating (exercised by tests)
 pub fn supports_tool_use(model_id: &str) -> bool {
     find_model(model_id).is_some_and(|m| m.supports_tools)
 }
 
 /// Get default temperature for a model (some models have specific defaults).
 ///
-/// Returns `None` when the provider default should be used (e.g., Anthropic
-/// defaults to 1.0 server-side). Returns `Some(value)` when a model-specific
-/// temperature is recommended.
+/// Returns `None` when the parameter should be omitted and the provider default
+/// used. Returns `Some(value)` only when a model-specific temperature is both
+/// recommended *and* accepted by that provider.
+///
+/// OpenAI reasoning models (`o1`/`o3` families) reject any temperature other
+/// than their server default of 1, so we must NOT send `0.0` to them — we return
+/// `None` and let the caller omit the parameter. The `o1`/`o3` detection matches
+/// the family as a delimited prefix (e.g. `o3`, `o1-preview`, `openai/o3-mini`)
+/// rather than a bare substring, so unrelated IDs that merely contain "o1"/"o3"
+/// are not misclassified.
+#[allow(dead_code)] // reserved: per-model temperature defaulting (exercised by tests)
 pub fn default_temperature(model_id: &str) -> Option<f64> {
     let lower = model_id.to_lowercase();
 
-    // Reasoning models prefer deterministic output
-    if lower.contains("deepseek-reasoner") || lower.contains("o3") || lower.contains("o1") {
+    // OpenAI reasoning models (o1/o3 families): the API rejects any non-default
+    // temperature, so omit the parameter entirely.
+    if is_openai_reasoning_family(&lower) {
+        return None;
+    }
+
+    // DeepSeek's reasoner prefers deterministic output and accepts low temps.
+    if lower.contains("deepseek-reasoner") {
         return Some(0.0);
     }
 
@@ -154,9 +193,25 @@ pub fn default_temperature(model_id: &str) -> Option<f64> {
     None
 }
 
+/// True when `lower` (an already-lowercased model ID) names an OpenAI `o1`/`o3`
+/// reasoning-family model. Matches the family token as a prefix or after a
+/// `/` or `:` separator (e.g. `o3`, `o1-mini`, `openai/o3`) instead of a bare
+/// `contains`, so IDs like `gpt-4o1234` or `mistral-o3-tuned` do not misfire.
+#[allow(dead_code)] // reserved: only caller is default_temperature (also reserved)
+fn is_openai_reasoning_family(lower: &str) -> bool {
+    let stem = lower.rsplit(['/', ':']).next().unwrap_or(lower);
+    for family in ["o1", "o3"] {
+        if stem == family || stem.starts_with(&format!("{family}-")) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Check if a model supports extended thinking / reasoning mode.
 ///
 /// Returns `false` for unknown models.
+#[allow(dead_code)] // reserved: reasoning-mode gating (exercised by tests)
 pub fn supports_reasoning(model_id: &str) -> bool {
     find_model(model_id).is_some_and(|m| m.supports_reasoning)
 }
@@ -164,6 +219,7 @@ pub fn supports_reasoning(model_id: &str) -> bool {
 /// Check if a model is deprecated.
 ///
 /// Returns `false` for unknown models.
+#[allow(dead_code)] // reserved: deprecation warnings (exercised by tests)
 pub fn is_deprecated(model_id: &str) -> bool {
     find_model(model_id).is_some_and(|m| m.status == "deprecated")
 }
@@ -182,6 +238,7 @@ pub fn is_deprecated(model_id: &str) -> bool {
 ///   Audio in/out:    no / no
 ///   PDF:             yes
 /// ```
+#[allow(dead_code)] // reserved: verbose per-model detail view (exercised by tests)
 pub fn format_model_detail(model: &ModelInfo) -> String {
     let ctx = format_context_size(model.context_window);
     let max_out = format_context_size(model.max_output_tokens);
@@ -286,10 +343,16 @@ fn format_context_size(tokens: usize) -> String {
 }
 
 /// Provider-specific message normalization rules.
+///
+/// Namespace-only unit struct: its associated helpers are reserved for the
+/// not-yet-wired provider normalization path (currently exercised by tests), so
+/// it carries a scoped `dead_code` allow instead of a module-wide suppression.
+#[allow(dead_code)] // reserved: provider message normalization namespace
 pub struct MessageNormalizer;
 
 impl MessageNormalizer {
     /// Sanitize a tool ID for Anthropic (only alphanumeric, underscore, hyphen allowed).
+    #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
     pub fn sanitize_anthropic_tool_id(id: &str) -> String {
         id.chars()
             .map(|c| {
@@ -303,21 +366,66 @@ impl MessageNormalizer {
     }
 
     /// Generate a Mistral-compatible tool ID (exactly 9 alphanumeric chars).
+    #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
     pub fn mistral_tool_id(index: usize) -> String {
         format!("call{:05}", index)
     }
 
     /// Sanitize a JSON Schema for Gemini (remove unsupported fields).
+    ///
+    /// Gemini's function-declaration schema is an OpenAPI 3.0 subset and rejects
+    /// several JSON Schema keywords. We strip the unsupported set at every level
+    /// and recurse through *all* schema-bearing positions — not just
+    /// `properties` — so array-item and union sub-schemas are sanitized too.
+    /// Otherwise tools with `items`/`anyOf`/`oneOf` sub-schemas still carry
+    /// rejected fields and fail tool registration with a 400.
+    #[allow(dead_code)] // reserved: Gemini schema sanitization (exercised by tests)
     pub fn sanitize_gemini_schema(schema: &Value) -> Value {
-        // Gemini doesn't support some JSON Schema features
+        // Keywords Gemini's function-declaration schema rejects outright.
+        const UNSUPPORTED_KEYS: &[&str] = &[
+            "default",
+            "$schema",
+            "$id",
+            "$ref",
+            "$defs",
+            "definitions",
+            "additionalProperties",
+            "patternProperties",
+            "examples",
+            "const",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "not",
+        ];
+        // Keys whose value is a single nested sub-schema.
+        const SUBSCHEMA_KEYS: &[&str] = &["items", "additionalItems", "contains"];
+        // Keys whose value is an array of nested sub-schemas.
+        const SUBSCHEMA_LIST_KEYS: &[&str] = &["anyOf", "oneOf", "allOf", "prefixItems"];
+
         let mut cleaned = schema.clone();
         if let Some(obj) = cleaned.as_object_mut() {
-            // Remove 'default' values (Gemini rejects them)
-            obj.remove("default");
-            // Recursively clean properties
-            if let Some(props) = obj.get_mut("properties") {
-                if let Some(props_obj) = props.as_object_mut() {
-                    for (_key, val) in props_obj.iter_mut() {
+            for key in UNSUPPORTED_KEYS {
+                obj.remove(*key);
+            }
+
+            // Recurse into the named property sub-schemas.
+            if let Some(props_obj) = obj.get_mut("properties").and_then(Value::as_object_mut) {
+                for (_key, val) in props_obj.iter_mut() {
+                    *val = Self::sanitize_gemini_schema(val);
+                }
+            }
+
+            // Recurse into single nested sub-schema positions.
+            for key in SUBSCHEMA_KEYS {
+                if let Some(val) = obj.get_mut(*key) {
+                    *val = Self::sanitize_gemini_schema(val);
+                }
+            }
+
+            // Recurse into arrays-of-sub-schema positions.
+            for key in SUBSCHEMA_LIST_KEYS {
+                if let Some(arr) = obj.get_mut(*key).and_then(Value::as_array_mut) {
+                    for val in arr.iter_mut() {
                         *val = Self::sanitize_gemini_schema(val);
                     }
                 }
@@ -327,6 +435,7 @@ impl MessageNormalizer {
     }
 
     /// Filter empty messages (some providers reject them).
+    #[allow(dead_code)] // reserved: provider message normalization (exercised by tests)
     pub fn filter_empty_messages(messages: &[Value]) -> Vec<Value> {
         messages
             .iter()
@@ -659,7 +768,7 @@ mod tests {
         // gpt-5.5 is the current OpenAI flagship (tools=true)
         assert!(supports_tool_use("gpt-5.5"));
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
-        // grok-4.3 deprecated; use grok-4.3 (live xAI flagship).
+        // grok-4.3 is the live xAI flagship in models.json (supersedes grok-4).
         assert!(supports_tool_use("grok-4.3"));
         assert!(supports_tool_use("deepseek-v4-pro"));
     }
@@ -679,9 +788,23 @@ mod tests {
 
     #[test]
     fn test_default_temperature_reasoning_models() {
+        // DeepSeek's reasoner accepts a deterministic temperature.
         assert_eq!(default_temperature("deepseek-reasoner"), Some(0.0));
-        assert_eq!(default_temperature("o3"), Some(0.0));
-        assert_eq!(default_temperature("o1-preview"), Some(0.0));
+        // OpenAI o1/o3 reasoning models reject any non-default temperature, so
+        // the parameter must be omitted (None) rather than forced to 0.0.
+        assert_eq!(default_temperature("o3"), None);
+        assert_eq!(default_temperature("o1-preview"), None);
+        assert_eq!(default_temperature("o3-mini"), None);
+        assert_eq!(default_temperature("openai/o3"), None);
+    }
+
+    #[test]
+    fn test_default_temperature_substring_o1_o3_not_misfired() {
+        // IDs that merely *contain* "o1"/"o3" as a substring (not the OpenAI
+        // reasoning family) must not be forced to a reasoning temperature.
+        assert_eq!(default_temperature("gpt-4o-2024"), None);
+        assert_eq!(default_temperature("mistral-o3-tuned"), None);
+        assert_eq!(default_temperature("model-o1234"), None);
     }
 
     #[test]
@@ -897,5 +1020,65 @@ mod tests {
         assert_eq!(MessageNormalizer::mistral_tool_id(0), "call00000");
         assert_eq!(MessageNormalizer::mistral_tool_id(42), "call00042");
         assert_eq!(MessageNormalizer::mistral_tool_id(0).len(), 9);
+    }
+
+    #[test]
+    fn test_sanitize_gemini_schema_recurses_all_positions() {
+        // A schema with unsupported fields buried in items, anyOf, and nested
+        // object properties — Gemini rejects `default` and `additionalProperties`
+        // at every level, so the sanitizer must strip them everywhere.
+        let schema = serde_json::json!({
+            "type": "object",
+            "default": {},
+            "additionalProperties": false,
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "default": "x"
+                    }
+                },
+                "choice": {
+                    "anyOf": [
+                        { "type": "string", "default": "a" },
+                        { "type": "integer", "const": 7 }
+                    ]
+                },
+                "nested": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                        "inner": { "type": "string", "default": "y" }
+                    }
+                }
+            }
+        });
+
+        let cleaned = MessageNormalizer::sanitize_gemini_schema(&schema);
+
+        // Top-level rejected keys removed.
+        assert!(cleaned.get("default").is_none());
+        assert!(cleaned.get("additionalProperties").is_none());
+        // items sub-schema sanitized.
+        assert!(cleaned["properties"]["tags"]["items"]
+            .get("default")
+            .is_none());
+        // anyOf union members sanitized.
+        let any_of = cleaned["properties"]["choice"]["anyOf"]
+            .as_array()
+            .unwrap();
+        assert!(any_of[0].get("default").is_none());
+        assert!(any_of[1].get("const").is_none());
+        // Nested object property sanitized at depth.
+        assert!(cleaned["properties"]["nested"]
+            .get("additionalProperties")
+            .is_none());
+        assert!(cleaned["properties"]["nested"]["properties"]["inner"]
+            .get("default")
+            .is_none());
+        // Structural fields preserved.
+        assert_eq!(cleaned["properties"]["tags"]["items"]["type"], "string");
+        assert_eq!(cleaned["properties"]["choice"]["anyOf"][1]["type"], "integer");
     }
 }

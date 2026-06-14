@@ -12,6 +12,14 @@ set -e
 
 CLI=${CLI:-agi}
 
+# Demo fallback-chain models. Defaults track the canonical catalog
+# (packages/types/src/models.json: claude-sonnet-4.6 + gpt-5.5 flagships; the
+# CLI resolves the dashed `claude-sonnet-4-6` form to canonical). Override when
+# the catalog IDs are renamed/retired so the demo never points at a dead model:
+#   DEMO_PRIMARY_MODEL=… DEMO_FALLBACK_MODEL=… ./demo.sh
+DEMO_PRIMARY_MODEL=${DEMO_PRIMARY_MODEL:-claude-sonnet-4-6}
+DEMO_FALLBACK_MODEL=${DEMO_FALLBACK_MODEL:-gpt-5.5}
+
 pause() { read -r -p "" _; }
 
 clear
@@ -35,7 +43,7 @@ pause
 echo "--- 3. Multi-model fallback chain ---"
 echo "Primary 429s → next model takes over, no operator action."
 echo "Using --demo to fire the rate-limit deterministically:"
-$CLI --demo --json-events exec -m claude-sonnet-4-6,gpt-5.5 "say hello" 2>&1 | grep -E 'spawning|ready|fallback_triggered|↘'
+$CLI --demo --json-events exec -m "$DEMO_PRIMARY_MODEL,$DEMO_FALLBACK_MODEL" "say hello" 2>&1 | grep -E 'spawning|ready|fallback_triggered|↘'
 pause
 
 echo "--- 4. Session replay / fork ---"

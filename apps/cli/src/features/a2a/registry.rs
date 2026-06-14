@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 
 use crate::config::CliConfig;
+use crate::terminal_style as ts;
 
 use super::protocol::AgentCard;
 
@@ -29,7 +30,7 @@ pub fn load_local_registry() -> Vec<AgentCard> {
             Err(e) => {
                 eprintln!(
                     "  {} Failed to parse {}: {}",
-                    "Warning:".yellow(),
+                    ts::warning("Warning:"),
                     path.display(),
                     e
                 );
@@ -39,7 +40,7 @@ pub fn load_local_registry() -> Vec<AgentCard> {
         Err(e) => {
             eprintln!(
                 "  {} Failed to read {}: {}",
-                "Warning:".yellow(),
+                ts::warning("Warning:"),
                 path.display(),
                 e
             );
@@ -72,14 +73,29 @@ pub async fn discover_agents(config: &CliConfig) -> Result<Vec<AgentCard>> {
         return Ok(Vec::new());
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()?;
-
     let mut results = Vec::new();
 
     for card in &local_cards {
         let url = format!("{}/a2a/card", card.endpoint.trim_end_matches('/'));
+
+        // SSRF guard: a registry entry whose endpoint points at a private/
+        // internal address (e.g. cloud-metadata 169.254.169.254 or loopback)
+        // must not be probed. Build a per-card client that validates the
+        // endpoint AND pins DNS to the checked IP (so it cannot rebind to a
+        // private address between the check and the connect). On failure,
+        // surface the agent as offline instead of issuing the GET.
+        let client = match super::security::a2a_pinned_client(&url, 5) {
+            Ok(client) => client,
+            Err(_) => {
+                let mut offline = card.clone();
+                offline
+                    .metadata
+                    .insert("online".to_string(), serde_json::json!(false));
+                results.push(offline);
+                continue;
+            }
+        };
+
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => match resp.json::<AgentCard>().await {
                 Ok(live_card) => results.push(live_card),
@@ -118,9 +134,9 @@ pub fn format_agent_list(agents: &[AgentCard]) -> String {
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
         let status = if online {
-            "online".green().to_string()
+            ts::success("online").to_string()
         } else {
-            "offline".red().to_string()
+            ts::danger("offline").to_string()
         };
         let caps = if card.capabilities.is_empty() {
             "none".to_string()

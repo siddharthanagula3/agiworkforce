@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use tokio::io::AsyncReadExt;
 
 use crate::permissions::FilePermissionOperation;
+use crate::terminal_style as ts;
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 use super::common::{
@@ -457,9 +458,9 @@ pub(super) async fn execute_write_file(
                                 );
                                 for line in diff.lines() {
                                     if let Some(rest) = line.strip_prefix('+') {
-                                        eprintln!("  {}{}", "+".green(), rest.green());
+                                        eprintln!("  {}{}", ts::addition("+"), ts::addition(rest));
                                     } else if let Some(rest) = line.strip_prefix('-') {
-                                        eprintln!("  {}{}", "-".red(), rest.red());
+                                        eprintln!("  {}{}", ts::deletion("-"), ts::deletion(rest));
                                     } else {
                                         eprintln!("  {}", line.dimmed());
                                     }
@@ -709,8 +710,8 @@ pub(super) async fn execute_edit_file(
                         &permission_paths,
                     );
                 } else {
-                    eprintln!("  {} {}", "-".red(), old_preview.red());
-                    eprintln!("  {} {}", "+".green(), new_preview.green());
+                    eprintln!("  {} {}", ts::deletion("-"), ts::deletion(old_preview));
+                    eprintln!("  {} {}", ts::addition("+"), ts::addition(new_preview));
 
                     let confirmed = Confirm::new()
                         .with_prompt("Allow this edit?")
@@ -984,9 +985,9 @@ pub(super) async fn execute_multiedit(
                     );
                     for line in diff.lines() {
                         if let Some(rest) = line.strip_prefix('+') {
-                            eprintln!("  {}{}", "+".green(), rest.green());
+                            eprintln!("  {}{}", ts::addition("+"), ts::addition(rest));
                         } else if let Some(rest) = line.strip_prefix('-') {
-                            eprintln!("  {}{}", "-".red(), rest.red());
+                            eprintln!("  {}{}", ts::deletion("-"), ts::deletion(rest));
                         } else {
                             eprintln!("  {}", line.dimmed());
                         }

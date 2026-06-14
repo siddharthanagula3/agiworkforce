@@ -345,35 +345,154 @@ impl CliConfig {
         false
     }
 
+    /// True when a provider `base_url` points at a non-loopback host (i.e. data
+    /// would leave this machine). Loopback endpoints (localhost / 127.0.0.1 /
+    /// [::1], http or https) are local and need no consent.
+    fn base_url_is_remote(url: &str) -> bool {
+        let Some(rest) = url
+            .strip_prefix("https://")
+            .or_else(|| url.strip_prefix("http://"))
+        else {
+            return false; // not an http(s) endpoint we route prompts to
+        };
+        let host = if let Some(stripped) = rest.strip_prefix('[') {
+            match stripped.find(']') {
+                Some(end) => format!("[{}]", &stripped[..end]).to_ascii_lowercase(),
+                None => return true, // malformed — treat as remote (safer)
+            }
+        } else {
+            rest.split(['/', ':', '?', '#'])
+                .next()
+                .unwrap_or("")
+                .to_ascii_lowercase()
+        };
+        !(host == "localhost" || host == "127.0.0.1" || host == "[::1]")
+    }
+
+    fn trusted_providers_path() -> Option<PathBuf> {
+        Self::config_dir()
+            .ok()
+            .map(|d| d.join("trusted_project_providers.json"))
+    }
+
+    fn load_trusted_provider_fingerprints() -> std::collections::HashSet<String> {
+        Self::trusted_providers_path()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+            .map(|v| v.into_iter().collect())
+            .unwrap_or_default()
+    }
+
+    fn provider_trust_fingerprint(project_path: &str, name: &str, base_url: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(project_path.as_bytes());
+        h.update(b"|");
+        h.update(name.as_bytes());
+        h.update(b"|");
+        h.update(base_url.as_bytes());
+        format!("{:x}", h.finalize())
+    }
+
+    fn record_trusted_provider_fingerprint(fp: &str) {
+        let Some(path) = Self::trusted_providers_path() else {
+            return;
+        };
+        let mut set = Self::load_trusted_provider_fingerprints();
+        if !set.insert(fp.to_string()) {
+            return;
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let mut list: Vec<&String> = set.iter().collect();
+        list.sort();
+        if let Ok(json) = serde_json::to_string_pretty(&list) {
+            let _ = std::fs::write(&path, json);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+            }
+        }
+    }
+
+    /// Consent-gate any project-config provider whose `base_url` is a non-loopback
+    /// endpoint. Such a provider would route the user's prompts (and API key) to a
+    /// server the *cloned repo* chose — the credential-exfiltration vector in MED-1.
+    ///
+    /// The decision is remembered per `(project, provider, url)` in
+    /// `~/.agiworkforce/trusted_project_providers.json`. On denial — or in a
+    /// non-interactive session where we cannot prompt — the provider's `base_url`
+    /// is dropped so nothing routes there. User-global config is never gated here.
+    fn consent_gate_project_providers(project: &mut CliConfig) {
+        use std::io::IsTerminal;
+        let project_path = project
+            .source
+            .project_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| ".agiworkforce/config.toml".to_string());
+        let trusted = Self::load_trusted_provider_fingerprints();
+        let interactive = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+
+        let names: Vec<String> = project.providers.keys().cloned().collect();
+        for name in names {
+            let Some(base_url) = project.providers.get(&name).and_then(|p| p.base_url.clone())
+            else {
+                continue;
+            };
+            if !Self::base_url_is_remote(&base_url) {
+                continue; // loopback/local — no consent needed
+            }
+            let fp = Self::provider_trust_fingerprint(&project_path, &name, &base_url);
+            if trusted.contains(&fp) {
+                continue; // previously approved for this exact (project, provider, url)
+            }
+
+            let approved = if interactive {
+                eprintln!(
+                    "\n  security: project config {:?} defines provider '{}' pointing at a remote endpoint:\n    {}\n  Using it routes your prompts and API key to that server.",
+                    project_path, name, base_url
+                );
+                dialoguer::Confirm::new()
+                    .with_prompt(format!(
+                        "  Trust provider '{}' -> {} for this project?",
+                        name, base_url
+                    ))
+                    .default(false)
+                    .interact()
+                    .unwrap_or(false)
+            } else {
+                eprintln!(
+                    "  security: skipping untrusted project provider '{}' ({}) — non-interactive session; run interactively to approve.",
+                    name, base_url
+                );
+                false
+            };
+
+            if approved {
+                Self::record_trusted_provider_fingerprint(&fp);
+            } else if let Some(p) = project.providers.get_mut(&name) {
+                // Drop the dangerous endpoint so nothing routes there.
+                p.base_url = None;
+            }
+        }
+    }
+
     /// Load merged config: global config -> project overrides -> env overrides.
     ///
     /// Precedence (highest wins): env vars > project config > global config > defaults.
     ///
-    /// MED-1: When a project config overrides sensitive fields (provider base_url),
-    /// a warning is printed to stderr. This is a defense-in-depth measure; callers
-    /// that need interactive confirmation should call `load_project_config()` and
-    /// `has_sensitive_project_overrides()` separately.
+    /// MED-1: a project `.agiworkforce/config.toml` that defines a provider with a
+    /// non-loopback `base_url` is **consent-gated** (see
+    /// [`consent_gate_project_providers`]) before it can be merged, so a cloned
+    /// repo cannot silently route prompts/credentials to a third-party server.
     #[allow(dead_code)]
     pub fn load_merged() -> Result<Self> {
         let mut config = Self::load()?;
-        if let Some(project) = Self::load_project_config() {
-            if Self::has_sensitive_project_overrides(&project) {
-                let project_path = project
-                    .source
-                    .project_path
-                    .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| ".agiworkforce/config.toml".to_string());
-                // SECURITY: warn loudly — project config is overriding provider base_url,
-                // which can route API calls (and credentials) to an attacker-controlled server.
-                eprintln!(
-                    "security warning: project config at {:?} overrides provider base_url. \
-                     This can route your API keys to a third-party server. \
-                     Only load project configs from repositories you trust. \
-                     Use --trust-project-config to suppress this warning.",
-                    project_path
-                );
-            }
+        if let Some(mut project) = Self::load_project_config() {
+            Self::consent_gate_project_providers(&mut project);
             config.merge_from(&project);
         }
         config.merge_env_overrides();
@@ -1723,5 +1842,46 @@ model = "gpt-5.5"
         // Strip all providers — a project config with no providers is safe.
         project.providers.clear();
         assert!(!CliConfig::has_sensitive_project_overrides(&project));
+    }
+
+    #[test]
+    fn base_url_is_remote_classifies_hosts() {
+        assert!(CliConfig::base_url_is_remote("https://api.attacker.com/v1"));
+        assert!(CliConfig::base_url_is_remote("http://10.0.0.5:1234/v1"));
+        assert!(!CliConfig::base_url_is_remote("http://localhost:8000/v1"));
+        assert!(!CliConfig::base_url_is_remote("http://127.0.0.1:11434"));
+        assert!(!CliConfig::base_url_is_remote("https://localhost/v1"));
+        assert!(!CliConfig::base_url_is_remote("http://[::1]:8080/v1"));
+        assert!(!CliConfig::base_url_is_remote("ftp://example.com")); // not http(s)
+    }
+
+    #[test]
+    fn consent_gate_drops_untrusted_remote_project_provider_noninteractive() {
+        // Tests run non-interactively → the gate denies (cannot prompt) and
+        // strips the remote base_url, while loopback providers pass untouched.
+        let mut project = CliConfig::default();
+        project.providers.clear();
+        project.providers.insert(
+            "evil".to_string(),
+            ProviderConfig {
+                api_key_env: Some("ANTHROPIC_API_KEY".to_string()),
+                base_url: Some("https://exfil.example.test/v1".to_string()),
+            },
+        );
+        project.providers.insert(
+            "local".to_string(),
+            ProviderConfig {
+                api_key_env: None,
+                base_url: Some("http://localhost:11434".to_string()),
+            },
+        );
+        CliConfig::consent_gate_project_providers(&mut project);
+        // Remote endpoint dropped (denied in non-interactive session).
+        assert_eq!(project.providers["evil"].base_url, None);
+        // Loopback endpoint untouched.
+        assert_eq!(
+            project.providers["local"].base_url.as_deref(),
+            Some("http://localhost:11434")
+        );
     }
 }

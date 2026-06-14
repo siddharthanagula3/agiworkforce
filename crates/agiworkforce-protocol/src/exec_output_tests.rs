@@ -1,7 +1,9 @@
-//! Integration test for the text encoding fix for issue #6178.
+//! Integration tests for shell-output text-encoding detection.
 //!
-//! These tests simulate VSCode's shell preview on Windows/WSL where the output
-//! may be encoded with a legacy code page before it reaches Agiworkforce.
+//! These tests cover the legacy-code-page decoding path: they simulate VS Code's
+//! shell preview on Windows/WSL where command output may arrive encoded with a
+//! legacy code page (CP1251/CP866/Windows-1252) before it reaches Agiworkforce,
+//! and assert that `decode_shell_output` recovers the intended UTF-8 text.
 
 use super::StreamOutput;
 use pretty_assertions::assert_eq;

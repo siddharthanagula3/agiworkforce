@@ -11,10 +11,6 @@
 //! - `{"continue": false}` → signals the caller to stop
 
 use anyhow::{Context, Result};
-// Only used inside the #[cfg(unix)] permission-check block at the bottom of
-// load_hooks_config() — gating the import keeps `unused = "deny"` on windows.
-#[cfg(unix)]
-use colored::Colorize;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -332,7 +328,7 @@ fn matches_permission_rule(
     let rule_tool = rule[..open].trim();
     let arg_glob = &rule[open + 1..rule.len() - 1];
 
-    // Tool names accept AGI's canonical identifiers and Claude-style aliases.
+    // Tool names accept AGI's canonical identifiers and reference-compatible aliases.
     if !tool_name_matches(rule_tool, tool_name) {
         return false;
     }
@@ -677,7 +673,7 @@ pub fn load_hooks() -> Result<HooksConfig> {
                     eprintln!(
                         "{} hooks.json is group/other-writable (mode {:o}). \
                          Fix with: chmod 600 {}",
-                        "security warning:".red().bold(),
+                        crate::terminal_style::danger_header("security warning:"),
                         mode & 0o777,
                         path.display()
                     );
@@ -686,7 +682,7 @@ pub fn load_hooks() -> Result<HooksConfig> {
                     eprintln!(
                         "{} hooks.json is group/other-readable (mode {:o}). \
                          Fix with: chmod 600 {}",
-                        "security warning:".red().bold(),
+                        crate::terminal_style::danger_header("security warning:"),
                         mode & 0o777,
                         path.display()
                     );
@@ -895,7 +891,13 @@ fn parse_hook_output(stdout: &str) -> HookOutputSignals {
         .and_then(|v| v.as_str())
         .map(|s| {
             if s.len() > MAX_ADDITIONAL_CONTEXT_BYTES {
-                let mut truncated = s[..MAX_ADDITIONAL_CONTEXT_BYTES].to_string();
+                // Truncate on the largest char boundary at or below the cap so a hook
+                // emitting multibyte UTF-8 cannot panic the agent process mid-turn.
+                let mut cut = MAX_ADDITIONAL_CONTEXT_BYTES;
+                while cut > 0 && !s.is_char_boundary(cut) {
+                    cut -= 1;
+                }
+                let mut truncated = s[..cut].to_string();
                 truncated.push_str("\n[additional_context truncated]");
                 truncated
             } else {

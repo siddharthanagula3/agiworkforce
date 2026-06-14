@@ -7,13 +7,6 @@
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub(crate) enum InputFormat {
-    Text,
-    #[value(name = "stream-json", alias = "streamJson")]
-    StreamJson,
-}
-
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionMode {
@@ -24,15 +17,13 @@ pub enum PermissionMode {
     AcceptEdits,
     #[value(name = "bypassPermissions", alias = "bypass-permissions")]
     BypassPermissions,
-    /// Headless mode: no interactive prompts, fall back to local rules.
-    /// Used by SDK embedders where canUseTool comes through the control channel.
+    /// Headless mode: do not prompt interactively. Only pre-approved safe work runs.
     #[value(name = "dontAsk", alias = "dont-ask")]
     DontAsk,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CliOptions {
-    pub(crate) input_format: InputFormat,
     pub(crate) permission_mode: Option<PermissionMode>,
     pub(crate) allowed_tools: Vec<String>,
     pub(crate) disallowed_tools: Vec<String>,
@@ -49,7 +40,6 @@ pub(crate) struct CliOptions {
 impl CliOptions {
     pub(crate) fn from_cli(cli: &crate::Cli) -> Self {
         Self {
-            input_format: cli.input_format,
             permission_mode: cli.permission_mode,
             allowed_tools: cli.allowed_tools.clone(),
             disallowed_tools: cli.disallowed_tools.clone(),
@@ -65,15 +55,23 @@ impl CliOptions {
     }
 
     pub(crate) fn should_skip_permissions(&self, explicit_skip: bool) -> bool {
-        explicit_skip
-            || matches!(
-                self.permission_mode,
-                Some(PermissionMode::BypassPermissions) | Some(PermissionMode::DontAsk)
-            )
+        // `DontAsk` is deliberately NOT a blanket skip: it must keep the
+        // approval gate so that non-safe tools auto-deny in headless runs (no
+        // interactive prompt -> denied), matching the documented contract that
+        // only pre-approved safe work runs. Only `BypassPermissions` (and the
+        // explicit `--dangerously-skip-permissions` flag) skip all approvals.
+        explicit_skip || matches!(self.permission_mode, Some(PermissionMode::BypassPermissions))
     }
 
     pub(crate) fn should_auto_approve_safe(&self, explicit_yes: bool) -> bool {
-        explicit_yes || matches!(self.permission_mode, Some(PermissionMode::AcceptEdits))
+        // `DontAsk` auto-approves only the read-only/safe-tool allowlist so that
+        // pre-approved safe work runs non-interactively while mutating tools
+        // still hit the (non-interactive -> deny) approval gate.
+        explicit_yes
+            || matches!(
+                self.permission_mode,
+                Some(PermissionMode::AcceptEdits) | Some(PermissionMode::DontAsk)
+            )
     }
 
     pub(crate) fn mcp_config_load_options(&self) -> crate::mcp::McpConfigLoadOptions {
@@ -81,13 +79,5 @@ impl CliOptions {
             explicit_paths: self.mcp_config_paths.iter().map(Into::into).collect(),
             strict: self.strict_mcp_config,
         }
-    }
-
-    /// True when the embedder owns permission decisions over the SDK control channel
-    /// rather than the CLI prompting interactively. Wired in the next session
-    /// when sdk_io's control channel intercepts canUseTool decisions.
-    #[allow(dead_code)]
-    pub(crate) fn is_headless_permissions(&self) -> bool {
-        matches!(self.permission_mode, Some(PermissionMode::DontAsk))
     }
 }

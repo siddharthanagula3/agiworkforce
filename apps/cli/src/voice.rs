@@ -21,6 +21,7 @@ use crate::agent::{AgentSession, PrivacyMode};
 use crate::config::CliConfig;
 use crate::markdown::MarkdownRenderer;
 use crate::output;
+use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,8 +33,26 @@ const SAMPLE_RATE: u32 = 16_000;
 /// Maximum recording duration (seconds) to prevent runaway captures.
 const MAX_RECORDING_SECS: u64 = 120;
 
+/// OpenAI Whisper speech-to-text model id used for the transcription endpoint.
+/// This is an STT model on the `/v1/audio/transcriptions` endpoint, not a
+/// chat/completion model in `packages/types/src/models.json`, so it is owned
+/// here as a single named constant rather than routed through the model
+/// catalog. Update this in one place if OpenAI retires `whisper-1`.
+const OPENAI_STT_MODEL: &str = "whisper-1";
+
 /// Minimum recording duration (milliseconds) to filter out accidental taps.
 const MIN_RECORDING_MS: u128 = 300;
+
+/// Hard cap on the number of captured `f32` samples buffered in memory during a
+/// single recording, in addition to the `MAX_RECORDING_SECS` time cap.
+///
+/// The time cap alone does not bound memory because a high-sample-rate,
+/// multi-channel device can produce many samples per second. This caps the
+/// buffer at a fixed ceiling regardless of device format: 96 kHz × 2 channels ×
+/// `MAX_RECORDING_SECS` (≈ 23M `f32` ≈ 92 MiB) covers any realistic capture
+/// while preventing an unbounded allocation. Frames beyond this budget are
+/// dropped.
+const MAX_RECORDING_SAMPLES: usize = 96_000 * 2 * MAX_RECORDING_SECS as usize;
 
 /// Supported voice languages (ISO 639-1 codes).
 const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
@@ -120,13 +139,13 @@ pub async fn run_voice_mode(
         TranscriptionBackend::OpenAiApi => {
             eprintln!(
                 "  {} Using OpenAI Whisper API (OPENAI_API_KEY detected)",
-                "voice:".cyan().bold()
+                ts::accent_header("voice:")
             );
         }
         TranscriptionBackend::LocalBinary(path) => {
             eprintln!(
                 "  {} Using local whisper binary: {}",
-                "voice:".cyan().bold(),
+                ts::accent_header("voice:"),
                 path.display()
             );
         }
@@ -134,8 +153,8 @@ pub async fn run_voice_mode(
             if privacy_mode == PrivacyMode::Local && !voice_cloud_opt_in {
                 output::print_error(
                     "Voice mode in Local privacy mode requires a local whisper binary on PATH.\n\
-                     Install `whisper` or `whisper-cpp` for fully local transcription, or pass\n\
-                     `--voice-cloud-opt-in` to explicitly allow audio egress to OpenAI cloud.",
+                     Install `whisper` or `whisper-cpp` for fully local transcription, or set\n\
+                     `AGIWORKFORCE_VOICE_ALLOW_CLOUD=1` to explicitly allow audio egress to OpenAI cloud.",
                 );
             } else {
                 output::print_error(
@@ -157,13 +176,13 @@ pub async fn run_voice_mode(
     eprintln!();
     eprintln!(
         "  {} Press {} to talk, {} to exit voice mode.",
-        "voice:".cyan().bold(),
+        ts::accent_header("voice:"),
         "SPACE".bold(),
         "ESC".bold(),
     );
     eprintln!(
         "  {} Language: {} ({})",
-        "voice:".cyan().bold(),
+        ts::accent_header("voice:"),
         voice_lang,
         language_name(voice_lang),
     );
@@ -220,7 +239,7 @@ pub async fn run_voice_mode(
         };
 
         // Show transcribed text and ask for confirmation
-        eprintln!("  {} {}", "You said:".green().bold(), text.trim());
+        eprintln!("  {} {}", ts::success_header("You said:"), text.trim());
         eprintln!(
             "  {}",
             "[ENTER to send, 'r' to re-record, ESC to discard]".dimmed()
@@ -375,8 +394,8 @@ fn gate_cloud_egress(
                      \n\
                      Options:\n\
                      • Install `whisper` or `whisper-cpp` for fully on-device transcription.\n\
-                     • Run with `--voice-cloud-opt-in` to explicitly allow cloud egress (this \
-                       will leave Local mode for voice transcription only).\n\
+                     • Set `AGIWORKFORCE_VOICE_ALLOW_CLOUD=1` to explicitly allow cloud egress \
+                       (this will leave Local mode for voice transcription only).\n\
                      \n\
                      This matches the behaviour of `/continue-with-byok` for chat — audio \
                      egress must always be intentional and visible."
@@ -588,11 +607,21 @@ fn record_audio() -> Result<Option<AudioRecording>> {
             &stream_config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 if let Ok(mut buf) = samples_writer.lock() {
-                    buf.extend_from_slice(data);
+                    // Bound the in-memory buffer by sample count in addition to
+                    // the wall-clock cap, so a high-rate/multi-channel device
+                    // cannot grow the allocation without limit. Once the budget
+                    // is reached, further frames are dropped (the time cap in
+                    // the record loop will stop the stream shortly after).
+                    let remaining = MAX_RECORDING_SAMPLES.saturating_sub(buf.len());
+                    if remaining == 0 {
+                        return;
+                    }
+                    let take = remaining.min(data.len());
+                    buf.extend_from_slice(&data[..take]);
                 }
             },
             move |err| {
-                eprintln!("  {}", format!("Audio stream error: {}", err).red());
+                eprintln!("  {}", ts::danger(format!("Audio stream error: {}", err)));
                 err_flag_cb.store(true, Ordering::Relaxed);
             },
             None,
@@ -606,7 +635,7 @@ fn record_audio() -> Result<Option<AudioRecording>> {
     // Show recording indicator
     eprint!(
         "  {} {} ",
-        "REC".on_red().white().bold(),
+        ts::danger_header("REC"),
         "(release SPACE to stop)".dimmed()
     );
     std::io::stderr().flush().ok();
@@ -619,7 +648,10 @@ fn record_audio() -> Result<Option<AudioRecording>> {
             eprintln!();
             eprintln!(
                 "  {}",
-                format!("(max recording time {}s reached)", MAX_RECORDING_SECS).yellow()
+                ts::warning(format!(
+                    "(max recording time {}s reached)",
+                    MAX_RECORDING_SECS
+                ))
             );
             break false;
         }
@@ -650,7 +682,7 @@ fn record_audio() -> Result<Option<AudioRecording>> {
         let elapsed_secs = start.elapsed().as_secs();
         eprint!(
             "\r  {} {} {}s ",
-            "REC".on_red().white().bold(),
+            ts::danger_header("REC"),
             "(release SPACE to stop)".dimmed(),
             elapsed_secs,
         );
@@ -720,7 +752,7 @@ fn record_audio() -> Result<Option<AudioRecording>> {
 
     eprintln!(
         "  {} {:.1}s recorded ({} samples)",
-        "voice:".cyan().bold(),
+        ts::accent_header("voice:"),
         duration_ms as f64 / 1000.0,
         pcm_samples.len(),
     );
@@ -846,7 +878,7 @@ async fn transcribe_openai_api(wav_path: &std::path::Path, language: &str) -> Re
 
     let form = reqwest::multipart::Form::new()
         .part("file", file_part)
-        .text("model", "whisper-1")
+        .text("model", OPENAI_STT_MODEL)
         .text("language", language.to_string())
         .text("response_format", "text");
 

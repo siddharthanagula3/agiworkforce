@@ -1042,15 +1042,20 @@ pub fn format_allow_prefixes(prefixes: Vec<Vec<String>>) -> Option<String> {
         .collect::<Vec<_>>()
         .join("\n");
 
-    // truncate to last UTF8 char
+    // Enforce the byte budget at a char boundary: walk char boundaries and stop
+    // at the last one that keeps the byte length within MAX_ALLOW_PREFIX_TEXT_BYTES.
+    // (Counting chars would let multi-byte command text exceed the byte cap by up
+    // to 4x, under-truncating the rendered allow-prefix list.)
     let mut output = full_text;
-    let byte_idx = output
-        .char_indices()
-        .nth(MAX_ALLOW_PREFIX_TEXT_BYTES)
-        .map(|(i, _)| i);
-    if let Some(byte_idx) = byte_idx {
+    if output.len() > MAX_ALLOW_PREFIX_TEXT_BYTES {
+        let cut = output
+            .char_indices()
+            .map(|(i, _)| i)
+            .take_while(|&i| i <= MAX_ALLOW_PREFIX_TEXT_BYTES)
+            .last()
+            .unwrap_or(0);
         truncated = true;
-        output = output[..byte_idx].to_string();
+        output = output[..cut].to_string();
     }
 
     if truncated {
@@ -1666,7 +1671,10 @@ impl CallToolResult {
 fn convert_mcp_content_to_items(
     contents: &[serde_json::Value],
 ) -> Option<Vec<FunctionCallOutputContentItem>> {
-    const AGIWORKFORCE_IMAGE_DETAIL_META_KEY: &str = "codex/imageDetail";
+    // Canonical first-party key for AGI-branded MCP servers. The codex-namespaced
+    // key is accepted for backward compatibility with upstream/legacy emitters.
+    const AGIWORKFORCE_IMAGE_DETAIL_META_KEY: &str = "agiworkforce/imageDetail";
+    const COMPAT_IMAGE_DETAIL_META_KEY: &str = "codex/imageDetail";
 
     #[derive(serde::Deserialize)]
     #[serde(tag = "type")]
@@ -1708,7 +1716,10 @@ fn convert_mcp_content_to_items(
                     detail: meta
                         .as_ref()
                         .and_then(serde_json::Value::as_object)
-                        .and_then(|meta| meta.get(AGIWORKFORCE_IMAGE_DETAIL_META_KEY))
+                        .and_then(|meta| {
+                            meta.get(AGIWORKFORCE_IMAGE_DETAIL_META_KEY)
+                                .or_else(|| meta.get(COMPAT_IMAGE_DETAIL_META_KEY))
+                        })
                         .and_then(serde_json::Value::as_str)
                         .and_then(|detail| match detail {
                             "auto" => Some(ImageDetail::Auto),
