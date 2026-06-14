@@ -17,11 +17,43 @@ import {
   type ProviderMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
-import { Share2, Bell, X as XIcon } from 'lucide-react';
+import {
+  Share2,
+  Bell,
+  X as XIcon,
+  MessageSquare,
+  Folder,
+  Settings,
+  Library,
+  ChevronUp,
+  ChevronRight,
+  CreditCard,
+  Download,
+  HelpCircle,
+  Keyboard,
+  Globe,
+  LogOut,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
-import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
+import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';
+import { Sidebar, type SidebarSession, type SidebarNavItem } from '@agiworkforce/ui';
+import { useClerk } from '@clerk/nextjs';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@shared/ui/dropdown-menu';
+import { useDirectoryStore } from '@features/chat/stores/directory-store';
+import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
+import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
@@ -259,6 +291,30 @@ export default function WebChatPage() {
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
   const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
   const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
+
+  // Dialog state — lifted from ChatSidebar so they live at the page level and
+  // work with the shared <Sidebar> component (which has no dialog state).
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
+
+  // Web-specific hooks for the sidebar footer slot.
+  const { signOut: clerkSignOut } = useClerk();
+  const { user, logout } = useAuthStore();
+  const subscription = useBillingStore((s) => s.subscription);
+  const openDirectory = useDirectoryStore((s) => s.setOpen);
+
+  // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
+  // regardless of which component dispatches them.
+  useEffect(() => {
+    const openSearch = () => setSearchDialogOpen(true);
+    const openShortcuts = () => setKeyboardShortcutsOpen(true);
+    window.addEventListener('agi:open-search', openSearch);
+    window.addEventListener('agi:open-shortcuts', openShortcuts);
+    return () => {
+      window.removeEventListener('agi:open-search', openSearch);
+      window.removeEventListener('agi:open-shortcuts', openShortcuts);
+    };
+  }, []);
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
@@ -639,11 +695,13 @@ export default function WebChatPage() {
   );
 
   const handleOpenSearch = useCallback(() => {
-    window.dispatchEvent(new Event('agi:open-search'));
+    // Dialogs are now at page level; dispatch kept for backward compat with
+    // any other component that fires the event (e.g. collapsed rail search btn).
+    setSearchDialogOpen(true);
   }, []);
 
   const handleOpenShortcuts = useCallback(() => {
-    window.dispatchEvent(new Event('agi:open-shortcuts'));
+    setKeyboardShortcutsOpen(true);
   }, []);
 
   const handleFocusComposer = useCallback(() => {
@@ -651,9 +709,7 @@ export default function WebChatPage() {
     textarea?.focus();
   }, []);
 
-  // Wire global keyboard shortcuts. Search and keyboard-shortcuts dialogs live
-  // inside ChatSidebar, so we dispatch custom events that the sidebar listens
-  // for rather than lifting that state to the page level.
+  // Wire global keyboard shortcuts. Dialogs now live at the page level.
   useKeyboardShortcuts({
     onNewChat: handleNewChat,
     onToggleSidebar: handleToggleSidebar,
@@ -964,27 +1020,251 @@ export default function WebChatPage() {
     return count;
   }, [chatMessages]);
 
+  // Map web Conversation[] → SidebarSession[] for @agiworkforce/ui <Sidebar>.
+  // Web uses isPinned/isStarred/isArchived; shared sidebar uses pinned/starred/archived.
+  const sidebarSessions = useMemo<SidebarSession[]>(
+    () =>
+      conversations.map((c) => ({
+        id: c.id,
+        title: c.title,
+        updatedAt: c.updatedAt,
+        pinned: c.isPinned ?? false,
+        starred: c.isStarred ?? false,
+        archived: c.isArchived ?? false,
+        projectId: c.projectId ?? undefined,
+        messageCount: c.messageCount,
+      })),
+    [conversations],
+  );
+
+  // Keyboard shortcuts definitions forwarded to the shortcuts dialog.
+  const sidebarShortcuts = useMemo<KeyboardShortcut[]>(
+    () => [
+      {
+        key: 'K',
+        ctrl: true,
+        meta: true,
+        action: () => setSearchDialogOpen(true),
+        description: 'Open search',
+        category: 'navigation' as const,
+      },
+      {
+        key: '/',
+        ctrl: true,
+        meta: true,
+        action: () => setKeyboardShortcutsOpen(true),
+        description: 'Show keyboard shortcuts',
+        category: 'ui' as const,
+      },
+      {
+        key: 'N',
+        ctrl: true,
+        meta: true,
+        action: handleNewChat,
+        description: 'New conversation',
+        category: 'conversation' as const,
+      },
+      {
+        key: 'B',
+        ctrl: true,
+        meta: true,
+        action: handleToggleSidebar,
+        description: 'Toggle sidebar',
+        category: 'ui' as const,
+      },
+    ],
+    [handleNewChat, handleToggleSidebar],
+  );
+
+  // Nav items injected into <Sidebar> via the navItems prop.
+  // "Artifacts" is removed — it linked to /gallery (a marketing page) which is
+  // not the chat workspace artifacts panel. Artifacts are accessible via the
+  // ArtifactsToggleButton in the header.
+  const sidebarNavItems = useMemo<SidebarNavItem[]>(
+    () => [
+      {
+        id: 'chats',
+        label: 'Chats',
+        icon: MessageSquare,
+        onClick: () => router.push('/chat'),
+        isActive: false,
+      },
+      {
+        id: 'projects',
+        label: 'Projects',
+        icon: Folder,
+        onClick: () => router.push('/projects'),
+        isActive: false,
+      },
+      {
+        id: 'directory',
+        label: 'Directory',
+        icon: Library,
+        onClick: () => openDirectory(true),
+        isActive: false,
+      },
+      {
+        id: 'customize',
+        label: 'Customize',
+        icon: Settings,
+        onClick: () => router.push('/customize'),
+        isActive: false,
+      },
+    ],
+    [router, openDirectory],
+  );
+
+  // Billing tier label for the user profile footer.
+  const tierLabel = useMemo(() => {
+    const tier = subscription?.tier ?? 'free';
+    if (tier === 'free') return 'Free';
+    if (tier === 'hobby') return 'Hobby';
+    if (tier === 'pro') return 'Pro';
+    if (tier === 'max') return 'Max';
+    if (tier === 'enterprise') return 'Enterprise';
+    return null;
+  }, [subscription?.tier]);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    await clerkSignOut({ redirectUrl: '/login' });
+  }, [clerkSignOut, logout]);
+
+  const displayName = user?.name || user?.email?.split('@')[0] || 'User';
+  const userInitial = displayName.charAt(0).toUpperCase();
+  const currentTier = subscription?.tier ?? 'free';
+
+  // footerSlot: web-specific account menu + free-plan nudge.
+  const sidebarFooterSlot = (
+    <div className="w-full">
+      {/* Free plan nudge */}
+      {currentTier === 'free' && (
+        <div className="px-3 pb-2">
+          <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
+            <span>Free plan</span>
+            <button
+              type="button"
+              onClick={handleOpenCloudWaitlist}
+              className="font-medium text-primary hover:underline"
+            >
+              Upgrade
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Account dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Account menu for ${displayName}`}
+            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              {userInitial}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
+                {tierLabel && currentTier === 'free' ? (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/20">
+                    Upgrade
+                  </span>
+                ) : tierLabel ? (
+                  <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {tierLabel}
+                  </span>
+                ) : null}
+              </div>
+              {user?.email && (
+                <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
+              )}
+            </div>
+            <ChevronUp
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
+              aria-hidden="true"
+            />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
+          <DropdownMenuItem onClick={() => router.push('/settings/general')}>
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Globe className="mr-2 h-4 w-4" />
+              Language
+              <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-40">
+              <DropdownMenuItem disabled>English</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuItem onClick={() => router.push('/help')}>
+            <HelpCircle className="mr-2 h-4 w-4" />
+            Get help
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleOpenCloudWaitlist}>
+            <CreditCard className="mr-2 h-4 w-4" />
+            Upgrade
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/download')}>
+            <Download className="mr-2 h-4 w-4" />
+            Get apps and extensions
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setKeyboardShortcutsOpen(true)}>
+            <Keyboard className="mr-2 h-4 w-4" />
+            Keyboard shortcuts
+            <span className="ml-auto text-[10px] text-muted-foreground">?</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => void handleLogout()}
+            className="text-destructive focus:text-destructive"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Log out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
   return (
     <div
       data-chat-theme="cool"
       className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
     >
-      {/* Sidebar */}
-      <ChatSidebar
-        sessions={conversations}
+      {/* Dialogs lifted from ChatSidebar to the page level */}
+      <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
+      <KeyboardShortcutsDialog
+        open={keyboardShortcutsOpen}
+        onOpenChange={setKeyboardShortcutsOpen}
+        shortcuts={sidebarShortcuts}
+      />
+
+      {/* Sidebar — @agiworkforce/ui shared component */}
+      <Sidebar
+        sessions={sidebarSessions}
         activeSessionId={displayedConversationId ?? undefined}
-        onNewChat={handleNewChat}
-        onSelectSession={handleSelectSession}
-        onDeleteSession={handleDeleteSession}
-        onRenameSession={handleRenameSession}
-        onToggleSidebar={handleToggleSidebar}
         collapsed={sidebarCollapsed}
-        onMoveToProjectSession={handleMoveToProjectSession}
-        onUpgradeRequest={handleOpenCloudWaitlist}
-        onPinSession={handlePinSession}
-        onStarSession={handleStarSession}
-        onArchiveSession={handleArchiveSession}
-        onShareSession={handleShareSession}
+        mode="cloud"
+        onNewChat={handleNewChat}
+        onToggleCollapse={handleToggleSidebar}
+        onOpenSearch={handleOpenSearch}
+        navItems={sidebarNavItems}
+        footerSlot={sidebarFooterSlot}
+        onSelect={handleSelectSession}
+        onDelete={(id) => void handleDeleteSession(id)}
+        onRename={handleRenameSession}
+        onTogglePin={handlePinSession}
+        onStar={handleStarSession}
+        onArchive={handleArchiveSession}
+        onShare={handleShareSession}
+        onMoveToProject={handleMoveToProjectSession}
+        className="bg-[var(--chat-sidebar-bg)] border-[var(--chat-border-strong)]"
       />
 
       {/* Main area + artifact workbench */}
