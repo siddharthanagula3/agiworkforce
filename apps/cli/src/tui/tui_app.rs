@@ -1444,14 +1444,9 @@ fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.effort = effort;
             app.input.clear();
             app.cursor = 0;
-            let budget = effort.anthropic_budget_tokens();
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
-                text: format!(
-                    "Effort set to {} (anthropic budget: {} tokens)",
-                    effort.label(),
-                    budget,
-                ),
+                text: format!("Effort set to {}", effort.label()),
             });
             InputAction::None
         }
@@ -2168,12 +2163,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match new_effort {
                     Some(e) => {
                         app.effort = e;
-                        let budget = e.anthropic_budget_tokens();
-                        SlashResult::SystemMessage(format!(
-                            "Effort set to {} (anthropic budget: {} tokens)",
-                            e.label(),
-                            budget,
-                        ))
+                        SlashResult::SystemMessage(format!("Effort set to {}", e.label()))
                     }
                     None => SlashResult::SystemMessage(format!(
                         "Unknown effort level '{arg}'. Use: low | medium | high | max"

@@ -122,10 +122,10 @@ pub fn handle_key(state: &mut EffortPickerState, key: crossterm::event::KeyEvent
 // ---------------------------------------------------------------------------
 
 static EFFORT_DESCRIPTIONS: &[&str] = &[
-    "Minimal thinking. Fastest response.",
-    "Balanced thinking. Default.",
-    "Extended thinking. More accurate.",
-    "Maximum thinking. Best accuracy.",
+    "Concise responses. Fastest.",
+    "Balanced quality and speed. Default.",
+    "More thorough responses. Slower.",
+    "Most thorough responses. Slowest.",
 ];
 
 /// Render the effort picker overlay into `frame`.
