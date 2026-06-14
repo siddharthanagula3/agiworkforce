@@ -75,6 +75,19 @@ if [[ "${PROFILE}" == "production" || "${PROFILE}" == "preview" ]]; then
   fi
 fi
 
+# --- TLS pin guard (#387) -------------------------------------------------
+# Fail if any SPKI hashes in lib/pinning.ts are still placeholders.
+# Real pin provisioning is an ops task — see the runbook in lib/pinning.ts.
+
+if [[ "${PROFILE}" == "production" || "${PROFILE}" == "preview" ]]; then
+  log "checking TLS SPKI pins..."
+  if EXPO_PUBLIC_APP_ENV=production node "${MOBILE_DIR}/scripts/check-tls-pins.mjs"; then
+    log_ok "TLS pins provisioned"
+  else
+    die "TLS SPKI pins are still placeholders — provision real hashes before releasing (runbook: apps/mobile/lib/pinning.ts)"
+  fi
+fi
+
 # --- Git ------------------------------------------------------------------
 
 if [[ "${PROFILE}" == "production" ]]; then

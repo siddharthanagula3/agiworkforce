@@ -48,6 +48,8 @@ export default [
       'test-*.js',
       // Web app maintenance/migration scripts (Node.js CJS, not app source)
       'apps/web/scripts/**',
+      // Mobile utility scripts (Node.js ESM, not RN/Expo source)
+      'apps/mobile/scripts/**',
       // CLI utility scripts (Node.js ESM, not Rust source)
       'apps/cli/scripts/**',
       // CLI parity workflow artifacts are authored for the workflow runner, not
