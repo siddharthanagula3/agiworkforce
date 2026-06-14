@@ -13,6 +13,16 @@ import {
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+// SEPARATION-FIX: cloud conversations are physically separated into their own store.
+// Lazy import to avoid circular dependency at module initialisation time.
+function getCloudStore() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { useChatCloudMessageStore } =
+    require('@/stores/chat/chatCloudMessageStore') as typeof import('@/stores/chat/chatCloudMessageStore');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return useChatCloudMessageStore;
+}
+export { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 
 export interface ForkConversationOptions {
   title?: string;
@@ -82,13 +92,17 @@ export const useChatMessageStore = create<MessageState>()(
       loadConversations: async () => {
         set({ isLoadingConversations: true });
         try {
-          if (!shouldLoadCloudConversationList()) return;
-          const data = await api.get<{ conversations: ConversationSummary[] }>(
-            '/api/chat/conversations',
-          );
-          set((state) => ({
-            conversations: mergeCloudConversations(state.conversations, data.conversations ?? []),
-          }));
+          // SEPARATION-FIX: Cloud conversations fetched from the API are routed
+          // to useChatCloudMessageStore, never written into this local store.
+          // This store only holds Local Mode conversations.
+          if (shouldLoadCloudConversationList()) {
+            const data = await api.get<{ conversations: ConversationSummary[] }>(
+              '/api/chat/conversations',
+            );
+            getCloudStore()
+              .getState()
+              .setCloudConversations(data.conversations ?? []);
+          }
         } catch {
           // Keep existing conversations on failure — offline resilience
         } finally {
@@ -176,8 +190,27 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       deleteConversation: async (id) => {
-        const conversation = get().conversations.find((c) => c.id === id);
-        const shouldDeleteRemote = shouldSyncConversationRemote(conversation);
+        // SEPARATION-FIX: check local store first; if not found, delegate to cloud store.
+        const localConversation = get().conversations.find((c) => c.id === id);
+        if (!localConversation) {
+          const cloudStore = getCloudStore();
+          const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
+          if (cloudConversation && shouldSyncConversationRemote(cloudConversation)) {
+            cloudStore.getState().removeCloudConversation(id);
+            try {
+              await api.delete(`/api/chat/conversations/${id}`);
+            } catch {
+              // Optimistic delete stands — offline resilience
+            }
+          } else {
+            cloudStore.getState().removeCloudConversation(id);
+          }
+          set((state) => ({
+            currentConversationId:
+              state.currentConversationId === id ? null : state.currentConversationId,
+          }));
+          return;
+        }
         set((state) => {
           const { [id]: _, ...remainingMessages } = state.messages;
           return {
@@ -187,18 +220,21 @@ export const useChatMessageStore = create<MessageState>()(
               state.currentConversationId === id ? null : state.currentConversationId,
           };
         });
-        if (!shouldDeleteRemote) return;
-        try {
-          await api.delete(`/api/chat/conversations/${id}`);
-        } catch {
-          // Optimistic delete stands — offline resilience
-        }
       },
 
       loadMessages: async (conversationId) => {
-        const existing = get().messages[conversationId];
+        // SEPARATION-FIX: check which store owns this conversation.
+        const localConversation = get().conversations.find((c) => c.id === conversationId);
+        const cloudStore = getCloudStore();
+        const cloudConversation = !localConversation
+          ? cloudStore.getState().conversations.find((c) => c.id === conversationId)
+          : undefined;
+        const conversation = localConversation ?? cloudConversation;
+
+        const existingLocalMsgs = get().messages[conversationId];
+        const existingCloudMsgs = cloudStore.getState().messages[conversationId];
+        const existing = localConversation ? existingLocalMsgs : existingCloudMsgs;
         if (existing && existing.length > 0 && !existing.some((m) => m.isStreaming)) return;
-        const conversation = get().conversations.find((c) => c.id === conversationId);
 
         set({ isLoadingMessages: true });
         try {
@@ -206,69 +242,100 @@ export const useChatMessageStore = create<MessageState>()(
           const data = await api.get<{ messages: ChatMessage[] }>(
             `/api/chat/conversations/${conversationId}`,
           );
-          set((state) => ({
-            messages: { ...state.messages, [conversationId]: data.messages ?? [] },
-          }));
+          // Route messages to the correct store.
+          if (cloudConversation) {
+            cloudStore.getState().setCloudMessages(conversationId, data.messages ?? []);
+          } else {
+            set((state) => ({
+              messages: { ...state.messages, [conversationId]: data.messages ?? [] },
+            }));
+          }
         } catch {
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [conversationId]: state.messages[conversationId] ?? [],
-            },
-          }));
+          if (!cloudConversation) {
+            set((state) => ({
+              messages: {
+                ...state.messages,
+                [conversationId]: state.messages[conversationId] ?? [],
+              },
+            }));
+          }
         } finally {
           set({ isLoadingMessages: false });
         }
       },
 
       renameConversation: async (id, title) => {
-        const conversation = get().conversations.find((c) => c.id === id);
-        const shouldRenameRemote = shouldSyncConversationRemote(conversation);
+        // SEPARATION-FIX: route to the store that owns this conversation.
+        const localConversation = get().conversations.find((c) => c.id === id);
+        if (!localConversation) {
+          const cloudStore = getCloudStore();
+          cloudStore.getState().patchCloudConversation(id, { title });
+          if (
+            shouldSyncConversationRemote(
+              cloudStore.getState().conversations.find((c) => c.id === id),
+            )
+          ) {
+            try {
+              await api.put(`/api/chat/conversations/${id}`, { title });
+            } catch {
+              // Optimistic rename stands
+            }
+          }
+          return;
+        }
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
         }));
-        if (!shouldRenameRemote) return;
-        try {
-          await api.put(`/api/chat/conversations/${id}`, { title });
-        } catch {
-          // Optimistic rename stands
-        }
       },
 
       pinConversation: async (id) => {
-        const conv = get().conversations.find((c) => c.id === id);
-        if (!conv) return;
-        const shouldPinRemote = shouldSyncConversationRemote(conv);
-        const pinned = !conv.pinned;
+        // SEPARATION-FIX: route to the store that owns this conversation.
+        const localConv = get().conversations.find((c) => c.id === id);
+        if (!localConv) {
+          const cloudStore = getCloudStore();
+          const cloudConv = cloudStore.getState().conversations.find((c) => c.id === id);
+          if (!cloudConv) return;
+          const pinned = !cloudConv.pinned;
+          cloudStore.getState().patchCloudConversation(id, { pinned });
+          if (shouldSyncConversationRemote(cloudConv)) {
+            try {
+              await api.put(`/api/chat/conversations/${id}`, { pinned });
+            } catch {
+              cloudStore.getState().patchCloudConversation(id, { pinned: !pinned });
+            }
+          }
+          return;
+        }
+        const pinned = !localConv.pinned;
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, pinned } : c)),
         }));
-        if (!shouldPinRemote) return;
-        try {
-          await api.put(`/api/chat/conversations/${id}`, { pinned });
-        } catch {
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c.id === id ? { ...c, pinned: !pinned } : c,
-            ),
-          }));
-        }
       },
 
       makeConversationPermanent: (id) => {
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, temporary: false } : c,
-          ),
-        }));
+        // Route to the correct store.
+        if (get().conversations.find((c) => c.id === id)) {
+          set((state) => ({
+            conversations: state.conversations.map((c) =>
+              c.id === id ? { ...c, temporary: false } : c,
+            ),
+          }));
+        } else {
+          getCloudStore().getState().patchCloudConversation(id, { temporary: false });
+        }
       },
 
       markConversationRead: (id) => {
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, unread: false } : c,
-          ),
-        }));
+        // Route to the correct store.
+        if (get().conversations.find((c) => c.id === id)) {
+          set((state) => ({
+            conversations: state.conversations.map((c) =>
+              c.id === id ? { ...c, unread: false } : c,
+            ),
+          }));
+        } else {
+          getCloudStore().getState().patchCloudConversation(id, { unread: false });
+        }
       },
 
       deleteMessage: (conversationId, messageId) => {
@@ -461,7 +528,11 @@ export const useChatMessageStore = create<MessageState>()(
       },
     }),
     {
-      name: 'chat-message-store',
+      // SEPARATION-FIX: Local conversations persist under a dedicated Local key.
+      // Cloud conversations are persisted separately in `useChatCloudMessageStore`
+      // under 'chat-message-store-cloud'. The two namespaces never share keys in
+      // MMKV, ensuring physical separation between Local and Cloud data at rest.
+      name: 'chat-message-store-local',
       storage: createJSONStorage(() => mmkvStorage),
       // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
@@ -471,7 +542,11 @@ export const useChatMessageStore = create<MessageState>()(
       partialize: (state) => {
         const MAX_CONVERSATIONS = 200;
         const MAX_MESSAGES_PER_CONVERSATION = 100;
-        const conversations = state.conversations.slice(0, MAX_CONVERSATIONS);
+        // SEPARATION-FIX: only persist LOCAL conversations in this store.
+        // Cloud conversations must never co-mingle with local storage.
+        const conversations = state.conversations
+          .filter((c) => executionModeForConversation(c) === 'local')
+          .slice(0, MAX_CONVERSATIONS);
         const conversationIds = new Set(conversations.map((c) => c.id));
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {
@@ -511,20 +586,9 @@ function shouldLoadRemoteMessages(conversation: ConversationSummary | undefined)
   return useChatAppModeStore.getState().appMode === 'cloud';
 }
 
-function mergeCloudConversations(
-  existingConversations: ConversationSummary[],
-  cloudConversations: ConversationSummary[],
-): ConversationSummary[] {
-  const normalizedCloudConversations = cloudConversations.map((conversation) => ({
-    ...conversation,
-    provider: conversation.provider ?? providerForExecutionMode('cloud'),
-    executionMode: conversation.executionMode ?? ('cloud' as const),
-  }));
-  const localConversations = existingConversations.filter(
-    (conversation) => executionModeForConversation(conversation) === 'local',
-  );
-  return [...normalizedCloudConversations, ...localConversations];
-}
+// mergeCloudConversations removed: cloud conversations no longer write into
+// the local store. They are stored exclusively in useChatCloudMessageStore
+// under 'chat-message-store-cloud'. See SEPARATION-FIX comments above.
 
 async function createConversationForMode(
   set: (
@@ -549,18 +613,18 @@ async function createConversationForMode(
       title: title ?? 'New Chat',
       projectId,
     });
-    const conversation = {
+    const conversation: ConversationSummary = {
       ...data.conversation,
       projectId,
       model: data.conversation.model ?? model,
       provider: data.conversation.provider ?? providerForExecutionMode('cloud'),
       executionMode: data.conversation.executionMode ?? 'cloud',
     };
-    set((state) => ({
-      conversations: [conversation, ...state.conversations],
-      currentConversationId: conversation.id,
-      messages: { ...state.messages, [conversation.id]: [] },
-    }));
+    // SEPARATION-FIX: cloud conversation goes to the cloud store, NOT the local store.
+    // The local store `set` function is intentionally not called here.
+    getCloudStore().getState().addCloudConversation(conversation);
+    // currentConversationId is shared UI state, not conversation data — safe to set here.
+    set(() => ({ currentConversationId: conversation.id }));
     return conversation.id;
   } catch {
     throw new Error('AGI Cloud conversation could not be created.');
@@ -599,4 +663,4 @@ function createStoredConversation(
   return localId;
 }
 
-rehydrateWhenMmkvReady(useChatMessageStore, 'chat-message-store');
+rehydrateWhenMmkvReady(useChatMessageStore, 'chat-message-store-local');
