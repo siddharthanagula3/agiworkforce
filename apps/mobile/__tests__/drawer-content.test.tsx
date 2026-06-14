@@ -72,6 +72,27 @@ jest.mock('../src/features/cloud-bridge', () => {
   };
 });
 
+jest.mock('../src/features/chat/components/ModeSwitchModal', () => {
+  const { View, Pressable } = require('react-native');
+  return {
+    ModeSwitchModal: ({
+      visible,
+      onConfirm,
+      onCancel,
+    }: {
+      visible: boolean;
+      onConfirm?: () => void;
+      onCancel?: () => void;
+    }) =>
+      visible ? (
+        <View testID="mode-switch-modal">
+          <Pressable testID="mode-switch-confirm" onPress={onConfirm} />
+          <Pressable testID="mode-switch-cancel" onPress={onCancel} />
+        </View>
+      ) : null,
+  };
+});
+
 import { DrawerContent } from '../src/features/drawer/components/DrawerContent';
 import { useChatStore } from '../stores/chatStore';
 import { useAuthStore } from '../src/features/auth/store';
@@ -274,14 +295,29 @@ describe('DrawerContent', () => {
     expect(getByTestId('invite-code-modal')).toBeTruthy();
   });
 
-  it('uses the unlocked AGI Cloud route from AGI Agent', () => {
+  it('shows consent modal then navigates when AGI Agent is pressed with cloud unlocked', () => {
+    // SILENT-SWITCH-FIX: AGI Agent no longer silently sets appMode('cloud').
+    // It shows ModeSwitchModal first; navigation only happens after user confirms.
     useWaitlistStore.setState({ cloudUnlocked: true });
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    const { getByLabelText, queryByTestId } = renderDrawer();
+    const { getByLabelText, getByTestId, queryByTestId } = renderDrawer();
 
+    // Invite modal must not appear (cloud is already unlocked).
+    expect(queryByTestId('invite-code-modal')).toBeNull();
+    // Mode-switch consent modal must not be visible yet.
+    expect(queryByTestId('mode-switch-modal')).toBeNull();
+
+    // Press AGI Agent — should show consent modal, NOT navigate immediately.
     fireEvent.press(getByLabelText('AGI Agent. Cloud'));
 
-    expect(queryByTestId('invite-code-modal')).toBeNull();
+    expect(getByTestId('mode-switch-modal')).toBeTruthy();
+    expect(mockCloseDrawer).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    // Confirm the modal — navigation should now happen.
+    fireEvent.press(getByTestId('mode-switch-confirm'));
+
+    expect(queryByTestId('mode-switch-modal')).toBeNull();
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/chat');
     if (DEFAULT_CLOUD_MODEL_ID) {
@@ -289,6 +325,29 @@ describe('DrawerContent', () => {
       expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
       expect(useChatAppModeStore.getState().appMode).toBe('cloud');
     }
+  });
+
+  it('cancelling the consent modal keeps current mode unchanged', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useChatAppModeStore.setState({ appMode: 'local' });
+    const { getByLabelText, getByTestId, queryByTestId } = renderDrawer();
+
+    // In local mode, AGI Agent is not visible — switch to cloud mode in the store first.
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const {
+      getByLabelText: getByLabelText2,
+      getByTestId: getByTestId2,
+      queryByTestId: queryByTestId2,
+    } = renderDrawer();
+
+    fireEvent.press(getByLabelText2('AGI Agent. Cloud'));
+    expect(getByTestId2('mode-switch-modal')).toBeTruthy();
+
+    fireEvent.press(getByTestId2('mode-switch-cancel'));
+
+    expect(queryByTestId2('mode-switch-modal')).toBeNull();
+    expect(mockCloseDrawer).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('highlights active projects and settings rows', () => {
