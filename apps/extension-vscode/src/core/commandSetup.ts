@@ -1154,26 +1154,26 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const modeItems: vscode.QuickPickItem[] = [
         {
           label: '$(comment-discussion) Ask before edits',
-          description: 'Claude will ask for approval before making each edit',
+          description: 'AGI will ask for approval before making each edit',
           detail: 'ask',
           picked: currentMode === 'ask',
         },
         {
           label: '$(symbol-misc) Edit automatically',
-          description: 'Claude will edit your selected text or the whole file',
+          description: 'AGI will edit your selected text or the whole file',
           detail: 'auto',
           picked: currentMode === 'auto',
         },
         {
           label: '$(checklist) Plan mode',
-          description: 'Claude will explore the code and present a plan before editing',
+          description: 'AGI will explore the code and present a plan before editing',
           detail: 'plan',
           picked: currentMode === 'plan',
         },
         {
           label: '$(warning) Bypass permissions',
           description:
-            'Claude will not ask for approval before running potentially dangerous commands',
+            'AGI will not ask for approval before running potentially dangerous commands',
           detail: 'bypass',
           picked: currentMode === 'bypass',
         },
