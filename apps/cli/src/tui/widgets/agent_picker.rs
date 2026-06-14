@@ -3,23 +3,23 @@
 //! Triggered by `/agents` (no arg). Layout:
 //!
 //! ```text
-//! ┌─ Select Agent  (/ search  ↑↓ navigate  Enter invoke  Esc close) ─────────┐
-//! │ Search: █                                                                  │
-//! ├────────────────────────────────────────────────────────────────────────────┤
-//! │   researcher       Research agent for deep web analysis   [project]        │
-//! │ ❯ planner          Plan and break down complex tasks       [global]         │
-//! │   coder            Write and review code changes           [project]        │
-//! ├────────────────────────────────────────────────────────────────────────────┤
-//! │ model: claude-sonnet-4-6   tools: read_file, web_search   max_turns: 20   │
-//! └────────────────────────────────────────────────────────────────────────────┘
+//! ┌─ Agents  2 agent(s) ──────────────────────────────────────────────────────┐
+//! │/ type to filter agents...                                                 │
+//! │───────────────────────────────────────────────────────────────────────────│
+//! │   researcher          Search and synthesize technical material… [project]│
+//! │ ❯ planner             Plan and break down complex tasks        [global] │
+//! │───────────────────────────────────────────────────────────────────────────│
+//! │ model: default   tools: all                                               │
+//! └───────────────────────────────────────────────────────────────────────────┘
 //! ```
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 
 use crate::agents::AgentDefinition;
+use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light};
 
 // ---------------------------------------------------------------------------
 // Public state
@@ -131,19 +131,17 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) 
     // ── outer border ──────────────────────────────────────────────────────────
     let agent_count = state.agents.len();
     let badge = format!(" {agent_count} agent(s) ");
-    let hint = " Select Agent  (/ search  \u{2191}\u{2193} navigate  Enter invoke  Esc close)";
+    let hint = " Agents ";
     let title_line = Line::from(vec![
-        Span::styled(hint, Style::default()),
+        Span::styled(hint, Style::default().add_modifier(Modifier::BOLD)),
         Span::styled(
             badge,
-            Style::default()
-                .fg(Color::DarkGray)
-                .add_modifier(Modifier::DIM),
+            Style::default().fg(ui_muted()).add_modifier(Modifier::DIM),
         ),
     ]);
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan))
+        .border_style(Style::default().fg(ui_muted()))
         .title(title_line);
     frame.render_widget(outer_block, popup_area);
 
@@ -176,10 +174,10 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) 
 fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) {
     let prompt_style = if state.search_focused {
         Style::default()
-            .fg(Color::Yellow)
+            .fg(ui_accent())
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(ui_muted())
     };
 
     let prompt = Span::styled("/ ", prompt_style);
@@ -187,11 +185,11 @@ fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
         Span::styled(
             "type to filter agents...",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(ui_muted())
                 .add_modifier(Modifier::ITALIC),
         )
     } else {
-        Span::styled(state.search.clone(), Style::default().fg(Color::White))
+        Span::styled(state.search.clone(), Style::default())
     };
     frame.render_widget(Paragraph::new(Line::from(vec![prompt, text])), area);
 }
@@ -201,7 +199,7 @@ fn render_divider(frame: &mut ratatui::Frame, area: Rect, width: u16) {
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             line,
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         ))),
         area,
     );
@@ -215,7 +213,7 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
             "No agents match filter."
         };
         frame.render_widget(
-            Paragraph::new(Span::styled(msg, Style::default().fg(Color::DarkGray))),
+            Paragraph::new(Span::styled(msg, Style::default().fg(ui_muted()))),
             area,
         );
         return;
@@ -245,21 +243,16 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
                 agent.description.as_str()
             };
 
-            // Truncate description to keep name visible
             let name_col = 18usize;
             let scope_col = 9usize;
-            // Leave 3 for marker+space+space + name_col + 2 + scope_col + 2
             let desc_budget = (area.width as usize).saturating_sub(name_col + scope_col + 7);
-            let desc_short = if desc.len() > desc_budget && desc_budget > 3 {
-                &desc[..desc_budget - 1]
-            } else {
-                desc
-            };
+            let name_short = truncate_chars(&agent.name, name_col);
+            let desc_short = truncate_chars(desc, desc_budget);
 
             let text = format!(
                 " {} {:<name_col$}  {:<desc_short_len$}  [{}]",
                 cursor_marker,
-                &agent.name,
+                name_short,
                 desc_short,
                 scope,
                 name_col = name_col,
@@ -268,11 +261,11 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
 
             let style = if is_cursor {
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
+                    .fg(ui_on_light())
+                    .bg(ui_accent())
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default()
             };
 
             ListItem::new(text).style(style)
@@ -302,14 +295,14 @@ fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
             .unwrap_or_default();
         let line = format!(" model: {}   tools: {}{}", model, tools, max_turns);
         frame.render_widget(
-            Paragraph::new(Span::styled(line, Style::default().fg(Color::DarkGray))),
+            Paragraph::new(Span::styled(line, Style::default().fg(ui_muted()))),
             area,
         );
     } else {
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " (no agent selected)",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(ui_muted()),
             )),
             area,
         );
@@ -318,6 +311,18 @@ fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
 
 fn agent_scope_label(agent: &AgentDefinition) -> &'static str {
     crate::agents::agent_scope_label(agent)
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+    if max_chars <= 1 {
+        return "…".to_string();
+    }
+    let mut out: String = value.chars().take(max_chars - 1).collect();
+    out.push('…');
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +403,9 @@ pub fn handle_key(
 mod tests {
     use super::*;
     use crate::agents::AgentDefinition;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
     use std::path::PathBuf;
 
     fn make_agent(name: &str, description: &str) -> AgentDefinition {
@@ -424,6 +432,13 @@ mod tests {
         s
     }
 
+    fn draw_picker(state: &AgentPickerState, width: u16, height: u16) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+        let area = Rect::new(0, 0, width, height);
+        terminal.draw(|f| render(f, area, state)).expect("draw");
+        terminal
+    }
+
     #[test]
     fn picker_default_is_not_visible() {
         let s = AgentPickerState::default();
@@ -444,6 +459,25 @@ mod tests {
         s.rebuild_filtered();
         assert_eq!(s.filtered.len(), 1);
         assert_eq!(s.selected_agent().map(|a| a.name.as_str()), Some("coder"));
+    }
+
+    #[test]
+    fn render_agent_picker_snapshot() {
+        let agents = vec![
+            make_agent(
+                "researcher",
+                "Search and synthesize technical material with citations",
+            ),
+            make_agent(
+                "long-agent-name-with-unicode-Δ",
+                "Review implementation details, edge cases, and visual regressions",
+            ),
+        ];
+        let mut state = picker_with_agents(agents);
+        state.cursor = 1;
+
+        let terminal = draw_picker(&state, 84, 18);
+        insta::assert_snapshot!("agent_picker_overlay_baseline", terminal.backend());
     }
 
     #[test]

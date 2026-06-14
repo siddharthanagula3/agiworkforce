@@ -29,7 +29,7 @@ function maskRow(row: ApiKeyRow) {
 
 /**
  * GET /api/settings/api-keys
- * List the current user's active API keys (masked — no hashes returned).
+ * List the current user's active API keys (masked · no hashes returned).
  */
 async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'api-keys-list');
@@ -53,7 +53,7 @@ async function handleList(request: NextRequest) {
 
 /**
  * POST /api/settings/api-keys
- * Create a new API key. Returns the full key once — it is never stored in plaintext.
+ * Create a new API key. Returns the full key once · it is never stored in plaintext.
  */
 async function handleCreate(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'api-keys-create');

@@ -155,7 +155,7 @@ jest.mock('../src/features/model-picker/store', () => ({
 }));
 
 jest.mock('../src/features/model-picker/service', () => ({
-  getDisplayName: (id: string) => {
+  getShortDisplayName: (id: string) => {
     if (id === 'claude-sonnet-4.6') return 'Claude 4.6 Sonnet';
     return id;
   },

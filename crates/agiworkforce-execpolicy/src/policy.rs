@@ -361,11 +361,19 @@ impl Evaluation {
             .any(|rule_match| !matches!(rule_match, RuleMatch::HeuristicsRuleMatch { .. }))
     }
 
-    /// Caller is responsible for ensuring that `matched_rules` is non-empty.
+    /// Builds an `Evaluation` from the matched rules, taking the most-restrictive
+    /// decision (`Allow < Prompt < Forbidden`).
+    ///
+    /// An empty `matched_rules` set is reachable via `check_multiple` with an
+    /// empty `commands` batch, so we must not panic here. With nothing to
+    /// authorize there is nothing to allow, so the safe default is `Prompt`
+    /// (require explicit approval) rather than silently allowing or crashing.
     fn from_matches(matched_rules: Vec<RuleMatch>) -> Self {
-        let decision = matched_rules.iter().map(RuleMatch::decision).max();
-        #[expect(clippy::expect_used)]
-        let decision = decision.expect("invariant failed: matched_rules must be non-empty");
+        let decision = matched_rules
+            .iter()
+            .map(RuleMatch::decision)
+            .max()
+            .unwrap_or(Decision::Prompt);
 
         Self {
             decision,

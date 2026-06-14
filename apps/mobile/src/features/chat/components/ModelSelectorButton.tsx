@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { getDisplayName, isAutoMode, getModelById } from '@/src/features/model-picker/service';
+import { getShortDisplayName, isAutoMode, getModelById } from '@/src/features/model-picker/service';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface ModelSelectorButtonProps {
@@ -23,7 +23,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const isAuto = isAutoMode(selectedModel);
-  const label = getDisplayName(selectedModel);
+  const label = getShortDisplayName(selectedModel);
   const thinkingOn = thinkingEnabledPerModel[selectedModel] ?? false;
 
   const model = isAuto ? null : getModelById(selectedModel);
@@ -39,42 +39,74 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   return (
     <Pressable
       onPress={handlePress}
-      className="flex-row items-center gap-1 px-1.5 py-1.5 rounded-lg"
       style={({ pressed }) => ({
+        minWidth: 150,
+        height: 36,
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
         backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
       })}
+      hitSlop={6}
       accessibilityLabel={`Model: ${label}${thinkingOn ? ', thinking mode on' : ''}`}
       accessibilityRole="button"
       accessibilityHint="Opens model picker"
     >
-      {/* Provider icon with thinking indicator */}
-      <View className="relative">
-        <Bot size={18} color={iconColor} />
-
-        {/* Per-model thinking indicator — small purple dot */}
-        {thinkingOn && (
-          <View
-            className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border items-center justify-center"
-            style={{
-              backgroundColor: colors.purple,
-              borderColor: colors.surfaceBase,
-            }}
-          >
-            <Brain size={6} color={colors.accentText} />
-          </View>
-        )}
-      </View>
-
-      {/* Truncated label */}
-      <Text
-        className="text-xs font-medium max-w-[80px]"
-        style={{ color: model ? colors.teal : colors.textMuted }}
-        numberOfLines={1}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 5,
+          minWidth: 128,
+        }}
       >
-        {label}
-      </Text>
+        {/* Provider icon with thinking indicator */}
+        <View style={{ position: 'relative', width: 18, height: 18 }}>
+          <Bot size={18} color={iconColor} />
 
-      <ChevronDown size={12} color={colors.textMuted} />
+          {/* Per-model thinking indicator — small purple dot */}
+          {thinkingOn && (
+            <View
+              style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                width: 10,
+                height: 10,
+                borderRadius: 5,
+                borderWidth: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.purple,
+                borderColor: colors.surfaceBase,
+              }}
+            >
+              <Brain size={6} color={colors.accentText} />
+            </View>
+          )}
+        </View>
+
+        {/* Truncated label */}
+        <Text
+          style={{
+            color: model ? colors.teal : colors.textMuted,
+            fontSize: 12,
+            lineHeight: 15,
+            fontWeight: '500',
+            maxWidth: 88,
+            flexShrink: 1,
+            includeFontPadding: false,
+          }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+
+        <ChevronDown size={12} color={colors.textMuted} />
+      </View>
     </Pressable>
   );
 }

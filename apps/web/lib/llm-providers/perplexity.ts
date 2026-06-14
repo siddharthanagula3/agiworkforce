@@ -66,7 +66,7 @@ export class PerplexityProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -150,7 +150,7 @@ export class PerplexityProvider extends BaseLLMProvider {
       }
     }
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),

@@ -1,15 +1,15 @@
 /**
- * MCP API — server-side proxy that uses the shared `@agiworkforce/mcp`
+ * MCP API · server-side proxy that uses the shared `@agiworkforce/mcp`
  * transport-discriminated client to connect to remote MCP servers and
  * surface their tool catalogs to authenticated web users.
  *
  * Routes:
- *   POST /api/mcp      — connect-and-list. Body: { serverName, config }
+ *   POST /api/mcp      · connect-and-list. Body: { serverName, config }
  *                        Returns the tool catalog for one server.
  *
  * Notes:
  *   - SSRF defense: stdio transports are rejected outright (the gateway
- *     does not spawn child processes from a Next.js route handler — that
+ *     does not spawn child processes from a Next.js route handler · that
  *     belongs in `services/api-gateway/src/mcp/` which runs the long-lived
  *     proxy). Only HTTP-family transports are accepted here.
  *   - Connection lifecycle: each request opens, lists, and closes a fresh
@@ -28,15 +28,21 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 
 export const runtime = 'nodejs';
+export const WEB_MCP_PRIVATE_BETA_ENV = 'AGI_WEB_MCP_PRIVATE_BETA';
 
 interface ConnectBody {
   serverName?: string;
   config?: McpServerConfig;
 }
 
-function validateHttpUrl(raw: unknown): URL {
+function isWebMcpPrivateBetaEnabled(): boolean {
+  return process.env[WEB_MCP_PRIVATE_BETA_ENV] === '1';
+}
+
+async function validateHttpUrl(raw: unknown): Promise<URL> {
   if (typeof raw !== 'string') {
     throw createError.validation('config.url must be a string');
   }
@@ -46,17 +52,19 @@ function validateHttpUrl(raw: unknown): URL {
   } catch {
     throw createError.validation('config.url is not a valid URL');
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw createError.validation('config.url must use http(s) scheme');
+  if (parsed.protocol !== 'https:') {
+    throw createError.validation('config.url must use https');
   }
-  // SSRF defense: reject loopback / private / link-local hosts. Mirror of
-  // the api-gateway httpTransportSchema policy at
-  // services/api-gateway/src/mcp/mcpConfig.ts.
-  const host = parsed.hostname;
-  const blockedHosts =
-    /(^localhost$|^127\.|^10\.|^172\.(1[6-9]|2\d|3[01])\.|^192\.168\.|^169\.254\.|^0\.0\.0\.0$|^::1$|^::ffff:127\.|^\[::1\]$)/i;
-  if (blockedHosts.test(host)) {
-    throw createError.validation('config.url targets a private network address');
+  try {
+    await assertResolvedPublicHostname(parsed.toString());
+  } catch (err) {
+    if (err instanceof EgressPolicyError) {
+      throw createError.validation('config.url targets a private or unsafe network address');
+    }
+    throw err;
+  }
+  if (parsed.username !== '' || parsed.password !== '') {
+    throw createError.validation('config.url must not include embedded credentials');
   }
   return parsed;
 }
@@ -69,6 +77,16 @@ async function handleConnect(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
+
+  if (!isWebMcpPrivateBetaEnabled()) {
+    return NextResponse.json(
+      {
+        error: 'Web MCP connections are private beta only.',
+        code: 'WEB_MCP_PRIVATE_BETA_REQUIRED',
+      },
+      { status: 403 },
+    );
+  }
 
   let body: ConnectBody;
   try {
@@ -85,13 +103,13 @@ async function handleConnect(request: NextRequest) {
     throw createError.validation('config is required');
   }
 
-  // Stdio is server-process-only — disallow from a Next route handler.
+  // Stdio is server-process-only · disallow from a Next route handler.
   if (typeof body.config.command === 'string' && body.config.command.length > 0) {
     throw createError.validation(
       'Stdio MCP transports must be configured via the api-gateway, not the web /api/mcp route.',
     );
   }
-  validateHttpUrl(body.config.url);
+  await validateHttpUrl(body.config.url);
 
   let handle;
   try {

@@ -455,7 +455,7 @@ export function useToggle2FA(): UseMutationResult<
           throw new Error(error);
         }
         throw new Error(
-          'Two-factor setup started — enabling still requires verifying a code from your authenticator app. This step is not available yet.',
+          'Two-factor setup started · enabling still requires verifying a code from your authenticator app. This step is not available yet.',
         );
       }
 

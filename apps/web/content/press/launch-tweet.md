@@ -23,7 +23,7 @@
 
 ## Alternate A — shorter, punchy
 
-> Your phone has AI built in. ChatGPT doesn't know that. We do.
+> Your phone should show which AI route is actually running.
 >
 > AGI Mobile — free Local, Cloud by invite.
 >
@@ -37,7 +37,7 @@
 
 > Free AI. On your phone. No subscription.
 >
-> Local works on Redmi Note, Vivo Y series, mid-range Android — not just flagships.
+> Local Mode first. Cloud by invite when you need hosted models or sync.
 >
 > AGI Mobile is live today. iOS + Android.
 >
@@ -65,11 +65,11 @@
 
 Reply 1:
 
-> How it works: Local mode uses Apple Foundation Models on iPhone 15 Pro+ and Gemma + Qwen3-4B on Android where supported. Cloud is explicit.
+> How it works: Local Mode shows installed, downloadable, unavailable, and Cloud-invite states. No silent Cloud fallback.
 
 Reply 2:
 
-> Features in v1: chat, image Q&A, voice, OCR, translate, memory, projects, skills. HealthKit week recap on iOS. Hindi support validated.
+> Mobile v1 focus: local chat, model setup, voice input where supported, memory, projects, artifacts preview, safety controls, and Cloud request.
 
 Reply 3:
 
@@ -81,6 +81,6 @@ Reply 3:
 
 > Shipped AGI Mobile today. Free, on-device AI for iOS + Android.
 >
-> Took us 90 days from first Expo commit to App Store approval. The hard part wasn't the AI — it was making on-device inference feel fast on a Redmi Note 13.
+> The hard part is not a chat screen. It is honest model state, privacy copy, and Local-to-Cloud boundaries that normal users understand.
 >
 > We got it. agiworkforce.com/mobile

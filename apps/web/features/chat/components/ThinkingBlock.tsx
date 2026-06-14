@@ -62,7 +62,7 @@ export function ThinkingBlock({
   const prevStreamingRef = useRef(isStreaming);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // prefers-reduced-motion check (evaluated once — SSR safe via null default)
+  // prefers-reduced-motion check (evaluated once · SSR safe via null default)
   const reducedMotion = useRef(
     typeof window !== 'undefined'
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -157,7 +157,7 @@ export function ThinkingBlock({
         aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning block`}
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-black/10 dark:hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50"
       >
-        {/* Clock icon — pulses while streaming (unless reduced-motion) */}
+        {/* Clock icon · pulses while streaming (unless reduced-motion) */}
         <Clock
           className={cn(
             'w-3.5 h-3.5 shrink-0',
@@ -183,7 +183,7 @@ export function ThinkingBlock({
           {headerLabel}
         </span>
 
-        {/* Collapsed preview — hidden on mobile (sm:) */}
+        {/* Collapsed preview · hidden on mobile (sm:) */}
         {!expanded && previewText && (
           <span className="hidden sm:block flex-1 min-w-0 truncate text-xs italic font-mono text-slate-500">
             {previewText}

@@ -173,8 +173,13 @@ async function handleSendMessage(request: NextRequest) {
   } catch (err: unknown) {
     const pgErr = err as { code?: string; message?: string };
     if (pgErr.code === '42P01' || pgErr.message?.includes('does not exist')) {
-      logger.warn({ userId, from, to }, 'agent_messages table does not exist; message dropped');
-      return NextResponse.json({ success: true, message: null });
+      logger.warn(
+        { userId, from, to },
+        'agent_messages table does not exist; agent messaging is not provisioned',
+      );
+      throw createError.serviceUnavailable(
+        'Agent-to-agent messaging is not available in this deployment yet. Your message was not sent.',
+      );
     }
     logger.error({ err, userId, from, to }, 'Failed to send agent message');
     throw createError.internal('Failed to send message');

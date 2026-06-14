@@ -1,19 +1,20 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { RouteMap } from '../../components/marketing/LandingSections';
 import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  LedgerSection,
-  RouteMap,
-} from '../../components/marketing/LandingSections';
+  CapabilityGrid,
+  DevBand,
+  FinalCta,
+  FlagshipHero,
+  SurfaceIndex,
+} from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Code - Coding agents across CLI, desktop, web, and VS Code',
+  title: 'AGI Code | CLI + VS Code developer stack',
   description:
-    'AGI Code brings Codex and Claude Code-style workflows to a multi-provider, Local, BYOK, and invite-only Cloud product suite.',
+    'AGI Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or AGI Cloud by invite.',
   alternates: { canonical: 'https://agiworkforce.com/agi-code' },
 };
 
@@ -22,121 +23,146 @@ export default function AgiCodePage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Developer surface`}
-          title="A coding agent suite with model choice."
-          lede="Codex and Claude Code set the bar: terminal agents, IDE extensions, cloud tasks, diffs, tests, permissions, and parallel work. AGI Code targets that workflow while letting builders choose local models, BYOK providers, or invite-only AGI Cloud."
-          primaryCta={{ href: '/cli', label: 'Open CLI page' }}
-          secondaryCta={{ href: '/vscode-extension', label: 'VS Code extension' }}
-          chips={['CLI', 'VS Code', 'Desktop Code', 'Worktrees', 'Permissions']}
-          panelTitle="AGI Code"
-          panelRows={[
-            { k: 'CLI', v: 'Sessions, tools, permissions, hooks, MCP, and slash commands' },
-            { k: 'IDE', v: 'Sidebar chat, diffs, model picker, context files, and reviews' },
-            { k: 'Desktop', v: 'GUI wrapper for code sessions and local runtime management' },
-            { k: 'Cloud', v: 'Invite-only background tasks when managed controls are ready' },
+
+        <FlagshipHero
+          eyebrow="AGI Code · for developers"
+          titleLines={['Your terminal.', 'Your editor.', 'One agent.']}
+          em="One agent."
+          lede="AGI Code spans the agi CLI and the VS Code extension. Resume and fork sessions. Review diffs before they land. Run commands in an OS sandbox. Extend the agent with hooks, skills, and MCP. Local models, your own keys, or AGI Cloud by invite."
+          ctas={[
+            { href: '/cli', label: 'See the CLI' },
+            { href: '/vscode-extension', label: 'Get the VS Code Extension' },
+            { href: '/download', label: 'Download AGI' },
+          ]}
+          modeRibbon={['Local · offline-capable', 'BYOK · your keys', 'Cloud · by invite']}
+        />
+
+        <SurfaceIndex
+          eyebrow="The stack"
+          title="Two developer surfaces. One workflow."
+          lede="Work in the terminal or inside your editor. Same agent, same permission model. You can always see where your work runs."
+          items={[
+            {
+              index: '01',
+              name: 'AGI CLI',
+              tagline: 'An agent in your terminal.',
+              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. Works offline with local models.',
+              capabilities: [
+                'Sessions, resume & fork',
+                'Sandboxed execution',
+                'Hooks, skills & MCP',
+                'Privacy modes',
+                'Offline with local models',
+              ],
+              platforms: 'macOS · Linux',
+              status: 'Developer preview',
+              href: '/cli',
+              frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
+            },
+            {
+              index: '02',
+              name: 'AGI in VS Code',
+              tagline: 'IDE-native assistance.',
+              body: 'Chat with @agi inside your editor with workspace-scoped context. Review diffs before they land, run slash commands like /explain and /tests, and hand off to other surfaces explicitly.',
+              capabilities: [
+                '@agi chat participant',
+                'Workspace-scoped context',
+                'Diff review',
+                '/explain · /fix · /tests · /docs',
+                'Explicit handoffs',
+              ],
+              platforms: 'VS Code',
+              status: 'Developer preview',
+              href: '/vscode-extension',
+              frame: { variant: 'editor', title: 'AGI · VS Code', badge: '@agi' },
+            },
           ]}
         />
 
-        <FeatureGrid
-          eyebrow="Developer parity"
-          title="The core AGI Code checklist."
+        <CapabilityGrid
+          eyebrow="Capabilities"
+          title="Built for the way agents actually work."
           items={[
             {
-              meta: 'Terminal',
-              title: 'Agentic CLI',
-              body: 'Read files, edit patches, run tests, inspect git, manage permissions, compact context, and resume sessions from the terminal.',
+              meta: 'Sessions',
+              title: 'Resume & fork',
+              body: 'Pick a session back up where you left it, or fork it with /fork to explore a branch without losing the original.',
               href: '/cli',
             },
             {
-              meta: 'IDE',
-              title: 'VS Code and Cursor-style extension',
-              body: 'Chat, edit, review, accept/reject diffs, @-mention files, and switch models without leaving the editor.',
-              href: '/vscode-extension',
-            },
-            {
-              meta: 'Multi-agent',
-              title: 'Parallel work with isolation',
-              body: 'Use worktrees or sandboxes for separate tasks so multiple agents can implement, test, and prepare PRs in parallel.',
+              meta: 'Review',
+              title: 'Code review',
+              body: 'agi review reads your diff and returns severity-ranked findings with file and line references, before you commit.',
+              href: '/cli',
             },
             {
               meta: 'Safety',
-              title: 'Permissions before power',
-              body: 'Ask, accept edits, plan, auto, and bypass-style modes expose tool inputs, command risk, and workspace scope.',
+              title: 'Sandboxed execution',
+              body: 'Commands run inside an OS sandbox with network access denied by default; sensitive actions wait for your explicit approval.',
+              href: '/cli',
             },
             {
-              meta: 'Models',
-              title: 'Use the model fit for the job',
-              body: 'Route quick edits to fast models, hard debugging to frontier reasoning models, and private experiments to local models.',
+              meta: 'Extensibility',
+              title: 'Hooks & skills',
+              body: 'Run your own commands on agent lifecycle events, and package repeatable workflows as skills.',
+              href: '/cli',
             },
             {
-              meta: 'Cloud invite',
-              title: 'Background automation later',
-              body: 'Cloud coding tasks stay invite-only until metering, abuse, logs, and environment controls are proven.',
+              meta: 'Tools',
+              title: 'MCP servers',
+              body: 'Connect local MCP servers as stdio processes and call their tools mid-session, behind the same permission model.',
+              href: '/apps',
+            },
+            {
+              meta: 'Privacy',
+              title: 'Privacy modes',
+              body: 'Set a privacy mode per project to pin the trust boundary. Local work stays local. Any other route is explicit and labeled.',
+              href: '/local',
             },
           ]}
         />
 
-        <LedgerSection
-          eyebrow="Developer positioning"
-          title="Developer positioning against Codex and Claude Code."
-          rows={[
-            {
-              k: 'Core claim',
-              v: 'AGI Code gives developers a coding-agent workflow across CLI, desktop, web, and VS Code with Local, BYOK, and Cloud invite modes.',
-            },
-            {
-              k: 'Differentiator',
-              v: 'OpenAI and Anthropic ship excellent agents inside their model ecosystems. AGI makes provider choice the default.',
-            },
-            {
-              k: 'Demo proof',
-              v: 'Model switching, permission prompts, file diffs, test loops, and provider labels in one session.',
-            },
-            {
-              k: 'Cloud boundary',
-              v: 'Managed cloud coding remains invite-only until access and control-plane readiness are proven.',
-            },
+        <DevBand
+          eyebrow="Local-first"
+          title="Works offline. Routes on your rules."
+          body="Point AGI Code at local models through Ollama or LM Studio and work entirely offline. Bring your own provider keys when you want frontier models. The provider label is visible on every request. Nothing moves between modes silently."
+          ctas={[
+            { href: '/local', label: 'Run AGI Locally' },
+            { href: '/byok', label: 'Set Up BYOK' },
           ]}
         />
 
         <RouteMap
-          eyebrow="Developer pages"
-          title="Split developer traffic by workflow."
+          eyebrow="Explore"
+          title="Go deeper, surface by surface."
           routes={[
             {
               meta: 'Terminal',
-              title: 'CLI',
-              body: 'The command-line coding surface.',
+              title: 'AGI CLI',
+              body: 'The command-line coding surface, in detail.',
               href: '/cli',
             },
             {
               meta: 'Editor',
-              title: 'VS Code',
+              title: 'AGI in VS Code',
               body: 'Editor-native chat, diffs, and reviews.',
               href: '/vscode-extension',
-            },
-            {
-              meta: 'Compare',
-              title: 'AGI vs Codex',
-              body: 'How provider choice changes the Codex-style workflow.',
-              href: '/compare/codex',
-            },
-            {
-              meta: 'Compare',
-              title: 'AGI vs Claude Code',
-              body: 'Where Claude Code wins and where AGI differs.',
-              href: '/compare/claude-code',
             },
           ]}
         />
 
-        <LaunchCta
-          title="Ship the developer product as a suite, not a terminal-only utility."
-          body="Users can move a task between CLI, editor, desktop, web, and mobile approvals without losing context or provider choice."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/compare/codex', label: 'Compare with Codex' }}
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Bring the agent to your repo."
+          body="Install the CLI, request the VS Code extension preview, and choose the route for every task: local models, your own keys, or AGI Cloud by invite."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/cli', label: 'See the CLI' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
         />
+
         <MarketingFooter />
       </main>
     </div>

@@ -138,9 +138,11 @@ impl SkillLearner {
         let sessions_yaml: Vec<String> = skill
             .source_sessions
             .iter()
-            .map(|s| format!("\"{}\"", s))
+            .map(|s| yaml_quote(s))
             .collect();
 
+        // Emit name/description as quoted, escaped YAML scalars so a tool name
+        // containing a colon, `#`, or newline cannot corrupt the frontmatter.
         let content = format!(
             "---\n\
              name: {}\n\
@@ -151,8 +153,8 @@ impl SkillLearner {
              category: Learned Patterns\n\
              ---\n\n\
              {}\n",
-            skill.name,
-            skill.description,
+            yaml_quote(&skill.name),
+            yaml_quote(&skill.description),
             skill.confidence,
             sessions_yaml.join(", "),
             skill.pattern,
@@ -163,6 +165,27 @@ impl SkillLearner {
 
         Ok(())
     }
+}
+
+/// Render `value` as a YAML double-quoted scalar with the minimal escaping
+/// required by the YAML 1.1 double-quoted style. This keeps tool-name-derived
+/// frontmatter values (which may contain `:`, `#`, quotes, backslashes, or
+/// newlines) from corrupting a generated SKILL.md.
+fn yaml_quote(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -581,11 +604,42 @@ mod tests {
         assert!(skill_path.exists());
 
         let content = fs::read_to_string(skill_path).unwrap();
-        assert!(content.contains("name: auto-test-pattern"));
+        // name/description are emitted as quoted YAML scalars.
+        assert!(content.contains("name: \"auto-test-pattern\""));
+        assert!(content.contains("description: \"Test pattern\""));
         assert!(content.contains("auto_generated: true"));
         assert!(content.contains("confidence: 0.7"));
         assert!(content.contains("Learned Patterns"));
-        assert!(content.contains("s1"));
+        assert!(content.contains("\"s1\""));
+    }
+
+    #[test]
+    fn test_save_skill_escapes_yaml_metacharacters() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        fs::create_dir_all(home.join("skills").join("learned")).unwrap();
+
+        // A tool-name-derived description containing YAML-significant chars
+        // (colon, hash, quote, newline) must not corrupt the frontmatter.
+        let skill = LearnedSkill {
+            name: "auto-weird".to_string(),
+            description: "uses: tool#1 with \"quotes\"\nand newline".to_string(),
+            pattern: "# Body".to_string(),
+            confidence: 0.5,
+            source_sessions: vec!["s1".to_string()],
+        };
+
+        assert!(SkillLearner::save_skill(home, &skill).is_ok());
+
+        let content =
+            fs::read_to_string(home.join("skills").join("learned").join("auto-weird.md"))
+                .unwrap();
+        // The raw colon/hash/quote/newline must be escaped inside one scalar,
+        // so the description stays on a single quoted line.
+        assert!(content
+            .contains("description: \"uses: tool#1 with \\\"quotes\\\"\\nand newline\""));
+        // The frontmatter must still parse as exactly two `---` fences.
+        assert_eq!(content.matches("---").count(), 2);
     }
 
     #[test]

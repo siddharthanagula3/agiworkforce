@@ -119,9 +119,9 @@ function RailNode({
           borderRadius: 11,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: `${colors.agentActive}18`,
+          backgroundColor: colors.accentSurface,
           borderWidth: 1.5,
-          borderColor: colors.agentActive,
+          borderColor: colors.accentBorder,
         }}
       >
         <PulsingDot color={colors.agentActive} />
@@ -137,9 +137,9 @@ function RailNode({
           borderRadius: 11,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: `${colors.agentSuccess}14`,
+          backgroundColor: colors.successSurface,
           borderWidth: 1.5,
-          borderColor: `${colors.agentSuccess}60`,
+          borderColor: colors.successBorder,
         }}
       >
         <CheckCircle2 size={12} color={colors.agentSuccess} />
@@ -155,9 +155,9 @@ function RailNode({
         borderRadius: 11,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: `${colors.agentError}14`,
+        backgroundColor: colors.dangerSurface,
         borderWidth: 1.5,
-        borderColor: `${colors.agentError}60`,
+        borderColor: colors.dangerBorder,
       }}
     >
       <XCircle size={12} color={colors.agentError} />
@@ -168,10 +168,10 @@ function RailNode({
 function StatusPill({ status }: { status: ToolCall['status'] }) {
   const colors = useThemeColors();
   const config = {
-    running: { label: 'Running', bg: `${colors.agentActive}18`, fg: colors.agentActive },
-    completed: { label: 'Done', bg: `${colors.agentSuccess}18`, fg: colors.agentSuccess },
-    failed: { label: 'Failed', bg: `${colors.agentError}18`, fg: colors.agentError },
-  }[status] ?? { label: status, bg: 'rgba(255,255,255,0.08)', fg: colors.textMuted };
+    running: { label: 'Running', bg: colors.accentSurface, fg: colors.agentActive },
+    completed: { label: 'Done', bg: colors.successSurface, fg: colors.agentSuccess },
+    failed: { label: 'Failed', bg: colors.dangerSurface, fg: colors.agentError },
+  }[status] ?? { label: status, bg: colors.neutralSurface, fg: colors.textMuted };
 
   return (
     <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: config.bg }}>
@@ -209,10 +209,10 @@ export function ToolCallCard({
   // Rail line colour — muted when completed, active when running
   const railColor =
     toolCall.status === 'running'
-      ? `${colors.agentActive}50`
+      ? colors.accentBorder
       : toolCall.status === 'failed'
-        ? `${colors.agentError}30`
-        : `${colors.textMuted}30`;
+        ? colors.dangerBorder
+        : colors.neutralBorder;
 
   return (
     <Animated.View entering={FadeInDown.duration(300).springify()}>
@@ -241,7 +241,7 @@ export function ToolCallCard({
           style={{
             backgroundColor: colors.surfaceOverlay,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.07)',
+            borderColor: colors.borderLight,
           }}
         >
           {/* Header row */}
@@ -257,7 +257,11 @@ export function ToolCallCard({
             <ToolIcon size={13} color={colors.textMuted} style={{ marginRight: 6 }} />
 
             {/* Tool name */}
-            <Text className="text-[13px] font-medium text-white flex-1 mr-2" numberOfLines={1}>
+            <Text
+              className="text-[13px] font-medium flex-1 mr-2"
+              style={{ color: colors.textPrimary }}
+              numberOfLines={1}
+            >
               {toolCall.name}
             </Text>
 
@@ -281,11 +285,12 @@ export function ToolCallCard({
             <View className="px-3 pb-2.5">
               <View
                 className="rounded-lg px-2.5 py-2"
-                style={{ backgroundColor: 'rgba(0,0,0,0.25)' }}
+                style={{ backgroundColor: colors.inputSurface }}
               >
                 <Text
                   variant="mono"
-                  className="text-[11px] text-emerald-400"
+                  className="text-[11px]"
+                  style={{ color: colors.agentSuccess }}
                   numberOfLines={expanded ? undefined : 2}
                 >
                   $ {toolCall.command}
@@ -298,7 +303,12 @@ export function ToolCallCard({
           {toolCall.filePath ? (
             <View className="flex-row items-center gap-1.5 px-3 pb-2.5">
               <FileCode size={11} color={colors.textMuted} />
-              <Text variant="caption" className="text-white/40 text-[11px]" numberOfLines={1}>
+              <Text
+                variant="caption"
+                className="text-[11px]"
+                style={{ color: colors.textMuted }}
+                numberOfLines={1}
+              >
                 {toolCall.filePath}
               </Text>
             </View>
@@ -309,32 +319,46 @@ export function ToolCallCard({
             <View
               className="mx-3 mb-3 rounded-lg overflow-hidden"
               style={{
-                backgroundColor: 'rgba(0,0,0,0.2)',
+                backgroundColor: colors.inputSurface,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.05)',
+                borderColor: colors.borderLight,
               }}
             >
               {toolCall.input ? (
                 <View className="px-3 py-2.5">
-                  <Text className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1.5">
+                  <Text
+                    className="text-[10px] font-semibold uppercase tracking-wider mb-1.5"
+                    style={{ color: colors.textMuted }}
+                  >
                     Input
                   </Text>
-                  <Text variant="mono" className="text-[11px] text-white/60">
+                  <Text
+                    variant="mono"
+                    className="text-[11px]"
+                    style={{ color: colors.textSecondary }}
+                  >
                     {toolCall.input}
                   </Text>
                 </View>
               ) : null}
 
               {toolCall.input && toolCall.output ? (
-                <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+                <View style={{ height: 1, backgroundColor: colors.borderLight }} />
               ) : null}
 
               {toolCall.output ? (
                 <View className="px-3 py-2.5">
-                  <Text className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1.5">
+                  <Text
+                    className="text-[10px] font-semibold uppercase tracking-wider mb-1.5"
+                    style={{ color: colors.textMuted }}
+                  >
                     Output
                   </Text>
-                  <Text variant="mono" className="text-[11px] text-white/60">
+                  <Text
+                    variant="mono"
+                    className="text-[11px]"
+                    style={{ color: colors.textSecondary }}
+                  >
                     {toolCall.output}
                   </Text>
                 </View>
@@ -346,7 +370,9 @@ export function ToolCallCard({
           {toolCall.duration != null && toolCall.status !== 'running' ? (
             <View className="flex-row items-center gap-1 px-3 pb-2">
               <Clock size={10} color={colors.textMuted} />
-              <Text className="text-[10px] text-white/30">{formatDuration(toolCall.duration)}</Text>
+              <Text className="text-[10px]" style={{ color: colors.textMuted }}>
+                {formatDuration(toolCall.duration)}
+              </Text>
             </View>
           ) : null}
         </View>

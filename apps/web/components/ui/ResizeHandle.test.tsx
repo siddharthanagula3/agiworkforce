@@ -84,7 +84,7 @@ describe('ResizeHandle', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Mouse drag — direction="right"
+  // Mouse drag · direction="right"
   // -------------------------------------------------------------------------
 
   describe('Mouse drag (direction=right)', () => {
@@ -132,7 +132,7 @@ describe('ResizeHandle', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Mouse drag — direction="left"
+  // Mouse drag · direction="left"
   // -------------------------------------------------------------------------
 
   describe('Mouse drag (direction=left)', () => {
@@ -154,7 +154,7 @@ describe('ResizeHandle', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Drag lifecycle — cursor and userSelect
+  // Drag lifecycle · cursor and userSelect
   // -------------------------------------------------------------------------
 
   describe('Drag lifecycle', () => {

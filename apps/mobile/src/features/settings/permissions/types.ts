@@ -1,7 +1,7 @@
 /**
  * Mobile OS Permission types
  *
- * Canonical enum for the 6 top-priority permission kinds on Mobile v1.
+ * Canonical enum for Mobile permission kinds.
  * Extraction to packages/types is deferred — no other surface needs this today
  * (v1 LOCAL ONLY; no cross-surface cloud sync of permission state).
  *
@@ -10,7 +10,8 @@
  */
 
 /**
- * The 6 permission kinds surfaced on the permissions screen (priority cut).
+ * Permission kinds known to Mobile. The visible settings list only includes
+ * permissions backed by installed native adapters.
  */
 export type MobilePermissionKind =
   | 'microphone'

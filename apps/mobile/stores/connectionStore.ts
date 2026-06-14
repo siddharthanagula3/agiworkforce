@@ -38,6 +38,7 @@ import { useDispatchStore } from './dispatchStore';
 import type { DispatchMessage, TaskStatus, TaskResult } from './dispatchStore';
 import { notifyCompanionMessage } from '@/services/companionNotifications';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export type ConnectionStatus =
   | 'disconnected'
@@ -115,6 +116,17 @@ interface ConnectionState {
 /** Signaling client instance — kept outside state to avoid serialization */
 let signalingClient: SignalingClient | null = null;
 
+/** Monotonic guard so stale async connect() work cannot mutate a newer session. */
+let connectionAttemptId = 0;
+
+function invalidateConnectionAttempt(): void {
+  connectionAttemptId += 1;
+}
+
+function isCurrentConnectionAttempt(attemptId: number): boolean {
+  return attemptId === connectionAttemptId;
+}
+
 /**
  * HIGH-MOB-05 fix (2026-05-04, v2 nonce scheme 2026-05-05): per-session
  * HMAC state. Initialised when a pairing code is resolved to a shared secret.
@@ -174,6 +186,10 @@ function parsePairingPayload(raw: string): { code: string; pairToken: string | n
     };
   }
   return { code: trimmed.toUpperCase(), pairToken: null };
+}
+
+function isDispatchCompanionEnabled(): boolean {
+  return FEATURES.dispatch && FEATURES.companion;
 }
 
 // ---------------------------------------------------------------------------
@@ -365,36 +381,34 @@ export function ingestApprovalRequestPayload(payload: unknown): boolean {
  * Messages that fail verification are silently dropped (no error state —
  * avoids providing an oracle to an active attacker).
  *
- * Transitional: unsigned messages (no `hmac` field) are accepted with a
- * console.warn until DISPATCH_HMAC_REQUIRED_AFTER (2026-06-05). In that case
- * the entire envelope object IS the inner payload and is passed directly to
- * handleControlMessageInner without unwrapping.
- *
- * When hmacState is null (HKDF derivation not yet complete — a narrow window
- * at the very start of connect()) the raw payload is passed as-is.
+ * Unsigned messages are rejected. When hmacState is null, control messages are
+ * dropped because the receiver cannot authenticate them.
  */
 async function handleControlMessageAsync(envelope: unknown): Promise<void> {
+  if (!isDispatchCompanionEnabled()) return;
+  if (!hmacState) {
+    console.warn('[dispatch] Message rejected: missing_hmac_state');
+    return;
+  }
+
   let payload: unknown = envelope;
   const envelopeToVerify = getSignedEnvelopeCandidate(envelope);
 
-  if (hmacState) {
-    const result = await verifyMessage(hmacState, envelopeToVerify);
-    if (!result.ok) {
-      console.warn('[dispatch] Message rejected:', result.reason);
-      return;
-    }
-    // Unwrap inner payload when the envelope is a proper signed message.
-    // Unsigned transitional messages (ok=true but no hmac field) ARE the
-    // payload — do not attempt to unwrap a .payload property.
-    const isSignedEnvelope =
-      typeof envelopeToVerify === 'object' &&
-      envelopeToVerify !== null &&
-      typeof (envelopeToVerify as Record<string, unknown>)['hmac'] === 'string';
-    if (isSignedEnvelope) {
-      payload = (envelopeToVerify as { payload: unknown }).payload;
-    }
-    // else: transitional unsigned — payload stays = envelope (the raw object)
+  const result = await verifyMessage(hmacState, envelopeToVerify);
+  if (!result.ok) {
+    console.warn('[dispatch] Message rejected:', result.reason);
+    return;
   }
+
+  const isSignedEnvelope =
+    typeof envelopeToVerify === 'object' &&
+    envelopeToVerify !== null &&
+    typeof (envelopeToVerify as Record<string, unknown>)['hmac'] === 'string';
+  if (!isSignedEnvelope) {
+    console.warn('[dispatch] Message rejected: unsigned_transitional');
+    return;
+  }
+  payload = (envelopeToVerify as { payload: unknown }).payload;
 
   handleControlMessageInner(payload);
 }
@@ -701,6 +715,12 @@ export const useConnectionStore = create<ConnectionState>()(
       reconnectStartedAt: null,
 
       connect: (rawCode: string) => {
+        if (!isDispatchCompanionEnabled()) {
+          invalidateConnectionAttempt();
+          get().disconnect();
+          return;
+        }
+
         // Clean up any existing connection
         const currentState = get();
         const isReconnect =
@@ -709,6 +729,7 @@ export const useConnectionStore = create<ConnectionState>()(
           get().disconnect();
         }
 
+        const attemptId = ++connectionAttemptId;
         const parsed = parsePairingPayload(rawCode);
         const pairToken =
           parsed.pairToken ??
@@ -759,6 +780,8 @@ export const useConnectionStore = create<ConnectionState>()(
           const { default: Constants } = await import('expo-constants');
           const appVersion = Constants.expoConfig?.version ?? '0.0.0';
 
+          if (!isCurrentConnectionAttempt(attemptId)) return;
+
           const sessionMetadata: {
             deviceType: string;
             app: string;
@@ -779,11 +802,26 @@ export const useConnectionStore = create<ConnectionState>()(
             }
             sessionMetadata.dispatchSalt = hex;
             const secret = await deriveDispatchSecret(parsed.code, hex);
+            if (!isCurrentConnectionAttempt(attemptId)) return;
             hmacState = { secret, nonceCache: new Map() };
           } catch (err) {
+            if (!isCurrentConnectionAttempt(attemptId)) return;
             console.warn('[dispatch] HMAC secret derivation failed:', err);
             hmacState = null;
+            pendingControlQueue.length = 0;
+            set({
+              status: 'error',
+              error:
+                'Secure pairing could not start. Generate a new QR code and try pairing again.',
+              pairingCode: parsed.code,
+              pairToken,
+              connectionQuality: 'disconnected',
+              reconnectStartedAt: null,
+            });
+            return;
           }
+
+          if (!isCurrentConnectionAttempt(attemptId)) return;
 
           // Set up WebRTC
           setupPeerConnection();
@@ -797,6 +835,7 @@ export const useConnectionStore = create<ConnectionState>()(
             metadata: sessionMetadata,
             heartbeatIntervalMs: 25000,
             onEvent: (event: SignalingEvent) => {
+              if (!isCurrentConnectionAttempt(attemptId)) return;
               switch (event.type) {
                 case 'open':
                   // WebSocket opened, waiting for registration confirmation
@@ -944,6 +983,7 @@ export const useConnectionStore = create<ConnectionState>()(
       },
 
       queueControl: (action: string, payload?: unknown) => {
+        if (!isDispatchCompanionEnabled()) return;
         if (pendingControlQueue.length >= MAX_PENDING_QUEUE) {
           pendingControlQueue.shift(); // Drop oldest to stay under cap
         }
@@ -969,6 +1009,7 @@ export const useConnectionStore = create<ConnectionState>()(
       },
 
       markSessionExpired: () => {
+        invalidateConnectionAttempt();
         // Clear any queued messages — session is gone
         pendingControlQueue.length = 0;
         set({
@@ -984,6 +1025,7 @@ export const useConnectionStore = create<ConnectionState>()(
       },
 
       disconnect: () => {
+        invalidateConnectionAttempt();
         if (signalingClient) {
           signalingClient.close();
           signalingClient = null;
@@ -1013,6 +1055,8 @@ export const useConnectionStore = create<ConnectionState>()(
       },
 
       sendControl: (action: string, payload?: unknown) => {
+        if (!isDispatchCompanionEnabled()) return;
+
         const { status } = get();
         const controlMessage = buildRelayControlMessage(action, payload);
 
@@ -1030,10 +1074,13 @@ export const useConnectionStore = create<ConnectionState>()(
         }
 
         // HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): sign the outgoing
-        // control message when HMAC state is available. signMessage() produces
-        // the canonical envelope { hmac, nonce, payload, ts, type } that the
-        // desktop peer verifies. Falls back to unsigned send when hmacState is
-        // null (pre-derivation race; extremely narrow window at connect start).
+        // control message. Do not send unsigned control data when HMAC state is
+        // missing; Dispatch must fail closed.
+        if (!hmacState) {
+          console.warn('[dispatch] Refusing to send unsigned control message');
+          return;
+        }
+
         const sendRaw = (envelope: unknown) => {
           const serialised = JSON.stringify(envelope);
           // Prefer data channel for low latency
@@ -1054,16 +1101,11 @@ export const useConnectionStore = create<ConnectionState>()(
           }
         };
 
-        if (hmacState) {
-          // New signature: signMessage(state, type, payload)
-          signMessage(hmacState, controlMessage.relay.action, controlMessage.innerPayload)
-            .then(sendRaw)
-            .catch((err) => {
-              console.warn('[dispatch] Failed to sign control message:', err);
-            });
-        } else {
-          sendRaw(controlMessage.innerPayload);
-        }
+        signMessage(hmacState, controlMessage.relay.action, controlMessage.innerPayload)
+          .then(sendRaw)
+          .catch((err) => {
+            console.warn('[dispatch] Failed to sign control message:', err);
+          });
       },
 
       clearError: () => {

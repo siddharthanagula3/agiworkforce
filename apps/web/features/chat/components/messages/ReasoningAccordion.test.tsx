@@ -23,7 +23,7 @@ vi.mock('framer-motion', () => ({
 
 /** Find the content area (the pre-formatted div inside the expanded body). */
 function queryContentText(text: string) {
-  // The whitespace-pre-wrap div is the content container — use a partial match
+  // The whitespace-pre-wrap div is the content container · use a partial match
   return screen.queryByText((content) => content.includes(text), {
     selector: 'div.whitespace-pre-wrap',
   });
@@ -31,7 +31,7 @@ function queryContentText(text: string) {
 
 // ─── Empty / guard ────────────────────────────────────────────────────────────
 
-describe('ReasoningAccordion — null guard', () => {
+describe('ReasoningAccordion · null guard', () => {
   it('renders nothing when steps is empty and not streaming', () => {
     const { container } = render(<ReasoningAccordion steps={[]} />);
     expect(container.firstChild).toBeNull();
@@ -45,7 +45,7 @@ describe('ReasoningAccordion — null guard', () => {
 
 // ─── Collapsed header labels ──────────────────────────────────────────────────
 
-describe('ReasoningAccordion — collapsed header', () => {
+describe('ReasoningAccordion · collapsed header', () => {
   it('shows "Thought about this" fallback when all step lines are under 15 chars', () => {
     // Both lines are short enough to be filtered out (< 15 chars)
     render(<ReasoningAccordion steps={['ok', 'yep']} isStreaming={false} />);
@@ -77,15 +77,15 @@ describe('ReasoningAccordion — collapsed header', () => {
     const long = 'I need to ' + 'x'.repeat(200);
     render(<ReasoningAccordion steps={[long]} isStreaming={false} />);
     const label = screen.getByText(/I need to/);
-    // Should be truncated — original is >200 chars, capped at 77 + '...' = 80
+    // Should be truncated · original is >200 chars, capped at 77 + '...' = 80
     expect((label.textContent ?? '').length).toBeLessThanOrEqual(83);
   });
 });
 
 // ─── Expand / collapse ────────────────────────────────────────────────────────
 
-describe('ReasoningAccordion — expand and collapse', () => {
-  it('starts closed — expanded content body not visible until click', () => {
+describe('ReasoningAccordion · expand and collapse', () => {
+  it('starts closed · expanded content body not visible until click', () => {
     const steps = ['Let me reason through the problem here.'];
     render(<ReasoningAccordion steps={steps} isStreaming={false} />);
 
@@ -96,7 +96,7 @@ describe('ReasoningAccordion — expand and collapse', () => {
     expect(queryContentText('Let me reason through the problem here.')).not.toBeInTheDocument();
   });
 
-  it('expands on button click — content body appears', async () => {
+  it('expands on button click · content body appears', async () => {
     const steps = ['Let me reason through the problem here.'];
     render(<ReasoningAccordion steps={steps} isStreaming={false} />);
 
@@ -141,7 +141,7 @@ describe('ReasoningAccordion — expand and collapse', () => {
 
 // ─── Auto-expand / hasUserCollapsed ──────────────────────────────────────────
 
-describe('ReasoningAccordion — auto-expand during streaming', () => {
+describe('ReasoningAccordion · auto-expand during streaming', () => {
   it('auto-expands when isStreaming transitions from false to true', async () => {
     const { rerender } = render(
       <ReasoningAccordion steps={['thinking in progress...']} isStreaming={false} />,
@@ -180,7 +180,7 @@ describe('ReasoningAccordion — auto-expand during streaming', () => {
       expect(queryContentText('active step content here')).not.toBeInTheDocument();
     });
 
-    // More content streams in — should NOT re-expand
+    // More content streams in · should NOT re-expand
     await act(async () => {
       rerender(
         <ReasoningAccordion
@@ -196,7 +196,7 @@ describe('ReasoningAccordion — auto-expand during streaming', () => {
 
 // ─── Streaming visual cues ────────────────────────────────────────────────────
 
-describe('ReasoningAccordion — streaming visual cues', () => {
+describe('ReasoningAccordion · streaming visual cues', () => {
   it('applies amber accent border when streaming', () => {
     render(<ReasoningAccordion steps={['step']} isStreaming />);
     const container = screen.getByRole('button').closest('div');
@@ -212,7 +212,7 @@ describe('ReasoningAccordion — streaming visual cues', () => {
 
 // ─── Multiple steps ───────────────────────────────────────────────────────────
 
-describe('ReasoningAccordion — multiple steps', () => {
+describe('ReasoningAccordion · multiple steps', () => {
   it('joins multiple steps and shows them in the expanded body', async () => {
     const steps = ['Step one analysis done.', 'Step two: verify result here.'];
     render(<ReasoningAccordion steps={steps} isStreaming={false} />);

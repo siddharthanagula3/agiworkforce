@@ -110,7 +110,7 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
               accessibilityRole="button"
               accessibilityLabel="Close image view"
             >
-              <X size={20} color="#fff" />
+              <X size={20} color={c.white} />
             </Pressable>
 
             {answer ? (
@@ -120,7 +120,7 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
                 accessibilityRole="button"
                 accessibilityLabel="Ask a new question"
               >
-                <RotateCcw size={18} color="#fff" />
+                <RotateCcw size={18} color={c.white} />
               </Pressable>
             ) : null}
           </View>
@@ -184,9 +184,9 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
             accessibilityLabel="Send question"
           >
             {isRunning ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={c.white} />
             ) : (
-              <Send size={18} color="#fff" />
+              <Send size={18} color={c.white} />
             )}
           </Pressable>
         </View>

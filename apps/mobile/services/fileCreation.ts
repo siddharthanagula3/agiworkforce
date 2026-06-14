@@ -23,7 +23,7 @@ import * as Print from 'expo-print';
 // Types
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = 'pdf' | 'text' | 'docx' | 'markdown';
+export type ExportFormat = 'pdf' | 'text' | 'markdown';
 
 export interface ExportResult {
   uri: string;
@@ -264,31 +264,16 @@ export async function shareFile(uri: string): Promise<void> {
   const ext = uri.split('.').pop()?.toLowerCase();
   const utiMap: Record<string, string> = {
     pdf: 'com.adobe.pdf',
-    docx: 'org.openxmlformats.wordprocessingml.document',
     md: 'net.daringfireball.markdown',
   };
   const mimeMap: Record<string, string> = {
     pdf: 'application/pdf',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     md: 'text/markdown',
   };
   await Sharing.shareAsync(uri, {
     UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
     mimeType: mimeMap[ext ?? ''] ?? 'text/plain',
   });
-}
-
-// ---------------------------------------------------------------------------
-// DOCX Export (HTML-in-DOCX)
-// ---------------------------------------------------------------------------
-
-export async function exportToDocx(content: string, title: string): Promise<ExportResult> {
-  if (!content.trim()) throw new Error('Cannot export empty content');
-  const html = markdownToHtml(content, title);
-  const fileName = `${sanitizeFileName(title)}.docx`;
-  const destUri = `${documentDirectory}${fileName}`;
-  await writeAsStringAsync(destUri, html, { encoding: EncodingType.UTF8 });
-  return { uri: destUri, format: 'docx', fileName };
 }
 
 // ---------------------------------------------------------------------------

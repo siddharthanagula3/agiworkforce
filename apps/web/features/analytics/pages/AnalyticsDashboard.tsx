@@ -74,7 +74,7 @@ function buildAnalyticsPreviewData(range: DateRange) {
   // Usage time series
   const usageSeries = generateUsageTimeSeries(days);
 
-  // Model distribution — display labels read from catalog, not hardcoded IDs
+  // Model distribution · display labels read from catalog, not hardcoded IDs
 
   const modelDistribution = [
     {
@@ -109,7 +109,7 @@ function buildAnalyticsPreviewData(range: DateRange) {
     { label: 'email_send', value: Math.round(720 * multiplier), color: 'bg-teal-500' },
   ];
 
-  // Recent activity preview data — display labels read from catalog, not hardcoded IDs
+  // Recent activity preview data · display labels read from catalog, not hardcoded IDs
 
   const agents = ['Research Bot', 'Code Assistant', 'Data Analyst', 'Email Writer', 'SEO Agent'];
   const models = [
@@ -392,7 +392,7 @@ const AnalyticsDashboard: React.FC = () => {
             change={Math.abs(data.costChange)}
             trend="down"
             icon={DollarSign}
-            subtitle="cost down — efficiency up"
+            subtitle="cost down · efficiency up"
             iconColor="text-emerald-600"
             iconBg="bg-emerald-500/10"
           />
@@ -410,7 +410,7 @@ const AnalyticsDashboard: React.FC = () => {
 
         {/* Charts row */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {/* Usage over time — takes 2/3 width on large screens */}
+          {/* Usage over time · takes 2/3 width on large screens */}
           <Card className="glass-strong lg:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -463,7 +463,7 @@ const AnalyticsDashboard: React.FC = () => {
 
         {/* Activity table + leaderboard */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {/* Activity table — 2/3 */}
+          {/* Activity table · 2/3 */}
           <Card className="glass-strong lg:col-span-2">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
@@ -472,7 +472,7 @@ const AnalyticsDashboard: React.FC = () => {
                     <Activity className="h-4 w-4 text-primary" />
                     Recent Activity
                   </CardTitle>
-                  <CardDescription>Latest agent executions — sortable by column</CardDescription>
+                  <CardDescription>Latest agent executions · sortable by column</CardDescription>
                 </div>
                 <Badge variant="outline" className="shrink-0">
                   {data.recentActivity.length} executions
@@ -484,7 +484,7 @@ const AnalyticsDashboard: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Team leaderboard — 1/3 */}
+          {/* Team leaderboard · 1/3 */}
           <Card className="glass-strong">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">

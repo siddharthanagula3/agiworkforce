@@ -117,7 +117,13 @@ export class WebChatRuntime implements ChatRuntime {
     // Append the new user message
     history.push({ role: 'user', content });
 
-    const response = await fetch('/api/llm/v1/chat/completions', {
+    // Fail-closed: the client never requests auto-approval (that would let a
+    // client skip the per-tool gate). The server-side tool loop owns approval
+    // policy (default manual) and emits x_tool_approval_request events that the
+    // tool_call StreamEvents below surface as an Approve/Reject prompt.
+    const completionsUrl = '/api/llm/v1/chat/completions';
+
+    const response = await fetch(completionsUrl, {
       method: 'POST',
       headers: await authHeaders(token),
       body: JSON.stringify({
@@ -170,9 +176,68 @@ export class WebChatRuntime implements ChatRuntime {
           let chunk: string | null = null;
           const choices = parsed['choices'];
           if (Array.isArray(choices) && choices.length > 0) {
-            const delta = (choices[0] as Record<string, unknown>)['delta'];
-            if (delta && typeof (delta as Record<string, unknown>)['content'] === 'string') {
-              chunk = (delta as Record<string, unknown>)['content'] as string;
+            const delta = (choices[0] as Record<string, unknown>)['delta'] as
+              | Record<string, unknown>
+              | undefined;
+
+            if (delta && typeof delta['content'] === 'string') {
+              chunk = delta['content'] as string;
+            }
+
+            // ── MCP tool events emitted by tool-loop.ts ────────────────────
+            // x_tool_status: a tool started or finished (status = running | completed | failed)
+            if (delta && delta['x_tool_status']) {
+              const ts = delta['x_tool_status'] as Record<string, unknown>;
+              const toolName = String(ts['name'] ?? 'tool');
+              const status = String(ts['status'] ?? 'running') as
+                | 'running'
+                | 'completed'
+                | 'failed';
+              // Emit a tool_call event so useChat's onStream handler updates
+              // the ToolTimeline via the chat store.
+              this.emit({
+                type: 'tool_call',
+                toolCall: {
+                  id: toolName,
+                  name: toolName,
+                  args: {},
+                },
+              });
+              if (status === 'completed' || status === 'failed') {
+                this.emit({
+                  type: 'tool_result',
+                  toolCallId: toolName,
+                  ...(status === 'failed' ? { error: 'Tool execution failed' } : {}),
+                });
+              }
+            }
+
+            // x_tool_result: final output from a tool execution
+            if (delta && delta['x_tool_result']) {
+              const tr = delta['x_tool_result'] as Record<string, unknown>;
+              const toolCallId = String(tr['tool_call_id'] ?? '');
+              const isError = tr['is_error'] === true;
+              const content = String(tr['content'] ?? '');
+              this.emit({
+                type: 'tool_result',
+                toolCallId,
+                ...(isError ? { error: content } : { result: content }),
+              });
+            }
+
+            // x_tool_approval_request: tool is gated on user consent (manual mode).
+            // In auto mode this event is never sent. Emit a tool_call with the
+            // args so the ToolCallCard renders the approval prompt.
+            if (delta && delta['x_tool_approval_request']) {
+              const req = delta['x_tool_approval_request'] as Record<string, unknown>;
+              this.emit({
+                type: 'tool_call',
+                toolCall: {
+                  id: String(req['tool_call_id'] ?? crypto.randomUUID()),
+                  name: String(req['name'] ?? 'tool'),
+                  args: (req['args'] as Record<string, unknown>) ?? {},
+                },
+              });
             }
           } else if (parsed['type'] === 'content_block_delta') {
             const delta = parsed['delta'] as Record<string, unknown> | undefined;

@@ -59,7 +59,7 @@ vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: vi.fn(),
 }));
 
-// Subscription / credit / LLM factory mocks — guards beyond auth that must
+// Subscription / credit / LLM factory mocks · guards beyond auth that must
 // not be reached when auth fails. We assert they were NOT called in each test.
 const mockGetSubscription = vi.fn();
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -88,7 +88,7 @@ vi.mock('@/lib/llm-providers/factory', () => ({
   },
 }));
 
-// Route under test — must be imported AFTER all vi.mock() calls
+// Route under test · must be imported AFTER all vi.mock() calls
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -111,13 +111,13 @@ type AuthErrorBody = {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe('POST /api/llm/v1/chat/completions — auth contract', () => {
+describe('POST /api/llm/v1/chat/completions · auth contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('rejects request with no Authorization header → 401', async () => {
-    // No auth header at all — auth-gate trips at line 46 before any JWT lookup.
+    // No auth header at all · auth-gate trips at line 46 before any JWT lookup.
     const response = await POST(makeRequest());
 
     expect(response.status).toBe(401);
@@ -134,7 +134,7 @@ describe('POST /api/llm/v1/chat/completions — auth contract', () => {
   });
 
   it('rejects request whose Authorization is not Bearer-prefixed → 401', async () => {
-    // Wrong scheme — auth-gate.ts:46 requires "Bearer " prefix specifically.
+    // Wrong scheme · auth-gate.ts:46 requires "Bearer " prefix specifically.
     const response = await POST(makeRequest({ Authorization: 'Basic dXNlcjpwYXNz' }));
 
     expect(response.status).toBe(401);
@@ -146,7 +146,7 @@ describe('POST /api/llm/v1/chat/completions — auth contract', () => {
 
   it('rejects request with a forged/invalid Bearer JWT → 401', async () => {
     // Bearer token present, but Clerk JWT verification throws inside
-    // getClerkAuthUser — auth-gate.ts:63-79 maps that to 401.
+    // getClerkAuthUser · auth-gate.ts:63-79 maps that to 401.
     mockGetClerkAuthUser.mockRejectedValueOnce(new Error('JWT signature verification failed'));
 
     const response = await POST(
@@ -168,7 +168,7 @@ describe('POST /api/llm/v1/chat/completions — auth contract', () => {
   });
 
   it('rejects an empty Bearer token → 401', async () => {
-    // "Bearer " (trailing space, no token) — getClerkAuthUser
+    // "Bearer " (trailing space, no token) · getClerkAuthUser
     // should reject the empty token. We mock the rejection to assert the
     // route's contract (route translates the error to 401 invalid_api_key).
     mockGetClerkAuthUser.mockRejectedValueOnce(new Error('Invalid token'));

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowLeft,
   HardDrive,
@@ -10,7 +10,7 @@ import {
   FileDown,
   AlertTriangle,
 } from 'lucide-react-native';
-import { cacheDirectory, getInfoAsync, deleteAsync, type FileInfo } from 'expo-file-system/legacy';
+import { cacheDirectory, deleteAsync } from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -22,7 +22,19 @@ import {
   wipeAllLocalData,
   type DsarExportProgress,
 } from '@/services/dsarExport';
+import {
+  buildLocalDataExportSnapshot,
+  resetLocalInMemoryState,
+} from '@/src/features/settings/data-controls/localDataSnapshot';
+import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
 import type { InstalledModel } from '@/storage/types';
+
+const STORAGE_RETURN_PATHS = ['/(app)/settings/data-controls', '/(app)/settings/general'] as const;
+type StorageReturnPath = (typeof STORAGE_RETURN_PATHS)[number];
+
+function isStorageReturnPath(value: string | undefined): value is StorageReturnPath {
+  return STORAGE_RETURN_PATHS.includes(value as StorageReturnPath);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,6 +75,7 @@ function exportStageLabel(stage: DsarExportProgress['stage']): string {
 export default function StorageManagerScreen() {
   const c = useThemeColors();
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
 
   const [models, setModels] = useState<InstalledModel[]>([]);
   const [modelStorageBytes, setModelStorageBytes] = useState(0);
@@ -73,14 +86,14 @@ export default function StorageManagerScreen() {
   const [isWiping, setIsWiping] = useState(false);
 
   const loadStorageInfo = useCallback(async () => {
-    const [installed, modelBytes, cacheInfo] = await Promise.all([
+    const [installed, modelBytes, cacheBytes] = await Promise.all([
       listInstalledModels(),
       getModelStorageBytes(),
-      getInfoAsync(cacheDirectory ?? ''),
+      cacheDirectory ? getDirectorySizeBytes(cacheDirectory) : Promise.resolve(0),
     ]);
     setModels(installed);
     setModelStorageBytes(modelBytes);
-    setCacheBytes(cacheInfo.exists ? ((cacheInfo as FileInfo & { size?: number }).size ?? 0) : 0);
+    setCacheBytes(cacheBytes);
   }, []);
 
   useEffect(() => {
@@ -88,9 +101,10 @@ export default function StorageManagerScreen() {
   }, [loadStorageInfo]);
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
-  }, [router]);
+    const returnTo = params.returnTo;
+    const target = isStorageReturnPath(returnTo) ? returnTo : '/(app)/settings/general';
+    router.navigate(target as Parameters<typeof router.navigate>[0]);
+  }, [params.returnTo, router]);
 
   const handleDeleteModel = useCallback((model: InstalledModel) => {
     Alert.alert(
@@ -136,9 +150,10 @@ export default function StorageManagerScreen() {
     setIsExporting(true);
     setExportProgress(null);
     try {
-      await exportAllUserData((progress) => {
-        setExportProgress(progress);
-      });
+      await exportAllUserData(
+        (progress) => setExportProgress(progress),
+        buildLocalDataExportSnapshot(),
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error.';
       Alert.alert('Export failed', msg);
@@ -170,9 +185,8 @@ export default function StorageManagerScreen() {
                   onPress: async () => {
                     setIsWiping(true);
                     try {
-                      await wipeAllLocalData();
-                      // Navigate to onboarding root
-                      router.replace('/onboarding' as Parameters<typeof router.replace>[0]);
+                      await wipeAllLocalData({ afterPersistentWipe: resetLocalInMemoryState });
+                      router.replace('/(public)/age-gate' as Parameters<typeof router.replace>[0]);
                     } catch (err) {
                       setIsWiping(false);
                       const msg = err instanceof Error ? err.message : 'Unknown error.';
@@ -189,17 +203,25 @@ export default function StorageManagerScreen() {
   }, [router]);
 
   const totalModelBytes = models.reduce((sum, m) => sum + (m.size_bytes ?? 0), 0);
+  const displayedModelStorageBytes = Math.max(modelStorageBytes, totalModelBytes);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
       {/* Header */}
       <View
         className="flex-row items-center px-3 h-12"
-        style={{ borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{
+          backgroundColor: c.surfaceBase,
+          borderBottomWidth: 1,
+          borderBottomColor: c.border,
+        }}
       >
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
+          className="p-2 rounded-lg"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? c.surfaceHover : c.transparent,
+          })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
@@ -214,7 +236,7 @@ export default function StorageManagerScreen() {
       {isWiping && (
         <View
           className="absolute inset-0 z-50 items-center justify-center"
-          style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+          style={{ backgroundColor: c.scrim }}
         >
           <ActivityIndicator size="large" color={c.teal} />
           <Text className="mt-3 text-sm" style={{ color: c.textSecondary }}>
@@ -243,7 +265,7 @@ export default function StorageManagerScreen() {
                 Downloaded models
               </Text>
               <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
-                {formatBytes(modelStorageBytes)}
+                {formatBytes(displayedModelStorageBytes)}
               </Text>
             </View>
             <View className="flex-row justify-between">
@@ -292,7 +314,10 @@ export default function StorageManagerScreen() {
                   </View>
                   <Pressable
                     onPress={() => handleDeleteModel(model)}
-                    className="p-2 rounded-lg active:bg-white/5"
+                    className="p-2 rounded-lg"
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? c.dangerSurface : c.transparent,
+                    })}
                     accessibilityLabel={`Delete ${model.display_name}`}
                     accessibilityRole="button"
                   >
@@ -307,8 +332,8 @@ export default function StorageManagerScreen() {
         {/* Privacy actions */}
         <Card>
           <Text
-            className="text-[11px] uppercase tracking-wider font-semibold mb-3"
-            style={{ color: c.textMuted }}
+            className="text-[11px] uppercase font-semibold mb-3"
+            style={{ color: c.textMuted, letterSpacing: 0 }}
           >
             Privacy
           </Text>

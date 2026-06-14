@@ -40,7 +40,7 @@ export interface ArtifactLocalPublishResult {
   waitlistGated: false;
 }
 
-/** Cloud publish is waitlist-gated in v1 (v1-local-only-cloud-waitlist-2026-05-18). */
+/** Cloud publish is waitlist-gated until managed artifact publishing is proven. */
 export interface ArtifactWaitlistPublishResult {
   kind: 'waitlist';
   shareUrl: null;

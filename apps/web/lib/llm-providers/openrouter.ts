@@ -20,7 +20,7 @@ const OPENROUTER_APP_TITLE = 'AGI Workforce';
  *
  * For Anthropic-routed models (modelId starts with 'anthropic/'), OpenRouter
  * passes cache_control through to the upstream Anthropic API on system messages.
- * Reference: openclaw extra-params.openrouter-cache-control.test.ts — system
+ * Reference: openclaw extra-params.openrouter-cache-control.test.ts · system
  * message only, not last-user or last-tool_result.
  */
 function mapMessages(
@@ -131,7 +131,7 @@ export class OpenRouterProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -248,7 +248,7 @@ export class OpenRouterProvider extends BaseLLMProvider {
       if (request.tool_choice !== undefined) body['tool_choice'] = request.tool_choice;
     }
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),

@@ -56,7 +56,7 @@ async function handleGetMe(request: NextRequest) {
         } catch (prefsError) {
           logger.warn(
             { userId, error: prefsError },
-            'Failed to fetch routing_preferences — defaulting to {}',
+            'Failed to fetch routing_preferences · defaulting to {}',
           );
           return {};
         }

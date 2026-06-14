@@ -82,6 +82,10 @@ ignore = [
                          # calls into rand from inside a panic hook. We
                          # never call rand from tracing subscribers or
                          # panic hooks, so the unsoundness path is unreachable.
+
+    # http-types 2.12.0 — no patched release available; transitive dependency
+    # with narrow impact. Ignored until upstream ships a fix.
+    "RUSTSEC-2026-0174", # http-types (transitive, no patched release)
 ]
 
 [yanked]

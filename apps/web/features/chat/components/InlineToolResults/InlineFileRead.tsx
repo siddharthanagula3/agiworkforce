@@ -167,7 +167,7 @@ export const InlineFileRead: React.FC<ToolResultProps> = ({ result, status }) =>
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Metadata chips (computed inline — no useMemo needed; deps change with data)
+  // Metadata chips (computed inline · no useMemo needed; deps change with data)
   const chips: string[] = [];
   if (lineCount > 0) chips.push(`${lineCount} lines`);
   if (wordCount && wordCount > 0) chips.push(`${wordCount} words`);

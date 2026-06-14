@@ -160,6 +160,10 @@ pub struct AgentSession {
     /// Session-ID string to embed in `MessageDelta` events when `json_events`
     /// is `true`.  Usually the managed-session UUID; falls back to "exec".
     pub json_session_id: String,
+    /// When set, send extended-thinking with this token budget (Anthropic only).
+    /// Maps from the TUI Effort picker: Medium=None, High=Some(16384), Max=Some(32768).
+    /// Only applied when the active provider is Anthropic.
+    pub thinking_budget_tokens: Option<u32>,
 }
 
 /// Metadata returned after a single agent turn.
@@ -384,6 +388,7 @@ impl AgentSession {
             pending_image_blocks: Vec::new(),
             json_events: false,
             json_session_id: String::new(),
+            thinking_budget_tokens: None,
         }
     }
 

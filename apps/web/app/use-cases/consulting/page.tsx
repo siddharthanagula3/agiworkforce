@@ -2,9 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { ProductFrame } from '../../../components/marketing/ProductFrame';
+import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
+import { FinalCta } from '../../../components/marketing/FlagshipSections';
+import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Consulting firms — AGI',
+  title: 'Consulting firms: AGI',
   description:
     'How consulting practices use AGI: research, deliverables, data analysis, and reporting at scale across multiple AI providers.',
   alternates: { canonical: 'https://agiworkforce.com/use-cases/consulting' },
@@ -16,79 +20,98 @@ export default function ConsultingPage() {
       <main className="agi-shell">
         <Header />
 
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Consulting firms.</h1>
-          <p className="agi-page-lede">
-            Research, deliverables, data analysis, and client reporting — across every cloud
-            provider you bring keys to.{' '}
-            <strong>
-              Switch from Claude (long-form prose) to Gemini (long-context spreadsheet) to GPT
-              (tool-heavy automation) inside one engagement, without losing the thread.
-            </strong>
+        <section className="agi-fl-hero" aria-labelledby="agi-consulting-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Use case · consulting</p>
+          <h1 id="agi-consulting-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Client work,</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">across providers.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            Research, deliverables, data analysis, and client reporting. Switch providers
+            mid-engagement as the work changes shape, from long-context analysis to prose drafting
+            to tool-heavy automation, without losing the thread.
           </p>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Where it shows up</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Research</h3>
-              <p className="agi-reason-p">
-                Read whole repositories of prior decks, transcripts, and primary sources. Hand off
-                synthesis to whichever model handles your shape of context best.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Deliverables</h3>
-              <p className="agi-reason-p">
-                Draft analyses, executive summaries, and slide narratives in your house tone. The
-                conversation history travels across model switches.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Reporting at scale</h3>
-              <p className="agi-reason-p">
-                Run the same analysis prompt across many client datasets in parallel through the
-                CLI. Headless mode for CI-style pipelines.
-              </p>
-            </li>
-          </ul>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What partners ask for</p>
-          <table className="agi-ledger">
-            <tbody>
-              <tr>
-                <td>Provider choice</td>
-                <td>BYOK against any cloud — pay providers directly. No markup.</td>
-              </tr>
-              <tr>
-                <td>Confidentiality</td>
-                <td>Local mode for sensitive engagements. AES-256-GCM key storage.</td>
-              </tr>
-              <tr>
-                <td>Audit trail</td>
-                <td>
-                  Every prompt and tool call journaled. Exportable to your engagement&rsquo;s
-                  records.
-                </td>
-              </tr>
-              <tr>
-                <td>Team scale</td>
-                <td>Enterprise SSO/SCIM and per-engagement retention windows.</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="agi-cta-row" style={{ marginTop: 28 }}>
-            <Link href="/enterprise" className="agi-cta-primary">
-              Talk to enterprise
+          <div className="agi-fl-cta-row">
+            <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--primary">
+              Contact Sales
             </Link>
-            <Link href="/byok" className="agi-cta-ghost">
-              How BYOK works →
+            <Link href="/byok" className="agi-fl-cta agi-fl-cta--ghost">
+              Set Up BYOK
             </Link>
           </div>
+          <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+            <li>Local · sensitive engagements</li>
+            <li>BYOK · Desktop &amp; CLI</li>
+            <li>Cloud · by invite</li>
+          </ul>
+          <div className="agi-fl-hero-console" aria-hidden="true">
+            <ProductFrame
+              variant="desktop"
+              title="AGI Desktop"
+              badge="Local"
+              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+            />
+          </div>
         </section>
+
+        <FeatureGrid
+          eyebrow="Where it shows up"
+          title="The engagement, end to end."
+          items={[
+            {
+              meta: 'Research',
+              title: 'Synthesis at depth',
+              body: 'Read whole repositories of prior decks, transcripts, and primary sources, then hand synthesis to the model that handles your shape of context best.',
+            },
+            {
+              meta: 'Deliverables',
+              title: 'Drafts in your house tone',
+              body: 'Draft analyses, executive summaries, and slide narratives. The conversation history travels across model switches.',
+            },
+            {
+              meta: 'Scale',
+              title: 'Reporting in pipelines',
+              body: 'Run the same analysis across many client datasets through the CLI, headless, in CI-style pipelines.',
+            },
+          ]}
+        />
+
+        <LedgerSection
+          eyebrow="What partners ask for"
+          title="The posture, answered up front."
+          rows={[
+            {
+              k: 'Provider choice',
+              v: 'BYOK on Desktop and CLI. Pay providers directly at their rates.',
+            },
+            {
+              k: 'Confidentiality',
+              v: 'Local Mode for sensitive engagements; keys stored encrypted on your device.',
+            },
+            {
+              k: 'Records',
+              v: 'Resumable sessions and visible tool approvals on the developer surfaces.',
+            },
+            {
+              k: 'Team scale',
+              v: 'SSO/SCIM, retention windows, and audit export scoped on enterprise contracts.',
+            },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Bring the engagement, keep the boundary."
+          body="Start on Local and BYOK today, and talk to sales when the practice needs enterprise controls."
+          ctas={[
+            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/byok', label: 'Set Up BYOK' },
+            { href: '/enterprise', label: 'See Enterprise Controls' },
+          ]}
+        />
 
         <MarketingFooter />
       </main>

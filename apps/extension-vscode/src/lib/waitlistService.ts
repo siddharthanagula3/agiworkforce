@@ -7,7 +7,7 @@ export interface WaitlistEntry {
 }
 
 const ACCOUNT_AUTH_NOT_WIRED =
-  'AGI account web auth is not wired in the VS Code extension yet. Use AGI Workforce Web for invite and waitlist access.';
+  'AGI Cloud sign-in is not available in the VS Code extension yet. Use AGI Web for invite and waitlist access.';
 
 export async function redeemInviteCode(
   _code: string,

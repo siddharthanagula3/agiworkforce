@@ -1,102 +1,109 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LedgerSection } from '../../components/marketing/LandingSections';
+import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Enterprise — The same product, with the controls your security team needs',
+  title: 'Enterprise: controls your security team needs',
   description:
-    'SSO, SCIM, audit log export, custom retention, regional residency on request, and a four-hour SLA on a contract that names you.',
+    'SSO, SCIM, audit export, custom retention, BYOK enforcement, and a named support contact. Scoped on a contract, with compliance status reported honestly.',
   alternates: { canonical: 'https://agiworkforce.com/enterprise' },
 };
-
-const INCLUDED: { k: string; v: string }[] = [
-  { k: 'SSO', v: 'SAML 2.0 + OIDC. Okta, Azure AD, Google Workspace.' },
-  { k: 'SCIM', v: 'User and group provisioning. Add and remove seats from your IdP.' },
-  { k: 'Audit log', v: 'Every model call, tool execution, user action. Export to your SIEM.' },
-  { k: 'Retention', v: 'Org-level retention windows. You set them.' },
-  {
-    k: 'BYOK enforcement',
-    v: 'Force BYOK across the org. Zero managed-cloud spend unless you opt in.',
-  },
-  { k: 'Residency', v: 'United States by default. EU on roadmap. Custom regions on contract.' },
-  { k: 'SLA', v: 'Four-hour response. Named support contact.' },
-  { k: 'MSA', v: 'Negotiate against your procurement. We do not require a click-through.' },
-];
-
-const COMPLIANCE: { k: string; v: string }[] = [
-  { k: 'SOC 2 Type II', v: 'In progress. Audit initiated.' },
-  { k: 'GDPR', v: 'DPA available on request.' },
-  { k: 'HIPAA', v: 'BAA on request. Not HIPAA-certified.' },
-  { k: 'ISO 27001', v: 'On the roadmap. No date claimed.' },
-];
 
 export default function EnterprisePage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">
-            The same product. With the controls your security team needs.
-          </h1>
-          <p className="agi-page-lede">
-            SSO, SCIM, audit log export, custom retention, regional residency on request, and a
-            four-hour SLA — on a contract that names you.{' '}
-            <strong>
-              One CTA at the bottom of the page. We are not going to chase you with three.
-            </strong>
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What&rsquo;s included</p>
-          <table className="agi-ledger">
-            <tbody>
-              {INCLUDED.map((row) => (
-                <tr key={row.k}>
-                  <td>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Compliance posture — honest as of today</p>
-          <table className="agi-ledger">
-            <tbody>
-              {COMPLIANCE.map((row) => (
-                <tr key={row.k}>
-                  <td>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p
-            className="agi-step-body"
-            style={{ marginTop: 18, color: 'var(--agi-ink-quiet)', fontSize: 13 }}
-          >
-            We claim only what we have completed. Anything else is on the roadmap with no date until
-            there&rsquo;s a date.
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Talk to us</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: '60ch' }}>
-            <p className="agi-step-body" style={{ fontSize: 16 }}>
-              We answer. A real human, on a real contract, against your real security review.
-            </p>
-            <div className="agi-cta-row">
-              <Link href="/contact-sales" className="agi-cta-primary">
-                Contact sales
-              </Link>
-              <Link href="/byok" className="agi-cta-ghost">
-                Read the BYOK posture →
-              </Link>
-            </div>
-          </div>
-        </section>
+
+        <FlagshipHero
+          eyebrow="AGI for enterprise"
+          titleLines={['The same product.', 'Enterprise controls.']}
+          em="Enterprise controls."
+          lede="SSO, SCIM provisioning, audit export, retention windows, and org-wide BYOK enforcement. Scoped on a contract that names you. Compliance status reported honestly. Local and BYOK adoption can start before any managed compute spend exists."
+          ctas={[
+            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/trust', label: 'See Trust & Compliance' },
+            { href: '/byok', label: 'Read the BYOK Posture' },
+          ]}
+          modeRibbon={['Local · on-device', 'BYOK · enforceable', 'Cloud · by invite']}
+        />
+
+        <LedgerSection
+          eyebrow="What an enterprise contract covers"
+          title="The controls, named one by one."
+          rows={[
+            {
+              k: 'SSO',
+              v: 'SAML 2.0 and OIDC. Okta, Azure AD, Google Workspace. Scoped per contract.',
+            },
+            {
+              k: 'SCIM',
+              v: 'User and group provisioning from your IdP, scoped per contract.',
+            },
+            {
+              k: 'Audit',
+              v: 'Provider labels, tool approvals, and session records, with export scoped to your review.',
+            },
+            {
+              k: 'Retention',
+              v: 'Org-level retention windows. You set them.',
+            },
+            {
+              k: 'BYOK enforcement',
+              v: 'Require BYOK across the org. Zero managed-cloud spend unless you opt in.',
+            },
+            {
+              k: 'Residency',
+              v: 'United States by default. EU on the roadmap; custom regions by contract.',
+            },
+            {
+              k: 'SLA',
+              v: 'Four-hour response target with a named support contact.',
+            },
+            {
+              k: 'MSA',
+              v: 'We negotiate against your procurement. No forced click-through.',
+            },
+          ]}
+        />
+
+        <LedgerSection
+          eyebrow="Compliance posture, honest as of today"
+          title="We claim only what is complete."
+          rows={[
+            {
+              k: 'SOC 2 Type II',
+              v: 'Planned. No audit report claimed. Evidence collection is part of the Cloud release path.',
+            },
+            { k: 'GDPR', v: 'In progress. Standard DPA available on request.' },
+            {
+              k: 'CCPA',
+              v: 'In progress. Export and deletion paths are being verified before broad Cloud launch.',
+            },
+            { k: 'HIPAA', v: 'Not available. AGI does not offer HIPAA-covered workflows today.' },
+            { k: 'ISO 27001', v: 'On the roadmap. No date claimed.' },
+            {
+              k: 'Everything else',
+              v: 'On the roadmap with no date until there is a date.',
+            },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Bring your security review."
+          body="A real human answers, on a real contract. Evaluate Local and BYOK today. Managed compute opens by invite only."
+          ctas={[
+            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/download', label: 'Download AGI' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
+        />
+
         <MarketingFooter />
       </main>
     </div>

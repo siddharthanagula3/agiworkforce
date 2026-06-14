@@ -20,7 +20,7 @@ export default function DpaPage() {
             For customers handling personal data of EU, UK, or California residents through AGI
             Workforce.{' '}
             <strong>
-              Email contact@agiworkforce.com to request our standard DPA — we send it pre-signed and
+              Email contact@agiworkforce.com to request our standard DPA. We send it pre-signed and
               you counter-sign.
             </strong>
           </p>
@@ -64,7 +64,7 @@ export default function DpaPage() {
                   <Link href="/security" style={{ color: 'var(--agi-ink)' }}>
                     security posture
                   </Link>{' '}
-                  — encryption at rest, sandboxed tool execution, RLS-enforced access.
+                  · encryption at rest, sandboxed tool execution, RLS-enforced access.
                 </td>
               </tr>
               <tr>

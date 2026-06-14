@@ -78,7 +78,7 @@ describe('Artifact Store (consolidated)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // addArtifactForMessage — message-keyed add
+  // addArtifactForMessage · message-keyed add
   // -------------------------------------------------------------------------
 
   describe('addArtifactForMessage', () => {
@@ -146,7 +146,7 @@ describe('Artifact Store (consolidated)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // upsertArtifact — update-or-insert
+  // upsertArtifact · update-or-insert
   // -------------------------------------------------------------------------
 
   describe('upsertArtifact', () => {

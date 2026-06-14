@@ -957,8 +957,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
               <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
                 <p className="text-xs text-blue-300">
-                  Knowledge base files are read once and their content is stored locally. The AI
-                  will reference this content when answering questions within this project.
+                  Knowledge base files are read once and stored locally. AGI searches this content
+                  and references the most relevant parts when answering questions in this project.
                 </p>
               </div>
             </TabsContent>

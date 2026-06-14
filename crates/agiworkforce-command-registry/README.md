@@ -8,7 +8,7 @@ Criticality: high
 
 ## Purpose
 
-Shared Claude-style command registry contracts for AGI Workforce CLI and TUI surfaces.
+Shared AGI command registry contracts for CLI and TUI surfaces.
 
 ## Consumers
 

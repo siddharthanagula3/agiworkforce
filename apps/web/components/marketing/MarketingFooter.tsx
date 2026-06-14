@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { POSITIONING } from '../../lib/marketing-constants';
 import { AgiMark } from '../agi/AgiMark';
 
 /*
@@ -16,10 +15,11 @@ const PRODUCT = [
   { href: '/teams', label: 'Teams' },
   { href: '/apps', label: 'Apps' },
   { href: '/agi-code', label: 'AGI Code' },
-  { href: '/cowork', label: 'Cowork' },
+  { href: '/agi-work', label: 'AGI Work' },
   { href: '/byok', label: 'BYOK' },
   { href: '/local', label: 'Local' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/waitlist', label: 'Cloud Waitlist' },
 ];
 
 const SURFACES = [
@@ -37,7 +37,6 @@ const CAPABILITIES = [
   { href: '/features/projects', label: 'Projects' },
   { href: '/features/memory', label: 'Memory' },
   { href: '/providers', label: 'Providers' },
-  { href: '/compare', label: 'Compare' },
 ];
 
 const COMPANY = [
@@ -100,7 +99,10 @@ export function MarketingFooter() {
       </div>
       <div className="agi-footer-strip">
         <span>© 2026 AGI. Proprietary.</span>
-        <span>{POSITIONING.trustBoundary}</span>
+        <span>
+          Local and BYOK stay explicit. Managed cloud remains invite-gated until release controls
+          are proven.
+        </span>
       </div>
     </footer>
   );

@@ -1,5 +1,5 @@
 /**
- * WaitlistForm — CSRF 429 error path
+ * WaitlistForm · CSRF 429 error path
  *
  * Regression test: /api/csrf returning 429 must show a rate-limit message,
  * not the generic "Network error. Please try again." string.
@@ -47,7 +47,7 @@ function submitForm() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('WaitlistForm — CSRF error handling', () => {
+describe('WaitlistForm · CSRF error handling', () => {
   beforeEach(() => {
     // Clear the module-level token cache so each test starts fresh.
     clearCsrfToken();

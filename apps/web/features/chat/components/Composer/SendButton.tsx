@@ -4,9 +4,9 @@
  * SendButton Component
  *
  * 3-state send/stop/queue button for the chat composer.
- * - send    (idle): terra-cotta-500, ArrowUp icon — submits the message
- * - stop    (generating): red-500, Square icon — aborts the SSE stream
- * - queue   (queued): amber-500, Clock icon — message will send after current finishes
+ * - send    (idle): terra-cotta-500, ArrowUp icon · submits the message
+ * - stop    (generating): red-500, Square icon · aborts the SSE stream
+ * - queue   (queued): amber-500, Clock icon · message will send after current finishes
  *
  * Mirrors the desktop SendButton in
  * apps/desktop/src/components/UnifiedAgenticChat/SendButton.tsx.
@@ -26,7 +26,7 @@ export interface SendButtonProps {
   hasContent?: boolean;
   /** Whether the button is disabled externally (e.g. quota exhausted). */
   disabled?: boolean;
-  /** Unified click handler — caller decides action based on mode. */
+  /** Unified click handler · caller decides action based on mode. */
   onClick: () => void;
   /** Optional extra class names forwarded to the root button element. */
   className?: string;
@@ -72,7 +72,7 @@ export function SendButton({
             : 'bg-amber-500 text-white hover:bg-amber-600 shadow-md',
           className,
         )}
-        title="Queue message — will send after current response finishes"
+        title="Queue message · will send after current response finishes"
         aria-label="Add message to queue"
       >
         <Clock className="h-4 w-4" aria-hidden="true" />

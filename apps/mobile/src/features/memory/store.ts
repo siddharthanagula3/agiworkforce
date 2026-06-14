@@ -129,6 +129,9 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       entries: state.entries
         .map((e) => (e.id === id ? { ...e, pinned } : e))
         .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at),
+      filteredEntries: state.filteredEntries
+        .map((e) => (e.id === id ? { ...e, pinned } : e))
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at),
     }));
     try {
       await togglePinMemoryFact(id, pinned);

@@ -1,5 +1,5 @@
 /**
- * GET /api/support/[id]/replies — list replies on a support ticket.
+ * GET /api/support/[id]/replies · list replies on a support ticket.
  * Auth required; user may only access replies on their own tickets.
  */
 

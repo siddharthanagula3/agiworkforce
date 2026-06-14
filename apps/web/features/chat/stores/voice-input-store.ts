@@ -92,7 +92,7 @@ const rt: RuntimeRefs = {
 
 /**
  * Reset all module-level runtime refs to their initial state.
- * Exported for test isolation only — do not call in production code.
+ * Exported for test isolation only · do not call in production code.
  *
  * @internal
  */

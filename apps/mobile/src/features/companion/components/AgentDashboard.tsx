@@ -708,23 +708,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                     <Text className="text-xs text-red-400 font-medium">Stop Agent</Text>
                   </Pressable>
                 )}
-
-                {/* Approve / Deny — shortcut when there are pending approvals */}
-                {pendingApprovals.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      // Scroll user to the approval card by toggling selection
-                    }}
-                    className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-500/10 active:bg-amber-500/20"
-                    accessibilityLabel="Review pending approvals"
-                    accessibilityRole="button"
-                  >
-                    <ShieldAlert size={12} color={colors.agentWarning} />
-                    <Text className="text-xs text-amber-400 font-medium">
-                      {pendingApprovals.length} Pending
-                    </Text>
-                  </Pressable>
-                )}
               </View>
             </View>
           )}

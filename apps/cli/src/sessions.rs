@@ -513,6 +513,26 @@ fn normalize_for_search(input: &str) -> String {
     input.to_lowercase()
 }
 
+/// Largest char boundary `<= index` (clamped to `s.len()`).
+#[allow(dead_code)]
+fn floor_char_boundary(s: &str, index: usize) -> usize {
+    let mut idx = index.min(s.len());
+    while idx > 0 && !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    idx
+}
+
+/// Smallest char boundary `>= index` (clamped to `s.len()`).
+#[allow(dead_code)]
+fn ceil_char_boundary(s: &str, index: usize) -> usize {
+    let mut idx = index.min(s.len());
+    while idx < s.len() && !s.is_char_boundary(idx) {
+        idx += 1;
+    }
+    idx
+}
+
 /// Full-text search across managed session titles and message content.
 pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSummary>> {
     let needle = normalize_for_search(query);
@@ -551,11 +571,17 @@ pub fn search_session_messages(
             let text = message.text_content();
             let text_lower = normalize_for_search(&text);
             if let Some(pos) = text_lower.find(&needle) {
-                let start = pos.saturating_sub(60);
-                let end = (pos + needle.len() + 60).min(text.len());
-                let snippet = text[start..end].replace('\n', " ");
+                let raw_start = pos.saturating_sub(60);
+                let raw_end = (pos + needle.len() + 60).min(text_lower.len());
+                // Snap to char boundaries against `text_lower` (the buffer the
+                // offsets were derived from); `to_lowercase()` can shift byte
+                // positions/length relative to `text`, so slicing `text` here
+                // could land off a UTF-8 char boundary and panic.
+                let start = floor_char_boundary(&text_lower, raw_start);
+                let end = ceil_char_boundary(&text_lower, raw_end);
+                let snippet = text_lower[start..end].replace('\n', " ");
                 let prefix = if start > 0 { "..." } else { "" };
-                let suffix = if end < text.len() { "..." } else { "" };
+                let suffix = if end < text_lower.len() { "..." } else { "" };
                 snippets.push(format!(
                     "[{}] {}{}{}",
                     message.role, prefix, snippet, suffix

@@ -829,6 +829,50 @@ impl McpConnection {
         }
     }
 
+    /// Fire the `Elicitation` hook, dispatch the request to the configured
+    /// handler, then fire the `ElicitationResult` hook. Shared by the stdio and
+    /// SSE transports so the human-in-the-loop audit/approval boundary is
+    /// identical regardless of how the server-initiated prompt arrived.
+    async fn dispatch_elicitation_with_hooks(
+        elicitation_handler: &SharedElicitationHandler,
+        server_name: &str,
+        request: elicitation::ElicitationRequest,
+    ) -> elicitation::ElicitationResponse {
+        let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+        crate::hooks::run_hooks(
+            &hcfg,
+            crate::hooks::HookEvent::Elicitation,
+            &crate::hooks::HookInput {
+                event: "Elicitation".to_string(),
+                session_id: None,
+                model: None,
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: Some(server_name.to_string()),
+                tool_execution: None,
+            },
+        )
+        .await;
+        let response = elicitation_handler.handle(server_name, request).await;
+        crate::hooks::run_hooks(
+            &hcfg,
+            crate::hooks::HookEvent::ElicitationResult,
+            &crate::hooks::HookInput {
+                event: "ElicitationResult".to_string(),
+                session_id: None,
+                model: None,
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: Some(server_name.to_string()),
+                tool_execution: None,
+            },
+        )
+        .await;
+        response
+    }
+
     /// Check whether a raw JSON frame is any server-initiated request (has both
     /// `method` and `id` fields). Returns `(method, id, params)`.
     fn as_server_request(
@@ -1039,37 +1083,10 @@ impl McpConnection {
                                     elicitation::ElicitationRequest,
                                 >(params)
                                 {
-                                    let hcfg = crate::hooks::load_hooks().unwrap_or_default();
-                                    crate::hooks::run_hooks(
-                                        &hcfg,
-                                        crate::hooks::HookEvent::Elicitation,
-                                        &crate::hooks::HookInput {
-                                            event: "Elicitation".to_string(),
-                                            session_id: None,
-                                            model: None,
-                                            tool_name: None,
-                                            tool_args: None,
-                                            tool_output: None,
-                                            message: Some(server_name.clone()),
-                                            tool_execution: None,
-                                        },
-                                    )
-                                    .await;
-                                    let resp =
-                                        elicitation_handler.handle(&server_name, elicit_req).await;
-                                    crate::hooks::run_hooks(
-                                        &hcfg,
-                                        crate::hooks::HookEvent::ElicitationResult,
-                                        &crate::hooks::HookInput {
-                                            event: "ElicitationResult".to_string(),
-                                            session_id: None,
-                                            model: None,
-                                            tool_name: None,
-                                            tool_args: None,
-                                            tool_output: None,
-                                            message: Some(server_name.clone()),
-                                            tool_execution: None,
-                                        },
+                                    let resp = Self::dispatch_elicitation_with_hooks(
+                                        &elicitation_handler,
+                                        &server_name,
+                                        elicit_req,
                                     )
                                     .await;
                                     let reply = serde_json::json!({
@@ -1192,8 +1209,12 @@ impl McpConnection {
                                     elicitation::ElicitationRequest,
                                 >(params)
                                 {
-                                    let elicit_resp =
-                                        elicitation_handler.handle(&server_name, elicit_req).await;
+                                    let elicit_resp = Self::dispatch_elicitation_with_hooks(
+                                        &elicitation_handler,
+                                        &server_name,
+                                        elicit_req,
+                                    )
+                                    .await;
                                     Self::reply_elicitation_sse(
                                         &post_url_clone,
                                         &headers_clone,

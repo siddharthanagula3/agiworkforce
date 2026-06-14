@@ -49,7 +49,8 @@ export const useWaitlistStore = create<WaitlistState>()(
           joined: true,
           email: submission.email,
           country: submission.country,
-          rank: result.rank,
+          // Public route returns no queue position → store undefined (not null).
+          rank: result.rank ?? undefined,
           joinedAt: new Date().toISOString(),
         }),
 

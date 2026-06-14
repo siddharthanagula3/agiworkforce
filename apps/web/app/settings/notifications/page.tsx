@@ -5,7 +5,7 @@ import { useBillingStore } from '@/stores/unified/auth';
 import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
 /**
- * /settings/notifications — push + email notification preferences. Round-2
+ * /settings/notifications · push + email notification preferences. Round-2
  * audit P0 #7 (web settings depth). Account settings are persisted through
  * /api/settings/preferences backed by Neon. Missing or failed persistence is
  * surfaced to the user instead of falling back to client-only state.
@@ -54,7 +54,8 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
       {
         id: 'browserAgentDone',
         label: 'Agent task finished',
-        description: 'Notify when a long-horizon agent task (Code mode, Cowork mode) finishes.',
+        description:
+          'Notify when a long-horizon agent task (AGI Code mode, AGI Work mode) finishes.',
         defaultValue: true,
       },
     ],

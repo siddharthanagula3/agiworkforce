@@ -1,19 +1,72 @@
 import type { InstalledModel } from './types';
 import { getDb } from './db';
 
+const MODEL_RUNTIMES = new Set<InstalledModel['runtime']>(['local', 'cloud']);
+const MODEL_FORMATS = new Set<InstalledModel['format']>([
+  'gguf',
+  'safetensors',
+  'mlx',
+  'onnx',
+  'pte',
+]);
+
+function requireString(row: Record<string, unknown>, key: string): string {
+  const value = row[key];
+  if (typeof value === 'string' && value.length > 0) return value;
+  throw new Error(`Invalid installed_models row: ${key} must be a non-empty string.`);
+}
+
+function requireNumber(row: Record<string, unknown>, key: string): number {
+  const value = row[key];
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  throw new Error(`Invalid installed_models row: ${key} must be a finite number.`);
+}
+
+function nullableString(row: Record<string, unknown>, key: string): string | null {
+  const value = row[key];
+  if (value == null) return null;
+  if (typeof value === 'string') return value;
+  throw new Error(`Invalid installed_models row: ${key} must be a string or null.`);
+}
+
+function nullableNumber(row: Record<string, unknown>, key: string): number | null {
+  const value = row[key];
+  if (value == null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  throw new Error(`Invalid installed_models row: ${key} must be a finite number or null.`);
+}
+
 function row2model(row: Record<string, unknown>): InstalledModel {
+  const runtime = requireString(row, 'runtime') as InstalledModel['runtime'];
+  const format = requireString(row, 'format') as InstalledModel['format'];
+  if (!MODEL_RUNTIMES.has(runtime)) {
+    throw new Error(`Invalid installed_models row: unsupported runtime "${runtime}".`);
+  }
+  if (!MODEL_FORMATS.has(format)) {
+    throw new Error(`Invalid installed_models row: unsupported format "${format}".`);
+  }
+
   return {
-    id: row.id as string,
-    display_name: row.display_name as string,
-    runtime: row.runtime as InstalledModel['runtime'],
-    format: row.format as InstalledModel['format'],
-    size_bytes: row.size_bytes as number,
-    sha256: (row.sha256 as string | null) ?? null,
-    local_path: (row.local_path as string | null) ?? null,
-    installed_at: row.installed_at as number,
-    last_used_at: (row.last_used_at as number | null) ?? null,
-    capabilities: (row.capabilities as string | null) ?? null,
+    id: requireString(row, 'id'),
+    display_name: requireString(row, 'display_name'),
+    runtime,
+    format,
+    size_bytes: requireNumber(row, 'size_bytes'),
+    sha256: nullableString(row, 'sha256'),
+    local_path: nullableString(row, 'local_path'),
+    installed_at: requireNumber(row, 'installed_at'),
+    last_used_at: nullableNumber(row, 'last_used_at'),
+    capabilities: nullableString(row, 'capabilities'),
   };
+}
+
+function safeRow2Model(row: Record<string, unknown>): InstalledModel | null {
+  try {
+    return row2model(row);
+  } catch (error) {
+    console.warn('[installedModels] Ignoring malformed installed model row:', error);
+    return null;
+  }
 }
 
 export async function listInstalledModels(): Promise<InstalledModel[]> {
@@ -21,7 +74,7 @@ export async function listInstalledModels(): Promise<InstalledModel[]> {
   const rows = await db.getAllAsync<Record<string, unknown>>(
     'SELECT * FROM installed_models ORDER BY last_used_at DESC, installed_at DESC;',
   );
-  return rows.map(row2model);
+  return rows.map(safeRow2Model).filter((model): model is InstalledModel => model !== null);
 }
 
 export async function getInstalledModel(id: string): Promise<InstalledModel | null> {
@@ -30,7 +83,7 @@ export async function getInstalledModel(id: string): Promise<InstalledModel | nu
     'SELECT * FROM installed_models WHERE id = ?;',
     [id],
   );
-  return row ? row2model(row) : null;
+  return row ? safeRow2Model(row) : null;
 }
 
 export async function recordInstalledModel(model: InstalledModel): Promise<void> {

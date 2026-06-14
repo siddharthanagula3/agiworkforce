@@ -147,7 +147,7 @@ function setupInsertChain(resolvedValue: { data: unknown; error: unknown }) {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('PUT /api/projects/[id] — round-10 fields', () => {
+describe('PUT /api/projects/[id] · round-10 fields', () => {
   beforeEach(() => {
     wireAuthAndDb();
   });
@@ -229,7 +229,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
     expect(sqlParams).toContainEqual(['web', 'desktop']);
   });
 
-  it('partial PUT — only iconEmoji provided leaves other fields untouched', async () => {
+  it('partial PUT · only iconEmoji provided leaves other fields untouched', async () => {
     const dbRow = {
       ...BASE_DB_ROW,
       icon_emoji: '🌟',
@@ -269,7 +269,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
   });
 });
 
-describe('POST /api/projects — round-10 fields', () => {
+describe('POST /api/projects · round-10 fields', () => {
   beforeEach(() => {
     wireAuthAndDb();
   });

@@ -81,7 +81,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 
 jest.mock('expo-constants', () => ({
@@ -107,6 +107,11 @@ const mockSettingsState = {
   hapticsEnabled: true,
   themeMode: 'system' as const,
   accentColor: 'neutral' as const,
+  personalization: {
+    nickname: '',
+    fullName: '',
+    occupation: '',
+  },
   isTemporaryChat: false,
   autoApproveMode: 'ask',
   setHapticsEnabled: jest.fn(),
@@ -128,6 +133,7 @@ jest.mock('@/src/features/model-picker/store', () => ({
 
 jest.mock('@/src/features/model-picker/service', () => ({
   getDisplayName: (id: string) => id,
+  getShortDisplayName: (id: string) => id,
 }));
 
 jest.mock('@/lib/safeOpenURL', () => ({
@@ -136,6 +142,21 @@ jest.mock('@/lib/safeOpenURL', () => ({
 
 jest.mock('@/lib/v1FeatureFlags', () => ({
   FEATURES: { companion: false, connectors: false },
+}));
+
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: { user: null; signOut: jest.Mock }) => unknown) =>
+    selector({ user: null, signOut: jest.fn() }),
+}));
+
+jest.mock('@/src/features/waitlist/store', () => ({
+  useWaitlistStore: (selector: (s: { cloudUnlocked: boolean }) => unknown) =>
+    selector({ cloudUnlocked: false }),
+}));
+
+jest.mock('@/src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: (selector: (s: { appMode: string }) => unknown) =>
+    selector({ appMode: 'local' }),
 }));
 
 jest.mock('@/src/features/cloud-bridge', () => {

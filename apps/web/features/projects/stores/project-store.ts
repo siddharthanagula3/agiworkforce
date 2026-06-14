@@ -1,5 +1,5 @@
 /**
- * Project Store — web surface canonical re-export.
+ * Project Store · web surface canonical re-export.
  *
  * The single source of truth for project state is the persisted Zustand store
  * in `@agiworkforce/unified-chat`. Both the shared `ProjectGallery` /

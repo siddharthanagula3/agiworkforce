@@ -3,17 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import type React from 'react';
-import {
-  ArrowLeft,
-  FileText,
-  Code,
-  Tag,
-  MapPin,
-  Database,
-  Terminal,
-  Hash,
-  User,
-} from 'lucide-react';
+import { ArrowLeft, FileText, Code, Tag, Database, Terminal, Hash, User } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import MarkdownContent from '@/features/chat/components/messages/MarkdownContent';
 
@@ -22,7 +12,6 @@ import MarkdownContent from '@/features/chat/components/messages/MarkdownContent
 interface SkillMeta {
   name: string;
   description: string;
-  location: string;
   source: string;
 }
 
@@ -234,7 +223,6 @@ export default function SkillDetailPage({ params }: { params: Promise<{ name: st
                 <MetaRow icon={User} label="Added by" value={skillSourceLabel(meta.source)} />
                 <MetaRow icon={Database} label="Source" value={meta.source} />
                 <MetaRow icon={Terminal} label="Allowed tools" value="Not specified" />
-                <MetaRow icon={MapPin} label="Location" value={meta.location} />
                 <MetaRow icon={Tag} label="Name" value={meta.name} />
               </div>
             </section>

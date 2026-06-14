@@ -87,7 +87,8 @@ const SVG_ALLOWED_TAGS = new Set([
   'text',
   'tspan',
   'defs',
-  'clipPath',
+  // tagName comparisons are lowercased; 'clipPath' would never match.
+  'clippath',
   'use',
   'image',
   'marker',
@@ -167,6 +168,13 @@ function sanitizeSvg(raw: string): string {
     const doc = parser.parseFromString(raw, 'image/svg+xml');
     const errorNode = doc.querySelector('parsererror');
     if (errorNode) return '';
+
+    // AUDIT-FIX (CRITICAL #15): a non-<svg> root (e.g. an XHTML document)
+    // used to fall into sanitizeNode's removeChild branch, which detaches
+    // the root but leaves the held reference — and its attributes and
+    // children — completely unsanitized for XMLSerializer below. Reject
+    // any document whose root is not <svg> outright.
+    if (doc.documentElement.tagName.toLowerCase() !== 'svg') return '';
 
     function sanitizeNode(node: Element) {
       const tagName = node.tagName.toLowerCase();
@@ -299,7 +307,10 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
     >
       <div
         className="w-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
-        dangerouslySetInnerHTML={{ __html: sanitized }}
+        dangerouslySetInnerHTML={{
+          __html:
+            sanitized /* llm-guardrail-allow: sanitizeSvg() output — audited SVG tag/attr allowlist, non-svg roots rejected */,
+        }}
       />
     </div>
   );
@@ -364,7 +375,10 @@ function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boo
       {sanitized ? (
         <div
           ref={containerRef}
-          dangerouslySetInnerHTML={{ __html: sanitized }}
+          dangerouslySetInnerHTML={{
+            __html:
+              sanitized /* llm-guardrail-allow: sanitizeSvg() output — audited SVG tag/attr allowlist, non-svg roots rejected */,
+          }}
           className="w-full h-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />
       ) : (

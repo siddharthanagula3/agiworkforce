@@ -64,6 +64,13 @@ const knownRootDebt = new Set([
   'AUDIT_TAXONOMY.md',
   'REMEDIATION_PRIORITY.md',
   'SKILL.md',
+  // VC-demo production-push workflow deliverables (audit map / public-pages audit /
+  // reference analysis / session notes). Transient — relocate under docs/ once the
+  // push lands; tracked as known root debt (not unclassified) until then.
+  'PHASE2_MAP.md',
+  'PUBLIC_PAGES_AUDIT.md',
+  'REFERENCE_ANALYSIS.md',
+  'SKILL_SESSION.md',
   'libnull.rlib',
 ]);
 

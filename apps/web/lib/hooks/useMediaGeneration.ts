@@ -51,14 +51,11 @@ export function useMediaGeneration() {
         }
 
         const data = (await response.json()) as {
-          url?: string;
-          image_url?: string;
-          b64_json?: string;
+          images?: Array<{ url?: string; b64_json?: string }>;
         };
+        const first = data.images?.[0];
         const resultUrl =
-          data.url ||
-          data.image_url ||
-          (data.b64_json ? `data:image/png;base64,${data.b64_json}` : undefined);
+          first?.url || (first?.b64_json ? `data:image/png;base64,${first.b64_json}` : undefined);
 
         if (!resultUrl) throw new Error('No image URL in response');
 

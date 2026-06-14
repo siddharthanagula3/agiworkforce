@@ -469,7 +469,7 @@ export function ComputerUseSettings() {
               </h4>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Choose the vision-capable model that drives the Observe-Plan-Act loop.
-                Multi-provider parity vs Cowork's Anthropic-only mode.
+                Multi-provider parity vs Claude Cowork's Anthropic-only mode.
               </p>
             </div>
             <div className="space-y-2">
@@ -654,8 +654,8 @@ export function ComputerUseSettings() {
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Investment, brokerage, crypto, and banking apps are hardcoded as blocked at the
-                  agent level — matching Cowork's hard-blocked categories. {alwaysBlocked.length}{' '}
-                  bundle IDs are on this list.
+                  agent level — matching Claude Cowork's hard-blocked categories.{' '}
+                  {alwaysBlocked.length} bundle IDs are on this list.
                 </p>
               </div>
               <details className="text-xs">

@@ -16,6 +16,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
+import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 
 // Types
 export interface MessageMetadata {
@@ -41,7 +42,9 @@ export interface MessageMetadata {
   /** True while a server-managed web search is in progress */
   isSearching?: boolean;
   /** Web search results from server-managed tools */
-  searchResults?: Array<{ url: string; title: string; snippet: string }>;
+  searchResults?: WebSearchResults;
+  /** Safe replay metadata used to regenerate a turn without storing raw skill bodies. */
+  sendReplay?: SendReplayMetadata;
   /** True while server-managed code execution is running */
   isExecutingCode?: boolean;
   /** Tool activity timeline rendered below assistant messages. */
@@ -71,12 +74,22 @@ export interface MessageMetadata {
 export interface MessageToolEntry {
   id?: string;
   name: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_approval';
   durationMs?: number;
   args?: string;
   parameters?: Record<string, unknown>;
   parallelGroup?: string;
   error?: string;
+  /** When true, this tool call is blocked on user approval before execution. */
+  requiresApproval?: boolean;
+  /** Approval decision recorded by the user (true = approved, false = rejected). */
+  approved?: boolean;
+  /** Raw tool_call_id from the model, used for the approval round-trip. */
+  toolCallId?: string;
+  /** JSON-serialized args from the model, for display in the approval card. */
+  rawArgs?: Record<string, unknown>;
+  /** Tool result content after execution. */
+  result?: string;
 }
 
 export interface Message {
@@ -120,6 +133,12 @@ export interface Conversation {
   projectId?: string | null;
   messageCount?: number;
   isTemporary?: boolean;
+  /** Pinned to top of sidebar. Persisted in web_conversations.pinned. */
+  isPinned?: boolean;
+  /** Starred by the user. Client-side only (no DB column in v1). */
+  isStarred?: boolean;
+  /** Archived (hidden from default list). Client-side only (no DB column in v1). */
+  isArchived?: boolean;
 }
 
 export type ModelTier = 'economy' | 'balanced' | 'premium';
@@ -198,6 +217,12 @@ interface ChatState {
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean) => void;
   setToolTimeline: (id: string, tools: MessageToolEntry[]) => void;
+  /** Update a single tool entry by toolCallId within the message's tool timeline. */
+  updateToolEntry: (
+    messageId: string,
+    toolCallId: string,
+    updates: Partial<MessageToolEntry>,
+  ) => void;
   setCodeExecutionResult: (
     id: string,
     result: NonNullable<MessageMetadata['codeExecutionResult']>,
@@ -398,6 +423,22 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/setToolTimeline',
+          ),
+
+        updateToolEntry: (messageId, toolCallId, updates) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) => {
+                if (m.id !== messageId) return m;
+                const tools = m.metadata?.tools ?? [];
+                const updatedTools = tools.map((t) =>
+                  t.toolCallId === toolCallId ? { ...t, ...updates } : t,
+                );
+                return { ...m, metadata: { ...m.metadata, tools: updatedTools } };
+              }),
+            }),
+            undefined,
+            'chat/updateToolEntry',
           ),
 
         setCodeExecutionResult: (id, result) =>

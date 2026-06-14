@@ -41,6 +41,7 @@ const setApiKey = z.object({
 });
 
 const clearApiKey = z.object({ type: z.literal('clearApiKey') });
+const signIn = z.object({ type: z.literal('signIn') });
 const ready = z.object({ type: z.literal('ready') });
 const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
@@ -133,6 +134,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   sendMessage,
   setApiKey,
   clearApiKey,
+  signIn,
   ready,
   getModel,
   openSettings,

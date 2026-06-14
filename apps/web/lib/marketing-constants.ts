@@ -135,7 +135,10 @@ export const MARKETING = {
   skills: { count: 150, display: '150+', label: 'AI Skills' },
   categories: { count: 23, display: '23', label: 'Skill Categories' },
   tools: { count: 0, display: 'Tool-ready', label: 'Agent Tools' },
-  models: { count: 0, display: 'Multi-provider', label: 'Model Routing' },
+  // 60 catalog entries in packages/types/src/models.json (2026-06-03) minus
+  // 4 Auto-routing presets and 4 "(via OpenRouter)" duplicates = 52 unique
+  // models. '50+' is the defensible floor; re-verify after pnpm sync:models.
+  models: { count: 50, display: '50+', label: 'Models' },
   surfaces: { count: 6, display: '6', label: 'Platforms' },
   appSize: { value: 0, display: 'Native', label: 'Desktop Build' },
   tagline:

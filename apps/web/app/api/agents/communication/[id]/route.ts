@@ -65,8 +65,13 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
   } catch (err: unknown) {
     const pgErr = err as { code?: string; message?: string };
     if (pgErr.code === '42P01' || pgErr.message?.includes('does not exist')) {
-      // Table doesn't exist yet - return graceful success
-      return NextResponse.json({ success: true, delegation: null });
+      logger.warn(
+        { userId, delegationId: id },
+        'agent_delegations table does not exist; delegation responses are not provisioned',
+      );
+      throw createError.serviceUnavailable(
+        'Agent delegation is not available in this deployment yet. Your response was not recorded.',
+      );
     }
     logger.error({ err, userId, delegationId: id }, 'Failed to respond to delegation');
     throw createError.internal('Failed to respond to delegation');

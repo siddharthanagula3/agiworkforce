@@ -61,6 +61,10 @@ export interface VoicePartialResult {
   isFinal: boolean;
 }
 
+export interface VoiceCaptureSession {
+  result: Promise<OnDeviceTranscriptResult>;
+}
+
 type MeteringCallback = (event: VoiceInputMeteringEvent) => void;
 type PartialCallback = (event: VoicePartialResult) => void;
 
@@ -141,34 +145,49 @@ function pickLocale(): string {
  *   - on-device-recognition-unavailable (when locale not installed)
  *   - already-active (concurrent start)
  */
-export async function startCapture(
+export async function startCaptureSession(
   onMetering?: MeteringCallback,
   onPartial?: PartialCallback,
-): Promise<OnDeviceTranscriptResult> {
+): Promise<VoiceCaptureSession> {
   if (_active) {
     throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
   }
-
-  const granted = await requestMicPermission();
-  if (!granted) {
-    throw new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied');
-  }
-
-  const lang = pickLocale();
-  const onDeviceSupported =
-    typeof ExpoSpeechRecognitionModule.supportsOnDeviceRecognition === 'function'
-      ? ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()
-      : true;
-  const requiresOnDevice = onDeviceSupported;
-
   _active = true;
-  _startedAt = Date.now();
-  _latestPartial = '';
-  _latestConfidence = -1;
+  let result: Promise<OnDeviceTranscriptResult>;
 
-  return new Promise<OnDeviceTranscriptResult>((resolve, reject) => {
-    _finalResolve = resolve;
-    _finalReject = reject;
+  try {
+    const granted = await requestMicPermission();
+    if (!granted) {
+      _active = false;
+      throw new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied');
+    }
+
+    const lang = pickLocale();
+    const onDeviceSupported =
+      typeof ExpoSpeechRecognitionModule.supportsOnDeviceRecognition === 'function'
+        ? ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()
+        : true;
+    if (!onDeviceSupported) {
+      _active = false;
+      throw new VoiceCaptureError(
+        'on-device-recognition-unavailable',
+        'On-device voice recognition is not available on this device.',
+      );
+    }
+
+    _startedAt = Date.now();
+    _latestPartial = '';
+    _latestConfidence = -1;
+
+    let resolveFinal: ((result: OnDeviceTranscriptResult) => void) | null = null;
+    let rejectFinal: ((err: VoiceCaptureError) => void) | null = null;
+    result = new Promise<OnDeviceTranscriptResult>((resolve, reject) => {
+      resolveFinal = resolve;
+      rejectFinal = reject;
+    });
+
+    _finalResolve = resolveFinal;
+    _finalReject = rejectFinal;
 
     _listeners.push(
       ExpoSpeechRecognitionModule.addListener('result', (ev) => {
@@ -214,20 +233,33 @@ export async function startCapture(
       );
     }
 
-    try {
-      ExpoSpeechRecognitionModule.start({
-        lang,
-        interimResults: true,
-        continuous: false,
-        requiresOnDeviceRecognition: requiresOnDevice,
-        addsPunctuation: true,
-        volumeChangeEventOptions: onMetering ? { enabled: true, intervalMillis: 100 } : undefined,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to start recognizer';
-      settleError(new VoiceCaptureError('recognition-error', msg));
-    }
-  });
+    ExpoSpeechRecognitionModule.start({
+      lang,
+      interimResults: true,
+      continuous: false,
+      requiresOnDeviceRecognition: true,
+      addsPunctuation: true,
+      volumeChangeEventOptions: onMetering ? { enabled: true, intervalMillis: 100 } : undefined,
+    });
+  } catch (err) {
+    _active = false;
+    clearListeners();
+    _finalResolve = null;
+    _finalReject = null;
+    if (err instanceof VoiceCaptureError) throw err;
+    const msg = err instanceof Error ? err.message : 'Failed to start recognizer';
+    throw new VoiceCaptureError('recognition-error', msg);
+  }
+
+  return { result };
+}
+
+export async function startCapture(
+  onMetering?: MeteringCallback,
+  onPartial?: PartialCallback,
+): Promise<OnDeviceTranscriptResult> {
+  const session = await startCaptureSession(onMetering, onPartial);
+  return session.result;
 }
 
 /** Stop recognition and return the final transcript via the original startCapture promise. */

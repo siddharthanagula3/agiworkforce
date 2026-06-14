@@ -4,7 +4,7 @@
  * Verifies a TOTP code entered by the user after scanning the QR code, and
  * enables 2FA on their account.  Must be called after POST /api/settings/2fa/setup.
  *
- * Body: { code: string }  — the 6-digit TOTP code from the authenticator app
+ * Body: { code: string }  · the 6-digit TOTP code from the authenticator app
  *
  * Returns { success: true } on success or 401 on invalid code.
  */
@@ -50,7 +50,7 @@ async function handleVerify2FA(request: NextRequest) {
 
   if (!row) {
     throw createError.badRequest(
-      '2FA setup not initiated — call POST /api/settings/2fa/setup first',
+      '2FA setup not initiated · call POST /api/settings/2fa/setup first',
     );
   }
 

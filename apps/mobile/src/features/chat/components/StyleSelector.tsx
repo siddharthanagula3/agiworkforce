@@ -1,14 +1,11 @@
-import { useCallback, forwardRef } from 'react';
-import { View, Pressable } from 'react-native';
-import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import { useCallback, useEffect, useState } from 'react';
+import { Modal, View, Pressable } from 'react-native';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
-
-const SNAP_POINTS = ['50%'];
 
 const STYLE_OPTIONS: Array<{
   id: ChatStyle;
@@ -21,9 +18,14 @@ const STYLE_OPTIONS: Array<{
   { id: 'creative', label: 'Creative', description: 'Imaginative, expressive' },
 ];
 
-export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_props, ref) {
+interface StyleSelectorProps {
+  openSignal?: number;
+}
+
+export function StyleSelector({ openSignal }: StyleSelectorProps) {
   const { colors: themeColors } = useTheme();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const [visible, setVisible] = useState(false);
 
   const chatStyle = useChatStore((s) => s.chatStyle);
   const setChatStyle = useChatStore((s) => s.setChatStyle);
@@ -35,10 +37,13 @@ export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_pro
   }, [hapticsEnabled]);
 
   const closeSheet = useCallback(() => {
-    if (ref && 'current' in ref && ref.current) {
-      ref.current.close();
-    }
-  }, [ref]);
+    setVisible(false);
+  }, []);
+
+  useEffect(() => {
+    if (!openSignal) return;
+    setVisible(true);
+  }, [openSignal]);
 
   const handleSelect = useCallback(
     (style: ChatStyle) => {
@@ -49,122 +54,152 @@ export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_pro
     [haptic, setChatStyle, closeSheet],
   );
 
-  const renderBackdrop = useCallback(
-    (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.5} />
-    ),
-    [],
-  );
-
   return (
-    <BottomSheet
-      ref={ref}
-      index={-1}
-      snapPoints={SNAP_POINTS}
-      enablePanDownToClose
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: themeColors.surfaceElevated }}
-      handleIndicatorStyle={{ backgroundColor: themeColors.textMuted }}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={closeSheet}
+      statusBarTranslucent
     >
-      {/* Header */}
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 20,
-          paddingBottom: 16,
+          flex: 1,
+          justifyContent: 'flex-end',
+          backgroundColor: themeColors.scrim,
         }}
       >
         <Pressable
+          style={{ flex: 1 }}
           onPress={closeSheet}
-          style={{ padding: 4 }}
-          accessibilityLabel="Close"
+          accessibilityLabel="Close style selector"
           accessibilityRole="button"
-        >
-          <X size={20} color={themeColors.textMuted} />
-        </Pressable>
-        <Text
+        />
+        <View
           style={{
-            fontSize: 16,
-            fontWeight: '600',
-            color: themeColors.textPrimary,
+            backgroundColor: themeColors.surfaceElevated,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            paddingTop: 8,
+            paddingBottom: 34,
+            borderTopWidth: 1,
+            borderColor: themeColors.border,
           }}
         >
-          Choose Style
-        </Text>
-        <View style={{ width: 28 }} />
-      </View>
+          <View
+            style={{
+              alignSelf: 'center',
+              width: 38,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: themeColors.textMuted,
+              marginBottom: 14,
+            }}
+          />
 
-      {/* Options */}
-      <View style={{ paddingHorizontal: 20, gap: 4 }}>
-        {STYLE_OPTIONS.map((option) => {
-          const isSelected = chatStyle === option.id;
-          return (
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 20,
+              paddingBottom: 16,
+            }}
+          >
             <Pressable
-              key={option.id}
-              onPress={() => handleSelect(option.id)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                gap: 12,
-                paddingVertical: 12,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                backgroundColor: isSelected ? themeColors.accentSurface : themeColors.transparent,
-              }}
-              accessibilityLabel={`${option.label} style${isSelected ? ', selected' : ''}`}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: isSelected }}
+              onPress={closeSheet}
+              style={{ padding: 4 }}
+              accessibilityLabel="Close style selector"
+              accessibilityRole="button"
             >
-              {/* Radio circle */}
-              <View
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  borderWidth: 2,
-                  borderColor: isSelected ? themeColors.teal : themeColors.textMuted,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: 2,
-                }}
-              >
-                {isSelected && (
+              <X size={20} color={themeColors.textMuted} />
+            </Pressable>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: '600',
+                color: themeColors.textPrimary,
+              }}
+            >
+              Choose Style
+            </Text>
+            <View style={{ width: 28 }} />
+          </View>
+
+          {/* Options */}
+          <View style={{ paddingHorizontal: 20, gap: 4 }}>
+            {STYLE_OPTIONS.map((option) => {
+              const isSelected = chatStyle === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  onPress={() => handleSelect(option.id)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    paddingVertical: 12,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: isSelected
+                      ? themeColors.accentSurface
+                      : themeColors.transparent,
+                  }}
+                  accessibilityLabel={`${option.label} style${isSelected ? ', selected' : ''}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                >
+                  {/* Radio circle */}
                   <View
                     style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 5,
-                      backgroundColor: themeColors.teal,
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: isSelected ? themeColors.teal : themeColors.textMuted,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginTop: 2,
                     }}
-                  />
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: '500',
-                    color: themeColors.textPrimary,
-                  }}
-                >
-                  {option.label}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    color: themeColors.textMuted,
-                    marginTop: 2,
-                  }}
-                >
-                  {option.description}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
+                  >
+                    {isSelected && (
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: themeColors.teal,
+                        }}
+                      />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight: '500',
+                        color: themeColors.textPrimary,
+                      }}
+                    >
+                      {option.label}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: themeColors.textMuted,
+                        marginTop: 2,
+                      }}
+                    >
+                      {option.description}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
       </View>
-    </BottomSheet>
+    </Modal>
   );
-});
+}

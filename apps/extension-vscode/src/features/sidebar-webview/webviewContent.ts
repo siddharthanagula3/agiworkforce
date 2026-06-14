@@ -124,8 +124,42 @@ export function getWebviewContent(
     .header-title {
       font-size: 13px;
       font-weight: 600;
-      color: var(--accent-teal);
-      letter-spacing: 0.3px;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+
+    /* Brand mark — the 12-spoke AGI symbol, rendered mono. */
+    .brand-mark {
+      width: 18px;
+      height: 18px;
+      color: var(--text-primary);
+      flex-shrink: 0;
+      line-height: 0;
+    }
+    .brand-mark svg { display: block; width: 18px; height: 18px; }
+
+    /* Cloud identity pill — always-on "AGI Cloud" (cloud-only surface). */
+    .cloud-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: var(--text-secondary);
+      background: var(--bg-overlay);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .cloud-pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-teal);
+      flex-shrink: 0;
     }
 
     .header-left {
@@ -915,10 +949,24 @@ export function getWebviewContent(
 </head>
 <body>
 
+  <!-- The real AGI mark: 12 spokes, rendered mono via currentColor. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="agimark" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+      <line x1="12" y1="7.40" x2="12" y2="3.00"/><line x1="14.30" y1="8.02" x2="16.50" y2="4.21"/>
+      <line x1="15.98" y1="9.70" x2="19.79" y2="7.50"/><line x1="16.60" y1="12.00" x2="21.00" y2="12.00"/>
+      <line x1="15.98" y1="14.30" x2="19.79" y2="16.50"/><line x1="14.30" y1="15.98" x2="16.50" y2="19.79"/>
+      <line x1="12.00" y1="16.60" x2="12.00" y2="21.00"/><line x1="9.70" y1="15.98" x2="7.50" y2="19.79"/>
+      <line x1="8.02" y1="14.30" x2="4.21" y2="16.50"/><line x1="7.40" y1="12.00" x2="3.00" y2="12.00"/>
+      <line x1="8.02" y1="9.70" x2="4.21" y2="7.50"/><line x1="9.70" y1="8.02" x2="7.50" y2="4.21"/>
+    </g>
+  </symbol></svg>
+
   <!-- ── Header ── -->
   <div class="header">
     <div class="header-left">
-      <span class="header-title">AGI Workforce</span>
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
+      <span class="header-title">AGI</span>
+      <span class="cloud-pill"><span class="cloud-pill-dot"></span>AGI Cloud</span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -959,14 +1007,12 @@ export function getWebviewContent(
     <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage meter">&#9660; Usage</button>
   </div>
 
-  <!-- ── API key banner (hidden when key is present) ── -->
+  <!-- ── Sign-in CTA (shown when not signed in) ── -->
   <div class="api-key-banner" id="apiKeyBanner" style="display:none">
-    <p>Enter your AGI Workforce API key to start chatting.<br/>
-       Get one at <strong>agiworkforce.com</strong></p>
+    <p><strong>Sign in to AGI</strong><br/>
+       Your AGI Cloud workspace — chat, projects &amp; memory, across every device.</p>
     <div class="api-key-input-row">
-      <input type="password" class="api-key-input" id="apiKeyInput"
-             placeholder="sk-agi-…" autocomplete="off" spellcheck="false" />
-      <button class="save-key-btn" id="saveKeyBtn">Save</button>
+      <button class="save-key-btn" id="signInBtn">Sign in to AGI Cloud</button>
     </div>
   </div>
 
@@ -1021,7 +1067,7 @@ export function getWebviewContent(
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Switch model" aria-haspopup="true" aria-expanded="false">${escapeHtml(MODEL_PICKER_OPTIONS[0]?.label ?? 'Model')}</button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">AGI Cloud · Auto</button>
         <button class="mode-chip" id="modeChip" title="Agent mode">${modeLabel}</button>
         <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>${effortLabel}</button>
         <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
@@ -1046,8 +1092,7 @@ export function getWebviewContent(
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const apiKeyBanner = document.getElementById('apiKeyBanner');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const signInBtn = document.getElementById('signInBtn');
     const actionsBtn = document.getElementById('actionsBtn');
     const historyBtn = document.getElementById('historyBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -1499,16 +1544,11 @@ export function getWebviewContent(
       vscode.postMessage({ type: 'openEffortPicker' });
     });
 
-    saveKeyBtn.addEventListener('click', () => {
-      const key = apiKeyInput.value.trim();
-      if (!key) return;
-      vscode.postMessage({ type: 'setApiKey', payload: { key } });
-      apiKeyInput.value = '';
-    });
-
-    apiKeyInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') saveKeyBtn.click();
-    });
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'signIn' });
+      });
+    }
 
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
     var composerCard = document.getElementById('composerCard');
@@ -1667,13 +1707,18 @@ export function getWebviewContent(
           accumulatedContent = '';
         }
         accumulatedContent += msg.payload.text;
-        currentAssistantEl.textContent = accumulatedContent;
+        // Render markdown incrementally so there is no raw-markdown → HTML
+        // flash at stream completion. renderAssistant falls back to escaped
+        // plain text if window.agiRender is not yet loaded.
+        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
+          // Content is already rendered; re-render once to ensure the final
+          // token is flushed, then bind copy buttons on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCopyButtons(currentAssistantEl);
         }
@@ -1723,7 +1768,13 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'model') {
-        const opt = modelSelect.querySelector('option[value="' + msg.payload.model + '"]');
+        // Match by comparing option.value directly rather than building a CSS
+        // selector via string concat — a model id containing a quote/"]" would
+        // throw a SyntaxError and break model display (audit 218 L1726).
+        let opt = null;
+        for (const o of modelSelect.options) {
+          if (o.value === msg.payload.model) { opt = o; break; }
+        }
         if (opt) {
           modelSelect.value = msg.payload.model;
           if (modelPill) modelPill.textContent = opt.text;

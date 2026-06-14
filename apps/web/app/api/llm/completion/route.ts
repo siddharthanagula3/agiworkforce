@@ -15,6 +15,7 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { getEconomyFallbackModels, normalizeModelId } from '@agiworkforce/types';
 
@@ -206,6 +207,13 @@ async function handleLLMCompletion(request: NextRequest) {
 
   // Determine provider from model
   let provider = LLMProviderFactory.getProviderFromModel(llmRequest.model);
+
+  const managedGateResponse = buildManagedComputeGateResponse(request, {
+    provider,
+    model: llmRequest.model,
+    feature: 'llm_completion_legacy',
+  });
+  if (managedGateResponse) return managedGateResponse;
 
   const KNOWN_PROVIDERS = new Set([
     'openai',

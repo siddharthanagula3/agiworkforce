@@ -300,17 +300,21 @@ export const agiExtensionCssVars = {
 } as const satisfies Record<AgiThemeMode, CssVariableMap>;
 
 export const agiVsCodeCssVars = {
-  '--agi-vscode-bg': 'var(--vscode-sideBar-background, #1a1915)',
-  '--agi-vscode-surface': 'var(--vscode-editorWidget-background, #242220)',
-  '--agi-vscode-overlay': 'var(--vscode-input-background, #2e2b28)',
-  '--agi-vscode-text': 'var(--vscode-foreground, #e8e4db)',
-  '--agi-vscode-text-muted': 'var(--vscode-descriptionForeground, #8b8680)',
-  '--agi-vscode-border': 'var(--vscode-input-border, rgba(255, 235, 205, 0.15))',
-  '--agi-vscode-button': 'var(--vscode-button-background, #21808d)',
-  '--agi-vscode-button-text': 'var(--vscode-button-foreground, #ffffff)',
-  '--agi-vscode-focus': 'var(--vscode-focusBorder, #21808d)',
-  '--agi-vscode-hover': 'var(--vscode-list-hoverBackground, rgba(255, 235, 205, 0.08))',
-  '--agi-vscode-terra': 'var(--vscode-button-secondaryBackground, #da7756)',
+  // AGI-branded panel palette (founder-approved 2026-06-13): the website's
+  // Linear-style cool-neutral set + indigo accent (#5e6ad2). Fixed (not
+  // theme-derived) so the panel carries the AGI brand identity consistently
+  // across VS Code + Cursor + Windsurf + Antigravity. Single source of truth.
+  '--agi-vscode-bg': '#09090b',
+  '--agi-vscode-surface': '#151518',
+  '--agi-vscode-overlay': '#202024',
+  '--agi-vscode-text': '#fafafa',
+  '--agi-vscode-text-muted': '#a1a1aa',
+  '--agi-vscode-border': '#242428',
+  '--agi-vscode-button': '#5e6ad2',
+  '--agi-vscode-button-text': '#ffffff',
+  '--agi-vscode-focus': '#5e6ad2',
+  '--agi-vscode-hover': '#26262b',
+  '--agi-vscode-terra': '#828fff',
   '--agi-vscode-danger': 'var(--vscode-errorForeground, #ef4444)',
   '--agi-vscode-danger-bg': 'rgba(239, 68, 68, 0.12)',
   '--agi-vscode-danger-border': 'rgba(239, 68, 68, 0.3)',

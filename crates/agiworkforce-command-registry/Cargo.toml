@@ -3,7 +3,7 @@ name = "agiworkforce-command-registry"
 version = "0.1.0"
 edition = "2021"
 authors = ["AGI Automation LLC"]
-description = "Claude-style command registry contracts for AGI Workforce CLI and TUI surfaces"
+description = "AGI command registry contracts for CLI and TUI surfaces"
 license = "Proprietary"
 
 [lints.rust]
