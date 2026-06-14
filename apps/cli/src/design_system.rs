@@ -326,6 +326,17 @@ impl Effort {
         }
     }
 
+    /// Returns the Anthropic extended-thinking budget for this effort level,
+    /// or `None` for Low/Medium where standard inference is used.
+    /// High = 32K tokens, Max = 65K tokens.
+    pub fn thinking_budget_for_anthropic(self) -> Option<u32> {
+        match self {
+            Effort::Low | Effort::Medium => None,
+            Effort::High => Some(32_768),
+            Effort::Max => Some(65_536),
+        }
+    }
+
     /// OpenAI `reasoning.effort` string (mirrors `OPENAI_REASONING_EFFORT`).
     /// Note: `Max` falls back to `"high"` for o-series.
     #[allow(dead_code)]
