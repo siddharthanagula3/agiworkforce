@@ -1,7 +1,7 @@
 /**
  * QuickAnswerToggle Component
  *
- * ChatGPT-style toggle that appears on assistant messages which used extended thinking.
+ * Toggle that appears on assistant messages which used extended thinking.
  * Lets users switch between the detailed thinking response and a concise quick answer.
  */
 
