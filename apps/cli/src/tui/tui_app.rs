@@ -954,7 +954,8 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         let col_text_width =
             Line::from(text_before[line_start_byte..].to_string()).width() as u16;
 
-        let indent_width = if cursor_row == 0 { prompt_width } else { prompt_width };
+        // Continuation rows align under the first line's text, same as row 0.
+        let indent_width = prompt_width;
         let cursor_x = area.x + 1 + indent_width + col_text_width;
         let cursor_y = area.y + 1 + cursor_row as u16;
         frame.set_cursor_position((cursor_x, cursor_y));
