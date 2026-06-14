@@ -509,18 +509,10 @@ pub async fn settings_load_from_disk(
             loaded_settings.global_hotkey_preferences.combo = default_global_hotkey_combo();
         }
 
-        // Cloud gating migration: if a user previously opted into cloud sync before
-        // the explicit cloud gate, coerce chat_storage_mode back to "local" on load.
-        // This prevents spawn_sync_message from firing for upgrading users.
-        // Remove this coercion when cloud sync is ungated for production.
-        if let Some(ref mut chat_prefs) = loaded_settings.chat_preferences {
-            if chat_prefs.chat_storage_mode == "cloud" {
-                tracing::info!(
-                    "cloud gate: coercing persisted chat_storage_mode 'cloud' to 'local'"
-                );
-                chat_prefs.chat_storage_mode = "local".to_string();
-            }
-        }
+        // REMOVED: do NOT coerce the user's persisted chat_storage_mode.
+        // A mode the user explicitly saved must be honored exactly.
+        // (The old coercion from 'cloud'->'local' was a silent trust-boundary
+        // violation that hid the actual persisted state from the backend.)
 
         // Update in-memory state
         let mut current_settings = state.settings.lock().await;
