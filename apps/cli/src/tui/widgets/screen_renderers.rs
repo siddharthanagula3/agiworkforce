@@ -846,7 +846,9 @@ pub fn render_keybindings() -> String {
         String::new(),
         "    Editor".to_string(),
         "      Ctrl+E       Open external editor for current input".to_string(),
-        "      Alt+Enter    Insert newline without submitting".to_string(),
+        "      Enter        Send message".to_string(),
+        "      Shift+Enter  Insert newline (multiline)".to_string(),
+        "      Alt+Enter    Insert newline (multiline, alternate)".to_string(),
     ];
     frame("Keybindings".to_string(), &body, "Esc to close")
 }
