@@ -25,11 +25,21 @@ const BASE_STYLES =
   `body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: CanvasText; background: Canvas; } ` +
   `</style>`;
 
-const CSP_META_TAG_PATTERN =
-  /<meta\s+[^>]*http-equiv\s*=\s*(["']?)content-security-policy\1[^>]*>/gi;
+// CSP <meta> tags are stripped in two ReDoS-free passes. The only regex applied
+// to (untrusted) artifact content is META_TAG_PATTERN, whose single unbounded
+// quantifier `[^>]*` is hard-anchored by `>` — linear, the canonical safe form.
+// The CSP check then uses plain substring `.includes()` (no quantifier, so no
+// polynomial backtracking is possible) instead of a regex over the matched tag.
+// An earlier `\s*["']?\s*content-security-policy` form put two `\s*` adjacent
+// whenever the optional quote was absent — that is the polynomial CodeQL
+// (correctly) flagged.
+const META_TAG_PATTERN = /<meta\b[^>]*>/gi;
 
 function stripCspMetaTags(content: string): string {
-  return content.replace(CSP_META_TAG_PATTERN, '');
+  return content.replace(META_TAG_PATTERN, (tag) => {
+    const lower = tag.toLowerCase();
+    return lower.includes('http-equiv') && lower.includes('content-security-policy') ? '' : tag;
+  });
 }
 
 function injectHeadContent(documentHtml: string, headContent: string): string {
