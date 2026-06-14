@@ -13,7 +13,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { secureFetch } from '@/services/secureFetch';
 import { getAuthToken } from '@/services/authSession';
 import {
-  startCapture,
+  startCaptureSession,
   stopCapture,
   cancelCapture,
   isCapturing,
@@ -70,12 +70,20 @@ export async function startRecording(onMetering?: MeteringCallback): Promise<voi
         })
     : undefined;
 
-  _activeCapturePromise = startCapture(meteringAdapter).then((result) => {
+  // await startCaptureSession so that permission / availability errors (thrown
+  // before the recognizer starts) propagate as rejections on startRecording()
+  // itself — fail-closed. The returned { result } promise resolves only when
+  // the user stops speaking; store it so stopRecording / cancelRecording can
+  // await it.
+  const session = await startCaptureSession(meteringAdapter);
+  _activeCapturePromise = session.result.then((result) => {
     _lastResult = result;
     return result;
   });
   _activeCapturePromise.catch(() => {
-    // Caller of stopRecording / transcribe handles errors.
+    // Errors after the session starts (recognition-error, aborted) are handled
+    // by stopRecording / transcribe.
+    _activeCapturePromise = null;
   });
 }
 
