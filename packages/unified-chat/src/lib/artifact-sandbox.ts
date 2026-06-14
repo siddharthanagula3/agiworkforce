@@ -25,17 +25,18 @@ const BASE_STYLES =
   `body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: CanvasText; background: Canvas; } ` +
   `</style>`;
 
-// NOTE: `\s` is intentionally a single required whitespace (not `\s+`). A
-// `\s+` here overlaps the following `[^>]*` (space is also a non-`>` char),
-// producing two adjacent unbounded quantifiers over the same input — quadratic
-// backtracking on hostile strings like `<meta ` + many spaces (CodeQL
-// js/polynomial-redos). One fixed-width `\s` is language-equivalent (the
-// `[^>]*` already absorbs any further whitespace) but backtracks linearly.
-const CSP_META_TAG_PATTERN =
-  /<meta\s[^>]*http-equiv\s*=\s*(["']?)content-security-policy\1[^>]*>/gi;
+// CSP <meta> tags are stripped in two linear passes to avoid ReDoS. A single
+// regex like `<meta\s+[^>]*http-equiv...` places two unbounded quantifiers over
+// overlapping classes (whitespace is a subset of non-`>`) next to each other,
+// which CodeQL flags as js/polynomial-redos (hostile input: `<meta ` followed
+// by many spaces). Here the only `*` is `[^>]*>` — a single quantifier
+// hard-anchored by `>`, so it backtracks linearly — and the CSP attribute test
+// runs once per already-bounded tag.
+const META_TAG_PATTERN = /<meta\b[^>]*>/gi;
+const CSP_HTTP_EQUIV_PATTERN = /http-equiv\s*=\s*["']?\s*content-security-policy\b/i;
 
 function stripCspMetaTags(content: string): string {
-  return content.replace(CSP_META_TAG_PATTERN, '');
+  return content.replace(META_TAG_PATTERN, (tag) => (CSP_HTTP_EQUIV_PATTERN.test(tag) ? '' : tag));
 }
 
 function injectHeadContent(documentHtml: string, headContent: string): string {
