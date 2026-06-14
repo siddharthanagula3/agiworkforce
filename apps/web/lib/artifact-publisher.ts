@@ -1,10 +1,10 @@
 /**
- * Artifact publish helper — web surface adapter.
+ * Artifact publish helper · web surface adapter.
  *
- * v1 LOCAL ONLY (lock: v1-local-only-cloud-waitlist-2026-05-18):
+ * Web publish boundary:
  *
- * Web has no local filesystem. Cloud publish is waitlist-gated because the
- * `published_artifacts` table migration ships only in private beta.
+ * Web has no local filesystem. Cloud publish is waitlist-gated because managed
+ * artifact publishing is not proven for public use yet.
  *
  * This adapter always returns a clean {@link WaitlistPublishResult} instead of
  * attempting any network call or DB upsert. The previous implementation threw
@@ -12,7 +12,7 @@
  * production. That error class is gone; the route now receives a discriminated
  * union and returns 200 with kind='waitlist'.
  *
- * See: locks/v1-local-only-cloud-waitlist-2026-05-18.md
+ * See the current product source of truth before changing this gate.
  */
 import 'server-only';
 
@@ -76,8 +76,8 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
     );
   }
 
-  // v1 LOCAL ONLY: web has no local filesystem; cloud publish is waitlist-gated.
-  // Return clean discriminated union — no DB upsert, no network call.
+  // Web has no local filesystem; cloud publish is waitlist-gated.
+  // Return clean discriminated union · no DB upsert, no network call.
   const result: WaitlistPublishResult = {
     kind: 'waitlist',
     shareUrl: null,

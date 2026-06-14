@@ -1,24 +1,61 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUser, useClerk } from '@clerk/nextjs';
+import { useTheme } from 'next-themes';
+import { Moon, Sun } from 'lucide-react';
 import { AgiMark } from '../agi/AgiMark';
 
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  // Render a stable placeholder until mounted to avoid hydration mismatch.
+  if (!mounted) {
+    return <span className="agi-top-theme-toggle" aria-hidden="true" />;
+  }
+
+  const isDark = resolvedTheme === 'dark';
+  return (
+    <button
+      type="button"
+      className="agi-top-link agi-top-theme-toggle"
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+    >
+      {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+    </button>
+  );
+}
+
 /*
- * Site-wide marketing header. Same exports as the previous editorial
- * version so every page that imports `Header` continues to work.
- * Auth wiring uses Clerk (useUser + useClerk from @clerk/nextjs).
+ * Site-wide marketing header. Same exports as the previous version so every
+ * page that imports `Header` continues to work. Auth wiring uses Clerk
+ * (useUser + useClerk from @clerk/nextjs).
+ *
+ * Adds a "Products" disclosure listing all six surfaces so the suite is
+ * one click away from every marketing page. The menu is keyboard-accessible:
+ * Escape closes, click-outside closes, aria-expanded reflects state.
  */
 
+const PRODUCT_ITEMS = [
+  { href: '/desktop', label: 'AGI Desktop', hint: 'Local + BYOK host' },
+  { href: '/mobile', label: 'AGI Mobile', hint: 'Private AI in your pocket' },
+  { href: '/cli', label: 'AGI CLI', hint: 'Agent in your terminal' },
+  { href: '/chrome-extension', label: 'AGI in Chrome', hint: 'Browser side panel' },
+  { href: '/vscode-extension', label: 'AGI in VS Code', hint: 'IDE-native assistance' },
+  { href: '/agi-code', label: 'AGI Code', hint: 'The developer stack' },
+  { href: '/apps', label: 'Apps & Connectors', hint: 'MCP tools & integrations' },
+] as const;
+
 const NAV_ITEMS = [
-  { href: '/business', key: 'navBusiness' },
-  { href: '/agi-code', key: 'navAgiCode' },
-  { href: '/apps', key: 'navApps' },
-  { href: '/pricing', key: 'navPricing' },
-  { href: '/compare', key: 'navCompare' },
-  { href: '/contact-sales', key: 'navContactSales' },
+  { href: '/pricing', key: 'navPricing', fallback: 'Pricing' },
+  { href: '/business', key: 'navBusiness', fallback: 'Business' },
+  { href: '/docs', key: 'navDocs', fallback: 'Docs' },
 ] as const;
 
 export function Header() {
@@ -26,8 +63,29 @@ export function Header() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProductsOpen, setIsProductsOpen] = useState(false);
+  const productsRef = useRef<HTMLDivElement | null>(null);
 
   const userEmail = isLoaded ? (user?.primaryEmailAddress?.emailAddress ?? null) : null;
+
+  useEffect(() => {
+    if (!isProductsOpen) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (productsRef.current && !productsRef.current.contains(e.target as Node)) {
+        setIsProductsOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsProductsOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isProductsOpen]);
 
   const handleSignOut = async () => {
     await signOut({ redirectUrl: '/' });
@@ -52,10 +110,44 @@ export function Header() {
         style={{ display: 'flex', alignItems: 'center', gap: 24 }}
       >
         {/* Desktop nav links */}
-        <span className="agi-top-nav-desktop" style={{ display: 'inline-flex', gap: 24 }}>
+        <span
+          className="agi-top-nav-desktop"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 24 }}
+        >
+          <ThemeToggle />
+          <div className="agi-top-products" ref={productsRef}>
+            <button
+              type="button"
+              className="agi-top-link agi-top-products-button"
+              aria-expanded={isProductsOpen}
+              aria-haspopup="true"
+              onClick={() => setIsProductsOpen((v) => !v)}
+            >
+              {t('navProducts', 'Products')}
+              <span aria-hidden="true" className="agi-top-products-chevron">
+                {isProductsOpen ? '▴' : '▾'}
+              </span>
+            </button>
+            {isProductsOpen && (
+              <div className="agi-top-products-menu" role="menu" aria-label="AGI products">
+                {PRODUCT_ITEMS.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    role="menuitem"
+                    className="agi-top-products-item"
+                    onClick={() => setIsProductsOpen(false)}
+                  >
+                    <span className="agi-top-products-label">{item.label}</span>
+                    <span className="agi-top-products-hint">{item.hint}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
           {NAV_ITEMS.map((item) => (
             <Link key={item.href} href={item.href} className="agi-top-link">
-              {t(item.key)}
+              {t(item.key, item.fallback)}
             </Link>
           ))}
         </span>
@@ -71,18 +163,10 @@ export function Header() {
               </button>
             </>
           ) : (
-            <>
-              <Link href="/chat" className="agi-top-link">
-                Try AGI
-              </Link>
-              <Link href="/login" className="agi-top-link">
-                {t('navSignIn')}
-              </Link>
-            </>
+            <Link href="/login" className="agi-top-link">
+              {t('navSignIn')}
+            </Link>
           )}
-          <Link href="/download" className="agi-top-cta">
-            {t('navInstall')}
-          </Link>
         </span>
 
         {/* Mobile menu toggle */}
@@ -118,6 +202,17 @@ export function Header() {
             zIndex: 50,
           }}
         >
+          <span className="agi-top-mobile-group">{t('navProducts', 'Products')}</span>
+          {PRODUCT_ITEMS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="agi-top-link"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              {item.label}
+            </Link>
+          ))}
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
@@ -125,7 +220,7 @@ export function Header() {
               className="agi-top-link"
               onClick={() => setIsMenuOpen(false)}
             >
-              {t(item.key)}
+              {t(item.key, item.fallback)}
             </Link>
           ))}
           {userEmail ? (
@@ -138,18 +233,10 @@ export function Header() {
               </button>
             </>
           ) : (
-            <>
-              <Link href="/chat" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
-                Try AGI
-              </Link>
-              <Link href="/login" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
-                {t('navSignIn')}
-              </Link>
-            </>
+            <Link href="/login" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
+              {t('navSignIn')}
+            </Link>
           )}
-          <Link href="/download" className="agi-top-cta" onClick={() => setIsMenuOpen(false)}>
-            {t('navInstall')}
-          </Link>
         </div>
       )}
 

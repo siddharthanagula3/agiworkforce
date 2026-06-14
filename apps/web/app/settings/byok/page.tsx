@@ -1,5 +1,5 @@
 /**
- * /settings/byok — API keys (BYOK) settings section.
+ * /settings/byok · API keys (BYOK) settings section.
  *
  * Shows which env-based provider keys are configured (presence only, never value).
  * Browser-managed key entry is a hosted upgrade capability; env-based BYOK
@@ -86,7 +86,7 @@ export default function ByokSettingsPage() {
         >
           Providers
         </div>
-        {/* EnvKeyStatusList is a client component — receives static provider metadata,
+        {/* EnvKeyStatusList is a client component · receives static provider metadata,
             fetches isSet status from /api/byok/env-key-status at mount */}
         <EnvKeyStatusList providers={BYOK_PROVIDERS} />
       </section>

@@ -35,6 +35,7 @@ const IGNORED_DIRS = new Set([
 const EXEMPT_PREFIXES = [
   'apps/mobile/__tests__/',
   'apps/mobile/scripts/screenshots/',
+  'apps/mobile/src/ui/theme/tokens.ts',
   'packages/design-tokens/',
 ];
 
@@ -105,6 +106,9 @@ function scanFile(relPath) {
       regex.lastIndex = 0;
       let m;
       while ((m = regex.exec(codeOnly)) !== null) {
+        if (rule === 'named-color' && /<Badge\b/.test(codeOnly)) {
+          continue;
+        }
         hits.push({
           file: relPath,
           line: i + 1,

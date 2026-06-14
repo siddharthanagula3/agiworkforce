@@ -1,0 +1,1155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AGI for VS Code — Cloud Chat Preview</title>
+    <style>
+      /* ─────────────────────────────────────────────────────────────
+     AGI for VS Code · Cloud chat · production visual preview (v2)
+     Matched to the WEBSITE palette (apps/web globals.css, Linear set):
+       bg hsl(240 10% 3.9%)=#09090b · card #151518 · muted #242428
+       ink #fafafa · grey #a1a1aa · accent = Linear indigo #5e6ad2
+     Logo = the real 12-spoke AGI mark, rendered MONO (black/grey/white).
+     Static design preview (no backend). Toggle states at the top.
+  ───────────────────────────────────────────────────────────── */
+      :root {
+        --bg: #09090b;
+        --surface: #151518;
+        --surface-2: #1a1a1e;
+        --overlay: #202024;
+        --hover: #26262b;
+        --editor-bg: #0c0c0e;
+        --sidebar: #060607;
+        --input: #161619;
+        --code: #0d0d10;
+        --border: #242428;
+        --border-soft: #1c1c20;
+        --text: #fafafa;
+        --text-2: #a1a1aa;
+        --text-3: #6b6b73;
+        --accent: #5e6ad2;
+        --accent-hi: #828fff;
+        --accent-press: #4f5ac0;
+        --accent-soft: rgba(94, 106, 210, 0.14);
+        --accent-line: rgba(94, 106, 210, 0.3);
+        --green: #3fb950;
+        --user-bubble: #1c1c20;
+        --radius: 10px;
+        --radius-lg: 13px;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
+        --sans: ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+        background:
+          radial-gradient(1100px 640px at 80% -12%, #131318 0%, transparent 58%),
+          radial-gradient(820px 540px at 8% 112%, #0e0e12 0%, transparent 62%), #060608;
+        color: var(--text);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+      .stage {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        padding: 28px 20px 48px;
+      }
+
+      /* logo mark sizing (uses the <symbol> below) */
+      .mk {
+        display: inline-block;
+        line-height: 0;
+        color: var(--text);
+      }
+      .mk svg {
+        display: block;
+      }
+
+      /* ── top controls ── */
+      .topbar {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+      .brandline {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+      .brandline .badge {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        display: grid;
+        place-items: center;
+        color: var(--text);
+      }
+      .brandline h1 {
+        font-size: 16.5px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--text);
+      }
+      .brandline .sub {
+        color: var(--text-3);
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+      .toggle {
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 4px;
+        gap: 2px;
+      }
+      .toggle button {
+        border: 0;
+        background: transparent;
+        color: var(--text-2);
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        padding: 7px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition:
+          color 0.2s var(--ease),
+          background 0.2s var(--ease);
+      }
+      .toggle button.active {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 2px 10px rgba(94, 106, 210, 0.4);
+      }
+
+      /* ── VS Code window chrome ── */
+      .vscode {
+        width: min(1080px, 96vw);
+        height: 680px;
+        background: var(--bg);
+        border: 1px solid #000;
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow:
+          0 40px 90px -30px rgba(0, 0, 0, 0.85),
+          0 0 0 1px rgba(255, 255, 255, 0.03);
+      }
+      .titlebar {
+        height: 36px;
+        flex: none;
+        background: #0b0b0d;
+        display: flex;
+        align-items: center;
+        padding: 0 13px;
+        gap: 9px;
+        border-bottom: 1px solid #000;
+      }
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+      .dot.r {
+        background: #ec6a5e;
+      }
+      .dot.y {
+        background: #f4bf4f;
+      }
+      .dot.g {
+        background: #61c554;
+      }
+      .titlebar .title {
+        flex: 1;
+        text-align: center;
+        color: var(--text-3);
+        font-size: 12px;
+      }
+      .titlebar .editor-tag {
+        font-size: 11px;
+        color: var(--text-3);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 2px 8px;
+      }
+      .body {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+
+      .activity {
+        width: 48px;
+        flex: none;
+        background: var(--sidebar);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 10px 0;
+        gap: 4px;
+        border-right: 1px solid #000;
+      }
+      .activity .ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        color: var(--text-3);
+        position: relative;
+      }
+      .activity .ic svg {
+        width: 20px;
+        height: 20px;
+      }
+      .activity .ic.active {
+        color: var(--text);
+      }
+      .activity .ic.agi {
+        color: var(--text);
+      }
+      .activity .ic.agi::before {
+        content: '';
+        position: absolute;
+        left: -10px;
+        top: 8px;
+        bottom: 8px;
+        width: 2px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+      .activity .spacer {
+        flex: 1;
+      }
+
+      .editor {
+        flex: 1;
+        min-width: 0;
+        background: var(--editor-bg);
+        display: flex;
+        flex-direction: column;
+      }
+      .tabs {
+        height: 36px;
+        flex: none;
+        display: flex;
+        background: #0a0a0c;
+        border-bottom: 1px solid #000;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 15px;
+        font-size: 12.5px;
+        color: var(--text-3);
+        border-right: 1px solid #000;
+      }
+      .tab.active {
+        background: var(--editor-bg);
+        color: var(--text-2);
+        border-top: 1.5px solid var(--accent);
+      }
+      .tab .modot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-3);
+      }
+      .code {
+        flex: 1;
+        padding: 14px 0;
+        overflow: hidden;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: #7e7e88;
+        opacity: 0.8;
+      }
+      .ln {
+        display: flex;
+      }
+      .ln .no {
+        width: 42px;
+        text-align: right;
+        padding-right: 16px;
+        color: #3a3a42;
+        flex: none;
+      }
+      .kw {
+        color: #9aa2e6;
+      }
+      .fn {
+        color: #cfd2f0;
+      }
+      .st {
+        color: #8a9a8f;
+      }
+      .cm {
+        color: #4f4f58;
+        font-style: italic;
+      }
+      .pm {
+        color: #b6b6c0;
+      }
+
+      /* ── AGI panel ── */
+      .panel {
+        width: 396px;
+        flex: none;
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        box-shadow: -18px 0 40px -30px rgba(0, 0, 0, 0.7);
+      }
+      .p-head {
+        height: 46px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .p-head .name {
+        font-weight: 600;
+        font-size: 13.5px;
+        letter-spacing: -0.01em;
+      }
+      .cloud-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-2);
+        background: var(--overlay);
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+      }
+      .cloud-pill .live {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 0 rgba(94, 106, 210, 0.6);
+        animation: pulse 2.2s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(94, 106, 210, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 6px rgba(94, 106, 210, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(94, 106, 210, 0);
+        }
+      }
+      .p-head .grow {
+        flex: 1;
+      }
+      .iconbtn {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        border: 0;
+        background: transparent;
+        color: var(--text-2);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .iconbtn:hover {
+        background: var(--hover);
+        color: var(--text);
+      }
+      .iconbtn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--overlay);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+
+      .convo {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 14px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .convo::-webkit-scrollbar {
+        width: 9px;
+      }
+      .convo::-webkit-scrollbar-thumb {
+        background: #2c2c32;
+        border-radius: 9px;
+        border: 2px solid var(--surface);
+      }
+      .msg {
+        animation: rise 0.5s var(--ease) both;
+      }
+      .msg.u {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .msg.u .bubble {
+        background: var(--user-bubble);
+        border: 1px solid var(--border-soft);
+        border-radius: 13px 13px 4px 13px;
+        padding: 9px 13px;
+        font-size: 13px;
+        line-height: 1.5;
+        max-width: 86%;
+        color: var(--text);
+      }
+      .msg.a .who {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 7px;
+      }
+      .msg.a .who .lbl {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .msg.a .who .mdl {
+        font-size: 11px;
+        color: var(--text-3);
+      }
+      .msg.a .content {
+        font-size: 13px;
+        line-height: 1.62;
+        color: var(--text);
+      }
+      .msg.a .content p {
+        margin: 0 0 9px;
+      }
+      .msg.a .content strong {
+        color: #fff;
+        font-weight: 620;
+      }
+      .codeblock {
+        background: var(--code);
+        border: 1px solid var(--border-soft);
+        border-radius: 9px;
+        margin: 4px 0 10px;
+        overflow: hidden;
+      }
+      .codeblock .cb-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 11px;
+        border-bottom: 1px solid var(--border-soft);
+        font-size: 11px;
+        color: var(--text-3);
+      }
+      .codeblock pre {
+        margin: 0;
+        padding: 11px 12px;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.6;
+        overflow-x: auto;
+        color: #c7c7d2;
+      }
+      .toolchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--overlay);
+        border: 1px solid var(--border-soft);
+        border-radius: 8px;
+        padding: 7px 11px;
+        font-size: 12px;
+        color: var(--text-2);
+        margin: 2px 0 4px;
+      }
+      .toolchip .ok {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: rgba(63, 185, 80, 0.16);
+        color: var(--green);
+        display: grid;
+        place-items: center;
+      }
+      .toolchip .ok svg {
+        width: 10px;
+        height: 10px;
+      }
+      .toolchip code {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--accent-hi);
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      .toolchip .diff {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      .toolchip .diff .add {
+        color: var(--green);
+      }
+      .toolchip .diff .del {
+        color: #d98b7a;
+      }
+      .cursor {
+        display: inline-block;
+        width: 7px;
+        height: 15px;
+        background: var(--accent);
+        border-radius: 2px;
+        vertical-align: -2px;
+        margin-left: 2px;
+        animation: blink 1s steps(2) infinite;
+      }
+      @keyframes blink {
+        0%,
+        50% {
+          opacity: 1;
+        }
+        50.01%,
+        100% {
+          opacity: 0;
+        }
+      }
+      .actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+      }
+      .actions .iconbtn {
+        width: 26px;
+        height: 26px;
+      }
+      .actions .iconbtn svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .composer {
+        flex: none;
+        padding: 10px 12px 12px;
+        border-top: 1px solid var(--border-soft);
+      }
+      .box {
+        background: var(--input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 10px 12px 8px;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+      }
+      .box:focus-within {
+        border-color: var(--accent-line);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      .box .ta {
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.5;
+        min-height: 22px;
+      }
+      .box .ta .ph {
+        color: var(--text-3);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 9px;
+      }
+      .mpill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--overlay);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--text-2);
+        cursor: pointer;
+      }
+      .mpill .cloud {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .mpill svg {
+        width: 12px;
+        height: 12px;
+        opacity: 0.7;
+      }
+      .chip {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-2);
+        background: var(--overlay);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 4px 10px;
+      }
+      .row .grow {
+        flex: 1;
+      }
+      .send {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        border: 0;
+        background: var(--accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        transition:
+          transform 0.12s,
+          background 0.15s;
+      }
+      .send:hover {
+        background: var(--accent-press);
+        transform: translateY(-1px);
+      }
+      .send svg {
+        width: 16px;
+        height: 16px;
+      }
+      .meter {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 9px;
+        padding: 0 2px;
+        font-size: 11px;
+        color: var(--text-3);
+      }
+      .meter .left {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .meter .bar {
+        width: 72px;
+        height: 4px;
+        border-radius: 4px;
+        background: var(--hover);
+        overflow: hidden;
+      }
+      .meter .bar i {
+        display: block;
+        height: 100%;
+        width: 62%;
+        background: var(--accent);
+        border-radius: 4px;
+      }
+
+      .signin {
+        flex: 1;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 28px 30px;
+        position: relative;
+        overflow: hidden;
+      }
+      .signin::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          420px 280px at 50% 26%,
+          rgba(94, 106, 210, 0.12),
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .signin .biglogo {
+        width: 62px;
+        height: 62px;
+        border-radius: 17px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        margin-bottom: 20px;
+        box-shadow: 0 14px 40px -16px rgba(0, 0, 0, 0.8);
+      }
+      .signin h2 {
+        font-size: 19px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+        margin-bottom: 9px;
+      }
+      .signin p {
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text-2);
+        max-width: 280px;
+        margin-bottom: 22px;
+      }
+      .signin .btn {
+        width: 100%;
+        max-width: 270px;
+        height: 42px;
+        border: 0;
+        border-radius: 11px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-size: 13.5px;
+        font-weight: 650;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        box-shadow: 0 8px 22px -10px rgba(94, 106, 210, 0.7);
+        transition:
+          background 0.15s,
+          transform 0.12s;
+      }
+      .signin .btn:hover {
+        background: var(--accent-press);
+        transform: translateY(-1px);
+      }
+      .signin .alt {
+        margin-top: 14px;
+        font-size: 12.5px;
+        color: var(--text-3);
+      }
+      .signin .alt a {
+        color: var(--accent-hi);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .signin .forks {
+        margin-top: 26px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 11px;
+        color: var(--text-3);
+      }
+      .signin .forks .ed {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .signin .forks .ed b {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--text-3);
+      }
+      .signin .trust {
+        position: absolute;
+        bottom: 16px;
+        font-size: 10.5px;
+        color: var(--text-3);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .signin .trust .c {
+        color: var(--accent);
+      }
+
+      body.signedout .convo,
+      body.signedout .composer {
+        display: none;
+      }
+      body.signedout .signin {
+        display: flex;
+      }
+      body.signedout .p-head .right-actions {
+        display: none;
+      }
+
+      .caption {
+        color: var(--text-3);
+        font-size: 12px;
+        max-width: 700px;
+        text-align: center;
+        line-height: 1.6;
+      }
+      .caption b {
+        color: var(--text-2);
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .d1 {
+        animation-delay: 0.05s;
+      }
+      .d2 {
+        animation-delay: 0.16s;
+      }
+    </style>
+  </head>
+  <body class="signedin">
+    <!-- the real AGI mark: 12 spokes, rendered mono (currentColor) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="agimark" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <line x1="12" y1="7.40" x2="12" y2="3.00" />
+          <line x1="14.30" y1="8.02" x2="16.50" y2="4.21" />
+          <line x1="15.98" y1="9.70" x2="19.79" y2="7.50" />
+          <line x1="16.60" y1="12.00" x2="21.00" y2="12.00" />
+          <line x1="15.98" y1="14.30" x2="19.79" y2="16.50" />
+          <line x1="14.30" y1="15.98" x2="16.50" y2="19.79" />
+          <line x1="12.00" y1="16.60" x2="12.00" y2="21.00" />
+          <line x1="9.70" y1="15.98" x2="7.50" y2="19.79" />
+          <line x1="8.02" y1="14.30" x2="4.21" y2="16.50" />
+          <line x1="7.40" y1="12.00" x2="3.00" y2="12.00" />
+          <line x1="8.02" y1="9.70" x2="4.21" y2="7.50" />
+          <line x1="9.70" y1="8.02" x2="7.50" y2="4.21" />
+        </g>
+      </symbol>
+    </svg>
+
+    <div class="stage">
+      <div class="topbar">
+        <div class="brandline">
+          <span class="badge"
+            ><span class="mk" style="width: 18px; height: 18px"
+              ><svg width="18" height="18"><use href="#agimark" /></svg></span
+          ></span>
+          <h1>AGI for VS Code</h1>
+          <span class="sub">· cloud chat · preview v2 (website palette)</span>
+        </div>
+        <div class="toggle">
+          <button
+            id="t-in"
+            class="active"
+            onclick="
+              document.body.className = 'signedin';
+              setActive('t-in');
+            "
+          >
+            Signed in — chat
+          </button>
+          <button
+            id="t-out"
+            onclick="
+              document.body.className = 'signedout';
+              setActive('t-out');
+            "
+          >
+            Signed out — sign in
+          </button>
+        </div>
+      </div>
+
+      <div class="vscode">
+        <div class="titlebar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">api.ts — agiworkforce</span>
+          <span class="editor-tag">VS Code · Cursor · Windsurf · Antigravity</span>
+        </div>
+        <div class="body">
+          <div class="activity">
+            <div class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M3 6h18M3 12h18M3 18h18" />
+              </svg>
+            </div>
+            <div class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path
+                  d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+                />
+              </svg>
+            </div>
+            <div class="ic agi" title="AGI">
+              <span class="mk" style="width: 20px; height: 20px; color: currentColor"
+                ><svg width="20" height="20"><use href="#agimark" /></svg
+              ></span>
+            </div>
+            <div class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </div>
+            <div class="spacer"></div>
+            <div class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7Z"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <div class="editor">
+            <div class="tabs">
+              <div class="tab active"><span class="modot"></span> api.ts</div>
+              <div class="tab">extension.ts</div>
+            </div>
+            <div class="code">
+              <div class="ln">
+                <span class="no">15</span
+                ><span
+                  ><span class="kw">export async function</span>
+                  <span class="fn">streamChatCompletion</span>(<span class="pm">req</span>) {</span
+                >
+              </div>
+              <div class="ln">
+                <span class="no">16</span
+                ><span
+                  >&nbsp;&nbsp;<span class="kw">const</span> token = <span class="kw">await</span>
+                  <span class="fn">getAccountToken</span>();</span
+                >
+              </div>
+              <div class="ln">
+                <span class="no">17</span
+                ><span
+                  >&nbsp;&nbsp;<span class="kw">const</span> res = <span class="kw">await</span>
+                  <span class="fn">fetch</span>(<span class="st"
+                    >"/api/llm/v1/chat/completions"</span
+                  >, {</span
+                >
+              </div>
+              <div class="ln">
+                <span class="no">18</span
+                ><span
+                  >&nbsp;&nbsp;&nbsp;&nbsp;headers: { Authorization:
+                  <span class="st">`Bearer ${token}`</span> },</span
+                >
+              </div>
+              <div class="ln"><span class="no">19</span><span>&nbsp;&nbsp;});</span></div>
+              <div class="ln"><span class="no">20</span><span>}</span></div>
+              <div class="ln"><span class="no">21</span><span></span></div>
+              <div class="ln">
+                <span class="no">22</span
+                ><span><span class="cm">// ← AGI is editing this file</span></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="p-head">
+              <span class="mk" style="width: 19px; height: 19px; color: var(--text)"
+                ><svg width="19" height="19"><use href="#agimark" /></svg
+              ></span>
+              <span class="name">AGI</span>
+              <span class="cloud-pill"><span class="live"></span> AGI Cloud</span>
+              <span class="grow"></span>
+              <span class="right-actions" style="display: flex; align-items: center; gap: 4px">
+                <button class="iconbtn" title="New chat">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+                <button class="iconbtn" title="History">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                    <path d="M3 3v5h5" />
+                    <path d="M12 7v5l3 2" />
+                  </svg>
+                </button>
+                <span class="avatar">S</span>
+              </span>
+            </div>
+
+            <div class="convo">
+              <div class="msg u d1">
+                <div class="bubble">
+                  Refactor
+                  <code style="font-family: var(--mono); font-size: 12px"
+                    >streamChatCompletion</code
+                  >
+                  to use the account token and add error handling.
+                </div>
+              </div>
+              <div class="msg a d2">
+                <div class="who">
+                  <span class="mk" style="width: 15px; height: 15px; color: var(--text-2)"
+                    ><svg width="15" height="15"><use href="#agimark" /></svg></span
+                  ><span class="lbl">AGI</span><span class="mdl">· AGI Cloud · Auto</span>
+                </div>
+                <div class="content">
+                  <p>
+                    I'll switch it to the signed-in account token and add a clean error path. Here's
+                    the change:
+                  </p>
+                  <div class="codeblock">
+                    <div class="cb-head"><span>api.ts</span><span>Copy</span></div>
+                    <pre>
+const token = await getAccountToken();
+if (!token) return promptSignIn();
+const res = await fetch(ENDPOINT, {
+  headers: { Authorization: `Bearer ${token}` },
+  body: JSON.stringify(req),
+});
+if (!res.ok) throw new ChatError(res.status);</pre
+                    >
+                  </div>
+                  <div class="toolchip">
+                    <span class="ok"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <path d="M20 6 9 17l-5-5" /></svg
+                    ></span>
+                    Edited <code>src/utils/api.ts</code
+                    ><span class="diff"
+                      ><span class="add">+6</span> <span class="del">-2</span></span
+                    >
+                  </div>
+                  <p>
+                    It now reads the AGI Cloud session token, falls back to sign-in when missing,
+                    and throws a typed error on non-2xx<span class="cursor"></span>
+                  </p>
+                  <div class="actions">
+                    <button class="iconbtn" title="Copy">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                        <rect x="9" y="9" width="11" height="11" rx="2" />
+                        <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+                      </svg>
+                    </button>
+                    <button class="iconbtn" title="Good">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                        <path d="M7 11v9M14 4l-2 7h6a2 2 0 0 1 2 2.3l-1 6A2 2 0 0 1 17 21H7" />
+                      </svg>
+                    </button>
+                    <button class="iconbtn" title="Retry">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                        <path d="M3 3v5h5" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="composer">
+              <div class="box">
+                <div class="ta">
+                  <span class="ph">Ask AGI anything — or describe a change…</span>
+                </div>
+                <div class="row">
+                  <span class="mpill"
+                    ><span class="cloud"></span> AGI Cloud · Auto
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                  <span class="chip">Plan</span>
+                  <button class="iconbtn" title="Attach">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                      <path
+                        d="M21 12.5 12.5 21a5 5 0 0 1-7-7l9-9a3.3 3.3 0 0 1 4.7 4.7l-9 9a1.7 1.7 0 0 1-2.4-2.4l8-8"
+                      />
+                    </svg>
+                  </button>
+                  <span class="grow"></span>
+                  <button class="send" title="Send">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <path d="M12 19V5M5 12l7-7 7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="meter">
+                <span class="left"
+                  ><span style="color: var(--text-2)">Pro</span> · synced across all your
+                  devices</span
+                >
+                <span class="left"
+                  ><span class="bar"><i></i></span> 12,480 credits</span
+                >
+              </div>
+            </div>
+
+            <div class="signin">
+              <span class="biglogo"
+                ><span class="mk" style="width: 34px; height: 34px; color: var(--text)"
+                  ><svg width="34" height="34"><use href="#agimark" /></svg></span
+              ></span>
+              <h2>Sign in to AGI</h2>
+              <p>
+                Your AGI Cloud workspace — chat, projects, memory and usage, shared across every
+                device.
+              </p>
+              <button class="btn">Sign in to AGI Cloud</button>
+              <div class="alt">New here? <a>Create an account →</a></div>
+              <div class="forks">
+                <span class="ed"><b></b> VS Code</span><span class="ed"><b></b> Cursor</span
+                ><span class="ed"><b></b> Windsurf</span><span class="ed"><b></b> Antigravity</span>
+              </div>
+              <div class="trust">
+                <span class="c">●</span> One account · usage metered across the whole AGI suite
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="caption">
+        <b>Preview v2 — website palette.</b> Cool near-black <b>#09090b</b>, grey surfaces,
+        off-white ink, with the Linear <b>indigo #5e6ad2</b> as the single accent — and the real
+        <b>12-spoke AGI mark</b>, rendered mono. Toggle to see the signed-in chat and the “Sign in
+        to AGI” states. No BYOK key entry; model is AGI Cloud; usage is one shared meter; identical
+        across VS Code / Cursor / Windsurf / Antigravity.
+      </p>
+    </div>
+
+    <script>
+      function setActive(id) {
+        document.getElementById('t-in').classList.toggle('active', id === 't-in');
+        document.getElementById('t-out').classList.toggle('active', id === 't-out');
+      }
+    </script>
+  </body>
+</html>

@@ -121,7 +121,7 @@ vi.mock('lucide-react', () => {
   };
 });
 
-// Mock CSRF token client — the connect flow calls getCsrfToken() before fetch.
+// Mock CSRF token client · the connect flow calls getCsrfToken() before fetch.
 vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: vi.fn().mockResolvedValue('test-csrf-token'),
 }));
@@ -289,7 +289,7 @@ describe('ConnectorsPage', () => {
     ];
 
     for (const label of expectedLabels) {
-      // Some labels (e.g. "All") collide with text elsewhere on the page —
+      // Some labels (e.g. "All") collide with text elsewhere on the page ·
       // assert presence with getAllByText so the tab match doesn't have to be
       // unique across the whole DOM.
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
@@ -303,10 +303,10 @@ describe('ConnectorsPage', () => {
     // Click the "Developer" category
     fireEvent.click(screen.getByText('Developer'));
 
-    // GitHub is in the Developer category — should be visible
+    // GitHub is in the Developer category · should be visible
     expect(screen.getByText('GitHub')).toBeDefined();
 
-    // Gmail and Calendar are in Productivity — should NOT be visible
+    // Gmail and Calendar are in Productivity · should NOT be visible
     expect(screen.queryByText('Gmail')).toBeNull();
     expect(screen.queryByText('Google Calendar')).toBeNull();
   });
@@ -335,7 +335,7 @@ describe('ConnectorsPage', () => {
   it('connects a connector when Connect button is clicked in the detail panel', async () => {
     await renderConnectorsPage();
 
-    // Select a connector from the list — click the first non-status-filter row button
+    // Select a connector from the list · click the first non-status-filter row button
     const listRows = screen.getAllByRole('button');
     const firstConnectorRow = listRows.find((btn) => {
       const label = btn.textContent ?? '';

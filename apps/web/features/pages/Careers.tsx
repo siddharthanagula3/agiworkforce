@@ -85,7 +85,7 @@ const steps = [
     text: 'Role-relevant task or paired session.',
   },
   { title: 'Team Chat', text: 'Meet future collaborators and leadership.' },
-  { title: 'Offer', text: 'We move fast—clear, transparent offers.' },
+  { title: 'Offer', text: 'We move fast·clear, transparent offers.' },
 ];
 
 const Careers: React.FC = () => {

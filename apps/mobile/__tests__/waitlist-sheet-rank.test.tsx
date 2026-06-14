@@ -91,6 +91,17 @@ describe('InviteCodeModal — waitlist tab rank display', () => {
     jest.clearAllMocks();
   });
 
+  it('exposes invite-code controls as individual accessibility targets', () => {
+    const { getByLabelText } = render(
+      <InviteCodeModal open onClose={jest.fn()} source="other" defaultTab="invite" />,
+    );
+
+    expect(getByLabelText('Invitation code')).toBeTruthy();
+    expect(getByLabelText('Unlock AGI Cloud')).toBeTruthy();
+    expect(getByLabelText('Join waitlist')).toBeTruthy();
+    expect(getByLabelText('Join the waitlist instead')).toBeTruthy();
+  });
+
   it('keeps submit disabled until the email is valid', () => {
     const props = makeProps(0);
     const { getByTestId, getByPlaceholderText } = render(<InviteCodeModal {...props} />);

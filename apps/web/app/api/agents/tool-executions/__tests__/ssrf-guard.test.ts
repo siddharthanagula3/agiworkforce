@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// ── Hoisted mocks — must run before any imports ────────────────────────────────
+// ── Hoisted mocks · must run before any imports ────────────────────────────────
 
 const { mockNeonQuery, mockGetClerkAuthUser, mockRequireCsrf, mockWithRateLimit } = vi.hoisted(
   () => ({
@@ -113,8 +113,8 @@ beforeEach(() => {
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe('POST /api/agents/tool-executions — SSRF guard (webhook)', () => {
-  it('IMDS link-local (169.254.169.254) is blocked — fetch is never called', async () => {
+describe('POST /api/agents/tool-executions · SSRF guard (webhook)', () => {
+  it('IMDS link-local (169.254.169.254) is blocked · fetch is never called', async () => {
     setupDbForWebhookUrl('http://169.254.169.254/latest/meta-data/iam/security-credentials/');
 
     await POST(makeRequest());
@@ -122,7 +122,7 @@ describe('POST /api/agents/tool-executions — SSRF guard (webhook)', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('loopback IPv4 (127.0.0.1) is blocked — fetch is never called', async () => {
+  it('loopback IPv4 (127.0.0.1) is blocked · fetch is never called', async () => {
     setupDbForWebhookUrl('http://127.0.0.1:8080/internal');
 
     await POST(makeRequest());
@@ -130,7 +130,7 @@ describe('POST /api/agents/tool-executions — SSRF guard (webhook)', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('non-http/https scheme (file://) is blocked — fetch is never called', async () => {
+  it('non-http/https scheme (file://) is blocked · fetch is never called', async () => {
     setupDbForWebhookUrl('file:///etc/passwd');
 
     await POST(makeRequest());
@@ -138,7 +138,7 @@ describe('POST /api/agents/tool-executions — SSRF guard (webhook)', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('RFC-1918 private range (10.0.0.1) is blocked — fetch is never called', async () => {
+  it('RFC-1918 private range (10.0.0.1) is blocked · fetch is never called', async () => {
     setupDbForWebhookUrl('http://10.0.0.1/admin');
 
     await POST(makeRequest());
@@ -146,7 +146,7 @@ describe('POST /api/agents/tool-executions — SSRF guard (webhook)', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('valid https external host passes the guard — fetch IS called', async () => {
+  it('valid https external host passes the guard · fetch IS called', async () => {
     setupDbForWebhookUrl('https://hooks.example.com/webhook');
 
     await POST(makeRequest());

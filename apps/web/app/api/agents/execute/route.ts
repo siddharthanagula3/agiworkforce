@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { readFile, access } from 'fs/promises';
+import { readFile, access, stat } from 'fs/promises';
 import { join } from 'path';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
@@ -13,6 +13,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getTaskModelForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
 
 export function OPTIONS(request: NextRequest) {
@@ -71,6 +72,22 @@ async function loadEmployeeSystemPrompt(employeeId: string): Promise<string | nu
 }
 
 /**
+ * Returns true only if the agent-execution corpus is actually provisioned in
+ * this deployment (the `.agi/employees` directory exists). When it does not,
+ * the feature is unavailable as a whole and we must say so honestly instead of
+ * returning a misleading per-employee "not found" error.
+ */
+async function isAgentExecutionProvisioned(): Promise<boolean> {
+  const dir = join(process.cwd(), '.agi', 'employees');
+  try {
+    const s = await stat(dir);
+    return s.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Estimate cost in cents for a request based on message length.
  * This is a conservative estimate for pre-flight checks.
  * Actual cost is calculated from real token counts after streaming.
@@ -103,7 +120,7 @@ async function handler(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
 
   // Authenticate user. The userClient is RLS-bound so all CreditService ops
-  // happen under the user's identity — no service-role escalation.
+  // happen under the user's identity · no service-role escalation.
   let userId: string;
   try {
     const authResult = await getClerkAuthUser(request);
@@ -130,10 +147,21 @@ async function handler(request: NextRequest) {
   const { employeeId, message, model, provider, systemPrompt, conversationHistory } =
     validationResult.data;
 
-  // H10: Load canonical skill from filesystem - caller's systemPrompt is appended as context, never replaces
+  // H10: Load canonical skill from filesystem - caller's systemPrompt is appended as context, never replaces.
+  // Distinguish "feature not provisioned" (no .agi/employees dir ships in this deployment) from
+  // "this specific employee is missing" so we never falsely imply the feature works.
+  if (!(await isAgentExecutionProvisioned())) {
+    logger.warn(
+      { userId, employeeId },
+      'Agent execution requested but .agi/employees is not provisioned',
+    );
+    throw createError.serviceUnavailable(
+      'Agent execution is not available in this deployment. The employee skill corpus is not provisioned.',
+    );
+  }
   const canonicalPrompt = await loadEmployeeSystemPrompt(employeeId);
   if (!canonicalPrompt) {
-    throw createError.badRequest(`Employee "${employeeId}" not found`);
+    throw createError.notFound(`Employee "${employeeId}" not found`);
   }
 
   // Build messages array
@@ -154,7 +182,7 @@ async function handler(request: NextRequest) {
 
   // FIX (audit 2026-05-20, §5): the role lock to `user` (H16) already
   // closed the system-prompt-override vector. But the `[Additional context
-  // from caller]:` prefix is still an instruction-following foothold — an
+  // from caller]:` prefix is still an instruction-following foothold · an
   // attacker who controls `systemPrompt` can write "Ignore previous
   // instructions" and lean on the model's tendency to obey nearby
   // imperative text.
@@ -185,6 +213,15 @@ async function handler(request: NextRequest) {
 
   messages.push({ role: 'user', content: message });
 
+  const selectedModel = model || DEFAULT_EMPLOYEE_MODEL;
+  const selectedProvider = provider || LLMProviderFactory.getProviderFromModel(selectedModel);
+  const managedGateResponse = buildManagedComputeGateResponse(request, {
+    provider: selectedProvider,
+    model: selectedModel,
+    feature: 'agent_execution',
+  });
+  if (managedGateResponse) return managedGateResponse;
+
   // --- BILLING: Pre-flight credit check ---
   const estimatedCents = estimateCostCents(messages);
   const hasCredits = await CreditService.checkAvailable(userId, estimatedCents);
@@ -196,10 +233,6 @@ async function handler(request: NextRequest) {
       `Insufficient credits. You need approximately ${estimatedCents} credits but have ${remainingCents} remaining. Please upgrade your plan at /pricing.`,
     );
   }
-
-  // Use the LLM provider factory to get the appropriate provider
-  const selectedModel = model || DEFAULT_EMPLOYEE_MODEL;
-  const selectedProvider = provider || LLMProviderFactory.getProviderFromModel(selectedModel);
 
   try {
     const llmProvider = LLMProviderFactory.createProvider(selectedProvider);

@@ -60,10 +60,22 @@ jest.mock('expo-speech', () => ({
 }));
 
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import * as VoiceService from '@/src/features/voice/services/voice';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+
+const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
+  __clearListeners: () => void;
+  ExpoSpeechRecognitionModule: {
+    start: jest.Mock;
+    requestPermissionsAsync: jest.Mock;
+    supportsOnDeviceRecognition: jest.Mock;
+  };
+};
 
 describe('voiceInput service', () => {
   beforeEach(() => {
+    speechRecognitionMock.__clearListeners();
     jest.clearAllMocks();
   });
 
@@ -90,6 +102,37 @@ describe('voiceInput service', () => {
 
   it('cancelCapture is safe when no recording is active', async () => {
     await expect(VoiceInput.cancelCapture()).resolves.toBeUndefined();
+  });
+
+  it('fails closed when speech recognition permission is denied', async () => {
+    speechRecognitionMock.ExpoSpeechRecognitionModule.requestPermissionsAsync.mockResolvedValueOnce(
+      {
+        granted: false,
+        status: 'denied',
+        canAskAgain: false,
+        expires: 'never',
+      },
+    );
+
+    await expect(VoiceService.startRecording()).rejects.toMatchObject({
+      code: 'mic-permission-denied',
+    });
+
+    expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
+    expect(VoiceService.isRecording()).toBe(false);
+  });
+
+  it('does not start when on-device speech recognition is unavailable', async () => {
+    speechRecognitionMock.ExpoSpeechRecognitionModule.supportsOnDeviceRecognition.mockReturnValueOnce(
+      false,
+    );
+
+    await expect(VoiceService.startRecording()).rejects.toMatchObject({
+      code: 'on-device-recognition-unavailable',
+    });
+
+    expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
+    expect(VoiceService.isRecording()).toBe(false);
   });
 });
 

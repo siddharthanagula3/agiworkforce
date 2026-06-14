@@ -11,7 +11,14 @@
  *   7. Settings toggles
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator, AccessibilityInfo } from 'react-native';
+import {
+  View,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  AccessibilityInfo,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -34,7 +41,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
 import { getCapabilities, getModelById as getLocalModelById } from '@agiworkforce/local-llm';
-import type { DeviceCapabilities, LocalRuntimeName } from '@agiworkforce/local-llm';
+import type { DeviceCapabilities } from '@agiworkforce/local-llm';
 import {
   getThermalState,
   getRollingStats,
@@ -116,6 +123,12 @@ function backendDisplayName(runtime: string): string {
     default:
       return String(runtime);
   }
+}
+
+function platformDisplayName(os: string): string {
+  if (os === 'ios') return 'iOS';
+  if (os === 'android') return 'Android';
+  return os.charAt(0).toUpperCase() + os.slice(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,11 +294,7 @@ function ToggleRow({
 }) {
   const c = useThemeColors();
   return (
-    <View
-      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
-      accessible
-      accessibilityRole="none"
-    >
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}>
       <Icon size={16} color={c.textSecondary} style={{ marginRight: 12 }} />
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 14, color: c.textPrimary }}>{label}</Text>
@@ -293,7 +302,7 @@ function ToggleRow({
           <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 1 }}>{sublabel}</Text>
         ) : null}
       </View>
-      <Switch value={value} onValueChange={onChange} />
+      <Switch accessibilityLabel={label} value={value} onValueChange={onChange} />
     </View>
   );
 }
@@ -388,8 +397,7 @@ export default function PerformanceScreen() {
   }, []);
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    router.navigate('/(app)/settings/general' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
   // Persist perf settings immediately on change
@@ -486,10 +494,8 @@ export default function PerformanceScreen() {
     () => thermalColor(thermalState, c.teal, c.agentWarning, c.agentError),
     [thermalState, c.teal, c.agentWarning, c.agentError],
   );
-
-  // Expose LocalRuntimeName type usage to satisfy TS import check
-  const _runtimeRef: LocalRuntimeName | null = caps?.tier1Runtime ?? null;
-  void _runtimeRef;
+  const fallbackOsVersion = `${platformDisplayName(Platform.OS)} ${String(Platform.Version)}`;
+  const displayedOsVersion = caps?.osVersion?.trim() || fallbackOsVersion;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
@@ -578,7 +584,7 @@ export default function PerformanceScreen() {
                   }}
                   accessibilityLabel={`Device tier: ${tierInfo.label}`}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: c.white }}>
                     {tierInfo.label}
                   </Text>
                 </View>
@@ -593,14 +599,14 @@ export default function PerformanceScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, color: c.textMuted }}>RAM</Text>
                   <Text style={{ fontSize: 13, color: c.textPrimary }}>
-                    {caps.totalRAMMB > 0 ? `${(caps.totalRAMMB / 1024).toFixed(1)} GB` : 'Unknown'}
+                    {caps.totalRAMMB > 0
+                      ? `${(caps.totalRAMMB / 1024).toFixed(1)} GB`
+                      : 'Unavailable'}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, color: c.textMuted }}>OS Version</Text>
-                  <Text style={{ fontSize: 13, color: c.textPrimary }}>
-                    {caps.osVersion || 'Unknown'}
-                  </Text>
+                  <Text style={{ fontSize: 13, color: c.textPrimary }}>{displayedOsVersion}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, color: c.textMuted }}>Thermal</Text>
@@ -799,7 +805,7 @@ export default function PerformanceScreen() {
             </Text>
           </View>
           <Text style={{ fontSize: 13, color: c.textMuted, marginBottom: 12 }}>
-            Runs a standardised 60-token prompt against the loaded model. Result is stored for
+            Runs a standardized 60-token prompt against the loaded model. Result is stored for
             comparison across sessions.
           </Text>
           <Pressable
@@ -900,7 +906,7 @@ export default function PerformanceScreen() {
             style={{
               fontSize: 11,
               textTransform: 'uppercase',
-              letterSpacing: 1,
+              letterSpacing: 0,
               fontWeight: '600',
               color: c.textMuted,
               marginBottom: 8,

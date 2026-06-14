@@ -55,17 +55,12 @@
  *     rejected. Old entries are pruned on each verification call.
  *
  * ---------------------------------------------------------------------------
- * TRANSITIONAL MODE (one release window)
+ * UNSIGNED MESSAGE POLICY
  * ---------------------------------------------------------------------------
  *
- * Messages without an `hmac` field are accepted with a console.warn during
- * the transitional period. The desktop peer MUST add signing before
- * DISPATCH_HMAC_REQUIRED_AFTER (see constant below). After that date, this
- * file should be updated to fail-closed (delete the transitional branch and
- * remove this comment block).
- *
- * CUTOFF: 2026-06-05 — bump dispatchHmac.ts and remove the transitional
- * accept path once the desktop surface ships matching HMAC signing.
+ * Messages without an `hmac` field are rejected. The transitional unsigned
+ * accept window is closed; mobile and desktop must sign every Dispatch control
+ * message before the feature is exposed.
  *
  * ---------------------------------------------------------------------------
  * DESKTOP COUNTERPART REQUIREMENTS
@@ -105,12 +100,8 @@ const MAX_MESSAGE_AGE_MS = DISPATCH_MAX_MESSAGE_AGE_MS;
 const NONCE_CACHE_TTL_MS = DISPATCH_NONCE_CACHE_TTL_MS;
 
 /**
- * ISO 8601 date after which unsigned (transitional) messages should be
- * rejected. Desktop surface must ship HMAC signing before this date.
- *
- * CUTOFF: 2026-06-05
- *
- * Re-exported from the canonical contract for backwards compatibility.
+ * Historical ISO 8601 date after which unsigned messages are rejected.
+ * Re-exported from the canonical contract for cross-surface compatibility.
  */
 export const DISPATCH_HMAC_REQUIRED_AFTER = CANONICAL_DISPATCH_HMAC_REQUIRED_AFTER;
 
@@ -295,9 +286,27 @@ export async function deriveDispatchSecret(
  *
  * Signed fields: { nonce, payload, ts, type }  (no "hmac" in the signed set)
  */
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => (item === undefined ? null : canonicalizeJson(item)));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const source = value as Record<string, unknown>;
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(source).sort()) {
+    const child = source[key];
+    if (child !== undefined) {
+      sorted[key] = canonicalizeJson(child);
+    }
+  }
+  return sorted;
+}
+
 function canonicalSigningInput(type: string, payload: unknown, ts: number, nonce: string): string {
-  // Alphabetical order: nonce < payload < ts < type
-  return JSON.stringify({ nonce, payload, ts, type });
+  return JSON.stringify(canonicalizeJson({ nonce, payload, ts, type }));
 }
 
 // ---------------------------------------------------------------------------
@@ -365,9 +374,7 @@ function pruneNonceCache(nonceCache: Map<string, number>, now: number): void {
  *
  * Rejection reasons (checked in order):
  *  1. `malformed`           — not a valid SignedEnvelope shape
- *  2. `unsigned_transitional` — no hmac field; accepted with warn during
- *                              the transitional period, fail-closed after
- *                              DISPATCH_HMAC_REQUIRED_AFTER
+ *  2. `unsigned_transitional` — no hmac field; fail-closed
  *  3. `timestamp_expired`   — |now - ts| > MAX_MESSAGE_AGE_MS
  *  4. `nonce_replay`        — nonce seen in the NONCE_CACHE_TTL_MS window
  *  5. `hmac_mismatch`       — HMAC does not match (constant-time compare)
@@ -389,20 +396,7 @@ export async function verifyMessage(state: HmacSessionState, msg: unknown): Prom
   const hasTs = typeof m['ts'] === 'number';
   const hasType = typeof m['type'] === 'string';
 
-  // Transitional: accept unsigned messages (no hmac field) during the window
   if (!hasHmac) {
-    const now = Date.now();
-    const cutoff = new Date(DISPATCH_HMAC_REQUIRED_AFTER).getTime();
-    if (now < cutoff) {
-      console.warn(
-        '[dispatch] SECURITY: received unsigned control message — transitional accept. ' +
-          'Desktop peer must add HMAC signing before ' +
-          DISPATCH_HMAC_REQUIRED_AFTER +
-          '. This accept path will be removed after that date.',
-      );
-      return { ok: true };
-    }
-    // Past cutoff: fail-closed
     return { ok: false, reason: 'unsigned_transitional' };
   }
 

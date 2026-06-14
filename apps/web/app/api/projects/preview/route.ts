@@ -1,5 +1,5 @@
 /**
- * /api/projects/preview — server-side ProjectHeaderPresentation derivation.
+ * /api/projects/preview · server-side ProjectHeaderPresentation derivation.
  *
  * Round-10 service-layer slice. Exposes the canonical
  * `summarizeProjectHeader()` from `@agiworkforce/types` as a stateless
@@ -7,7 +7,7 @@
  * Tauri shell when it bridges to web endpoints, etc.) can request the
  * same presentation shape that Web/Desktop/Mobile compute client-side.
  *
- * Pure derivation — no database, no auth. The endpoint accepts a partial
+ * Pure derivation · no database, no auth. The endpoint accepts a partial
  * ProjectRecord (validated minimally; bad shapes return 400) and returns
  * the derived `ProjectHeaderPresentation`. This proves the cross-language
  * contract (TS / Rust / Postgres) is wire-ready end-to-end at the service

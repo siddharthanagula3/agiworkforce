@@ -113,5 +113,11 @@ export async function updateConversation(
 
 export async function deleteConversation(id: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM conversations WHERE id = ?;', [id]);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'UPDATE memory_facts SET source_conversation_id = NULL WHERE source_conversation_id = ?;',
+      [id],
+    );
+    await db.runAsync('DELETE FROM conversations WHERE id = ?;', [id]);
+  });
 }

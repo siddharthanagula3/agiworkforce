@@ -305,13 +305,14 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
   const { provider, originalId } = parseTaskId(taskId);
 
   // Verify task ownership: the requesting user must be the one who created this task.
-  // Tasks created in a different serverless instance won't be in this store - in that
-  // case we allow the request through to avoid blocking legitimate cross-instance polls.
+  // The current owner store is process-local. If ownership is missing because the
+  // request landed on a different instance, fail closed until this moves to durable
+  // storage instead of polling a provider-side task by guessable ID.
   const taskOwner = getVideoTaskOwner(taskId);
-  if (taskOwner && taskOwner !== userId) {
+  if (!taskOwner || taskOwner !== userId) {
     logger.warn(
       { taskId, requestingUser: userId, taskOwner },
-      'Video task ownership mismatch - rejecting status request',
+      'Video task ownership missing or mismatched - rejecting status request',
     );
     throw createError.forbidden('You do not have permission to check this task');
   }

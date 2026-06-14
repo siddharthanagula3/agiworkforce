@@ -151,6 +151,16 @@ describe('WorkSecret codec', () => {
     const encoded = encodeWorkSecret(noToken);
     expect(() => decodeWorkSecret(encoded)).toThrow('missing session_ingress_token');
   });
+
+  it('normalizes legacy claude_code_args to AGI worker_args', () => {
+    const legacy = {
+      ...validSecret,
+      claude_code_args: ['--resume', 'session-1'],
+    };
+    const encoded = encodeWorkSecret(legacy);
+    const decoded = decodeWorkSecret(encoded);
+    expect(decoded.worker_args).toEqual(['--resume', 'session-1']);
+  });
 });
 
 // ---------------------------------------------------------------------------

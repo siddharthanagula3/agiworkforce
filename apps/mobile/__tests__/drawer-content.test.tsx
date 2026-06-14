@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
@@ -52,6 +52,7 @@ jest.mock('lucide-react-native', () => {
     Search: icon,
     Settings: icon,
     Sparkles: icon,
+    SquarePen: icon,
     UserCircle: icon,
     X: icon,
   };
@@ -75,6 +76,13 @@ import { DrawerContent } from '../src/features/drawer/components/DrawerContent';
 import { useChatStore } from '../stores/chatStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useProjectStore } from '../src/features/projects/store';
+import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useModelStore } from '../src/features/model-picker/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  DEFAULT_CLOUD_MODEL_ID,
+  DEFAULT_LOCAL_MODEL_ID,
+} from '../src/features/model-picker/service';
 
 function renderDrawer() {
   return render(<DrawerContent {...({ navigation: { closeDrawer: mockCloseDrawer } } as never)} />);
@@ -102,6 +110,18 @@ describe('DrawerContent', () => {
           createdAt: new Date().toISOString(),
           messageCount: 1,
           pinned: false,
+          executionMode: 'local',
+        },
+        {
+          id: 'conv-cloud',
+          title: 'Cloud Chat',
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          messageCount: 2,
+          pinned: false,
+          model: DEFAULT_CLOUD_MODEL_ID,
+          provider: 'cloud_managed',
+          executionMode: 'cloud',
         },
       ],
       messages: {},
@@ -141,6 +161,25 @@ describe('DrawerContent', () => {
       isLoading: false,
       isInitialized: true,
     });
+
+    useWaitlistStore.setState({
+      joined: false,
+      email: undefined,
+      country: undefined,
+      rank: undefined,
+      joinedAt: undefined,
+      cloudUnlocked: false,
+      inviteId: undefined,
+      inviteCode: undefined,
+      cloudUnlockedAt: undefined,
+    });
+    useModelStore.setState({
+      selectedModel: DEFAULT_LOCAL_MODEL_ID,
+      selectedProvider: 'local',
+      recentModels: [],
+      favorites: [],
+    } as never);
+    useChatAppModeStore.setState({ appMode: 'local' });
   });
 
   it('renders the AGI mobile drawer structure', () => {
@@ -149,29 +188,107 @@ describe('DrawerContent', () => {
     expect(getByText('AGI')).toBeTruthy();
     expect(getAllByText('Projects').length).toBeGreaterThan(0);
     expect(getByText('Artifacts')).toBeTruthy();
-    expect(getByText('AGI Agent')).toBeTruthy();
+    expect(queryByText('AGI Agent')).toBeNull();
     expect(getByText('Recents')).toBeTruthy();
     expect(getByText('Settings')).toBeTruthy();
-    expect(getAllByLabelText('Open profile').length).toBeGreaterThanOrEqual(2);
+    expect(getAllByLabelText('Open profile')).toHaveLength(1);
     expect(queryByText(/byok/i)).toBeNull();
   });
 
+  it('shows AGI Agent only while the drawer is in Cloud mode', () => {
+    const local = renderDrawer();
+    expect(local.queryByText('AGI Agent')).toBeNull();
+    local.unmount();
+
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const cloud = renderDrawer();
+
+    expect(cloud.getByText('AGI Agent')).toBeTruthy();
+    expect(cloud.queryByLabelText('Projects')).toBeNull();
+    expect(cloud.queryByText('Launch demo')).toBeNull();
+  });
+
   it('renders projects and recents', () => {
-    const { getByText } = renderDrawer();
+    const { getByText, queryByText } = renderDrawer();
 
     expect(getByText('Launch demo')).toBeTruthy();
     expect(getByText('First Chat')).toBeTruthy();
     expect(getByText('Second Chat')).toBeTruthy();
+    expect(queryByText('Cloud Chat')).toBeNull();
   });
 
-  it('opens invite flow from AGI Agent instead of navigating to a disabled route', () => {
+  it('caps visible recents so the drawer footer does not cover chat rows', () => {
+    useChatStore.setState({
+      conversations: Array.from({ length: 10 }, (_, index) => ({
+        id: `local-${index + 1}`,
+        title: `Local recent ${index + 1}`,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        messageCount: 1,
+        pinned: false,
+        executionMode: 'local',
+      })),
+    });
+
+    const { getByText, queryByText } = renderDrawer();
+
+    expect(getByText('Local recent 1')).toBeTruthy();
+    expect(getByText('Local recent 8')).toBeTruthy();
+    expect(queryByText('Local recent 9')).toBeNull();
+  });
+
+  it('clears drawer search through the visible clear button', () => {
+    const { getByLabelText, getByText, queryByText } = renderDrawer();
+
+    fireEvent.changeText(getByLabelText('Search chats and projects'), 'Test');
+    expect(getByText('Results')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Clear search'));
+
+    expect(getByText('Recents')).toBeTruthy();
+    expect(queryByText('Results')).toBeNull();
+  });
+
+  it('keeps Cloud recents separate from Local recents', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    if (DEFAULT_CLOUD_MODEL_ID) {
+      useModelStore.getState().setModel(DEFAULT_CLOUD_MODEL_ID);
+    }
+
+    const { getByText, queryByText } = renderDrawer();
+
+    expect(getByText('Cloud Chat')).toBeTruthy();
+    expect(queryByText('First Chat')).toBeNull();
+    expect(queryByText('Second Chat')).toBeNull();
+  });
+
+  it('opens invite flow from AGI Agent while Cloud is locked', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText, getByTestId } = renderDrawer();
 
     fireEvent.press(getByLabelText('AGI Agent. Cloud'));
 
-    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockCloseDrawer).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalledWith('/(app)/agents');
     expect(getByTestId('invite-code-modal')).toBeTruthy();
+  });
+
+  it('uses the unlocked AGI Cloud route from AGI Agent', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText, queryByTestId } = renderDrawer();
+
+    fireEvent.press(getByLabelText('AGI Agent. Cloud'));
+
+    expect(queryByTestId('invite-code-modal')).toBeNull();
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    if (DEFAULT_CLOUD_MODEL_ID) {
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_CLOUD_MODEL_ID);
+      expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
+      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    }
   });
 
   it('highlights active projects and settings rows', () => {
@@ -185,19 +302,13 @@ describe('DrawerContent', () => {
     expect(settings.getByLabelText('Settings').props.accessibilityState.selected).toBe(true);
   });
 
-  it('creates a new chat from the header button', async () => {
-    useChatStore.setState({
-      createConversation: jest.fn(async () => 'conv-new'),
-    } as never);
+  it('opens the new chat composer from the header button', () => {
     const { getByLabelText } = renderDrawer();
 
     fireEvent.press(getByLabelText('New chat'));
 
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith({
-        pathname: '/(app)/chat/[id]',
-        params: { id: 'conv-new' },
-      });
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/(tabs)/chat',
     });
   });
 });

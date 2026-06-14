@@ -82,7 +82,7 @@ function EmptyState() {
 }
 
 // ============================================================================
-// Artifact Content Viewer — delegates to ArtifactPreview for full
+// Artifact Content Viewer · delegates to ArtifactPreview for full
 // Preview/Code tabs, versioning, sharing, and download functionality.
 // ============================================================================
 
@@ -122,7 +122,7 @@ export function ArtifactsPanel() {
           'bg-card/95 backdrop-blur-xl',
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-40 w-full',
-          // Desktop: inline panel — responsive width
+          // Desktop: inline panel · responsive width
           'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:shrink-0',
           // Slide-in animation
           'animate-in slide-in-from-right duration-300',
@@ -168,7 +168,7 @@ export function ArtifactsPanel() {
           <EmptyState />
         ) : (
           <>
-            {/* Tabs — horizontal scrollable list */}
+            {/* Tabs · horizontal scrollable list */}
             <div className="border-b border-border/20 px-3 py-2">
               <div className="flex gap-1 overflow-x-auto scrollbar-none">
                 {artifacts.map((artifact) => (

@@ -123,7 +123,7 @@ export default function CompareScreen() {
       const ctrlA = new AbortController();
       controllerARef.current = ctrlA;
 
-      let startA = Date.now();
+      const startA = Date.now();
       setStateA((prev) => ({ ...prev, isStreaming: true }));
 
       streamChat(
@@ -170,7 +170,6 @@ export default function CompareScreen() {
       const ctrlB = new AbortController();
       controllerBRef.current = ctrlB;
 
-      startA = Date.now(); // reset variable name but track separately per closure
       const startB = Date.now();
       setStateB((prev) => ({ ...prev, isStreaming: true }));
 

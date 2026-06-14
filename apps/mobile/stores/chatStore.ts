@@ -65,6 +65,22 @@ export interface CombinedChatState {
     model: string,
     queueId: string,
   ) => void;
+  beginImageGeneration: (
+    conversationId: string,
+    commandContent: string,
+    prompt: string,
+    model: string,
+  ) => string;
+  completeImageGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    result: { imageUrl: string; revisedPrompt?: string; model?: string },
+  ) => void;
+  failImageGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    errorMessage: string,
+  ) => void;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
   sendMessage: (
@@ -109,6 +125,9 @@ function buildCombinedState(
     markConversationRead: msg.markConversationRead,
     deleteMessage: msg.deleteMessage,
     enqueueOfflineMessage: msg.enqueueOfflineMessage,
+    beginImageGeneration: msg.beginImageGeneration,
+    completeImageGeneration: msg.completeImageGeneration,
+    failImageGeneration: msg.failImageGeneration,
     resolveOfflineMessage: msg.resolveOfflineMessage,
     clearQueuedPlaceholders: msg.clearQueuedPlaceholders,
     isStreaming: exec.isStreaming,

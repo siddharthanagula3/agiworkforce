@@ -28,9 +28,6 @@ describe('public marketing copy regressions', () => {
     for (const file of files) {
       const source = readWebFile(file);
 
-      expect(source, `${file} must use bash installer`).toContain(
-        'curl -fsSL https://agiworkforce.com/install.sh | bash',
-      );
       expect(source, `${file} must not use sh installer`).not.toContain(
         'https://agiworkforce.com/install.sh | sh',
       );
@@ -42,17 +39,30 @@ describe('public marketing copy regressions', () => {
       );
     }
 
-    const sourceInstall = readWebFile('app/get-started/page.tsx');
+    // The install.sh script and brew tap have no repo backing; no public page
+    // may advertise them as install paths (flagship refactor, 2026-06).
+    for (const file of ['app/get-started/page.tsx', 'app/download/page.tsx']) {
+      const source = readWebFile(file);
+
+      expect(source, `${file} must not advertise the unverified curl installer`).not.toContain(
+        'install.sh',
+      );
+      expect(source, `${file} must not advertise the unverified brew tap`).not.toContain(
+        'brew install',
+      );
+    }
+
     const cliInstall = readWebFile('app/cli/page.tsx');
 
-    expect(sourceInstall).toContain(
-      'cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi',
+    // /cli only advertises the install path documented in apps/cli/README.md.
+    // The brew tap and install.sh script have no repo backing for the CLI page.
+    expect(cliInstall).toContain('cargo install --path apps/cli --bin agi');
+    expect(cliInstall, 'cli page must not advertise the unverified curl installer').not.toContain(
+      'install.sh',
     );
-    expect(sourceInstall).toContain('brew install agiworkforce/tap/agiworkforce');
-    expect(cliInstall).toContain(
-      'cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi',
+    expect(cliInstall, 'cli page must not advertise the unverified brew tap').not.toContain(
+      'brew install',
     );
-    expect(cliInstall).toContain('brew install agiworkforce/tap/agiworkforce');
   });
 
   it('keeps public download CTAs away from unavailable installer API JSON', () => {
@@ -66,9 +76,11 @@ describe('public marketing copy regressions', () => {
   it('keeps managed cloud waitlist copy scoped by surface trust boundary', () => {
     const waitlist = readWebFile('app/waitlist/page.tsx');
     const waitlistForm = readWebFile('app/byok/WaitlistForm.tsx');
+    const normalizedWaitlist = waitlist.replace(/\s+/g, ' ');
 
     expect(waitlist).not.toContain('Cloud Managed is invite-only across Web, Mobile, Desktop, CLI');
-    expect(waitlist).toContain('CLI, Chrome, and VS Code require explicit scoped handoff');
+    expect(normalizedWaitlist).toContain('rolling out by invite');
+    expect(normalizedWaitlist).toContain('Use your provider accounts on Desktop and CLI');
     expect(waitlistForm).not.toContain('var(--teal, #2eb88a)');
     expect(waitlistForm).toContain('var(--agi-success)');
   });
@@ -80,8 +92,8 @@ describe('public marketing copy regressions', () => {
     const normalized = byok.replace(/\s+/g, ' ');
 
     expect(byok).not.toContain('Web and mobile use explicit consent before sending a prompt');
-    expect(normalized).toContain('Web remains account and managed-cloud waitlist');
-    expect(normalized).toContain('Mobile v1 does not accept provider keys');
+    expect(normalized).toContain('BYOK lives on Desktop and the CLI');
+    expect(normalized).toContain('Web and Mobile don&rsquo;t take provider keys');
     expect(pricingEn).not.toContain('Available on every surface');
     expect(pricingEs).not.toContain('Disponible en todas las superficies');
   });

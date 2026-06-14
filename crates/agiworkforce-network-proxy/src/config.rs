@@ -163,7 +163,10 @@ fn default_proxy_url() -> String {
 }
 
 fn default_socks_url() -> String {
-    "http://127.0.0.1:8081".to_string()
+    // Scheme-less host:port: this is a SOCKS5 listener, not HTTP. `resolve_addr`
+    // ignores any scheme and extracts host:port, but the stored default should
+    // reflect the actual protocol so future consumers aren't misled.
+    "127.0.0.1:8081".to_string()
 }
 
 /// Clamp non-loopback bind addresses to loopback unless explicitly allowed.
@@ -435,7 +438,7 @@ mod tests {
                 enabled: false,
                 proxy_url: "http://127.0.0.1:3128".to_string(),
                 enable_socks5: true,
-                socks_url: "http://127.0.0.1:8081".to_string(),
+                socks_url: "127.0.0.1:8081".to_string(),
                 enable_socks5_udp: true,
                 allow_upstream_proxy: true,
                 dangerously_allow_non_loopback_proxy: false,

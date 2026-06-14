@@ -62,7 +62,7 @@ export function SidebarHeader({ onSearchChange }: SidebarHeaderProps) {
           onFocus={() => setIsSearchFocused(true)}
           onBlur={() => setIsSearchFocused(false)}
           placeholder="Search conversations..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor={colors.textMuted}
           style={{
             flex: 1,
             fontSize: 13,

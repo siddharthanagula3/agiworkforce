@@ -1,7 +1,7 @@
 {
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
-  "description": "Multi-provider AI coding assistant — 10+ providers",
+  "description": "Multi-provider AI coding assistant for VS Code",
   "version": "0.3.0",
   "publisher": "agiworkforce",
   "license": "PROPRIETARY",
@@ -97,6 +97,16 @@
         "command": "agi-workforce.generateTests",
         "title": "AGI Workforce: Generate Tests",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "agi-workforce.signIn",
+        "title": "AGI: Sign in to AGI Cloud",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "agi-workforce.signOut",
+        "title": "AGI: Sign out of AGI Cloud",
+        "icon": "$(sign-out)"
       },
       {
         "command": "agi-workforce.setApiKey",
@@ -414,7 +424,7 @@
         "id": "agiworkforce.agi",
         "name": "agi",
         "fullName": "AGI Workforce",
-        "description": "Multi-provider AI coding assistant — 10+ providers",
+        "description": "Multi-provider AI coding assistant for VS Code",
         "isSticky": true,
         "commands": [
           {
@@ -820,7 +830,7 @@
             "Bring-your-own-key — free, single-provider per session (default).",
             "Hobby managed cloud — limited credits, single-provider per session.",
             "Pro managed cloud — higher limits, single-provider per session.",
-            "Pro+ ($49.99/mo) — unlocks multi-provider in-thread switching.",
+            "Pro+ eligible plan — unlocks multi-provider in-thread switching.",
             "Max — highest limits, all features."
           ],
           "default": "byok",

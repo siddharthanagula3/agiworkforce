@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde_json::Value;
 
 use super::{ContentBlock, Message, MessageContent};
@@ -92,6 +94,13 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                 if !tc_array.is_empty() {
                     msg["tool_calls"] = serde_json::json!(tc_array);
                 }
+                // OpenAI-compatible endpoints reject an assistant message that has
+                // neither `content` nor `tool_calls` (hard 400). When the blocks
+                // yielded no text and no tool calls, emit an empty-string content
+                // so the message stays valid on replayed/edge-case histories.
+                if msg.get("content").is_none() && msg.get("tool_calls").is_none() {
+                    msg["content"] = serde_json::json!("");
+                }
                 vec![msg]
             } else {
                 // For user/tool messages — tool results become separate "tool" role messages.
@@ -184,8 +193,26 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
     }
 }
 
-/// Convert an internal Message to Gemini API JSON format.
-pub(crate) fn convert_message_to_gemini(m: &Message) -> Value {
+/// Build a `tool_use_id -> function name` map from all ToolUse blocks. Gemini's
+/// `functionResponse.name` must equal the originating `functionCall.name`, but a
+/// ToolResult only carries `tool_use_id`, so the name is resolved via this map.
+pub(crate) fn build_gemini_tool_name_map(messages: &[Message]) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for m in messages {
+        if let MessageContent::Blocks(blocks) = &m.content {
+            for b in blocks {
+                if let ContentBlock::ToolUse { id, name, .. } = b {
+                    map.insert(id.clone(), name.clone());
+                }
+            }
+        }
+    }
+    map
+}
+
+/// Convert an internal Message to Gemini API JSON format. `tool_names` maps
+/// `tool_use_id -> function name` so tool results carry the correct name.
+pub(crate) fn convert_message_to_gemini(m: &Message, tool_names: &HashMap<String, String>) -> Value {
     let role = if m.role == "assistant" {
         "model"
     } else {
@@ -213,12 +240,21 @@ pub(crate) fn convert_message_to_gemini(m: &Message) -> Value {
                             "functionCall": { "name": name, "args": input }
                         })
                     }
-                    ContentBlock::ToolResult { content, .. } => {
-                        // Gemini uses functionResponse — we need the function name,
-                        // but ToolResult only has tool_use_id. Use a generic name.
+                    ContentBlock::ToolResult {
+                        tool_use_id,
+                        content,
+                        ..
+                    } => {
+                        // Gemini matches functionResponse to functionCall by name;
+                        // resolve the real name from the tool_use_id map (fallback
+                        // "tool" only if the originating call is missing).
+                        let name = tool_names
+                            .get(tool_use_id)
+                            .map(String::as_str)
+                            .unwrap_or("tool");
                         serde_json::json!({
                             "functionResponse": {
-                                "name": "tool",
+                                "name": name,
                                 "response": { "result": content }
                             }
                         })
@@ -330,11 +366,63 @@ mod tests {
     }
 
     #[test]
+    fn openai_empty_assistant_blocks_emit_empty_content() {
+        // An assistant message whose blocks yield neither text nor tool calls
+        // must still carry a `content` field — OpenAI-compatible endpoints reject
+        // an assistant message with neither `content` nor `tool_calls` (400).
+        let msg = Message::blocks("assistant", vec![]);
+        let msgs = convert_message_to_openai(&msg);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0]["role"], "assistant");
+        assert_eq!(
+            msgs[0]["content"], "",
+            "empty assistant blocks must serialize with content=\"\""
+        );
+        assert!(
+            msgs[0].get("tool_calls").is_none(),
+            "no tool_calls expected when blocks are empty"
+        );
+    }
+
+    #[test]
     fn gemini_image_block_uses_inline_data() {
         let msg = Message::blocks("user", vec![image_block()]);
-        let v = convert_message_to_gemini(&msg);
+        let v = convert_message_to_gemini(&msg, &HashMap::new());
         let parts = v["parts"].as_array().unwrap();
         assert_eq!(parts[0]["inlineData"]["mimeType"], "image/png");
         assert_eq!(parts[0]["inlineData"]["data"], "BASE64DATA");
+    }
+
+    #[test]
+    fn gemini_tool_result_resolves_real_function_name() {
+        // functionResponse.name must equal the originating functionCall.name,
+        // not the previous hardcoded "tool".
+        let mut names = HashMap::new();
+        names.insert("call_1".to_string(), "read_file".to_string());
+        let msg = Message::blocks(
+            "user",
+            vec![ContentBlock::ToolResult {
+                tool_use_id: "call_1".to_string(),
+                content: "ok".to_string(),
+                is_error: false,
+            }],
+        );
+        let v = convert_message_to_gemini(&msg, &names);
+        let parts = v["parts"].as_array().unwrap();
+        assert_eq!(parts[0]["functionResponse"]["name"], "read_file");
+    }
+
+    #[test]
+    fn gemini_tool_name_map_collects_tool_use_ids() {
+        let msg = Message::blocks(
+            "assistant",
+            vec![ContentBlock::ToolUse {
+                id: "call_9".to_string(),
+                name: "grep_files".to_string(),
+                input: serde_json::json!({}),
+            }],
+        );
+        let map = build_gemini_tool_name_map(std::slice::from_ref(&msg));
+        assert_eq!(map.get("call_9").map(String::as_str), Some("grep_files"));
     }
 }

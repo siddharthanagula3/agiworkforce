@@ -98,7 +98,7 @@ const CHAT_TEXT_SECONDARY_DARK = '#a1a1a6';
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('WCAG 2.1 AA contrast ratios — light mode', () => {
+describe('WCAG 2.1 AA contrast ratios · light mode', () => {
   it('--background vs --foreground: >= 4.5:1', () => {
     const ratio = contrastRatio(LIGHT_BG, LIGHT_FG);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
@@ -125,7 +125,7 @@ describe('WCAG 2.1 AA contrast ratios — light mode', () => {
   });
 });
 
-describe('WCAG 2.1 AA contrast ratios — dark mode', () => {
+describe('WCAG 2.1 AA contrast ratios · dark mode', () => {
   it('--background vs --foreground: >= 4.5:1', () => {
     const ratio = contrastRatio(DARK_BG, DARK_FG);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
@@ -152,34 +152,34 @@ describe('WCAG 2.1 AA contrast ratios — dark mode', () => {
   });
 });
 
-describe('WCAG 2.1 AA contrast ratios — large text and graphics (>= 3:1)', () => {
+describe('WCAG 2.1 AA contrast ratios · large text and graphics (>= 3:1)', () => {
   /**
    * Sidebar borders (--sidebar-border, --border, --chat-border-subtle/strong) are
    * purely decorative separators between surface areas that share very similar hues.
    * WCAG 1.4.11 (Non-text Contrast) requires 3:1 only for "components and states"
-   * that convey information — not for decorative borders.
+   * that convey information · not for decorative borders.
    * We verify the correct semantic role here and document the actual ratios.
    */
   it('light sidebar-bg vs sidebar-border is decorative (< 3:1 acceptable)', () => {
     // --sidebar-border: 214.3 31.8% 91.4%
     const sidebarBorder = hslToHex(214.3, 31.8, 91.4);
     const ratio = contrastRatio(LIGHT_SIDEBAR_BG, sidebarBorder);
-    // These are background-to-background dividers — intentionally subtle
+    // These are background-to-background dividers · intentionally subtle
     // WCAG exception: purely decorative borders between surface zones
     expect(ratio).toBeGreaterThan(1.0); // must be distinct, not identical
   });
 
   it('dark chat-border-strong is visually distinct from chat-bg (> 1:1)', () => {
-    // #2d2d35 on #0f0f13 — subtle structural divider, not a UI control
+    // #2d2d35 on #0f0f13 · subtle structural divider, not a UI control
     const chatBorderStrong = '#2d2d35';
     const ratio = contrastRatio(CHAT_BG_DARK, chatBorderStrong);
-    // Decorative layout separator — must be different from background
+    // Decorative layout separator · must be different from background
     expect(ratio).toBeGreaterThan(1.0);
   });
 
   it('focus ring (--ring) has >= 3:1 contrast with dark background', () => {
-    // --ring: 224.3 76.3% 52% — used for focus indicators (non-decorative)
-    // Updated from 48% (2.83:1 — failed) to 52% (3.24:1 — WCAG AA pass)
+    // --ring: 224.3 76.3% 52% · used for focus indicators (non-decorative)
+    // Updated from 48% (2.83:1 · failed) to 52% (3.24:1 · WCAG AA pass)
     const focusRing = hslToHex(224.3, 76.3, 52);
     const ratio = contrastRatio(DARK_BG, focusRing);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_LARGE);

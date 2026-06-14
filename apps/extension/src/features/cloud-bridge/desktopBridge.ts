@@ -20,9 +20,23 @@ export interface CloudUnlockState {
 export async function getCloudUnlockState(): Promise<CloudUnlockState> {
   try {
     const result = await chrome.storage.local.get([CLOUD_UNLOCKED_KEY]);
-    const raw = result[CLOUD_UNLOCKED_KEY] as CloudUnlockState | undefined;
-    if (raw?.unlocked) {
-      return raw;
+    const raw = result[CLOUD_UNLOCKED_KEY] as Partial<CloudUnlockState> | undefined;
+    // SECURITY (audit batch-220 [MEDIUM] validation bypass, fixed 2026-06-13):
+    // require a validated shape with a non-empty inviteId before honoring an
+    // unlock, so a bare `{ unlocked: true }` written to chrome.storage.local
+    // cannot flip cloud-unlock. (Server-side invite re-verification remains the
+    // authoritative gate before any cloud routing is enabled.)
+    if (
+      raw &&
+      raw.unlocked === true &&
+      typeof raw.inviteId === 'string' &&
+      raw.inviteId.length > 0
+    ) {
+      return {
+        unlocked: true,
+        inviteId: raw.inviteId,
+        ...(typeof raw.unlockedAt === 'number' ? { unlockedAt: raw.unlockedAt } : {}),
+      };
     }
   } catch {
     // chrome.storage unavailable — treat as locked

@@ -137,7 +137,9 @@ pub struct ShellEnvironmentPolicy {
     pub inherit: ShellEnvironmentPolicyInherit,
 
     /// True to skip the check to exclude default environment variables that
-    /// contain "KEY", "SECRET", or "TOKEN" in their name. Defaults to true.
+    /// contain "KEY", "SECRET", or "TOKEN" in their name. Defaults to false so
+    /// that secret-bearing variables are stripped from child processes unless
+    /// the user explicitly opts in to inheriting them.
     pub ignore_default_excludes: bool,
 
     /// Environment variable names to exclude from the environment.
@@ -157,7 +159,9 @@ impl Default for ShellEnvironmentPolicy {
     fn default() -> Self {
         Self {
             inherit: ShellEnvironmentPolicyInherit::All,
-            ignore_default_excludes: true,
+            // Strip KEY/SECRET/TOKEN-named variables by default; the user must
+            // explicitly opt in (set this to true) to inherit secret-bearing env.
+            ignore_default_excludes: false,
             exclude: Vec::new(),
             r#set: HashMap::new(),
             include_only: Vec::new(),
@@ -426,10 +430,17 @@ fn default_provider_auth_cwd() -> AbsolutePathBuf {
         return cwd;
     }
 
-    match AbsolutePathBuf::current_dir() {
-        Ok(cwd) => cwd,
-        Err(err) => panic!("provider auth cwd must resolve: {err}"),
+    if let Ok(cwd) = AbsolutePathBuf::current_dir() {
+        return cwd;
     }
+
+    // If the working directory cannot be resolved at config-load time (e.g. it
+    // was deleted or is permission-denied), fall back to the filesystem root
+    // rather than panicking and aborting the process. `from_absolute_path_checked`
+    // only rejects non-absolute inputs and does not touch the filesystem, so this
+    // construction for an absolute "/" cannot fail.
+    AbsolutePathBuf::from_absolute_path_checked(std::path::Path::new("/"))
+        .expect("filesystem root \"/\" is always an absolute path")
 }
 
 fn is_default_provider_auth_cwd(path: &AbsolutePathBuf) -> bool {
@@ -628,7 +639,7 @@ mod tests {
         let mode = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
-                model: "gpt-5.2-codex".to_string(),
+                model: "test-model".to_string(),
                 reasoning_effort: Some(ReasoningEffort::High),
                 developer_instructions: Some("stay focused".to_string()),
             },
@@ -644,7 +655,7 @@ mod tests {
         let expected = CollaborationMode {
             mode: ModeKind::Default,
             settings: Settings {
-                model: "gpt-5.2-codex".to_string(),
+                model: "test-model".to_string(),
                 reasoning_effort: None,
                 developer_instructions: None,
             },

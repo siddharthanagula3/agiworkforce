@@ -145,7 +145,7 @@ interface UserPlanData {
   stripeSubscriptionId: string | null;
 }
 
-// Per-tier billing metadata — prices and usage budgets come from the shared billing catalog.
+// Per-tier billing metadata · prices and usage budgets come from the shared billing catalog.
 const TIER_CONFIG: Record<
   BillingPlan,
   { creditLimitCents: number; price: number; name: string; features: string[] }
@@ -291,7 +291,7 @@ async function fetchUserPlan(_userId: string): Promise<UserPlanData> {
       };
     }
     const data = (await res.json()) as UsageApiResponse;
-    // Map plan_tier to BillingPlan — hobby is a valid paid tier
+    // Map plan_tier to BillingPlan · hobby is a valid paid tier
     const planTier = (data.plan_tier ?? 'free').toLowerCase();
     // pro_plus is a legacy value; map it to max as the closest valid tier.
     const normalizedTier = planTier === 'pro_plus' ? 'max' : planTier;
@@ -347,7 +347,7 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
       const balance = Number.isFinite(tokenBalance.currentBalance)
         ? tokenBalance.currentBalance
         : 0;
-      // Both creditLimitCents and balance are in cents — units match
+      // Both creditLimitCents and balance are in cents · units match
       const totalUsed = Math.max(creditLimitCents - balance, 0);
 
       // Calculate billing period dates
@@ -447,7 +447,7 @@ export function useTokenAnalytics(
     // TODO: Add /api/usage/analytics endpoint for per-session token analytics with time range.
     queryFn: async (): Promise<TokenAnalyticsData | null> => {
       if (!user?.id) return null;
-      // No analytics API route available yet — return empty structure.
+      // No analytics API route available yet · return empty structure.
       return {
         sessions: [],
         stats: {

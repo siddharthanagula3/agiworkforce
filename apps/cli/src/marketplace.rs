@@ -251,6 +251,11 @@ impl Marketplace {
             self.install_from_path(source, &name, &plugins_dir)?
         };
 
+        // Read the real version from the plugin's manifest. Falling back to
+        // "0.0.0" (unknown) rather than a fake "1.0.0" makes a missing/invalid
+        // manifest version visible instead of pretending every plugin is 1.0.0.
+        let version = read_manifest_version(&install_path);
+
         // Record in installed.json
         let mut reg = InstalledPlugins::load(&plugins_dir);
         reg.plugins.insert(
@@ -258,7 +263,7 @@ impl Marketplace {
             InstalledPluginEntry {
                 scope: scope.to_string(),
                 install_path: install_path.to_string_lossy().to_string(),
-                version: "1.0.0".to_string(),
+                version,
                 installed_at: Utc::now(),
             },
         );
@@ -270,6 +275,13 @@ impl Marketplace {
 
     /// Clone a git repository into the plugin cache and copy to plugins root.
     fn install_from_git(&self, url: &str, name: &str, plugins_dir: &Path) -> Result<PathBuf> {
+        // Validate the clone source before it ever reaches git's argv. Without
+        // this a caller-supplied "URL" beginning with `-` (e.g.
+        // `--upload-pack=...`) would be parsed by git as an option rather than
+        // a remote (argument injection), and an unexpected scheme (file://,
+        // ext::, ssh helper tricks) could pull from an unintended source.
+        validate_git_clone_url(url)?;
+
         let cache_dir = plugins_dir.join(CACHE_DIR);
         std::fs::create_dir_all(&cache_dir)?;
 
@@ -280,11 +292,13 @@ impl Marketplace {
             std::fs::remove_dir_all(&cache_target).context("failed to remove stale cache entry")?;
         }
 
-        // Shallow clone
+        // Shallow clone. `--` terminates option parsing so neither the URL nor
+        // the target path can be reinterpreted as a git option.
         let output = std::process::Command::new("git")
             .arg("clone")
             .arg("--depth")
             .arg("1")
+            .arg("--")
             .arg(url)
             .arg(&cache_target)
             .output()
@@ -386,7 +400,7 @@ impl Marketplace {
     /// Local-path plugins are skipped (no remote to pull from).
     pub async fn update_all(&self, home: &Path) -> Result<()> {
         let plugins_dir = home.join("plugins");
-        let registry = InstalledPlugins::load(&plugins_dir);
+        let mut registry = InstalledPlugins::load(&plugins_dir);
 
         if registry.plugins.is_empty() {
             eprintln!("No plugins installed.");
@@ -395,6 +409,10 @@ impl Marketplace {
 
         let mut updated = 0u32;
         let mut skipped = 0u32;
+        // Collect (name, fresh_version) for plugins that pulled new commits so
+        // the recorded version is refreshed from the post-pull manifest rather
+        // than left stale.
+        let mut version_refresh: Vec<(String, String)> = Vec::new();
 
         for (name, entry) in &registry.plugins {
             let install_path = PathBuf::from(&entry.install_path);
@@ -424,6 +442,12 @@ impl Marketplace {
                     } else {
                         eprintln!("  {} — updated", name);
                     }
+                    // Re-read the manifest version after the pull so update
+                    // decisions trust the real installed version.
+                    let fresh = read_manifest_version(&install_path);
+                    if fresh != entry.version {
+                        version_refresh.push((name.clone(), fresh));
+                    }
                     updated += 1;
                 }
                 Ok(o) => {
@@ -434,6 +458,15 @@ impl Marketplace {
                     eprintln!("  {} — git error: {}", name, e);
                 }
             }
+        }
+
+        if !version_refresh.is_empty() {
+            for (name, fresh) in version_refresh {
+                if let Some(entry) = registry.plugins.get_mut(&name) {
+                    entry.version = fresh;
+                }
+            }
+            registry.save(&plugins_dir)?;
         }
 
         eprintln!(
@@ -500,6 +533,19 @@ pub fn format_search_results(plugins: &[MarketplacePlugin]) -> String {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Read the plugin's declared version from its installed manifest.
+///
+/// Returns the manifest `version` field when present, or `"0.0.0"` (unknown)
+/// when the plugin has no manifest or omits a version. This is recorded in
+/// `installed.json` so `format_installed` and update/compatibility logic
+/// reflect the real version rather than a hardcoded placeholder.
+fn read_manifest_version(install_path: &Path) -> String {
+    crate::plugins::load_manifest_for(install_path)
+        .and_then(|(manifest, _format)| manifest.version)
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "0.0.0".to_string())
+}
+
 /// Derive a plugin name from a source string (path or URL).
 fn derive_plugin_name(source: &str) -> String {
     // Strip trailing slashes and .git suffix
@@ -518,6 +564,31 @@ fn is_git_url(source: &str) -> bool {
         || source.ends_with(".git")
 }
 
+/// Validate a clone source before it is handed to `git clone`.
+///
+/// Rejects argument-injection (`-`-prefixed sources git would treat as an
+/// option) and confines the source to an allowlist of safe transports
+/// (`https://`, `http://`, `git://`, and `git@host:path` SSH shorthand).
+/// Local-path transports git understands implicitly — `file://`, plain
+/// filesystem paths, and the `ext::`/`fd::` helper transports that can run
+/// arbitrary commands — are not accepted here; local plugins install via
+/// [`install_from_path`](Marketplace::install_from_path) instead.
+fn validate_git_clone_url(url: &str) -> Result<()> {
+    if url.starts_with('-') {
+        bail!("refusing git source that begins with '-' (argument injection): {url}");
+    }
+    let allowed = url.starts_with("https://")
+        || url.starts_with("http://")
+        || url.starts_with("git://")
+        || (url.starts_with("git@") && url.contains(':'));
+    if !allowed {
+        bail!(
+            "unsupported git source '{url}': only https://, http://, git://, and git@host:path are allowed"
+        );
+    }
+    Ok(())
+}
+
 /// Minimal percent-encoding for query strings.
 fn urlencoded(s: &str) -> String {
     s.replace(' ', "%20")
@@ -527,15 +598,31 @@ fn urlencoded(s: &str) -> String {
 }
 
 /// Recursively copy a directory tree.
+///
+/// Symlinks are skipped rather than followed: `symlink_metadata` does not
+/// traverse the link, so a malicious plugin source containing a symlink to a
+/// directory outside the source tree cannot pull arbitrary host files into the
+/// install target (or create a copy loop). `is_dir()`/`is_file()` here would
+/// follow the link and reintroduce that overreach.
 fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let e = entry?;
+        let path = e.path();
+        let meta = std::fs::symlink_metadata(&path)
+            .with_context(|| format!("failed to stat {}", path.display()))?;
+        if meta.file_type().is_symlink() {
+            eprintln!(
+                "[marketplace] skipping symlink during plugin copy: {}",
+                path.display()
+            );
+            continue;
+        }
         let d = dst.join(e.file_name());
-        if e.path().is_dir() {
-            copy_dir(&e.path(), &d)?;
+        if meta.is_dir() {
+            copy_dir(&path, &d)?;
         } else {
-            std::fs::copy(e.path(), d)?;
+            std::fs::copy(&path, d)?;
         }
     }
     Ok(())

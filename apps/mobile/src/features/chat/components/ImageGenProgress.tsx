@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface ImageGenProgressProps {
   prompt: string;
@@ -34,6 +34,8 @@ export function ImageGenProgress({
   errorMessage,
   onRetry,
 }: ImageGenProgressProps) {
+  const colors = useThemeColors();
+
   // Pulsing animation for "pending" state
   const pulseOpacity = useSharedValue(1);
 
@@ -72,7 +74,7 @@ export function ImageGenProgress({
           backgroundColor: colors.surfaceElevated,
           borderRadius: 12,
           borderWidth: 1,
-          borderColor: isFailed ? 'rgba(239, 68, 68, 0.2)' : colors.border,
+          borderColor: isFailed ? colors.dangerBorder : colors.border,
           padding: 14,
           marginVertical: 6,
           gap: 10,
@@ -134,7 +136,7 @@ export function ImageGenProgress({
                 color: colors.textMuted,
               }}
             >
-              Queued\u2026
+              Queued...
             </Text>
           </Animated.View>
         )}
@@ -147,7 +149,7 @@ export function ImageGenProgress({
               style={{
                 height: 4,
                 borderRadius: 2,
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: colors.progressTrack,
                 overflow: 'hidden',
               }}
             >
@@ -202,7 +204,7 @@ export function ImageGenProgress({
                 style={{
                   fontSize: 12,
                   lineHeight: 17,
-                  color: 'rgba(239, 68, 68, 0.8)',
+                  color: colors.agentError,
                 }}
                 numberOfLines={3}
               >

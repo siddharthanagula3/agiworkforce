@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * AdvancedModeToggle — tier-gated manual model picker for Pro and Max users.
+ * AdvancedModeToggle · tier-gated manual model picker for Pro and Max users.
  *
  * Design decisions (per parallel-spinning-hedgehog.md §2 Round 13):
  * - Toggle is only rendered when `getTierPolicy(tier).allowManualSelection === true`.
@@ -11,7 +11,7 @@
  *   in `settingsStore.advancedModelId` (localStorage-persisted).
  * - The parent page (ChatTab / SettingsPage) is responsible for reading
  *   `advancedMode` and `advancedModelId` and passing the override to the
- *   model store — see integration note below.
+ *   model store · see integration note below.
  *
  * Integration note: callers should do:
  *   const { advancedMode, advancedModelId } = useSettingsStore();
@@ -63,7 +63,7 @@ function resolveDropdownItems(allowedSlots: readonly string[]): ModelDropdownIte
   for (const slotName of allowedSlots) {
     const slotDef = SLOT_REGISTRY[slotName as RoutingSlot];
     if (!slotDef) continue;
-    // Skip image/video generation and voice slots from the chat model picker —
+    // Skip image/video generation and voice slots from the chat model picker ·
     // they are specialty slots not surfaced as general chat models.
     if (
       slotName === 'image_generation' ||
@@ -199,7 +199,7 @@ const AdvancedModeRow = memo(function AdvancedModeRow({
 export interface AdvancedModeToggleProps {
   /**
    * The user's current subscription tier string (e.g. 'pro', 'max', 'hobby').
-   * Accepts any value — normalisation is done internally via `getTierPolicy`.
+   * Accepts any value · normalisation is done internally via `getTierPolicy`.
    */
   tier: string | null | undefined;
 }

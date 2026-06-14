@@ -1,0 +1,24 @@
+---
+source: apps/cli/src/tui/widgets/approval_overlay.rs
+expression: terminal.backend()
+---
+"                                                                                        "
+"                                                                                        "
+"                                                                                        "
+"                                                                                        "
+"                                                                                        "
+"   ┌ Tool Approval ─────────────────────────────────────────────────────────────────┐   "
+"   │                                                                                │   "
+"   │  Allow write_file to modify:                                                   │   "
+"   │    src/main.rs  (+42 / -3 lines)                                               │   "
+"   │                                                                                │   "
+"   │  [ Yes ]  [ No ]  [ Allow Session ]  [ Always Allow ]  [ Deny All ]            │   "
+"   │  ←/→ move   Enter confirm   Esc = No                                           │   "
+"   │                                                                                │   "
+"   └────────────────────────────────────────────────────────────────────────────────┘   "
+"                                                                                        "
+"                                                                                        "
+"                                                                                        "
+"                                                                                        "
+"                                                                                        "
+"                                                                                        "

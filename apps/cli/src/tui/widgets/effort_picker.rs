@@ -3,22 +3,23 @@
 //! Triggered by `/effort` (no arg) or programmatically. Layout:
 //!
 //! ```text
-//! ┌─ Set Effort (↑↓ navigate  Enter select  Esc close) ──────────────┐
-//! │                                                                    │
-//! │  ● Low     Minimal thinking. Fastest response. (~4K tokens)       │
-//! │    Medium  Balanced thinking. Default.         (~16K tokens)      │
-//! │    High    Extended thinking. More accurate.   (~32K tokens)      │
-//! │    Max     Maximum thinking. Best accuracy.    (~64K tokens)      │
-//! │                                                                    │
-//! └────────────────────────────────────────────────────────────────────┘
+//! ┌─ Effort ──────────────────────────────────────────────────────────────────┐
+//! │                                                                          │
+//! │    Low       Minimal thinking. Fastest response.     (~4K tokens)        │
+//! │ ●  Medium    Balanced thinking. Default.             (~16K tokens)       │
+//! │    High      Extended thinking. More accurate.       (~32K tokens)       │
+//! │    Max       Maximum thinking. Best accuracy.        (~65K tokens)       │
+//! │                                                                          │
+//! └──────────────────────────────────────────────────────────────────────────┘
 //! ```
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem};
 
 use crate::design_system::Effort;
+use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light};
 
 // ---------------------------------------------------------------------------
 // Public state
@@ -121,10 +122,10 @@ pub fn handle_key(state: &mut EffortPickerState, key: crossterm::event::KeyEvent
 // ---------------------------------------------------------------------------
 
 static EFFORT_DESCRIPTIONS: &[&str] = &[
-    "Minimal thinking. Fastest response.",
-    "Balanced thinking. Default.",
-    "Extended thinking. More accurate.",
-    "Maximum thinking. Best accuracy.",
+    "Concise responses. Fastest.",
+    "Balanced quality and speed. Default.",
+    "More thorough responses. Slower.",
+    "Most thorough responses. Slowest.",
 ];
 
 /// Render the effort picker overlay into `frame`.
@@ -137,7 +138,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState)
     }
 
     let popup_height: u16 = 8; // border(2) + blank(1) + rows(4) + blank(1)
-    let popup_width: u16 = 66.min(area.width.saturating_sub(4));
+    let popup_width: u16 = 76.min(area.width.saturating_sub(4));
 
     let popup_area = Rect {
         x: area.x + (area.width.saturating_sub(popup_width)) / 2,
@@ -150,8 +151,8 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState)
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan))
-        .title(" Set Effort  (↑↓ navigate  Enter select  Esc close) ");
+        .border_style(Style::default().fg(ui_muted()))
+        .title(" Effort ");
     frame.render_widget(block, popup_area);
 
     let inner = Rect {
@@ -186,15 +187,15 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState)
 
             let style = if is_cursor {
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
+                    .fg(ui_on_light())
+                    .bg(ui_accent())
                     .add_modifier(Modifier::BOLD)
             } else if is_active {
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(ui_accent())
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default()
             };
 
             ListItem::new(Line::from(Span::styled(label, style)))
@@ -202,4 +203,28 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState)
         .collect();
 
     frame.render_widget(List::new(items), inner);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn draw_picker(state: &EffortPickerState, width: u16, height: u16) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+        let area = Rect::new(0, 0, width, height);
+        terminal.draw(|f| render(f, area, state)).expect("draw");
+        terminal
+    }
+
+    #[test]
+    fn render_effort_picker_snapshot() {
+        let mut state = EffortPickerState::default();
+        state.open(Effort::Medium);
+        state.cursor_down();
+
+        let terminal = draw_picker(&state, 80, 18);
+        insta::assert_snapshot!("effort_picker_overlay_baseline", terminal.backend());
+    }
 }

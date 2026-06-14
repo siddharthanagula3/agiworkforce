@@ -1,5 +1,5 @@
 /**
- * Knowledge File — soft-delete endpoint.
+ * Knowledge File · soft-delete endpoint.
  *
  * DELETE /api/projects/[id]/knowledge-files/[fileId]
  *
@@ -15,6 +15,15 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+
+const PG_UNDEFINED_TABLE = '42P01';
+const PG_UNDEFINED_COLUMN = '42703';
+
+function isSchemaNotReady(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as Record<string, unknown>)['code'];
+  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
+}
 
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 
@@ -47,6 +56,15 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
       [fileId, projectId],
     );
   } catch (error) {
+    if (isSchemaNotReady(error)) {
+      return NextResponse.json(
+        {
+          error: 'knowledge_files_unavailable',
+          message: 'Knowledge files require Cloud Managed (pending migration apply)',
+        },
+        { status: 503 },
+      );
+    }
     logger.error({ error, projectId, fileId }, 'Failed to delete knowledge file');
     throw createError.internal('Failed to delete knowledge file');
   }

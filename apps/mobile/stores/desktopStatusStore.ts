@@ -69,4 +69,6 @@ export const useDesktopStatusStore = create<DesktopStatusState>()(
 );
 
 // FIX (audit 2026-05-20, §17): use the shared rehydrate helper.
-rehydrateWhenMmkvReady(useDesktopStatusStore, 'desktopStatusStore');
+// Audit 2026-06-13: align the rehydrate log label with the persisted MMKV key
+// ('desktop-status-store') so debug logs reference the actual storage key.
+rehydrateWhenMmkvReady(useDesktopStatusStore, 'desktop-status-store');

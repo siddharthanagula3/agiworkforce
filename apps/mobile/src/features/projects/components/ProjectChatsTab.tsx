@@ -2,14 +2,13 @@
  * ProjectChatsTab — shows conversations belonging to this project
  * and provides a new-chat CTA.
  *
- * Conversations are filtered by projectId from the local store; no
- * network call is required in v1 LOCAL-ONLY mode.
+ * Conversations are filtered by projectId from the local store.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MessageSquare, Plus, Clock } from 'lucide-react-native';
+import { Clock, MessageSquare, SquarePen } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { useChatMessageStore } from '@/stores/chatStore';
@@ -53,7 +52,7 @@ function EmptyState({ onNewChat }: { onNewChat: () => void }) {
         accessibilityRole="button"
         accessibilityLabel="New chat"
       >
-        <Plus size={15} color={colors.teal} />
+        <SquarePen size={15} color={colors.teal} />
         <Text className="text-[13px] font-semibold" style={{ color: colors.teal }}>
           New chat
         </Text>
@@ -66,8 +65,10 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
   const colors = useThemeColors();
   const router = useRouter();
 
-  const conversations = useChatMessageStore((s) =>
-    s.conversations.filter((c) => c.projectId === projectId),
+  const allConversations = useChatMessageStore((s) => s.conversations);
+  const conversations = useMemo(
+    () => allConversations.filter((conversation) => conversation.projectId === projectId),
+    [allConversations, projectId],
   );
 
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
@@ -101,7 +102,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
           accessibilityRole="button"
           accessibilityLabel="New chat in this project"
         >
-          <Plus size={16} color={colors.teal} />
+          <SquarePen size={16} color={colors.teal} />
           <Text className="text-[14px] font-semibold" style={{ color: colors.teal }}>
             New chat
           </Text>

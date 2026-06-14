@@ -2,14 +2,33 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { FinalCta } from '../../components/marketing/FlagshipSections';
+import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 import { WaitlistForm } from './WaitlistForm';
 
 export const metadata: Metadata = {
-  title: 'Bring Your Own API Keys (BYOK)',
-  description: `Use your own Anthropic, OpenAI, Google, OpenRouter and more API keys in AGI desktop and developer surfaces. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
+  title: 'BYOK: Bring Your Own Keys to Desktop & CLI',
+  description: `Bring your own provider API keys to AGI Desktop and the CLI. Keys encrypted at rest on your machine, traffic direct to your provider, and a visible provider label on every route. ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/byok' },
 };
+
+const BYOK_PROVIDERS = [
+  'Anthropic',
+  'OpenAI',
+  'Google',
+  'xAI',
+  'DeepSeek',
+  'Qwen',
+  'Moonshot AI',
+  'Perplexity',
+  'ZhipuAI',
+  'Mistral AI',
+  'Groq',
+  'OpenRouter',
+  'NVIDIA NIM',
+];
 
 export default function ByokPage() {
   return (
@@ -17,139 +36,165 @@ export default function ByokPage() {
       <main className="agi-shell">
         <Header />
 
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
-            Bring Your Own API Keys
-          </p>
-          <h1 className="agi-page-h1">Your keys. Your providers. No markup.</h1>
-          <p className="agi-page-lede">
-            Bring Anthropic, OpenAI, Google, OpenRouter, Groq, Mistral, xAI, DeepSeek, Perplexity,
-            and compatible endpoints into AGI desktop and developer workflows. Pay providers
-            directly.
-            <strong> AGI does not mark up your BYOK usage.</strong>
-          </p>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '4px 10px',
-                borderRadius: 100,
-                background: 'color-mix(in srgb, var(--agi-amber) 15%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--agi-amber) 40%, transparent)',
-                fontSize: 12,
-                fontWeight: 600,
-                color: 'var(--agi-amber)',
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: 'var(--agi-amber)',
-                  display: 'inline-block',
-                }}
-              />
-              {LAUNCH.publicLabel}
+        <section className="agi-fl-hero" aria-labelledby="agi-byok-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">BYOK · bring your own keys</p>
+          <h1 id="agi-byok-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Your keys.</span>
+            <span className="agi-fl-h1-line">Your providers.</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">Your billing.</em>
             </span>
-          </div>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Free BYOK launch</p>
-          <h2
-            style={{
-              fontFamily: 'var(--serif)',
-              fontSize: 22,
-              fontWeight: 500,
-              color: 'var(--text-1)',
-              margin: '0 0 12px',
-            }}
-          >
-            Use frontier models without AGI paying the token bill
-          </h2>
-          <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 20px', maxWidth: 560 }}>
-            BYOK is the fastest path to Claude and ChatGPT-style capability at launch: users keep
-            provider ownership, AGI becomes the product shell on desktop and developer surfaces, and
-            Cloud remains invite-only for users who want AGI-managed compute later.
+          </h1>
+          <p className="agi-fl-lede">
+            Bring your own API keys to AGI Desktop and the CLI. Keys are stored encrypted at rest on
+            your machine, requests go directly to your provider, and the provider label stays
+            visible on every route.
           </p>
-          <div className="agi-cta-row">
-            <Link href="/waitlist" className="agi-cta-primary">
-              {LAUNCH.ctaLabel}
+          <div className="agi-fl-cta-row">
+            <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+              Get AGI Desktop
             </Link>
-            <Link href="/providers" className="agi-cta-ghost">
-              See supported providers &rarr;
+            <Link href="/cli" className="agi-fl-cta agi-fl-cta--secondary">
+              Set Up the CLI
             </Link>
+            <Link href="/providers" className="agi-fl-cta agi-fl-cta--ghost">
+              Browse All Providers
+            </Link>
+          </div>
+          <ul className="agi-fl-mode-ribbon" aria-label="BYOK guarantees">
+            <li>Desktop + CLI only</li>
+            <li>Keys encrypted at rest</li>
+            <li>Billed by your provider</li>
+          </ul>
+
+          <div className="agi-fl-hero-console" aria-hidden="true">
+            <ProductFrame
+              variant="desktop"
+              title="AGI Desktop"
+              badge="BYOK"
+              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+            />
+            <ProductFrame
+              variant="terminal"
+              title="agi · zsh"
+              badge="BYOK"
+              className="agi-fl-hero-frame agi-fl-hero-frame--terminal"
+            />
           </div>
         </section>
 
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">How keys are handled</p>
-          <div className="agi-callout">
-            <h2 className="agi-callout-h">{POSITIONING.trustBoundary}</h2>
-            <p className="agi-callout-p">
-              Desktop and developer surfaces store provider keys through the operating system
-              keychain or local developer configuration. Web remains account and managed-cloud
-              waitlist, not public BYOK chat. Mobile v1 does not accept provider keys. The active
-              provider label stays visible wherever BYOK is available.
-            </p>
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <Link
-              href="/docs/byok-env"
-              style={{ fontSize: 14, color: 'var(--agi-amber)', textDecoration: 'underline' }}
-            >
-              How to use env-based BYOK in v1 &rarr;
-            </Link>
-          </div>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What ships on {LAUNCH.shortDate}</p>
+        <section className="agi-fl-section" aria-labelledby="agi-byok-steps-title">
+          <p className="agi-fl-eyebrow">How it works</p>
+          <h2 id="agi-byok-steps-title" className="agi-fl-h2">
+            Three steps, no middleman.
+          </h2>
           <ol className="agi-steps">
             <li className="agi-step">
-              <span className="agi-step-n">01 / Add a provider</span>
-              <h3 className="agi-step-h">Add a provider once</h3>
+              <span className="agi-step-n">01 / Add a key</span>
+              <h3 className="agi-step-h">Add a provider key once</h3>
               <p className="agi-step-body">
-                Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Mistral, Groq, OpenRouter and
-                compatible endpoints on the BYOK-enabled desktop and developer surfaces. Start with
-                one key and add more as your workflow grows.
+                Add a key on Desktop or in the CLI. It&rsquo;s stored encrypted at rest on your
+                machine. BYOK lives on Desktop and the CLI. Web and Mobile don&rsquo;t take provider
+                keys.
               </p>
             </li>
             <li className="agi-step">
-              <span className="agi-step-n">02 / Switch models mid-thread</span>
-              <h3 className="agi-step-h">Change models without changing apps</h3>
+              <span className="agi-step-n">02 / Pick provider &amp; model</span>
+              <h3 className="agi-step-h">Switch models without switching apps</h3>
               <p className="agi-step-body">
-                Route BYOK-enabled work to Claude, GPT, Gemini, or local/open-compatible providers,
-                with clear provider labels and no silent Local-to-BYOK handoff.
+                Choose any provider from the catalog and change models mid-thread. The active
+                provider label is visible before a request leaves your machine.
               </p>
             </li>
             <li className="agi-step">
-              <span className="agi-step-n">03 / Pay providers directly</span>
-              <h3 className="agi-step-h">Pay providers directly</h3>
+              <span className="agi-step-n">03 / Pay your provider</span>
+              <h3 className="agi-step-h">Pay your provider directly</h3>
               <p className="agi-step-body">
-                Your usage is billed by the provider, not by AGI. Free Local and free BYOK let users
-                try AGI without forcing AGI to subsidize every token.
+                BYOK traffic goes straight to your provider, on your account and your rates. AGI is
+                the workspace, not the meter.
               </p>
             </li>
           </ol>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Cloud invite</p>
-          <div className="agi-callout">
-            <h2 className="agi-callout-h">Want AGI-managed compute?</h2>
-            <p className="agi-callout-p" style={{ marginBottom: 24 }}>
-              Join the Cloud invite list. Cloud is for synced chats, hosted tools, and managed
-              compute after Local and BYOK prove demand.
-            </p>
-            <WaitlistForm source="byok" ctaLabel="Request Cloud invite →" />
+          <div className="agi-fl-cta-row">
+            <Link href="/docs/byok-env" className="agi-fl-cta agi-fl-cta--ghost">
+              Read the Env-Based BYOK Guide
+            </Link>
           </div>
         </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-byok-providers-title">
+          <p className="agi-fl-eyebrow">Provider catalog</p>
+          <h2 id="agi-byok-providers-title" className="agi-fl-h2">
+            BYOK providers, straight from the catalog.
+          </h2>
+          <p className="agi-fl-section-lede">
+            BYOK on Desktop and the CLI covers the providers below, the same catalog that powers
+            AGI&rsquo;s {MARKETING.models.display} models. Ollama and LM Studio run alongside them
+            for offline work.
+          </p>
+          <div className="agi-chip-row" aria-label="Supported BYOK providers">
+            {BYOK_PROVIDERS.map((provider) => (
+              <span key={provider} className="agi-chip">
+                {provider}
+              </span>
+            ))}
+            <span className="agi-chip">Ollama (local)</span>
+            <span className="agi-chip">LM Studio (local)</span>
+          </div>
+          <div className="agi-fl-cta-row">
+            <Link href="/providers" className="agi-fl-cta agi-fl-cta--ghost">
+              See Provider Details
+            </Link>
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-byok-boundary-title">
+          <p className="agi-fl-eyebrow">The boundary</p>
+          <div className="agi-callout">
+            <h2 id="agi-byok-boundary-title" className="agi-callout-h">
+              Local stays Local until you say otherwise.
+            </h2>
+            <p className="agi-callout-p">
+              A Local chat never silently becomes a BYOK chat. Continuing Local work on your keys is
+              an explicit, reviewed continuation. You choose the context that travels and see the
+              provider label before anything is sent.
+            </p>
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-byok-cloud-title">
+          <p className="agi-fl-eyebrow">AGI Cloud</p>
+          <div className="agi-callout">
+            <h2 id="agi-byok-cloud-title" className="agi-callout-h">
+              Prefer managed compute?
+            </h2>
+            <p className="agi-callout-p">
+              AGI Cloud is in private beta behind a waitlist and invite codes. Request access with
+              your signed-in account, or leave an email without one. Either way, you get a single
+              note when access opens.
+            </p>
+            <WaitlistForm source="byok" ctaLabel="Request Cloud Invite" />
+          </div>
+          <div className="agi-fl-cta-row">
+            <WaitlistTrigger
+              label="Join the Waitlist Without an Account"
+              source="byok"
+              className="agi-fl-cta agi-fl-cta--ghost"
+            />
+          </div>
+        </section>
+
+        <FinalCta
+          eyebrow="BYOK"
+          title="Your keys are ready when you are."
+          body="Follow the Desktop and CLI pages for current install routes, add a provider key, and route work on your own account. Local Mode stays available the whole time."
+          ctas={[
+            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/cli', label: 'Explore the CLI' },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
+        />
 
         <MarketingFooter />
       </main>

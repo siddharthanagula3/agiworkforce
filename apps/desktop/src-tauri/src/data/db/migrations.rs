@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 64;
+const CURRENT_VERSION: i32 = 65;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -591,6 +591,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 64 {
         run_migration_in_transaction(conn, 64, apply_migration_v64)?;
+    }
+
+    if current_version < 65 {
+        run_migration_in_transaction(conn, 65, apply_migration_v65)?;
     }
 
     Ok(())
@@ -5374,6 +5378,19 @@ fn apply_migration_v64(conn: &Connection) -> Result<()> {
         "projects",
         "default_privacy_mode",
         "default_privacy_mode TEXT",
+    )?;
+    Ok(())
+}
+
+/// Migration v65: Add knowledge_base_files column to projects table.
+/// Stores JSON-serialized knowledge base file metadata (with extracted text
+/// content) for context injection. ADDITIVE ALTER TABLE only.
+fn apply_migration_v65(conn: &Connection) -> Result<()> {
+    ensure_column(
+        conn,
+        "projects",
+        "knowledge_base_files",
+        "knowledge_base_files TEXT",
     )?;
     Ok(())
 }

@@ -131,11 +131,20 @@ export async function searchContacts(query: string): Promise<ContactEntry[]> {
 }
 
 /**
+ * Discriminated result for {@link getContactsCount}. On platforms where a true
+ * total count is unavailable we report presence without an exact number, so
+ * callers never compute against a magic sentinel value.
+ */
+export type ContactsCountResult =
+  | { known: true; count: number }
+  | { known: false; hasContacts: boolean };
+
+/**
  * Get a count of total contacts (useful for displaying in settings).
  */
-export async function getContactsCount(): Promise<number> {
+export async function getContactsCount(): Promise<ContactsCountResult> {
   const hasPermission = await requestContactsPermission();
-  if (!hasPermission) return 0;
+  if (!hasPermission) return { known: true, count: 0 };
 
   // Use a minimal fields request to count contacts efficiently
   const { data } = await Contacts.getContactsAsync({
@@ -149,8 +158,10 @@ export async function getContactsCount(): Promise<number> {
   if (Platform.OS === 'ios') {
     // On iOS, getContactsAsync without pageSize returns all
     const all = await Contacts.getContactsAsync({ fields: [Contacts.Fields.Name] });
-    return all.data.length;
+    return { known: true, count: all.data.length };
   }
 
-  return data.length > 0 ? -1 : 0; // -1 signals "has contacts but count unknown"
+  // On Android a full count would require paging all contacts; report presence
+  // only, leaving the exact count unknown rather than encoding it as a sentinel.
+  return { known: false, hasContacts: data.length > 0 };
 }

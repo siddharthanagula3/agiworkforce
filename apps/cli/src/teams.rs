@@ -6,6 +6,8 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
+use crate::terminal_style as ts;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -94,6 +96,29 @@ pub struct SharedTask {
 // Git Worktree Isolation
 // ---------------------------------------------------------------------------
 
+/// Validate a teammate name before interpolating it into a git branch name or
+/// a filesystem path. Teammate names originate from LLM `spawn_teammate` tool
+/// args, so a name containing `/`, `..`, or other path metacharacters could
+/// otherwise let the model create/remove git worktrees, branches, or temp
+/// directories outside the intended `agi-team/` namespace. We restrict to a
+/// strict ASCII allowlist so the value is always safe in both contexts.
+#[allow(dead_code)]
+fn validate_teammate_name(name: &str) -> anyhow::Result<()> {
+    if name.is_empty() {
+        anyhow::bail!("Teammate name must not be empty");
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        anyhow::bail!(
+            "Invalid teammate name '{}': only ASCII letters, digits, '_' and '-' are allowed",
+            name
+        );
+    }
+    Ok(())
+}
+
 /// Manages git worktrees for teammate isolation.
 /// Each teammate gets its own worktree so their edits don't conflict.
 #[allow(dead_code)]
@@ -104,6 +129,7 @@ impl WorktreeManager {
     /// Create an isolated git worktree for a teammate.
     /// Returns the worktree path on success.
     pub async fn create_worktree(teammate_name: &str) -> anyhow::Result<std::path::PathBuf> {
+        validate_teammate_name(teammate_name)?;
         let branch_name = format!("agi-team/{}", teammate_name);
         let worktree_dir = std::env::temp_dir().join(format!("agi-worktree-{}", teammate_name));
 
@@ -137,6 +163,7 @@ impl WorktreeManager {
 
     /// Remove a teammate's worktree and optionally merge their changes.
     pub async fn remove_worktree(teammate_name: &str, merge: bool) -> anyhow::Result<()> {
+        validate_teammate_name(teammate_name)?;
         let branch_name = format!("agi-team/{}", teammate_name);
         let worktree_dir = std::env::temp_dir().join(format!("agi-worktree-{}", teammate_name));
 
@@ -397,8 +424,8 @@ impl TeamManager {
         let teammates = self.list_teammates().await;
         let tasks = self.get_tasks().await;
 
-        eprintln!("{}", "Team Status".bold().cyan());
-        eprintln!("{}", "───────────".dimmed());
+        eprintln!("{}", ts::accent_header("Team Status"));
+        eprintln!("{}", ts::muted("───────────"));
 
         if teammates.is_empty() {
             eprintln!("  No teammates registered.");
@@ -406,8 +433,8 @@ impl TeamManager {
             eprintln!("  {}", "Teammates:".bold());
             for tm in &teammates {
                 let status_color = match tm.status {
-                    TeammateStatus::Active => tm.status.to_string().green(),
-                    TeammateStatus::Idle => tm.status.to_string().yellow(),
+                    TeammateStatus::Active => ts::success(tm.status.to_string()),
+                    TeammateStatus::Idle => ts::warning(tm.status.to_string()),
                     TeammateStatus::Completed => tm.status.to_string().dimmed(),
                 };
                 eprintln!(
@@ -425,10 +452,10 @@ impl TeamManager {
             eprintln!("  {}", "Tasks:".bold());
             for task in &tasks {
                 let status_color = match task.status {
-                    TaskStatus::Pending => task.status.to_string().yellow(),
-                    TaskStatus::InProgress => task.status.to_string().cyan(),
-                    TaskStatus::Completed => task.status.to_string().green(),
-                    TaskStatus::Blocked => task.status.to_string().red(),
+                    TaskStatus::Pending => ts::warning(task.status.to_string()),
+                    TaskStatus::InProgress => ts::accent(task.status.to_string()),
+                    TaskStatus::Completed => ts::success(task.status.to_string()),
+                    TaskStatus::Blocked => ts::danger(task.status.to_string()),
                 };
                 let assignee = task.assignee.as_deref().unwrap_or("unassigned");
                 let deps = if task.dependencies.is_empty() {
@@ -454,13 +481,43 @@ impl TeamManager {
 // ---------------------------------------------------------------------------
 
 /// Execute the `send_message` team tool.
+///
+/// SECURITY: when `acting_sender` is provided (the authenticated identity of the
+/// executing teammate, plumbed from `execute_team_tool`), the message sender is
+/// FORCED to that identity and a mismatching model-supplied `from` is rejected
+/// as spoofing — so a turn cannot forge a message "from" another teammate. When
+/// `acting_sender` is `None` (today's single-process, single-trust-boundary
+/// session, where every teammate is simulated by the same orchestrator agent and
+/// there is no separate principal to spoof *across*), the model-supplied `from`
+/// is used. The enforcement path is ready for when teammates become
+/// independently-executing agents.
 pub async fn execute_send_message(
     team: &TeamManager,
     args: &HashMap<String, String>,
+    acting_sender: Option<&str>,
 ) -> anyhow::Result<crate::tools::ToolResult> {
-    let from = args.get("from").map(|s| s.as_str()).unwrap_or("");
+    let claimed_from = args.get("from").map(|s| s.as_str()).unwrap_or("");
     let to = args.get("to").map(|s| s.as_str()).unwrap_or("");
     let content = args.get("content").map(|s| s.as_str()).unwrap_or("");
+
+    // Derive the authenticated sender. With a known executing identity, reject
+    // any attempt to address the message as a different principal.
+    let from = match acting_sender {
+        Some(actor) => {
+            if !claimed_from.is_empty() && claimed_from != actor {
+                return Ok(crate::tools::ToolResult {
+                    tool_name: "send_message".to_string(),
+                    success: false,
+                    output: format!(
+                        "sender spoofing rejected: 'from' must be the executing teammate '{}', not '{}'",
+                        actor, claimed_from
+                    ),
+                });
+            }
+            actor
+        }
+        None => claimed_from,
+    };
 
     if from.is_empty() || to.is_empty() || content.is_empty() {
         return Ok(crate::tools::ToolResult {
@@ -739,6 +796,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_execute_send_message_rejects_spoofed_sender() {
+        let tm = TeamManager::new();
+        tm.spawn_teammate("alice", "engineer", "").await.unwrap();
+        tm.spawn_teammate("bob", "qa", "").await.unwrap();
+        let mut args = HashMap::new();
+        args.insert("to".to_string(), "alice".to_string());
+        args.insert("content".to_string(), "hi".to_string());
+
+        // Executing identity is "alice" but the turn claims from="bob": rejected.
+        args.insert("from".to_string(), "bob".to_string());
+        let spoof = execute_send_message(&tm, &args, Some("alice")).await.unwrap();
+        assert!(!spoof.success);
+        assert!(spoof.output.contains("spoofing"));
+
+        // from matching the executing identity is accepted.
+        args.insert("from".to_string(), "alice".to_string());
+        let ok = execute_send_message(&tm, &args, Some("alice")).await.unwrap();
+        assert!(ok.success);
+
+        // Legacy single-orchestrator path (no acting identity) keeps working.
+        args.insert("from".to_string(), "bob".to_string());
+        let legacy = execute_send_message(&tm, &args, None).await.unwrap();
+        assert!(legacy.success);
+    }
+
+    #[tokio::test]
     async fn test_add_and_update_task() {
         let tm = TeamManager::new();
         let task_id = tm
@@ -778,6 +861,26 @@ mod tests {
         let tm = TeamManager::new();
         let result = tm.update_task("task-999", TaskStatus::Completed).await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_teammate_name_accepts_safe_names() {
+        assert!(validate_teammate_name("alice").is_ok());
+        assert!(validate_teammate_name("alice-2").is_ok());
+        assert!(validate_teammate_name("worker_01").is_ok());
+        assert!(validate_teammate_name("ABC-xyz_9").is_ok());
+    }
+
+    #[test]
+    fn test_validate_teammate_name_rejects_path_traversal() {
+        // Path separators and traversal sequences must be rejected so they
+        // cannot escape the agi-team/ branch namespace or the temp-dir path.
+        assert!(validate_teammate_name("../../tmp/evil").is_err());
+        assert!(validate_teammate_name("a/b").is_err());
+        assert!(validate_teammate_name("..").is_err());
+        assert!(validate_teammate_name("name with space").is_err());
+        assert!(validate_teammate_name("$(rm -rf)").is_err());
+        assert!(validate_teammate_name("").is_err());
     }
 
     #[test]

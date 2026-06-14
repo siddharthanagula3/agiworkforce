@@ -67,7 +67,7 @@ vi.mock('@shared/ui/accordion', () => ({
   ),
 }));
 
-// Mock Tabs — render all TabsContent so tests can query content in all tabs
+// Mock Tabs · render all TabsContent so tests can query content in all tabs
 vi.mock('@shared/ui/tabs', () => ({
   Tabs: ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="tabs" {...props}>
@@ -102,7 +102,7 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Mock lucide-react icons — use importOriginal to include all icons
+// Mock lucide-react icons · use importOriginal to include all icons
 vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('lucide-react')>();
   return { ...actual };

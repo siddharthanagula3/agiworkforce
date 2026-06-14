@@ -94,7 +94,7 @@ export class APIClient {
         return stored;
       }
 
-      // Corrupted ciphertext — clear it
+      // Corrupted ciphertext · clear it
       console.warn(`[APIClient] Removing corrupted value from ${key}`);
       localStorage.removeItem(key);
       return null;
@@ -114,7 +114,7 @@ export class APIClient {
       const encrypted = await securityManager.encryptAsync(token);
       localStorage.setItem(this.tokenKey, encrypted);
     } catch {
-      // Do NOT store plaintext — log warning and skip localStorage persistence
+      // Do NOT store plaintext · log warning and skip localStorage persistence
       console.warn('[APIClient] Encryption unavailable; token stored in memory only');
     }
     // Also set as HttpOnly cookie for stronger security
@@ -144,7 +144,7 @@ export class APIClient {
       const encrypted = await securityManager.encryptAsync(token);
       localStorage.setItem(this.refreshTokenKey, encrypted);
     } catch {
-      // Do NOT store plaintext — log warning and skip localStorage persistence
+      // Do NOT store plaintext · log warning and skip localStorage persistence
       console.warn('[APIClient] Encryption unavailable; refresh token stored in memory only');
     }
     // Also set as HttpOnly cookie for stronger security
@@ -882,19 +882,6 @@ export const getErrorMessage = (error: unknown): string => {
     return error.message;
   }
   return 'An unknown error occurred';
-};
-
-// Mock API responses for development
-export const createMockResponse = <T>(data: T, delay = 1000): Promise<APIResponse<T>> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        data,
-        success: true,
-        message: 'Mock response',
-      });
-    }, delay);
-  });
 };
 
 export default apiClient;

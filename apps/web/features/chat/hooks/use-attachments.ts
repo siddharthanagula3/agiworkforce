@@ -22,7 +22,7 @@ const MAX_FILE_COUNT = 20;
  * Per-file size cap. Sourced from `@agiworkforce/types` so Web matches the
  * canonical limit that Mobile + Desktop + unified-chat already enforce.
  *
- * Previously hardcoded to 30 MB here — files between 25 MiB (canonical)
+ * Previously hardcoded to 30 MB here · files between 25 MiB (canonical)
  * and 30 MB (web) passed local validation but consistently failed at the
  * Anthropic/OpenAI provider gateways, surfacing as opaque 413s late in
  * the request flow. 2026-05-22 ultrathink audit.
@@ -67,7 +67,7 @@ export interface AttachmentPreview {
 export interface UseAttachmentsOptions {
   /** Maximum number of files allowed (default: 20) */
   maxFiles?: number;
-  /** Maximum file size in bytes (default: 25 MiB — canonical, see `@agiworkforce/types` MAX_ATTACHMENT_BYTES). */
+  /** Maximum file size in bytes (default: 25 MiB · canonical, see `@agiworkforce/types` MAX_ATTACHMENT_BYTES). */
   maxFileSize?: number;
   /** Callback fired when a validation error occurs */
   onError?: (message: string) => void;

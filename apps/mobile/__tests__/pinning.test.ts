@@ -4,8 +4,10 @@ import {
   PINNING_ENFORCED,
   assertPinningReadyIfEnforced,
   hasPlaceholderPins,
+  hasPlaceholderPinForUrl,
   hostHasPins,
   pinningStartupState,
+  pinsAreProvisionedForUrl,
   pinsForUrl,
   requiresPin,
 } from '@/lib/pinning';
@@ -46,8 +48,12 @@ describe('PINS_BY_HOST', () => {
 // ---------------------------------------------------------------------------
 
 describe('PINNING_ENFORCED', () => {
-  it('is true (audit-fix C-7)', () => {
-    expect(PINNING_ENFORCED).toBe(true);
+  it('is false until ops provisions real SPKI pins (#387)', () => {
+    // Enforcing against the placeholder pins below would fail-close every
+    // request to our prod hosts and break cloud on real device builds. Standard
+    // platform TLS validation still applies; this flips to true once real
+    // hashes land and the release-lane check:tls-pins guard passes.
+    expect(PINNING_ENFORCED).toBe(false);
   });
 });
 
@@ -58,9 +64,11 @@ describe('startup pinning guard (P0-FIX 2026-05-29: release builds must LAUNCH, 
 
   // REGRESSION (DoD D2): the guard previously threw at module load, crashing
   // every release build on launch via the app/_layout.tsx import chain.
-  it('release build with placeholder pins is "unprovisioned" and does NOT throw', () => {
+  it('release build with enforcement off is "disabled" and does NOT throw', () => {
     expect(() => pinningStartupState({ isDev: false, isTest: false })).not.toThrow();
-    expect(pinningStartupState({ isDev: false, isTest: false })).toBe('unprovisioned');
+    // PINNING_ENFORCED is false (#387) so the chokepoint is a passthrough; the
+    // app launches and falls back to standard TLS rather than failing closed.
+    expect(pinningStartupState({ isDev: false, isTest: false })).toBe('disabled');
   });
 
   it('dev and test builds skip the guard (state "dev-or-test")', () => {
@@ -114,6 +122,20 @@ describe('pinsForUrl', () => {
 
   it('returns empty array for malformed URL', () => {
     expect(pinsForUrl('::bad')).toEqual([]);
+  });
+});
+
+describe('provisioned pin checks', () => {
+  it('detects placeholder pins for a known host', () => {
+    expect(hasPlaceholderPinForUrl('https://agiworkforce.com/')).toBe(true);
+  });
+
+  it('does not treat placeholder pins as provisioned', () => {
+    expect(pinsAreProvisionedForUrl('https://agiworkforce.com/')).toBe(false);
+  });
+
+  it('does not treat unknown hosts as provisioned', () => {
+    expect(pinsAreProvisionedForUrl('https://example.com/')).toBe(false);
   });
 });
 
@@ -173,16 +195,16 @@ describe('assertPinningReadyIfEnforced', () => {
 });
 
 // ---------------------------------------------------------------------------
-// secureFetch — passthrough (PINNING_ENFORCED is true now, but secureFetch
-// implementation may still passthrough for hosts; this just sanity-checks
-// that the call is intercepted with our mocked fetch).
+// secureFetch — passthrough while enforcement is off (#387). It fails closed
+// only once PINNING_ENFORCED is flipped on with still-unprovisioned pins.
 // ---------------------------------------------------------------------------
 
 describe('secureFetch (smoke)', () => {
-  it('still invokes fetch under the hood', async () => {
+  it('passes through to fetch while enforcement is off (#387)', async () => {
     const mockFetch = jest.spyOn(global, 'fetch').mockResolvedValue(fakeOk());
-    await secureFetch('https://agiworkforce.com/api/test');
-    expect(mockFetch).toHaveBeenCalled();
+    const res = await secureFetch('https://agiworkforce.com/api/test');
+    expect(res.ok).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
 

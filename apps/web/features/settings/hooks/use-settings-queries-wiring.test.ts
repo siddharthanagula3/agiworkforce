@@ -10,7 +10,7 @@
  *
  * We verify fetch calls directly (not through renderHook) because setting up
  * a full React Query provider in jsdom adds no value over testing the fetch
- * contract — the React integration is covered by the existing component tests.
+ * contract · the React integration is covered by the existing component tests.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,7 +53,7 @@ async function setupMocks() {
 // useOrganizationSettings
 // ============================================================================
 
-describe('useOrganizationSettings — queryFn (wired to GET /api/settings/organization)', () => {
+describe('useOrganizationSettings · queryFn (wired to GET /api/settings/organization)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     toastSuccess.mockReset();
@@ -101,7 +101,7 @@ describe('useOrganizationSettings — queryFn (wired to GET /api/settings/organi
     expect(json.organization).toEqual(org);
   });
 
-  it('surfaces error when server returns 403 — old queryFn silently returned null', async () => {
+  it('surfaces error when server returns 403 · old queryFn silently returned null', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Forbidden' }, 403));
 
     const res = await fetch('/api/settings/organization', {
@@ -122,10 +122,10 @@ describe('useOrganizationSettings — queryFn (wired to GET /api/settings/organi
 });
 
 // ============================================================================
-// useUpdateOrganizationSettings — fake success removed
+// useUpdateOrganizationSettings · fake success removed
 // ============================================================================
 
-describe('useUpdateOrganizationSettings — mutationFn (wired to PATCH /api/settings/organization)', () => {
+describe('useUpdateOrganizationSettings · mutationFn (wired to PATCH /api/settings/organization)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     toastSuccess.mockReset();
@@ -161,7 +161,7 @@ describe('useUpdateOrganizationSettings — mutationFn (wired to PATCH /api/sett
     expect(json.organization).toEqual({ name: 'NewCo', slug: 'newco' });
   });
 
-  it('surfaces error when server returns 404 — old mutationFn returned updates directly (fake success)', async () => {
+  it('surfaces error when server returns 404 · old mutationFn returned updates directly (fake success)', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Not found' }, 404));
 
     const res = await fetch('/api/settings/organization', {
@@ -187,10 +187,10 @@ describe('useUpdateOrganizationSettings — mutationFn (wired to PATCH /api/sett
 });
 
 // ============================================================================
-// useTeamMembers — was returning []
+// useTeamMembers · was returning []
 // ============================================================================
 
-describe('useTeamMembers — queryFn (wired to GET /api/settings/team)', () => {
+describe('useTeamMembers · queryFn (wired to GET /api/settings/team)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -229,7 +229,7 @@ describe('useTeamMembers — queryFn (wired to GET /api/settings/team)', () => {
     expect(json.members).toEqual(members);
   });
 
-  it('surfaces error when server returns 403 — old queryFn returned [] silently', async () => {
+  it('surfaces error when server returns 403 · old queryFn returned [] silently', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Forbidden' }, 403));
 
     const res = await fetch('/api/settings/team?organizationId=org-1', {
@@ -246,10 +246,10 @@ describe('useTeamMembers — queryFn (wired to GET /api/settings/team)', () => {
 });
 
 // ============================================================================
-// useInviteTeamMember — was throwing "pending implementation"
+// useInviteTeamMember · was throwing "pending implementation"
 // ============================================================================
 
-describe('useInviteTeamMember — mutationFn (wired to POST /api/settings/team)', () => {
+describe('useInviteTeamMember · mutationFn (wired to POST /api/settings/team)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     toastSuccess.mockReset();
@@ -294,7 +294,7 @@ describe('useInviteTeamMember — mutationFn (wired to POST /api/settings/team)'
     expect(json.member).toEqual(member);
   });
 
-  it('surfaces server error — old code threw "pending implementation" unconditionally', async () => {
+  it('surfaces server error · old code threw "pending implementation" unconditionally', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Forbidden' }, 403));
 
     const res = await fetch('/api/settings/team', {
@@ -320,10 +320,10 @@ describe('useInviteTeamMember — mutationFn (wired to POST /api/settings/team)'
 });
 
 // ============================================================================
-// useRemoveTeamMember — was throwing "pending implementation"
+// useRemoveTeamMember · was throwing "pending implementation"
 // ============================================================================
 
-describe('useRemoveTeamMember — mutationFn (wired to DELETE /api/settings/team/[memberId])', () => {
+describe('useRemoveTeamMember · mutationFn (wired to DELETE /api/settings/team/[memberId])', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     toastSuccess.mockReset();
@@ -352,7 +352,7 @@ describe('useRemoveTeamMember — mutationFn (wired to DELETE /api/settings/team
     expect(res.ok).toBe(true);
   });
 
-  it('surfaces server error — old code threw "pending implementation" unconditionally', async () => {
+  it('surfaces server error · old code threw "pending implementation" unconditionally', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Not found' }, 404));
 
     const res = await fetch('/api/settings/team/org-1:u999', {
@@ -376,10 +376,10 @@ describe('useRemoveTeamMember — mutationFn (wired to DELETE /api/settings/team
 });
 
 // ============================================================================
-// useUpdateTeamMemberRole — was throwing "pending implementation"
+// useUpdateTeamMemberRole · was throwing "pending implementation"
 // ============================================================================
 
-describe('useUpdateTeamMemberRole — mutationFn (wired to PATCH /api/settings/team/[memberId])', () => {
+describe('useUpdateTeamMemberRole · mutationFn (wired to PATCH /api/settings/team/[memberId])', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     toastSuccess.mockReset();
@@ -411,7 +411,7 @@ describe('useUpdateTeamMemberRole — mutationFn (wired to PATCH /api/settings/t
     );
   });
 
-  it('surfaces server error — old code threw "pending implementation" unconditionally', async () => {
+  it('surfaces server error · old code threw "pending implementation" unconditionally', async () => {
     fetchMock.mockResolvedValueOnce(
       makeResponse({ error: 'Only owners can assign owner role' }, 403),
     );
@@ -439,10 +439,10 @@ describe('useUpdateTeamMemberRole — mutationFn (wired to PATCH /api/settings/t
 });
 
 // ============================================================================
-// useUserActivity — was returning []
+// useUserActivity · was returning []
 // ============================================================================
 
-describe('useUserActivity — queryFn (wired to GET /api/settings/activity)', () => {
+describe('useUserActivity · queryFn (wired to GET /api/settings/activity)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -477,7 +477,7 @@ describe('useUserActivity — queryFn (wired to GET /api/settings/activity)', ()
     expect(json.activities).toEqual(activities);
   });
 
-  it('surfaces error when server returns 401 — old queryFn returned [] silently', async () => {
+  it('surfaces error when server returns 401 · old queryFn returned [] silently', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Unauthorized' }, 401));
 
     const res = await fetch('/api/settings/activity?limit=50', {
@@ -494,10 +494,10 @@ describe('useUserActivity — queryFn (wired to GET /api/settings/activity)', ()
 });
 
 // ============================================================================
-// useAuditLogs — was returning []
+// useAuditLogs · was returning []
 // ============================================================================
 
-describe('useAuditLogs — queryFn (wired to GET /api/settings/audit-logs)', () => {
+describe('useAuditLogs · queryFn (wired to GET /api/settings/audit-logs)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -533,7 +533,7 @@ describe('useAuditLogs — queryFn (wired to GET /api/settings/audit-logs)', () 
     );
   });
 
-  it('surfaces error when server returns 401 — old queryFn returned [] silently', async () => {
+  it('surfaces error when server returns 401 · old queryFn returned [] silently', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Unauthorized' }, 401));
 
     const res = await fetch('/api/settings/audit-logs?limit=100&offset=0', {
@@ -550,10 +550,10 @@ describe('useAuditLogs — queryFn (wired to GET /api/settings/audit-logs)', () 
 });
 
 // ============================================================================
-// useAuditLogActions — was returning []
+// useAuditLogActions · was returning []
 // ============================================================================
 
-describe('useAuditLogActions — queryFn (wired to GET /api/settings/audit-logs/actions)', () => {
+describe('useAuditLogActions · queryFn (wired to GET /api/settings/audit-logs/actions)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -577,7 +577,7 @@ describe('useAuditLogActions — queryFn (wired to GET /api/settings/audit-logs/
     expect(json.actions).toEqual(actions);
   });
 
-  it('surfaces error when server returns 401 — old queryFn returned [] silently', async () => {
+  it('surfaces error when server returns 401 · old queryFn returned [] silently', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Unauthorized' }, 401));
 
     const res = await fetch('/api/settings/audit-logs/actions', {

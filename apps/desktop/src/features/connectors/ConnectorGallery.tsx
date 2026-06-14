@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   Check,
+  ChevronDown,
   ExternalLink,
   Loader2,
   MoreHorizontal,
@@ -46,6 +47,7 @@ import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
 import { CustomRemoteMcpConnectorDialog } from './CustomRemoteMcpConnectorDialog';
 import { ConnectorDetailView } from './ConnectorDetailView';
+import { OAuthCredentialsPanel } from '../settings/OAuthCredentialsPanel';
 import {
   Select,
   SelectContent,
@@ -305,7 +307,13 @@ function AvailableConnectorCard({ connector, loading, error, onConnect }: Availa
           {connector.mcpPackage ? <span aria-hidden>·</span> : null}
           {connector.mcpPackage ? <span>MCP</span> : null}
         </div>
-        {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+        {error ? (
+          <p className="mt-2 text-xs text-destructive">
+            {/Missing\s+\w+_CLIENT_(ID|SECRET)/i.test(error)
+              ? 'This connector needs an OAuth app. Add its Client ID & Secret in OAuth app credentials above, then Connect.'
+              : error}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -336,6 +344,7 @@ export function ConnectorGallery() {
   const [apiKeyDialogConnector, setApiKeyDialogConnector] = useState<ConnectorDef | null>(null);
   const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
   const [detailConnectorId, setDetailConnectorId] = useState<string | null>(null);
+  const [oauthCredsOpen, setOauthCredsOpen] = useState(false);
 
   const {
     connectedIds,
@@ -628,6 +637,32 @@ export function ConnectorGallery() {
                 }
               />
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* OAuth app credentials — collapsible; must be configured before connecting */}
+      <section className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setOauthCredsOpen((o) => !o)}
+          className="flex w-full items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <span className="text-sm font-semibold text-foreground">OAuth app credentials</span>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 text-muted-foreground transition-transform',
+              oauthCredsOpen && 'rotate-180',
+            )}
+          />
+        </button>
+        {oauthCredsOpen && (
+          <div className="rounded-xl border border-border bg-card/35 p-4">
+            <p className="mb-4 text-xs text-muted-foreground">
+              OAuth connectors require a Client ID and Client Secret from the provider&apos;s
+              developer console. Credentials are stored encrypted on this device only.
+            </p>
+            <OAuthCredentialsPanel />
           </div>
         )}
       </section>

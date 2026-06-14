@@ -40,6 +40,8 @@ import { getContextBuilder } from '../../data/contextBuilder';
 import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
 import { getWorkspaceDisplayName } from '../../platform/workspaceFolders';
 import { Config } from '../../platform/config';
+import { loadFacts } from '../../memory/memoryStore';
+import { loadProjectInstructions } from '../../data/projectInstructions';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -57,6 +59,8 @@ interface PromptOptions {
   planOnly: boolean;
   mcpEnabled: boolean;
   desktopBridgeEnabled: boolean;
+  /** Effective agent mode from Config.agentMode() (ask/auto/plan/bypass). */
+  agentMode?: 'ask' | 'auto' | 'plan' | 'bypass';
 }
 
 function gatherEditorContext(): EditorContext {
@@ -95,8 +99,13 @@ function gatherEditorContext(): EditorContext {
 
 // ─── System prompt builder ────────────────────────────────────────────────────
 
-async function buildSystemPrompt(ctx: EditorContext, options: PromptOptions): Promise<string> {
-  const { command, planModeEnabled, planOnly, mcpEnabled, desktopBridgeEnabled } = options;
+async function buildSystemPrompt(
+  ctx: EditorContext,
+  options: PromptOptions,
+  globalState?: vscode.ExtensionContext['globalState'],
+): Promise<string> {
+  const { command, planModeEnabled, planOnly, mcpEnabled, desktopBridgeEnabled, agentMode } =
+    options;
   const parts: string[] = [
     'You are AGI Workforce, a model-agnostic AI coding assistant integrated into VS Code.',
     'You are knowledgeable, concise, and produce production-ready code.',
@@ -177,6 +186,44 @@ async function buildSystemPrompt(ctx: EditorContext, options: PromptOptions): Pr
     parts.push(
       '\nPlan mode is enabled and user confirmed execution. Execute the plan and clearly summarize what was applied.',
     );
+  }
+
+  // Wire agent mode instructions so the setting actually affects model behaviour.
+  const effectiveMode = agentMode ?? 'auto';
+  if (effectiveMode === 'ask') {
+    parts.push(
+      '\nAgent mode: ASK. Before making any file edits, ask the user for confirmation. ' +
+        'Describe the changes you intend to make and wait for a "yes" or "proceed" before applying them.',
+    );
+  } else if (effectiveMode === 'bypass') {
+    parts.push(
+      '\nAgent mode: BYPASS. The user has opted to skip all approval prompts. ' +
+        'Apply edits directly without asking for confirmation.',
+    );
+  }
+  // 'auto' and 'plan' are handled by the planMode block above / default behaviour.
+
+  // Inject project-level instruction files (CLAUDE.md / AGENTS.md / .cursorrules).
+  // These are authoritative project conventions — higher trust than user-selection data.
+  const projectInstructions = await loadProjectInstructions();
+  if (projectInstructions !== '') {
+    parts.push('\n' + projectInstructions);
+  }
+
+  // Inject cross-conversation memory facts stored by the user.
+  if (globalState !== undefined) {
+    const memoryFacts = loadFacts(globalState);
+    if (memoryFacts.length > 0) {
+      const factsText = memoryFacts
+        .slice(0, 20)
+        .map((f) => `- ${f.text}`)
+        .join('\n');
+      parts.push(
+        '\n## User memory\nThe following facts were saved by the user and should ' +
+          'inform your responses:\n' +
+          factsText,
+      );
+    }
   }
 
   // Append rich workspace context (diagnostics, git, open files, structure)
@@ -329,6 +376,7 @@ export function createChatHandler(
   secrets: vscode.SecretStorage,
   conversationStore?: ConversationStore,
   conversationTreeProvider?: ConversationTreeProvider,
+  globalState?: vscode.ExtensionContext['globalState'],
 ): vscode.ChatRequestHandler {
   return async (
     request: vscode.ChatRequest,
@@ -347,18 +395,24 @@ export function createChatHandler(
     }
 
     const editorCtx = gatherEditorContext();
-    const planModeEnabled = Config.agentPlanMode();
+    const agentMode = Config.agentMode();
+    const planModeEnabled = agentMode === 'plan' || Config.agentPlanMode();
     const mcpEnabled = Config.mcpEnabled();
     const desktopBridgeEnabled = Config.desktopBridgeEnabled();
     const planOnly = planModeEnabled && !isExecutionConfirmation(request.prompt);
 
-    const systemPrompt = await buildSystemPrompt(editorCtx, {
-      command: request.command ?? '',
-      planModeEnabled,
-      planOnly,
-      mcpEnabled,
-      desktopBridgeEnabled,
-    });
+    const systemPrompt = await buildSystemPrompt(
+      editorCtx,
+      {
+        command: request.command ?? '',
+        planModeEnabled,
+        planOnly,
+        mcpEnabled,
+        desktopBridgeEnabled,
+        agentMode,
+      },
+      globalState,
+    );
     const userMessage = buildUserMessage(request, editorCtx);
 
     // Build message array: system + history + current user turn
@@ -379,7 +433,7 @@ export function createChatHandler(
       );
     }
 
-    // Optional provider stream route. AGI account web auth is not wired in the
+    // Optional provider stream route. AGI Cloud sign-in is not wired in the
     // extension yet, so this path fails closed instead of using platform tokens.
     const useProviderStream = Config.useProviderStream();
 
@@ -479,7 +533,8 @@ export function createChatHandler(
         usedFallback = true;
         await streamVscodeLmFallback(messages, stream, token);
       } else if (isWebAuthNotWired) {
-        const message = err instanceof Error ? err.message : 'AGI account web auth is not wired.';
+        const message =
+          err instanceof Error ? err.message : 'AGI Cloud sign-in is not available in VS Code yet.';
         stream.markdown(`\n\n> **Error**: ${message}\n\n`);
       } else {
         // No fallback — surface the error
@@ -533,7 +588,12 @@ export function registerChatParticipant(
   conversationStore?: ConversationStore,
   conversationTreeProvider?: ConversationTreeProvider,
 ): vscode.Disposable {
-  const handler = createChatHandler(context.secrets, conversationStore, conversationTreeProvider);
+  const handler = createChatHandler(
+    context.secrets,
+    conversationStore,
+    conversationTreeProvider,
+    context.globalState,
+  );
 
   const participant = vscode.chat.createChatParticipant('agiworkforce.agi', handler);
 

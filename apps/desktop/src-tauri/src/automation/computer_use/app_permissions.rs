@@ -219,7 +219,7 @@ impl AppPermissionManager {
             }
         }
 
-        // Default: prompt the user (Cowork-style first-encounter behavior).
+        // Default: prompt the user (Claude-Cowork-style first-encounter behavior).
         PermissionStatus::AskEveryTime
     }
 

@@ -15,16 +15,19 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(() => 'You are a helpful AI assistant.'),
 }));
 
-// Mock fs/promises — the route uses access() and readFile() from fs/promises
+// Mock fs/promises — the route uses access(), readFile(), and stat() from fs/promises
 const mockFsAccess = vi.fn();
 const mockFsReadFile = vi.fn();
+const mockFsStat = vi.fn();
 vi.mock('fs/promises', () => ({
   default: {
     access: (...args: unknown[]) => mockFsAccess(...args),
     readFile: (...args: unknown[]) => mockFsReadFile(...args),
+    stat: (...args: unknown[]) => mockFsStat(...args),
   },
   access: (...args: unknown[]) => mockFsAccess(...args),
   readFile: (...args: unknown[]) => mockFsReadFile(...args),
+  stat: (...args: unknown[]) => mockFsStat(...args),
 }));
 
 // Mock rate limiting — pass through by default
@@ -114,6 +117,8 @@ vi.mock('@/lib/errors', () => {
       unauthorized: (msg: string) => new AppError(msg, 'UNAUTHORIZED', 401),
       badRequest: (msg: string) => new AppError(msg, 'BAD_REQUEST', 400),
       forbidden: (msg: string) => new AppError(msg, 'FORBIDDEN', 403),
+      notFound: (msg: string) => new AppError(msg, 'NOT_FOUND', 404),
+      serviceUnavailable: (msg: string) => new AppError(msg, 'SERVICE_UNAVAILABLE', 503),
       internal: (msg: string) => new AppError(msg, 'INTERNAL_ERROR', 500),
       validation: (msg: string, details?: unknown) =>
         new AppError(msg, 'VALIDATION_ERROR', 400, details),
@@ -192,9 +197,12 @@ describe('POST /api/agents/execute', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    // Default: fs/promises mocks for employee system prompt loading
+    // Default: fs/promises mocks for employee system prompt loading.
+    // stat() backs isAgentExecutionProvisioned() — default to "provisioned" so the
+    // existing happy-path tests still reach the per-employee load.
     mockFsAccess.mockResolvedValue(undefined);
     mockFsReadFile.mockResolvedValue('You are a helpful AI assistant.');
+    mockFsStat.mockResolvedValue({ isDirectory: () => true });
 
     // Default: authenticated user via Clerk
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });

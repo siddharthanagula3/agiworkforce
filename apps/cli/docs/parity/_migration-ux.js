@@ -21,9 +21,40 @@ export const meta = {
 };
 
 const DATE = (args && args.date) || '2026-06-01';
-const REPO = '/Users/siddhartha/Desktop/agiworkforce';
+
+// Repo root, resolved without hardcoding a developer machine path so the
+// harness runs for any contributor / CI runner. Priority:
+//   1. explicit --repo arg (args.repo)
+//   2. process.cwd() when the harness is launched from the repo root
+//   3. last-resort fallback for the original author's layout
+const REPO =
+  (args && args.repo) ||
+  (typeof process !== 'undefined' && process.cwd && process.cwd()) ||
+  '/Users/siddhartha/Desktop/agiworkforce';
 const CLI = REPO + '/apps/cli';
 const ART = CLI + '/docs/parity';
+
+// External Claude reference checkout. Not part of this repo, so its location is
+// machine-specific: resolve from --claudeRef / AGI_CLAUDE_REFERENCE first, then
+// fall back to the original author's layout. The reference line in GROUND is
+// only emitted when the path actually exists (see CLAUDE_REF_NOTE below) so the
+// harness does not point agents at a non-existent tree on other machines.
+const CLAUDE_REF =
+  (args && args.claudeRef) ||
+  (typeof process !== 'undefined' && process.env && process.env.AGI_CLAUDE_REFERENCE) ||
+  '/Users/siddhartha/Desktop/claude_reference/src';
+
+// Best-effort synchronous existence check. If the fs module is unavailable in
+// the harness sandbox, treat the reference as present (preserving prior
+// behavior) rather than silently dropping it.
+let CLAUDE_REF_EXISTS = true;
+try {
+  const { existsSync } = await import('node:fs');
+  CLAUDE_REF_EXISTS = existsSync(CLAUDE_REF);
+} catch (_e) {
+  CLAUDE_REF_EXISTS = true;
+}
+const CLAUDE_REF_NOTE = CLAUDE_REF_EXISTS ? ', and the Claude reference at ' + CLAUDE_REF : '';
 
 const GROUND =
   ' GROUND every claim in real code: Read AGI files under ' +
@@ -34,7 +65,9 @@ const GROUND =
   REPO +
   '/reference/gemini-cli/packages/cli/src/ui, ' +
   REPO +
-  '/reference/opencode, and /Users/siddhartha/Desktop/claude_reference/src. Cite file:line. Do not trust training data. date_accessed=' +
+  '/reference/opencode' +
+  CLAUDE_REF_NOTE +
+  '. Cite file:line. Do not trust training data. date_accessed=' +
   DATE +
   '. The migrant is an existing Claude Code / Codex CLI / Gemini CLI user; friction = anything that breaks muscle memory or hides AGI value. Key differentiator to surface well: users can run LOCAL on-device LLMs, bring their own keys (BYOK), OR use a cloud subscription - SEPARATE trust boundaries, never silently route between them. Your final message IS the structured result.';
 

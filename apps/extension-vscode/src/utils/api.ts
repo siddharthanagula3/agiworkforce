@@ -125,6 +125,8 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SECRET_KEY = 'agiWorkforce.apiKey';
+/** AGI Cloud account session token (Clerk JWT) obtained via device sign-in. */
+const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
 
 // ─── Secret storage ───────────────────────────────────────────────────────────
@@ -150,6 +152,33 @@ export async function setApiKey(secrets: vscode.SecretStorage, apiKey: string): 
  */
 export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> {
   await secrets.delete(SECRET_KEY);
+}
+
+// ─── Account session token (AGI Cloud sign-in) ────────────────────────────────
+//
+// The cloud-only surface authenticates via a Clerk session token obtained
+// through the device sign-in flow (features/account-auth/deviceAuth.ts), stored
+// in SecretStorage and sent as the Bearer for every cloud call.
+
+export async function getAccountToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
+  return secrets.get(ACCOUNT_TOKEN_KEY);
+}
+
+export async function setAccountToken(secrets: vscode.SecretStorage, token: string): Promise<void> {
+  await secrets.store(ACCOUNT_TOKEN_KEY, token);
+}
+
+export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
+  await secrets.delete(ACCOUNT_TOKEN_KEY);
+}
+
+/**
+ * Resolve the auth token for cloud calls: prefer the AGI Cloud account token;
+ * fall back to a legacy BYOK key if one is still stored (dormant during the
+ * cloud-only transition — no UI sets it anymore).
+ */
+async function getAuthToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
+  return (await getAccountToken(secrets)) ?? (await getApiKey(secrets));
 }
 
 // ─── Trusted-config helper (VSCODE-01 fix) ────────────────────────────────────
@@ -228,9 +257,25 @@ function getCloudApiEndpoint(): string {
   return validateEndpointUrl(raw) ?? DEFAULT_ENDPOINT;
 }
 
+/**
+ * Web app origin (e.g. https://agiworkforce.com) derived from the cloud
+ * endpoint. Used by account sign-in for the connect page + device poll.
+ */
+export function getCloudWebOrigin(): string {
+  try {
+    return new URL(getCloudApiEndpoint()).origin;
+  } catch {
+    return new URL(DEFAULT_ENDPOINT).origin;
+  }
+}
+
 function getModel(): string {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  return normalizeConfiguredModelId(config.get<string>('model'));
+  // SECURITY (audit 219): read global-only, like getCloudApiEndpoint, so a
+  // malicious workspace .vscode/settings.json cannot silently override the
+  // model id (and thus routing/cost/behaviour) for every LLM call.
+  return normalizeConfiguredModelId(
+    getGlobalConfig<string | undefined>('agiWorkforce', 'model', undefined),
+  );
 }
 
 function isStreamingEnabled(): boolean {
@@ -240,6 +285,31 @@ function isStreamingEnabled(): boolean {
 
 function isThinkingEnabled(): boolean {
   return vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.thinking') ?? false;
+}
+
+/**
+ * Map the user-selected effort level to model request parameters.
+ * Effort controls reasoning depth via max_tokens and temperature.
+ *
+ *   low    → 2048 tokens,  temp 0.3  (fast, cheap)
+ *   medium → 4096 tokens,  temp 0.2  (default balanced)
+ *   high   → 8192 tokens,  temp 0.15 (deeper reasoning)
+ *   max    → 16384 tokens, temp 0.1  (maximum budget)
+ */
+function getEffortParams(): { max_tokens: number; temperature: number } {
+  const effort =
+    vscode.workspace.getConfiguration('agiWorkforce').get<string>('agent.effort') ?? 'medium';
+  switch (effort) {
+    case 'low':
+      return { max_tokens: 2048, temperature: 0.3 };
+    case 'high':
+      return { max_tokens: 8192, temperature: 0.15 };
+    case 'max':
+      return { max_tokens: 16384, temperature: 0.1 };
+    case 'medium':
+    default:
+      return { max_tokens: 4096, temperature: 0.2 };
+  }
 }
 
 function getFeatureFlags(): {
@@ -474,12 +544,12 @@ export async function streamChatCompletion(
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
 ): Promise<void> {
-  const apiKey = await getApiKey(secrets);
+  const apiKey = await getAuthToken(secrets);
   if (apiKey === undefined || apiKey === '') {
     throw new AgiWorkforceApiError(
-      'No AGI Workforce API key configured. Run "AGI Workforce: Set API Key".',
+      'Not signed in. Run "AGI: Sign in to AGI Cloud" to start chatting.',
       401,
-      'NO_API_KEY',
+      'NOT_SIGNED_IN',
     );
   }
 
@@ -488,18 +558,24 @@ export async function streamChatCompletion(
   const streaming = isStreamingEnabled();
   const features = getFeatureFlags();
   const thinking = isThinkingEnabled();
+  const { max_tokens, temperature } = getEffortParams();
+
+  // Resolve the effective agent mode for metadata (ask/auto/plan/bypass).
+  const agentMode =
+    vscode.workspace.getConfiguration('agiWorkforce').get<string>('agent.mode') ?? 'auto';
 
   const requestBody: ChatCompletionRequest = {
     model,
     messages,
     stream: streaming,
-    temperature: 0.2,
-    max_tokens: 4096,
+    temperature,
+    max_tokens,
     ...(thinking ? { thinking: true } : {}),
     metadata: {
       mcp_enabled: features.mcpEnabled,
       desktop_bridge_enabled: features.desktopBridgeEnabled,
       desktop_bridge_port: features.desktopBridgePort,
+      agent_mode: agentMode,
     },
   };
 
@@ -672,7 +748,7 @@ export interface TierInfo {
  * should treat undefined as "unknown tier".
  */
 export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
-  const apiKey = await getApiKey(secrets);
+  const apiKey = await getAuthToken(secrets);
   if (apiKey === undefined || apiKey === '') {
     return undefined;
   }
@@ -754,8 +830,8 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
 
 // ─── Provider-stream path ─────────────────────────────────────────────────────
 //
-// The direct platform-token path has been removed. Until Clerk-backed AGI
-// account auth is wired into the VS Code extension, this setting fails closed
+// The direct platform-token path has been removed. Until AGI Cloud account
+// sign-in is wired into the VS Code extension, this setting fails closed
 // instead of accepting manually pasted runtime tokens.
 
 /**
@@ -775,7 +851,7 @@ export async function streamChatCompletionViaProvider(
   void cancellationToken;
   void overrideModel;
   throw new AgiWorkforceApiError(
-    'AGI account web auth is not wired in the VS Code extension yet. Disable agiWorkforce.useProviderStream or use AGI Workforce Web for account-gated provider streaming.',
+    'AGI Cloud sign-in is not available in the VS Code extension yet. Disable agiWorkforce.useProviderStream or use AGI Web for account-gated provider streaming.',
     401,
     'AGI_ACCOUNT_WEB_AUTH_NOT_WIRED',
   );

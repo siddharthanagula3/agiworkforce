@@ -123,7 +123,7 @@ function getPreview(artifact: Artifact): string {
 }
 
 /**
- * ChatGPT-style inline rich card for artifacts.
+ * Inline rich card for artifacts.
  * Tappable to expand to full screen view.
  */
 export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardProps) {
