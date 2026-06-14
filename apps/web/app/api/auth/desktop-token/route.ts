@@ -36,13 +36,13 @@ const TOKEN_TTL_MS = 60 * 1000;
 // rejecting < 64-byte inputs. SHA-256 is not a password-stretching KDF, so
 // once the ciphertext leaked the attacker could grind candidate passphrases
 // at hardware speed. This release migrates the KDF to scrypt(N=2^15,r=8,p=1)
-// with a fixed app-domain salt — chosen over Argon2id because scrypt ships in
+// with a fixed app-domain salt · chosen over Argon2id because scrypt ships in
 // node:crypto (no native dep), gives raw bytes for direct AES-256-GCM key
 // use, and matches the desktop-side derivation we plan to wire up next.
 const MIN_KEYSOURCE_BYTES = 64;
 const HEX_32_BYTE = /^[0-9a-fA-F]{64}$/;
 const SCRYPT_KEY_LENGTH = 32;
-const SCRYPT_N = 1 << 15; // 32768 — matches OWASP minimum, ~64ms on modern CPUs
+const SCRYPT_N = 1 << 15; // 32768 · matches OWASP minimum, ~64ms on modern CPUs
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 // Stable app-domain salt. Changing this value invalidates every previously
@@ -51,7 +51,7 @@ const SCRYPT_SALT = Buffer.from('agiworkforce.desktop-token.v1', 'utf8');
 
 function assertHighEntropyKeysource(name: string, value: string): void {
   const byteLen = Buffer.byteLength(value, 'utf8');
-  if (HEX_32_BYTE.test(value)) return; // hex 32-byte secret — strong
+  if (HEX_32_BYTE.test(value)) return; // hex 32-byte secret · strong
   if (byteLen < MIN_KEYSOURCE_BYTES) {
     throw new Error(
       `${name} too short: SHA-256 derivation requires >= ${MIN_KEYSOURCE_BYTES} UTF-8 bytes ` +

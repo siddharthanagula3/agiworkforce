@@ -138,7 +138,7 @@ export function ScheduleForm({
         )}
       </div>
 
-      {/* Days of week picker — only for weekly */}
+      {/* Days of week picker · only for weekly */}
       {form.recurrence === 'weekly' && (
         <div className="space-y-1.5">
           <Label>Days of week</Label>
@@ -165,7 +165,7 @@ export function ScheduleForm({
         </div>
       )}
 
-      {/* Day of month — only for monthly */}
+      {/* Day of month · only for monthly */}
       {form.recurrence === 'monthly' && (
         <div className="space-y-1.5">
           <Label>Day of month</Label>
@@ -280,7 +280,7 @@ export function ScheduleForm({
         />
       )}
 
-      {/* Advanced collapsible — only shows when not already shown via recurrence */}
+      {/* Advanced collapsible · only shows when not already shown via recurrence */}
       {form.recurrence !== 'custom' && (
         <>
           <Separator />

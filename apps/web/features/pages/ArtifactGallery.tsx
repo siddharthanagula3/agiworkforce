@@ -48,7 +48,7 @@ interface PublicArtifact {
  * - Replit Community
  */
 const ArtifactGalleryPage: React.FC = () => {
-  // Community artifacts table does not exist yet — gallery shows empty state
+  // Community artifacts table does not exist yet · gallery shows empty state
   const artifacts: PublicArtifact[] = [];
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');

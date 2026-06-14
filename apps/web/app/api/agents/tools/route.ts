@@ -1,10 +1,10 @@
 /**
  * Agent Tools Registry API.
  *
- * GET  /api/agents/tools               — list tools (scoped to user + global)
- * GET  /api/agents/tools?type=X        — filter by tool type
- * GET  /api/agents/tools?integrationType=X — filter by integration type
- * POST /api/agents/tools               — register a new tool (user-scoped)
+ * GET  /api/agents/tools               · list tools (scoped to user + global)
+ * GET  /api/agents/tools?type=X        · filter by tool type
+ * GET  /api/agents/tools?integrationType=X · filter by integration type
+ * POST /api/agents/tools               · register a new tool (user-scoped)
  *
  * Tools are persisted in agent_tools (migration 0024). Global tools have
  * user_id = null and are visible to all authenticated users.

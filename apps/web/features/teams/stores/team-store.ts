@@ -126,7 +126,7 @@ export const useTeamStore = create<TeamState & TeamActions>()(
           const res = await fetch('/api/teams', { credentials: 'include' });
           if (!res.ok) throw new Error(`Failed to fetch teams: ${res.statusText}`);
           const data = await res.json();
-          // The API returns teams without nested members — we keep existing
+          // The API returns teams without nested members · we keep existing
           // member data if we have it, or start with empty arrays.
           const existingTeamsById = Object.fromEntries(get().teams.map((t) => [t.id, t]));
           const teams: Team[] = (data.teams || []).map((t: Record<string, unknown>) => ({
@@ -177,7 +177,7 @@ export const useTeamStore = create<TeamState & TeamActions>()(
             return { teams: [...state.teams, team] };
           });
         } catch {
-          // Silently fail — UI can retry
+          // Silently fail · UI can retry
         }
       },
 

@@ -5,7 +5,6 @@ import type { ByokProvider } from '@/lib/byok-providers';
 
 interface ProviderStatus {
   id: string;
-  envVar: string;
   isSet: boolean;
 }
 
@@ -13,7 +12,7 @@ interface ApiResponse {
   providers: ProviderStatus[];
 }
 
-/** Icon abbreviation cell — consistent with connections page pattern */
+/** Icon abbreviation cell · consistent with connections page pattern */
 function ProviderIcon({ text }: { text: string }) {
   return (
     <div
@@ -98,7 +97,7 @@ export function EnvKeyStatusList({ providers }: Props) {
         }
         setStatuses(map);
       } catch {
-        // Silently fail — statuses remain unknown (neither Set nor Not set shown)
+        // Silently fail · statuses remain unknown (neither Set nor Not set shown)
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -169,7 +168,7 @@ export function EnvKeyStatusList({ providers }: Props) {
               </div>
             </div>
 
-            {/* Status badge — only presence, never value */}
+            {/* Status badge · only presence, never value */}
             {loading ? (
               <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Checking...</span>
             ) : (

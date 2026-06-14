@@ -14,7 +14,7 @@ interface MessageBubbleSkeletonProps {
 }
 
 /**
- * MessageBubbleSkeleton — loading placeholder that mirrors the shape and
+ * MessageBubbleSkeleton · loading placeholder that mirrors the shape and
  * layout of a real MessageItem from MessageListNew.
  *
  * Layout matches MessageItem exactly:

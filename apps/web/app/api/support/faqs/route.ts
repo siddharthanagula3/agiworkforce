@@ -1,5 +1,5 @@
 /**
- * GET /api/support/faqs — list all published FAQs.
+ * GET /api/support/faqs · list all published FAQs.
  * Static data; no DB required.
  */
 

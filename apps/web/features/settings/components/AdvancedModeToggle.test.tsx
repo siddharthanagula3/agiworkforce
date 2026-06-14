@@ -130,7 +130,7 @@ vi.mock('@agiworkforce/types', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Mock @/constants/llm — getModelMetadata
+// Mock @/constants/llm · getModelMetadata
 // ---------------------------------------------------------------------------
 
 vi.mock('@/constants/llm', () => ({

@@ -16,7 +16,7 @@
  * way callers get the same canonical shape.
  *
  * The legacy `color` field (free-form CSS) is preserved separately from
- * the canonical `accentColor` enum — they are different concepts and
+ * the canonical `accentColor` enum · they are different concepts and
  * existing clients depend on `color`.
  */
 
@@ -138,7 +138,7 @@ export function mapKnowledgeFileRow(row: Record<string, unknown>): ProjectKnowle
 /**
  * Map a raw `user_projects` row from Neon into the canonical
  * project shape. Tolerant of missing columns when the round-10
- * migration hasn't been applied yet — defaults are derived from the
+ * migration hasn't been applied yet · defaults are derived from the
  * canonical `PrivacyMode`/`ProviderMode`/`SourceSurface` types.
  */
 export function mapProjectRow(row: Record<string, unknown>): MappedProject {

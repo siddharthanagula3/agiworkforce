@@ -6,7 +6,7 @@
  * # v1 scope
  *
  * v1 ships two methods only: joinWaitlist + validateInviteCode.
- * checkWaitlistStatus is deferred to v2 — it needs a rank RPC for
+ * checkWaitlistStatus is deferred to v2 · it needs a rank RPC for
  * cloud_managed_waitlist. The rank RPC that exists today (cloud_waitlist_rank)
  * targets the older cloud_waitlist table, not cloud_managed_waitlist, so the
  * two don't compose correctly.
@@ -19,7 +19,7 @@
  * `getNeonDb()` internally and are documented as such.
  *
  * The `validateInviteCode` method calls the `validate_and_redeem_invite_code`
- * security-definer RPC — the only permitted path to read invite state. Direct
+ * security-definer RPC · the only permitted path to read invite state. Direct
  * SELECT on `beta_invites` is blocked by RLS.
  */
 import 'server-only';
@@ -61,7 +61,7 @@ interface ValidateRpcRow {
 // ---------------------------------------------------------------------------
 // joinWaitlist
 // Inserts into cloud_managed_waitlist with normalized email storage.
-// Accepts a DatabaseAdapter — no auth required.
+// Accepts a DatabaseAdapter · no auth required.
 // ---------------------------------------------------------------------------
 
 export async function joinWaitlist(

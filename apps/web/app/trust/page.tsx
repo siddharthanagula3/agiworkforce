@@ -6,26 +6,30 @@ import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Trust',
-  description: 'Compliance, audits, and security posture — with honest dates.',
+  description: 'Compliance, audits, and security posture. With honest dates.',
   alternates: { canonical: 'https://agiworkforce.com/trust' },
 };
 
 const COMPLIANCE: { item: string; status: string; note: string }[] = [
   {
     item: 'SOC 2 Type II',
-    status: 'In progress',
-    note: 'Audit initiated. Evidence collection underway.',
+    status: 'Planned',
+    note: 'No audit report claimed. Evidence collection is part of the Cloud release path.',
   },
   {
     item: 'GDPR',
-    status: 'Compliant',
-    note: 'DPA available on request. Standard Contractual Clauses on Enterprise contracts.',
+    status: 'In progress',
+    note: 'Privacy controls, export, deletion, and subprocessors are being prepared for legal review.',
   },
-  { item: 'CCPA', status: 'Compliant', note: 'Data export and deletion supported.' },
+  {
+    item: 'CCPA',
+    status: 'In progress',
+    note: 'User data export and deletion paths must be verified before broad Cloud launch.',
+  },
   {
     item: 'HIPAA',
-    status: 'On request',
-    note: 'BAA available for qualifying Enterprise customers. Not HIPAA-certified.',
+    status: 'Not available',
+    note: 'AGI is not a medical device and does not offer HIPAA-covered workflows today.',
   },
   {
     item: 'ISO 27001',
@@ -38,26 +42,27 @@ const SECURITY: { item: string; detail: string }[] = [
   {
     item: 'Key storage',
     detail:
-      'AES-256-GCM encryption at rest, with Argon2id key derivation. Master password unrecoverable by design.',
+      'Local and BYOK secrets are designed for masked display, local secure storage, and explicit provider labeling.',
   },
   {
     item: 'Tool execution',
     detail:
-      'macOS Seatbelt + Linux bwrap sandbox by default for dangerous tools. Per-tool permission model.',
+      'File, shell, browser, and external actions use explicit approval and sandbox paths where available.',
   },
   {
     item: 'Auth',
     detail:
-      'Managed auth, JWT cookies with strict same-site, CSRF tokens on state-changing endpoints.',
+      'Managed Cloud auth uses server-side route checks and secure cookie settings where enabled.',
   },
   {
     item: 'Database',
-    detail: 'Row-level security on every table. Service-role keys never used on user-data paths.',
+    detail:
+      'Cloud data is scoped by authenticated user in server routes and database policies before broad release.',
   },
-  { item: 'Transit', detail: 'TLS 1.3 everywhere. HSTS preload.' },
+  { item: 'Transit', detail: 'HTTPS in transit on deployed surfaces.' },
   {
     item: 'Code signing',
-    detail: `Desktop installers are published through verified GitHub release assets or configured signed-asset URLs. Windows public release remains aligned to ${LAUNCH.date}.`,
+    detail: `Desktop installers are launch-gated and will be published through verified GitHub release assets or configured signed-asset URLs. Windows public release remains aligned to ${LAUNCH.date}.`,
   },
   {
     item: 'Privacy',
@@ -70,18 +75,44 @@ export default function TrustPage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Trust.</h1>
-          <p className="agi-page-lede">
-            Compliance, audits, and security posture — with honest dates.{' '}
+
+        <section className="agi-fl-hero" aria-labelledby="agi-trust-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Trust</p>
+          <h1 id="agi-trust-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Claims with dates,</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">nothing more.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            Compliance, audits, and security posture. Honest dates.{' '}
             <strong>
               We claim only what we have completed. Anything else is on the roadmap with no date
-              until there&rsquo;s a date.
+              until there's a date.
             </strong>
           </p>
+          <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
+            <div className="agi-fl-cta-row">
+              <Link href="/security" className="agi-fl-cta agi-fl-cta--primary">
+                Read the Security Details
+              </Link>
+              <Link href="/privacy" className="agi-fl-cta agi-fl-cta--secondary">
+                Read the Privacy Policy
+              </Link>
+            </div>
+          </div>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Compliance</p>
+
+        <section className="agi-fl-section" aria-labelledby="agi-trust-compliance-title">
+          <p className="agi-fl-eyebrow">Compliance</p>
+          <h2 id="agi-trust-compliance-title" className="agi-fl-h2">
+            Compliance, as it stands today.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Every line below carries its real status. When a status changes, this table changes. Not
+            before.
+          </p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -103,8 +134,12 @@ export default function TrustPage() {
             </tbody>
           </table>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Security posture</p>
+
+        <section className="agi-fl-section" aria-labelledby="agi-trust-security-title">
+          <p className="agi-fl-eyebrow">Security posture</p>
+          <h2 id="agi-trust-security-title" className="agi-fl-h2">
+            How the product is held together.
+          </h2>
           <table className="agi-ledger">
             <tbody>
               {SECURITY.map((s) => (
@@ -116,20 +151,25 @@ export default function TrustPage() {
             </tbody>
           </table>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">More detail</p>
-          <div className="agi-cta-row">
-            <Link href="/security" className="agi-cta-primary">
-              Security details
+
+        <section className="agi-fl-section" aria-labelledby="agi-trust-more-title">
+          <p className="agi-fl-eyebrow">More detail</p>
+          <h2 id="agi-trust-more-title" className="agi-fl-h2">
+            Go deeper on any of it.
+          </h2>
+          <div className="agi-fl-cta-row">
+            <Link href="/security" className="agi-fl-cta agi-fl-cta--primary">
+              Read the Security Details
             </Link>
-            <Link href="/privacy" className="agi-cta-ghost">
-              Privacy policy →
+            <Link href="/privacy" className="agi-fl-cta agi-fl-cta--ghost">
+              Read the Privacy Policy
             </Link>
-            <Link href="/subprocessors" className="agi-cta-ghost">
-              Subprocessors →
+            <Link href="/subprocessors" className="agi-fl-cta agi-fl-cta--ghost">
+              See the Subprocessors
             </Link>
           </div>
         </section>
+
         <MarketingFooter />
       </main>
     </div>

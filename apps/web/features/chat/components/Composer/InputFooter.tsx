@@ -29,10 +29,10 @@ export function InputFooter({
 
   return (
     <div className="mt-2 flex items-center justify-between gap-4 px-1">
-      {/* Left — keyboard hint */}
+      {/* Left · keyboard hint */}
       <span className="text-xs text-muted-foreground">{hint}</span>
 
-      {/* Right — credit usage bar */}
+      {/* Right · credit usage bar */}
       {!hideCredits && (
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-[10px] tabular-nums text-muted-foreground">

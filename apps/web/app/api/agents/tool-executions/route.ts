@@ -1,5 +1,5 @@
 /**
- * POST /api/agents/tool-executions — execute a registered tool.
+ * POST /api/agents/tool-executions · execute a registered tool.
  *
  * Looks up the tool in agent_tools, validates the user owns it (or it is global),
  * logs the execution attempt in agent_tool_executions, then delegates to the
@@ -131,7 +131,7 @@ async function handleExecuteTool(request: NextRequest) {
           body: JSON.stringify({ parameters, context: context ?? {} }),
           // SSRF redirect bypass: the pre-fetch guard only validates the initial
           // URL. A 3xx Location could point at an internal host (e.g. IMDS), so
-          // do not auto-follow — surface the redirect as a failed webhook.
+          // do not auto-follow · surface the redirect as a failed webhook.
           redirect: 'manual',
           signal: AbortSignal.timeout(15_000),
         });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// waitlistServiceClient routes through active Next.js API endpoints — Neon
+// waitlistServiceClient routes through active Next.js API endpoints · Neon
 // browser access was removed. Mock global fetch and CSRF header injection.
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -145,6 +145,15 @@ describe('joinWaitlist', () => {
 
     const body = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.source).toBe('byok');
+  });
+
+  it('passes mobile source through in POST body', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
+
+    await joinWaitlist({ email: 'a@b.com', referralSource: 'mobile' });
+
+    const body = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.source).toBe('mobile');
   });
 
   it('returns error message on non-ok response', async () => {

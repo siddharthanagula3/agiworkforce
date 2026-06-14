@@ -57,7 +57,7 @@ export default function RefundPolicyPage() {
                 <td>BYOK usage</td>
                 <td>
                   Provider charges (Anthropic, OpenAI, Google, etc.) are billed directly by the
-                  provider — refunds for those go through the provider, not us.
+                  provider. Refunds for those go through the provider, not us.
                 </td>
               </tr>
             </tbody>

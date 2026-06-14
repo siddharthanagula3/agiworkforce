@@ -60,7 +60,7 @@ function getFaviconUrl(url: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Search result row — compact flat list: favicon + title + URL on one line,
+// Search result row · compact flat list: favicon + title + URL on one line,
 // snippet on the next. No borders, minimal padding.
 // ---------------------------------------------------------------------------
 
@@ -211,7 +211,7 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
         </div>
       )}
 
-      {/* Results list — compact, divider-separated */}
+      {/* Results list · compact, divider-separated */}
       <div className="divide-y divide-border/20">
         {displayResults.map((r, i) => (
           <SearchResultCard key={`${r.url}-${i}`} result={r} />

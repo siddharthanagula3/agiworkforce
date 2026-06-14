@@ -1,5 +1,5 @@
 /**
- * GET /api/support/[id] — get a support ticket by ID.
+ * GET /api/support/[id] · get a support ticket by ID.
  * Returns ticket details. Auth required; user may only access their own tickets.
  */
 

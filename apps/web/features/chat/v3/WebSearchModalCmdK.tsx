@@ -1,5 +1,5 @@
 /**
- * WebSearchModalCmdK — alias for GlobalSearchDialog.
+ * WebSearchModalCmdK · alias for GlobalSearchDialog.
  *
  * GlobalSearchDialog is the canonical search surface (Fix 37). This shim
  * keeps existing imports in WebShellV3 working while routing everything

@@ -228,7 +228,7 @@ const AIConfigurationPageContent: React.FC = () => {
   const [aiMaxTokens, setAiMaxTokens] = useState<number>(4000);
   const [isSavingPreferences, setIsSavingPreferences] = useState(false);
 
-  // Advanced settings (per-session state — no backend persistence needed)
+  // Advanced settings (per-session state · no backend persistence needed)
   const [autoFallback, setAutoFallback] = useState<boolean>(true);
   const [rateLimiting, setRateLimiting] = useState<boolean>(true);
 
@@ -262,7 +262,7 @@ const AIConfigurationPageContent: React.FC = () => {
       initialConfigs[key] = {
         ...config,
         apiKey,
-        // Default to not configured — badge updates when an API key is provided
+        // Default to not configured · badge updates when an API key is provided
         isConfigured: false,
       };
     });
@@ -288,16 +288,16 @@ const AIConfigurationPageContent: React.FC = () => {
     setTestResults((prev) => ({ ...prev, [provider]: 'pending' }));
 
     try {
-      // Auth is managed via Clerk session cookies (set by middleware) — no manual token needed.
+      // Auth is managed via Clerk session cookies (set by middleware) · no manual token needed.
       // SECURITY (web-MED-1): the prior `csrf-token` cookie reader was dead
-      // code — the server never sets that cookie; CSRF is bound to the
+      // code · the server never sets that cookie; CSRF is bound to the
       // `anon-session-id` cookie + an HMAC token returned by `/api/csrf`.
       // Using the canonical helper guarantees a token actually exists.
       let csrfToken = '';
       try {
         csrfToken = await getCsrfToken();
       } catch {
-        // /api/csrf unreachable — let the server reject the request.
+        // /api/csrf unreachable · let the server reject the request.
       }
 
       const response = await fetch('/api/settings/test-provider', {

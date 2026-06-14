@@ -5,78 +5,118 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
   title: 'Support',
-  description: 'How to reach us, what response time to expect, and where to file bugs.',
+  description:
+    'How to reach us today, where to report bugs, and what support is planned for waitlist tiers.',
   alternates: { canonical: 'https://agiworkforce.com/support' },
 };
+
+const SUPPORT_ROWS: { tier: string; status: string; channel: string; expectation: string }[] = [
+  {
+    tier: 'Local · BYOK',
+    status: 'Available now',
+    channel: 'Email · contact@agiworkforce.com',
+    expectation: 'Best-effort reply from a human',
+  },
+  {
+    tier: 'Hobby · Pro · Max',
+    status: 'Waitlist, not yet sold',
+    channel: 'Priority email, planned',
+    expectation: 'Response targets publish when these tiers go on sale',
+  },
+  {
+    tier: 'Enterprise',
+    status: 'In scoping',
+    channel: 'Named contact, planned',
+    expectation: 'SLA defined per contract during scoping',
+  },
+];
 
 export default function SupportPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Support.</h1>
-          <p className="agi-page-lede">
-            We answer.{' '}
-            <strong>
-              Email is the canonical channel — community for free tiers, priority email for paid
-              tiers, named contact + 4-hour SLA for Enterprise.
-            </strong>
+
+        <section className="agi-fl-hero" aria-labelledby="agi-support-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Support</p>
+          <h1 id="agi-support-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">We read</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">every email.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            Email is the canonical channel today, for everyone. Hosted tiers are still
+            waitlist-only, so we don't publish response-time promises for plans nobody can buy yet.
+            What is planned is labeled as planned.
           </p>
+          <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
+            <div className="agi-fl-cta-row">
+              <a href="mailto:contact@agiworkforce.com" className="agi-fl-cta agi-fl-cta--primary">
+                Email contact@agiworkforce.com
+              </a>
+              <Link href="/help" className="agi-fl-cta agi-fl-cta--ghost">
+                Browse the Help Index
+              </Link>
+            </div>
+          </div>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">By tier</p>
+
+        <section className="agi-fl-section" aria-labelledby="agi-support-tiers-title">
+          <p className="agi-fl-eyebrow">By tier</p>
+          <h2 id="agi-support-tiers-title" className="agi-fl-h2">
+            What you can count on, by tier.
+          </h2>
+          <p className="agi-fl-section-lede">
+            One honest table. The free paths get a human on email today; commitments for paid tiers
+            arrive with the tiers themselves.
+          </p>
           <table className="agi-ledger">
             <thead>
               <tr>
                 <th>Tier</th>
+                <th>Status</th>
                 <th>Channel</th>
-                <th>Target response</th>
+                <th>What to expect</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Local · BYOK</td>
-                <td>Community + GitHub issues</td>
-                <td>Best-effort</td>
-              </tr>
-              <tr>
-                <td>Hobby</td>
-                <td>Email · contact@agiworkforce.com</td>
-                <td>48 hours</td>
-              </tr>
-              <tr>
-                <td>Pro</td>
-                <td>Priority email</td>
-                <td>24 hours</td>
-              </tr>
-              <tr>
-                <td>Pro+ / Max</td>
-                <td>Priority email</td>
-                <td>12 / 8 hours</td>
-              </tr>
-              <tr>
-                <td>Enterprise</td>
-                <td>Named support contact, contract SLA</td>
-                <td>4 hours</td>
-              </tr>
+              {SUPPORT_ROWS.map((row) => (
+                <tr key={row.tier}>
+                  <td>{row.tier}</td>
+                  <td>{row.status}</td>
+                  <td>{row.channel}</td>
+                  <td>{row.expectation}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Reach us</p>
-          <div className="agi-cta-row">
-            <a href="mailto:contact@agiworkforce.com" className="agi-cta-primary">
-              Email contact@agiworkforce.com
+
+        <section className="agi-fl-section" aria-labelledby="agi-support-bugs-title">
+          <p className="agi-fl-eyebrow">Bugs &amp; incidents</p>
+          <h2 id="agi-support-bugs-title" className="agi-fl-h2">
+            Found something broken?
+          </h2>
+          <p className="agi-fl-section-lede">
+            Tell us what you did, what you expected, and what happened instead. Screenshots and
+            exact error text make fixes faster. For service-wide issues, check the status page
+            first.
+          </p>
+          <div className="agi-fl-cta-row">
+            <a href="mailto:contact@agiworkforce.com" className="agi-fl-cta agi-fl-cta--primary">
+              Email a Bug Report
             </a>
-            <Link href="/contact" className="agi-cta-ghost">
-              Contact form →
+            <Link href="/status" className="agi-fl-cta agi-fl-cta--secondary">
+              Check Service Status
             </Link>
-            <Link href="/help" className="agi-cta-ghost">
-              Help index →
+            <Link href="/contact" className="agi-fl-cta agi-fl-cta--ghost">
+              Open the Contact Page
             </Link>
           </div>
         </section>
+
         <MarketingFooter />
       </main>
     </div>

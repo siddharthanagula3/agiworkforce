@@ -193,19 +193,20 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByText('/Backend Engineer')).not.toBeInTheDocument();
   });
 
-  it('opens + menu and shows Add files or photos option', async () => {
+  it('opens + menu and shows Add photos option', async () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     const moreBtn = screen.getByRole('button', { name: /more options/i });
     fireEvent.click(moreBtn);
 
-    expect(screen.getByText('Add files or photos')).toBeInTheDocument();
+    expect(screen.getByText('Add photos')).toBeInTheDocument();
   });
 
-  it('surfaces attachment validation errors in the composer', () => {
+  it('rejects non-image attachments before send', () => {
     const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
     const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
     expect(input).not.toBeNull();
+    expect(input).toHaveAttribute('accept', 'image/*');
 
     const unsupportedFile = new File(['binary'], 'installer.exe', {
       type: 'application/x-msdownload',
@@ -213,7 +214,7 @@ describe('ChatComposerNew', () => {
     fireEvent.change(input!, { target: { files: [unsupportedFile] } });
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      '"installer.exe" has an unsupported file type (application/x-msdownload).',
+      'Web chat currently accepts images only. Other file types require Cloud file support.',
     );
   });
 
@@ -225,6 +226,15 @@ describe('ChatComposerNew', () => {
 
     expect(screen.getAllByText('Web search').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /toggle research mode/i })).not.toBeInTheDocument();
+  });
+
+  it('does not show incognito when no active conversation can be made temporary', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    expect(
+      screen.queryByRole('button', { name: /enable incognito mode/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/start an incognito conversation/i)).not.toBeInTheDocument();
   });
 
   it('clears the textarea after sending', async () => {

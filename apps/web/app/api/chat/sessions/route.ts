@@ -1,9 +1,9 @@
 /**
- * Chat Sessions API — backed by web_conversations table.
+ * Chat Sessions API · backed by web_conversations table.
  *
- * GET  /api/chat/sessions       — list the current user's sessions (newest first)
- * POST /api/chat/sessions       — create a new session (upsert via title+id)
- * PUT  /api/chat/sessions       — alias for POST (upsert semantics)
+ * GET  /api/chat/sessions       · list the current user's sessions (newest first)
+ * POST /api/chat/sessions       · create a new session (upsert via title+id)
+ * PUT  /api/chat/sessions       · alias for POST (upsert semantics)
  *
  * The "sessions" surface is a UI alias for web_conversations used by
  * chat-store.ts. Fields are mapped to the ChatSession shape:
@@ -103,7 +103,7 @@ async function handleUpsertSession(request: NextRequest) {
   try {
     rawBody = await request.json();
   } catch {
-    /* empty body fine — defaults apply */
+    /* empty body fine · defaults apply */
   }
 
   const parsed = CreateSessionSchema.safeParse(rawBody);
@@ -114,6 +114,13 @@ async function handleUpsertSession(request: NextRequest) {
 
   try {
     // If an ID was provided, upsert; otherwise always insert.
+    //
+    // AUDIT-FIX (CRITICAL #16, BOLA): the conflict target is the global PK,
+    // and body.id is any client-supplied UUID · without the user_id guard on
+    // the DO UPDATE, an authenticated user could overwrite another user's
+    // conversation metadata by posting the victim's conversation UUID. The
+    // WHERE clause makes a foreign-row conflict update nothing; the missing
+    // row is then rejected explicitly below instead of crashing on `row!`.
     const [row] = body.id
       ? await db.query<SessionRow>(
           `
@@ -125,6 +132,7 @@ async function handleUpsertSession(request: NextRequest) {
                   pinned = excluded.pinned,
                   project_id = excluded.project_id,
                   updated_at = now()
+              where web_conversations.user_id = excluded.user_id
             returning
               id, title, model, pinned, project_id, created_at, updated_at,
               0::text as message_count,
@@ -144,8 +152,18 @@ async function handleUpsertSession(request: NextRequest) {
           [userId, body.title, body.model ?? null, body.pinned, body.projectId ?? null],
         );
 
-    return NextResponse.json({ session: mapSession(row!) }, { status: 201 });
+    if (!row) {
+      // Conflict on a conversation owned by someone else: the guarded upsert
+      // touched no rows. Treat as not-found rather than leaking existence.
+      throw createError.notFound('Conversation not found');
+    }
+
+    return NextResponse.json({ session: mapSession(row) }, { status: 201 });
   } catch (error) {
+    // Re-throw typed AppErrors (e.g. the ownership not-found above) as-is.
+    if (error && typeof error === 'object' && ('status' in error || 'statusCode' in error)) {
+      throw error;
+    }
     logger.error({ error, userId }, 'Failed to create session');
     throw createError.internal('Failed to create session');
   }

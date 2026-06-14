@@ -97,7 +97,7 @@ export function secureFilenameSegment(length = 13): string {
 }
 
 /**
- * Cryptographically secure replacement for `Math.random()` — returns a
+ * Cryptographically secure replacement for `Math.random()` · returns a
  * float in `[0, 1)` derived from 32 fresh bits.
  */
 export function secureRandomFloat(): number {

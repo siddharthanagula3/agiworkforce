@@ -1,5 +1,7 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
+import { ProviderLogo } from './ProviderLogo';
 
 export interface CtaLink {
   href: string;
@@ -31,6 +33,30 @@ export interface LedgerRow {
   v: string;
 }
 
+export interface ProviderLogoItem {
+  name: string;
+  src: string;
+}
+
+export interface HeroVisual {
+  src: string;
+  width: number;
+  height: number;
+  alt: string;
+  caption: string;
+}
+
+export interface ProductProofHeroProps {
+  eyebrow: string;
+  title: string;
+  lede: string;
+  primaryCta: CtaLink;
+  secondaryCta: CtaLink;
+  tertiaryCta?: CtaLink;
+  chips: string[];
+  visual: HeroVisual;
+}
+
 export interface CampaignHeroProps {
   eyebrow: string;
   title: string;
@@ -56,12 +82,125 @@ const DEFAULT_STATS: StatItem[] = [
   { label: MARKETING.models.label, value: MARKETING.models.display },
 ];
 
+/**
+ * Marquee entries use OFFICIAL marks from simple-icons (via ProviderLogo,
+ * monochrome currentColor) where the brand distributes one; providers
+ * without a distributable mark render as clean text wordmarks · never
+ * hand-drawn letter tiles.
+ */
+const PROVIDER_PILLS: { name: string; slug?: string }[] = [
+  { name: 'OpenAI' },
+  { name: 'Anthropic', slug: 'anthropic' },
+  { name: 'Gemini', slug: 'gemini' },
+  { name: 'Grok' },
+  { name: 'DeepSeek', slug: 'deepseek' },
+  { name: 'Qwen', slug: 'qwen' },
+  { name: 'Mistral', slug: 'mistral' },
+  { name: 'Perplexity', slug: 'perplexity' },
+  { name: 'Moonshot AI', slug: 'moonshot' },
+  { name: 'ZhipuAI' },
+  { name: 'Ollama', slug: 'ollama' },
+  { name: 'LM Studio' },
+];
+
+function ProviderMarqueeRow({ hidden = false }: { hidden?: boolean }) {
+  return (
+    <ul className="agi-provider-marquee-row" aria-hidden={hidden || undefined}>
+      {PROVIDER_PILLS.map((provider) => (
+        <li key={provider.name} className="agi-provider-pill">
+          {provider.slug ? <ProviderLogo slug={provider.slug} /> : null}
+          <span>{provider.name}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function ProviderMarquee({
+  eyebrow,
+  title,
+  body,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <section className="agi-provider-section" aria-labelledby="agi-provider-title">
+      <div className="agi-provider-copy">
+        <p className="agi-section-eyebrow">{eyebrow}</p>
+        <h2 id="agi-provider-title" className="agi-section-h2">
+          {title}
+        </h2>
+        <p className="agi-provider-body">{body}</p>
+      </div>
+      <div className="agi-provider-marquee" aria-label="Provider and local runtime options">
+        <div className="agi-provider-marquee-track">
+          <ProviderMarqueeRow />
+          <ProviderMarqueeRow hidden />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function ProductProofHero({
+  eyebrow,
+  title,
+  lede,
+  primaryCta,
+  secondaryCta,
+  tertiaryCta,
+  chips,
+  visual,
+}: ProductProofHeroProps) {
+  return (
+    <section className="agi-product-hero" aria-labelledby="agi-product-hero-title">
+      <Image
+        src={visual.src}
+        alt={visual.alt}
+        width={visual.width}
+        height={visual.height}
+        preload
+        sizes="100vw"
+        className="agi-product-hero-image"
+      />
+      <div className="agi-product-hero-content">
+        <p className="agi-product-hero-eyebrow">{eyebrow}</p>
+        <h1 id="agi-product-hero-title" className="agi-product-hero-title">
+          {title}
+        </h1>
+        <p className="agi-product-hero-lede">{lede}</p>
+        <div className="agi-product-hero-actions">
+          <Link href={primaryCta.href} className="agi-cta-primary">
+            {primaryCta.label}
+          </Link>
+          <Link href={secondaryCta.href} className="agi-cta-hero-secondary">
+            {secondaryCta.label}
+          </Link>
+          {tertiaryCta ? (
+            <Link href={tertiaryCta.href} className="agi-cta-hero-tertiary">
+              {tertiaryCta.label}
+            </Link>
+          ) : null}
+        </div>
+        <ul className="agi-product-hero-chips" aria-label="AGI trust and surface highlights">
+          {chips.map((chip) => (
+            <li key={chip}>{chip}</li>
+          ))}
+        </ul>
+      </div>
+      <p className="agi-product-hero-caption">{visual.caption}</p>
+    </section>
+  );
+}
+
 export function CampaignHero({
   eyebrow,
   title,
   lede,
   primaryCta = { href: '/download', label: LAUNCH.ctaLabel },
-  secondaryCta = { href: '/compare', label: 'Compare the field' },
+  secondaryCta = { href: '/providers', label: 'Explore providers' },
   chips = ['Local', 'BYOK', 'Cloud invite', 'Multi-provider'],
   stats = DEFAULT_STATS,
   panelTitle = 'Launch control',
@@ -127,6 +266,77 @@ export function ProofStrip({ items }: { items: StatItem[] }) {
           {item.note ? <span className="agi-proof-note">{item.note}</span> : null}
         </div>
       ))}
+    </section>
+  );
+}
+
+export interface SurfaceProofItem {
+  title: string;
+  body: string;
+  href: string;
+  meta: string;
+  status: string;
+  image?: HeroVisual;
+}
+
+export function SurfaceProofGrid({
+  eyebrow,
+  title,
+  items,
+}: {
+  eyebrow: string;
+  title: string;
+  items: SurfaceProofItem[];
+}) {
+  return (
+    <section className="agi-section">
+      <p className="agi-section-eyebrow">{eyebrow}</p>
+      <h2 className="agi-section-h2">{title}</h2>
+      <div className="agi-surface-proof-grid">
+        {items.map((item) => (
+          <Link key={item.title} href={item.href} className="agi-surface-proof-card">
+            {item.image ? (
+              <Image
+                src={item.image.src}
+                alt={item.image.alt}
+                width={item.image.width}
+                height={item.image.height}
+                sizes="(min-width: 960px) 50vw, 100vw"
+                className="agi-surface-proof-image"
+              />
+            ) : null}
+            <span className="agi-route-meta">{item.meta}</span>
+            <span className="agi-route-title">{item.title}</span>
+            <span className="agi-route-body">{item.body}</span>
+            <span className="agi-surface-proof-status">{item.status}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export interface TrustModeItem {
+  mode: string;
+  label: string;
+  body: string;
+  href: string;
+}
+
+export function TrustModeGrid({ items }: { items: TrustModeItem[] }) {
+  return (
+    <section className="agi-section">
+      <p className="agi-section-eyebrow">Trust modes</p>
+      <h2 className="agi-section-h2">Choose the route before the work leaves your device.</h2>
+      <div className="agi-trust-mode-grid">
+        {items.map((item) => (
+          <Link key={item.mode} href={item.href} className="agi-trust-mode-card">
+            <span className="agi-route-meta">{item.mode}</span>
+            <span className="agi-route-title">{item.label}</span>
+            <span className="agi-route-body">{item.body}</span>
+          </Link>
+        ))}
+      </div>
     </section>
   );
 }

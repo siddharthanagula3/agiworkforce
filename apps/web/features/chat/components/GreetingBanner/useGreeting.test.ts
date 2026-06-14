@@ -64,7 +64,7 @@ afterEach(() => {
 // Time-band mapping
 // ---------------------------------------------------------------------------
 
-describe('useGreeting — time band selection', () => {
+describe('useGreeting · time band selection', () => {
   it('returns earlyMorning band at hour 4', () => {
     const { result } = renderGreeting(4, 1); // day 1 → variantIndex 1
     // Anonymous variant: config.variants[1] = 'Early start'
@@ -137,7 +137,7 @@ describe('useGreeting — time band selection', () => {
 // Variant rotation (date % 3)
 // ---------------------------------------------------------------------------
 
-describe('useGreeting — variant rotation via date', () => {
+describe('useGreeting · variant rotation via date', () => {
   it('selects variant index 0 when day % 3 === 0 (day=3)', () => {
     const { result } = renderGreeting(10, 3); // morning, index 0
     expect(result.current.headline).toBe('Good morning');
@@ -170,7 +170,7 @@ describe('useGreeting — variant rotation via date', () => {
 // Name extraction
 // ---------------------------------------------------------------------------
 
-describe('useGreeting — name extraction', () => {
+describe('useGreeting · name extraction', () => {
   it('uses first token from a full name', () => {
     const { result } = renderGreeting(10, 3, 'Jane Doe'); // morning, index 0
     // Named variant index 0: 'Good morning, {name}' → 'Good morning, Jane'
@@ -230,7 +230,7 @@ describe('useGreeting — name extraction', () => {
 // Name length cap (> 50 chars → discard)
 // ---------------------------------------------------------------------------
 
-describe('useGreeting — name length cap', () => {
+describe('useGreeting · name length cap', () => {
   it('uses name when it is exactly 50 characters', () => {
     const fiftyChars = 'A'.repeat(50);
     const { result } = renderGreeting(10, 3, fiftyChars);
@@ -264,7 +264,7 @@ describe('useGreeting — name length cap', () => {
 // Non-printable character stripping
 // ---------------------------------------------------------------------------
 
-describe('useGreeting — non-printable character stripping', () => {
+describe('useGreeting · non-printable character stripping', () => {
   it('strips control characters from the name', () => {
     // Name with embedded null byte and bell char
     const { result } = renderGreeting(10, 3, 'Chris\x00\x07');

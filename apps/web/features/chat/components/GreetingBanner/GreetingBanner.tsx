@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * GreetingBanner — time-aware greeting with suggestion chips for the chat
+ * GreetingBanner · time-aware greeting with suggestion chips for the chat
  * empty state (rendered by ChatMessageList when messages.length === 0).
  *
  * Design:
- *   1. Sparkle icon — amber accent, small
- *   2. Greeting headline — serif display font, time-aware (morning / afternoon / evening)
- *   3. Subtext line — muted secondary copy
- *   4. Suggestion chips — pre-fill the composer text on click
+ *   1. Sparkle icon · amber accent, small
+ *   2. Greeting headline · serif display font, time-aware (morning / afternoon / evening)
+ *   3. Subtext line · muted secondary copy
+ *   4. Suggestion chips · pre-fill the composer text on click
  *
  * All colours come from --chat-* design tokens; no hardcoded hex values.
  */

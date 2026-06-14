@@ -80,7 +80,7 @@ vi.mock('@/shared/stores/model-store', () => ({
     }),
 }));
 
-// Radix Dialog — render children directly (no Portal)
+// Radix Dialog · render children directly (no Portal)
 vi.mock('@/components/ui/Dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
     open ? <div data-testid="dialog">{children}</div> : null,
@@ -257,7 +257,7 @@ describe('CommandPalette', () => {
   });
 
   // ============================================================
-  // Command execution — navigation
+  // Command execution · navigation
   // ============================================================
 
   describe('navigation commands', () => {
@@ -351,7 +351,7 @@ describe('CommandPalette', () => {
 
       fireEvent.keyDown(input, { key: 'Escape' });
 
-      // Back to main menu — model options should be gone
+      // Back to main menu · model options should be gone
       expect(screen.queryByText('Fixture Primary Model')).not.toBeInTheDocument();
       // Main commands should be back
       expect(screen.getByText('New Chat')).toBeInTheDocument();
@@ -415,7 +415,7 @@ describe('CommandPalette', () => {
       fireEvent.keyDown(input, { key: 'ArrowDown' });
       fireEvent.keyDown(input, { key: 'Enter' });
 
-      // Could be any "Go to" page — just confirm navigation happened
+      // Could be any "Go to" page · just confirm navigation happened
       expect(mockPush).toHaveBeenCalled();
     });
   });
