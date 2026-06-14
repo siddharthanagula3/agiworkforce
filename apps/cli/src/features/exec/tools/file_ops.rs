@@ -833,6 +833,24 @@ pub(super) async fn execute_apply_patch(
             });
         }
     }
+    // Freshness gate: for every existing file the patch will touch, confirm
+    // it has been read since it was last modified on disk.  This matches the
+    // read-before-write contract enforced by write_file/edit_file/multiedit.
+    // New files (not yet on disk) are skipped — there is nothing to be stale.
+    if let Ok(paths) = patch_target_paths(patch) {
+        for path in &paths {
+            if path.exists() {
+                if let Err(msg) = crate::file_state::ensure_previously_read_and_fresh(path) {
+                    return Ok(ToolResult {
+                        tool_name: "apply_patch".into(),
+                        success: false,
+                        output: format!("apply_patch blocked: {} ({})", path.display(), msg),
+                    });
+                }
+            }
+        }
+    }
+
     match crate::apply_patch::apply_git_patch(patch, None).await {
         Ok(r) => {
             let mut out = String::new();
