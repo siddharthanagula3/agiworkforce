@@ -82,6 +82,24 @@
   <body>
     <div id="idle">Waiting for artifact…</div>
     <div id="root" hidden></div>
+    <!--
+      DOMPurify — sound HTML/SVG sanitizer used by renderSvg(). Loaded from the
+      CSP-allowed jsdelivr origin (see script-src in the CSP meta above). This
+      blocking <script> runs before the main inline script, so window.DOMPurify
+      is guaranteed ready before any postMessage 'render' arrives.
+
+      Pinned to an exact version with Subresource Integrity: a compromised CDN
+      serving a tampered (or no-op) sanitizer would silently reintroduce the
+      SVG XSS this file defends against, so the browser must verify the bytes.
+      To bump: change the version, re-fetch, and recompute the sha384 hash
+      (curl -fsSL <url> | openssl dgst -sha384 -binary | openssl base64 -A).
+    -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/dompurify@3.4.10/dist/purify.min.js"
+      integrity="sha384-eguRoJERj8ghOpzO//Rl7+ScQsQIR1cH+ajll7+fG+IpbNPlkZsQn9h8ccr+wPXx"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
     <script>
       'use strict';
       (function () {
@@ -193,20 +211,31 @@
 
         function renderSvg(payload) {
           const svg = String(payload.svg || payload.html || '');
-          const cleaned = svg
-            .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
-            .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
-            .replace(/href\s*=\s*(["'])\s*javascript:[^"']*\1/gi, 'href="#"');
-
           rootEl.innerHTML = '';
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(cleaned, 'image/svg+xml');
-          const svgEl = doc.documentElement;
-          if (svgEl && svgEl.tagName.toLowerCase() === 'svg') {
-            rootEl.appendChild(svgEl);
-          } else {
-            showError('Invalid SVG structure');
+
+          // DOMPurify is the sound sanitizer here. The previous defense — a
+          // regex strip of on*= handlers and javascript: hrefs followed by
+          // DOMParser.parseFromString(svg, 'image/svg+xml') — was unsafe on two
+          // counts: (1) the regex was trivially bypassable (unquoted handlers,
+          // xlink:href, nested <foreignObject> HTML, entity-encoded payloads),
+          // and (2) feeding attacker-controlled markup to an XML parser is an
+          // entity-expansion sink. DOMPurify with the SVG profile strips
+          // <script>, event handlers, and dangerous URLs, and we never run an
+          // XML parser of our own.
+          const purifier = window.DOMPurify;
+          if (!purifier) {
+            showError('SVG sanitizer unavailable');
+            return;
           }
+          const clean = purifier.sanitize(svg, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+          });
+          // Single fixed-width class after the literal — no ReDoS.
+          if (!/<svg[\s>]/i.test(clean)) {
+            showError('Invalid SVG structure');
+            return;
+          }
+          rootEl.innerHTML = clean;
         }
 
         function renderMermaid(payload) {
