@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronRight } from 'lucide-react';
 import { cn, useChatModelStore } from '@agiworkforce/unified-chat';
+import { ProviderMark } from '@agiworkforce/ui';
 import {
   getTaskModelForProvider,
   getProviderDefaultModel,
@@ -207,6 +208,12 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
                 )}
                 onClick={() => handleSelect(model.id)}
               >
+                <span
+                  className="flex h-4 w-4 shrink-0 items-center justify-center"
+                  style={{ color: 'var(--chat-text-secondary)' }}
+                >
+                  <ProviderMark providerKey={model.provider} size={16} />
+                </span>
                 <div className="flex-1 text-left">
                   <div
                     className="text-sm font-medium"
