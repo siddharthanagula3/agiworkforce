@@ -3,14 +3,14 @@
  * Tests for AddToChatSheet component.
  *
  * Validates the local-mode "Add to Chat" bottom sheet:
- * 1. Attachment row (Camera, Photos, File)
- * 2. Mode selector radio buttons (Chat, Research, Create)
- * 3. Tool availability rows (cloud-gated + desktop handoff)
- * 4. Config links (Project, Choose style, Connectors)
+ * 1. Attachment row (Camera, Photos in Local Mode; File only in Cloud)
+ * 2. Session controls
+ * 3. Hidden feature rows while feature flags are disabled
+ * 4. Config links (Project, Choose style)
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
@@ -133,6 +133,7 @@ jest.mock('../src/features/chat/components/StyleSelector', () => {
 import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,6 +150,7 @@ function resetStores() {
     projects: [],
     activeProjectId: null,
   });
+  useChatAppModeStore.setState({ appMode: 'local' });
 }
 
 const defaultProps = {
@@ -156,6 +158,7 @@ const defaultProps = {
   onPhotos: jest.fn(),
   onFile: jest.fn(),
   onOpenCloudAccess: jest.fn(),
+  onOpenStyleSelector: jest.fn(),
 };
 
 function renderSheet(overrides = {}) {
@@ -183,87 +186,41 @@ describe('AddToChatSheet', () => {
       expect(getByLabelText('Close Add to Chat')).toBeTruthy();
     });
 
-    it('renders 3 attachment cards: Camera, Photos, File', () => {
+    it('renders only locally supported attachment cards in Local Mode', () => {
       const { getByText, queryByText } = renderSheet();
 
       expect(getByText('Camera')).toBeTruthy();
       expect(getByText('Photos')).toBeTruthy();
-      expect(getByText('File')).toBeTruthy();
+      expect(queryByText('File')).toBeNull();
       expect(queryByText('Skills')).toBeNull();
     });
   });
 
-  // ---- Section 2: Mode Selector ----
+  // ---- Section 2: Removed mode selector ----
 
   describe('mode selector', () => {
-    it('renders 3 mode radio buttons', () => {
-      const { getByLabelText } = renderSheet();
+    it('does not render duplicate mode controls in Add to Chat', () => {
+      const { queryByLabelText, queryByText } = renderSheet();
 
-      expect(getByLabelText('Chat mode, selected')).toBeTruthy();
-      expect(getByLabelText('Research mode')).toBeTruthy();
-      expect(getByLabelText('Create mode')).toBeTruthy();
-    });
-
-    it('has Chat mode selected by default', () => {
-      const { getByLabelText } = renderSheet();
-
-      const chatRadio = getByLabelText('Chat mode, selected');
-      expect(chatRadio.props.accessibilityState.selected).toBe(true);
-
-      const researchRadio = getByLabelText('Research mode');
-      expect(researchRadio.props.accessibilityState.selected).toBe(false);
-    });
-
-    it('tapping a mode changes the selection in the store', () => {
-      const { getByLabelText } = renderSheet();
-
-      fireEvent.press(getByLabelText('Research mode'));
-
-      expect(useChatStore.getState().chatMode).toBe('research');
-    });
-
-    it('shows "(default)" label on Chat mode only', () => {
-      const { getByText } = renderSheet();
-
-      expect(getByText('Chat (default)')).toBeTruthy();
+      expect(queryByLabelText('Chat mode, selected')).toBeNull();
+      expect(queryByLabelText('Research mode')).toBeNull();
+      expect(queryByLabelText('Create mode')).toBeNull();
+      expect(queryByText('Chat (default)')).toBeNull();
     });
   });
 
-  // ---- Section 3: Feature Toggles ----
+  // ---- Section 3: Feature Rows ----
 
   describe('feature toggles', () => {
-    it('renders local and cloud-gated tool rows', () => {
+    it('hides unavailable tool rows while feature flags are disabled', () => {
       const { getByText, queryByText } = renderSheet();
 
-      expect(getByText('Web search')).toBeTruthy();
-      expect(getByText('Image generation')).toBeTruthy();
-      expect(getByText('Computer use')).toBeTruthy();
-      expect(getByText('Desktop required')).toBeTruthy();
+      expect(getByText('Temporary chat')).toBeTruthy();
+      expect(queryByText('Web search')).toBeNull();
+      expect(queryByText('Image generation')).toBeNull();
+      expect(queryByText('Computer use')).toBeNull();
       expect(queryByText('Health')).toBeNull();
       expect(queryByText('Beta')).toBeNull();
-    });
-
-    it('shows cloud rows as waitlist-gated instead of live switches', () => {
-      const { getByLabelText, queryByLabelText } = renderSheet();
-
-      expect(getByLabelText('Web search, Waitlist')).toBeTruthy();
-      expect(getByLabelText('Image generation, Waitlist')).toBeTruthy();
-      expect(queryByLabelText('Web search on')).toBeNull();
-      expect(queryByLabelText('Image generation on')).toBeNull();
-    });
-
-    it('requests cloud access instead of enabling cloud web search', () => {
-      useChatStore.setState({
-        features: { webSearch: false, imageGen: false, health: false },
-      });
-
-      const onOpenCloudAccess = jest.fn();
-      const { getByLabelText } = renderSheet({ onOpenCloudAccess });
-
-      fireEvent.press(getByLabelText('Web search, Waitlist'));
-
-      expect(useChatStore.getState().features.webSearch).toBe(false);
-      expect(onOpenCloudAccess).toHaveBeenCalled();
     });
   });
 
@@ -275,7 +232,7 @@ describe('AddToChatSheet', () => {
 
       expect(getByText('Project')).toBeTruthy();
       expect(getByText('Choose style')).toBeTruthy();
-      expect(getByText('Connectors')).toBeTruthy();
+      expect(queryByText('Connectors')).toBeNull();
       expect(queryByText('Tool access')).toBeNull();
     });
 
@@ -306,6 +263,29 @@ describe('AddToChatSheet', () => {
       const { getByText } = renderSheet();
 
       expect(getByText('My Project')).toBeTruthy();
+    });
+
+    it('does not show local project config while in Cloud mode', () => {
+      useProjectStore.setState({
+        projects: [
+          {
+            id: 'proj-1',
+            name: 'My Project',
+            description: 'Test',
+            instructions: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+        activeProjectId: 'proj-1',
+      });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Project')).toBeNull();
+      expect(queryByText('My Project')).toBeNull();
+      expect(queryByText('Choose style')).toBeTruthy();
     });
   });
 });

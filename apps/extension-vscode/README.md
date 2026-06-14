@@ -2,13 +2,13 @@
 
 Status: Current
 Owner role: Extension lead
-Last updated: 2026-05-20
+Last updated: 2026-06-06
 Kind: app
 Criticality: high
 
 ## Purpose
 
-Multi-provider AI coding assistant. 10+ providers (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LMStudio, plus any OpenAI-compatible BYO endpoint). Switch mid-conversation. BYOK or managed cloud — your choice.
+IDE-native AGI coding assistant for editor context, diffs, file references, explicit Desktop bridge flows, and cloud handoff where implemented. Provider/model behavior must come from the current AGI catalog and current extension code, not from marketing counts.
 
 ## Features (v0.3.0)
 
@@ -16,7 +16,7 @@ Multi-provider AI coding assistant. 10+ providers (Anthropic, OpenAI, Google, xA
 - **Chat-in-editor panel** (`Cmd+Shift+A` or `agi-workforce.openChatInEditor`) — full chat as a VS Code editor tab.
 - **Sidebar chat** with multi-conversation history, context-file pinning, and code-action suggestions.
 - **`@mention` file quickpick** — type `@` in the chat input to add any workspace file as context; content capped at 20 K chars.
-- **Inline completions** (debounced, LRU-cached, 16-entry) — opt-in via `agiWorkforce.inlineCompletions.enabled`.
+- **Inline completions** (debounced, LRU-cached, 16-entry) — enabled by default, API-key required, with a first-run notice and sensitive-file suppression.
 - **CodeLens** "Ask AI / Tests / Docs" actions on every function or class — cached by `(uri, version)` to avoid repeated rescans.
 - **Model picker** — `agi-workforce.selectModel` opens a QuickPick over the full provider catalog; no hardcoded model IDs.
 - **Agent mode** — multi-file edit with diff preview and one-click batch undo; workspace-trust gated.
@@ -35,21 +35,21 @@ Multi-provider AI coding assistant. 10+ providers (Anthropic, OpenAI, Google, xA
 
 1. Install the extension.
 2. Open the AGI Workforce sidebar (Activity Bar icon).
-3. Pick a provider:
+3. Pick an available path:
    - **BYOK:** paste your provider API key in Settings → AGI Workforce → Models.
    - **Local:** install Ollama or LM Studio; the extension auto-detects them.
-   - **Cloud:** sign in with your AGI Workforce account in the sidebar header.
+   - **AGI Cloud:** use AGI Web for invite and waitlist access. VS Code account sign-in is not wired yet.
 
 ## Configuration highlights
 
-| Setting                                  | Default                               | What it does                                                     |
-| ---------------------------------------- | ------------------------------------- | ---------------------------------------------------------------- |
-| `agiWorkforce.apiEndpoint`               | `https://agiworkforce.com/api/llm/v1` | LLM API endpoint. Restricted in untrusted workspaces.            |
-| `agiWorkforce.model`                     | `auto-balanced`                       | Default model. Run **AGI Workforce: Select Model** to pick.      |
-| `agiWorkforce.fallbackToVscodeLm`        | `true`                                | Use VS Code Language Model API when no AGI Workforce key is set. |
-| `agiWorkforce.inlineCompletions.enabled` | `false`                               | Opt-in inline ghost-text completions.                            |
-| `agiWorkforce.useProviderStream`         | `false`                               | Route chat through `/api/v1/providers/:id/stream` (Wave 3 path). |
-| `agiWorkforce.telemetryEnabled`          | `false`                               | Anonymous usage telemetry.                                       |
+| Setting                                  | Default                               | What it does                                                                                         |
+| ---------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `agiWorkforce.apiEndpoint`               | `https://agiworkforce.com/api/llm/v1` | LLM API endpoint. Restricted in untrusted workspaces.                                                |
+| `agiWorkforce.model`                     | `auto-balanced`                       | Default model. Run **AGI Workforce: Select Model** to pick.                                          |
+| `agiWorkforce.fallbackToVscodeLm`        | `true`                                | Use VS Code Language Model API when no AGI Workforce key is set.                                     |
+| `agiWorkforce.inlineCompletions.enabled` | `true`                                | Inline ghost-text completions. Requires an API key and suppresses sensitive files.                   |
+| `agiWorkforce.useProviderStream`         | `false`                               | Private-beta AGI Cloud provider-stream path. Fails closed in VS Code until account sign-in is wired. |
+| `agiWorkforce.telemetryEnabled`          | `false`                               | Anonymous usage telemetry.                                                                           |
 
 ## Keyboard shortcuts
 

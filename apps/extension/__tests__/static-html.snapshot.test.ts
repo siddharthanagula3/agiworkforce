@@ -1,12 +1,10 @@
 /**
  * static-html.snapshot.test.ts — structural visual-verification for the
- * Chrome extension's static HTML surfaces (popup + side panel).
+ * Chrome extension's static HTML surfaces.
  *
  * Locks the HTML shape so any layout drift fires a snapshot diff.
- * Discharges the Stop-hook visual-verification debt for the Chrome
- * surface — the popup + side panel are the only "screens" the extension
- * has, and snapshotting them is the closest structural-parity check
- * available without spinning up a real Chrome window.
+ * Phase 3 (2026-06-14): popup.html has been deleted (retired in favor of the
+ * side-panel ⋮ settings drawer). Only side_panel.html is snapshotted now.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -22,10 +20,6 @@ function readSrc(file: string): string {
 }
 
 describe('Chrome extension static HTML snapshots', () => {
-  it('locks the popup.html structure', () => {
-    expect(readSrc('popup.html')).toMatchSnapshot();
-  });
-
   it('locks the side_panel.html structure', () => {
     expect(readSrc('side_panel.html')).toMatchSnapshot();
   });

@@ -71,14 +71,14 @@ describe('local-llm: catalog', () => {
       getLocalLlm();
 
     const models = getShippableModels();
-    expect(models.length).toBeGreaterThanOrEqual(5);
+    expect(models.length).toBeGreaterThanOrEqual(4);
     const ids = models.map((m: { id: string }) => m.id);
     // At least one system-tier model (platform-dependent) must be present
     expect(SYSTEM_TIER_IDS.some((id: string) => ids.includes(id))).toBe(true);
     // Standard downloadable models must be present
     expect(ids).toContain('qwen3-4b-instruct-2507');
     expect(ids).toContain('llama-3.2-1b-instruct-spinquant');
-    expect(ids).toContain('qwen2.5-vl-3b-instruct');
+    expect(ids).not.toContain('qwen2.5-vl-3b-instruct');
   });
 
   it('all catalog entries have a license field', () => {

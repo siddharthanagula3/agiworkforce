@@ -59,6 +59,7 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
   const colors = useThemeColors();
   const router = useRouter();
   const markInviteRedeemed = useWaitlistStore((s) => s.markInviteRedeemed);
+  const cloudChatAvailable = FEATURES.cloudChat;
   const [code, setCode] = useState('');
   const [state, setState] = useState<InviteState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -106,9 +107,11 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
           <Check size={24} color={colors.white} strokeWidth={2.5} />
         </View>
         <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
-          AGI Cloud unlocked
+          {cloudChatAvailable ? 'AGI Cloud unlocked' : 'Invitation saved'}
         </Text>
-        <Text style={{ fontSize: 14, color: colors.textSecondary }}>Closing...</Text>
+        <Text style={{ fontSize: 14, color: colors.textSecondary }}>
+          {cloudChatAvailable ? 'Closing...' : 'We will notify you when mobile Cloud opens.'}
+        </Text>
       </View>
     );
   }
@@ -129,6 +132,7 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
         </Text>
         <TextInput
           testID="invite-code-input"
+          accessibilityLabel="Invitation code"
           value={code}
           onChangeText={(t) => setCode(t.toUpperCase())}
           placeholder="XXXXXXXX"
@@ -167,7 +171,8 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
         onPress={handleSubmit}
         disabled={!canSubmit}
         accessibilityRole="button"
-        accessibilityLabel="Unlock AGI Cloud"
+        accessibilityLabel={cloudChatAvailable ? 'Unlock AGI Cloud' : 'Save invitation code'}
+        accessibilityState={{ disabled: !canSubmit, busy: state === 'loading' }}
         style={{
           backgroundColor: canSubmit ? colors.teal : colors.surfaceHover,
           borderRadius: 14,
@@ -193,12 +198,17 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
               fontWeight: '600',
             }}
           >
-            Unlock AGI Cloud
+            {cloudChatAvailable ? 'Unlock AGI Cloud' : 'Save invitation code'}
           </Text>
         )}
       </Pressable>
 
-      <Pressable onPress={onSwitchToWaitlist} accessibilityRole="button" hitSlop={8}>
+      <Pressable
+        onPress={onSwitchToWaitlist}
+        accessibilityRole="button"
+        accessibilityLabel="Join the waitlist instead"
+        hitSlop={8}
+      >
         <Text style={{ textAlign: 'center', fontSize: 13, color: colors.textMuted }}>
           Don't have a code?{' '}
           <Text style={{ color: colors.teal, textDecorationLine: 'underline' }}>
@@ -311,6 +321,7 @@ function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
         </Text>
         <TextInput
           testID="cloud-waitlist-email-input"
+          accessibilityLabel="Email address"
           value={email}
           onChangeText={setEmail}
           placeholder="you@example.com"
@@ -347,6 +358,7 @@ function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
           Name · optional
         </Text>
         <TextInput
+          accessibilityLabel="Name"
           value={name}
           onChangeText={setName}
           placeholder="Your name"
@@ -380,6 +392,7 @@ function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
         disabled={!canSubmit}
         accessibilityRole="button"
         accessibilityLabel="Join the cloud waitlist"
+        accessibilityState={{ disabled: !canSubmit, busy: submitting }}
         style={{
           backgroundColor: canSubmit ? colors.teal : colors.surfaceHover,
           borderRadius: 14,
@@ -450,10 +463,7 @@ export function InviteCodeModal({
       accessibilityViewIsModal
     >
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}>
-        <Pressable
-          onPress={() => {
-            /* swallow taps */
-          }}
+        <View
           style={{
             backgroundColor: colors.background,
             borderTopLeftRadius: 26,
@@ -539,6 +549,9 @@ export function InviteCodeModal({
                     testID={`invite-code-tab-${tab}`}
                     onPress={() => setActiveTab(tab)}
                     accessibilityRole="tab"
+                    accessibilityLabel={
+                      tab === 'invite' ? 'Enter invitation code' : 'Join waitlist'
+                    }
                     accessibilityState={{ selected: activeTab === tab }}
                     style={{
                       flex: 1,
@@ -580,7 +593,7 @@ export function InviteCodeModal({
               </ScrollView>
             </SafeAreaView>
           </KeyboardAvoidingView>
-        </Pressable>
+        </View>
       </View>
     </Modal>
   );

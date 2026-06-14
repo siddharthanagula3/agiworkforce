@@ -47,7 +47,7 @@ import type { KeyboardShortcut } from '@features/chat/hooks/use-keyboard-shortcu
 // Types
 // ---------------------------------------------------------------------------
 
-/** Minimal session shape accepted by ChatSidebar — compatible with both chat-store.ChatSession and shared/types.ChatSession */
+/** Minimal session shape accepted by ChatSidebar · compatible with both chat-store.ChatSession and shared/types.ChatSession */
 export interface SessionLike {
   id: string;
   title: string;
@@ -56,6 +56,9 @@ export interface SessionLike {
   updatedAt: Date | string;
   messageCount?: number;
   userId?: string;
+  isPinned?: boolean;
+  isStarred?: boolean;
+  isArchived?: boolean;
 }
 
 export interface ChatSidebarProps {
@@ -67,7 +70,7 @@ export interface ChatSidebarProps {
   onRenameSession: (sessionId: string, title: string) => void;
   onToggleSidebar?: () => void;
   collapsed?: boolean;
-  /** Optional rich-action callbacks — rendered in ConversationListItem when provided */
+  /** Optional rich-action callbacks · rendered in ConversationListItem when provided */
   onPinSession?: (sessionId: string) => void;
   onStarSession?: (sessionId: string) => void;
   onArchiveSession?: (sessionId: string) => void;
@@ -101,7 +104,7 @@ function getTimeGroup(date: Date): string {
   return 'Older';
 }
 
-const GROUP_ORDER = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
+const GROUP_ORDER = ['Pinned', 'Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
 
 function groupSessions(sessions: SessionLike[]): Map<string, SessionLike[]> {
   const groups = new Map<string, SessionLike[]>();
@@ -109,6 +112,11 @@ function groupSessions(sessions: SessionLike[]): Map<string, SessionLike[]> {
     groups.set(key, []);
   }
   for (const session of sessions) {
+    // Pinned sessions get their own top section regardless of date.
+    if (session.isPinned) {
+      groups.get('Pinned')!.push(session);
+      continue;
+    }
     const raw = session.updatedAt;
     const d = raw instanceof Date ? raw : raw ? new Date(raw) : new Date();
     const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
@@ -234,6 +242,9 @@ const SessionItem = React.memo(function SessionItem({
         updatedAt={updatedAtDate}
         totalMessages={session.messageCount ?? 0}
         isActive={isActive}
+        isPinned={session.isPinned}
+        isStarred={session.isStarred}
+        isArchived={session.isArchived}
         onClick={() => onSelect(session.id)}
         onRename={() => setIsRenaming(true)}
         onDelete={() => onDelete(session.id)}
@@ -375,7 +386,7 @@ const UserProfileArea = React.memo(function UserProfileArea({
 });
 
 // ---------------------------------------------------------------------------
-// Collapsed Sidebar — claude.ai icon-rail pattern (~50px)
+// Collapsed Sidebar · claude.ai icon-rail pattern (~50px)
 // ---------------------------------------------------------------------------
 
 const RAIL_BTN =
@@ -482,7 +493,7 @@ function CollapsedSidebar({
 }
 
 // ---------------------------------------------------------------------------
-// Free Plan Nudge — only shown when user is on the free tier
+// Free Plan Nudge · only shown when user is on the free tier
 // ---------------------------------------------------------------------------
 
 const FreePlanNudge = React.memo(function FreePlanNudge({
@@ -585,6 +596,20 @@ function ChatSidebarContent({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [bulkMode, exitBulkMode]);
+
+  // Listen for custom events dispatched by the global keyboard shortcut hook
+  // so that Cmd+K / Cmd+/ open the dialogs that live inside the sidebar,
+  // without requiring state to be lifted to the page level.
+  useEffect(() => {
+    const openSearch = () => setSearchDialogOpen(true);
+    const openShortcuts = () => setKeyboardShortcutsOpen(true);
+    window.addEventListener('agi:open-search', openSearch);
+    window.addEventListener('agi:open-shortcuts', openShortcuts);
+    return () => {
+      window.removeEventListener('agi:open-search', openSearch);
+      window.removeEventListener('agi:open-shortcuts', openShortcuts);
+    };
+  }, []);
 
   const keyboardShortcuts = useMemo<KeyboardShortcut[]>(() => {
     const shortcuts: KeyboardShortcut[] = [
@@ -830,7 +855,7 @@ function ChatSidebarContent({
 }
 
 // ---------------------------------------------------------------------------
-// Public export — wrapped in ErrorBoundary
+// Public export · wrapped in ErrorBoundary
 // ---------------------------------------------------------------------------
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = (props) => {

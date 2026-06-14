@@ -212,8 +212,15 @@ export class TauriRuntime implements ChatRuntime {
       conversationId,
       content,
       model: options?.model,
+      provider: options?.provider,
       attachments: undefined,
       signal: options?.signal,
+      // Forward the composer controls that were previously dropped here.
+      thinkingEnabled: options?.thinkingEnabled,
+      webSearch: options?.webSearch,
+      systemPrompt: options?.systemPrompt,
+      agentMode: options?.agentMode,
+      effort: options?.effort,
     };
     for await (const chunk of this._streamMessage(params)) {
       if (this._streamCallbacks.size > 0) {
@@ -275,7 +282,19 @@ export class TauriRuntime implements ChatRuntime {
   // ---------------------------------------------------------------------------
 
   private async *_streamMessage(params: SendMessageParams): AsyncIterable<StreamChunk> {
-    const { conversationId, content, model, attachments, signal } = params;
+    const {
+      conversationId,
+      content,
+      model,
+      provider,
+      attachments,
+      signal,
+      thinkingEnabled,
+      webSearch,
+      systemPrompt,
+      agentMode,
+      effort,
+    } = params;
     const frontendMessageId = crypto.randomUUID();
     const userId = this.getCurrentUserId();
 
@@ -424,12 +443,20 @@ export class TauriRuntime implements ChatRuntime {
         request: {
           content,
           userId,
+          provider,
           modelOverride: model,
           conversationId: backendConversationId,
           attachments: attachments ?? [],
           stream: true,
           frontendMessageId,
           preferCloudCredits: useAppModeStore.getState().mode === 'cloud',
+          // Composer controls — the Rust ChatSendMessageRequest already accepts
+          // these camelCase aliases; they were previously dropped client-side.
+          thinkingMode: thinkingEnabled,
+          reasoningEffort: effort,
+          customInstructions: systemPrompt,
+          enableAgentMode: agentMode ? true : undefined,
+          focusMode: webSearch ? 'web' : undefined,
         },
       });
     } catch (err) {

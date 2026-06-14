@@ -78,7 +78,7 @@ describe('publishArtifact — local path', () => {
 // 2. Cloud paths return waitlist-gated (no network)
 // ---------------------------------------------------------------------------
 
-describe('publishArtifact — cloud waitlist gate (v1 LOCAL ONLY)', () => {
+describe('publishArtifact — cloud waitlist gate', () => {
   it.each(['byok', 'managed'] as const)(
     'returns WaitlistPublishResult for privacyMode=%s without touching the network',
     async (privacyMode) => {

@@ -1,8 +1,8 @@
 /**
- * Session Messages API — backed by web_messages table.
+ * Session Messages API · backed by web_messages table.
  *
- * GET  /api/chat/sessions/[id]/messages  — list messages for a session
- * POST /api/chat/sessions/[id]/messages  — save a single message to a session
+ * GET  /api/chat/sessions/[id]/messages  · list messages for a session
+ * POST /api/chat/sessions/[id]/messages  · save a single message to a session
  *
  * "Sessions" is a UI alias for web_conversations used by chat-store.ts.
  * This route intentionally skips the LLM call (skipLlm=true equivalent):

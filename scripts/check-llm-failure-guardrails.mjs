@@ -19,6 +19,10 @@ const SKIP_DIRS = new Set([
   'dist',
   'node_modules',
   'target',
+  'Pods',
+  'dist-web',
+  'playwright-report',
+  'test-results',
 ]);
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.rs', '.ts', '.tsx']);
@@ -163,6 +167,21 @@ function lineForOffset(text, offset) {
   return text.slice(0, offset).split('\n').length;
 }
 
+// A single flagged line may be explicitly allowed when it is provably safe by
+// inspection (e.g. a sink fed only sanitized input). The allowance must be a
+// justification comment — `llm-guardrail-allow: <reason>` — on the matched line
+// or the line directly above it, so every exemption is auditable in the diff.
+function isAllowedByAnnotation(lines, lineNo) {
+  // Check the matched line plus two lines on either side, so the justification
+  // survives formatter reflow of the surrounding expression (e.g. prettier
+  // wrapping a JSX attribute value across several lines).
+  for (let i = lineNo - 2; i <= lineNo + 2; i++) {
+    const line = lines[i - 1];
+    if (line !== undefined && /llm-guardrail-allow:/.test(line)) return true;
+  }
+  return false;
+}
+
 function collectPatternViolations(files, patterns, { productionOnly = false } = {}) {
   const violations = [];
   for (const file of files) {
@@ -172,11 +191,14 @@ function collectPatternViolations(files, patterns, { productionOnly = false } = 
     if (!SOURCE_EXTENSIONS.has(path.extname(file))) continue;
     if (productionOnly && !isProductionPath(relativePath)) continue;
     const text = readFileSync(file, 'utf8');
+    const lines = text.split('\n');
     for (const { regex, label } of patterns) {
       regex.lastIndex = 0;
       let match;
       while ((match = regex.exec(text)) !== null) {
-        violations.push(`${relativePath}:${lineForOffset(text, match.index)} ${label}`);
+        const lineNo = lineForOffset(text, match.index);
+        if (isAllowedByAnnotation(lines, lineNo)) continue;
+        violations.push(`${relativePath}:${lineNo} ${label}`);
       }
     }
   }

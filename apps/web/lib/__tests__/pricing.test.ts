@@ -11,7 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Mocks — set up before the module under test is imported
+// Mocks · set up before the module under test is imported
 // ---------------------------------------------------------------------------
 
 // Suppress logger side-effects in tests

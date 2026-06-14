@@ -1,7 +1,7 @@
 /**
  * BrowserActivityBadge — Phase A Slice 5 (ported from UAC)
  *
- * Shows a pill indicator for browser extension / Cowork integration status.
+ * Shows a pill indicator for browser extension / AGI Work integration status.
  * Uses optional props instead of Tauri/desktop-specific hooks.
  * Hosts supply the state from their extension-events hook.
  */

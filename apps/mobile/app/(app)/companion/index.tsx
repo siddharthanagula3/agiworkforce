@@ -81,22 +81,26 @@ export default function CompanionScreen() {
   // MOB-PAIRINGCODE-ORPHAN fix: auto-connect when a pairingCode param is
   // present (deep-link flow). Status guard prevents double-connect on re-render.
   useEffect(() => {
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
     if (deepLinkCode && status === 'disconnected') {
       connect(deepLinkCode);
     }
   }, [deepLinkCode, status, connect]);
 
   useEffect(() => {
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
     const cleanup = setupCompanionNotifications();
     return cleanup;
   }, []);
 
   useEffect(() => {
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
     const stopHeartbeat = startMobileHeartbeat();
     return stopHeartbeat;
   }, []);
 
   useEffect(() => {
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
     if (status === 'connected') {
       startHealthChecks();
       requestAgentRefresh();
@@ -117,6 +121,7 @@ export default function CompanionScreen() {
 
   const handleScan = useCallback(
     (code: string) => {
+      if (!FEATURES.companion || !FEATURES.dispatch) return;
       setShowScanner(false);
       connect(code);
     },
@@ -135,6 +140,7 @@ export default function CompanionScreen() {
   }, [disconnect, desktopName]);
 
   const handleRetry = useCallback(() => {
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
     clearError();
     if (pairingCode) connect(pairingCode);
     else setShowScanner(true);

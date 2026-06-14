@@ -92,7 +92,7 @@ export class MistralProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -185,7 +185,7 @@ export class MistralProvider extends BaseLLMProvider {
       if (request.tool_choice !== undefined) body['tool_choice'] = request.tool_choice;
     }
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),

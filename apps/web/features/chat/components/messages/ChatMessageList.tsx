@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * ChatMessageList — upgraded web equivalent of the desktop ChatMessageList.
+ * ChatMessageList · upgraded web equivalent of the desktop ChatMessageList.
  *
  * Improvements over MessageListNew:
  * - Feeds from useAdaptedMessages() store adapter hook instead of raw props
@@ -34,7 +34,7 @@ import { cn } from '@shared/lib/utils';
 export interface ChatMessageListProps {
   /**
    * Messages to display. When omitted the component pulls from
-   * useAdaptedMessages() — pass messages explicitly in tests or when the
+   * useAdaptedMessages() · pass messages explicitly in tests or when the
    * parent already holds a filtered slice.
    */
   messages: ChatMessage[];
@@ -65,7 +65,7 @@ export interface ChatMessageListProps {
 interface MessageGroup {
   role: 'user' | 'assistant';
   messages: ChatMessage[];
-  /** Index of first message in original array — used as React key. */
+  /** Index of first message in original array · used as React key. */
   firstId: string;
 }
 
@@ -301,7 +301,14 @@ const MessageGroupRow = memo(
           prevMeta?.thinkingContent === nextMeta?.thinkingContent &&
           prevMeta?.isThinkingStreaming === nextMeta?.isThinkingStreaming &&
           prevMeta?.reaction === nextMeta?.reaction &&
-          prevMeta?.paywall === nextMeta?.paywall
+          prevMeta?.paywall === nextMeta?.paywall &&
+          // Tool timeline: compare length + last entry status so tool-call
+          // cards update visually as each tool starts/completes during streaming.
+          prevMeta?.tools?.length === nextMeta?.tools?.length &&
+          prevMeta?.tools?.[0]?.status === nextMeta?.tools?.[0]?.status &&
+          prevMeta?.tools?.at(-1)?.status === nextMeta?.tools?.at(-1)?.status &&
+          prevMeta?.isSearching === nextMeta?.isSearching &&
+          prevMeta?.isExecutingCode === nextMeta?.isExecutingCode
         );
       }) &&
       prev.onRegenerate === next.onRegenerate &&
@@ -351,7 +358,7 @@ const ChatMessageListComponent = ({
 
   const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
 
-  /** Lightweight fingerprint — changes whenever streaming content grows. */
+  /** Lightweight fingerprint · changes whenever streaming content grows. */
   const lastMessageFingerprint = useMemo(
     () => (lastMessage ? `${lastMessage.id}-${lastMessage.content.length}` : ''),
     [lastMessage],
@@ -507,7 +514,7 @@ const ChatMessageListComponent = ({
         <div ref={bottomRef} aria-hidden="true" className="h-px" />
       </div>
 
-      {/* Scroll-to-bottom FAB — shown when user has scrolled up */}
+      {/* Scroll-to-bottom FAB · shown when user has scrolled up */}
       <AnimatePresence>
         {userScrolledUp && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
@@ -522,7 +529,7 @@ const ChatMessageListComponent = ({
 };
 
 /**
- * ChatMessageList — upgraded web message list with auto-scroll, message
+ * ChatMessageList · upgraded web message list with auto-scroll, message
  * grouping, and streaming-aware rendering.
  *
  * Replaces `MessageListNew`. Compatible with the same props interface.
@@ -551,7 +558,11 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
         prevMeta?.thinkingContent === nextMeta?.thinkingContent &&
         prevMeta?.isThinkingStreaming === nextMeta?.isThinkingStreaming &&
         prevMeta?.reaction === nextMeta?.reaction &&
-        prevMeta?.paywall === nextMeta?.paywall
+        prevMeta?.paywall === nextMeta?.paywall &&
+        prevMeta?.tools?.length === nextMeta?.tools?.length &&
+        prevMeta?.tools?.at(-1)?.status === nextMeta?.tools?.at(-1)?.status &&
+        prevMeta?.isSearching === nextMeta?.isSearching &&
+        prevMeta?.isExecutingCode === nextMeta?.isExecutingCode
       );
     })
   );

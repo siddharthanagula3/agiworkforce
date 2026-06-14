@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * EmptyState — consistent empty state for list and grid views on the web app.
+ * EmptyState · consistent empty state for list and grid views on the web app.
  *
  * Matches the glassmorphism surface style used across the web dashboard.
  *

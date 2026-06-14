@@ -4,7 +4,7 @@ import GorhomBottomSheet, {
   type BottomSheetBackdropProps,
   type BottomSheetProps as GorhomProps,
 } from '@gorhom/bottom-sheet';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface BottomSheetProps extends Partial<GorhomProps> {
   children: React.ReactNode;
@@ -13,6 +13,7 @@ interface BottomSheetProps extends Partial<GorhomProps> {
 
 export const BottomSheet = forwardRef<GorhomBottomSheet, BottomSheetProps>(
   ({ children, snapPoints: snapPointsProp, ...props }, ref) => {
+    const colors = useThemeColors();
     const snapPoints = useMemo(() => snapPointsProp ?? ['50%', '90%'], [snapPointsProp]);
 
     const renderBackdrop = useCallback(
@@ -35,7 +36,7 @@ export const BottomSheet = forwardRef<GorhomBottomSheet, BottomSheetProps>(
         enablePanDownToClose
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: colors.surfaceElevated }}
-        handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
+        handleIndicatorStyle={{ backgroundColor: colors.neutralBorder, width: 36 }}
         {...props}
       >
         {children}

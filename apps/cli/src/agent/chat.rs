@@ -7,6 +7,7 @@ use crate::config::CliConfig;
 use crate::errors::CliError;
 use crate::hooks;
 use crate::models::{self, ContentBlock, Message, StreamCallback, ToolCallResponse};
+use crate::terminal_style as ts;
 
 use super::executor::{
     detect_content_loop, hash_tool_call, value_to_legacy_args, LOOP_DETECTION_THRESHOLD,
@@ -219,7 +220,10 @@ impl AgentSession {
         } else if usage.near_limit {
             eprintln!(
                 "  {}",
-                format!("Warning: {}", compaction::format_context_report(&usage)).yellow()
+                ts::warning(format!(
+                    "Warning: {}",
+                    compaction::format_context_report(&usage)
+                ))
             );
         }
 
@@ -284,7 +288,9 @@ message -- revise and call `update_plan` again.\n\n",
         if let Err(error) = self.persist_managed_session() {
             eprintln!(
                 "{}",
-                format!("  warning: failed to persist managed session: {error:#}").yellow()
+                ts::warning(format!(
+                    "  warning: failed to persist managed session: {error:#}"
+                ))
             );
         }
 
@@ -352,6 +358,7 @@ message -- revise and call `update_plan` again.\n\n",
                 max_tokens,
                 Some(&tool_defs),
                 on_chunk,
+                self.thinking_budget_tokens,
             )
             .await
         };
@@ -372,7 +379,11 @@ message -- revise and call `update_plan` again.\n\n",
                             let delay = cli_err.retry_delay();
                             eprintln!(
                                 "  {}",
-                                format!("Retrying in {}s: {}", delay.as_secs(), cli_err).yellow()
+                                ts::warning(format!(
+                                    "Retrying in {}s: {}",
+                                    delay.as_secs(),
+                                    cli_err
+                                ))
                             );
                             tokio::time::sleep(delay).await;
                             match models::stream_completion(
@@ -383,6 +394,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 max_tokens,
                                 Some(&tool_defs),
                                 self.continuation_sink(),
+                                self.thinking_budget_tokens,
                             )
                             .await
                             {
@@ -426,11 +438,10 @@ message -- revise and call `update_plan` again.\n\n",
                                 }
                                 eprintln!(
                                     "  {}",
-                                    format!(
+                                    ts::warning(format!(
                                         "↘ Falling back: {} → {} ({})",
                                         prev_model, fallback_model, kind
-                                    )
-                                    .yellow()
+                                    ))
                                 );
                                 if let Some(sink) = self.on_fallback.as_ref() {
                                     (sink.0)(&prev_model, fallback_model, kind);
@@ -473,6 +484,7 @@ message -- revise and call `update_plan` again.\n\n",
                                         max_tokens,
                                         Some(&tool_defs),
                                         self.continuation_sink(),
+                                        self.thinking_budget_tokens,
                                     )
                                     .await
                                 };
@@ -530,7 +542,7 @@ message -- revise and call `update_plan` again.\n\n",
                     if self.loop_strike_count >= 2 {
                         eprintln!(
                             "\n{}",
-                            "  Auto-stopping: second loop detected in this session.".red()
+                            ts::danger("  Auto-stopping: second loop detected in this session.")
                         );
                         hooks::run_hooks(
                             &self.hooks_config,
@@ -559,7 +571,7 @@ message -- revise and call `update_plan` again.\n\n",
                             .unwrap_or("unknown"),
                         self.loop_strike_count
                     );
-                    eprintln!("\n{}", loop_msg.yellow());
+                    eprintln!("\n{}", ts::warning(&loop_msg));
                     hooks::run_hooks(
                         &self.hooks_config,
                         hooks::HookEvent::Notification,
@@ -722,7 +734,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 "  {} {} blocked by hook: {}",
                                 "->".dimmed(),
                                 tc.name.bold(),
-                                reason_text.red()
+                                ts::danger(&reason_text)
                             );
                         }
                         result_blocks.push(ContentBlock::ToolResult {
@@ -897,9 +909,9 @@ message -- revise and call `update_plan` again.\n\n",
                 };
 
                 let sa_display_status = if tool_result.success {
-                    "success".green().to_string()
+                    ts::success("success").to_string()
                 } else {
-                    "failed".red().to_string()
+                    ts::danger("failed").to_string()
                 };
                 eprintln!(
                     "  {} {} [{}]",
@@ -992,7 +1004,7 @@ message -- revise and call `update_plan` again.\n\n",
                                     "  {} {} blocked by hook: {}",
                                     "->".dimmed(),
                                     tc.name.bold(),
-                                    reason_text.red()
+                                    ts::danger(&reason_text)
                                 );
                             }
                             result_blocks.push(ContentBlock::ToolResult {
@@ -1043,6 +1055,16 @@ message -- revise and call `update_plan` again.\n\n",
                             summary: tool_event_summary(&tc.name, &effective_args),
                         },
                     );
+                    if self.json_events {
+                        crate::agent_events::AgentEvent::RunningTool {
+                            session_id: self.json_session_id.clone(),
+                            name: tc.name.clone(),
+                            args_redacted: crate::agent_events::redact_args(
+                                &effective_args.to_string(),
+                            ),
+                        }
+                        .emit_stdout();
+                    }
                     runnable.push((tc.id.clone(), tc.name.clone(), effective_args));
                 }
 
@@ -1069,6 +1091,10 @@ message -- revise and call `update_plan` again.\n\n",
                 let outcomes = join_all(futures).await;
 
                 for (tool_use_id, tool_name, tool_args, exec_result) in outcomes {
+                    let started_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0);
                     let tool_result = match exec_result {
                         Ok(r) => r,
                         Err(e) => crate::tools::ToolResult {
@@ -1077,14 +1103,29 @@ message -- revise and call `update_plan` again.\n\n",
                             output: format!("tool error: {:#}", e),
                         },
                     };
+                    let elapsed_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0)
+                        .saturating_sub(started_ms);
 
                     if !self.quiet {
                         let status = if tool_result.success {
-                            "success".green().to_string()
+                            ts::success("success").to_string()
                         } else {
-                            "failed".red().to_string()
+                            ts::danger("failed").to_string()
                         };
                         eprintln!("  {} {} [{}]", "->".dimmed(), tool_name.bold(), status);
+                    }
+
+                    if self.json_events {
+                        crate::agent_events::AgentEvent::ToolResult {
+                            session_id: self.json_session_id.clone(),
+                            name: tool_name.clone(),
+                            duration_ms: elapsed_ms,
+                            ok: tool_result.success,
+                        }
+                        .emit_stdout();
                     }
 
                     emit_tool_event(
@@ -1184,7 +1225,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 "  {} {} blocked by hook: {}",
                                 "->".dimmed(),
                                 tc.name.bold(),
-                                reason_text.red()
+                                ts::danger(&reason_text)
                             );
                         }
                         result_blocks.push(ContentBlock::ToolResult {
@@ -1241,6 +1282,22 @@ message -- revise and call `update_plan` again.\n\n",
                     },
                 );
 
+                if self.json_events {
+                    crate::agent_events::AgentEvent::RunningTool {
+                        session_id: self.json_session_id.clone(),
+                        name: tc.name.clone(),
+                        args_redacted: crate::agent_events::redact_args(
+                            &effective_args.to_string(),
+                        ),
+                    }
+                    .emit_stdout();
+                }
+
+                let seq_tool_start_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+
                 let tool_result = if tc.name == "update_plan" {
                     let payload = self.handle_update_plan(&effective_args);
                     let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -1273,7 +1330,10 @@ message -- revise and call `update_plan` again.\n\n",
                         output: payload.to_string(),
                     }
                 } else if is_team_tool(&tc.name) {
-                    execute_team_tool(&self.team_manager, &tc.name, &legacy.args).await?
+                    // `None`: this orchestrator session has no per-teammate
+                    // identity yet. Pass the executing teammate's name here once
+                    // teammate-scoped sessions exist to enforce the message sender.
+                    execute_team_tool(&self.team_manager, &tc.name, &legacy.args, None).await?
                 } else if tc.name.starts_with("mcp_") {
                     execute_mcp_tool(&mut self.mcp_manager, &tc.name, effective_args.clone())
                         .await?
@@ -1292,11 +1352,26 @@ message -- revise and call `update_plan` again.\n\n",
 
                 if !self.quiet {
                     let status = if tool_result.success {
-                        "success".green().to_string()
+                        ts::success("success").to_string()
                     } else {
-                        "failed".red().to_string()
+                        ts::danger("failed").to_string()
                     };
                     eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
+                }
+
+                if self.json_events {
+                    let seq_elapsed_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0)
+                        .saturating_sub(seq_tool_start_ms);
+                    crate::agent_events::AgentEvent::ToolResult {
+                        session_id: self.json_session_id.clone(),
+                        name: tc.name.clone(),
+                        duration_ms: seq_elapsed_ms,
+                        ok: tool_result.success,
+                    }
+                    .emit_stdout();
                 }
 
                 emit_tool_event(
@@ -1393,6 +1468,7 @@ message -- revise and call `update_plan` again.\n\n",
                 max_tokens,
                 Some(&tool_defs),
                 self.continuation_sink(),
+                self.thinking_budget_tokens,
             )
             .await
             {
@@ -1403,7 +1479,11 @@ message -- revise and call `update_plan` again.\n\n",
                             let delay = cli_err.retry_delay();
                             eprintln!(
                                 "  {}",
-                                format!("Retrying in {}s: {}", delay.as_secs(), cli_err).yellow()
+                                ts::warning(format!(
+                                    "Retrying in {}s: {}",
+                                    delay.as_secs(),
+                                    cli_err
+                                ))
                             );
                             tokio::time::sleep(delay).await;
                             models::stream_completion(
@@ -1414,6 +1494,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 max_tokens,
                                 Some(&tool_defs),
                                 self.continuation_sink(),
+                                self.thinking_budget_tokens,
                             )
                             .await?
                         } else {
@@ -1448,11 +1529,10 @@ message -- revise and call `update_plan` again.\n\n",
                 if cumulative >= budget_cap {
                     eprintln!(
                         "\n{}",
-                        format!(
+                        ts::warning(format!(
                             "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
                             cumulative, budget_cap
-                        )
-                        .yellow()
+                        ))
                     );
                     // Emit the machine-readable event via the injected callback.
                     // lib.rs wires this only when --json-events is active so that
@@ -1470,18 +1550,19 @@ message -- revise and call `update_plan` again.\n\n",
                 if self.loop_strike_count >= 2 {
                     eprintln!(
                         "\n{}",
-                        "  Auto-stopping: second content loop detected in this session.".red()
+                        ts::danger(
+                            "  Auto-stopping: second content loop detected in this session."
+                        )
                     );
                     break;
                 }
 
                 eprintln!(
                     "\n{}",
-                    format!(
+                    ts::warning(format!(
                         "  Warning: Detected repetitive content in LLM response. Possible content loop. [strike {}/2]",
                         self.loop_strike_count
-                    )
-                    .yellow()
+                    ))
                 );
 
                 let confirmed = dialoguer::Confirm::new()
@@ -1571,7 +1652,9 @@ message -- revise and call `update_plan` again.\n\n",
         if let Err(error) = self.persist_managed_session() {
             eprintln!(
                 "{}",
-                format!("  warning: failed to persist managed session: {error:#}").yellow()
+                ts::warning(format!(
+                    "  warning: failed to persist managed session: {error:#}"
+                ))
             );
         }
 
@@ -1625,6 +1708,7 @@ message -- revise and call `update_plan` again.\n\n",
             max_tokens,
             None,
             on_chunk,
+            None, // send_btw never uses extended thinking
         )
         .await?;
 

@@ -61,7 +61,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // or api-gateway — no backend implementation found. Gate all calls behind
 // EXPO_PUBLIC_FEATURE_HEALTH_CONTEXT (default false/off) until the endpoint
 // is implemented or the feature is officially removed.
-// TODO: decide whether to implement GET /api/health-context or remove this service.
+// Open design decision (tracked): add a GET /api/health-context endpoint, or retire this service.
 const HEALTH_CONTEXT_ENABLED = process.env.EXPO_PUBLIC_FEATURE_HEALTH_CONTEXT === '1';
 
 export async function getHealthPermissionStatus(): Promise<HealthPermissionStatus> {
@@ -132,20 +132,25 @@ export async function getHealthSummary(): Promise<HealthSummary | null> {
     lastFetchTime = Date.now();
     return cachedSummary;
   } catch {
-    return cachedSummary; // Return stale cache on error, or null
+    if (cachedSummary && Date.now() - lastFetchTime < CACHE_TTL) {
+      return cachedSummary;
+    }
+    return null;
   }
 }
 
 export function isHealthAvailable(): boolean {
-  // Available on iOS (via HxF bridge) — not yet on Android
-  return Platform.OS === 'ios';
+  return HEALTH_CONTEXT_ENABLED && Platform.OS === 'ios';
 }
 
 /**
  * Format health summary as context string for AI chat injection.
  * Returns empty string if no health data available.
  */
-export async function getHealthContext(): Promise<string> {
+export async function getHealthContext(
+  options: { localOnlyApproved?: boolean } = {},
+): Promise<string> {
+  if (!options.localOnlyApproved) return '';
   const summary = await getHealthSummary();
   if (!summary) return '';
 

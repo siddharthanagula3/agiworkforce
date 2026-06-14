@@ -95,7 +95,7 @@ function navItemsForMode(mode: V3Mode): NavItem[] {
       { id: 'customize', label: 'Customize', icon: Sliders },
     ];
   }
-  if (mode === 'cowork') {
+  if (mode === 'work') {
     return [
       { id: 'cw-projects', label: 'Projects', icon: FolderOpen },
       { id: 'cw-scheduled', label: 'Scheduled', icon: RefreshCw },
@@ -190,10 +190,10 @@ export function WebSidebar({
         projects: 'projects',
         artifacts: 'artifacts',
         customize: 'customize-home',
-        'cw-projects': 'cowork-projects',
-        'cw-scheduled': 'cowork-scheduled',
-        'cw-artifacts': 'cowork-artifacts',
-        'cw-dispatch': 'cowork-dispatch',
+        'cw-projects': 'work-projects',
+        'cw-scheduled': 'work-scheduled',
+        'cw-artifacts': 'work-artifacts',
+        'cw-dispatch': 'work-dispatch',
         routines: 'code',
         settings: 'voice-settings',
       };

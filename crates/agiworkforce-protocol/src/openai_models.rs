@@ -442,7 +442,7 @@ impl From<ModelInfo> for ModelPreset {
             supported_reasoning_efforts: info.supported_reasoning_levels.clone(),
             supports_personality,
             additional_speed_tiers: info.additional_speed_tiers,
-            is_default: false, // default is the highest priority available model
+            is_default: false, // set later by mark_default_by_picker_visibility (first picker-visible wins)
             upgrade: info.upgrade.as_ref().map(|upgrade| ModelUpgrade {
                 id: upgrade.model.clone(),
                 reasoning_effort_mapping: reasoning_effort_mapping_from_presets(

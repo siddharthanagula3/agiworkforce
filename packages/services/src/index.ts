@@ -7,6 +7,6 @@
  * @packageDocumentation
  */
 
-// Artifact publish service — view + publish + copy (v1 LOCAL ONLY)
-// Versioning and inline editor are deferred (TODO: EXEC-SUMMARY-r2 hours).
+// Artifact publish service — local export now, BYOK/managed publish gated until
+// the managed artifact publishing boundary is proven.
 export * from './artifacts';

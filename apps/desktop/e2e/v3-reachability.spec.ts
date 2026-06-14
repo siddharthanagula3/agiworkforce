@@ -50,7 +50,7 @@ test.describe('@reachability v3 surface', () => {
   test('shell sidebar exposes data-mode attr', async ({ page }) => {
     const el = page.locator('[data-v3-sidebar]').first();
     if ((await el.count()) === 0) test.skip();
-    await expect(el).toHaveAttribute('data-mode', /chat|cowork|code/);
+    await expect(el).toHaveAttribute('data-mode', /chat|work|code/);
   });
 
   test('shell sidebar exposes data-collapsed attr', async ({ page }) => {
@@ -153,7 +153,7 @@ test.describe('@reachability v3 surface', () => {
     const sidebar = page.locator('[data-v3-sidebar]').first();
     if ((await sidebar.count()) === 0) test.skip();
     // At least one of the three mode buttons should be in the DOM
-    const buttons = sidebar.getByRole('button', { name: /^(chat|cowork|code)$/i });
+    const buttons = sidebar.getByRole('button', { name: /^(chat|agi work|code)$/i });
     expect(await buttons.count()).toBeGreaterThanOrEqual(0);
   });
 
@@ -200,7 +200,7 @@ test.describe('@reachability v3 surface', () => {
     expect(ariaLabel).toBeTruthy();
   });
 
-  test('a11y: icon-only Cowork artifact refresh button exposes accessible name', async ({
+  test('a11y: icon-only AGI Work artifact refresh button exposes accessible name', async ({
     page,
   }) => {
     const el = page.getByRole('button', { name: /refresh/i });

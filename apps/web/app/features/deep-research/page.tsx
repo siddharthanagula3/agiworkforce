@@ -1,110 +1,155 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  LedgerSection,
-} from '../../../components/marketing/LandingSections';
-import { LAUNCH } from '../../../lib/marketing-constants';
+import { ProductFrame } from '../../../components/marketing/ProductFrame';
+import { FeatureGrid } from '../../../components/marketing/LandingSections';
+import { FinalCta } from '../../../components/marketing/FlagshipSections';
+
+const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
 export const metadata: Metadata = {
-  title: 'AGI Deep Research - Cited reports across web, files, and connectors',
+  title: 'AGI Deep Research | Cited Answers Across Web, Files & Tools',
   description:
-    'AGI Deep Research combines planning, source collection, citations, and structured reports across web, files, projects, and connected data sources.',
+    'Research in AGI is designed around citations: live web search with source cards, numbered inline citations, and a sources panel. In the same workspace as your projects, artifacts, and memory.',
   alternates: { canonical: 'https://agiworkforce.com/features/deep-research' },
 };
+
+const RESEARCH_FEATURES = [
+  {
+    meta: 'Search',
+    title: 'Live web search',
+    body: 'Turn search on when the answer needs current information. Results arrive as source cards with titles, snippets, and links, right in the chat where you asked.',
+  },
+  {
+    meta: 'Citations',
+    title: 'Numbered, inline, checkable',
+    body: 'Citations sit inside the answer as numbered markers. Hover for a preview of the source, click to open it. The claim and its evidence stay together.',
+  },
+  {
+    meta: 'Sources',
+    title: 'A panel for the evidence',
+    body: 'The research panel collects the sources behind the latest answer in a sidebar. Scan them, open them, and judge them without leaving the conversation.',
+  },
+  {
+    meta: 'Routing',
+    title: 'Research-aware Auto routing',
+    body: 'Auto routing recognizes research-shaped prompts and sends them to search-capable models. The provider label stays visible before the request leaves your machine.',
+  },
+  {
+    meta: 'Artifacts',
+    title: 'Reports that stay editable',
+    body: 'Long-form output can live beside the chat as an artifact with previews and versions. A draft you keep working, not a reply you scroll past.',
+    href: '/features/artifacts',
+  },
+  {
+    meta: 'Projects',
+    title: 'A home for each question',
+    body: 'Projects group the chats, files, instructions, and sources behind a line of research, so follow-ups start with the context already in place.',
+    href: '/features/projects',
+  },
+];
 
 export default function DeepResearchPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Deep research`}
-          title="Research that shows its sources and keeps the output editable."
-          lede="ChatGPT and Claude made research a core workflow. AGI brings the same workflow expectation to multi-step plans, web search, connector search, source panels, citations, and report artifacts across selected model routes."
-          primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondaryCta={{ href: '/features/artifacts', label: 'Report artifacts' }}
-          chips={['Planning', 'Web search', 'Connectors', 'Citations', 'Report artifacts']}
-          panelTitle="Research run"
-          panelRows={[
-            { k: 'Plan', v: 'Break the question into subtopics and evidence needs' },
-            { k: 'Gather', v: 'Search live web, project files, and connected apps where enabled' },
-            { k: 'Verify', v: 'Track sources, snippets, dates, and confidence' },
-            { k: 'Deliver', v: 'Cited answer plus editable report artifact' },
-          ]}
-        />
+
+        <section className="agi-fl-hero" aria-labelledby="agi-fl-research-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Deep Research</p>
+          <h1 id="agi-fl-research-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Answers that</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">show their sources.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            Research in AGI is designed around one rule: claims come with citations. Turn on search
+            and results arrive as source cards, numbered citations sit inside the answer, and a
+            sources panel keeps the evidence one click away, in the same workspace as your projects,
+            artifacts, and memory.
+          </p>
+          <div className="agi-fl-cta-row">
+            <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
+              Try AGI Web
+            </Link>
+            <Link href="/features/artifacts" className="agi-fl-cta agi-fl-cta--secondary">
+              Explore Artifacts
+            </Link>
+          </div>
+          <ul className="agi-fl-mode-ribbon" aria-label="Research highlights">
+            <li>Search · live web</li>
+            <li>Citations · inline &amp; linked</li>
+            <li>Sources · one panel away</li>
+          </ul>
+
+          <div className="agi-fl-hero-console">
+            <ProductFrame
+              variant="web"
+              title="agiworkforce.com/chat"
+              badge="Sources"
+              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+            />
+          </div>
+        </section>
 
         <FeatureGrid
-          eyebrow="Research workflow"
-          title="One workspace for the whole research loop."
-          items={[
-            {
-              meta: 'Current info',
-              title: 'Live web search',
-              body: 'Use search when knowledge can be outdated, cite claims inline, and expose the source list for verification.',
-            },
-            {
-              meta: 'Private context',
-              title: 'Project and connector search',
-              body: 'Search uploaded files and enabled apps with the same permission model as other tools.',
-              href: '/apps',
-            },
-            {
-              meta: 'Long run',
-              title: 'Visible progress states',
-              body: 'Show planning, gathering, reading, synthesizing, and report-generation states so long research feels trustworthy.',
-            },
-            {
-              meta: 'Output',
-              title: 'Structured report artifacts',
-              body: 'Deliver research as an editable artifact with sections, tables, source links, and export controls.',
-              href: '/features/artifacts',
-            },
-            {
-              meta: 'Models',
-              title: 'Route by task shape',
-              body: 'Use the best provider for long context, source synthesis, coding analysis, or fast drafting without restarting the research.',
-            },
-            {
-              meta: 'Controls',
-              title: 'Stop, resume, and notify',
-              body: 'Long research runs include cancel, background completion, notifications, and preserved partial results.',
-            },
+          eyebrow="The research loop"
+          title="From question to checked answer, in one workspace."
+          items={RESEARCH_FEATURES}
+        />
+
+        <section className="agi-fl-section" aria-labelledby="agi-fl-research-boundaries-title">
+          <p className="agi-fl-eyebrow">Honest boundaries</p>
+          <h2 id="agi-fl-research-boundaries-title" className="agi-fl-h2">
+            Research you can audit.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Cited answers only matter if you can check them, and if you control what the research
+            touches. Both hold here.
+          </p>
+          <table className="agi-ledger">
+            <tbody>
+              <tr>
+                <td>Sources</td>
+                <td>Every cited source is a real link you can open and judge yourself.</td>
+              </tr>
+              <tr>
+                <td>Your files</td>
+                <td>
+                  Project files and connected tools join research only where you've enabled them.
+                </td>
+              </tr>
+              <tr>
+                <td>Local</td>
+                <td>
+                  Local chats stay on your device; live web search and connectors run only on routes
+                  you can see.
+                </td>
+              </tr>
+              <tr>
+                <td>Cloud</td>
+                <td>
+                  Managed compute stays invite-only. Nothing routes to AGI Cloud without a visible
+                  label.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <FinalCta
+          eyebrow="Start now"
+          title="Ask something worth citing."
+          body="Try AGI Web in the browser today, or install the apps for Local and BYOK work on Desktop and CLI."
+          ctas={[
+            { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
+            { href: '/download', label: 'Download AGI' },
           ]}
         />
 
-        <LedgerSection
-          eyebrow="Research promise"
-          title="A practical research workflow for daily work."
-          rows={[
-            {
-              k: 'Audience',
-              v: 'Consultants, founders, analysts, students, lawyers, sales teams, and operators who need cited work products.',
-            },
-            {
-              k: 'Offer',
-              v: 'Research with sources, files, tools, and editable report artifacts across available Local, BYOK, and Cloud invite routes.',
-            },
-            {
-              k: 'Differentiator',
-              v: 'Model choice: use OpenAI, Claude, Gemini, Perplexity, local models, or other providers from one AGI workflow.',
-            },
-            {
-              k: 'Boundary',
-              v: 'Local-only models browse or access connectors only when those tools are explicitly enabled and routed.',
-            },
-          ]}
-        />
-
-        <LaunchCta
-          title="Deep research is a high-frequency workflow."
-          body="Strategy, diligence, reports, market maps, and internal knowledge synthesis all need source-backed answers that remain editable."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/use-cases/consulting', label: 'Consulting use case' }}
-        />
         <MarketingFooter />
       </main>
     </div>

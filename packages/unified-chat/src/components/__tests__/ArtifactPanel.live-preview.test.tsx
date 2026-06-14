@@ -251,12 +251,13 @@ describe('buildSandboxedHtml', () => {
     expect(doc).toContain('Content-Security-Policy');
   });
 
-  it('leaves a document alone when it already declares its own CSP', () => {
+  it('replaces any document-supplied CSP with the AGI sandbox CSP', () => {
     const supplied =
-      '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'"><title>t</title></head><body /></html>';
+      '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="connect-src https://example.com"><title>t</title></head><body /></html>';
     const doc = buildSandboxedHtml(supplied);
-    // The supplied CSP is preserved; we never inject a second one.
     const matches = doc.match(/Content-Security-Policy/g) ?? [];
     expect(matches.length).toBe(1);
+    expect(doc).toContain("connect-src 'none'");
+    expect(doc).not.toContain('https://example.com');
   });
 });

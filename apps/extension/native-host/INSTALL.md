@@ -90,7 +90,7 @@ Windows uses the registry keys above. The JSON files live under
   "description": "AGI Workforce Browser Automation Host",
   "path": "/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host",
   "type": "stdio",
-  "allowed_origins": ["chrome-extension://abcdefghijklmnopqrstuvwxyz123456/"]
+  "allowed_origins": ["chrome-extension://<EXTENSION_ID>/"]
 }
 ```
 

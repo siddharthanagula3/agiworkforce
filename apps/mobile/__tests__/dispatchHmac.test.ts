@@ -47,10 +47,10 @@
  *   - verifyMessage returns malformed for envelope missing ts when hmac present
  *   - verifyMessage returns malformed for envelope missing type when hmac present
  *
- *  Transitional mode — unsigned messages
- *   - unsigned message (no hmac field) returns ok:true before DISPATCH_HMAC_REQUIRED_AFTER
- *   - unsigned message logs a console.warn during transitional period
- *   - unsigned message returns unsigned_transitional after cutoff date (fail-closed)
+ *  Unsigned messages
+ *   - unsigned message (no hmac field) returns unsigned_transitional before cutoff
+ *   - unsigned message (no hmac field) returns unsigned_transitional after cutoff
+ *   - unsigned message never logs legacy acceptance warnings
  *
  *  Wire format
  *   - canonical signing input has keys in alphabetical order: nonce < payload < ts < type
@@ -543,10 +543,10 @@ describe('Malformed message rejection', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. Transitional mode — unsigned messages
+// 7. Unsigned messages
 // ---------------------------------------------------------------------------
 
-describe('Transitional mode — unsigned messages', () => {
+describe('Unsigned Dispatch messages', () => {
   const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
   beforeEach(() => {
@@ -559,18 +559,18 @@ describe('Transitional mode — unsigned messages', () => {
     jest.spyOn(Date, 'now').mockRestore();
   });
 
-  it('accepts unsigned message (no hmac field) before the cutoff date', async () => {
+  it('rejects unsigned message before the historical cutoff date', async () => {
     const state = await makeState();
-    // Ensure we are before DISPATCH_HMAC_REQUIRED_AFTER
     const cutoff = new Date(DISPATCH_HMAC_REQUIRED_AFTER).getTime();
     jest.spyOn(Date, 'now').mockReturnValue(cutoff - 1_000);
 
     const rawMsg = { action: 'ping', timestamp: Date.now() };
     const result = await verifyMessage(state, rawMsg);
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('unsigned_transitional');
   });
 
-  it('logs a console.warn for unsigned messages during the transitional period', async () => {
+  it('does not log a legacy acceptance warning before the historical cutoff', async () => {
     const state = await makeState();
     const cutoff = new Date(DISPATCH_HMAC_REQUIRED_AFTER).getTime();
     jest.spyOn(Date, 'now').mockReturnValue(cutoff - 1_000);
@@ -578,8 +578,10 @@ describe('Transitional mode — unsigned messages', () => {
     const rawMsg = { action: 'agents_update', agents: [] };
     await verifyMessage(state, rawMsg);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('SECURITY'));
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(DISPATCH_HMAC_REQUIRED_AFTER));
+    const securityWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].includes('SECURITY'),
+    );
+    expect(securityWarns).toHaveLength(0);
   });
 
   it('rejects unsigned message after DISPATCH_HMAC_REQUIRED_AFTER (fail-closed)', async () => {

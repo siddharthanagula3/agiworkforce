@@ -37,7 +37,7 @@ export class SecurityManager {
    * prevent it from being bundled into client-side JavaScript. This class
    * should only be used server-side for encryption operations. Client-side
    * code that imports SecurityManager will use the development fallback
-   * (in dev) or throw in production — which is the correct behavior since
+   * (in dev) or throw in production · which is the correct behavior since
    * encryption should happen server-side.
    */
   private getKeySource(): string {
@@ -72,7 +72,7 @@ export class SecurityManager {
       );
     }
 
-    // Development-only fallback — still include origin for per-environment isolation
+    // Development-only fallback · still include origin for per-environment isolation
     console.warn(
       '[SecurityManager] Using development fallback encryption key. ' +
         'Set ENCRYPTION_KEY (>=32 chars) for production.',
@@ -446,7 +446,7 @@ export class SecurityManager {
   static sanitizeUrl(url: string): string {
     if (!url) return '';
 
-    // Remove dangerous schemes — loop until stable to prevent bypass via nesting
+    // Remove dangerous schemes · loop until stable to prevent bypass via nesting
     let sanitized = url;
     let prev;
     do {
@@ -727,7 +727,7 @@ export class SecurityManager {
  *
  * script-src uses a per-request nonce instead of 'unsafe-inline'.
  * style-src keeps 'unsafe-inline' because Tailwind, Radix UI, and inline style
- * attributes require it — migrating to nonce-based styles is tracked separately.
+ * attributes require it · migrating to nonce-based styles is tracked separately.
  */
 export class CSPManager {
   private static nonce: string | null = null;
@@ -809,7 +809,7 @@ export class CSPManager {
 // Secure Storage Utility
 // ========================================
 
-// AUDIT-FIX: C-5 / H-18 — thrown when a caller attempts encrypted storage without an active key.
+// AUDIT-FIX: C-5 / H-18 · thrown when a caller attempts encrypted storage without an active key.
 export class SecureStorageUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -843,7 +843,7 @@ export class SecureStorage {
       // Generate new non-extractable key
       const key = await window.crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
-        false, // non-extractable — raw bytes never leave WebCrypto
+        false, // non-extractable · raw bytes never leave WebCrypto
         ['encrypt', 'decrypt'],
       );
 
@@ -864,7 +864,7 @@ export class SecureStorage {
     try {
       const encryptionKey = await this.getEncryptionKey();
       if (!encryptionKey) {
-        // AUDIT-FIX: C-5 — never silently fall back to plaintext writes.
+        // AUDIT-FIX: C-5 · never silently fall back to plaintext writes.
         throw new SecureStorageUnavailableError(
           'Encryption key unavailable; refusing plaintext write',
         );
@@ -887,7 +887,7 @@ export class SecureStorage {
       localStorage.setItem(key, btoa(JSON.stringify(encryptedData)));
       return true;
     } catch (error) {
-      // AUDIT-FIX: C-5 — surface unavailability so callers route to loading/empty state.
+      // AUDIT-FIX: C-5 · surface unavailability so callers route to loading/empty state.
       if (error instanceof SecureStorageUnavailableError) throw error;
       console.error('Secure storage set failed:', error);
       return false;
@@ -901,7 +901,7 @@ export class SecureStorage {
 
     const encryptionKey = await this.getEncryptionKey();
     if (!encryptionKey) {
-      // AUDIT-FIX: C-5 / H-18 — never read attacker-controlled plaintext as if it were trusted JSON.
+      // AUDIT-FIX: C-5 / H-18 · never read attacker-controlled plaintext as if it were trusted JSON.
       throw new SecureStorageUnavailableError(
         'Encryption key unavailable; refusing plaintext read',
       );

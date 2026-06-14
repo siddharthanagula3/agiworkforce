@@ -33,11 +33,14 @@ import {
   buildRelayControlMessage,
   ingestApprovalRequestPayload,
   parseApprovalRequest,
+  useConnectionStore,
 } from '../stores/connectionStore';
 import { useAgentStore } from '../stores/agentStore';
 import { notifyCompanionMessage } from '../services/companionNotifications';
+import { SignalingClient } from '@agiworkforce/utils/signaling';
 
 const mockNotifyCompanionMessage = notifyCompanionMessage as jest.Mock;
+const mockSignalingClient = SignalingClient as unknown as jest.Mock;
 
 describe('Wave 1 control relay fixes', () => {
   beforeEach(() => {
@@ -134,5 +137,20 @@ describe('Wave 1 control relay fixes', () => {
     expect(accepted).toBe(false);
     expect(useAgentStore.getState().pendingApprovals).toHaveLength(0);
     expect(mockNotifyCompanionMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not open a companion connection while Dispatch is feature-gated', () => {
+    useConnectionStore.setState({
+      status: 'disconnected',
+      pairingCode: null,
+      pairToken: null,
+      connectionQuality: 'disconnected',
+    });
+
+    useConnectionStore.getState().connect(`agiw:ABCDEF123456:${'a'.repeat(64)}`);
+
+    expect(mockSignalingClient).not.toHaveBeenCalled();
+    expect(useConnectionStore.getState().status).toBe('disconnected');
+    expect(useConnectionStore.getState().pairingCode).toBeNull();
   });
 });

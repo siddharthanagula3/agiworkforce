@@ -61,6 +61,7 @@ jest.mock('lucide-react-native', () => {
 
 const mockStorageSet = jest.fn();
 const mockStorageGet = jest.fn().mockReturnValue(undefined);
+let mockModelPickerProps: { onSelect?: (modelId: string) => void } | null = null;
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store) => store.persist.rehydrate()),
@@ -87,7 +88,10 @@ jest.mock('@gorhom/bottom-sheet', () => {
   };
 });
 jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => ({
-  ModelPickerSheet: jest.fn().mockReturnValue(null),
+  ModelPickerSheet: jest.fn((props: { onSelect?: (modelId: string) => void }) => {
+    mockModelPickerProps = props;
+    return null;
+  }),
 }));
 
 // Compliance package — control disclosure satisfied / not satisfied
@@ -119,28 +123,41 @@ jest.mock('../storage/installedModels', () => ({
 }));
 
 // Local LLM catalog stub
+const mockDefaultLocalModel = {
+  id: 'qwen2.5-1.5b-instruct-q4_k_m',
+  displayName: 'Qwen 2.5 1.5B',
+  family: 'qwen',
+  paramCountB: 1.5,
+  fileSizeBytes: 1_073_741_824,
+  supportedRuntimes: ['gguf'],
+  contextWindow: 32768,
+  capabilities: {
+    text: true,
+    visionIn: false,
+    audioIn: false,
+    toolCalls: true,
+    structuredOutput: true,
+  },
+  license: 'Apache-2.0',
+  role: 'default',
+  shipsInV1: true,
+};
+const mockLiteLocalModel = {
+  ...mockDefaultLocalModel,
+  id: 'llama-3.2-1b-instruct-spinquant',
+  displayName: 'AGI Lite',
+  family: 'llama',
+  paramCountB: 1,
+  fileSizeBytes: 600_000_000,
+  role: 'lite-mode',
+};
 jest.mock('@agiworkforce/local-llm', () => ({
   detectCapabilities: (...args: unknown[]) => mockDetectCapabilities(...args),
-  getDefaultModel: jest.fn().mockReturnValue({
-    id: 'qwen2.5-1.5b-instruct-q4_k_m',
-    displayName: 'Qwen 2.5 1.5B',
-    family: 'qwen',
-    paramCountB: 1.5,
-    fileSizeBytes: 1_073_741_824,
-    supportedRuntimes: ['gguf'],
-    contextWindow: 32768,
-    capabilities: {
-      text: true,
-      visionIn: false,
-      audioIn: false,
-      toolCalls: true,
-      structuredOutput: true,
-    },
-    license: 'Apache-2.0',
-    role: 'default',
-    shipsInV1: true,
-  }),
-  getShippableModels: jest.fn().mockReturnValue([]),
+  getDefaultModel: jest.fn(() => mockDefaultLocalModel),
+  getModelById: jest.fn((id: string) =>
+    [mockDefaultLocalModel, mockLiteLocalModel].find((model) => model.id === id),
+  ),
+  getShippableModels: jest.fn(() => [mockDefaultLocalModel, mockLiteLocalModel]),
 }));
 
 // expo-constants
@@ -168,6 +185,7 @@ describe('Onboarding', () => {
   beforeEach(() => {
     jest.useRealTimers();
     jest.clearAllMocks();
+    mockModelPickerProps = null;
     mockIsDisclosureSatisfied.mockReturnValue(false);
     mockGetInstalledModel.mockResolvedValue(null);
   });
@@ -355,9 +373,29 @@ describe('Onboarding', () => {
       expect(getByTestId('device-tier-download-btn')).toBeTruthy();
     });
 
+    it('shows model size without claiming a fixed download time', async () => {
+      const { getByText, queryByText } = await renderAtDeviceTier();
+      expect(getByText('1.0 GB download · Wi-Fi recommended')).toBeTruthy();
+      expect(getByText('Download time depends on your connection.')).toBeTruthy();
+      expect(queryByText(/Estimated download/)).toBeNull();
+    });
+
     it('shows pick-a-different-model button', async () => {
       const { getByTestId } = await renderAtDeviceTier();
       expect(getByTestId('device-tier-pick-model-btn')).toBeTruthy();
+    });
+
+    it('uses the selected picker model for the download card', async () => {
+      const { getByTestId, getByText } = await renderAtDeviceTier();
+
+      await act(async () => {
+        fireEvent.press(getByTestId('device-tier-pick-model-btn'));
+        mockModelPickerProps?.onSelect?.('llama-3.2-1b-instruct-spinquant');
+        await Promise.resolve();
+      });
+
+      expect(getByText('AGI Lite')).toBeTruthy();
+      expect(getByText('Download AGI Lite')).toBeTruthy();
     });
   });
 

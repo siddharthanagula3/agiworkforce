@@ -1,6 +1,8 @@
 import {
+  DEFAULT_CLOUD_MODEL_ID,
   getShortDisplayName,
   getModelListForCloudAccess,
+  isSelectableModelIdForCloudAccess,
   LOCKED_CLOUD_MODELS,
 } from '../src/features/model-picker/service';
 
@@ -25,6 +27,11 @@ describe('mobile cloud model labels', () => {
 
   it('keeps the mobile cloud catalog aligned with configured production providers', () => {
     const providerIds = LOCKED_CLOUD_MODELS.map((model) => model.provider);
+    const unlockedProviderIds = new Set(
+      getModelListForCloudAccess(true)
+        .filter((model) => model.surface === 'cloud_managed')
+        .map((model) => model.provider),
+    );
 
     expect(providerIds).toEqual([
       'openai',
@@ -36,5 +43,17 @@ describe('mobile cloud model labels', () => {
       'moonshot',
     ]);
     expect(providerIds).not.toContain('perplexity');
+    expect(unlockedProviderIds).not.toContain('perplexity');
+  });
+
+  it('uses the shared OpenAI probe model after cloud invite access', () => {
+    const unlockedCloudModels = getModelListForCloudAccess(true).filter(
+      (model) => model.surface === 'cloud_managed',
+    );
+
+    expect(DEFAULT_CLOUD_MODEL_ID).toBe('gpt-5.4-mini');
+    expect(unlockedCloudModels.some((model) => model.id === 'gpt-5.4-mini')).toBe(true);
+    expect(isSelectableModelIdForCloudAccess('gpt-5.4-mini', false)).toBe(false);
+    expect(isSelectableModelIdForCloudAccess('gpt-5.4-mini', true)).toBe(true);
   });
 });

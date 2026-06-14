@@ -47,7 +47,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "cowork": "Cowork",
+      "work": "AGI Work",
       "code": "Code"
     },
     "nav": {
@@ -313,16 +313,16 @@
       "tsDesc": "Bun-powered TS execution in a sandbox"
     }
   },
-  "cowork": {
+  "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use Cowork safely.",
+      "learnLink": "Learn how to use AGI Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know Cowork",
+      "onboardingTitle": "Get to know AGI Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -354,7 +354,7 @@
       "empty": "No artifacts yet. Run a scheduled task to generate outputs."
     },
     "projects": {
-      "title": "Cowork projects",
+      "title": "AGI Work projects",
       "newProject": "New project",
       "updated": "Updated {{when}}",
       "sessions": "{{count}} sessions"

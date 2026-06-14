@@ -29,11 +29,22 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function formatTime(timeOfDay: string): string {
   const [hoursStr, minutesStr] = timeOfDay.split(':');
-  const hours = parseInt(hoursStr, 10);
-  const minutes = minutesStr ?? '00';
+  const parsedHours = parseInt(hoursStr, 10);
+  const parsedMinutes = parseInt(minutesStr ?? '', 10);
+  const hours =
+    Number.isFinite(parsedHours) && parsedHours >= 0 && parsedHours <= 23 ? parsedHours : 9;
+  const minutes =
+    Number.isFinite(parsedMinutes) && parsedMinutes >= 0 && parsedMinutes <= 59
+      ? parsedMinutes.toString().padStart(2, '0')
+      : '00';
   const ampm = hours >= 12 ? 'PM' : 'AM';
   const displayHour = hours % 12 || 12;
   return `${displayHour}:${minutes} ${ampm}`;
+}
+
+function parseValidDate(value: string): Date | null {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
 }
 
 function formatRecurrence(schedule: Schedule): string {
@@ -42,7 +53,8 @@ function formatRecurrence(schedule: Schedule): string {
   switch (schedule.recurrence) {
     case 'once': {
       if (schedule.scheduledAt) {
-        const date = new Date(schedule.scheduledAt);
+        const date = parseValidDate(schedule.scheduledAt);
+        if (!date) return `Once at ${time}`;
         const month = date.toLocaleDateString('en-US', { month: 'short' });
         const day = date.getDate();
         return `Once on ${month} ${day} at ${time}`;
@@ -53,13 +65,16 @@ function formatRecurrence(schedule: Schedule): string {
       return `Daily at ${time}`;
     case 'weekly': {
       if (schedule.daysOfWeek && schedule.daysOfWeek.length > 0) {
-        const days = schedule.daysOfWeek.map((d) => DAY_LABELS[d]).join(', ');
-        return `Every ${days} at ${time}`;
+        const days = schedule.daysOfWeek
+          .filter((d) => Number.isInteger(d) && d >= 0 && d < DAY_LABELS.length)
+          .map((d) => DAY_LABELS[d]);
+        if (days.length > 0) return `Every ${days.join(', ')} at ${time}`;
       }
       return `Weekly at ${time}`;
     }
     case 'monthly': {
-      const day = schedule.dayOfMonth ?? 1;
+      const rawDay = schedule.dayOfMonth ?? 1;
+      const day = Number.isInteger(rawDay) && rawDay >= 1 && rawDay <= 31 ? rawDay : 1;
       const suffix =
         day === 1 || day === 21 || day === 31
           ? 'st'

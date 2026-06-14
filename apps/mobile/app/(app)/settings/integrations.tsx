@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   View,
   Pressable,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import BottomSheet from '@gorhom/bottom-sheet';
 import {
   ArrowLeft,
@@ -26,7 +27,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import {
   requestCalendarPermission,
   requestContactsPermission,
@@ -73,12 +74,12 @@ function statusBadgeColor(status: PermissionStatus): 'green' | 'red' | 'gray' {
   }
 }
 
-function StatusIcon({ status }: { status: PermissionStatus }) {
+function StatusIcon({ status, colors }: { status: PermissionStatus; colors: ColorScheme }) {
   switch (status) {
     case 'granted':
-      return <CheckCircle size={16} color="#10b981" />;
+      return <CheckCircle size={16} color={colors.agentSuccess} />;
     case 'denied':
-      return <XCircle size={16} color="#ef4444" />;
+      return <XCircle size={16} color={colors.agentError} />;
     case 'undetermined':
       return <HelpCircle size={16} color={colors.textMuted} />;
   }
@@ -88,10 +89,23 @@ function StatusIcon({ status }: { status: PermissionStatus }) {
 // Section header
 // ---------------------------------------------------------------------------
 
-function SectionHeader({ title, count }: { title: string; count?: number }) {
+function SectionHeader({
+  title,
+  count,
+  colors,
+}: {
+  title: string;
+  count?: number;
+  colors: ColorScheme;
+}) {
   return (
     <View className="flex-row items-center justify-between mb-3">
-      <Text className="text-xs font-semibold text-white/50 uppercase tracking-wider">{title}</Text>
+      <Text
+        className="text-xs font-semibold uppercase tracking-wider"
+        style={{ color: colors.textMuted }}
+      >
+        {title}
+      </Text>
       {count !== undefined && (
         <Badge label={`${count} connected`} color={count > 0 ? 'teal' : 'gray'} />
       )}
@@ -105,6 +119,7 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
 
 export default function IntegrationsScreen() {
   const router = useRouter();
+  const colors = useThemeColors();
 
   // -- Legacy permission state (Calendar / Contacts / Health) ---------------
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
@@ -138,27 +153,39 @@ export default function IntegrationsScreen() {
       : null
     : null;
 
-  // -- Permission check on mount --------------------------------------------
-  useEffect(() => {
-    async function checkPermissions() {
-      const [calStat, conStat] = await Promise.all([
+  const refreshPermissionStatus = useCallback(async () => {
+    setIsChecking(true);
+    try {
+      const [calStat, conStat] = await Promise.allSettled([
         getCalendarPermissionStatus(),
         getContactsPermissionStatus(),
       ]);
-      setCalendarStatus(calStat);
-      setContactsStatus(conStat);
+      setCalendarStatus(calStat.status === 'fulfilled' ? calStat.value : 'undetermined');
+      setContactsStatus(conStat.status === 'fulfilled' ? conStat.value : 'undetermined');
 
-      if (isHealthAvailable()) {
-        const hStat = await getHealthPermissionStatus();
-        setHealthStatus(hStat);
-      } else {
+      if (!isHealthAvailable()) {
         setHealthStatus('unavailable');
+        return;
       }
 
+      const hStat = await getHealthPermissionStatus();
+      setHealthStatus(hStat);
+    } finally {
       setIsChecking(false);
     }
-    checkPermissions();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void refreshPermissionStatus().finally(() => {
+        if (!active) setIsChecking(false);
+      });
+      return () => {
+        active = false;
+      };
+    }, [refreshPermissionStatus]),
+  );
 
   const openSystemSettings = useCallback(() => {
     if (Platform.OS === 'ios') {
@@ -267,12 +294,6 @@ export default function IntegrationsScreen() {
     [platforms, disconnectPlatform],
   );
 
-  const handleConfigure = useCallback((platformId: string) => {
-    Alert.alert('Configure', `Configuration options for this platform will be available soon.`, [
-      { text: 'OK' },
-    ]);
-  }, []);
-
   if (!FEATURES.connectors) return null;
 
   const connectedCount = platforms.filter((p) => p.connected).length;
@@ -283,7 +304,8 @@ export default function IntegrationsScreen() {
       <View className="flex-row items-center px-4 h-12">
         <Pressable
           onPress={() => router.back()}
-          className="p-2 -ml-2 rounded-lg active:bg-white/5"
+          className="p-2 -ml-2 rounded-lg"
+          style={({ pressed }) => ({ backgroundColor: pressed ? colors.surfaceHover : undefined })}
           accessibilityLabel="Go back"
         >
           <ArrowLeft size={22} color={colors.textSecondary} />
@@ -299,7 +321,7 @@ export default function IntegrationsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Description */}
-        <Text className="text-white/50 text-sm leading-5 mt-2">
+        <Text className="text-sm leading-5 mt-2" style={{ color: colors.textMuted }}>
           Connect messaging platforms and device features to give AI assistants the context they
           need. Data stays on your device and is only shared when you start a chat.
         </Text>
@@ -308,12 +330,14 @@ export default function IntegrationsScreen() {
         {/* SECTION 1: Messaging Platforms                                       */}
         {/* ------------------------------------------------------------------ */}
         <View>
-          <SectionHeader title="Messaging" count={connectedCount} />
+          <SectionHeader title="Messaging" count={connectedCount} colors={colors} />
 
           {platformsLoading && (
             <View className="flex-row items-center justify-center py-4">
               <ActivityIndicator size="small" color={colors.teal} />
-              <Text className="text-white/40 text-sm ml-3">Loading platforms...</Text>
+              <Text className="text-sm ml-3" style={{ color: colors.textMuted }}>
+                Loading platforms...
+              </Text>
             </View>
           )}
 
@@ -331,7 +355,6 @@ export default function IntegrationsScreen() {
                 }}
                 onConnect={() => handleConnect(p.id)}
                 onDisconnect={() => handleDisconnect(p.id)}
-                onConfigure={() => handleConfigure(p.id)}
               />
             ))}
         </View>
@@ -340,7 +363,7 @@ export default function IntegrationsScreen() {
         {/* SECTION 2: Device Integrations (new component)                       */}
         {/* ------------------------------------------------------------------ */}
         <View>
-          <SectionHeader title="Device" />
+          <SectionHeader title="Device" colors={colors} />
           <DeviceIntegrationStatus />
         </View>
 
@@ -348,16 +371,18 @@ export default function IntegrationsScreen() {
         {/* SECTION 3: Legacy permission toggles (Calendar / Contacts / Health)  */}
         {/* ------------------------------------------------------------------ */}
         <View>
-          <SectionHeader title="Permissions" />
+          <SectionHeader title="Permissions" colors={colors} />
 
-          <Text className="text-white/40 text-xs leading-4 mb-4">
+          <Text className="text-xs leading-4 mb-4" style={{ color: colors.textMuted }}>
             Fine-grained permission controls for device features used in AI context injection.
           </Text>
 
           {isChecking && (
             <View className="flex-row items-center justify-center py-6">
               <ActivityIndicator size="small" color={colors.teal} />
-              <Text className="text-white/40 text-sm ml-3">Checking permissions...</Text>
+              <Text className="text-sm ml-3" style={{ color: colors.textMuted }}>
+                Checking permissions...
+              </Text>
             </View>
           )}
 
@@ -367,13 +392,18 @@ export default function IntegrationsScreen() {
               <Card>
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-3">
-                    <View className="w-9 h-9 rounded-lg bg-blue-500/15 items-center justify-center">
-                      <Calendar size={18} color="#3b82f6" />
+                    <View
+                      className="w-9 h-9 rounded-lg items-center justify-center"
+                      style={{ backgroundColor: colors.accentSurface }}
+                    >
+                      <Calendar size={18} color={colors.agentActive} />
                     </View>
                     <View>
-                      <Text className="text-sm text-white font-medium">Calendar</Text>
+                      <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                        Calendar
+                      </Text>
                       <View className="flex-row items-center gap-1.5 mt-0.5">
-                        <StatusIcon status={calendarStatus} />
+                        <StatusIcon status={calendarStatus} colors={colors} />
                         <Badge
                           label={statusLabel(calendarStatus)}
                           color={statusBadgeColor(calendarStatus)}
@@ -387,7 +417,7 @@ export default function IntegrationsScreen() {
                   />
                 </View>
                 <Separator className="mb-3" />
-                <Text className="text-white/40 text-xs leading-4">
+                <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
                   Calendar is used to provide context about your schedule to AI assistants. Upcoming
                   events help the AI understand your availability and suggest better times for
                   tasks.
@@ -398,13 +428,18 @@ export default function IntegrationsScreen() {
               <Card>
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-3">
-                    <View className="w-9 h-9 rounded-lg bg-purple-500/15 items-center justify-center">
-                      <Users size={18} color="#a855f7" />
+                    <View
+                      className="w-9 h-9 rounded-lg items-center justify-center"
+                      style={{ backgroundColor: colors.purpleSurface }}
+                    >
+                      <Users size={18} color={colors.purple} />
                     </View>
                     <View>
-                      <Text className="text-sm text-white font-medium">Contacts</Text>
+                      <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                        Contacts
+                      </Text>
                       <View className="flex-row items-center gap-1.5 mt-0.5">
-                        <StatusIcon status={contactsStatus} />
+                        <StatusIcon status={contactsStatus} colors={colors} />
                         <Badge
                           label={statusLabel(contactsStatus)}
                           color={statusBadgeColor(contactsStatus)}
@@ -418,7 +453,7 @@ export default function IntegrationsScreen() {
                   />
                 </View>
                 <Separator className="mb-3" />
-                <Text className="text-white/40 text-xs leading-4">
+                <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
                   Contacts helps AI find and reference people you know. When you mention someone by
                   name, the AI can look up their details to help draft messages or schedule
                   meetings.
@@ -430,13 +465,19 @@ export default function IntegrationsScreen() {
                 <Card>
                   <View className="flex-row items-center justify-between mb-3">
                     <View className="flex-row items-center gap-3">
-                      <View className="w-9 h-9 rounded-lg bg-red-500/15 items-center justify-center">
-                        <Heart size={18} color="#ef4444" />
+                      <View
+                        className="w-9 h-9 rounded-lg items-center justify-center"
+                        style={{ backgroundColor: colors.dangerSurface }}
+                      >
+                        <Heart size={18} color={colors.agentError} />
                       </View>
                       <View>
-                        <Text className="text-sm text-white font-medium">Health Data</Text>
+                        <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                          Health Data
+                        </Text>
                         <View className="flex-row items-center gap-1.5 mt-0.5">
                           <StatusIcon
+                            colors={colors}
                             status={
                               healthStatus === 'granted'
                                 ? 'granted'
@@ -483,7 +524,7 @@ export default function IntegrationsScreen() {
                     />
                   </View>
                   <Separator className="mb-3" />
-                  <Text className="text-white/40 text-xs leading-4">
+                  <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
                     Health data is read from the HxF companion app (HealthKit bridge). Steps, heart
                     rate, sleep, and more can be shared with AI assistants for personalized
                     insights.
@@ -501,7 +542,9 @@ export default function IntegrationsScreen() {
           accessibilityLabel="Open device settings"
         >
           <ExternalLink size={14} color={colors.teal} />
-          <Text className="text-sm text-teal-400">Open Device Settings</Text>
+          <Text className="text-sm" style={{ color: colors.teal }}>
+            Open Device Settings
+          </Text>
         </Pressable>
       </ScrollView>
 

@@ -5,7 +5,8 @@ short and path-checked so it does not drift into stale reference material.
 
 ## Current Shape
 
-- Source tree: 186 Rust source files under `apps/cli/src`.
+- Source tree: 171 Rust source files under `apps/cli/src`
+  (`find apps/cli/src -name '*.rs' | wc -l`).
 - Entry point: `src/main.rs` delegates to `agiworkforce_cli::run_main()` in `src/lib.rs`.
 - Primary session engine: `src/agent/mod.rs`, with prompt/tool/history helpers under `src/agent/`.
 - Main TUI: `src/tui/tui_app.rs`, supported by 29 Rust files under `src/tui/`.

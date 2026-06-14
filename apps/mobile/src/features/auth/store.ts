@@ -13,6 +13,14 @@ interface AuthState {
   user: MobileAuthUser | null;
   isLoading: boolean;
   isInitialized: boolean;
+  /**
+   * True when Clerk's native AuthView has a live session (bridged from
+   * ClerkTokenBridge via setClerkSignedIn). This is the REAL sign-in signal for
+   * cloud-lifecycle effects (tier refresh, realtime, push, sync) — the legacy
+   * `session` field is always null in v1 because initialize() never sets it.
+   */
+  isClerkSignedIn: boolean;
+  setClerkSignedIn: (value: boolean) => void;
 
   initialize: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -34,6 +42,11 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isLoading: true,
       isInitialized: false,
+      isClerkSignedIn: false,
+
+      setClerkSignedIn: (value: boolean) => {
+        set({ isClerkSignedIn: value });
+      },
 
       initialize: async () => {
         if (authSubscription) {

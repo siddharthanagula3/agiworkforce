@@ -15,11 +15,6 @@ const SECTIONS: { href: string; label: string; body: string }[] = [
   { href: '/changelog', label: 'Changelog', body: 'A dated archive of what shipped.' },
   { href: '/security', label: 'Security', body: 'How keys, data, and tools are protected.' },
   { href: '/byok', label: 'BYOK posture', body: 'Bring your own keys, pay providers directly.' },
-  {
-    href: '/compare',
-    label: 'Comparative reviews',
-    body: 'Honest reads on Claude, ChatGPT, Gemini, Perplexity.',
-  },
 ];
 
 export default function ResourcesPage() {
@@ -31,7 +26,7 @@ export default function ResourcesPage() {
           <h1 className="agi-page-h1">Resources.</h1>
           <p className="agi-page-lede">
             Pointers into the parts of AGI most often asked about.{' '}
-            <strong>Everything below is a real page with real content</strong> — nothing here is a
+            <strong>Everything below is a real page with real content</strong>. Nothing here is a
             placeholder.
           </p>
         </section>

@@ -127,7 +127,6 @@ const activeReferencePaths = [
   ...walk('docs/engineering'),
   ...walk('docs/enterprise'),
   ...walk('docs/marketing'),
-  ...walk('docs/launch'),
   ...walk('docs/design'),
   ...walk('docs/research'),
   'apps/mobile/README.md',

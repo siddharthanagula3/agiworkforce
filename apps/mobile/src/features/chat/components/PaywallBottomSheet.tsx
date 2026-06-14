@@ -36,7 +36,7 @@ import BottomSheet, {
 import { ArrowUpCircle, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 
 // ---------------------------------------------------------------------------
@@ -96,6 +96,7 @@ export interface PaywallSheetProps {
  */
 export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
   function PaywallBottomSheetInner({ feature, requiredTier, reason, onDismiss }, forwardedRef) {
+    const colors = useThemeColors();
     const sheetRef = useRef<BottomSheet>(null);
 
     // Expose expand() / close() / snapToIndex() to the parent via forwardRef.
@@ -155,7 +156,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
           borderTopRightRadius: 20,
         }}
         handleIndicatorStyle={{
-          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+          backgroundColor: colors.neutralBorder,
           width: 36,
         }}
         backdropComponent={renderBackdrop}
@@ -183,12 +184,12 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                   width: 40,
                   height: 40,
                   borderRadius: 10,
-                  backgroundColor: 'rgba(251, 191, 36, 0.15)',
+                  backgroundColor: colors.warningSurface,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <ArrowUpCircle size={20} color="#FBbf24" />
+                <ArrowUpCircle size={20} color={colors.agentWarning} />
               </View>
               <Text
                 style={{
@@ -232,7 +233,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             <Text
               style={{
                 fontSize: 13,
-                color: 'rgba(255,255,255,0.5)',
+                color: colors.textMuted,
                 lineHeight: 20,
                 marginBottom: 20,
               }}
@@ -260,7 +261,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             accessibilityLabel="Try later"
             accessibilityRole="button"
           >
-            <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)' }}>Try later</Text>
+            <Text style={{ fontSize: 14, color: colors.textMuted }}>Try later</Text>
           </Pressable>
         </BottomSheetView>
       </BottomSheet>

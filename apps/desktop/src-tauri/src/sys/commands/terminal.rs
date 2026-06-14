@@ -109,23 +109,20 @@ pub async fn execute_terminal_command(
         return Err(e);
     }
 
-    // AUDIT-FIX: Enforce user confirmation for dangerous commands
-    if crate::sys::security::command_validator::requires_confirmation(&command) {
-        let confirmation_args = serde_json::json!({
-            "command": command,
-            "cwd": cwd,
-            "shell": shell,
-        });
+    let confirmation_args = serde_json::json!({
+        "command": command,
+        "cwd": cwd,
+        "shell": shell,
+    });
 
-        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
-            &app,
-            "terminal_execute",
-            &confirmation_args,
-        )
-        .await?
-        {
-            return Err("Operation denied by user".to_string());
-        }
+    if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        &app,
+        "terminal_execute",
+        &confirmation_args,
+    )
+    .await?
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     let mut cwd = cwd;

@@ -8,7 +8,7 @@ Criticality: high
 
 ## Purpose
 
-`apps/extension` owns the Chrome MV3 extension: browser context capture, side panel UI, page interaction, native messaging bridge, and extension packaging.
+`apps/extension` owns the Chrome MV3 extension: browser context capture, side panel UI, approved-site page interaction, native messaging bridge, and extension packaging.
 
 ## Consumers
 
@@ -59,6 +59,10 @@ Do not commit extension store credentials, private keys, local native-host regis
 Security/privacy review is required for permissions, content-script injection, page capture, native messaging, cross-origin requests, command execution, browser storage, and any flow that sends page data to Local/BYOK/Managed runtime.
 
 The extension should clearly separate "ask before acting" and "act" capabilities.
+
+## Demo Boundary
+
+Chrome is a secondary demo surface. Do not present autonomous browser actions as public-ready unless the demo explicitly shows the user-managed site allowlist, the Desktop pairing state, and the action approval path. Non-allowlisted pages are treated as untrusted even though the content script is installed broadly for MV3 discovery and context capture.
 
 ## Tests Required For Changes
 

@@ -1012,7 +1012,7 @@ export const selectContextMemories = (state: MemoryState) =>
   state.memories.filter((m) => m.category === 'context');
 
 // ---------------------------------------------------------------------------
-// User-facing memory injection (ChatGPT-style "Memory" feature)
+// User-facing memory injection.
 // ---------------------------------------------------------------------------
 
 /** Rough token estimate: ~4 chars per token */

@@ -4,10 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
-import {
-  buildFreeWebsiteSubscription,
-  isFreePlanTier,
-} from '@/lib/services/auto-economy-trial-service';
+import { buildFreeWebsiteSubscription, isFreePlanTier } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
@@ -40,7 +37,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return { ok: false, response: csrfError };
 
-  // This route is the LLM chat-completions API — only Bearer-token clients
+  // This route is the LLM chat-completions API · only Bearer-token clients
   // (desktop, mobile, CLI, third-party API consumers) are valid callers; the
   // web UI uses a separate session-cookie path. Reject browser-style cookie
   // requests up front.

@@ -59,7 +59,7 @@ beforeEach(() => {
   // Restore defaults after mockReset clears them.
   // withRateLimit returning null means "no rate-limit hit, continue".
   mockWithRateLimit.mockResolvedValue(null);
-  // fetch returns 200 by default — without the prod guard, routes proxy this
+  // fetch returns 200 by default · without the prod guard, routes proxy this
   // through and return 200, so a 503 assertion would fail.
   mockFetch.mockImplementation(() => Promise.resolve(makeOkResponse()));
 });
@@ -70,7 +70,7 @@ afterEach(() => {
 
 // ── GET /api/v1/providers ────────────────────────────────────────────────────
 
-describe('GET /api/v1/providers — production gateway guard', () => {
+describe('GET /api/v1/providers · production gateway guard', () => {
   it('returns 503 when NODE_ENV=production and API_GATEWAY_URL is http (non-https)', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     mockGetEnv.mockReturnValue('http://localhost:3000');
@@ -80,7 +80,7 @@ describe('GET /api/v1/providers — production gateway guard', () => {
     expect(res.status).toBe(503);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['error']).toBe('Gateway misconfigured');
-    // fetch should NOT be called — guard fires before upstream request
+    // fetch should NOT be called · guard fires before upstream request
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
@@ -109,7 +109,7 @@ describe('GET /api/v1/providers — production gateway guard', () => {
   });
 
   it('does NOT apply the guard outside production (NODE_ENV=test)', async () => {
-    // NODE_ENV defaults to 'test' in vitest — no need to stub
+    // NODE_ENV defaults to 'test' in vitest · no need to stub
     mockGetEnv.mockReturnValue('http://localhost:3000');
 
     const res = await providersGET(makeRequest('http://localhost/api/v1/providers'));
@@ -122,7 +122,7 @@ describe('GET /api/v1/providers — production gateway guard', () => {
 
 // ── GET /api/v1/providers/:providerId/catalog ────────────────────────────────
 
-describe('GET /api/v1/providers/:id/catalog — production gateway guard', () => {
+describe('GET /api/v1/providers/:id/catalog · production gateway guard', () => {
   it('returns 503 when NODE_ENV=production and API_GATEWAY_URL is http (non-https)', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     mockGetEnv.mockReturnValue('http://internal-gateway');

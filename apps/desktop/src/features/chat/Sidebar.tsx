@@ -1138,7 +1138,7 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Navigation: Claude-style minimal nav */}
+        {/* Minimal navigation */}
         {!collapsed && !isSimpleMode && (
           <div className="px-2 py-1.5 border-b border-[hsl(var(--border))] space-y-0.5">
             {[

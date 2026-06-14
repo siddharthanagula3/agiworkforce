@@ -1,0 +1,530 @@
+/**
+ * @file Server-side tool-execution loop for agentic chat completions.
+ *
+ * Wraps the existing provider call with a bounded agentic loop:
+ *   1. Inject tool definitions from the web MCP catalog.
+ *   2. Stream the provider response.
+ *   3. On `tool_calls` finish_reason, pause the stream, execute the tools,
+ *      append `tool` result messages, and re-invoke the model.
+ *   4. Repeat up to `maxSteps` times.
+ *
+ * REUSE:
+ *   - `LLMProviderFactory.streamRequest` / `sendRequest` -- provider calls unchanged.
+ *   - `getWebMcpCatalog` / `executeWebMcpTool` -- MCP dispatcher from lib/mcp-tool-executor.ts.
+ *   - `ProcessedRequest.llmRequest.tools` seam in request-processor.ts (line 1041) --
+ *     we push our tool defs there before the first provider call.
+ *
+ * Safety model:
+ *   - DEFAULT FAIL-CLOSED: every tool call is queued as 'awaiting_approval'.
+ *   - When `approvalMode` is 'auto', tools execute immediately without a user prompt.
+ *   - When 'manual' (default), the loop returns a special SSE event `x_tool_approval_request`
+ *     and suspends execution. The client must call POST /api/llm/v1/chat/completions/approve
+ *     to resume.
+ *   - Parallel-safe tools (read-only) are executed concurrently; mutating tools are
+ *     serialized (mirrors Codex parallel.rs).
+ *
+ * Stream contract:
+ *   - Emits standard OpenAI-compatible SSE events.
+ *   - Emits `x_tool_status` events (reused from Anthropic server-tool path) to drive
+ *     `ToolTimeline` in the client.
+ *   - Emits `x_tool_approval_request` events when a tool needs user approval.
+ *   - Emits `x_tool_result` events when a tool completes.
+ */
+
+import 'server-only';
+
+import { logger } from '@/lib/logger';
+import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import {
+  getWebMcpCatalog,
+  executeWebMcpTool,
+  catalogToToolDefs,
+  parseQualifiedToolName,
+  toOpenAiToolDef,
+  type WebMcpToolDef,
+} from '@/lib/mcp-tool-executor';
+import type { ProcessedRequest } from './request-processor';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Maximum agentic steps (model calls) in a single request. */
+const DEFAULT_MAX_STEPS = 10;
+
+/** Tools whose names suggest read-only operations: safe to parallelize. */
+const READ_ONLY_TOOL_PREFIXES = [
+  'read_file',
+  'list_directory',
+  'search_files',
+  'get_file_info',
+  'list_allowed_directories',
+  'fetch',
+  'get',
+  'search',
+  'query',
+  'list',
+  'describe',
+];
+
+function isReadOnlyTool(toolName: string): boolean {
+  const lower = toolName.toLowerCase();
+  return READ_ONLY_TOOL_PREFIXES.some((p) => lower.startsWith(p) || lower.includes(p));
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type ApprovalMode = 'auto' | 'manual';
+
+export interface ToolLoopOptions {
+  /** Maximum number of model re-invocations. Default: 10. */
+  maxSteps?: number;
+  /** 'auto' = execute without prompting; 'manual' = gate on user approval. */
+  approvalMode?: ApprovalMode;
+  /** Resolved MCP tool defs to inject (fetched once by the caller). */
+  mcpTools?: WebMcpToolDef[];
+}
+
+/** Shape of a parsed tool_call from the provider stream. */
+interface PendingToolCall {
+  id: string;
+  qualifiedName: string;
+  args: Record<string, unknown>;
+}
+
+/** One SSE line ready to be flushed to the client. */
+type SseLine = string;
+
+// ─── SSE helpers ──────────────────────────────────────────────────────────────
+
+function sseData(payload: unknown): SseLine {
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+function sseDone(): SseLine {
+  return `data: [DONE]\n\n`;
+}
+
+/**
+ * Emit an `x_tool_status` SSE event -- reuses the same shape that
+ * stream-transform.ts emits for Anthropic server_tool_use blocks so the
+ * client's `useChatStream.ts` handles both paths uniformly.
+ */
+function toolStatusEvent(
+  toolName: string,
+  status: 'running' | 'completed' | 'failed',
+  responseModel: string,
+): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_tool_status: {
+            type: 'mcp_tool_use',
+            name: toolName,
+            status,
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+/**
+ * Emit an `x_tool_approval_request` SSE event when a tool is pending user
+ * approval (manual mode, default).
+ */
+function toolApprovalRequestEvent(
+  toolId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  responseModel: string,
+): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_tool_approval_request: {
+            tool_call_id: toolId,
+            name: toolName,
+            args,
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+/**
+ * Emit an `x_tool_result` SSE event once a tool has executed.
+ */
+function toolResultEvent(
+  toolId: string,
+  toolName: string,
+  result: string,
+  isError: boolean,
+  responseModel: string,
+): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_tool_result: {
+            tool_call_id: toolId,
+            name: toolName,
+            content: result,
+            is_error: isError,
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+// ─── Stream collector ─────────────────────────────────────────────────────────
+
+/**
+ * Consume a ReadableStream of SSE bytes, collecting:
+ *   - The raw SSE lines (to pass through to the client).
+ *   - Any tool_calls accumulation (streamed argument JSON fragments).
+ *   - The finish_reason.
+ *
+ * Returns everything needed to decide what to do next.
+ */
+async function collectProviderStream(stream: ReadableStream): Promise<{
+  lines: SseLine[];
+  finishReason: string | null;
+  pendingToolCalls: PendingToolCall[];
+  textContent: string;
+}> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  const lines: SseLine[] = [];
+  let buffer = '';
+  let finishReason: string | null = null;
+  let textContent = '';
+
+  // Accumulate streamed tool call fragments by index.
+  // OpenAI streaming: tool_calls[i].function.name comes first, then
+  // tool_calls[i].function.arguments arrives as partial_json fragments.
+  const toolCallAccum: Map<number, { id: string; name: string; argsJson: string }> = new Map();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n');
+    buffer = parts.pop() ?? '';
+
+    for (const raw of parts) {
+      const line = raw.trim();
+      if (!line) continue;
+
+      if (!line.startsWith('data: ')) {
+        lines.push(raw + '\n');
+        continue;
+      }
+
+      const jsonStr = line.slice(6);
+      if (jsonStr === '[DONE]') {
+        // Don't forward [DONE] yet -- we may need to continue the loop.
+        continue;
+      }
+
+      // Pass through raw line to client.
+      lines.push(raw + '\n');
+
+      try {
+        const event = JSON.parse(jsonStr);
+
+        // Accumulate text content.
+        const textDelta = event?.choices?.[0]?.delta?.content;
+        if (typeof textDelta === 'string') {
+          textContent += textDelta;
+        }
+
+        // Accumulate tool_call fragments.
+        const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
+        if (Array.isArray(toolCallDeltas)) {
+          for (const tc of toolCallDeltas) {
+            if (typeof tc !== 'object' || tc === null) continue;
+            const tcObj = tc as Record<string, unknown>;
+            const idx = typeof tcObj['index'] === 'number' ? tcObj['index'] : 0;
+            let entry = toolCallAccum.get(idx);
+            if (!entry) {
+              entry = { id: '', name: '', argsJson: '' };
+              toolCallAccum.set(idx, entry);
+            }
+            if (typeof tcObj['id'] === 'string' && tcObj['id']) {
+              entry.id = tcObj['id'];
+            }
+            const fn = tcObj['function'];
+            if (fn && typeof fn === 'object') {
+              const fnObj = fn as Record<string, unknown>;
+              if (typeof fnObj['name'] === 'string' && fnObj['name']) {
+                entry.name = fnObj['name'];
+              }
+              if (typeof fnObj['arguments'] === 'string') {
+                entry.argsJson += fnObj['arguments'];
+              }
+            }
+          }
+        }
+
+        // Capture finish_reason.
+        const fr = event?.choices?.[0]?.finish_reason;
+        if (typeof fr === 'string' && fr) {
+          finishReason = fr;
+        }
+      } catch {
+        // Ignore parse errors for incomplete chunks.
+      }
+    }
+  }
+
+  // Flush any remaining buffer.
+  if (buffer.trim()) {
+    lines.push(buffer);
+  }
+
+  // Build pending tool call list.
+  const pendingToolCalls: PendingToolCall[] = [];
+  for (const [, tc] of toolCallAccum) {
+    if (!tc.name) continue;
+    let args: Record<string, unknown> = {};
+    try {
+      args = JSON.parse(tc.argsJson || '{}') as Record<string, unknown>;
+    } catch {
+      args = { _raw: tc.argsJson };
+    }
+    pendingToolCalls.push({
+      id: tc.id || crypto.randomUUID(),
+      qualifiedName: tc.name,
+      args,
+    });
+  }
+
+  return { lines, finishReason, pendingToolCalls, textContent };
+}
+
+// ─── MCP tool execution ───────────────────────────────────────────────────────
+
+/**
+ * Execute a single MCP tool call.
+ * Returns the text content of the result and whether it was an error.
+ */
+async function runMcpTool(
+  toolCall: PendingToolCall,
+): Promise<{ content: string; isError: boolean }> {
+  const parsed = parseQualifiedToolName(toolCall.qualifiedName);
+  if (!parsed) {
+    return {
+      content: `Unknown tool: ${toolCall.qualifiedName}`,
+      isError: true,
+    };
+  }
+
+  try {
+    const result = await executeWebMcpTool(parsed.serverId, parsed.toolName, toolCall.args);
+    const text = result.content
+      .map((block) => {
+        if (block.type === 'text') return block.text;
+        if (block.type === 'resource')
+          return block.resource.text ?? `[resource: ${block.resource.uri}]`;
+        if (block.type === 'image') return '[image result]';
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+    return { content: text || '(no output)', isError: result.isError === true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { content: `Tool error: ${msg}`, isError: true };
+  }
+}
+
+// ─── Main loop ────────────────────────────────────────────────────────────────
+
+/**
+ * Run the agentic tool loop, yielding SSE chunks.
+ *
+ * Usage (from route.ts):
+ * ```ts
+ * const toolStream = runToolLoop(processed, { approvalMode: 'manual' });
+ * return buildToolLoopStreamResponse(request, toolStream, processed, userId, token);
+ * ```
+ *
+ * The generator yields Uint8Array chunks ready for a TransformStream or
+ * ReadableStream constructor.
+ */
+export async function* runToolLoop(
+  processed: ProcessedRequest,
+  options: ToolLoopOptions = {},
+): AsyncGenerator<Uint8Array> {
+  const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
+  const approvalMode = options.approvalMode ?? 'manual';
+  const encoder = new TextEncoder();
+  const responseModel = processed.requestedModel;
+
+  // Inject MCP tool defs into the llmRequest.
+  const mcpTools = options.mcpTools ?? [];
+  const openAiTools: unknown[] = mcpTools.map(toOpenAiToolDef);
+  const llmRequest = {
+    ...processed.llmRequest,
+    tools:
+      openAiTools.length > 0
+        ? [...(processed.llmRequest.tools ?? []), ...openAiTools]
+        : processed.llmRequest.tools,
+    // Ensure streaming for the loop.
+    stream: true,
+  };
+
+  // Mutable message thread for re-invocations.
+  const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
+
+  let step = 0;
+  while (step < maxSteps) {
+    step++;
+
+    // Build the request for this step.
+    const stepRequest = { ...llmRequest, messages };
+
+    // Call the provider.
+    let providerStream: ReadableStream;
+    try {
+      providerStream = await LLMProviderFactory.streamRequest(processed.provider, stepRequest);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(
+        { provider: processed.provider, step, error: msg },
+        '[tool-loop] provider call failed',
+      );
+      yield encoder.encode(
+        sseData({
+          choices: [{ delta: { content: `\n\nError: ${msg}` }, index: 0 }],
+          model: responseModel,
+        }),
+      );
+      break;
+    }
+
+    // Collect and pass through the provider stream.
+    const { lines, finishReason, pendingToolCalls, textContent } =
+      await collectProviderStream(providerStream);
+
+    // Forward all collected lines to the client.
+    for (const line of lines) {
+      yield encoder.encode(line);
+    }
+
+    // If no tool calls, the model is done: emit [DONE] and exit.
+    if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
+      yield encoder.encode(sseDone());
+      break;
+    }
+
+    // Append the assistant's tool-use turn to the thread.
+    const assistantToolCalls = pendingToolCalls.map((tc) => ({
+      id: tc.id,
+      type: 'function' as const,
+      function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
+    }));
+    messages.push({
+      role: 'assistant',
+      content: textContent,
+      tool_calls: assistantToolCalls as unknown[],
+    });
+
+    // In manual approval mode, emit an approval request for each tool and
+    // stop the stream -- the client resumes via the approve endpoint.
+    // In auto mode, execute immediately.
+    if (approvalMode === 'manual') {
+      for (const tc of pendingToolCalls) {
+        yield encoder.encode(
+          toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
+        );
+      }
+      // Emit [DONE] so the client knows the current stream is complete
+      // and the approval prompt is the terminal event for this turn.
+      yield encoder.encode(sseDone());
+      return;
+    }
+
+    // Auto mode: execute tools.
+    // Partition into parallel (read-only) and serial (mutating) groups.
+    const readOnly = pendingToolCalls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
+    const mutating = pendingToolCalls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
+
+    // Emit "running" status for all tools.
+    for (const tc of pendingToolCalls) {
+      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel));
+    }
+
+    // Execute read-only tools concurrently.
+    const results: { tc: PendingToolCall; content: string; isError: boolean }[] = [];
+
+    const parallelResults = await Promise.all(
+      readOnly.map(async (tc) => {
+        const result = await runMcpTool(tc);
+        return { tc, ...result };
+      }),
+    );
+    results.push(...parallelResults);
+
+    // Execute mutating tools serially.
+    for (const tc of mutating) {
+      const result = await runMcpTool(tc);
+      results.push({ tc, ...result });
+    }
+
+    // Emit status + result events, and append tool result messages.
+    for (const { tc, content, isError } of results) {
+      yield encoder.encode(
+        toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
+      );
+      yield encoder.encode(
+        toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
+      );
+
+      messages.push({
+        role: 'tool',
+        content,
+        tool_call_id: tc.id,
+      });
+    }
+
+    // Continue to next step.
+  }
+
+  if (step >= maxSteps) {
+    logger.warn(
+      { maxSteps, provider: processed.provider },
+      '[tool-loop] max steps reached without terminal stop',
+    );
+    yield encoder.encode(sseDone());
+  }
+}
+
+// ─── Catalog warm-up helper ───────────────────────────────────────────────────
+
+/**
+ * Load the MCP tool catalog and return the tool defs.
+ * Returns an empty list when no servers are configured (graceful degradation).
+ */
+export async function loadMcpToolDefs(): Promise<WebMcpToolDef[]> {
+  try {
+    const catalog = await getWebMcpCatalog();
+    return catalogToToolDefs(catalog);
+  } catch (err) {
+    logger.warn(
+      { error: err instanceof Error ? err.message : err },
+      '[tool-loop] failed to load MCP catalog -- proceeding without tools',
+    );
+    return [];
+  }
+}

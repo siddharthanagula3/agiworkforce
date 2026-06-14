@@ -4,10 +4,10 @@
 > update. "Kill switch" means: the feature is hidden from every
 > navigation path in the running binary, with no restart required.
 >
-> Decision: AGI v1 uses **local-only flags** (MMKV-backed), not remote
+> Decision: AGI Mobile v1 uses **local runtime flags** (MMKV-backed), not remote
 > config. Rationale:
 >
-> - v1 is an offline-first app. A remote kill switch that requires a
+> - Local Mode is the v1 demo path. A remote kill switch that requires a
 >   network call to function is useless for users without connectivity,
 >   and also requires a backend dependency that is not in the v1
 >   scope.
@@ -20,7 +20,7 @@
 >   by shipping a flag-flip OTA — but v1 has OTA disabled, so the only
 >   OTA vector is a full binary update anyway.
 >
-> For v1.1+, when cloud mode is active, migrate these to a remote flag
+> When AGI Cloud is active beyond invite-gated testing, migrate these to a remote flag
 > system (e.g. Clerk-authenticated Web/API remote config + MMKV cache) so a server-
 > side flip takes effect on next app foreground without an app update.
 
@@ -115,7 +115,7 @@ were enabled — OTA is disabled in v1, so binary update required).
 
 ### Cloud chat / sync (`FEATURES.cloudChat`)
 
-**Current state:** `false` — completely disabled in v1.
+**Current state:** `false` for public Local Mode — AGI Cloud remains invite-gated.
 
 What it controls:
 
@@ -123,10 +123,10 @@ What it controls:
 - No cloud row is created. No realtime subscription is
   opened.
 - The "Sync conversations" toggle in Settings is hidden.
-- The cloud-waitlist button is shown instead (routes through AGI Web/API,
-  which is the only cloud call in v1).
+- The cloud waitlist/invite button is shown instead and routes through AGI
+  Web/API.
 
-How to flip on for v1.1:
+How to flip on for gated Cloud testing:
 
 1. Set `cloudChat: true`.
 2. Ensure auth flow (`FEATURES.auth = true`), Clerk-authenticated Web/API

@@ -31,6 +31,14 @@ pub enum PlanType {
 }
 
 /// Account state returned by a model provider before it is adapted to an app-facing wire type.
+///
+/// NOT WIRED: this enum is a reserved protocol surface and is currently not
+/// referenced by any auth/account adaptation path in the workspace. The variants
+/// below are illustrative only and do NOT imply that ChatGPT or Amazon Bedrock
+/// provider-account support is implemented — no consumer reads or constructs
+/// this type yet. Wire it into the real account-adaptation path (with variants
+/// covering every actually-supported provider) before relying on it, or remove
+/// it once a concrete adapter design is chosen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAccount {
     ApiKey,

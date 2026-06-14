@@ -103,6 +103,7 @@ import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useProjectStore } from '../src/features/projects/store';
 import {
   listInstalledModels,
   getInstalledModel,
@@ -485,6 +486,85 @@ describe('chatStore — streaming state', () => {
       });
     });
 
+    it('uses the conversation project instructions instead of the currently active project', async () => {
+      useChatStore.setState({
+        conversations: [
+          {
+            id: CONV_ID,
+            title: 'Project A chat',
+            updatedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            messageCount: 0,
+            pinned: false,
+            model: LOCAL_MODEL,
+            provider: 'local',
+            executionMode: 'local',
+            projectId: 'project-a',
+          },
+        ],
+        messages: { [CONV_ID]: [] },
+      });
+      useProjectStore.setState({
+        projects: [
+          {
+            id: 'project-a',
+            name: 'Project A',
+            description: '',
+            instructions: 'Use Project A instructions.',
+            sources: [],
+            createdAt: '2026-06-11T00:00:00.000Z',
+            updatedAt: '2026-06-11T00:00:00.000Z',
+          },
+          {
+            id: 'project-b',
+            name: 'Project B',
+            description: '',
+            instructions: 'Use Project B instructions.',
+            sources: [],
+            createdAt: '2026-06-11T00:00:00.000Z',
+            updatedAt: '2026-06-11T00:00:00.000Z',
+          },
+        ],
+        activeProjectId: 'project-b',
+      });
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+        capturedLocalGenerateOptions = opts;
+        return { text: 'Project scoped answer', runtime: 'executorch', aborted: false };
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Use this project context', LOCAL_MODEL);
+      });
+
+      const systemMessages = capturedLocalGenerateOptions?.messages?.filter(
+        (message) => message.role === 'system',
+      );
+      expect(systemMessages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: 'Use Project A instructions.' }),
+        ]),
+      );
+      expect(systemMessages).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: 'Use Project B instructions.' }),
+        ]),
+      );
+    });
+
     it('keeps a selected local model on-device even when remote chat is otherwise allowed', async () => {
       mockRemoteDisabledReason.mockReturnValue(null);
       mockListInstalledModels.mockResolvedValue([
@@ -665,6 +745,104 @@ describe('chatStore — streaming state', () => {
       const msgs = getState().messages[CONV_ID] ?? [];
       const streamingMsgs = msgs.filter((m) => m.isStreaming);
       expect(streamingMsgs).toHaveLength(0);
+    });
+  });
+
+  describe('image generation messages', () => {
+    it('adds a user command and assistant progress message when image generation starts', () => {
+      let assistantMessageId = '';
+
+      act(() => {
+        assistantMessageId = getState().beginImageGeneration(
+          CONV_ID,
+          '/image a quiet workspace',
+          'a quiet workspace',
+          CLOUD_MODEL,
+        );
+      });
+
+      const msgs = getState().messages[CONV_ID] ?? [];
+      expect(msgs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: '/image a quiet workspace',
+          }),
+          expect.objectContaining({
+            id: assistantMessageId,
+            role: 'assistant',
+            isGeneratingImage: true,
+            imageGenStatus: 'generating',
+            imageGenPrompt: 'a quiet workspace',
+          }),
+        ]),
+      );
+      expect(getState().conversations[0]?.messageCount).toBe(2);
+    });
+
+    it('converts the assistant progress message into a generated image', () => {
+      let assistantMessageId = '';
+
+      act(() => {
+        assistantMessageId = getState().beginImageGeneration(
+          CONV_ID,
+          '/image product launch',
+          'product launch',
+          CLOUD_MODEL,
+        );
+        getState().completeImageGeneration(CONV_ID, assistantMessageId, {
+          imageUrl: 'https://example.com/generated.png',
+          revisedPrompt: 'A polished product launch scene',
+          model: 'gpt-image-2',
+        });
+      });
+
+      const assistantMessage = getState().messages[CONV_ID]?.find(
+        (message) => message.id === assistantMessageId,
+      );
+      expect(assistantMessage).toEqual(
+        expect.objectContaining({
+          type: 'image',
+          imageUrl: 'https://example.com/generated.png',
+          revisedPrompt: 'A polished product launch scene',
+          isGeneratingImage: false,
+          imageGenStatus: 'completed',
+          imageGenProgress: 100,
+          model: 'gpt-image-2',
+        }),
+      );
+      expect(getState().conversations[0]?.lastMessage).toBe(
+        'Generated image: A polished product launch scene',
+      );
+    });
+
+    it('leaves a visible assistant error when image generation fails', () => {
+      let assistantMessageId = '';
+
+      act(() => {
+        assistantMessageId = getState().beginImageGeneration(
+          CONV_ID,
+          '/image impossible request',
+          'impossible request',
+          CLOUD_MODEL,
+        );
+        getState().failImageGeneration(CONV_ID, assistantMessageId, 'Provider unavailable');
+      });
+
+      const assistantMessage = getState().messages[CONV_ID]?.find(
+        (message) => message.id === assistantMessageId,
+      );
+      expect(assistantMessage).toEqual(
+        expect.objectContaining({
+          content: 'Image generation failed: Provider unavailable',
+          isGeneratingImage: false,
+          imageGenStatus: 'failed',
+          imageGenError: 'Provider unavailable',
+        }),
+      );
+      expect(getState().conversations[0]?.lastMessage).toBe(
+        'Image generation failed: Provider unavailable',
+      );
     });
   });
 

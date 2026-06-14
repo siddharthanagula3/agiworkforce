@@ -21,7 +21,7 @@ vi.mock('framer-motion', () => ({
 
 // ─── Expand / collapse ────────────────────────────────────────────────────────
 
-describe('ToolTimeline — expand and collapse', () => {
+describe('ToolTimeline · expand and collapse', () => {
   it('starts collapsed when no tools are running', () => {
     const tools = [
       { name: 'tool1', status: 'completed' as const, durationMs: 100 },
@@ -73,7 +73,7 @@ describe('ToolTimeline — expand and collapse', () => {
 
 // ─── Auto-expand / userForcedClosed ───────────────────────────────────────────
 
-describe('ToolTimeline — auto-expand and userForcedClosed', () => {
+describe('ToolTimeline · auto-expand and userForcedClosed', () => {
   it('auto-expands while tools are running', () => {
     const tools = [{ name: 'running-tool', status: 'running' as const }];
 
@@ -83,14 +83,14 @@ describe('ToolTimeline — auto-expand and userForcedClosed', () => {
     expect(screen.getByText('running-tool')).toBeInTheDocument();
   });
 
-  it('respects userForcedClosed — stays closed after manual collapse during run', async () => {
+  it('respects userForcedClosed · stays closed after manual collapse during run', async () => {
     const tools = [{ name: 'running-tool', status: 'running' as const }];
     const { rerender } = render(<ToolTimeline tools={tools} />);
 
-    // Auto-expanded while running — ToolCallCard header renders the tool name
+    // Auto-expanded while running · ToolCallCard header renders the tool name
     expect(screen.getByText('running-tool')).toBeInTheDocument();
 
-    // User collapses manually while running — click the ToolTimeline header button
+    // User collapses manually while running · click the ToolTimeline header button
     const headerButton = screen.getByRole('button', { name: /toggle tool timeline/i });
     fireEvent.click(headerButton);
 
@@ -99,7 +99,7 @@ describe('ToolTimeline — auto-expand and userForcedClosed', () => {
       expect(screen.queryByText('running-tool')).not.toBeInTheDocument();
     });
 
-    // Re-render with still-running tool — should stay closed
+    // Re-render with still-running tool · should stay closed
     rerender(<ToolTimeline tools={[{ name: 'running-tool', status: 'running' as const }]} />);
 
     await waitFor(() => {
@@ -119,7 +119,7 @@ describe('ToolTimeline — auto-expand and userForcedClosed', () => {
       expect(screen.queryByText('running-tool')).not.toBeInTheDocument();
     });
 
-    // Tools finish — transition to completed
+    // Tools finish · transition to completed
     await act(async () => {
       rerender(
         <ToolTimeline
@@ -128,7 +128,7 @@ describe('ToolTimeline — auto-expand and userForcedClosed', () => {
       );
     });
 
-    // After finish, userForcedClosed should be cleared — manually expand should work
+    // After finish, userForcedClosed should be cleared · manually expand should work
     const updatedButton = screen.getByRole('button', { name: /toggle tool timeline/i });
     fireEvent.click(updatedButton);
 
@@ -140,7 +140,7 @@ describe('ToolTimeline — auto-expand and userForcedClosed', () => {
 
 // ─── Header labels ────────────────────────────────────────────────────────────
 
-describe('ToolTimeline — header metadata', () => {
+describe('ToolTimeline · header metadata', () => {
   it('displays tool count, total duration, and error count', () => {
     const tools = [
       { name: 'tool1', status: 'completed' as const, durationMs: 1500 },
@@ -167,7 +167,7 @@ describe('ToolTimeline — header metadata', () => {
 
 // ─── ToolCallCard rendering ───────────────────────────────────────────────────
 
-describe('ToolTimeline — ToolCallCard rendering', () => {
+describe('ToolTimeline · ToolCallCard rendering', () => {
   it('renders ToolCallCard with tool name when expanded', async () => {
     const tools = [{ name: 'WebSearch', status: 'completed' as const, durationMs: 300 }];
     render(<ToolTimeline tools={tools} />);
@@ -195,7 +195,7 @@ describe('ToolTimeline — ToolCallCard rendering', () => {
 
 // ─── Parallel groups ──────────────────────────────────────────────────────────
 
-describe('ToolTimeline — parallel groups', () => {
+describe('ToolTimeline · parallel groups', () => {
   it('shows parallel group indicator for tools sharing a parallelGroup key', async () => {
     const tools = [
       { name: 'tool1', status: 'completed' as const, parallelGroup: 'g1' },
@@ -224,7 +224,7 @@ describe('ToolTimeline — parallel groups', () => {
 
 // ─── Edge cases ───────────────────────────────────────────────────────────────
 
-describe('ToolTimeline — edge cases', () => {
+describe('ToolTimeline · edge cases', () => {
   it('returns null when no tools are provided', () => {
     const { container } = render(<ToolTimeline tools={[]} />);
     expect(container.firstChild).toBeNull();

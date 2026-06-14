@@ -1,25 +1,16 @@
-import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
+import { isTauri, isCloudWeb, isDesktopUiDevLocal } from '@/lib/tauri-mock';
 import { notifications, models as modelsApi } from '@agiworkforce/api';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { Search } from 'lucide-react';
 import {
-  Bell,
-  BookOpen,
-  Brain,
-  CreditCard,
-  Mic,
-  Plug,
-  Puzzle,
-  Search,
-  Server,
-  Settings2,
-  Shield,
-  UserRound,
-  Zap,
-} from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+  SETTINGS_NAV,
+  SETTINGS_NAV_GROUPS as NAV_GROUPS,
+  type SettingsNavKey,
+} from '@agiworkforce/ui';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Loader2 } from 'lucide-react';
 
@@ -59,58 +50,45 @@ import { NotificationsTab } from './tabs/Notifications';
 import { VoiceTab } from './tabs/Voice';
 import { MemoryTab } from './tabs/Memory';
 
-type CanonicalTab =
-  | 'general'
-  | 'account'
-  | 'appearance'
-  | 'privacy'
-  | 'models-keys'
-  | 'agents'
-  | 'skills'
-  | 'connectors'
-  | 'plugins'
-  | 'notifications'
-  | 'voice'
-  | 'memory';
+// Canonical settings tab keys — single source of truth in @agiworkforce/ui.
+type CanonicalTab = SettingsNavKey;
 
 function resolveTab(tab: SettingsTab): CanonicalTab {
   return (LEGACY_TAB_MAP[tab] as CanonicalTab | undefined) ?? (tab as CanonicalTab);
 }
 
-const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType }[] = [
-  { key: 'general', label: 'General', icon: Settings2 },
-  { key: 'account', label: 'Account', icon: CreditCard },
-  { key: 'appearance', label: 'Personalization', icon: UserRound },
-  { key: 'privacy', label: 'Privacy', icon: Shield },
-  { key: 'models-keys', label: 'Models & Keys', icon: Server },
-  { key: 'agents', label: 'Agents', icon: Zap },
-  { key: 'skills', label: 'Skills', icon: BookOpen },
-  { key: 'connectors', label: 'Connectors', icon: Plug },
-  { key: 'plugins', label: 'Plugins', icon: Puzzle },
-  { key: 'memory', label: 'Memory', icon: Brain },
-  { key: 'notifications', label: 'Notifications', icon: Bell },
-  { key: 'voice', label: 'Voice', icon: Mic },
-];
+// SETTINGS_NAV + NAV_GROUPS imported from @agiworkforce/ui (single source of truth).
+
+const LOCAL_NOTIFICATION_SETTINGS: NotificationSettings = {
+  enabled: true,
+  sound_enabled: true,
+  badge_enabled: true,
+  desktop_notifications: true,
+  enabled_types: [
+    'system',
+    'task_complete',
+    'task_failed',
+    'agent_activity',
+    'mcp_server',
+    'reminder',
+    'info',
+    'warning',
+    'error',
+  ],
+  do_not_disturb: false,
+  dnd_start_time: null,
+  dnd_end_time: null,
+};
+
+function canPersistNotificationSettings(): boolean {
+  return isTauri || isCloudWeb;
+}
 
 const SELF_SAVING_TABS = new Set<CanonicalTab>(['skills', 'connectors', 'plugins']);
 const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
 const visibleNav = isCloudWeb
   ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
   : SETTINGS_NAV;
-
-const NAV_GROUPS: { label?: string; keys: CanonicalTab[] }[] = [
-  {
-    keys: ['general', 'account', 'appearance', 'privacy', 'models-keys'],
-  },
-  {
-    label: 'Tools',
-    keys: ['skills', 'connectors', 'plugins', 'agents', 'memory'],
-  },
-  {
-    label: 'Desktop app',
-    keys: ['notifications', 'voice'],
-  },
-];
 
 function stableSerialize(value: unknown): string {
   const sortRecursively = (input: unknown): unknown => {
@@ -288,6 +266,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setNotificationLoading(true);
     setNotificationError(null);
     try {
+      if (!canPersistNotificationSettings()) {
+        setNotificationSettings(LOCAL_NOTIFICATION_SETTINGS);
+        return LOCAL_NOTIFICATION_SETTINGS;
+      }
       const s = (await notifications.notificationGetSettings()) as unknown as NotificationSettings;
       setNotificationSettings(s);
       return s;
@@ -314,7 +296,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setCheckingOllama(true);
     try {
       await checkProviderStatus('ollama');
-      const models = normalizeOllamaModelList(await modelsApi.llmGetOllamaModels().catch(() => []));
+      const rawModels = isDesktopUiDevLocal
+        ? []
+        : await modelsApi.llmGetOllamaModels().catch(() => []);
+      const models = normalizeOllamaModelList(rawModels);
       setOllamaModels(models);
       setSelectedOllamaModel((currentModel) => {
         const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
@@ -484,7 +469,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setSaveError(null);
     try {
       await saveSettings();
-      if (notificationSettings) {
+      if (notificationSettings && canPersistNotificationSettings()) {
         await notifications.notificationSetSettings(
           notificationSettings as unknown as Parameters<
             typeof notifications.notificationSetSettings

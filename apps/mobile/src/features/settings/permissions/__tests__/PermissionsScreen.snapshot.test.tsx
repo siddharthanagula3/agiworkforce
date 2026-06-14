@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Snapshot tests for the Permissions settings screens (R21).
- * Locks the index card structure and the location detail (4-level, exercises
- * all applicable levels) against visual regressions.
+ * Locks the index card structure and a native-backed permission detail against
+ * visual regressions.
  */
 
 import React from 'react';
@@ -96,6 +96,8 @@ jest.mock('lucide-react-native', () => {
 
 // ── Router / navigation mocks ─────────────────────────────────────────────────
 
+let mockPermissionParam = 'camera';
+
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -103,7 +105,7 @@ jest.mock('expo-router', () => ({
     replace: jest.fn(),
     canGoBack: () => true,
   }),
-  useLocalSearchParams: () => ({ permission: 'location' }),
+  useLocalSearchParams: () => ({ permission: mockPermissionParam }),
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -141,8 +143,7 @@ jest.mock('expo-camera', () => ({
   CameraView: 'CameraView',
 }));
 
-// expo-location is not installed in mobile v1. Location routes to OS Settings.
-// No mock needed for expo-location.
+// expo-location is not installed in mobile v1 and is not surfaced in settings.
 
 jest.mock('expo-image-picker', () => ({
   getMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
@@ -198,16 +199,30 @@ import PermissionDetailScreen from '@/src/features/settings/permissions/detail';
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+beforeEach(() => {
+  mockPermissionParam = 'camera';
+  jest.clearAllMocks();
+});
+
 describe('PermissionsScreen — index', () => {
-  it('locks the permission list card (6 rows, undetermined state)', () => {
+  it('locks the native-backed permission list card', () => {
     const { toJSON } = render(<PermissionsScreen />);
     expect(toJSON()).toMatchSnapshot();
   });
 });
 
-describe('PermissionDetailScreen — location (4-level)', () => {
-  it('locks the location detail with all 4 applicable levels (undetermined state)', () => {
+describe('PermissionDetailScreen — camera', () => {
+  it('locks the camera detail with native-backed levels', () => {
     const { toJSON } = render(<PermissionDetailScreen />);
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it('fails closed for an unknown permission route param', () => {
+    mockPermissionParam = 'nearby-devices';
+
+    const { getByText } = render(<PermissionDetailScreen />);
+
+    expect(getByText('Unknown permission type.')).toBeTruthy();
+    expect(mockPermissionsState.setObservedStatus).not.toHaveBeenCalled();
   });
 });

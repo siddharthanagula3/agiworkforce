@@ -107,6 +107,27 @@ pub struct LLMSendMessageRequest {
     pub prefer_cloud_credits: bool, // Prefer cloud credits over own API keys
 }
 
+/// Build the plain LLM request used by `llm_send_message`.
+///
+/// This IPC command is intentionally not the Desktop chat/agent path. It is
+/// used for lightweight helper calls such as voice cleanup and direct
+/// completion-style flows. Tool-capable chat must go through
+/// `chat_send_message`, where tool schemas, MCP exposure, streaming events,
+/// approvals, and follow-up tool loops are assembled in one place.
+fn build_plain_llm_request(request: &LLMSendMessageRequest, model: String) -> LLMRequest {
+    LLMRequest {
+        messages: request.messages.clone(),
+        model,
+        temperature: request.temperature,
+        max_tokens: request.max_tokens,
+        stream: false,
+        tools: None,
+        tool_choice: None,
+        thinking_mode: None,
+        ..Default::default()
+    }
+}
+
 pub struct LLMState {
     pub router: Arc<RwLock<LLMRouter>>,
     pub cache_manager: CacheManager,
@@ -231,17 +252,7 @@ pub async fn llm_send_message(
 
     let model = request.model.clone().unwrap_or_else(default_model);
 
-    let llm_request = LLMRequest {
-        messages: request.messages,
-        model: model.clone(),
-        temperature: request.temperature,
-        max_tokens: request.max_tokens,
-        stream: false,
-        tools: None,
-        tool_choice: None,
-        thinking_mode: None,
-        ..Default::default()
-    };
+    let llm_request = build_plain_llm_request(&request, model.clone());
 
     let preferences = RouterPreferences {
         provider,
@@ -982,6 +993,44 @@ mod tests {
         fn name(&self) -> &str {
             "mock"
         }
+    }
+
+    #[test]
+    fn direct_llm_command_builds_plain_non_tool_request() {
+        let request = LLMSendMessageRequest {
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: "Clean up voice dictation only.".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "um write this better".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+            ],
+            model: Some("gpt-5.4-mini".to_string()),
+            provider: Some("openai".to_string()),
+            temperature: Some(0.2),
+            max_tokens: Some(500),
+            prefer_cloud_credits: false,
+        };
+
+        let llm_request = build_plain_llm_request(&request, "gpt-5.4-mini".to_string());
+
+        assert_eq!(llm_request.model, "gpt-5.4-mini");
+        assert_eq!(llm_request.messages.len(), 2);
+        assert_eq!(llm_request.temperature, Some(0.2));
+        assert_eq!(llm_request.max_tokens, Some(500));
+        assert!(!llm_request.stream);
+        assert!(llm_request.tools.is_none());
+        assert!(llm_request.tool_choice.is_none());
+        assert!(llm_request.thinking_mode.is_none());
     }
 
     #[tokio::test]

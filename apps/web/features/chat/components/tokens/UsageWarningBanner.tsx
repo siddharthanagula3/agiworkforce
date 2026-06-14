@@ -110,7 +110,7 @@ export function UsageWarningBanner({ usageData, className }: UsageWarningBannerP
         {action}
       </button>
 
-      {/* Dismiss — always available */}
+      {/* Dismiss · always available */}
       <button
         type="button"
         aria-label="Dismiss usage warning"

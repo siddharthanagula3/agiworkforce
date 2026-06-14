@@ -19,7 +19,7 @@ import { ChatComposerNew } from '@/features/chat/components/Composer/ChatCompose
 import { useProjectMetaStore } from '@/features/projects/stores/project-meta-store';
 
 /**
- * /projects/[id] — per-project detail view, three-pane layout.
+ * /projects/[id] · per-project detail view, three-pane layout.
  *
  * Left pane:  narrow nav rail (back, chats tab, sources tab).
  * Center pane: chat list + embedded composer. Model selector in header.
@@ -54,7 +54,7 @@ function conversationLabel(conversationId: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Capacity thresholds (single definition — used by CapacityBanners +
+// Capacity thresholds (single definition · used by CapacityBanners +
 // CapacityFilesHeader below)
 // ---------------------------------------------------------------------------
 const MAX_KNOWLEDGE_FILES = 20;
