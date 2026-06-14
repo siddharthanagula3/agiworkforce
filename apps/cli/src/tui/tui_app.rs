@@ -902,7 +902,7 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                "Message AGI...  Alt+Enter to send  / for commands",
+                "Message AGI...  Enter to send · Shift+Enter for newline · / for commands",
                 Style::default().fg(ui_muted()),
             ),
         ]);
@@ -1239,11 +1239,17 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         // Shift+Tab → cycle mode
         KeyCode::BackTab => InputAction::CycleMode,
 
-        // Alt+Enter or Ctrl+Enter → submit (multiline composer submit key)
+        // Shift+Enter or Alt+Enter → insert newline (multiline composer)
         KeyCode::Enter
-            if key.modifiers.contains(KeyModifiers::ALT)
-                || key.modifiers.contains(KeyModifiers::CONTROL) =>
+            if key.modifiers.contains(KeyModifiers::SHIFT)
+                || key.modifiers.contains(KeyModifiers::ALT) =>
         {
+            insert_char_at_cursor(&mut app.input, &mut app.cursor, '\n');
+            InputAction::None
+        }
+
+        // Plain Enter → submit message (claude.ai / ChatGPT parity)
+        KeyCode::Enter => {
             let text = app.input.trim().to_string();
             if text.is_empty() {
                 return InputAction::None;
@@ -1252,17 +1258,6 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.cursor = 0;
             app.scroll_offset = 0;
             InputAction::SendMessage(text)
-        }
-
-        // Plain Enter → insert newline (multiline composer) OR submit when single-line
-        KeyCode::Enter => {
-            if app.input.is_empty() {
-                return InputAction::None;
-            }
-            // If the input already has content, insert a newline (multiline mode).
-            // The user submits with Alt+Enter or Ctrl+Enter.
-            insert_char_at_cursor(&mut app.input, &mut app.cursor, '\n');
-            InputAction::None
         }
 
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
