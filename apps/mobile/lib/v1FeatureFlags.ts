@@ -21,8 +21,18 @@
  * changes required — all guards are derived from this single source of truth.
  */
 export const FEATURES = {
-  /** Compatibility flag: true keeps Mobile chat on Local Mode until AGI Cloud is invite-enabled. */
-  v1LocalOnly: true,
+  /**
+   * Compatibility flag: when true, cloud chat is always blocked regardless of
+   * `cloudChat`. Set to false once AGI Cloud invite flow is fully active.
+   *
+   * HARD RULE: setting this to true while `cloudChat` is also true creates a
+   * dual-flag deadlock — `isCloudChatEnabled()` (chatMessageStore) always
+   * returns false, so Cloud mode is silently dead while the UI shows it
+   * available. Do not set both flags to true simultaneously.
+   *
+   * 2026-06-14: set to false so `cloudChat: true` is the single governing flag.
+   */
+  v1LocalOnly: false,
 
   /** Projects tab — ships in v1 per FOUNDER DECISION 2026-05-18. */
   projects: true,
