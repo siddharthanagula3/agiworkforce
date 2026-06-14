@@ -746,6 +746,15 @@ export default function WebChatPage() {
     [deletePersistedMessages],
   );
 
+  // Paywall cards are synthetic (not persisted in DB). "Try later" should just
+  // remove the card from the local store without hitting the API.
+  const handlePaywallDismiss = useCallback(
+    (id: string) => {
+      deleteMessage(id);
+    },
+    [deleteMessage],
+  );
+
   const handleEditMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
@@ -1021,8 +1030,9 @@ export default function WebChatPage() {
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
                   onReact={handleReactMessage}
-                  onSendMessage={(text) => setComposerPrefill(text)}
+                  onSendMessage={setComposerPrefill}
                   onPaywallUpgrade={handleOpenCloudWaitlist}
+                  onPaywallDismiss={handlePaywallDismiss}
                 />
               </div>
 
