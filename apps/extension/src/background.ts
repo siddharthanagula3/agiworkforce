@@ -1735,11 +1735,14 @@ async function handleMessageAsync(
       //   - When askBeforeActing is true: the background sends an AGI_CU_APPROVE_REQUEST
       //     message to the side panel, then waits for an AGI_CU_APPROVE_RESPONSE
       //     (allow/deny). The side panel's showApprovalCard() provides the UI.
-      //     A 30 s timeout is applied; no response = allow (fail-open) to prevent
-      //     the loop from hanging forever if the panel is closed.
+      //     A 30 s timeout is applied; no response = DENY (fail-CLOSED) so a
+      //     closed/unresponsive panel can never auto-approve an action. Matches
+      //     agentLoop's fail-closed contract (commit security review 2026-06-13).
       const onBeforeAction = askBeforeActing
         ? async (toolName: string, args: Record<string, unknown>): Promise<boolean> => {
-            const requestId = `cu_approve_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            // SECURITY (commit review 2026-06-13): CSPRNG request id, not Math.random,
+            // so a prompt-injected page cannot guess an in-flight approval id.
+            const requestId = `cu_approve_${crypto.randomUUID()}`;
             // Notify the side panel to show an approval card
             void chrome.runtime.sendMessage({
               type: 'AGI_CU_APPROVE_REQUEST',
@@ -1749,13 +1752,19 @@ async function handleMessageAsync(
                 .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
                 .join(', ')})`,
             });
-            // Wait for the side panel's response (or timeout after 30 s)
+            // Wait for the side panel's response (or timeout after 30 s → DENY)
             const decision = await new Promise<boolean>((resolve) => {
               const timeout = setTimeout(() => {
                 chrome.runtime.onMessage.removeListener(listener);
-                resolve(true); // fail-open: allow after timeout
+                resolve(false); // fail-CLOSED: deny if no approval arrives in time
               }, 30_000);
-              function listener(msg: unknown): void {
+              function listener(msg: unknown, sender: chrome.runtime.MessageSender): void {
+                // SECURITY (commit review 2026-06-13): only honor approval responses
+                // from a trusted extension page (popup/side panel/options) — these
+                // have no sender.tab. Reject content-script / external senders so a
+                // prompt-injected page cannot forge an AGI_CU_APPROVE_RESPONSE and
+                // bypass the human approval gate.
+                if (sender.id !== chrome.runtime.id || sender.tab) return;
                 if (
                   typeof msg === 'object' &&
                   msg !== null &&
