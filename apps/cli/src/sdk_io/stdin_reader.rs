@@ -1,10 +1,11 @@
 //! Async line reader for embedder-supplied input over stdin.
 //!
-//! When `--input-format stream-json` is active each line on stdin is one
-//! [`SdkInputMessage`] envelope. This reader handles framing (split on '\n'),
-//! strips empty lines, ignores the keep-alive heartbeat, and surfaces parse
-//! errors as [`SdkInputReaderError::Parse`] so the caller can decide whether
-//! to drop the line and continue or terminate the session.
+//! Each line on stdin is one [`SdkInputMessage`] envelope when a future
+//! embedder-driven session loop enables bidirectional input. This reader handles
+//! framing (split on '\n'), strips empty lines, ignores the keep-alive
+//! heartbeat, and surfaces parse errors as [`SdkInputReaderError::Parse`] so the
+//! caller can decide whether to drop the line and continue or terminate the
+//! session.
 
 use std::io;
 

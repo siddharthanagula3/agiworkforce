@@ -1,7 +1,13 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+/// The trust levels a project entry may carry. Persisted as free-form strings
+/// for forward/backward compatibility, but validated on write via
+/// [`ProjectRegistry::register_project`] so a typo'd value cannot reach disk and
+/// be mis-evaluated by downstream trust checks.
+pub const ALLOWED_TRUST_LEVELS: [&str; 3] = ["trusted", "untrusted", "ask"];
 
 /// A single registered project entry in the registry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,7 +60,12 @@ impl ProjectRegistry {
         }
         let contents =
             serde_json::to_string_pretty(self).context("Failed to serialize projects.json")?;
-        std::fs::write(&path, contents).context("Failed to write projects.json")?;
+        // Write to a sibling temp file and atomically rename it into place so a
+        // crash or concurrent invocation mid-write cannot leave projects.json
+        // truncated/corrupted (which would lose all registered trust levels).
+        let tmp_path = path.with_extension("json.tmp");
+        std::fs::write(&tmp_path, contents).context("Failed to write temp projects.json")?;
+        std::fs::rename(&tmp_path, &path).context("Failed to persist projects.json")?;
         Ok(())
     }
 
@@ -64,6 +75,11 @@ impl ProjectRegistry {
     /// already taken by a different path, a numeric suffix is appended.
     /// The `last_seen` timestamp is always updated to now.
     pub fn register_project(&mut self, path: &Path, trust_level: &str) -> Result<()> {
+        if !ALLOWED_TRUST_LEVELS.contains(&trust_level) {
+            bail!(
+                "Invalid trust level {trust_level:?}; expected one of {ALLOWED_TRUST_LEVELS:?}"
+            );
+        }
         let abs_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let path_key = abs_path.to_string_lossy().to_string();
 
@@ -241,6 +257,27 @@ mod tests {
         let entry = registry.get_project(&key);
         assert!(entry.is_some());
         assert_eq!(entry.unwrap().trust_level, "trusted");
+    }
+
+    #[test]
+    fn test_register_rejects_invalid_trust_level() {
+        let mut registry = ProjectRegistry::default();
+        let err = registry
+            .register_project(Path::new("/tmp/bad-trust"), "trustd")
+            .unwrap_err();
+        assert!(err.to_string().contains("Invalid trust level"));
+        assert!(registry.projects.is_empty());
+    }
+
+    #[test]
+    fn test_register_accepts_all_documented_trust_levels() {
+        for (i, level) in ALLOWED_TRUST_LEVELS.iter().enumerate() {
+            let mut registry = ProjectRegistry::default();
+            registry
+                .register_project(Path::new(&format!("/tmp/trust-{i}")), level)
+                .unwrap();
+            assert_eq!(registry.projects.len(), 1);
+        }
     }
 
     #[test]

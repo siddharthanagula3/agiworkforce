@@ -71,6 +71,81 @@ pub fn v3_on_light() -> Color {
     best_color((15, 15, 14))
 }
 
+/// Primary interactive accent for selection, prompts, and active controls.
+pub fn ui_accent() -> Color {
+    v3_teal()
+}
+
+/// Secondary text, borders, dividers, and inactive hints.
+pub fn ui_muted() -> Color {
+    v3_muted()
+}
+
+/// Positive state color for completed work and safe/local indicators.
+pub fn ui_success() -> Color {
+    v3_success()
+}
+
+/// Caution state color for warnings, fallbacks, and bypass-style modes.
+pub fn ui_warning() -> Color {
+    v3_warning()
+}
+
+/// Critical state color for errors, failed work, or unsafe modes.
+pub fn ui_danger() -> Color {
+    v3_danger()
+}
+
+/// Hosted/cloud accent, kept separate from local/BYOK state colors.
+pub fn ui_cloud() -> Color {
+    v3_terracotta()
+}
+
+/// AGI brand foreground for product marks in terminal UI.
+pub fn ui_brand() -> Color {
+    v3_teal()
+}
+
+/// Status bar background.
+pub fn ui_status_bar_bg() -> Color {
+    v3_status_bar_bg()
+}
+
+/// Foreground for dark semantic backgrounds.
+pub fn ui_on_dark() -> Color {
+    v3_on_dark()
+}
+
+/// Foreground for light semantic backgrounds.
+pub fn ui_on_light() -> Color {
+    v3_on_light()
+}
+
+/// Badge background for the default chat mode.
+pub fn ui_mode_default() -> Color {
+    v3_status_bar_bg()
+}
+
+/// Badge background for plan/read-only mode.
+pub fn ui_mode_plan() -> Color {
+    ui_accent()
+}
+
+/// Badge background for auto-accepted edit mode.
+pub fn ui_mode_accept_edits() -> Color {
+    ui_success()
+}
+
+/// Badge background for bypass mode.
+pub fn ui_mode_bypass() -> Color {
+    ui_warning()
+}
+
+/// Badge background for full-auto mode.
+pub fn ui_mode_full_auto() -> Color {
+    ui_danger()
+}
+
 static DEFAULT_PALETTE_VERSION: AtomicU64 = AtomicU64::new(0);
 
 fn bump_palette_version() {

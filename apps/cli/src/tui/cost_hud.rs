@@ -6,9 +6,9 @@
 //! are hardcoded here.
 //!
 //! Colour rules for the context-window indicator:
-//!   * `<70%`  → dim grey (calm)
-//!   * `70%-89%` → orange (heads up)
-//!   * `>=90%` → red (urgent)
+//!   * `<70%` uses the muted palette.
+//!   * `70%-89%` uses the warning palette.
+//!   * `>=90%` uses the danger palette.
 
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -21,6 +21,7 @@ use ratatui::Frame;
 
 use crate::model_catalog;
 use crate::output::format_tokens;
+use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_muted, ui_success, ui_warning};
 
 /// A render-time snapshot of the running cost / context usage for the active
 /// session. All values are cumulative across the session unless a field doc
@@ -64,9 +65,9 @@ impl CostHud {
 
     fn context_color(&self) -> Color {
         match self.context_percent() {
-            0..=69 => Color::DarkGray,
-            70..=89 => Color::Rgb(255, 165, 0),
-            _ => Color::Red,
+            0..=69 => ui_muted(),
+            70..=89 => ui_warning(),
+            _ => ui_danger(),
         }
     }
 }
@@ -100,15 +101,15 @@ fn build_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {
     };
 
     let mut spans = vec![
-        Span::styled("▮ ", Style::default().fg(Color::Cyan)),
+        Span::styled("▮ ", Style::default().fg(ui_accent())),
         Span::styled(
             format!("in {}", format_tokens(hud.in_tokens)),
-            Style::default().fg(Color::White),
+            Style::default(),
         ),
         Span::raw(" · "),
         Span::styled(
             format!("out {}", format_tokens(hud.out_tokens)),
-            Style::default().fg(Color::White),
+            Style::default(),
         ),
     ];
 
@@ -116,7 +117,7 @@ fn build_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {
         spans.push(Span::raw(" · "));
         spans.push(Span::styled(
             format!("reasoning {}", format_tokens(hud.reasoning_tokens)),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         ));
     }
 
@@ -128,7 +129,7 @@ fn build_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {
                 format_tokens(hud.cache_read),
                 format_tokens(hud.cache_creation),
             ),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         ));
     }
 
@@ -136,7 +137,7 @@ fn build_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {
     spans.push(Span::styled(
         dollars_text,
         Style::default()
-            .fg(Color::Green)
+            .fg(ui_success())
             .add_modifier(Modifier::BOLD),
     ));
     spans.push(Span::raw(" · "));
@@ -310,8 +311,8 @@ mod tests {
             context_window: window,
             ..Default::default()
         };
-        assert_eq!(make(50, 100).context_color(), Color::DarkGray);
-        assert_eq!(make(75, 100).context_color(), Color::Rgb(255, 165, 0));
-        assert_eq!(make(95, 100).context_color(), Color::Red);
+        assert_eq!(make(50, 100).context_color(), ui_muted());
+        assert_eq!(make(75, 100).context_color(), ui_warning());
+        assert_eq!(make(95, 100).context_color(), ui_danger());
     }
 }

@@ -37,12 +37,27 @@ pub fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
             opts.branch
         ))
     });
+    // Reject agent-controlled values that would be parsed as git options. The
+    // `--` separator below protects the positional <path>/<commit-ish> args, but
+    // `-b <branch>` is an option-argument, so guard the branch name explicitly
+    // to keep a dash-prefixed value from being mis-parsed.
+    if opts.branch.starts_with('-') {
+        anyhow::bail!("worktree branch name must not start with '-': {:?}", opts.branch);
+    }
+    if let Some(base) = opts.base.as_deref() {
+        if base.starts_with('-') {
+            anyhow::bail!("worktree base ref must not start with '-': {base:?}");
+        }
+    }
     let mut cmd = Command::new("git");
     cmd.current_dir(repo)
         .arg("worktree")
         .arg("add")
         .arg("-b")
         .arg(&opts.branch)
+        // End-of-options separator: everything after `--` is treated as a
+        // positional path/commit-ish, never a git option (argument injection).
+        .arg("--")
         .arg(&target);
     if let Some(base) = opts.base {
         cmd.arg(base);

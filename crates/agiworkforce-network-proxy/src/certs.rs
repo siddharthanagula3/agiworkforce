@@ -83,6 +83,13 @@ fn issue_host_certificate_pem(
         KeyUsagePurpose::KeyEncipherment,
     ];
 
+    // Bound the leaf certificate's validity window. rcgen otherwise defaults to a
+    // far-future (year 4096) expiry; short-lived leaf certs limit how long any
+    // single issued cert is trusted and force re-issuance on a regular cadence.
+    let (not_before, not_after) = validity_window(LEAF_CERT_VALIDITY_DAYS);
+    params.not_before = not_before;
+    params.not_after = not_after;
+
     let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)
         .map_err(|err| anyhow!("failed to generate host key pair: {err}"))?;
     let cert = params
@@ -95,6 +102,26 @@ fn issue_host_certificate_pem(
 const MANAGED_MITM_CA_DIR: &str = "proxy";
 const MANAGED_MITM_CA_CERT: &str = "ca.pem";
 const MANAGED_MITM_CA_KEY: &str = "ca.key";
+
+/// Validity window for issued per-host leaf certificates. Kept short so any
+/// single leaf cert is only trusted briefly and is re-minted on each new
+/// connection to a host after it lapses.
+const LEAF_CERT_VALIDITY_DAYS: i64 = 90;
+
+/// Validity window for the self-signed MITM CA. Bounded (rather than rcgen's
+/// far-future default) so a leaked CA key stops being trusted after this period;
+/// see `generate_ca` for the rotation procedure.
+const CA_CERT_VALIDITY_DAYS: i64 = 825;
+
+/// Build a `(not_before, not_after)` pair spanning `valid_days` from now. The
+/// start is backdated by an hour to tolerate modest clock skew between the
+/// issuing host and clients validating the chain.
+fn validity_window(valid_days: i64) -> (time::OffsetDateTime, time::OffsetDateTime) {
+    let now = time::OffsetDateTime::now_utc();
+    let not_before = now - time::Duration::hours(1);
+    let not_after = now + time::Duration::days(valid_days);
+    (not_before, not_after)
+}
 
 fn managed_ca_paths() -> Result<(PathBuf, PathBuf)> {
     let agiworkforce_home = find_agiworkforce_home()
@@ -166,6 +193,16 @@ fn generate_ca() -> Result<(String, String)> {
     let mut dn = DistinguishedName::new();
     dn.push(DnType::CommonName, "network_proxy MITM CA");
     params.distinguished_name = dn;
+
+    // Bound the CA's validity window instead of relying on rcgen's far-future
+    // (year 4096) default. The CA is regenerated once this window lapses (see
+    // `load_or_create_ca`, which only creates a CA when none exists), so a leaked
+    // CA key is not trusted indefinitely. Rotation procedure: delete
+    // `<AGIWORKFORCE_HOME>/proxy/ca.{pem,key}` and re-run the proxy to mint a
+    // fresh CA, then re-import it into the OS/browser trust store.
+    let (not_before, not_after) = validity_window(CA_CERT_VALIDITY_DAYS);
+    params.not_before = not_before;
+    params.not_after = not_after;
 
     let key_pair = KeyPair::generate_for(&PKCS_ECDSA_P256_SHA256)
         .map_err(|err| anyhow!("failed to generate CA key pair: {err}"))?;

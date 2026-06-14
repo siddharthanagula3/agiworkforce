@@ -58,17 +58,33 @@ pub(super) fn classify_sed(command: &str) -> CommandSafety {
     // Safe pattern: `sed -n <range>p [file...]`
     // where <range> is digits or digits,digits followed by 'p'
     if args.len() >= 3 && args[1] == "-n" {
-        // Strip surrounding single/double quotes from the expression
-        let expr = args[2]
-            .trim_start_matches('\'')
-            .trim_end_matches('\'')
-            .trim_start_matches('"')
-            .trim_end_matches('"');
+        // Strip at most one *matched* surrounding quote pair from the expression.
+        // Asymmetric trimming (independent trim_start/trim_end of both quote
+        // chars) would normalize a mixed-quote expression like `'5p"` into a
+        // "safe" print pattern; require a matched pair so mismatched quotes fall
+        // through to the Unknown fallback (which prompts the user) instead.
+        let expr = strip_matched_quotes(args[2]);
         if is_sed_readonly_print(expr) {
             return CommandSafety::Safe;
         }
     }
     CommandSafety::Unknown
+}
+
+/// Strip exactly one matched pair of surrounding quotes (`'...'` or `"..."`).
+/// Returns the input unchanged if it is not wrapped in a single matched pair
+/// (including mixed quotes such as `'5p"`), so callers never treat an
+/// asymmetrically quoted expression as if the quotes were balanced.
+fn strip_matched_quotes(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    if bytes.len() >= 2 {
+        let first = bytes[0];
+        let last = bytes[bytes.len() - 1];
+        if (first == b'\'' || first == b'"') && first == last {
+            return &s[1..s.len() - 1];
+        }
+    }
+    s
 }
 
 /// Check if a sed expression is a read-only print: `Np`, `M,Np`, `$p`.
@@ -217,4 +233,37 @@ pub(super) fn classify_mv(command: &str) -> CommandSafety {
     }
     // mv to a non-system path is just Unknown (still asks user, no warning).
     CommandSafety::Unknown
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_matched_quotes_strips_balanced_pairs_only() {
+        assert_eq!(strip_matched_quotes("'$p'"), "$p");
+        assert_eq!(strip_matched_quotes("\"5p\""), "5p");
+        // No surrounding quotes — unchanged.
+        assert_eq!(strip_matched_quotes("5p"), "5p");
+        // Mismatched quotes must NOT be normalized into a stripped form.
+        assert_eq!(strip_matched_quotes("'5p\""), "'5p\"");
+        assert_eq!(strip_matched_quotes("\"5p'"), "\"5p'");
+        // A single bare quote is not a pair.
+        assert_eq!(strip_matched_quotes("'"), "'");
+    }
+
+    #[test]
+    fn classify_sed_accepts_balanced_quoted_print() {
+        assert_eq!(classify_sed("sed -n '$p' file.txt"), CommandSafety::Safe);
+        assert_eq!(classify_sed("sed -n \"5p\" file.txt"), CommandSafety::Safe);
+        assert_eq!(classify_sed("sed -n 5p file.txt"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn classify_sed_rejects_mixed_quote_expression() {
+        // `'5p"` must NOT be normalized into a "safe" print pattern by asymmetric
+        // quote trimming — it falls through to Unknown (which prompts the user).
+        assert_eq!(classify_sed("sed -n '5p\" file.txt"), CommandSafety::Unknown);
+        assert_eq!(classify_sed("sed -n \"5p' file.txt"), CommandSafety::Unknown);
+    }
 }

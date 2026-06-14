@@ -22,13 +22,19 @@ use crate::protocol::WritableRoot;
 
 const PROTECTED_METADATA_GIT_PATH_NAME: &str = ".git";
 const PROTECTED_METADATA_AGENTS_PATH_NAME: &str = ".agents";
-const PROTECTED_METADATA_AGIWORKFORCE_PATH_NAME: &str = ".codex";
+/// The CLI's live config dir (config.toml, exec-policy rules, agents/, custom
+/// commands). Must be read-only to the agent so it cannot self-reconfigure its
+/// own sandbox/approval/exec-policy for subsequent runs.
+const PROTECTED_METADATA_AGIWORKFORCE_PATH_NAME: &str = ".agiworkforce";
+/// Legacy Codex-interop config dir, kept protected for backward compatibility.
+const PROTECTED_METADATA_CODEX_PATH_NAME: &str = ".codex";
 
 /// Top-level workspace metadata paths that stay protected under writable roots.
 pub const PROTECTED_METADATA_PATH_NAMES: &[&str] = &[
     PROTECTED_METADATA_GIT_PATH_NAME,
     PROTECTED_METADATA_AGENTS_PATH_NAME,
     PROTECTED_METADATA_AGIWORKFORCE_PATH_NAME,
+    PROTECTED_METADATA_CODEX_PATH_NAME,
 ];
 
 /// Returns true when a path basename is one of the protected workspace metadata names.
@@ -41,6 +47,7 @@ pub fn is_protected_metadata_name(name: &OsStr) -> bool {
 pub fn is_protected_metadata_directory_name(name: &OsStr) -> bool {
     name == OsStr::new(PROTECTED_METADATA_AGENTS_PATH_NAME)
         || name == OsStr::new(PROTECTED_METADATA_AGIWORKFORCE_PATH_NAME)
+        || name == OsStr::new(PROTECTED_METADATA_CODEX_PATH_NAME)
 }
 
 /// Returns the protected workspace metadata name when an agent write to `path`
@@ -515,9 +522,15 @@ impl FileSystemSandboxPolicy {
                 }),
         );
 
-        append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".git");
-        append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".agents");
-        append_default_read_only_project_root_subpath_if_no_explicit_rule(&mut entries, ".codex");
+        // Iterate the canonical protected-metadata list (.git/.agents/
+        // .agiworkforce/.codex) rather than hardcoding names here, so this never
+        // drifts out of sync with PROTECTED_METADATA_PATH_NAMES.
+        for metadata_name in PROTECTED_METADATA_PATH_NAMES {
+            append_default_read_only_project_root_subpath_if_no_explicit_rule(
+                &mut entries,
+                *metadata_name,
+            );
+        }
         for writable_root in writable_roots {
             for protected_path in default_read_only_subpaths_for_writable_root(
                 writable_root,
@@ -1426,13 +1439,18 @@ pub(crate) fn default_read_only_subpaths_for_writable_root(
         subpaths.push(top_level_agents);
     }
 
-    // Keep top-level project metadata under .codex read-only to the agent by
-    // default. For the workspace root itself, protect it even before the
-    // directory exists so first-time creation still goes through the
-    // protected-path approval flow.
-    let top_level_codex = writable_root.join(PROTECTED_METADATA_AGIWORKFORCE_PATH_NAME);
-    if protect_missing_dot_codex || top_level_codex.as_path().is_dir() {
-        subpaths.push(top_level_codex);
+    // Keep top-level project metadata under the live config dir (.agiworkforce)
+    // and the legacy interop dir (.codex) read-only to the agent by default. For
+    // the workspace root itself, protect them even before the directory exists so
+    // first-time creation still goes through the protected-path approval flow.
+    for metadata_name in [
+        PROTECTED_METADATA_AGIWORKFORCE_PATH_NAME,
+        PROTECTED_METADATA_CODEX_PATH_NAME,
+    ] {
+        let top_level = writable_root.join(metadata_name);
+        if protect_missing_dot_codex || top_level.as_path().is_dir() {
+            subpaths.push(top_level);
+        }
     }
 
     dedup_absolute_paths(subpaths, /*normalize_effective_paths*/ false)
@@ -1840,6 +1858,12 @@ mod tests {
                 },
                 FileSystemSandboxEntry {
                     path: FileSystemPath::Special {
+                        value: FileSystemSpecialPath::project_roots(Some(".agiworkforce".into())),
+                    },
+                    access: FileSystemAccessMode::Read,
+                },
+                FileSystemSandboxEntry {
+                    path: FileSystemPath::Special {
                         value: FileSystemSpecialPath::project_roots(Some(".codex".into())),
                     },
                     access: FileSystemAccessMode::Read,
@@ -1924,7 +1948,8 @@ mod tests {
         let cwd = TempDir::new().expect("tempdir");
         let dot_git_config = cwd.path().join(".git").join("config");
         let dot_agents_config = cwd.path().join(".agents").join("config");
-        let dot_agiworkforce_config = cwd.path().join(".codex").join("config.toml");
+        let dot_agiworkforce_config = cwd.path().join(".agiworkforce").join("config.toml");
+        let dot_codex_config = cwd.path().join(".codex").join("config.toml");
         let root = AbsolutePathBuf::from_absolute_path(cwd.path()).expect("absolute cwd");
         let file_system_policy =
             FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
@@ -1935,6 +1960,7 @@ mod tests {
         assert!(!file_system_policy.can_write_path_with_cwd(&dot_git_config, cwd.path()));
         assert!(!file_system_policy.can_write_path_with_cwd(&dot_agents_config, cwd.path()));
         assert!(!file_system_policy.can_write_path_with_cwd(&dot_agiworkforce_config, cwd.path()));
+        assert!(!file_system_policy.can_write_path_with_cwd(&dot_codex_config, cwd.path()));
 
         let writable_roots = file_system_policy.get_writable_roots_with_cwd(cwd.path());
         assert_eq!(writable_roots.len(), 1);
@@ -1943,12 +1969,14 @@ mod tests {
             vec![
                 ".git".to_string(),
                 ".agents".to_string(),
+                ".agiworkforce".to_string(),
                 ".codex".to_string(),
             ]
         );
         assert!(!writable_roots[0].is_path_writable(&dot_git_config));
         assert!(!writable_roots[0].is_path_writable(&dot_agents_config));
         assert!(!writable_roots[0].is_path_writable(&dot_agiworkforce_config));
+        assert!(!writable_roots[0].is_path_writable(&dot_codex_config));
     }
 
     #[test]
