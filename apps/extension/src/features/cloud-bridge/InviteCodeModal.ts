@@ -40,15 +40,16 @@ function friendlyInviteError(code?: InviteCodeError): string {
 
 function buildModalStyles(): string {
   return `
-    ${getExtensionTokensCss('light').replace(':root', ':host')}
+    ${getExtensionTokensCss('dark').replace(':root', ':host')}
 
-    :host { display:block; }
+    :host { display:block; position:fixed; inset:0; z-index:2147483645; pointer-events:none; }
 
     .agi-modal-backdrop {
-      position:fixed; inset:0; z-index:2147483646;
-      background:rgba(0,0,0,0.45);
+      position:absolute; inset:0;
+      background:rgba(0,0,0,0.55);
       display:flex; align-items:center; justify-content:center;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      pointer-events:auto;
     }
 
     .agi-modal-backdrop.hidden { display:none; }
@@ -551,7 +552,11 @@ export class InviteCodeModal {
 
     this.host = document.createElement('div');
     this.host.setAttribute('data-agi-cloud-modal', 'true');
-    this.host.style.cssText = 'all:initial;';
+    // Do not use all:initial — it resets display to inline and prevents the
+    // shadow-DOM :host rule (display:block; position:fixed) from taking effect,
+    // which causes the overlay to collapse into normal document flow instead of
+    // covering the viewport. The shadow-DOM stylesheet handles all internal
+    // isolation via the :host rule; no inline reset is needed here.
 
     this.shadow = this.host.attachShadow({ mode: 'open' });
     this.els = buildModalDOM(this.shadow);
