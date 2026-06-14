@@ -471,7 +471,9 @@ impl PlaywrightBridge {
             "--disable-sync",
             "--disable-translate",
             "--disable-popup-blocking",
-            "--no-sandbox",
+            // SECURITY: "--no-sandbox" intentionally removed from the allowlist — it lets a
+            // caller disable the Chrome renderer sandbox (audit: systemic-tauri-ipc-shell-injection).
+            // The desktop app runs as the user (not root), so the sandbox works without it.
             "--mute-audio",
             "--incognito",
             "--start-maximized",
