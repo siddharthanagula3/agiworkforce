@@ -3,7 +3,7 @@
 import { MemoryEditor } from '@agiworkforce/unified-chat';
 
 /**
- * /settings/memory — surfaces the shared MemoryEditor primitive on the web,
+ * /settings/memory · surfaces the shared MemoryEditor primitive on the web,
  * matching the Claude.ai Settings → Memory section.
  *
  * Memory facts are stored device-locally via the unified-chat memoryStore

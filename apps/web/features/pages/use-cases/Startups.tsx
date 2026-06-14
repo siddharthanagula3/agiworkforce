@@ -41,7 +41,7 @@ const StartupsPage: React.FC = () => {
       icon: Zap,
       title: 'Launch MVP in Days, Not Months',
       description:
-        'AI developers, designers, and QA engineers work 24/7 in parallel. What takes a human team 6 months takes AI employees 2 weeks—at 1/100th the cost.',
+        'AI developers, designers, and QA engineers work 24/7 in parallel. What takes a human team 6 months takes AI employees 2 weeks·at 1/100th the cost.',
       color: 'from-purple-500 to-pink-500',
     },
     {
@@ -55,7 +55,7 @@ const StartupsPage: React.FC = () => {
       icon: Users,
       title: 'Compete with YC Companies from Your Bedroom',
       description:
-        'Get the same firepower as $10M funded startups for $190/month. Access specialized AI employees instantly. Tell them what you need in natural language—they execute.',
+        'Get the same firepower as $10M funded startups for $190/month. Access specialized AI employees instantly. Tell them what you need in natural language·they execute.',
       color: 'from-orange-500 to-red-500',
     },
   ];
@@ -161,7 +161,7 @@ const StartupsPage: React.FC = () => {
               <p className="mb-8 text-xl leading-relaxed text-muted-foreground">
                 Why raise $2M when you can build a world-class product with a $29/month AI team
                 ($24.99/month if billed yearly)? Replace expensive engineers, designers, and
-                marketers with AI employees that work 24/7. Free Forever plan available—no credit
+                marketers with AI employees that work 24/7. Free Forever plan available·no credit
                 card required.
               </p>
               <div className="flex flex-col gap-4 sm:flex-row">

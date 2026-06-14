@@ -2,7 +2,7 @@
  * FollowUpSuggestions tests
  *
  * Covers:
- * deriveFollowUps() (extracted via re-export — see note below):
+ * deriveFollowUps() (extracted via re-export · see note below):
  * - Returns [] for content shorter than 20 chars or empty/whitespace
  * - Topic pattern matching for all 15 categories
  * - Deduplication of suggestions (same text text not emitted twice)
@@ -29,10 +29,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { deriveFollowUps, FollowUpSuggestions } from './FollowUpSuggestions';
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — guard clauses
+// deriveFollowUps · guard clauses
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — guard clauses', () => {
+describe('deriveFollowUps() · guard clauses', () => {
   it('returns [] for empty string', () => {
     expect(deriveFollowUps('', 0)).toEqual([]);
   });
@@ -54,10 +54,10 @@ describe('deriveFollowUps() — guard clauses', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — topic pattern matching
+// deriveFollowUps · topic pattern matching
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — topic patterns', () => {
+describe('deriveFollowUps() · topic patterns', () => {
   it('matches code-related pattern (function keyword)', () => {
     const result = deriveFollowUps(
       'Here is a function that handles the request and returns a response.',
@@ -221,10 +221,10 @@ describe('deriveFollowUps() — topic patterns', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — FollowUp types
+// deriveFollowUps · FollowUp types
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — suggestion types', () => {
+describe('deriveFollowUps() · suggestion types', () => {
   it('assigns "apply" type to "Can you add unit tests for this?"', () => {
     const result = deriveFollowUps('Here is a class that implements the component logic.', 0);
     const fu = result.find((f) => f.text === 'Can you add unit tests for this?');
@@ -245,10 +245,10 @@ describe('deriveFollowUps() — suggestion types', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — capability discovery
+// deriveFollowUps · capability discovery
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — capability discovery', () => {
+describe('deriveFollowUps() · capability discovery', () => {
   it('adds "Run this code" pill when response contains a code block', () => {
     const contentWithCode = [
       'Here is the solution to your problem.',
@@ -326,10 +326,10 @@ describe('deriveFollowUps() — capability discovery', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — deduplication
+// deriveFollowUps · deduplication
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — deduplication', () => {
+describe('deriveFollowUps() · deduplication', () => {
   it('does not emit duplicate suggestion texts', () => {
     // Content that would match multiple patterns with overlapping suggestions
     const content =
@@ -343,10 +343,10 @@ describe('deriveFollowUps() — deduplication', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — content cap (ReDoS prevention)
+// deriveFollowUps · content cap (ReDoS prevention)
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — content cap at 4000 chars', () => {
+describe('deriveFollowUps() · content cap at 4000 chars', () => {
   it('processes content longer than 4000 chars without error', () => {
     // 5000 chars of valid content including a keyword
     const longContent = 'function '.padEnd(4001, 'x') + ' class component module';
@@ -373,10 +373,10 @@ describe('deriveFollowUps() — content cap at 4000 chars', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — generic fallback
+// deriveFollowUps · generic fallback
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — generic fallback', () => {
+describe('deriveFollowUps() · generic fallback', () => {
   it('returns generic suggestions when no topic matches and content >= 20 chars', () => {
     // Content with no keywords from any topic pattern
     const result = deriveFollowUps('xxxxxxxxxxxxxxxxxxxxxxxxx', 0);
@@ -437,10 +437,10 @@ describe('deriveFollowUps() — generic fallback', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deriveFollowUps — result shape
+// deriveFollowUps · result shape
 // ---------------------------------------------------------------------------
 
-describe('deriveFollowUps() — result shape', () => {
+describe('deriveFollowUps() · result shape', () => {
   it('returns at most 3 suggestions', () => {
     // Content that matches multiple patterns
     const content =

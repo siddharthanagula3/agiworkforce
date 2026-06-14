@@ -6,7 +6,7 @@
  * since Clerk handles primary authentication separately.
  *
  * Design note: This route requires a valid Clerk session.  It intentionally
- * does NOT serve as a Clerk login second-factor endpoint — Clerk's own session
+ * does NOT serve as a Clerk login second-factor endpoint · Clerk's own session
  * model manages that flow.  This endpoint is for in-app step-up auth (e.g.,
  * confirming a destructive action, re-authenticating before viewing secrets).
  *

@@ -1,5 +1,5 @@
 /**
- * /settings/sync — Cross-device sync settings page.
+ * /settings/sync · Cross-device sync settings page.
  *
  * Cross-surface sync is a hosted cloud capability. Keep local/account modes
  * clear and reuse the shared account-bound access request form.
@@ -28,7 +28,7 @@ export default function SyncSettingsPage() {
         </p>
       </div>
 
-      {/* Cross-device sync — hosted cloud upgrade CTA */}
+      {/* Cross-device sync · hosted cloud upgrade CTA */}
       <section
         style={{
           border: '1px solid var(--settings-border)',
@@ -121,7 +121,7 @@ export default function SyncSettingsPage() {
             No cross-surface sync happens unless you explicitly enable hosted cloud sync.
           </li>
           <li style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            Export your data at any time — see Privacy &amp; Data for JSON export.
+            Export your data at any time. See Privacy &amp; Data for JSON export.
           </li>
         </ul>
       </section>

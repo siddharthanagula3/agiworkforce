@@ -2,99 +2,210 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+import {
+  CapabilityGrid,
+  FinalCta,
+  TrustTriptych,
+} from '../../components/marketing/FlagshipSections';
+import { FeatureGrid, LedgerSection } from '../../components/marketing/LandingSections';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Desktop — The native AGI app',
-  description: `The native AGI desktop app for Local, BYOK, and invited Cloud. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
+  title: 'AGI Desktop | Runs on Your Machine',
+  description: `The native AGI app, built in Rust. Local models with Ollama and LM Studio. Keys encrypted on your machine. Chats in SQLite on your disk. macOS, Windows, Linux. ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/desktop' },
 };
-
-const SPECS: { k: string; v: string }[] = [
-  { k: 'Engine', v: 'Tauri shell · Rust backend · React UI' },
-  { k: 'Installer', v: 'Release asset pending public launch' },
-  { k: 'Modes', v: 'Local · BYOK · Cloud invite' },
-  { k: 'Storage', v: 'SQLite local · optional cloud sync' },
-  { k: 'Computer use', v: 'Browser · files · terminal · screen' },
-  { k: 'MCP plugins', v: 'stdio · SSE · streamable HTTP' },
-  { k: 'Skills', v: 'Markdown + frontmatter, layered precedence' },
-  { k: 'Release signing', v: 'Apple Developer ID route prepared for public installers' },
-  { k: 'Launch', v: LAUNCH.date },
-];
 
 export default function DesktopPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
-            {LAUNCH.publicLabel}
-          </p>
-          <h1 className="agi-page-h1">The native desktop for every model.</h1>
-          <p className="agi-page-lede">
-            Desktop is the local compute host, BYOK vault, browser bridge, file bridge, and Cloud
-            invite gateway. Local mode keeps work on the machine. BYOK routes only to selected
-            providers. Cloud unlocks hosted sync by invite.{' '}
-            <strong>{POSITIONING.trustBoundary}</strong>
-          </p>
-          <div className="agi-cta-row">
-            <Link href="/download" className="agi-cta-primary">
-              {LAUNCH.ctaLabel}
-            </Link>
-            <Link href="/local" className="agi-cta-ghost">
-              Run it offline →
-            </Link>
+
+        <section className="agi-fl-hero" aria-labelledby="agi-fl-desktop-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">AGI Desktop</p>
+              <h1 id="agi-fl-desktop-hero-title" className="agi-fl-h1">
+                <span className="agi-fl-h1-line">Runs on</span>
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">your machine.</em>
+                </span>
+              </h1>
+              <p className="agi-fl-lede">
+                The native app, built in Rust. Point it at Ollama or LM Studio and work offline.
+                Chats live in SQLite on your disk. Keys never leave the machine.
+              </p>
+              <div className="agi-fl-cta-row">
+                <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+                  Get Launch Access
+                </Link>
+                <Link href="/local" className="agi-fl-cta agi-fl-cta--secondary">
+                  Run AGI Locally
+                </Link>
+                <WaitlistTrigger
+                  label="Join Cloud Waitlist"
+                  source="website"
+                  className="agi-fl-cta agi-fl-cta--ghost"
+                />
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+                <li>Local · on-device</li>
+                <li>BYOK · your keys</li>
+                <li>Cloud · by invite</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <ProductFrame variant="desktop" title="AGI Workforce" badge="Local" />
+            </div>
           </div>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What&rsquo;s inside</p>
-          <table className="agi-ledger">
-            <tbody>
-              {SPECS.map((s) => (
-                <tr key={s.k}>
-                  <td>{s.k}</td>
-                  <td>{s.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Available for</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">macOS</h3>
-              <p className="agi-reason-p">
-                Universal DMG route for Apple Silicon and Intel. The signed public installer link
-                appears here when release assets are published.
-              </p>
-              <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                Check availability →
-              </Link>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Linux</h3>
-              <p className="agi-reason-p">
-                AppImage/package route for modern Linux distributions. The public installer opens
-                when the release asset is published.
-              </p>
-              <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                Check availability →
-              </Link>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Windows</h3>
-              <p className="agi-reason-p">
-                Windows is part of the public launch plan, with installer, CLI, and desktop bridge
-                messaging aligned around Local, BYOK, and invited Cloud.
-              </p>
-              <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                Get launch access →
-              </Link>
-            </li>
-          </ul>
-        </section>
+
+        <CapabilityGrid
+          eyebrow="Capabilities"
+          title="Everything lives here."
+          items={[
+            {
+              meta: 'Local',
+              title: 'Local Models',
+              body: 'Ollama and LM Studio on your own hardware. Offline. No account.',
+              href: '/local',
+            },
+            {
+              meta: 'BYOK',
+              title: 'Your Own Keys',
+              body: 'Keys encrypted on your machine. Traffic goes straight to your provider.',
+              href: '/byok',
+            },
+            {
+              meta: 'Connectors',
+              title: 'MCP Connectors',
+              body: 'Pick from the gallery or add your own server. stdio, SSE, or HTTP.',
+              href: '/apps',
+            },
+            {
+              meta: 'Artifacts',
+              title: 'Artifact Workbench',
+              body: 'Documents, code, and previews take shape beside the chat.',
+              href: '/features/artifacts',
+            },
+            {
+              meta: 'AGI Work',
+              title: 'Scheduled Work',
+              body: 'Schedule recurring runs. Dispatch tasks. Built in.',
+              href: '/agi-work',
+            },
+            {
+              meta: 'Chat',
+              title: 'Transparent Answers',
+              body: 'Web sources, thinking, and effort, visible on each reply.',
+              href: '/features/ai-chat',
+            },
+          ]}
+        />
+
+        <TrustTriptych
+          eyebrow="Trust modes"
+          title="No silent switches."
+          lede="Desktop is where Local and BYOK live. Nothing moves between routes without a label and your consent."
+          cards={[
+            {
+              mode: 'Local',
+              glyph: '◆',
+              title: 'Yours alone.',
+              body: 'Models on your hardware. Works offline.',
+              points: [
+                'Local chats never silently leave your device',
+                'Chats stored in SQLite on your disk',
+                'No account required',
+              ],
+              cta: { href: '/local', label: 'Run AGI Locally' },
+            },
+            {
+              mode: 'BYOK',
+              glyph: '◇',
+              title: 'Your keys, your bill.',
+              body: 'Bring provider keys on Desktop and CLI.',
+              points: [
+                'Keys encrypted on your machine',
+                'Traffic goes straight to your provider',
+                'Provider label on every route',
+              ],
+              cta: { href: '/byok', label: 'Set Up BYOK' },
+            },
+            {
+              mode: 'AGI Cloud',
+              glyph: '●',
+              title: 'By invite.',
+              body: 'Hosted capacity, opened carefully.',
+              points: [
+                'Private beta via waitlist and invite codes',
+                'Separate from Local by design',
+                'One email when your access opens',
+              ],
+              cta: { label: 'Join the Waitlist', waitlist: true },
+            },
+          ]}
+        />
+
+        <FeatureGrid
+          eyebrow="Platforms"
+          title="macOS. Windows. Linux."
+          items={[
+            {
+              meta: 'macOS',
+              title: 'Apple Silicon & Intel',
+              body: 'Universal, aarch64, and x86_64 bundles. Signed installers post here at launch.',
+              href: '/download',
+            },
+            {
+              meta: 'Windows',
+              title: 'Windows x64',
+              body: 'The same Rust app, on x64. Planned for public launch.',
+              href: '/download',
+            },
+            {
+              meta: 'Linux',
+              title: 'Linux x64',
+              body: 'An x64 AppImage. The installer opens when release assets publish.',
+              href: '/download',
+            },
+          ]}
+        />
+
+        <LedgerSection
+          eyebrow="Specifications"
+          title="What's inside."
+          rows={[
+            { k: 'Engine', v: 'Tauri 2 · Rust backend · React frontend' },
+            { k: 'Modes', v: 'Local · BYOK · Cloud by invite' },
+            { k: 'Local runtimes', v: 'Ollama · LM Studio' },
+            { k: 'BYOK keys', v: 'Encrypted at rest, on your machine' },
+            { k: 'Storage', v: 'SQLite, local to your machine' },
+            { k: 'Computer use', v: 'Browser · files · terminal · screen, with explicit consent' },
+            { k: 'MCP transports', v: 'stdio · SSE · streamable HTTP' },
+            { k: 'Skills', v: 'Markdown + frontmatter' },
+            { k: 'Bundles', v: 'macOS universal · Windows x64 · Linux x64' },
+            { k: 'Installers', v: 'Release assets open at public launch' },
+            { k: 'Launch', v: LAUNCH.date },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Put AGI on your desktop."
+          body="Point it at Ollama, LM Studio, or your own keys. Installers open at public launch."
+          ctas={[
+            { href: '/download', label: 'Get Launch Access' },
+            { href: '/byok', label: 'Set Up BYOK' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
+        />
+
         <MarketingFooter />
       </main>
     </div>

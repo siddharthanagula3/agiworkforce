@@ -1,10 +1,9 @@
 /**
  * Threat model: GET /api/byok/env-key-status must NEVER reveal the value of any
- * provider API key. The response shape is { providers: [{id, envVar, isSet}] }.
- * `envVar` (the env-variable NAME) is intentionally exposed — it is documented
- * setup info, not a secret. Only `isSet` (boolean) communicates whether a key
- * is configured. No value, partial value, hash, length, or obfuscated form may
- * appear in the response body or any response header.
+ * provider API key or host env-var name. The authenticated response shape is
+ * { providers: [{id, isSet}] }. Only `isSet` (boolean) communicates whether a
+ * key is configured. No env-var name, value, partial value, hash, length, or
+ * obfuscated form may appear in the response body or any response header.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -30,6 +29,10 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/error-handler', () => ({
   withErrorHandler: (handler: (req: NextRequest) => Promise<Response>) => (req: NextRequest) =>
     handler(req),
+}));
+
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: vi.fn().mockResolvedValue({ userId: 'user_test' }),
 }));
 
 // ─── Import route under test ──────────────────────────────────────────────────
@@ -69,9 +72,9 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
     Object.assign(process.env, originalEnv);
   });
 
-  // ─── (a) Response body shape — no value fields ────────────────────────────
+  // ─── (a) Response body shape — no host env names or value fields ──────────
   describe('response body shape', () => {
-    it('returns providers array with id, envVar, isSet — no value field', async () => {
+    it('returns providers array with id and isSet only', async () => {
       process.env['ANTHROPIC_API_KEY'] = TEST_KEY_VALUE;
 
       const response = await GET(makeGetRequest());
@@ -84,9 +87,11 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
         const p = provider as Record<string, unknown>;
         // Required fields
         expect(typeof p['id']).toBe('string');
-        expect(typeof p['envVar']).toBe('string');
         expect(typeof p['isSet']).toBe('boolean');
-        // Forbidden fields — any of these would be a leak
+        // Forbidden fields — any of these would expose host secret posture.
+        expect(p).not.toHaveProperty('envVar');
+        expect(p).not.toHaveProperty('env');
+        expect(p).not.toHaveProperty('environmentVariable');
         expect(p).not.toHaveProperty('value');
         expect(p).not.toHaveProperty('key');
         expect(p).not.toHaveProperty('secret');
@@ -109,7 +114,7 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
 
       for (const provider of data.providers) {
         for (const [field, value] of Object.entries(provider)) {
-          if (field === 'id' || field === 'envVar') continue;
+          if (field === 'id') continue;
           if (typeof value === 'string') {
             // Any unknown string field longer than 8 chars on a non-metadata key
             // could be an obfuscated or partial key — flag it
@@ -186,9 +191,10 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
       const response = await GET(makeGetRequest());
       const body = await response.text();
 
-      // Must not contain any of the env var names as values (i.e., the env var
-      // name itself leaking as though it were a value)
       expect(body).not.toContain('process.env');
+      for (const { envVar } of BYOK_PROVIDERS) {
+        expect(body).not.toContain(envVar);
+      }
       expect(body).not.toContain('Error:');
       expect(body).not.toContain('stack');
       expect(body).not.toContain('at ');
@@ -315,11 +321,11 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
       }
     });
 
-    it('response body shape contains no unexpected fields beyond id, envVar, isSet', async () => {
+    it('response body shape contains no unexpected fields beyond id and isSet', async () => {
       const response = await GET(makeGetRequest());
       const data = (await response.json()) as { providers: Record<string, unknown>[] };
 
-      const ALLOWED_KEYS = new Set(['id', 'envVar', 'isSet']);
+      const ALLOWED_KEYS = new Set(['id', 'isSet']);
       for (const provider of data.providers) {
         const actualKeys = Object.keys(provider);
         for (const key of actualKeys) {
@@ -364,6 +370,15 @@ describe('GET /api/byok/env-key-status — key leak prevention', () => {
       const response = await GET(makeGetRequest());
       const body = await response.text();
       expect(body).not.toContain(TEST_KEY_VALUE);
+    });
+  });
+
+  describe('authentication', () => {
+    it('requires an authenticated user before returning provider status', async () => {
+      const { getClerkAuthUser } = await import('@/lib/api-auth');
+      vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new Error('Unauthorized'));
+
+      await expect(GET(makeGetRequest())).rejects.toThrow('Unauthorized');
     });
   });
 });

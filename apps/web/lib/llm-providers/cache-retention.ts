@@ -1,5 +1,5 @@
 /**
- * Cache retention helper — mirrors openclaw's prompt-cache-retention.ts
+ * Cache retention helper · mirrors openclaw's prompt-cache-retention.ts
  * Source: ~/Desktop/reference/openclaw/src/agents/pi-embedded-runner/prompt-cache-retention.ts
  *
  * Differences from the reference:
@@ -83,7 +83,7 @@ export function resolveCacheRetention(
     return 'short';
   }
 
-  // Google: no default — caller must opt in explicitly.
+  // Google: no default · caller must opt in explicitly.
   return undefined;
 }
 

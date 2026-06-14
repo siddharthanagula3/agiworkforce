@@ -1,18 +1,13 @@
 import type { Metadata } from 'next';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  LedgerSection,
-} from '../../../components/marketing/LandingSections';
-import { LAUNCH } from '../../../lib/marketing-constants';
+import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
+import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
 
 export const metadata: Metadata = {
-  title: 'AGI Artifacts - Canvas-style apps, documents, code, and reports',
+  title: 'AGI Artifacts | Sandboxed Previews, Versions & Downloads',
   description:
-    'Create, preview, iterate, version, download, and share generated apps, dashboards, documents, code, and reports in AGI artifacts.',
+    'Artifacts in the AGI workspace: HTML, React, SVG, diagrams, code, and documents rendered in a sandboxed preview beside the chat. Versioned, with source view, copy, and download.',
   alternates: { canonical: 'https://agiworkforce.com/features/artifacts' },
 };
 
@@ -21,89 +16,120 @@ export default function ArtifactsFeaturePage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Artifacts`}
-          title="Generated work belongs beside the chat."
-          lede="Artifacts are AGI's dedicated surface for apps, documents, reports, charts, code, spreadsheets, and prototypes that users can inspect, revise, download, and share."
-          primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondaryCta={{ href: '/features/deep-research', label: 'Research artifacts' }}
-          chips={['Preview', 'Version', 'Download', 'Publish', 'Auto-fix']}
-          panelTitle="Artifact lifecycle"
-          panelRows={[
-            {
-              k: 'Create',
-              v: 'Model emits standalone content or user starts from a guided artifact flow',
-            },
-            { k: 'Preview', v: 'Render safely in a sandboxed side panel' },
-            { k: 'Iterate', v: 'Update the current artifact instead of restarting from scratch' },
-            { k: 'Share', v: 'Download, publish, or share inside a workspace with permissions' },
-          ]}
-        />
+
+        <section className="agi-page-hero">
+          <p className="agi-section-eyebrow">Features · Artifacts</p>
+          <h1 className="agi-page-h1">Work you can keep.</h1>
+          <p className="agi-page-lede">
+            When a reply turns into a document, a prototype, or a diagram, AGI lifts it out of the
+            message stream and into an artifact. It sits beside the chat and you can preview,
+            revise, version, and download it.
+          </p>
+        </section>
 
         <FeatureGrid
           eyebrow="Artifact types"
-          title="Make every substantial output portable."
+          title="Six kinds of output, one panel."
           items={[
             {
-              meta: 'Apps',
-              title: 'HTML and React previews',
-              body: 'Render prototypes, dashboards, calculators, games, and UI experiments in a sandbox with visible errors and revisions.',
+              meta: 'HTML',
+              title: 'Pages that actually run',
+              body: 'HTML prototypes render live in a sandboxed frame. Scripts included, isolated from the rest of the app.',
             },
             {
-              meta: 'Docs',
-              title: 'Markdown, PDF, DOCX, and reports',
-              body: 'Turn research and strategy work into named documents with versions, exports, and workspace sharing.',
+              meta: 'React',
+              title: 'Components in isolation',
+              body: 'React previews let UI ideas be inspected and iterated on instead of imagined from code.',
             },
             {
-              meta: 'Data',
-              title: 'Tables, charts, and spreadsheets',
-              body: 'Show analysis outputs as inspectable artifacts instead of screenshots or plain message text.',
+              meta: 'SVG',
+              title: 'Vector graphics',
+              body: 'SVG output is sanitized and rendered, ready to copy out or download.',
+            },
+            {
+              meta: 'Diagrams',
+              title: 'Mermaid, drawn',
+              body: 'Diagram definitions become rendered flowcharts and graphs instead of staying code blocks.',
             },
             {
               meta: 'Code',
-              title: 'Generated files and scripts',
-              body: 'Keep substantial code outputs in a file-like surface with syntax highlighting, copy, download, and iteration controls.',
+              title: 'Files, not fragments',
+              body: 'Substantial code lands in a file-like view with source, copy, and download controls.',
             },
             {
-              meta: 'Gallery',
-              title: 'A catalog of created work',
-              body: 'An artifacts home keeps search, filtering, cleanup, and re-opening prior work in one place.',
-            },
-            {
-              meta: 'Safety',
-              title: 'Sandbox and domain controls',
-              body: 'Rendered artifacts use isolated execution, explicit network egress policy, and clear publish warnings.',
+              meta: 'Documents',
+              title: 'Named, durable writing',
+              body: 'Written work becomes a titled document you can download as Markdown.',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="Launch bar"
-          title="The artifact experience users expect."
+          eyebrow="Lifecycle"
+          title="From reply to artifact."
           rows={[
-            { k: 'Panel', v: 'Resizable right-side preview beside the active chat.' },
             {
-              k: 'Toolbar',
-              v: 'Title, copy, download, open, iterate, version, publish, and close controls.',
+              k: 'Detect',
+              v: 'Substantial outputs are recognized in the reply and offered as artifacts automatically.',
             },
             {
-              k: 'Versions',
-              v: 'Keep prior versions and allow users to switch without losing work.',
+              k: 'Preview',
+              v: 'Rendering runs in an isolated sandbox. A separate origin when configured, a locked-down frame otherwise.',
             },
             {
-              k: 'Errors',
-              v: 'Runtime errors surface in the UI and can feed back into an auto-fix loop.',
+              k: 'Inspect',
+              v: 'Preview and source sit on tabs, so what runs is also what you can read.',
             },
-            { k: 'Gallery', v: 'Artifacts are searchable from a dedicated catalog.' },
+            {
+              k: 'Iterate',
+              v: 'Follow-up prompts revise the artifact, and each pass is kept as a version you can switch back to.',
+            },
+            {
+              k: 'Export',
+              v: 'Copy the contents, download one artifact, or download the whole panel as a zip.',
+            },
+            {
+              k: 'Publish',
+              v: 'Managed publishing stays behind the AGI Cloud waitlist until sharing controls are proven.',
+            },
           ]}
         />
 
-        <LaunchCta
-          title="Artifacts are first-class work, not chat overflow."
-          body="Claude and ChatGPT trained users to expect a canvas for substantial work. AGI keeps that workspace available across model choices."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/compare/claude', label: 'Compare with Claude' }}
+        <CapabilityGrid
+          eyebrow="Around artifacts"
+          title="Where your work travels."
+          items={[
+            {
+              meta: 'Chat',
+              title: 'AI Chat',
+              body: 'Artifacts open beside the conversation that produced them.',
+              href: '/features/ai-chat',
+            },
+            {
+              meta: 'Projects',
+              title: 'Projects',
+              body: 'Group chats, files, instructions, memory, and sources by topic.',
+              href: '/features/projects',
+            },
+            {
+              meta: 'Desktop',
+              title: 'AGI Desktop',
+              body: 'The native app pairs chat with an artifacts workbench for local work.',
+              href: '/desktop',
+            },
+          ]}
         />
+
+        <FinalCta
+          eyebrow="Start now"
+          title="Make something you can keep."
+          body="Try AGI Web in the browser, or install the apps for Local and BYOK work."
+          ctas={[
+            { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
+            { href: '/download', label: 'Download AGI' },
+          ]}
+        />
+
         <MarketingFooter />
       </main>
     </div>

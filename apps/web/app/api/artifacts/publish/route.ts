@@ -1,14 +1,14 @@
 /**
  * POST /api/artifacts/publish
  *
- * Cloud Managed — waitlist-gated pending private beta migration.
+ * Cloud Managed · waitlist-gated pending private beta migration.
  *
- * In v1 LOCAL ONLY mode this route always returns 200 with
+ * Until managed artifact publishing is proven, this route returns 200 with
  * `{ kind: 'waitlist', shareUrl: null, waitlistGated: true }`.
  * The previous 503 path (ArtifactPersistenceUnavailableError) is gone;
  * the publisher now returns a clean discriminated union instead of throwing.
  *
- * See: locks/v1-local-only-cloud-waitlist-2026-05-18.md
+ * See the current product source of truth before changing this gate.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -134,7 +134,7 @@ async function handlePublishArtifact(request: NextRequest) {
       transfer,
       managed,
     });
-    // kind='waitlist' is the v1 LOCAL ONLY result; kind='local' would be
+    // kind='waitlist' is the current public web result; kind='local' would be
     // Desktop-only. Both are valid 200 responses from this route.
     return NextResponse.json(result, { status: 200 });
   } catch (err) {

@@ -124,7 +124,7 @@ describe('secureRandomInt', () => {
   it('distribution across 10k samples is reasonably uniform for n=10', () => {
     const counts = new Array(10).fill(0);
     for (let i = 0; i < 10_000; i++) counts[secureRandomInt(10)]++;
-    // Each bucket should be ~1000 ± 250 — generous tolerance for CI flake margin
+    // Each bucket should be ~1000 ± 250 · generous tolerance for CI flake margin
     for (const c of counts) {
       expect(c).toBeGreaterThan(700);
       expect(c).toBeLessThan(1300);

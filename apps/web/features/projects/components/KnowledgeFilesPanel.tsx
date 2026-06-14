@@ -17,7 +17,7 @@ type UploadState =
   | { status: 'uploading'; fileName: string; progress: number }
   | { status: 'error'; message: string };
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MiB — mirrors MAX_ATTACHMENT_BYTES
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MiB · mirrors MAX_ATTACHMENT_BYTES
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',

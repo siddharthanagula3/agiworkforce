@@ -6,7 +6,7 @@ export * from './components';
 // Hooks
 export * from './hooks';
 
-// Types — exclude ToolCall/ToolCallStatus since they are already exported by ./components
+// Types · exclude ToolCall/ToolCallStatus since they are already exported by ./components
 export type {
   ChatMode,
   ChatAIEmployee,

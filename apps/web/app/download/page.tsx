@@ -1,185 +1,202 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Code2, Globe2, Monitor, Smartphone, TerminalSquare, type LucideIcon } from 'lucide-react';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { DevBand, FinalCta, SurfaceIndex } from '../../components/marketing/FlagshipSections';
+import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { LAUNCH } from '../../lib/marketing-constants';
+
+const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
 export const metadata: Metadata = {
-  title: 'Download AGI — All AGI Apps',
-  description: `Download and join the AGI app suite across Website, Mobile, Desktop, CLI, Chrome, and VS Code. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
+  title: 'Download AGI: Apps for Every Surface',
+  description: `Get AGI on six surfaces: Web in the browser today, Desktop and CLI for Local and BYOK, Mobile with Cloud by invite, plus Chrome and VS Code extensions. ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/download' },
 };
-
-type Surface = {
-  title: string;
-  icon: LucideIcon;
-  body: string;
-  bullets: string[];
-  primaryLabel: string;
-  primaryHref: string;
-  secondaryLabel?: string;
-  secondaryHref?: string;
-  status: string;
-};
-
-const SURFACES: Surface[] = [
-  {
-    title: 'Website',
-    icon: Globe2,
-    body: 'Use AGI in the browser with account chat, projects, artifacts, usage view, billing waitlist, and account settings.',
-    bullets: ['Account web chat', 'Projects and artifacts', 'Usage view and billing waitlist'],
-    primaryLabel: 'Open web app',
-    primaryHref: '/chat',
-    secondaryLabel: 'See website features',
-    secondaryHref: '/business',
-    status: 'Available in browser',
-  },
-  {
-    title: 'Mobile',
-    icon: Smartphone,
-    body: 'Use AGI on iOS and Android for local chat, voice, approvals, share previews, and Cloud Managed invite access.',
-    bullets: ['iOS and Android', 'Local chat and voice', 'Cloud invite waitlist'],
-    primaryLabel: 'Join mobile list',
-    primaryHref: '/mobile',
-    secondaryLabel: 'Mobile legal',
-    secondaryHref: '/mobile/legal',
-    status: 'Local + Cloud invite',
-  },
-  {
-    title: 'Desktop',
-    icon: Monitor,
-    body: 'The local AGI host for chat, local models, BYOK keys, files, tools, and cowork tasks in one shell.',
-    bullets: ['macOS, Windows, Linux', 'Local and BYOK modes', 'Chat, files, and tools together'],
-    primaryLabel: 'Desktop page',
-    primaryHref: '/desktop',
-    secondaryLabel: 'Local mode',
-    secondaryHref: '/local',
-    status: LAUNCH.publicLabel,
-  },
-  {
-    title: 'CLI',
-    icon: TerminalSquare,
-    body: 'Run AGI from the terminal for repo-aware coding, permissioned tools, model routing, and local sessions.',
-    bullets: ['Terminal agent', 'Permission modes', 'Local workspace scope'],
-    primaryLabel: 'CLI install guide',
-    primaryHref: '/cli',
-    secondaryLabel: 'AGI Code',
-    secondaryHref: '/agi-code',
-    status: 'Developer preview',
-  },
-  {
-    title: 'Chrome',
-    icon: Globe2,
-    body: 'Bring AGI into the browser side panel for page-aware chat, capture, and permissioned browser actions.',
-    bullets: ['Side panel', 'Ask and act modes', 'Site permissions'],
-    primaryLabel: 'Chrome extension',
-    primaryHref: '/chrome-extension',
-    secondaryLabel: 'Connectors',
-    secondaryHref: '/apps',
-    status: 'Desktop-bridge scoped',
-  },
-  {
-    title: 'VS Code',
-    icon: Code2,
-    body: 'Use AGI inside the editor for chat, edits, review, terminal handoff, and effort-aware coding sessions.',
-    bullets: ['Editor sidebar', 'Diff review', 'Terminal handoff'],
-    primaryLabel: 'VS Code extension',
-    primaryHref: '/vscode-extension',
-    secondaryLabel: 'Compare Code',
-    secondaryHref: '/compare/codex',
-    status: 'Developer preview',
-  },
-];
-
-const DESKTOP_DOWNLOADS = [
-  {
-    platform: 'macOS',
-    detail: 'Signed installer route opens when release assets are available',
-    href: '/desktop',
-    action: 'Check availability',
-  },
-  {
-    platform: 'Windows',
-    detail: 'Installer route opens when release assets are available',
-    href: '/desktop',
-    action: 'Check availability',
-  },
-  {
-    platform: 'Linux',
-    detail: 'AppImage or package route opens when release assets are available',
-    href: '/desktop',
-    action: 'Check availability',
-  },
-];
 
 export default function DownloadPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
-            {LAUNCH.publicLabel} · six surfaces
+
+        <section className="agi-fl-hero" aria-labelledby="agi-download-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Get AGI</p>
+          <h1 id="agi-download-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Get AGI</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">everywhere you work.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            AGI Web runs in your browser today. No install. Desktop and the CLI bring Local models
+            and BYOK to your machine. Mobile starts in on-device Local Mode with Cloud by invite.
+            The Chrome and VS Code extensions meet you in the browser and the editor.
           </p>
-          <h1 className="agi-page-h1">Do more with AGI, everywhere you work.</h1>
-          <p className="agi-page-lede">
-            One product suite across Website, Mobile, Desktop, CLI, Chrome, and VS Code. AGI keeps
-            the same core promise on every surface: <strong>{POSITIONING.trustBoundary}</strong>
-          </p>
-          <div className="agi-cta-row">
-            <Link href="/get-started" className="agi-cta-primary">
-              Get started
+          <div className="agi-fl-cta-row">
+            <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
+              Try AGI Web
             </Link>
-            <Link href="/apps" className="agi-cta-ghost">
-              View apps and connectors
+            <Link href="/desktop" className="agi-fl-cta agi-fl-cta--secondary">
+              See AGI Desktop
             </Link>
+            <WaitlistTrigger
+              label="Join Cloud Waitlist"
+              source="website"
+              className="agi-fl-cta agi-fl-cta--ghost"
+            />
+          </div>
+          <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+            <li>Local · on-device</li>
+            <li>BYOK · your keys</li>
+            <li>Cloud · by invite</li>
+          </ul>
+
+          <div className="agi-fl-hero-console" aria-hidden="true">
+            <ProductFrame
+              variant="desktop"
+              title="AGI Desktop"
+              badge="Local"
+              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+            />
+            <ProductFrame
+              variant="terminal"
+              title="agi · zsh"
+              className="agi-fl-hero-frame agi-fl-hero-frame--terminal"
+            />
+            <ProductFrame
+              variant="phone"
+              title="AGI Mobile"
+              className="agi-fl-hero-frame agi-fl-hero-frame--phone"
+            />
           </div>
         </section>
 
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Surfaces</p>
-          <div className="agi-route-grid">
-            {SURFACES.map((surface) => {
-              const Icon = surface.icon;
-              return (
-                <article className="agi-route-card" key={surface.title}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 16,
-                    }}
-                  >
-                    <span className="agi-route-meta">{surface.status}</span>
-                    <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-                  </div>
-                  <h2 className="agi-route-title">{surface.title}</h2>
-                  <p className="agi-route-body">{surface.body}</p>
-                  <ul className="agi-route-body" style={{ paddingLeft: 18, marginBottom: 0 }}>
-                    {surface.bullets.map((bullet) => (
-                      <li key={bullet}>{bullet}</li>
-                    ))}
-                  </ul>
-                  <div className="agi-cta-row" style={{ marginTop: 'auto', paddingTop: 22 }}>
-                    <Link href={surface.primaryHref} className="agi-cta-primary">
-                      {surface.primaryLabel}
-                    </Link>
-                    {surface.secondaryHref && surface.secondaryLabel && (
-                      <Link href={surface.secondaryHref} className="agi-cta-ghost">
-                        {surface.secondaryLabel}
-                      </Link>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
+        <SurfaceIndex
+          eyebrow="Pick your surface"
+          title="Six surfaces, honestly labeled."
+          lede="Each surface carries its real status: what runs in your browser today, what installs now, and what opens by invite or developer preview. Nothing is marked available until it is."
+          items={[
+            {
+              index: '01',
+              name: 'AGI Web',
+              tagline: 'No install. Start in the browser.',
+              body: 'Hosted chat with projects, an artifact sidecar, web search, and shared conversations. Your account, waitlist status, and settings live here.',
+              capabilities: [
+                'Chat with projects & memory',
+                'Artifact sidecar',
+                'Web search',
+                'Account & Cloud waitlist',
+              ],
+              platforms: 'Any modern browser',
+              status: 'Available in browser',
+              href: WEB_CHAT_ENTRY_HREF,
+              frame: {
+                variant: 'web',
+                title: 'agiworkforce.com/chat',
+                badge: 'Web',
+                image: {
+                  src: '/app-preview.png',
+                  width: 1024,
+                  height: 665,
+                  alt: 'AGI Web composer with model and tool controls',
+                },
+              },
+            },
+            {
+              index: '02',
+              name: 'AGI Desktop',
+              tagline: 'The local-private compute host.',
+              body: 'A native app built in Rust. Runs local models, holds BYOK keys encrypted, powers files and connectors. Platform installers open from the Desktop page as release assets become available.',
+              capabilities: [
+                'Local models via Ollama & LM Studio',
+                'BYOK keys, encrypted at rest',
+                'MCP connectors & tool approvals',
+                'Scheduled work with AGI Work',
+              ],
+              platforms: 'macOS · Windows · Linux',
+              status: LAUNCH.publicLabel,
+              href: '/desktop',
+              frame: { variant: 'desktop', title: 'AGI Desktop', badge: 'Local' },
+            },
+            {
+              index: '03',
+              name: 'AGI Mobile',
+              tagline: 'Private AI in your pocket.',
+              body: 'On-device chat in Local Mode by default. Your conversations, memory, and files stay on the phone unless you explicitly choose otherwise. AGI Cloud arrives by invite.',
+              capabilities: [
+                'On-device Local chat',
+                'Local data stays local',
+                'Projects & recents drawer',
+                'Cloud by invite',
+              ],
+              platforms: 'iPhone · Android',
+              status: 'Local + Cloud invite',
+              href: '/mobile',
+              frame: { variant: 'phone', title: 'AGI Mobile' },
+            },
+            {
+              index: '04',
+              name: 'AGI CLI',
+              tagline: 'An agent in your terminal.',
+              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. The CLI page carries the current install guide.',
+              capabilities: [
+                'Sessions, resume & fork',
+                'Sandboxed execution',
+                'Hooks, skills & MCP',
+                'Offline with local models',
+              ],
+              platforms: 'macOS · Linux',
+              status: 'Developer preview',
+              href: '/cli',
+              frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
+            },
+            {
+              index: '05',
+              name: 'AGI in Chrome',
+              tagline: 'Your browser, with context.',
+              body: 'A Manifest V3 side panel that captures page context on request. Hands real work to Desktop over a paired native-messaging bridge. Availability tracks the Desktop release.',
+              capabilities: [
+                'Side panel on any page',
+                'Page context on request',
+                'Paired Desktop bridge',
+                'Scoped permissions',
+              ],
+              platforms: 'Chrome (MV3)',
+              status: 'Desktop-bridge scoped',
+              href: '/chrome-extension',
+              frame: { variant: 'browser', title: 'AGI · side panel', badge: 'scoped' },
+            },
+            {
+              index: '06',
+              name: 'AGI in VS Code',
+              tagline: 'IDE-native assistance.',
+              body: 'Chat with @agi inside your editor with workspace-scoped context. Review diffs before they land and run slash commands like /explain and /tests.',
+              capabilities: [
+                '@agi chat participant',
+                'Workspace-scoped context',
+                'Diff review',
+                'Explicit handoffs',
+              ],
+              platforms: 'VS Code',
+              status: 'Developer preview',
+              href: '/vscode-extension',
+              frame: { variant: 'editor', title: 'AGI · VS Code', badge: '@agi' },
+            },
+          ]}
+        />
 
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Desktop installers</p>
+        <section className="agi-fl-section" aria-labelledby="agi-download-installers-title">
+          <p className="agi-fl-eyebrow">Desktop installers</p>
+          <h2 id="agi-download-installers-title" className="agi-fl-h2">
+            Installers, as they become available.
+          </h2>
+          <p className="agi-fl-section-lede">
+            AGI Desktop targets macOS, Windows, and Linux. Each platform&rsquo;s route opens from
+            the Desktop page when release assets are available. No placeholder download links.
+          </p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -189,48 +206,58 @@ export default function DownloadPage() {
               </tr>
             </thead>
             <tbody>
-              {DESKTOP_DOWNLOADS.map((download) => (
-                <tr key={download.platform}>
-                  <td style={{ width: '24%' }}>{download.platform}</td>
-                  <td>{download.detail}</td>
-                  <td>
-                    <a className="agi-cta-ghost" href={download.href}>
-                      {download.action}
-                    </a>
-                  </td>
-                </tr>
-              ))}
+              <tr>
+                <td>macOS</td>
+                <td>Signed installer route opens when release assets are available</td>
+                <td>
+                  <Link href="/desktop" className="agi-cta-ghost">
+                    Check Availability
+                  </Link>
+                </td>
+              </tr>
+              <tr>
+                <td>Windows</td>
+                <td>Installer route opens when release assets are available</td>
+                <td>
+                  <Link href="/desktop" className="agi-cta-ghost">
+                    Check Availability
+                  </Link>
+                </td>
+              </tr>
+              <tr>
+                <td>Linux</td>
+                <td>AppImage or package route opens when release assets are available</td>
+                <td>
+                  <Link href="/desktop" className="agi-cta-ghost">
+                    Check Availability
+                  </Link>
+                </td>
+              </tr>
             </tbody>
           </table>
         </section>
 
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Terminal</p>
-          <div className="agi-terminal">
-            <div className="agi-terminal-bar">~/agi-workforce — install</div>
-            <pre className="agi-terminal-pre">{`$ curl -fsSL https://agiworkforce.com/install.sh | bash
-$ agi login
-$ agi exec "review this repo"`}</pre>
-          </div>
-        </section>
+        <DevBand
+          eyebrow="For developers"
+          title="Install the developer surfaces."
+          body="The AGI CLI ships as the agi binary in developer preview. The CLI page carries the current install guide and verified commands. The VS Code extension adds @agi chat, diff review, and slash commands to your editor."
+          ctas={[
+            { href: '/cli', label: 'Read the CLI Install Guide' },
+            { href: '/vscode-extension', label: 'See the VS Code Extension' },
+          ]}
+        />
 
-        <section className="agi-section">
-          <div className="agi-launch-cta">
-            <div>
-              <h2 className="agi-launch-title">
-                Choose local, BYOK, or managed cloud deliberately.
-              </h2>
-              <p className="agi-launch-body">
-                Desktop and CLI are the local execution anchors. Website uses account app chat.
-                Mobile is Local plus Cloud invite. Chrome and VS Code stay scoped to browser and
-                workspace tasks unless the user explicitly hands off context.
-              </p>
-            </div>
-            <Link href="/compare" className="agi-cta-primary">
-              Compare surfaces
-            </Link>
-          </div>
-        </section>
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Pick a surface and go."
+          body="Try AGI Web in the browser now. Follow the Desktop and CLI pages for Local and BYOK work as releases open. Join the waitlist for AGI Cloud. The route your work takes stays visible on every surface."
+          ctas={[
+            { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
+            { href: '/desktop', label: 'See AGI Desktop' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
+        />
 
         <MarketingFooter />
       </main>

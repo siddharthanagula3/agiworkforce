@@ -4,9 +4,8 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { AgiMark } from './AgiMark';
 
 /*
- * The hero product demo: a real chat panel where the model name in the
- * header changes mid-conversation. No instrument-panel chrome, no FIG marks,
- * no LED strips. Just the actual product surface, rendered live.
+ * The hero product preview: a scripted chat panel showing the route label change
+ * without claiming a live model call or a completed code execution.
  */
 
 type Step =
@@ -17,23 +16,23 @@ type Step =
 const SCRIPT: Step[] = [
   {
     kind: 'user',
-    text: 'Sketch the architecture for the cross-provider router.',
-    model: 'Claude Opus',
+    text: 'Plan the route for a private research task.',
+    model: 'Claude',
   },
   {
     kind: 'assistant',
-    text: 'Reading the source in apps/cli/src — drafted a five-stage handoff: receive, normalize, route, stream, reassemble. Returning the outline.',
-    model: 'Claude Opus',
+    text: 'Use Local for notes and files. Move only the selected summary to Cloud if you need a hosted model.',
+    model: 'Claude',
   },
-  { kind: 'switch', from: 'Claude Opus', to: 'GPT' },
+  { kind: 'switch', from: 'Claude', to: 'GPT' },
   {
     kind: 'user',
-    text: 'Now implement it in Rust.',
+    text: 'Now turn that into an implementation checklist.',
     model: 'GPT',
   },
   {
     kind: 'assistant',
-    text: 'Continuing from the previous outline. Drafted models.rs covering all five stages. Compiling clean.',
+    text: 'Create the adapter contract, add route labels, preserve the consent gate, then add tests for Local, BYOK, and Cloud paths.',
     model: 'GPT',
   },
 ];
@@ -91,13 +90,13 @@ export function AgiChatDemo() {
     !reduced && visible.length > 0 && visible[visible.length - 1]?.kind === 'switch';
 
   return (
-    <div className="agi-chat" aria-label="cross-provider chat demo">
+    <div className="agi-chat" aria-label="route preview">
       <div className="agi-chat-header">
         <AgiMark size={16} spinning={isSwitching} />
         <span className="agi-chat-model" key={currentModel}>
           {currentModel}
         </span>
-        <span className="agi-chat-meta">live · just now</span>
+        <span className="agi-chat-meta">preview · example</span>
       </div>
 
       <div className="agi-chat-body" aria-live="polite">

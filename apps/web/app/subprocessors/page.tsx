@@ -75,7 +75,7 @@ export default function SubprocessorsPage() {
           <p className="agi-section-eyebrow">What about LLM providers?</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             When you BYOK against Anthropic, OpenAI, Google, or any other provider, that provider
-            becomes a processor of <em>your</em> data, on <em>your</em> contract — not ours. We do
+            becomes a processor of <em>your</em> data, on <em>your</em> contract, not ours. We do
             not process your prompts; the request flows directly from your client to the provider
             you targeted. See{' '}
             <Link href="/byok" style={{ color: 'var(--agi-ink)' }}>

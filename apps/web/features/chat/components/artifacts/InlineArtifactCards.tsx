@@ -19,7 +19,7 @@ import type { ArtifactData } from './ArtifactPreview';
 
 interface InlineArtifactCardsProps {
   artifacts: ArtifactData[];
-  /** Called when user clicks a card or the overflow card — opens the panel. */
+  /** Called when user clicks a card or the overflow card · opens the panel. */
   onOpen?: (artifactId: string) => void;
   className?: string;
 }
@@ -109,7 +109,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
       )}
       aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
     >
-      {/* Preview area — 80px wide on the left */}
+      {/* Preview area · 80px wide on the left */}
       <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-r border-border/30">
         {canRender ? (
           <iframe
@@ -139,7 +139,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
         </div>
       </div>
 
-      {/* Text area — fills remaining width */}
+      {/* Text area · fills remaining width */}
       <div className="flex flex-1 min-w-0 flex-col justify-center gap-1 px-3 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <span className="flex-1 truncate text-sm font-medium text-foreground leading-tight">

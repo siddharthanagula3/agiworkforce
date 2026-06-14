@@ -1,4 +1,4 @@
-// Browser stub for node:async_hooks — AsyncLocalStorage is Node-only.
+// Browser stub for node:async_hooks · AsyncLocalStorage is Node-only.
 // Client components get a no-op implementation that always runs the callback
 // synchronously without any async context isolation.
 
