@@ -467,7 +467,7 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
     // Gateway was called twice (once for tool_call, once for final)
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(firstCall[0]).toBe('https://api.agiworkforce.com/v1/chat/completions');
+    expect(firstCall[0]).toBe('https://api.agiworkforce.com/api/llm/v1/chat/completions');
     const firstBody = JSON.parse(firstCall[1].body as string) as {
       messages: Array<{ role: string; content: unknown }>;
       stream: boolean;
