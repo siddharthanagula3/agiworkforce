@@ -8,7 +8,7 @@ import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { reconcileUsage } from '@/lib/assert-quota';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import type { ProcessedRequest } from './request-processor';
-// ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. — no extra imports needed
+// ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. · no extra imports needed
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -30,7 +30,7 @@ export async function buildStreamResponse(
     quotaFeature,
     isFlagshipRequest,
     usedFallback,
-    autoEconomyTrial,
+    freeTrial,
   } = processed;
 
   const modelUsed = chatRequest.model;
@@ -399,7 +399,7 @@ export async function buildStreamResponse(
 
         const totalTokens = inputTokens + outputTokens;
 
-        if (!autoEconomyTrial && totalTokens > 0) {
+        if (!freeTrial && totalTokens > 0) {
           const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
             promptTokens: inputTokens,
             completionTokens: outputTokens,
@@ -450,7 +450,7 @@ export async function buildStreamResponse(
       }
 
       const finalTotalTokens = inputTokens + outputTokens;
-      if (!autoEconomyTrial && finalTotalTokens > 0) {
+      if (!freeTrial && finalTotalTokens > 0) {
         void reconcileUsage({
           userId,
           token,
@@ -502,9 +502,9 @@ export async function buildStreamResponse(
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
-  if (autoEconomyTrial) {
-    streamHeaders['X-AGI-Trial-Prompts-Used'] = String(autoEconomyTrial.promptCount);
-    streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(autoEconomyTrial.promptLimit);
+  if (freeTrial) {
+    streamHeaders['X-AGI-Trial-Prompts-Used'] = String(freeTrial.promptCount);
+    streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
   }
 
   return new NextResponse(reconciledStream, { headers: streamHeaders });
