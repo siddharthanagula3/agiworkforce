@@ -20,6 +20,7 @@
  */
 
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
+import { getAuthToken } from '../computer-use/cloudAgentClient';
 
 // ─── CSS injected into the side panel's adoptedStyleSheets ───────────────────
 
@@ -341,6 +342,46 @@ export const COMPUTER_USE_PANEL_CSS = `
     border-color: var(--agi-ext-danger-border);
     color: var(--agi-ext-danger);
   }
+
+  /* Auth status chip in controls bar */
+  .sp-cu-auth-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .sp-cu-auth-chip.authed {
+    background: var(--agi-ext-success-bg);
+    color: var(--agi-ext-success);
+    border: 1px solid var(--agi-ext-success-border);
+  }
+
+  .sp-cu-auth-chip.unauthed {
+    background: color-mix(in srgb, var(--agi-ext-warning) 12%, transparent);
+    color: var(--agi-ext-warning);
+    border: 1px solid color-mix(in srgb, var(--agi-ext-warning) 35%, transparent);
+  }
+
+  .sp-cu-auth-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .sp-cu-auth-chip.authed .sp-cu-auth-dot {
+    background: var(--agi-ext-success);
+  }
+
+  .sp-cu-auth-chip.unauthed .sp-cu-auth-dot {
+    background: var(--agi-ext-warning);
+  }
 `;
 
 // ─── Tool icon map ────────────────────────────────────────────────────────────
@@ -411,6 +452,12 @@ export interface ComputerUsePanelAPI {
    * Called by the agent loop via onUsageUpdate.
    */
   updateUsageMeter(usage: AgentLoopUsage): void;
+  /**
+   * Re-check the cloud auth token and update the auth-status chip.
+   * Called by side_panel.ts whenever the Computer Use tab becomes visible,
+   * so the chip reflects any token that was pasted in Options since last open.
+   */
+  refreshAuthChip(): void;
 }
 
 /**
@@ -489,7 +536,44 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     if (_runAutofillHandler) _runAutofillHandler();
   });
 
+  // Auth-status chip — green "Signed in" or amber "Paste token in Options".
+  // Checked once on panel build; re-checked whenever the panel becomes visible
+  // via the exported refreshAuthChip() helper wired to the tab-switch event.
+  const authChip = document.createElement('span');
+  authChip.className = 'sp-cu-auth-chip unauthed';
+  authChip.setAttribute('aria-live', 'polite');
+  authChip.setAttribute('title', 'Cloud auth status');
+  const authDot = document.createElement('span');
+  authDot.className = 'sp-cu-auth-dot';
+  const authLabel = document.createElement('span');
+  authLabel.textContent = 'Checking…';
+  authChip.appendChild(authDot);
+  authChip.appendChild(authLabel);
+
+  function refreshAuthChip(): void {
+    getAuthToken()
+      .then((token) => {
+        if (token) {
+          authChip.className = 'sp-cu-auth-chip authed';
+          authLabel.textContent = 'Signed in';
+          authChip.title = 'Cloud token present — agent can run.';
+        } else {
+          authChip.className = 'sp-cu-auth-chip unauthed';
+          authLabel.textContent = 'Paste token in Options';
+          authChip.title =
+            'No cloud token found. Open Options and paste your AGI bearer token to enable the agent.';
+        }
+      })
+      .catch(() => {
+        authChip.className = 'sp-cu-auth-chip unauthed';
+        authLabel.textContent = 'Auth unavailable';
+      });
+  }
+  // Initial check
+  refreshAuthChip();
+
   controls.appendChild(runAutofillBtn);
+  controls.appendChild(authChip);
   controls.appendChild(controlsLabel);
   controls.appendChild(askLabel);
   controls.appendChild(clearBtn);
@@ -786,5 +870,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     showApprovalCard,
     onRunAutofill,
     updateUsageMeter,
+    refreshAuthChip,
   };
 }

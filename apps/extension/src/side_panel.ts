@@ -3273,9 +3273,13 @@ function buildUI(): void {
   document.body.appendChild(authBar);
 
   const tabBar = el('div', { id: 'sp-tab-bar' });
-  const chatTabBtn = el('button', { class: 'sp-tab sp-tab-active', 'data-tab': 'chat' }, 'Chat');
+  const chatTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'chat' }, 'Chat');
   const workflowsTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'workflows' }, 'Workflows');
-  const cuTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'computer-use' }, 'Computer Use');
+  const cuTabBtn = el(
+    'button',
+    { class: 'sp-tab sp-tab-active', 'data-tab': 'computer-use' },
+    'Computer Use',
+  );
   tabBar.appendChild(chatTabBtn);
   tabBar.appendChild(workflowsTabBtn);
   tabBar.appendChild(cuTabBtn);
@@ -3300,6 +3304,9 @@ function buildUI(): void {
     if (tab === 'workflows') {
       refreshWorkflowsShortcuts();
       refreshWorkflowsTasks();
+    }
+    if (tab === 'computer-use') {
+      cuPanel.refreshAuthChip();
     }
   }
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
@@ -4360,6 +4367,11 @@ function buildUI(): void {
 
   setupVoiceInput(micBtn, inputEl, autoResizeInput);
   renderMessages();
+
+  // Default to Computer Use tab on open — it's the hero demo surface and
+  // always functional. Chat tab requires the desktop bridge, which may not
+  // be running on first impression.
+  switchTab('computer-use');
 }
 
 function refreshConsoleLogs(): void {
