@@ -1,22 +1,18 @@
 /**
  * Vision routing service — routes image queries to the best available backend.
  *
- * Priority chain:
- *   1. On-device VL model (qwen2.5-vl-3b-instruct) if user has opted in and it is installed.
- *   2. System multimodal (Apple FM / Gemini Nano) if available.
- *   3. Apple Vision OCR + text-only LLM reasoning (Qwen3-4B) as universal fallback.
+ * Current Local Mode route:
+ *   1. Native OCR over the selected image.
+ *   2. Local text-only LLM reasoning over the extracted text.
+ *
+ * Do not advertise on-device VL or Apple/Gemini image input until the native
+ * bridge exposes an actual image parameter and the route is verified manually.
  *
  * The service never throws on routing fallback — it always returns a result or
  * a descriptive error string so the caller can surface it to the user.
  */
 
-import {
-  getModelsForRole,
-  getDefaultModel,
-  localGenerate,
-  detectCapabilities,
-} from '@agiworkforce/local-llm';
-import { getInstalledModel } from '@/storage/installedModels';
+import { getDefaultModel, localGenerate } from '@agiworkforce/local-llm';
 import { recognizeText } from './ocr';
 
 export type VisionRoute =
@@ -42,32 +38,9 @@ export interface VisionResult {
 
 /** Resolve which vision route to use, in priority order. */
 export async function resolveVisionRoute(): Promise<VisionRoute> {
-  // Check for user-opted-in premium vision pack
-  const visionPackModels = getModelsForRole('premium-vision-pack');
-  for (const model of visionPackModels) {
-    const installed = await getInstalledModel(model.id).catch(() => null);
-    if (installed) {
-      return { kind: 'vl-pack', modelId: model.id, displayName: model.displayName };
-    }
-  }
-
-  // Check for system multimodal (Apple FM on iOS, Gemini Nano on Android)
-  const caps = await detectCapabilities();
-  if (caps.tier1Available && caps.tier1Runtime) {
-    const sysModels = getModelsForRole('system-multimodal');
-    const runtime = caps.tier1Runtime;
-    const match = sysModels.find((m) =>
-      runtime === 'foundation_models'
-        ? m.id === 'apple-foundation-models'
-        : m.id === 'gemini-nano-aicore',
-    );
-    if (match) {
-      return { kind: 'system-multimodal', modelId: match.id, displayName: match.displayName };
-    }
-  }
-
-  // Universal fallback: Apple Vision OCR (iOS) or ML Kit text detection (Android)
-  // + Qwen3-4B text reasoning over the extracted text.
+  // The current local inference API accepts text prompts only. Until the Apple
+  // Foundation Models / AICore bridge exposes a real image input, keep this
+  // route honest and use native OCR plus local text reasoning.
   return { kind: 'ocr-fallback', displayName: 'AGI Standard (OCR)' };
 }
 
@@ -90,27 +63,7 @@ export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> 
   const route = await resolveVisionRoute();
   const t0 = Date.now();
 
-  if (route.kind === 'vl-pack' || route.kind === 'system-multimodal') {
-    // For VL models: Apple FM accepts image URIs directly via its structured message API.
-    // Executorch VL support is planned but not yet in rn-executorch 0.8.4; we fall through
-    // to the OCR path for the vl-pack case until the VL preset lands.
-    // Apple FM (tier1) handles visionIn=true natively.
-    if (route.kind === 'system-multimodal') {
-      const prompt =
-        `You are analyzing an image the user photographed or selected.\n` +
-        `Image URI: ${query.imageUri}\n\n` +
-        `User question: ${query.question}`;
-
-      const result = await localGenerate(undefined, {
-        modelId: route.modelId,
-        prompt,
-        onToken: query.onToken,
-      });
-      return { text: result.text, route, ttftMs: Date.now() - t0 };
-    }
-  }
-
-  // OCR fallback path (also used for vl-pack until Executorch VL preset ships):
+  // OCR fallback path:
   const ocrText = await runNativeOCR(query.imageUri);
 
   const prompt = ocrText

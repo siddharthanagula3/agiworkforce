@@ -1,290 +1,420 @@
-import { useCallback } from 'react';
-import { View, ScrollView, Pressable, Alert } from 'react-native';
+import type React from 'react';
+import { useCallback, useMemo } from 'react';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import * as WebBrowser from 'expo-web-browser';
 import {
   ArrowLeft,
-  CreditCard,
   BarChart3,
-  MessageSquare,
-  Bot,
-  Clock,
+  Brain,
+  ChevronRight,
+  CreditCard,
+  Database,
   ExternalLink,
   LogOut,
+  MessageSquare,
+  Shield,
+  Sparkles,
+  UserRound,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
-import { fetchPortalSessionUrl, UpsellCard } from '@/src/features/billing';
+import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatStore } from '@/stores/chatStore';
-import { useAgentStore } from '@/stores/agentStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
-import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
-interface UsageStats {
-  totalConversations: number;
-  totalMessages: number;
-  totalAgentRuns: number;
-  subscriptionPlan: string | null;
-  subscriptionStatus: string | null;
+interface ProfileRowProps {
+  icon: LucideIcon;
+  isLast?: boolean;
+  label: string;
+  onPress: () => void;
+  tone?: 'default' | 'danger';
+  value?: string;
 }
 
-/**
- * ProfileScreen -- User profile, subscription status, usage stats.
- */
 export default function ProfileScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const { user, signOut } = useAuthStore();
   const conversations = useChatStore((s) => s.conversations);
-  const agents = useAgentStore((s) => s.agents);
+  const personalization = useSettingsStore((s) => s.personalization);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
 
-  // v1 local-only: derive all stats from local store data. No API call needed.
-  // totalMessages sums per-conversation messageCount from ConversationSummary.
-  // subscriptionPlan / subscriptionStatus remain null until cloud is wired up.
-  const totalMessages = conversations.reduce((sum, c) => sum + (c.messageCount ?? 0), 0);
-  const stats: UsageStats = {
-    totalConversations: conversations.length,
-    totalMessages,
-    totalAgentRuns: agents.length,
-    subscriptionPlan: null,
-    subscriptionStatus: null,
-  };
+  const modeConversations = useMemo(
+    () =>
+      conversations.filter(
+        (conversation) => executionModeForConversation(conversation) === appMode,
+      ),
+    [appMode, conversations],
+  );
+  const totalMessages = modeConversations.reduce((sum, conversation) => {
+    return sum + (conversation.messageCount ?? 0);
+  }, 0);
+  const isCloudMode = appMode === 'cloud';
+  const displayName = isCloudMode
+    ? 'AGI Cloud'
+    : personalization.nickname ||
+      personalization.fullName ||
+      user?.email?.split('@')[0] ||
+      'Local profile';
+  const subtitle = isCloudMode
+    ? user?.email || (cloudUnlocked ? 'Cloud access unlocked' : 'Invite required')
+    : personalization.occupation || 'Private on this device';
+  const initial = displayName.charAt(0).toUpperCase();
+  const hasCloudAccount = FEATURES.auth && Boolean(user);
 
-  const handleBack = useCallback(() => {
+  const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  const handleSignOut = useCallback(() => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-    ]);
-  }, [signOut]);
+  const push = useCallback(
+    (path: string) => () => router.push(path as Parameters<typeof router.push>[0]),
+    [router],
+  );
 
   const handleManageSubscription = useCallback(async () => {
     try {
       const portalUrl = await fetchPortalSessionUrl();
-      // HIGH-MOB-02 allowlist: only https://stripe.com / *.stripe.com /
-      // agiworkforce.com / *.agiworkforce.com are accepted.
       if (isAllowedExternalUrl(portalUrl)) {
-        await WebBrowser.openBrowserAsync(portalUrl);
+        await openExternalUrl(portalUrl);
         return;
       }
     } catch {
-      // Fall through to fallback below
+      // Fall back to the public billing page below.
     }
-    // Fallback: static billing page
-    const fallbackOpened = await openExternalUrl('https://agiworkforce.com/settings/billing');
-    if (!fallbackOpened) {
+
+    const opened = await openExternalUrl('https://agiworkforce.com/settings/billing');
+    if (!opened) {
       Alert.alert(
-        'Error',
-        "Couldn't open billing portal. Try again or visit agiworkforce.com/settings/billing",
+        'Billing unavailable',
+        'Open agiworkforce.com/settings/billing in your browser to manage billing.',
       );
     }
   }, []);
 
-  const handleUpgradePress = useCallback(async () => {
-    // Open Stripe checkout via system browser; portal-session doubles as
-    // the upgrade URL for free-plan users when no subscription exists.
-    try {
-      const portalUrl = await fetchPortalSessionUrl();
-      if (isAllowedExternalUrl(portalUrl)) {
-        await WebBrowser.openBrowserAsync(portalUrl);
-        return;
-      }
-    } catch {
-      // Fall through
-    }
-    await openExternalUrl('https://agiworkforce.com/pricing');
-  }, []);
-
-  if (!FEATURES.auth) return null;
-
-  const email = user?.email ?? 'Not signed in';
-  const initial = email[0]?.toUpperCase() ?? 'U';
-  const joinDate = user?.created_at ? formatDate(user.created_at) : null;
-
-  // Normalise the plan string from the API into a BillingPlanTier so we can
-  // decide whether to show the upsell. normalizeBillingPlanTier falls back to
-  // 'free' for null / unrecognised values — correct for new / unsubscribed users.
-  const planTier = normalizeBillingPlanTier(stats.subscriptionPlan);
-  const showUpsell = planTier === 'free' || planTier === 'byok' || planTier === 'local-only';
+  const handleSignOut = useCallback(() => {
+    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log Out', style: 'destructive', onPress: signOut },
+    ]);
+  }, [signOut]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
-      {/* Header */}
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <View
-        className="flex-row items-center px-3 h-12"
-        style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
+        style={{
+          height: 50,
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 8,
+        }}
       >
         <Pressable
-          onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
-          accessibilityLabel="Go back"
+          onPress={goBack}
           accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={8}
+          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
-          <ArrowLeft size={20} color={colors.textSecondary} />
+          <ArrowLeft size={21} color={colors.textPrimary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2">
-          Profile
-        </Text>
+        <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}>Profile</Text>
       </View>
 
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 32 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 12,
+          paddingBottom: 36,
+          gap: 18,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Avatar + Name */}
-        <Animated.View entering={FadeInDown.duration(250)}>
-          <Card>
-            <View className="items-center py-4">
-              <View className="w-20 h-20 rounded-full bg-teal-500/20 items-center justify-center mb-3">
-                <Text className="text-3xl font-bold text-teal-400">{initial}</Text>
-              </View>
-              <Text className="text-lg font-semibold text-white">{email}</Text>
-              {joinDate && (
-                <View className="flex-row items-center gap-1 mt-1">
-                  <Clock size={12} color={colors.textMuted} />
-                  <Text className="text-xs text-white/40">Joined {joinDate}</Text>
-                </View>
-              )}
-            </View>
-          </Card>
-        </Animated.View>
-
-        {/* Upsell card — only shown for non-cloud-ready plans */}
-        {showUpsell && (
-          <Animated.View entering={FadeInDown.duration(250).delay(50)}>
-            <UpsellCard onUpgradePress={handleUpgradePress} />
-          </Animated.View>
-        )}
-
-        {/* Subscription */}
-        <Animated.View entering={FadeInDown.duration(250).delay(60)}>
-          <Card>
-            <Text variant="caption" className="mb-3 uppercase tracking-wider">
-              Subscription
+        <View
+          style={{
+            borderRadius: 18,
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: 18,
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <View
+            style={{
+              width: 76,
+              height: 76,
+              borderRadius: 38,
+              backgroundColor: colors.surfaceHover,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: 28, fontWeight: '700' }}>
+              {initial}
             </Text>
-            <View className="flex-row items-center gap-3 mb-3">
-              <CreditCard size={18} color={colors.teal} />
-              <View className="flex-1">
-                <Text className="text-sm text-white font-medium">
-                  {stats.subscriptionPlan ?? 'Free Plan'}
-                </Text>
-                {stats.subscriptionStatus && (
-                  <Text className="text-xs text-white/40 mt-0.5">{stats.subscriptionStatus}</Text>
-                )}
-              </View>
-              <Badge
-                label={stats.subscriptionStatus === 'active' ? 'Active' : 'Free'}
-                color={stats.subscriptionStatus === 'active' ? 'green' : 'gray'}
-              />
-            </View>
-            <Button
-              title="Manage Subscription"
-              variant="outline"
-              size="sm"
-              onPress={handleManageSubscription}
+          </View>
+          <View style={{ alignItems: 'center', gap: 3 }}>
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textPrimary, fontSize: 22, fontWeight: '700' }}
+            >
+              {displayName}
+            </Text>
+            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 14 }}>
+              {subtitle}
+            </Text>
+          </View>
+          <View
+            style={{
+              alignSelf: 'stretch',
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              paddingTop: 14,
+              flexDirection: 'row',
+              justifyContent: 'space-around',
+            }}
+          >
+            <ProfileStat
+              icon={MessageSquare}
+              label="Chats"
+              value={modeConversations.length}
+              color={colors.textSecondary}
             />
-          </Card>
-        </Animated.View>
+            <ProfileStat
+              icon={BarChart3}
+              label="Messages"
+              value={totalMessages}
+              color={colors.textSecondary}
+            />
+          </View>
+        </View>
 
-        {/* Usage Stats */}
-        <Animated.View entering={FadeInDown.duration(250).delay(120)}>
-          <Card>
-            <Text variant="caption" className="mb-3 uppercase tracking-wider">
-              Usage
-            </Text>
-            <View className="flex-row justify-around py-2">
-              <StatItem
-                icon={<MessageSquare size={18} color={colors.agentActive} />}
-                value={stats.totalConversations}
-                label="Chats"
+        {!isCloudMode ? (
+          <View>
+            <SectionTitle title="Local settings" />
+            <ProfileGroup>
+              <ProfileRow
+                icon={Sparkles}
+                label="Personalization"
+                onPress={push('/(app)/settings/personalization')}
               />
-              <StatItem
-                icon={<BarChart3 size={18} color={colors.teal} />}
-                value={stats.totalMessages}
-                label="Messages"
+              <ProfileRow icon={Brain} label="Memory" onPress={push('/(app)/settings/memory')} />
+              <ProfileRow
+                icon={Shield}
+                label="Safety & Security"
+                onPress={push('/(app)/settings/safety-security')}
               />
-              <StatItem
-                icon={<Bot size={18} color={colors.agentWarning} />}
-                value={stats.totalAgentRuns}
-                label="Agent Runs"
+              <ProfileRow
+                icon={Database}
+                isLast
+                label="Data Controls"
+                onPress={push('/(app)/settings/data-controls')}
               />
+            </ProfileGroup>
+          </View>
+        ) : null}
+
+        {isCloudMode && hasCloudAccount ? (
+          <View>
+            <SectionTitle title="AGI Cloud" />
+            <ProfileGroup>
+              <ProfileRow
+                icon={CreditCard}
+                label="Subscription"
+                onPress={handleManageSubscription}
+                value="Manage"
+              />
+              <ProfileRow
+                icon={ExternalLink}
+                label="Account"
+                onPress={() => {
+                  void openExternalUrl('https://agiworkforce.com/account');
+                }}
+                value="Web"
+              />
+              <ProfileRow
+                icon={LogOut}
+                isLast
+                label="Log Out"
+                onPress={handleSignOut}
+                tone="danger"
+              />
+            </ProfileGroup>
+          </View>
+        ) : null}
+
+        {!isCloudMode ? (
+          <View
+            style={{
+              borderRadius: 16,
+              backgroundColor: colors.surfaceElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: 14,
+              flexDirection: 'row',
+              gap: 12,
+              alignItems: 'flex-start',
+            }}
+          >
+            <UserRound size={19} color={colors.textSecondary} />
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+                Local profile
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                Your local profile, chats, and memory stay separate from AGI Cloud.
+              </Text>
             </View>
-          </Card>
-        </Animated.View>
+          </View>
+        ) : null}
 
-        {/* Account Actions */}
-        <Animated.View entering={FadeInDown.duration(250).delay(180)}>
-          <Card>
-            <Text variant="caption" className="mb-3 uppercase tracking-wider">
-              Account
-            </Text>
-            <Pressable
-              onPress={() => {
-                void openExternalUrl('https://agiworkforce.com/account');
-              }}
-              className="flex-row items-center gap-3 py-3 active:bg-white/5 rounded-lg"
-              accessibilityLabel="Manage account online"
-              accessibilityRole="link"
-            >
-              <ExternalLink size={18} color={colors.textSecondary} />
-              <Text className="text-sm text-white flex-1">Manage Account Online</Text>
-            </Pressable>
-            <Separator />
-            <Pressable
-              onPress={handleSignOut}
-              className="flex-row items-center gap-3 py-3 active:bg-white/5 rounded-lg"
-              accessibilityLabel="Sign out"
-              accessibilityRole="button"
-            >
-              <LogOut size={18} color={colors.agentError} />
-              <Text className="text-sm text-red-400">Sign Out</Text>
-            </Pressable>
-          </Card>
-        </Animated.View>
+        {isCloudMode && !hasCloudAccount ? (
+          <View
+            style={{
+              borderRadius: 16,
+              backgroundColor: colors.surfaceElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: 14,
+              flexDirection: 'row',
+              gap: 12,
+              alignItems: 'flex-start',
+            }}
+          >
+            <UserRound size={19} color={colors.textSecondary} />
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+                AGI Cloud profile
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                Cloud profile, chats, memory, and account settings stay separate from Local Mode.
+              </Text>
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Components
-// ---------------------------------------------------------------------------
-
-function StatItem({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
+function SectionTitle({ title }: { title: string }) {
+  const colors = useThemeColors();
   return (
-    <View className="items-center gap-1.5">
-      {icon}
-      <Text className="text-xl font-bold text-white">{value}</Text>
-      <Text className="text-[11px] text-white/40">{label}</Text>
+    <Text
+      style={{
+        color: colors.textMuted,
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 8,
+        paddingHorizontal: 2,
+      }}
+    >
+      {title}
+    </Text>
+  );
+}
+
+function ProfileGroup({ children }: { children: React.ReactNode }) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        borderRadius: 14,
+        backgroundColor: colors.surfaceElevated,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: 'hidden',
+      }}
+    >
+      {children}
     </View>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+function ProfileRow({
+  icon: Icon,
+  isLast,
+  label,
+  onPress,
+  tone = 'default',
+  value,
+}: ProfileRowProps) {
+  const colors = useThemeColors();
+  const tint = tone === 'danger' ? colors.agentError : colors.textSecondary;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={[label, value].filter(Boolean).join('. ')}
+      style={{
+        minHeight: 52,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        borderBottomWidth: isLast ? 0 : 1,
+        borderBottomColor: colors.border,
+      }}
+    >
+      <Icon size={19} color={tint} />
+      <Text
+        numberOfLines={1}
+        style={{
+          flex: 1,
+          color: tone === 'danger' ? colors.agentError : colors.textPrimary,
+          fontSize: 15,
+        }}
+      >
+        {label}
+      </Text>
+      {value ? (
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, maxWidth: 110 }}>
+          {value}
+        </Text>
+      ) : null}
+      <ChevronRight size={17} color={colors.textMuted} />
+    </Pressable>
+  );
+}
 
-function formatDate(isoDate: string): string {
-  try {
-    const date = new Date(isoDate);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return '';
-  }
+function ProfileStat({
+  color,
+  icon: Icon,
+  label,
+  value,
+}: {
+  color: string;
+  icon: LucideIcon;
+  label: string;
+  value: number;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View style={{ alignItems: 'center', gap: 5, minWidth: 86 }}>
+      <Icon size={18} color={color} />
+      <Text
+        style={{
+          color: colors.textPrimary,
+          fontSize: 22,
+          fontWeight: '700',
+          fontVariant: ['tabular-nums'],
+        }}
+      >
+        {value}
+      </Text>
+      <Text style={{ color: colors.textMuted, fontSize: 12 }}>{label}</Text>
+    </View>
+  );
 }

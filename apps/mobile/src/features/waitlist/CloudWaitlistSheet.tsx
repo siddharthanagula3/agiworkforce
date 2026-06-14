@@ -35,7 +35,8 @@ export interface WaitlistSubmission {
 }
 
 export interface WaitlistResult {
-  rank: number;
+  /** Queue position if the backend provides one; null when unavailable. */
+  rank: number | null;
 }
 
 export interface CloudWaitlistSheetProps {
@@ -466,7 +467,7 @@ function ConfirmedView({
   colors: ReturnType<typeof useThemeColors>;
   email: string;
   country: { code: string; name: string; flag: string };
-  rank: number;
+  rank: number | null;
 }) {
   return (
     <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
@@ -497,25 +498,28 @@ function ConfirmedView({
         You're confirmed.
       </Text>
 
-      {/* Rank badge */}
-      <View
-        style={{
-          marginTop: 12,
-          paddingHorizontal: 16,
-          paddingVertical: 8,
-          borderRadius: 20,
-          backgroundColor: colors.successSurface,
-          borderWidth: 1,
-          borderColor: colors.successBorder,
-        }}
-      >
-        <Text
-          testID="cloud-waitlist-rank"
-          style={{ fontSize: 15, fontWeight: '600', color: colors.agentSuccess }}
+      {/* Rank badge — only when the backend returns a real queue position.
+          The anonymous public endpoint does not, so we avoid a fabricated rank. */}
+      {rank !== null && (
+        <View
+          style={{
+            marginTop: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 20,
+            backgroundColor: colors.successSurface,
+            borderWidth: 1,
+            borderColor: colors.successBorder,
+          }}
         >
-          #{(rank + 1).toLocaleString('en-US')} in line
-        </Text>
-      </View>
+          <Text
+            testID="cloud-waitlist-rank"
+            style={{ fontSize: 15, fontWeight: '600', color: colors.agentSuccess }}
+          >
+            #{(rank + 1).toLocaleString('en-US')} in line
+          </Text>
+        </View>
+      )}
 
       <Text
         style={{

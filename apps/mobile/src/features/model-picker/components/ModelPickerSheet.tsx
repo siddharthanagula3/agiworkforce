@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, TextInput, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
+  BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import { Check, Cpu, Search, X as XIcon } from 'lucide-react-native';
@@ -94,11 +95,19 @@ function AutoModeRow({
 
 interface ModelPickerSheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;
+  openSignal?: number;
   onSelect?: (modelId: string) => void;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
+  modelScope?: 'local' | 'cloud' | 'all';
 }
 
-export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: ModelPickerSheetProps) {
+export function ModelPickerSheet({
+  sheetRef,
+  openSignal,
+  onSelect,
+  onOpenCloudAccess,
+  modelScope = 'local',
+}: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
@@ -119,12 +128,30 @@ export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: Mode
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const searchInputRef = useRef<TextInput>(null);
-  const modelList = useMemo(() => getModelListForCloudAccess(cloudUnlocked), [cloudUnlocked]);
+  const completeModelList = useMemo(
+    () => getModelListForCloudAccess(cloudUnlocked),
+    [cloudUnlocked],
+  );
+  const modelList = useMemo(() => {
+    if (modelScope === 'local') {
+      return completeModelList.filter((model) => model.surface === 'local');
+    }
+    if (modelScope === 'cloud') {
+      return completeModelList.filter((model) => model.surface === 'cloud_managed');
+    }
+    return completeModelList;
+  }, [completeModelList, modelScope]);
 
   useEffect(() => {
     void hydrateInstalledModels();
   }, [hydrateInstalledModels]);
+
+  useEffect(() => {
+    if (!openSignal) return;
+    requestAnimationFrame(() => {
+      sheetRef.current?.snapToIndex(0);
+    });
+  }, [openSignal, sheetRef]);
 
   const query = search.trim().toLowerCase();
   const filteredModels = useMemo(() => {
@@ -225,7 +252,6 @@ export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: Mode
 
   const clearSearch = useCallback(() => {
     setSearch('');
-    searchInputRef.current?.blur();
   }, []);
 
   const renderBackdrop = useCallback(
@@ -322,9 +348,11 @@ export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: Mode
             </Pressable>
           </View>
           <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-            {cloudUnlocked
-              ? 'Local and AGI Cloud models are selectable.'
-              : 'Local models are selectable. Cloud models require an invite.'}
+            {modelScope === 'cloud'
+              ? 'AGI Cloud models are managed separately from Local Mode.'
+              : modelScope === 'all'
+                ? 'Local and AGI Cloud models are shown in separate groups.'
+                : 'Local models run on this device. AGI Cloud is managed separately.'}
           </Text>
         </View>
 
@@ -345,15 +373,17 @@ export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: Mode
           }}
         >
           <Search size={16} color={colors.textMuted} />
-          <TextInput
-            ref={searchInputRef}
+          <BottomSheetTextInput
             testID="model-picker-search-input"
+            accessible
+            accessibilityRole="search"
             style={{
               flex: 1,
               minHeight: 32,
               color: colors.textPrimary,
               fontSize: 16,
               lineHeight: 21,
+              letterSpacing: 0,
               paddingTop: 0,
               paddingBottom: 0,
             }}
@@ -367,6 +397,7 @@ export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: Mode
             returnKeyType="search"
             accessibilityLabel="Search models"
             accessibilityHint="Filters the model list"
+            accessibilityValue={{ text: search }}
           />
           {search.length > 0 ? (
             <Pressable onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
@@ -380,7 +411,7 @@ export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: Mode
           contentContainerStyle={{ paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
         >
-          {!query ? (
+          {!query && modelScope !== 'cloud' ? (
             <View style={{ marginBottom: 8 }}>
               {AUTO_MODES.map((mode) => (
                 <AutoModeRow

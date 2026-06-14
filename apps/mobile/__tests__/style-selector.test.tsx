@@ -90,6 +90,10 @@ function resetChatStore() {
   useChatStore.setState({ chatStyle: 'normal' });
 }
 
+function renderOpenStyleSelector() {
+  return render(<StyleSelector openSignal={1} />);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -101,7 +105,7 @@ describe('StyleSelector', () => {
   });
 
   it('renders 4 style options', () => {
-    const { getByText } = render(<StyleSelector />);
+    const { getByText } = renderOpenStyleSelector();
 
     expect(getByText('Normal')).toBeTruthy();
     expect(getByText('Concise')).toBeTruthy();
@@ -110,7 +114,7 @@ describe('StyleSelector', () => {
   });
 
   it('shows descriptions for each option', () => {
-    const { getByText } = render(<StyleSelector />);
+    const { getByText } = renderOpenStyleSelector();
 
     expect(getByText('Balanced, standard')).toBeTruthy();
     expect(getByText('Short, direct answers')).toBeTruthy();
@@ -119,7 +123,7 @@ describe('StyleSelector', () => {
   });
 
   it('has Normal selected by default', () => {
-    const { getByLabelText } = render(<StyleSelector />);
+    const { getByLabelText } = renderOpenStyleSelector();
 
     const normalOption = getByLabelText('Normal style, selected');
     expect(normalOption).toBeTruthy();
@@ -127,7 +131,7 @@ describe('StyleSelector', () => {
   });
 
   it('tapping an option changes selection in chatStore', () => {
-    const { getByLabelText } = render(<StyleSelector />);
+    const { getByLabelText } = renderOpenStyleSelector();
 
     // Tap Concise
     const conciseOption = getByLabelText('Concise style');
@@ -137,21 +141,21 @@ describe('StyleSelector', () => {
   });
 
   it('tapping Detailed sets chatStyle to detailed', () => {
-    const { getByLabelText } = render(<StyleSelector />);
+    const { getByLabelText } = renderOpenStyleSelector();
 
     fireEvent.press(getByLabelText('Detailed style'));
     expect(useChatStore.getState().chatStyle).toBe('detailed');
   });
 
   it('tapping Creative sets chatStyle to creative', () => {
-    const { getByLabelText } = render(<StyleSelector />);
+    const { getByLabelText } = renderOpenStyleSelector();
 
     fireEvent.press(getByLabelText('Creative style'));
     expect(useChatStore.getState().chatStyle).toBe('creative');
   });
 
   it('renders the "Choose Style" header', () => {
-    const { getByText } = render(<StyleSelector />);
+    const { getByText } = renderOpenStyleSelector();
     expect(getByText('Choose Style')).toBeTruthy();
   });
 });

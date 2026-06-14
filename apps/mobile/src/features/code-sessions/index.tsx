@@ -8,8 +8,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
@@ -26,6 +26,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors } from '@/src/ui/theme';
+import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { CODE_SESSIONS, getCodeSessionById } from './data';
 import { CodeSessionMoreMenu } from './components/CodeSessionMoreMenu';
 import { EnvironmentOptionsSheet } from './components/EnvironmentOptionsSheet';
@@ -66,18 +67,32 @@ export function CodeSessionsScreen({ archivedOnly = false }: CodeSessionsScreenP
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
-      <View className="h-16 justify-center px-4">
+      <View className="h-12 flex-row items-center px-3 gap-2">
         <Pressable
           testID="code-open-drawer"
           onPress={openDrawer}
-          className="absolute left-4 w-12 h-12 rounded-full items-center justify-center border active:opacity-80"
-          style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: pressed ? c.surfaceHover : c.transparent,
+          })}
           accessibilityLabel="Open navigation drawer"
           accessibilityRole="button"
+          hitSlop={8}
         >
-          <Menu size={25} color={c.textSecondary} />
+          <Menu size={20} color={c.textSecondary} />
         </Pressable>
-        <Text className="text-center text-[20px] font-semibold" style={{ color: c.textPrimary }}>
+        <Text
+          style={{
+            flex: 1,
+            color: c.textPrimary,
+            fontSize: 17,
+            fontWeight: '700',
+          }}
+        >
           Code
         </Text>
       </View>
@@ -106,15 +121,22 @@ export function CodeSessionsScreen({ archivedOnly = false }: CodeSessionsScreenP
       <Pressable
         testID="code-new-session"
         onPress={() => setEnvironmentSheetVisible(true)}
-        className="absolute right-6 w-16 h-16 rounded-full items-center justify-center active:opacity-85"
-        style={{
+        style={({ pressed }) => ({
+          position: 'absolute',
+          right: 22,
           bottom: insets.bottom + 24,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          alignItems: 'center',
+          justifyContent: 'center',
           backgroundColor: c.textPrimary,
-        }}
+          opacity: pressed ? 0.85 : 1,
+        })}
         accessibilityLabel="Start code session"
         accessibilityRole="button"
       >
-        <Plus size={34} color={c.black} />
+        <Plus size={30} color={c.black} />
       </Pressable>
 
       <EnvironmentOptionsSheet
@@ -503,12 +525,7 @@ function useOpenDrawer() {
   const navigation = useNavigation();
 
   return useCallback(() => {
-    const parent = navigation.getParent?.();
-    if (parent) {
-      parent.dispatch(DrawerActions.openDrawer());
-      return;
-    }
-    navigation.dispatch(DrawerActions.openDrawer());
+    openNearestDrawer(navigation);
   }, [navigation]);
 }
 

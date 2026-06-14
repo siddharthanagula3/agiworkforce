@@ -75,10 +75,13 @@ Navigate to App Store Connect → Version (1.0.0).
 
 Path: App Store Connect → App Privacy → Get Started
 
-Select: **Data Not Collected**
+Do not select **Data Not Collected** if the Cloud waitlist remains visible
+in the submitted build.
 
-No data is collected in v1. Confirm when prompted: "None" for all
-data type rows.
+Local Mode collects no personal data by default. The optional AGI Cloud
+waitlist collects email address and optional name for access notifications.
+Declare those fields as Contact Info used for app functionality and not
+shared with third parties.
 
 ### A.7 Screenshots and App Previews
 
@@ -223,8 +226,8 @@ Run through this list the day before you submit.
 - [ ] Privacy policy page at `https://agiworkforce.com/privacy` is live and accessible
 - [ ] Support page at `https://agiworkforce.com/support` is live (or redirects to a working contact page)
 - [ ] `review@agiworkforce.com` inbox is monitored; test it before submitting
-- [ ] iOS: App Store Connect → App Privacy → "Data Not Collected" selected
-- [ ] Android: Play Console → Data Safety → no data collected confirmed
+- [ ] iOS: App Store Connect → App Privacy declares optional waitlist email/name collection
+- [ ] Android: Play Console → Data Safety declares optional waitlist email/name collection
 - [ ] [DESIGN] 1024 × 1024 iOS app icon uploaded
 - [ ] [DESIGN] 512 × 512 Android app icon uploaded
 - [ ] [DESIGN] 1024 × 500 Android feature graphic uploaded

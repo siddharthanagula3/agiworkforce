@@ -6,7 +6,8 @@
  * indicator when a project is active.
  */
 import { useState, useCallback } from 'react';
-import { View, Pressable, Modal, FlatList } from 'react-native';
+import { View, Pressable, Modal, FlatList, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FolderOpen, ChevronDown, X, Check, FolderMinus } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -28,33 +29,44 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
   return (
     <Pressable
       onPress={() => onSelect(project.id)}
-      style={({ pressed }) => ({
+      style={{
+        minHeight: 58,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
         paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-      })}
+        paddingVertical: 10,
+        backgroundColor: colors.transparent,
+      }}
       accessibilityLabel={`Select project: ${project.name}`}
       accessibilityRole="menuitem"
     >
       <View
-        className="w-8 h-8 rounded-lg items-center justify-center"
-        style={{ backgroundColor: isActive ? colors.accentSurface : colors.neutralSurface }}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: 12,
+          flexShrink: 0,
+          backgroundColor: isActive ? colors.accentSurface : colors.neutralSurface,
+        }}
       >
         <FolderOpen size={16} color={isActive ? colors.teal : colors.textMuted} />
       </View>
-      <View className="flex-1">
+      <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           className="text-[14px] font-medium"
-          style={{ color: isActive ? colors.teal : colors.textPrimary }}
+          style={{ color: isActive ? colors.teal : colors.textPrimary, lineHeight: 19 }}
           numberOfLines={1}
         >
           {project.name}
         </Text>
         {project.description ? (
-          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+          <Text
+            style={{ color: colors.textMuted, fontSize: 11, lineHeight: 15, marginTop: 2 }}
+            numberOfLines={1}
+          >
             {project.description}
           </Text>
         ) : null}
@@ -70,12 +82,16 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
 
 export function ProjectSelectorBar() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const [dropdownVisible, setDropdownVisible] = useState(false);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
+  const sheetMaxHeight = Math.min(height * 0.66, 520);
+  const listMaxHeight = Math.max(140, sheetMaxHeight - 132 - insets.bottom);
 
   const handleOpenDropdown = useCallback(() => {
     if (projects.length === 0) return;
@@ -155,48 +171,96 @@ export function ProjectSelectorBar() {
       <Modal
         visible={dropdownVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
+        statusBarTranslucent
         onRequestClose={() => setDropdownVisible(false)}
       >
         <Pressable
-          className="flex-1"
-          style={{ backgroundColor: colors.scrim }}
+          style={{
+            flex: 1,
+            justifyContent: 'flex-end',
+            backgroundColor: colors.scrim,
+          }}
           onPress={() => setDropdownVisible(false)}
+          accessibilityViewIsModal
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}
-            className="absolute left-4 right-4"
-            style={{ top: 140, borderRadius: 16, overflow: 'hidden' }}
+            style={{
+              backgroundColor: colors.surfaceOverlay,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderBottomWidth: 0,
+              maxHeight: sheetMaxHeight,
+              overflow: 'hidden',
+              paddingBottom: Math.max(insets.bottom, 10),
+            }}
           >
-            <View
-              style={{
-                backgroundColor: colors.surfaceOverlay,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-            >
+            <View>
+              <View
+                style={{
+                  alignItems: 'center',
+                  paddingTop: 8,
+                  paddingBottom: 4,
+                }}
+              >
+                <View
+                  style={{
+                    width: 38,
+                    height: 4,
+                    borderRadius: 999,
+                    backgroundColor: colors.border,
+                  }}
+                />
+              </View>
+
+              <View
+                style={{
+                  paddingHorizontal: 18,
+                  paddingTop: 8,
+                  paddingBottom: 10,
+                }}
+              >
+                <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>
+                  Projects
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    marginTop: 3,
+                  }}
+                >
+                  Choose the project context for this chat.
+                </Text>
+              </View>
+
               {/* Header */}
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
+                  paddingHorizontal: 18,
+                  paddingVertical: 8,
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
                 }}
               >
                 <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
-                  Select Project
+                  Select project
                 </Text>
                 <Pressable
                   onPress={() => setDropdownVisible(false)}
+                  accessibilityLabel="Close project picker"
+                  accessibilityRole="button"
                   style={({ pressed }) => ({
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
@@ -212,24 +276,34 @@ export function ProjectSelectorBar() {
                   setActiveProject(null);
                   setDropdownVisible(false);
                 }}
-                style={({ pressed }) => ({
+                style={{
+                  minHeight: 58,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 12,
                   paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-                })}
+                  paddingVertical: 10,
+                  backgroundColor: colors.transparent,
+                }}
                 accessibilityLabel="No project"
                 accessibilityRole="menuitem"
               >
                 <View
-                  className="w-8 h-8 rounded-lg items-center justify-center"
-                  style={{ backgroundColor: colors.neutralSurface }}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                    flexShrink: 0,
+                    backgroundColor: colors.neutralSurface,
+                  }}
                 >
                   <FolderMinus size={16} color={colors.textMuted} />
                 </View>
-                <Text style={{ color: colors.textMuted, fontSize: 14, flex: 1 }}>No project</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 19, flex: 1 }}>
+                  No project
+                </Text>
                 {!activeProjectId && <Check size={16} color={colors.textMuted} />}
               </Pressable>
 
@@ -237,7 +311,8 @@ export function ProjectSelectorBar() {
               <FlatList
                 data={projects}
                 keyExtractor={(item) => item.id}
-                style={{ maxHeight: 280 }}
+                style={{ maxHeight: listMaxHeight }}
+                contentContainerStyle={{ paddingBottom: 6 }}
                 renderItem={({ item }) => (
                   <ProjectDropdownItem
                     project={item}

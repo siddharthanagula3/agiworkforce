@@ -22,7 +22,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
@@ -32,16 +32,33 @@ interface ApprovalCardProps {
   onReject: (id: string, reason?: string) => void;
 }
 
-const RISK_BORDER_COLOR: Record<RiskLevel, string> = {
-  low: colors.agentSuccess,
-  medium: colors.agentWarning,
-  high: colors.agentError,
-};
-
-const RISK_CONFIG: Record<RiskLevel, { icon: typeof ShieldCheck; label: string; color: string }> = {
-  low: { icon: ShieldCheck, label: 'Low Risk', color: colors.agentSuccess },
-  medium: { icon: Shield, label: 'Medium Risk', color: colors.agentWarning },
-  high: { icon: ShieldAlert, label: 'High Risk', color: colors.agentError },
+const RISK_CONFIG: Record<
+  RiskLevel,
+  {
+    icon: typeof ShieldCheck;
+    label: string;
+    colorToken: 'agentSuccess' | 'agentWarning' | 'agentError';
+    surfaceToken: 'successSurface' | 'warningSurface' | 'dangerSurface';
+  }
+> = {
+  low: {
+    icon: ShieldCheck,
+    label: 'Low Risk',
+    colorToken: 'agentSuccess',
+    surfaceToken: 'successSurface',
+  },
+  medium: {
+    icon: Shield,
+    label: 'Medium Risk',
+    colorToken: 'agentWarning',
+    surfaceToken: 'warningSurface',
+  },
+  high: {
+    icon: ShieldAlert,
+    label: 'High Risk',
+    colorToken: 'agentError',
+    surfaceToken: 'dangerSurface',
+  },
 };
 
 const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
@@ -54,6 +71,7 @@ const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
 
 export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProps) {
   const reducedMotion = useReducedMotion();
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
 
@@ -74,7 +92,9 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
   const riskConfig = RISK_CONFIG[approval.riskLevel];
   const RiskIcon = riskConfig.icon;
   const TypeIcon = TYPE_ICONS[approval.type];
-  const borderColor = RISK_BORDER_COLOR[approval.riskLevel];
+  const riskColor = colors[riskConfig.colorToken];
+  const riskSurface = colors[riskConfig.surfaceToken];
+  const borderColor = riskColor;
 
   // Countdown timer for smart auto-approve
   useEffect(() => {
@@ -165,25 +185,31 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
       >
         {/* Header row */}
         <View className="flex-row items-center gap-2.5 px-3 pt-3 pb-1">
-          <View className="p-1.5 rounded-lg" style={{ backgroundColor: `${riskConfig.color}15` }}>
-            <TypeIcon size={16} color={riskConfig.color} />
+          <View className="p-1.5 rounded-lg" style={{ backgroundColor: riskSurface }}>
+            <TypeIcon size={16} color={riskColor} />
           </View>
 
           <View className="flex-1">
-            <Text className="text-[10px] uppercase tracking-wider text-white/40 font-medium">
+            <Text
+              className="text-[10px] uppercase tracking-wider font-medium"
+              style={{ color: colors.textMuted }}
+            >
               Approval Required
             </Text>
             <View className="flex-row items-center gap-1.5 mt-0.5">
-              <RiskIcon size={12} color={riskConfig.color} />
-              <Text className="text-[12px] font-semibold" style={{ color: riskConfig.color }}>
+              <RiskIcon size={12} color={riskColor} />
+              <Text className="text-[12px] font-semibold" style={{ color: riskColor }}>
                 {riskConfig.label}
               </Text>
             </View>
           </View>
 
           {/* Tool name badge */}
-          <View className="bg-white/8 px-2 py-0.5 rounded-full">
-            <Text variant="caption" className="text-white/50 text-[10px]">
+          <View
+            className="px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: colors.neutralSurface }}
+          >
+            <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
               {approval.toolName}
             </Text>
           </View>
@@ -191,18 +217,23 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
 
         {/* Description */}
         <View className="px-3 py-2">
-          <Text className="text-[13px] text-white/80 leading-[18px]">{approval.description}</Text>
+          <Text className="text-[13px] leading-[18px]" style={{ color: colors.textSecondary }}>
+            {approval.description}
+          </Text>
         </View>
 
         {/* Countdown bar (smart auto mode) */}
         {countdown != null && countdown > 0 && isPending ? (
           <View className="px-3 pb-2">
             <View className="flex-row items-center gap-2 mb-1">
-              <Text variant="caption" className="text-white/40 text-[10px]">
+              <Text variant="caption" className="text-[10px]" style={{ color: colors.textMuted }}>
                 Auto-approving in {countdown}s
               </Text>
             </View>
-            <View className="h-1 bg-white/10 rounded-full overflow-hidden">
+            <View
+              className="h-1 rounded-full overflow-hidden"
+              style={{ backgroundColor: colors.progressTrack }}
+            >
               <Animated.View
                 className="h-full rounded-full"
                 style={[{ backgroundColor: colors.agentWarning }, countdownBarStyle]}
@@ -213,7 +244,10 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
 
         {/* Resolved overlay */}
         {isResolved ? (
-          <View className="flex-row items-center justify-center gap-2 px-3 py-3 bg-white/5">
+          <View
+            className="flex-row items-center justify-center gap-2 px-3 py-3"
+            style={{ backgroundColor: colors.neutralSurface }}
+          >
             {approval.status === 'approved' ? (
               <>
                 <Check size={16} color={colors.agentSuccess} />
@@ -238,33 +272,55 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
             {showRejectInput ? (
               <View className="gap-2">
                 <TextInput
-                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-[13px]"
+                  className="rounded-lg px-3 py-2 text-[13px]"
                   placeholder="Reason for rejection (optional)"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  placeholderTextColor={colors.textMuted}
                   value={rejectReason}
                   onChangeText={setRejectReason}
                   autoFocus
                   selectionColor={colors.teal}
+                  style={{
+                    backgroundColor: colors.inputSurface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    color: colors.textPrimary,
+                  }}
                 />
                 <View className="flex-row gap-2">
                   <Pressable
                     onPress={handleRejectPress}
-                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-500/90 active:bg-red-600"
+                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg"
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? colors.dangerBorder : colors.agentError,
+                    })}
                     accessible={true}
                     accessibilityLabel="Confirm rejection"
                     accessibilityRole="button"
                   >
-                    <X size={14} color="#fff" />
-                    <Text className="text-[13px] font-semibold text-white">Confirm Reject</Text>
+                    <X size={14} color={colors.accentText} />
+                    <Text
+                      className="text-[13px] font-semibold"
+                      style={{ color: colors.accentText }}
+                    >
+                      Confirm Reject
+                    </Text>
                   </Pressable>
                   <Pressable
                     onPress={handleCancelReject}
-                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg bg-white/10 active:bg-white/15"
+                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg"
+                    style={({ pressed }) => ({
+                      backgroundColor: pressed ? colors.surfaceHover : colors.neutralSurface,
+                    })}
                     accessible={true}
                     accessibilityLabel="Cancel rejection"
                     accessibilityRole="button"
                   >
-                    <Text className="text-[13px] font-medium text-white/70">Cancel</Text>
+                    <Text
+                      className="text-[13px] font-medium"
+                      style={{ color: colors.textSecondary }}
+                    >
+                      Cancel
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -278,8 +334,10 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                   accessibilityLabel={`Approve ${approval.toolName} action`}
                   accessibilityRole="button"
                 >
-                  <Check size={16} color="#fff" />
-                  <Text className="text-[13px] font-semibold text-white">Approve</Text>
+                  <Check size={16} color={colors.accentText} />
+                  <Text className="text-[13px] font-semibold" style={{ color: colors.accentText }}>
+                    Approve
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={handleRejectPress}

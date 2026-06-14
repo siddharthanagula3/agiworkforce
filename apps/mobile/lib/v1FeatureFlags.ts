@@ -27,14 +27,18 @@ export const FEATURES = {
   /** Projects tab — ships in v1 per FOUNDER DECISION 2026-05-18. */
   projects: true,
 
-  /** Cloud chat / conversation sync through Clerk-authenticated Web/API. */
-  cloudChat: false,
+  /** Cloud chat / conversation sync through Clerk-authenticated Web/API.
+   *  2026-06-13: enabled — Clerk session token now bridged into the cloud stream
+   *  path (services/authSession.ts → services/streaming.ts). Server enforces the
+   *  free Hobby tier (3-prompt cap) for signed-in free users. */
+  cloudChat: true,
 
   /** Billing / subscription / Stripe portal. */
   billing: false,
 
-  /** Auth (login, OAuth, password reset). Cloud account flows open through invite access. */
-  auth: false,
+  /** Auth (login, OAuth, password reset). Cloud account flows open through invite access.
+   *  2026-06-13: enabled — Clerk Expo native auth (AuthView) wired in app/_layout.tsx. */
+  auth: true,
 
   /** Legacy direct-provider credential entry is not exposed on Mobile. */
   byokKeys: false,

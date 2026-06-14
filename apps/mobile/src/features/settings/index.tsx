@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, View, ScrollView, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import {
@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   UserRound,
+  X,
   Zap,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -31,10 +32,12 @@ import { Text } from '@/components/ui/text';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { getDisplayName } from '@/src/features/model-picker/service';
+import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 type RowTone = 'default' | 'cloud' | 'danger';
 
@@ -166,12 +169,21 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
 function ProfileHeader({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();
   const user = useAuthStore((s) => s.user);
-  const displayName =
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    user?.email?.split('@')[0] ||
-    'Local profile';
-  const subtitle = user?.email ?? 'Local mode active';
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const personalization = useSettingsStore((s) => s.personalization);
+  const isCloudMode = appMode === 'cloud';
+  const displayName = isCloudMode
+    ? 'AGI Cloud'
+    : personalization.nickname ||
+      personalization.fullName ||
+      user?.user_metadata?.full_name ||
+      user?.user_metadata?.name ||
+      user?.email?.split('@')[0] ||
+      'Local profile';
+  const subtitle = isCloudMode
+    ? user?.email || (cloudUnlocked ? 'Cloud access unlocked' : 'Invite required')
+    : personalization.occupation || 'Local mode active';
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
@@ -233,20 +245,34 @@ function formatAccent(accent: string) {
 export default function SettingsTabScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const [inviteOpen, setInviteOpen] = useState(false);
   const themeMode = useSettingsStore((s) => s.themeMode);
   const accentColor = useSettingsStore((s) => s.accentColor);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const push = useCallback(
     (path: string) => () => router.push(path as Parameters<typeof router.push>[0]),
     [router],
   );
+  const closeSettings = useCallback(() => {
+    router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+  }, [router]);
 
-  const openInvite = useCallback(() => setInviteOpen(true), []);
+  const openCloudAccess = useCallback(() => {
+    if (!cloudUnlocked) {
+      setInviteOpen(true);
+      return;
+    }
+    Alert.alert(
+      'AGI Cloud access',
+      'AGI Cloud is unlocked on this device. Local Mode stays separate from Cloud account features.',
+    );
+  }, [cloudUnlocked]);
 
   const handleSignOut = useCallback(() => {
     Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
@@ -255,22 +281,13 @@ export default function SettingsTabScreen() {
     ]);
   }, [signOut]);
 
+  const cloudAccessTag = cloudUnlocked ? 'Cloud' : 'Invite';
+
   const sections = useMemo<SettingsSection[]>(
     () => [
       {
+        title: 'Device',
         rows: [
-          {
-            key: 'personalization',
-            label: 'Personalization',
-            icon: Sparkles,
-            onPress: push('/(app)/settings/personalization'),
-          },
-          {
-            key: 'memory',
-            label: 'Memory',
-            icon: Brain,
-            onPress: push('/(app)/settings/memory'),
-          },
           {
             key: 'appearance',
             label: 'Appearance',
@@ -289,7 +306,7 @@ export default function SettingsTabScreen() {
             key: 'general',
             label: 'General',
             icon: SlidersHorizontal,
-            value: getDisplayName(selectedModel),
+            value: getShortDisplayName(selectedModel),
             onPress: push('/(app)/settings/general'),
           },
           {
@@ -302,19 +319,13 @@ export default function SettingsTabScreen() {
             key: 'voice',
             label: 'Voice',
             icon: Mic,
-            onPress: push('/(app)/voice'),
+            onPress: push('/(app)/settings/voice'),
           },
           {
             key: 'safety-security',
             label: 'Safety & Security',
             icon: Shield,
             onPress: push('/(app)/settings/safety-security'),
-          },
-          {
-            key: 'data-controls',
-            label: 'Data Controls',
-            icon: Database,
-            onPress: push('/(app)/settings/data-controls'),
           },
           {
             key: 'parental-controls',
@@ -325,23 +336,76 @@ export default function SettingsTabScreen() {
         ],
       },
       {
+        title: 'Local Mode',
+        rows: [
+          {
+            key: 'personalization',
+            label: 'Personalization',
+            icon: Sparkles,
+            onPress: push('/(app)/settings/personalization'),
+          },
+          {
+            key: 'memory',
+            label: 'Memory',
+            icon: Brain,
+            onPress: push('/(app)/settings/memory'),
+          },
+          {
+            key: 'capabilities',
+            label: 'Capabilities',
+            icon: Zap,
+            onPress: push('/(app)/settings/capabilities'),
+          },
+          {
+            key: 'data-controls',
+            label: 'Data Controls',
+            icon: Database,
+            onPress: push('/(app)/settings/data-controls'),
+          },
+        ],
+      },
+      {
         title: 'Cloud',
         rows: [
+          {
+            key: 'cloud-personalization',
+            label: 'Cloud Personalization',
+            icon: Sparkles,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudAccess,
+          },
+          {
+            key: 'cloud-memory',
+            label: 'Cloud Memory',
+            icon: Brain,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudAccess,
+          },
+          {
+            key: 'cloud-data-controls',
+            label: 'Cloud Data Controls',
+            icon: Database,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudAccess,
+          },
           {
             key: 'email-phone',
             label: 'Email / Phone Number',
             icon: Mail,
-            tag: 'Invite',
+            tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openInvite,
+            onPress: openCloudAccess,
           },
           {
             key: 'subscription',
             label: 'Subscription',
             icon: CreditCard,
-            tag: 'Invite',
+            tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openInvite,
+            onPress: openCloudAccess,
           },
           {
             key: 'restore-purchases',
@@ -349,7 +413,7 @@ export default function SettingsTabScreen() {
             icon: RotateCcw,
             tag: 'Cloud',
             tone: 'cloud',
-            onPress: openInvite,
+            onPress: openCloudAccess,
           },
           {
             key: 'connectors',
@@ -357,7 +421,7 @@ export default function SettingsTabScreen() {
             icon: Link2,
             tag: 'Cloud',
             tone: 'cloud',
-            onPress: openInvite,
+            onPress: openCloudAccess,
           },
           {
             key: 'plugins',
@@ -365,7 +429,7 @@ export default function SettingsTabScreen() {
             icon: Plug,
             tag: 'Cloud',
             tone: 'cloud',
-            onPress: openInvite,
+            onPress: openCloudAccess,
           },
           {
             key: 'skills',
@@ -373,7 +437,7 @@ export default function SettingsTabScreen() {
             icon: Zap,
             tag: 'Cloud',
             tone: 'cloud',
-            onPress: openInvite,
+            onPress: openCloudAccess,
           },
           ...(user
             ? [
@@ -395,7 +459,11 @@ export default function SettingsTabScreen() {
             key: 'report',
             label: 'Report App Issue',
             icon: MessageCircleWarning,
-            onPress: push('/(app)/feedback'),
+            onPress: () =>
+              router.push({
+                pathname: '/(app)/feedback',
+                params: { returnTo: '/(app)/(tabs)/settings' },
+              } as Parameters<typeof router.push>[0]),
           },
           {
             key: 'help',
@@ -415,21 +483,71 @@ export default function SettingsTabScreen() {
         ],
       },
     ],
-    [accentColor, appVersion, handleSignOut, openInvite, push, selectedModel, themeMode, user],
+    [
+      accentColor,
+      appVersion,
+      cloudAccessTag,
+      handleSignOut,
+      openCloudAccess,
+      push,
+      router,
+      selectedModel,
+      themeMode,
+      user,
+    ],
   );
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 36 }}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: Math.max(24, insets.top / 2),
+          paddingBottom: 36,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        <Text
-          style={{ color: colors.textPrimary, fontSize: 28, fontWeight: '700', marginBottom: 16 }}
+        <View
+          style={{
+            minHeight: 42,
+            marginBottom: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
         >
-          Settings
-        </Text>
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 28,
+              lineHeight: 34,
+              fontWeight: '700',
+              flex: 1,
+            }}
+          >
+            Settings
+          </Text>
+          <Pressable
+            onPress={closeSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Close settings"
+            hitSlop={10}
+            style={({ pressed }) => ({
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
+            })}
+          >
+            <X size={20} color={colors.textSecondary} />
+          </Pressable>
+        </View>
 
         <ProfileHeader onPress={push('/(app)/profile')} />
 

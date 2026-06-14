@@ -29,9 +29,8 @@
  * succeeded; `false` otherwise. Callers can use the boolean to fall back
  * to a static URL or show an error.
  *
- * The same allowlist that's used here is mirrored on the OAuth flow in
- * `components/auth/OAuthButtons.tsx`, but Stripe is added because the
- * portal flow needs to land on `billing.stripe.com`.
+ * Stripe is included because the portal flow needs to land on
+ * `billing.stripe.com`; AGI account routes stay on agiworkforce.com.
  */
 import * as Linking from 'expo-linking';
 

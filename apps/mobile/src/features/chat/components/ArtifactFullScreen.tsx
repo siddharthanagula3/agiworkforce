@@ -18,7 +18,7 @@ import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
 import { shareFile } from '@/services/fileCreation';
 import type { Artifact } from '@/types/chat';
@@ -52,6 +52,7 @@ export function ArtifactFullScreen({
   onRegenerate,
 }: ArtifactFullScreenProps) {
   const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
   const [copied, setCopied] = useState(false);
   const generatedFileSummary = useMemo(
     () =>
@@ -133,7 +134,7 @@ export function ArtifactFullScreen({
       <View
         style={{
           flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          backgroundColor: colors.background,
         }}
       >
         {/* Header */}
@@ -174,7 +175,7 @@ export function ArtifactFullScreen({
               style={{
                 padding: 8,
                 borderRadius: 8,
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                backgroundColor: colors.neutralSurface,
               }}
               accessibilityLabel="Share generated file"
               accessibilityRole="button"
@@ -193,7 +194,7 @@ export function ArtifactFullScreen({
               style={{
                 padding: 8,
                 borderRadius: 8,
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                backgroundColor: colors.neutralSurface,
               }}
               accessibilityLabel="Regenerate artifact"
               accessibilityRole="button"
@@ -208,7 +209,7 @@ export function ArtifactFullScreen({
             style={{
               padding: 8,
               borderRadius: 8,
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              backgroundColor: colors.neutralSurface,
             }}
             accessibilityLabel="Copy content"
             accessibilityRole="button"
@@ -226,7 +227,7 @@ export function ArtifactFullScreen({
             style={{
               padding: 8,
               borderRadius: 8,
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              backgroundColor: colors.neutralSurface,
             }}
             accessibilityLabel="Close"
             accessibilityRole="button"
@@ -258,7 +259,7 @@ export function ArtifactFullScreen({
                 marginBottom: 16,
                 padding: 12,
                 borderRadius: 8,
-                backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                backgroundColor: colors.accentSurface,
                 gap: 4,
               }}
             >
@@ -290,7 +291,7 @@ export function ArtifactFullScreen({
             style={
               isCode
                 ? {
-                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                    backgroundColor: colors.surfaceBase,
                     borderRadius: 8,
                     padding: 12,
                     borderWidth: 1,

@@ -28,7 +28,12 @@ export default function ParentalControlsScreen() {
           label="Review Age Settings"
           icon={Shield}
           isLast
-          onPress={() => router.push('/(public)/age-gate' as Parameters<typeof router.push>[0])}
+          onPress={() =>
+            router.push({
+              pathname: '/(public)/age-gate',
+              params: { returnTo: '/(app)/settings/parental-controls' },
+            } as Parameters<typeof router.push>[0])
+          }
         />
       </SettingsGroup>
     </SettingsScreenShell>

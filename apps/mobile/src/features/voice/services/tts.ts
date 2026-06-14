@@ -93,13 +93,17 @@ export async function isSpeaking(): Promise<boolean> {
  * Results vary by platform and installed voice packs.
  */
 export async function getAvailableVoices(): Promise<VoiceInfo[]> {
-  const voices = await Speech.getAvailableVoicesAsync();
-  return voices.map((v) => ({
-    identifier: v.identifier,
-    name: v.name,
-    quality: v.quality,
-    language: v.language,
-  }));
+  try {
+    const voices = await Speech.getAvailableVoicesAsync();
+    return voices.map((v) => ({
+      identifier: v.identifier,
+      name: v.name,
+      quality: v.quality,
+      language: v.language,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -139,12 +143,16 @@ export async function getAvailableLanguages(): Promise<
     const code = v.language.split('-')[0].toLowerCase();
     if (!seen.has(code)) seen.set(code, v.language);
   }
-  const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
+  const DisplayNamesConstructor = Intl.DisplayNames;
+  const displayNames =
+    typeof DisplayNamesConstructor === 'function'
+      ? new DisplayNamesConstructor(['en'], { type: 'language' })
+      : null;
   return Array.from(seen.entries())
     .map(([code, locale]) => ({
       code,
       locale,
-      label: displayNames.of(code) ?? code.toUpperCase(),
+      label: displayNames?.of(code) ?? code.toUpperCase(),
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }

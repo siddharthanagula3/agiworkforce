@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
+import { Alert, View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -41,8 +41,8 @@ interface VoiceConversationScreenProps {
   visible: boolean;
   /** Close the voice conversation screen */
   onClose: () => void;
-  /** Send transcribed user text to the chat engine and get AI response text */
-  onSendMessage: (text: string) => Promise<string>;
+  /** Send transcribed user text to the chat engine and return real assistant text when available. */
+  onSendMessage: (text: string) => Promise<string | null | undefined>;
 }
 
 const PHASE_CONFIG: Record<ConversationPhase, { label: string; color: string; sublabel: string }> =
@@ -69,6 +69,20 @@ const PHASE_CONFIG: Record<ConversationPhase, { label: string; color: string; su
     },
   };
 
+function voiceUnavailableMessage(err: unknown): string {
+  if (err instanceof VoiceService.VoiceCaptureError) {
+    if (err.code === 'mic-permission-denied') {
+      return 'Microphone access is off. Enable microphone permission in Settings to use voice.';
+    }
+    if (err.code === 'on-device-recognition-unavailable') {
+      return 'On-device speech recognition is not available for this device or language yet.';
+    }
+    if (err.code === 'already-active') return 'Voice capture is already running.';
+    return err.message;
+  }
+  return 'Voice input could not start. Please try again.';
+}
+
 function GradientBackground() {
   const { width, height } = useWindowDimensions();
   return (
@@ -80,9 +94,9 @@ function GradientBackground() {
     >
       <Defs>
         <RadialGradient id="voiceBg" cx="50%" cy="45%" r="60%" fx="50%" fy="45%">
-          <Stop offset="0%" stopColor="#1a1040" stopOpacity="1" />
-          <Stop offset="40%" stopColor="#0d0d1a" stopOpacity="1" />
-          <Stop offset="100%" stopColor="#050508" stopOpacity="1" />
+          <Stop offset="0%" stopColor={colors.voiceConversationBgStart} stopOpacity="1" />
+          <Stop offset="40%" stopColor={colors.voiceConversationBgMid} stopOpacity="1" />
+          <Stop offset="100%" stopColor={colors.voiceConversationBgEnd} stopOpacity="1" />
         </RadialGradient>
       </Defs>
       <Rect width={width} height={height} fill="url(#voiceBg)" />
@@ -127,14 +141,7 @@ function CenterOrb({ phase, audioLevel }: { phase: ConversationPhase; audioLevel
     <View className="items-center justify-center" style={{ width: 280, height: 280 }}>
       {/* Outer thin-stroke ring — matches talk-mode.png reference */}
       <Svg width={280} height={280} style={{ position: 'absolute' }} pointerEvents="none">
-        <Circle
-          cx={140}
-          cy={140}
-          r={130}
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth={1}
-          fill="none"
-        />
+        <Circle cx={140} cy={140} r={130} stroke={colors.borderLight} strokeWidth={1} fill="none" />
       </Svg>
 
       {/* Outer glow */}
@@ -226,7 +233,6 @@ export function VoiceConversationScreen({
     if (!activeRef.current || muted) return;
 
     try {
-      setPhase('listening');
       setTranscriptPreview('');
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -238,9 +244,13 @@ export function VoiceConversationScreen({
         const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
         setAudioLevel(normalized);
       });
-    } catch {
+      if (activeRef.current) {
+        setPhase('listening');
+      }
+    } catch (err) {
       if (activeRef.current) {
         setPhase('idle');
+        Alert.alert('Voice unavailable', voiceUnavailableMessage(err));
       }
     }
   }, [muted, hapticsEnabled]);
@@ -267,20 +277,26 @@ export function VoiceConversationScreen({
       setTranscriptPreview(text.trim());
 
       // Send to AI and get response
-      let aiResponse: string;
+      let aiResponse: string | null | undefined;
       try {
         aiResponse = await onSendMessage(text.trim());
-      } catch (sendErr) {
-        console.warn('[VoiceConversation] Send failed:', sendErr);
+      } catch {
+        setTranscriptPreview('Voice message could not be sent. Try again.');
         if (activeRef.current) setPhase('idle');
         return;
       }
 
       if (!activeRef.current) return;
+      if (!aiResponse?.trim()) {
+        setTranscriptPreview('Sent to chat.');
+        setPhase('idle');
+        setAudioLevel(0);
+        return;
+      }
 
       // Speak AI response
       setPhase('speaking');
-      await TTS.speak(aiResponse, {
+      await TTS.speak(aiResponse.trim(), {
         voice: selectedVoiceId ?? undefined,
         rate: speechRate,
         onStart: () => {
@@ -363,7 +379,7 @@ export function VoiceConversationScreen({
       entering={reducedMotion ? undefined : SlideInDown.springify().damping(18)}
       exiting={reducedMotion ? undefined : SlideOutDown.springify().damping(18)}
       className="absolute inset-0 z-50"
-      style={{ backgroundColor: '#050508' }}
+      style={{ backgroundColor: colors.voiceConversationBgEnd }}
     >
       <StatusBar barStyle="light-content" />
 
@@ -373,8 +389,12 @@ export function VoiceConversationScreen({
       {/* Close button */}
       <Pressable
         onPress={handleClose}
-        className="absolute z-10 p-2 rounded-full bg-white/10 active:bg-white/20"
-        style={{ top: insets.top + 12, right: 16 }}
+        className="absolute z-10 p-2 rounded-full active:opacity-80"
+        style={{
+          top: insets.top + 12,
+          right: 16,
+          backgroundColor: colors.voiceControlSurface,
+        }}
         accessibilityLabel="Close voice conversation"
         accessibilityRole="button"
       >
@@ -387,7 +407,9 @@ export function VoiceConversationScreen({
         style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
         {/* Status sublabel */}
-        <Text className="text-white/40 text-sm mb-4">{config.sublabel}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 14, marginBottom: 16 }}>
+          {config.sublabel}
+        </Text>
 
         {/* Center orb — tap to interact */}
         <Pressable
@@ -407,16 +429,29 @@ export function VoiceConversationScreen({
 
         {/* Active model name — mirrors "Bot: Main" label in talk-mode.png */}
         <Animated.View entering={FadeIn.duration(400)} className="mt-2 items-center">
-          <Text className="text-white/40 text-xs tracking-wide">{selectedModel.toUpperCase()}</Text>
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: 12,
+              letterSpacing: 0.8,
+              textTransform: 'uppercase',
+            }}
+          >
+            {selectedModel}
+          </Text>
         </Animated.View>
 
         {/* Transcript preview */}
         {transcriptPreview ? (
           <Animated.View
             entering={FadeIn.duration(200)}
-            className="mt-4 mx-8 px-4 py-2 rounded-xl bg-white/5"
+            className="mt-4 mx-8 px-4 py-2 rounded-xl"
+            style={{ backgroundColor: colors.voiceTranscriptSurface }}
           >
-            <Text className="text-white/60 text-sm text-center" numberOfLines={3}>
+            <Text
+              style={{ color: colors.textSecondary, fontSize: 14, textAlign: 'center' }}
+              numberOfLines={3}
+            >
               {transcriptPreview}
             </Text>
           </Animated.View>
@@ -432,7 +467,7 @@ export function VoiceConversationScreen({
         <Pressable
           onPress={handleMuteToggle}
           className="w-14 h-14 rounded-full items-center justify-center active:opacity-80"
-          style={{ backgroundColor: muted ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)' }}
+          style={{ backgroundColor: muted ? colors.dangerSurface : colors.voiceControlSurface }}
           accessibilityLabel={muted ? 'Unmute microphone' : 'Mute microphone'}
           accessibilityRole="button"
         >

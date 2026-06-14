@@ -29,6 +29,7 @@ jest.mock('../lib/mmkv', () => ({
 // ---------------------------------------------------------------------------
 
 import {
+  DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
   LOCAL_MODEL_LIST,
   LOCKED_CLOUD_MODELS,
@@ -110,6 +111,19 @@ describe('modelStore', () => {
       expect(getState().selectedModel).toBe(CLOUD_MODEL_ID);
       expect(getState().selectedProvider).toBe('cloud_managed');
       expect(getState().recentModels[0]).toBe(CLOUD_MODEL_ID);
+    });
+
+    it('selects the shared OpenAI probe model after invite access', () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      if (!DEFAULT_CLOUD_MODEL_ID) {
+        throw new Error('Expected a default cloud model for the mobile cloud picker.');
+      }
+
+      getState().setModel(DEFAULT_CLOUD_MODEL_ID);
+
+      expect(DEFAULT_CLOUD_MODEL_ID).toBe('gpt-5.4-mini');
+      expect(getState().selectedModel).toBe('gpt-5.4-mini');
+      expect(getState().selectedProvider).toBe('cloud_managed');
     });
 
     it('pushes local models to recents newest first', () => {

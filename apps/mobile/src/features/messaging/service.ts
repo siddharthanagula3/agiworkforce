@@ -23,11 +23,17 @@ export interface TestConnectionResponse {
   error?: string;
 }
 
+function assertMessagingAvailable(): void {
+  if (!FEATURES.messaging) {
+    throw new Error('messaging: not available in v1');
+  }
+}
+
 /**
  * Fetch all messaging platform connections for the authenticated user.
  */
 export function getMessagingConfig(): Promise<MessagingConfigResponse> {
-  if (!FEATURES.messaging) return Promise.reject(new Error('messaging: not available in v1'));
+  assertMessagingAvailable();
   return api.get<MessagingConfigResponse>('/api/messaging/config');
 }
 
@@ -38,6 +44,7 @@ export function connectMessagingPlatform(
   platform: string,
   config: Record<string, string>,
 ): Promise<{ connection: Record<string, unknown> }> {
+  assertMessagingAvailable();
   return api.post<{ connection: Record<string, unknown> }>('/api/messaging/config', {
     platform,
     config,
@@ -48,6 +55,7 @@ export function connectMessagingPlatform(
  * Disconnect (remove) a messaging platform connection.
  */
 export function disconnectMessagingPlatform(platform: string): Promise<{ success: boolean }> {
+  assertMessagingAvailable();
   return api.delete<{ success: boolean }>(`/api/messaging/config/${platform}`);
 }
 
@@ -55,6 +63,7 @@ export function disconnectMessagingPlatform(platform: string): Promise<{ success
  * Get message statistics for a specific platform.
  */
 export function getMessagingStats(platform: string): Promise<MessagingStatsResponse> {
+  assertMessagingAvailable();
   return api.get<MessagingStatsResponse>(`/api/messaging/stats/${platform}`);
 }
 
@@ -65,6 +74,7 @@ export function testConnection(
   platform: string,
   config: Record<string, string>,
 ): Promise<TestConnectionResponse> {
+  assertMessagingAvailable();
   return api.post<TestConnectionResponse>(`/api/messaging/test/${platform}`, {
     platform,
     config,
