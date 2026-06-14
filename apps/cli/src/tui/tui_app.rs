@@ -518,13 +518,15 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
     terminal.draw(|frame| {
         let area = frame.area();
 
+        // Dynamic input height: border(2) + content rows (1..=8)
+        let input_height = 2 + composer_content_rows(&app.input);
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // header
-                Constraint::Min(5),    // chat area
-                Constraint::Length(3), // input
-                Constraint::Length(1), // status bar
+                Constraint::Length(3),            // header
+                Constraint::Min(5),               // chat area
+                Constraint::Length(input_height), // input (grows with content)
+                Constraint::Length(1),            // status bar
             ])
             .split(area);
 
@@ -874,17 +876,6 @@ fn parse_inline_md(text: &str, base_style: Style) -> Vec<Span<'static>> {
 
 fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     use crate::tui::terminal_palette::ui_muted;
-    let display_text = if app.input.is_empty() && !app.is_loading {
-        "Message AGI...  / for commands"
-    } else {
-        &app.input
-    };
-
-    let style = if app.input.is_empty() && !app.is_loading {
-        Style::default().fg(ui_muted())
-    } else {
-        Style::default()
-    };
 
     let prompt_char = match app.mode {
         InteractionMode::Chat => "> ",
@@ -894,40 +885,94 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         InteractionMode::FullAuto => "F ",
     };
 
-    let input_line = Line::from(vec![
-        Span::styled(
-            prompt_char,
-            Style::default()
-                .fg(app.mode.color())
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(display_text.to_string(), style),
-    ]);
+    let prompt_width = prompt_char_width(prompt_char);
 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(ui_muted()))
         .title(format!(" {} ", app.mode.label()));
 
-    let input_widget = Paragraph::new(input_line).block(block);
-    frame.render_widget(input_widget, area);
-
-    if !app.is_loading {
-        let cursor_x =
-            area.x + 1 + prompt_char_width(prompt_char) + input_cursor_display_width(app);
+    if app.input.is_empty() && !app.is_loading {
+        // Show placeholder on single line
+        let placeholder_line = Line::from(vec![
+            Span::styled(
+                prompt_char,
+                Style::default()
+                    .fg(app.mode.color())
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Message AGI...  Alt+Enter to send  / for commands",
+                Style::default().fg(ui_muted()),
+            ),
+        ]);
+        let widget = Paragraph::new(placeholder_line).block(block);
+        frame.render_widget(widget, area);
+        // Position cursor after prompt character
+        let cursor_x = area.x + 1 + prompt_width;
         let cursor_y = area.y + 1;
         frame.set_cursor_position((cursor_x, cursor_y));
+        return;
     }
+
+    // Multiline: split input by '\n' and render each line.
+    let style = Style::default();
+    let prompt_style = Style::default()
+        .fg(app.mode.color())
+        .add_modifier(Modifier::BOLD);
+
+    let lines_text: Vec<&str> = app.input.split('\n').collect();
+    let lines: Vec<Line> = lines_text
+        .iter()
+        .enumerate()
+        .map(|(i, &text)| {
+            if i == 0 {
+                Line::from(vec![
+                    Span::styled(prompt_char, prompt_style),
+                    Span::styled(text.to_string(), style),
+                ])
+            } else {
+                // Indent continuation lines to align with text after prompt
+                let indent = " ".repeat(prompt_width as usize);
+                Line::from(vec![
+                    Span::styled(indent, style),
+                    Span::styled(text.to_string(), style),
+                ])
+            }
+        })
+        .collect();
+
+    let widget = Paragraph::new(lines).block(block);
+    frame.render_widget(widget, area);
+
+    if !app.is_loading {
+        // Compute cursor (row, col) within the multiline content
+        let cursor_byte = floor_char_boundary(&app.input, app.cursor);
+        let text_before = &app.input[..cursor_byte];
+        let cursor_row = text_before.chars().filter(|&c| c == '\n').count();
+        let line_start_byte = text_before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        let col_text_width =
+            Line::from(text_before[line_start_byte..].to_string()).width() as u16;
+
+        let indent_width = if cursor_row == 0 { prompt_width } else { prompt_width };
+        let cursor_x = area.x + 1 + indent_width + col_text_width;
+        let cursor_y = area.y + 1 + cursor_row as u16;
+        frame.set_cursor_position((cursor_x, cursor_y));
+    }
+}
+
+/// Return the number of display rows needed for the input composer content
+/// (excluding the 2 border rows). Minimum 1, maximum 8.
+fn composer_content_rows(input: &str) -> u16 {
+    let newlines = input.chars().filter(|&c| c == '\n').count() as u16;
+    (newlines + 1).clamp(1, 8)
 }
 
 fn prompt_char_width(prompt_char: &str) -> u16 {
     Line::from(prompt_char.to_string()).width() as u16
 }
 
-fn input_cursor_display_width(app: &TuiApp) -> u16 {
-    input_prefix_display_width(&app.input, app.cursor)
-}
-
+#[cfg(test)]
 fn input_prefix_display_width(input: &str, cursor: usize) -> u16 {
     let cursor = floor_char_boundary(input, cursor);
     Line::from(input[..cursor].to_string()).width() as u16
@@ -1194,7 +1239,11 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         // Shift+Tab → cycle mode
         KeyCode::BackTab => InputAction::CycleMode,
 
-        KeyCode::Enter => {
+        // Alt+Enter or Ctrl+Enter → submit (multiline composer submit key)
+        KeyCode::Enter
+            if key.modifiers.contains(KeyModifiers::ALT)
+                || key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
             let text = app.input.trim().to_string();
             if text.is_empty() {
                 return InputAction::None;
@@ -1203,6 +1252,17 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.cursor = 0;
             app.scroll_offset = 0;
             InputAction::SendMessage(text)
+        }
+
+        // Plain Enter → insert newline (multiline composer) OR submit when single-line
+        KeyCode::Enter => {
+            if app.input.is_empty() {
+                return InputAction::None;
+            }
+            // If the input already has content, insert a newline (multiline mode).
+            // The user submits with Alt+Enter or Ctrl+Enter.
+            insert_char_at_cursor(&mut app.input, &mut app.cursor, '\n');
+            InputAction::None
         }
 
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1246,19 +1306,99 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         }
 
         KeyCode::Home => {
-            app.cursor = 0;
+            // Move to start of current line (not start of whole buffer).
+            let cursor = floor_char_boundary(&app.input, app.cursor);
+            let line_start = app.input[..cursor]
+                .rfind('\n')
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            app.cursor = line_start;
             InputAction::None
         }
         KeyCode::End => {
-            app.cursor = app.input.len();
+            // Move to end of current line (not end of whole buffer).
+            let cursor = floor_char_boundary(&app.input, app.cursor);
+            let line_end = app.input[cursor..]
+                .find('\n')
+                .map(|p| cursor + p)
+                .unwrap_or(app.input.len());
+            app.cursor = line_end;
             InputAction::None
         }
 
-        KeyCode::Up => InputAction::ScrollUp,
-        KeyCode::Down => InputAction::ScrollDown,
+        // Up/Down: navigate within multiline composer when applicable,
+        // otherwise scroll the chat area.
+        KeyCode::Up => {
+            if composer_move_up(app) {
+                InputAction::None
+            } else {
+                InputAction::ScrollUp
+            }
+        }
+        KeyCode::Down => {
+            if composer_move_down(app) {
+                InputAction::None
+            } else {
+                InputAction::ScrollDown
+            }
+        }
 
         _ => InputAction::None,
     }
+}
+
+/// Try to move the composer cursor up one line. Returns true if a line move
+/// was performed (cursor was not already on the first line), false otherwise.
+fn composer_move_up(app: &mut TuiApp) -> bool {
+    let cursor = floor_char_boundary(&app.input, app.cursor);
+    // Find start of current line
+    let line_start = app.input[..cursor]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    if line_start == 0 {
+        // Already on the first line — let the event fall through to scroll chat.
+        return false;
+    }
+    // Column offset within current line
+    let col_offset = cursor - line_start;
+    // Find start of previous line
+    let prev_line_start = app.input[..line_start.saturating_sub(1)]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    let prev_line_end = line_start - 1; // the '\n' itself
+    let prev_line_len = prev_line_end - prev_line_start;
+    // Land at same column or end of prev line
+    app.cursor = prev_line_start + col_offset.min(prev_line_len);
+    true
+}
+
+/// Try to move the composer cursor down one line. Returns true if a line move
+/// was performed (cursor was not already on the last line), false otherwise.
+fn composer_move_down(app: &mut TuiApp) -> bool {
+    let cursor = floor_char_boundary(&app.input, app.cursor);
+    // Find end of current line (next '\n' or end of buffer)
+    let line_start = app.input[..cursor]
+        .rfind('\n')
+        .map(|p| p + 1)
+        .unwrap_or(0);
+    let col_offset = cursor - line_start;
+    // Find start of next line
+    let next_newline = app.input[cursor..].find('\n');
+    let Some(rel) = next_newline else {
+        // Already on last line.
+        return false;
+    };
+    let next_line_start = cursor + rel + 1;
+    // Find end of next line
+    let next_line_end = app.input[next_line_start..]
+        .find('\n')
+        .map(|p| next_line_start + p)
+        .unwrap_or(app.input.len());
+    let next_line_len = next_line_end - next_line_start;
+    app.cursor = next_line_start + col_offset.min(next_line_len);
+    true
 }
 
 fn open_command_popup(app: &mut TuiApp) {

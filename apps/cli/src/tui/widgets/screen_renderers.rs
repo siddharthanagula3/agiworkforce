@@ -1223,7 +1223,7 @@ mod tests {
             assert!(s.contains(mode.label()));
             assert!(s.contains("Allowed:"));
             assert!(s.contains("Blocked:"));
-            assert!(s.contains("AGIWORKFORCE_SANDBOX"));
+            assert!(s.contains("--permission-mode"));
             assert!(s.contains("agiworkforce-sandbox-policy"));
         }
     }
