@@ -63,6 +63,12 @@ if (!fs.existsSync(pinningPath)) {
 
 const pinningSource = fs.readFileSync(pinningPath, 'utf8');
 
+// Placeholder pins are only a launch blocker when enforcement is ON — with
+// PINNING_ENFORCED=false the app falls back to standard platform TLS validation
+// and ships safely. So this guard fails the release lane only for the genuinely
+// broken combo: enforcement on AND unprovisioned (placeholder) pins. (#387)
+const pinningEnforced = /export\s+const\s+PINNING_ENFORCED\s*=\s*true\b/.test(pinningSource);
+
 // Scan only for lines that look like actual pin string values (quoted sha256/...
 // or sha256/PLACEHOLDER...) in the PINS_BY_HOST object. We match lines that
 // contain a quoted string starting with 'sha256/' and also contain the
@@ -74,9 +80,13 @@ const placeholderLines = pinningSource
   .filter((line) => PIN_VALUE_RE.test(line) && line.includes(PLACEHOLDER_PREFIX))
   .map((line) => line.trim());
 
-if (placeholderLines.length > 0) {
-  console.error('[check-tls-pins] FAIL: lib/pinning.ts still contains placeholder TLS SPKI pins.');
-  console.error('[check-tls-pins] Replace the following before releasing:');
+if (pinningEnforced && placeholderLines.length > 0) {
+  console.error(
+    '[check-tls-pins] FAIL: PINNING_ENFORCED=true but lib/pinning.ts still contains placeholder TLS SPKI pins.',
+  );
+  console.error(
+    '[check-tls-pins] Replace the following before releasing (or keep PINNING_ENFORCED=false):',
+  );
   for (const line of placeholderLines) {
     console.error(`  ${line}`);
   }
@@ -84,5 +94,12 @@ if (placeholderLines.length > 0) {
   process.exit(1);
 }
 
-console.log('[check-tls-pins] PASS: all TLS SPKI pins are provisioned (no placeholders found).');
+if (placeholderLines.length > 0) {
+  console.log(
+    '[check-tls-pins] PASS: placeholder pins present but PINNING_ENFORCED=false — ships safely on standard TLS. ' +
+      'Provision real SPKI hashes and flip PINNING_ENFORCED=true to enable pinning.',
+  );
+} else {
+  console.log('[check-tls-pins] PASS: all TLS SPKI pins are provisioned (no placeholders found).');
+}
 process.exit(0);

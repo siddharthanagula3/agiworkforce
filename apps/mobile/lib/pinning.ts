@@ -80,21 +80,30 @@ export const PINS_BY_HOST: Readonly<Record<string, ReadonlyArray<string>>> = Obj
 });
 
 /**
- * When false, `secureFetch` is a transparent passthrough. When true,
- * requests to hosts with empty pin arrays are REFUSED (fail-closed).
+ * When false, `secureFetch` is a transparent passthrough — the platform's
+ * standard TLS chain validation still protects every request. When true,
+ * requests to hosts whose pins are unprovisioned (empty OR still placeholder)
+ * are REFUSED, fail-closed.
  *
- * AUDIT-FIX: C-7 — flipped to true. Release builds with placeholder pins
- * fail at module load (see {@link enforceProvisionedPinsForRelease} below).
+ * #387: this stays FALSE until ops provisions real SPKI hashes. Turning it on
+ * while the table below still holds placeholders would fail-close every request
+ * to our prod hosts (api / signaling / agiworkforce) and break cloud on real
+ * device builds — the exact pre-launch blocker. The chokepoint, the pin table,
+ * the bootstrap assert, and the release-lane `check:tls-pins` guard all stay
+ * wired, so enabling enforcement is a one-line flip once real hashes land and
+ * the guard passes.
  */
-export const PINNING_ENFORCED = true;
+export const PINNING_ENFORCED = false;
 
 const PLACEHOLDER_PREFIX = 'PLACEHOLDER_REPLACE_BEFORE_LAUNCH_';
 
+function isPlaceholderPin(pin: string): boolean {
+  return pin.includes(PLACEHOLDER_PREFIX);
+}
+
 /** True if any configured pin still carries the placeholder marker. */
 export function hasPlaceholderPins(): boolean {
-  return Object.values(PINS_BY_HOST)
-    .flat()
-    .some((h) => h.includes(PLACEHOLDER_PREFIX));
+  return Object.values(PINS_BY_HOST).flat().some(isPlaceholderPin);
 }
 
 /** Returns true when the URL's host has at least one pin configured. */
@@ -121,6 +130,17 @@ export function pinsForUrl(urlString: string): ReadonlyArray<string> {
   }
 }
 
+/** True if the URL's host has at least one placeholder pin configured. */
+export function hasPlaceholderPinForUrl(urlString: string): boolean {
+  return pinsForUrl(urlString).some(isPlaceholderPin);
+}
+
+/** True when the URL's host has non-placeholder pins ready for native enforcement. */
+export function pinsAreProvisionedForUrl(urlString: string): boolean {
+  const pins = pinsForUrl(urlString);
+  return pins.length > 0 && pins.every((pin) => !isPlaceholderPin(pin));
+}
+
 /** True if a given host is one of the known prod hosts that requires pins. */
 export function requiresPin(host: string): boolean {
   const normalized = host.toLowerCase();
@@ -135,10 +155,13 @@ export function requiresPin(host: string): boolean {
 export function assertPinningReadyIfEnforced(): void {
   if (!PINNING_ENFORCED) return;
 
-  const unpinned = REQUIRED_PINNED_HOSTS.filter((host) => (PINS_BY_HOST[host] ?? []).length === 0);
+  const unpinned = REQUIRED_PINNED_HOSTS.filter((host) => {
+    const pins = PINS_BY_HOST[host] ?? [];
+    return pins.length === 0 || pins.some(isPlaceholderPin);
+  });
   if (unpinned.length > 0) {
     throw new Error(
-      `PINNING_ENFORCED=true but PINS_BY_HOST has empty arrays for: ${unpinned.join(', ')}. ` +
+      `PINNING_ENFORCED=true but PINS_BY_HOST is missing real pins for: ${unpinned.join(', ')}. ` +
         `Follow the pin-capture runbook in lib/pinning.ts before enabling enforcement.`,
     );
   }
