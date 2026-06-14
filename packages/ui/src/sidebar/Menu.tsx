@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Tiny headless dropdown menu — dependency-free replacement for the Radix
  * DropdownMenu the desktop/web sidebars used. packages/ui must not pull Radix
