@@ -250,7 +250,7 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
   }
 
   const choice = await vscode.window.showInformationMessage(
-    'Welcome to AGI Workforce! Set up your API key to use Claude, GPT, Gemini, and 10+ providers in VS Code.',
+    'Welcome to AGI Workforce. Set up an API key to use supported providers in VS Code.',
     'Set API Key',
     'Later',
   );

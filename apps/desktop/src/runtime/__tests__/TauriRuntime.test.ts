@@ -133,6 +133,7 @@ describe('TauriRuntime', () => {
       }),
     });
 
+    expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain('llm_send_message');
     expect(linkConversationIdMock).toHaveBeenCalledWith('frontend-conversation-id', 42);
   });
 
