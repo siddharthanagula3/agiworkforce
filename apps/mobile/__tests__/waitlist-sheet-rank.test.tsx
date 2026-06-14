@@ -97,7 +97,7 @@ describe('InviteCodeModal — waitlist tab rank display', () => {
     );
 
     expect(getByLabelText('Invitation code')).toBeTruthy();
-    expect(getByLabelText('Save invitation code')).toBeTruthy();
+    expect(getByLabelText('Unlock AGI Cloud')).toBeTruthy();
     expect(getByLabelText('Join waitlist')).toBeTruthy();
     expect(getByLabelText('Join the waitlist instead')).toBeTruthy();
   });

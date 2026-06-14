@@ -83,7 +83,7 @@ describe('Capabilities settings screen', () => {
       getByLabelText('Web search. Search current web information in Cloud sessions. Invite'),
     ).toBeTruthy();
     expect(
-      getByLabelText('AGI Code. AGI Code runs from Desktop or Cloud access. Off'),
+      getByLabelText('AGI Code. Review mobile code sessions and Desktop handoff. Desktop'),
     ).toBeTruthy();
     expect(queryAllByRole('switch')).toHaveLength(0);
     expect(queryByText(/Claude/i)).toBeNull();
