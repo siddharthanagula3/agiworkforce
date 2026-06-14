@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
-  Plus,
+  SquarePen,
   Search,
   FolderOpen,
   Box,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
+import { ConversationRow } from './ConversationRow';
 import {
   useUnifiedAuthStore,
   selectUser,
@@ -32,6 +33,8 @@ import { AccountMenu } from './AccountMenu';
 type RecentsGroup = {
   label: string;
   items: ConversationSummary[];
+  /** Pinned group: always shown in full, never subject to the 30-item cap. */
+  noCap?: boolean;
 };
 
 function conversationUpdatedAtMs(conversation: ConversationSummary): number {
@@ -50,10 +53,15 @@ function groupConversations(convos: ConversationSummary[], t: TFunction): Recent
   const DAY = 86_400_000;
 
   const sorted = [...convos]
-    .sort((a, b) => conversationUpdatedAtMs(b) - conversationUpdatedAtMs(a))
-    .slice(0, 30);
+    .filter((c) => c.archived !== true)
+    .sort((a, b) => conversationUpdatedAtMs(b) - conversationUpdatedAtMs(a));
 
-  const groups: RecentsGroup[] = [
+  // Pinned conversations float to a dedicated top group (ChatGPT-style),
+  // independent of recency; the rest fall into time buckets capped at 30.
+  const pinned = sorted.filter((c) => c.pinned);
+  const rest = sorted.filter((c) => !c.pinned).slice(0, 30);
+
+  const timeGroups: RecentsGroup[] = [
     { label: t('sidebar.groups.lastHour'), items: [] },
     { label: t('sidebar.groups.today'), items: [] },
     { label: t('sidebar.groups.yesterday'), items: [] },
@@ -61,16 +69,21 @@ function groupConversations(convos: ConversationSummary[], t: TFunction): Recent
     { label: t('sidebar.groups.pastMonth'), items: [] },
   ];
 
-  for (const c of sorted) {
+  for (const c of rest) {
     const age = now - conversationUpdatedAtMs(c);
-    if (age < HOUR) groups[0]!.items.push(c);
-    else if (age < DAY) groups[1]!.items.push(c);
-    else if (age < 2 * DAY) groups[2]!.items.push(c);
-    else if (age < 7 * DAY) groups[3]!.items.push(c);
-    else groups[4]!.items.push(c);
+    if (age < HOUR) timeGroups[0]!.items.push(c);
+    else if (age < DAY) timeGroups[1]!.items.push(c);
+    else if (age < 2 * DAY) timeGroups[2]!.items.push(c);
+    else if (age < 7 * DAY) timeGroups[3]!.items.push(c);
+    else timeGroups[4]!.items.push(c);
   }
 
-  return groups.filter((g) => g.items.length > 0);
+  const result: RecentsGroup[] = [];
+  if (pinned.length > 0) {
+    result.push({ label: t('sidebar.pinned'), items: pinned, noCap: true });
+  }
+  result.push(...timeGroups.filter((g) => g.items.length > 0));
+  return result;
 }
 
 // ─── per-mode nav config ──────────────────────────────────────────────────────
@@ -138,6 +151,10 @@ export function Sidebar({
   const [showAll, setShowAll] = useState(false);
 
   const conversations = useChatStore((s: ChatState) => s.conversations);
+  const activeConversationId = useChatStore((s: ChatState) => s.activeConversationId);
+  const renameConversation = useChatStore((s: ChatState) => s.renameConversation);
+  const deleteConversation = useChatStore((s: ChatState) => s.deleteConversation);
+  const togglePinnedConversation = useChatStore((s: ChatState) => s.togglePinnedConversation);
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
   const hasCloudAccountSession = useUnifiedAuthStore(selectHasCloudAccountSession);
@@ -152,6 +169,7 @@ export function Sidebar({
     let seen = 0;
     return groups
       .map((g) => {
+        if (g.noCap) return g;
         const available = Math.max(0, 30 - seen);
         const items = g.items.slice(0, available);
         seen += items.length;
@@ -268,7 +286,7 @@ export function Sidebar({
             fontWeight: 500,
           }}
         >
-          <Plus size={14} />
+          <SquarePen size={14} />
           {!collapsed && <span>{newLabel}</span>}
         </button>
       </div>
@@ -410,28 +428,15 @@ export function Sidebar({
                 {group.label}
               </div>
               {group.items.map((c) => (
-                <button
+                <ConversationRow
                   key={c.id}
-                  title={c.title}
-                  onClick={() => onJumpConversation?.(c.id)}
-                  style={{
-                    width: '100%',
-                    display: 'block',
-                    padding: '5px 10px',
-                    borderRadius: 6,
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    color: 'var(--chat-text-secondary)',
-                    fontSize: 13,
-                    textAlign: 'left',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {c.title || t('common.untitled')}
-                </button>
+                  conversation={c}
+                  active={c.id === activeConversationId}
+                  onSelect={(id) => onJumpConversation?.(id)}
+                  onRename={renameConversation}
+                  onDelete={deleteConversation}
+                  onTogglePin={togglePinnedConversation}
+                />
               ))}
             </div>
           ))}
