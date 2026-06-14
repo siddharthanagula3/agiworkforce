@@ -143,9 +143,9 @@ if [ "$FAILS" -eq 0 ]; then
   echo "  3. git push origin v-cli-1.0.0"
   echo "  4. gh run watch  # release-cli.yml runs ~15 min"
   echo "  5. ./scripts/update-homebrew-tap.sh 1.0.0"
-  echo "  6. Post launch threads from docs/launch/"
+  echo "  6. Post launch threads from docs/marketing/"
   echo ""
-  echo "See docs/HANDOFF.md for full launch runbook."
+  echo "See docs/marketing/README.md and docs/current/commercial-and-launch.md for launch guidance."
   exit 0
 else
   echo -e "${red}$FAILS check(s) failed.${nc} Fix before tagging."

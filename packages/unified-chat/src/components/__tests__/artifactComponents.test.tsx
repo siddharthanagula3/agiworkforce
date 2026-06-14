@@ -84,6 +84,36 @@ describe('ArtifactRenderer', () => {
     expect(screen.getByText(/# Hello World/)).toBeDefined();
   });
 
+  // CRITICAL #15 regression: a well-formed non-SVG document used to bypass
+  // sanitizeSvg entirely (the detached root was serialized unsanitized into
+  // the raw-HTML render path). It must hit the fallback instead.
+  it('refuses to render an svg artifact whose root element is not <svg>', () => {
+    const artifact = makeArtifact({
+      id: 'a3-xss',
+      type: 'svg',
+      content:
+        '<html xmlns="http://www.w3.org/1999/xhtml"><img src="x" onerror="window.__pwned=1"/></html>',
+    });
+    const { container } = render(<ArtifactRenderer artifact={artifact} />);
+    expect(screen.getByText('Unable to render SVG content.')).toBeDefined();
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.innerHTML).not.toContain('onerror');
+  });
+
+  it('strips event handlers and foreignObject from svg artifacts', () => {
+    const artifact = makeArtifact({
+      id: 'a3-svg-evil',
+      type: 'svg',
+      content:
+        '<svg xmlns="http://www.w3.org/2000/svg" onload="window.__pwned=1"><foreignObject><img src="x" onerror="window.__pwned=1"/></foreignObject><rect width="10" height="10"/></svg>',
+    });
+    const { container } = render(<ArtifactRenderer artifact={artifact} />);
+    expect(screen.getByTestId('svg-artifact')).toBeDefined();
+    expect(container.innerHTML).not.toContain('onload');
+    expect(container.innerHTML).not.toContain('onerror');
+    expect(container.querySelector('foreignObject, foreignobject')).toBeNull();
+  });
+
   it('renders table artifact', () => {
     const data = JSON.stringify([
       { name: 'Alice', age: 30 },

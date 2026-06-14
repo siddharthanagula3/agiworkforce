@@ -58,7 +58,7 @@ export const DEFAULT_SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = [
     render: () => (
       <SectionPlaceholder
         title="Profile"
-        body="Manage your display name and avatar. In v1 local-only this is the device-local profile; cloud profile sync arrives with Cloud Managed."
+        body="Manage your display name and avatar. Local profiles stay on this device; cloud profile sync is gated until account sync is proven."
       />
     ),
   },

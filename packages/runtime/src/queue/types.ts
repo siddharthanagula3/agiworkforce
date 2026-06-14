@@ -10,8 +10,8 @@
  *
  * Within a lane, commands dequeue FIFO.
  *
- * Reference: tasks/research/deep/u2-utils-direct-h-n.md §2.5 + reference
- * implementation at ~/Desktop/reference/src/utils/messageQueueManager.ts.
+ * Reference: tasks/research/deep/u2-utils-direct-h-n.md §2.5 plus local
+ * reference research on priority message queues. This is an AGI-owned contract.
  */
 
 /** Priority lanes — ordered `now` < `next` < `later` (lower number = higher priority). */
@@ -40,7 +40,7 @@ export type PromptInputMode = EditablePromptInputMode | 'task-notification' | 'c
 /**
  * Pasted content — images, file refs, or text blobs the user pasted into the
  * prompt. Preserved across queue → input round-trips so imageStore lookups
- * still resolve. ID is stable; matches reference/src/utils/config.ts shape.
+ * still resolve. ID is stable across queue round-trips.
  */
 export interface PastedContent {
   /** Stable numeric ID; preserved across `popAllEditable`. */
