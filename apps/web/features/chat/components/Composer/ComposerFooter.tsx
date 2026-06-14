@@ -18,6 +18,7 @@ import {
 } from '@/constants/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
+import { AgiMark } from '@/components/agi/AgiMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
@@ -159,44 +160,36 @@ function partitionModels(
     };
   }
 
-  const autoModels = models.filter((m) => m.providerKey === 'managed_cloud');
-  const manualModels = models.filter((m) => m.providerKey !== 'managed_cloud');
+  // Top group = everything available in the user's tier (Auto modes first, then
+  // manual models). Bottom ("More models") = everything that needs an upgrade,
+  // Auto modes first there too. So free users see Auto (Economy) + their Hobby
+  // models up top, and Auto Balanced/Best + flagships below with an Upgrade link.
+  const isAuto = (m: AIModel) => m.providerKey === 'managed_cloud';
+  const available = models.filter((m) => isModelSelectableForTier(m, tier));
+  const locked = models.filter((m) => !isModelSelectableForTier(m, tier));
 
-  const inTierManual = manualModels.filter((m) => isModelSelectableForTier(m, tier));
-  const lockedManual = manualModels.filter((m) => !isModelSelectableForTier(m, tier));
-
-  // Always surface the Opus model in recommended so free users see the Anthropic flagship upsell.
-  // Show up to 2 locked flagships: the first locked model in provider order, plus the Opus model
-  // if it isn't already included. Fill remaining slots with in-tier models.
-  const opusModel = lockedManual.find((m) => m.name.toLowerCase().includes('opus'));
-  const firstLocked = lockedManual.slice(0, 1);
-  const flagshipLocked =
-    opusModel && !firstLocked.some((m) => m.id === opusModel.id)
-      ? [...firstLocked, opusModel]
-      : firstLocked;
-  const remainingSlots = Math.max(0, 3 - flagshipLocked.length);
-  const inTierSlice = inTierManual.slice(0, remainingSlots);
-  const recommendedManual = [...flagshipLocked, ...inTierSlice];
-
-  const recommendedIds = new Set([
-    ...autoModels.map((m) => m.id),
-    ...recommendedManual.map((m) => m.id),
-  ]);
-  const more = manualModels.filter((m) => !recommendedIds.has(m.id));
-
-  const recommended = [
-    ...autoModels.map((m) => ({ ...m, isLocked: !isModelSelectableForTier(m, tier) })),
-    ...recommendedManual.map((m) => ({
-      ...m,
-      isLocked: !isModelSelectableForTier(m, tier),
-    })),
+  const orderAutoFirst = (list: AIModel[]) => [
+    ...list.filter(isAuto),
+    ...list.filter((m) => !isAuto(m)),
   ];
+
+  const recommended = orderAutoFirst(available).map((m) => ({ ...m, isLocked: false }));
+  const more = orderAutoFirst(locked);
 
   return { recommended, more, isSearching: false };
 }
 
-/** Provider logo: official vector mark (theme-adaptive) → local SVG → brand dot. */
+/** Provider logo: AGI mark for Auto modes → official vector mark → local SVG → brand dot. */
 function ProviderLogo({ providerKey, size = 14 }: { providerKey: string; size?: number }) {
+  // Auto modes (managed cloud) carry the AGI brand mark in the brand accent colour.
+  if (providerKey === 'managed_cloud') {
+    return (
+      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-accent-primary)]">
+        <AgiMark size={size} mono />
+      </span>
+    );
+  }
+
   // Prefer the official, theme-adaptive mark (OpenAI/Claude/Gemini/DeepSeek/etc.).
   const markKey = toProviderId(providerKey) ?? providerKey;
   if (hasProviderMark(markKey)) {
@@ -515,7 +508,7 @@ export function ComposerFooter({
                   {/* Recommended section label */}
                   {!isSearching && (
                     <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                      Recommended
+                      Available
                     </div>
                   )}
                   {recommended.map((model) => {
