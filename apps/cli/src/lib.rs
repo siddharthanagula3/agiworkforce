@@ -1134,7 +1134,9 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             at_turn,
             as_name,
         } => {
-            let (mut messages, _) = resolve_resume_payload(&session_id, true)?;
+            // Load source session without creating a fork copy (fork=false avoids
+            // the UUID-named phantom copy that the old path wrote).
+            let (mut messages, _) = resolve_resume_payload(&session_id, false)?;
             if let Some(turn) = at_turn {
                 // Truncate to the first `turn` user→assistant pairs.
                 let mut user_seen = 0usize;
@@ -1155,18 +1157,46 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                 }
                 messages.truncate(keep_to);
             }
-            let new_name = as_name
-                .clone()
-                .unwrap_or_else(|| format!("{}-fork", session_id));
+            // Derive a safe session ID from --as (slugify) or auto-generate.
+            let new_id = if let Some(ref name) = as_name {
+                // Slugify: lowercase, replace non-alphanumeric with '-', collapse runs.
+                let raw: String = name
+                    .chars()
+                    .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+                    .collect();
+                let slug = raw
+                    .split('-')
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("-");
+                if slug.is_empty() {
+                    format!("{}-fork", session_id)
+                } else {
+                    slug
+                }
+            } else {
+                format!("{}-fork", session_id)
+            };
+            // Persist the forked (and optionally truncated) session to disk under
+            // the user-chosen ID so `agi --resume <as_name>` works immediately.
+            let resolved = runtime::session_control::create_managed_session_with_id(
+                new_id.clone(),
+                messages.clone(),
+            )?;
+            let saved_id = resolved.summary.session_id.clone();
             println!(
                 "{} Forked '{}' → '{}' ({} messages{}).",
                 ts::success_header("fork:"),
                 session_id,
-                new_name,
+                saved_id,
                 messages.len(),
                 at_turn
                     .map(|t| format!(", at turn {t}"))
                     .unwrap_or_default(),
+            );
+            println!(
+                "  Resume with: {}",
+                ts::accent_header(format!("agi --resume {saved_id}"))
             );
             Ok(())
         }
@@ -1411,7 +1441,9 @@ pub async fn run_main() -> Result<()> {
                                 out_tokens: turn.output_tokens,
                                 cache_read: turn.cache_read_tokens,
                                 cache_creation: turn.cache_creation_tokens,
-                                cumulative_dollars: 0.0,
+                                // Read accumulated cost from the session ledger instead of
+                                // hardcoding 0.0 — the ledger is updated by send() internally.
+                                cumulative_dollars: session.cost_ledger.total_usd,
                             }
                             .emit_stdout();
                             agent_events::AgentEvent::Finished {

@@ -28,18 +28,18 @@ Claude Code, OpenAI Codex CLI, OpenCode, and Gemini CLI are the four serious
 competitors. We close gaps none of them close, and meet them on parity where
 the ecosystem expects it.
 
-| Feature                                        |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                  **AGI Workforce**                   |
-| ---------------------------------------------- | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
-| Multi-provider in one session, mid-turn switch |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                  ✅ 10+ + `/model`                   |
-| Live cost HUD (tokens + $ + ctx %)             |          ❌          |        ❌        |           ❌           |       ❌       |                          ✅                          |
-| Machine-readable agent events for CI           |          ❌          |        ❌        |           ❌           |       ❌       |                  ✅ `--json-events`                  |
-| Multi-model fallback chain                     |          ❌          |        ❌        |           ❌           |       ❌       |                    ✅ `-m a,b,c`                     |
-| Session fork from any turn                     |    ✅ resume only    |  ✅ basic fork   |           ✅           |       ❌       |                   ✅ `--at-turn N`                   |
-| Native Rust binary                             |          ✅          |        ✅        |         ❌ Bun         |       ❌       |                          ✅                          |
-| OSS license                                    |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ❌ Proprietary                    |
-| MCP support (transports)                       | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |             stdio + SSE + HTTP (+OAuth)              |
-| Hook events                                    |          27          |        6         |           ✓            |    (varies)    |                          19                          |
-| Plan mode (model writes plan → user approves)  |          ✅          | ✅ `update_plan` |           ✓            |       ❌       | ⚠️ tool-allowlist toggle (real plan mode in Phase 1) |
+| Feature                                          |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                  **AGI Workforce**                   |
+| ------------------------------------------------ | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
+| Multi-provider in one session, mid-turn switch   |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                  ✅ 15+ + `/model`                   |
+| Always-on cost HUD top-right (tokens + $ + ctx%) | ⚠️ status line only  | ⚠️ /status card  |           ❌           |       ❌       |                          ✅                          |
+| Machine-readable JSONL agent events for CI       | ⚠️ stream-json mode  | ⚠️ JSONL events  |           ❌           |       ❌       |   ✅ `--json-events` (typed, stable kind strings)    |
+| Multi-model fallback chain                       |          ❌          |        ❌        |           ❌           |       ❌       |                    ✅ `-m a,b,c`                     |
+| Session fork at specific turn with rename        |    ✅ resume only    |  ✅ basic fork   |           ✅           |       ❌       |             ✅ `--at-turn N --as <name>`             |
+| Native Rust binary                               |          ✅          |        ✅        |         ❌ Bun         |       ❌       |                          ✅                          |
+| OSS license                                      |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ❌ Proprietary                    |
+| MCP support (transports)                         | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |             stdio + SSE + HTTP (+OAuth)              |
+| Hook events                                      |     ~19 (config)     |       ~10        |           ✓            |    (varies)    |                          32                          |
+| Plan mode (model writes plan → user approves)    |          ✅          | ✅ `update_plan` |           ✓            |       ❌       | ⚠️ tool-allowlist toggle (real plan mode in Phase 1) |
 
 ## Install
 
@@ -74,7 +74,8 @@ api_key_env = "GROQ_API_KEY"
 
 Custom names that collide with a pre-registered provider (`anthropic`,
 `openai`, `google`, `ollama`, `xai`, `deepseek`, `perplexity`, `qwen`,
-`moonshot`, `zhipu`, `lmstudio`) are ignored — the native handler always wins.
+`moonshot`, `zhipu`, `lmstudio`, `mistral`, `openrouter`, `nvidia`) are
+ignored — the native handler always wins.
 
 ## The four differentiators
 
@@ -219,7 +220,7 @@ agi doctor --json
 - Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
   Landlock are enum stubs (Phase 2).
 - MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).
-- Hooks: 33 events shipped (`apps/cli/src/features/hooks/hooks.rs`); aligned
+- Hooks: 32 events shipped (`apps/cli/src/features/hooks/hooks.rs`); aligned
   with the Sprint B5 canonical vocabulary (Claude Code aliases like
   `BeforeToolUse` map to canonical `PreToolUse`).
 - Catalog-driven provider routes through AGI-owned adapters and user-defined
@@ -232,7 +233,7 @@ agi doctor --json
   `init`.
 - **Phase 1 (Sprint B, complete)** — MCP SSE + HTTP + OAuth, plugin manifest
   discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`),
-  hook event vocabulary canonicalized (now 33 events), provider adapter
+  hook event vocabulary canonicalized (now 32 events), provider adapter
   support, and user-defined custom endpoints.
 - **Phase 2 (next)** — Routing strategy resurrection (the differentiator),
   hot reload, `--from-pr`, OS keychain (sprint1-vault-rewire), Linux Landlock +
