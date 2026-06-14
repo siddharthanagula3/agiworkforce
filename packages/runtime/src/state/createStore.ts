@@ -1,5 +1,5 @@
 /**
- * createStore — 34-LOC hand-rolled store, ported from Anthropic reference architecture.
+ * createStore — small AGI-owned store for stable snapshots and subscriptions.
  *
  * Design invariants (see tasks/research/deep/misc1-skills-tasks-state-memdir.md §8.1):
  *  - Object.is short-circuit: setState is a no-op when next === prev, preventing
@@ -9,7 +9,7 @@
  *  - Circular re-entrancy guard: onChangeAppState passes a depth counter through the
  *    fan-out chain; createStore itself doesn't need to track depth.
  *
- * Reference: state/store.ts:10-34 from ~/Desktop/reference/src/.
+ * Pattern reference: local reference research on stable snapshot stores.
  */
 
 /** Minimal listener type: no arguments, called after every state mutation. */

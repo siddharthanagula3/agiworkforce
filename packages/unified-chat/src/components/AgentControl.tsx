@@ -311,63 +311,6 @@ function EffortChip({ conversationId, projectId }: EffortChipProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Temp Chat Chip
-// ---------------------------------------------------------------------------
-
-interface TempChipProps {
-  conversationId: string;
-  projectId: string | null;
-}
-
-function TempChip({ conversationId, projectId }: TempChipProps) {
-  const resolve = useAgentControlStore((s) => s.resolve);
-  const setTemporaryChat = useAgentControlStore((s) => s.setTemporaryChat);
-  const state = resolve(conversationId, projectId);
-  const isOn = state.temporaryChat;
-
-  return (
-    <Tooltip.Provider delayDuration={400}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isOn}
-            aria-label={isOn ? 'Temporary chat: on' : 'Temporary chat: off'}
-            onClick={() => setTemporaryChat(conversationId, !isOn)}
-            className={chipClass(isOn)}
-          >
-            <span
-              className={cn(
-                'h-2 w-2 rounded-full transition-all duration-200',
-                isOn ? 'bg-[var(--chat-accent-primary)]' : 'bg-[var(--chat-text-muted)]',
-              )}
-              aria-hidden
-            />
-            <span>Temp</span>
-          </button>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            side="top"
-            className={cn(
-              'z-50 max-w-[180px] rounded-md px-2 py-1.5 text-[10px] shadow-md',
-              'bg-[var(--chat-surface-elevated)] border border-[var(--chat-border)]',
-              'text-[var(--chat-text-secondary)] text-center',
-            )}
-          >
-            {isOn
-              ? 'Temporary — this conversation will not be saved to history'
-              : 'Enable to skip saving this conversation'}
-            <Tooltip.Arrow className="fill-[var(--chat-surface-elevated)]" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // AgentControl — public composite component
 // ---------------------------------------------------------------------------
 
@@ -389,7 +332,6 @@ export function AgentControl({
     >
       <ModeChip conversationId={conversationId} projectId={projectId} />
       {supportsEffort && <EffortChip conversationId={conversationId} projectId={projectId} />}
-      <TempChip conversationId={conversationId} projectId={projectId} />
     </div>
   );
 }
