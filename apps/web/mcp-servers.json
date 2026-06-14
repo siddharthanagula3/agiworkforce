@@ -3,14 +3,14 @@
     {
       "id": "filesystem",
       "name": "Filesystem",
-      "description": "Read and list files on the server filesystem (restricted to allowed directories).",
+      "description": "Read and list files on the server filesystem (restricted to allowed directories). Disabled by default — opt-in per operator/deployment; review the allowed directory before enabling.",
       "transport": {
         "type": "stdio",
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
         "env": {}
       },
-      "enabled": true
+      "enabled": false
     }
   ]
 }
