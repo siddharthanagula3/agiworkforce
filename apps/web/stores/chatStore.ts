@@ -16,6 +16,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
+import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 
 // Types
 export interface MessageMetadata {
@@ -41,7 +42,9 @@ export interface MessageMetadata {
   /** True while a server-managed web search is in progress */
   isSearching?: boolean;
   /** Web search results from server-managed tools */
-  searchResults?: Array<{ url: string; title: string; snippet: string }>;
+  searchResults?: WebSearchResults;
+  /** Safe replay metadata used to regenerate a turn without storing raw skill bodies. */
+  sendReplay?: SendReplayMetadata;
   /** True while server-managed code execution is running */
   isExecutingCode?: boolean;
   /** Tool activity timeline rendered below assistant messages. */
@@ -120,6 +123,12 @@ export interface Conversation {
   projectId?: string | null;
   messageCount?: number;
   isTemporary?: boolean;
+  /** Pinned to top of sidebar. Persisted in web_conversations.pinned. */
+  isPinned?: boolean;
+  /** Starred by the user. Client-side only (no DB column in v1). */
+  isStarred?: boolean;
+  /** Archived (hidden from default list). Client-side only (no DB column in v1). */
+  isArchived?: boolean;
 }
 
 export type ModelTier = 'economy' | 'balanced' | 'premium';
