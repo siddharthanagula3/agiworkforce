@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SearchOverlay — the centered command-palette-style search modal the desktop
  * Sidebar opens. Pure presentation: results + handlers are passed in. Uses a
