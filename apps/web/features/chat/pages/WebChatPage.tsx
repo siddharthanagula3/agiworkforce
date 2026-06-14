@@ -394,12 +394,14 @@ export default function WebChatPage() {
         meta?: SendMeta;
       } = {},
     ) => {
+      let freshConvId: string | null = null;
       const convId =
         options.conversationId ||
         urlConversationId ||
         bareChatSessionId ||
         (await createConversation('New Chat', activeModelId).then((c) => {
           if (c) {
+            freshConvId = c.id;
             if (!urlConversationId) setBareChatSessionId(c.id);
             return c.id;
           }
@@ -408,6 +410,13 @@ export default function WebChatPage() {
 
       if (!convId) return;
       if (!urlConversationId) setBareChatSessionId(convId);
+
+      // Navigate to the canonical /chat/[id] URL after the first message so the
+      // conversation is bookmarkable and survives a page refresh. Use replace so
+      // the empty /chat entry is removed from browser history.
+      if (freshConvId) {
+        router.replace(`/chat/${freshConvId}`);
+      }
 
       // Read image files as base64 data URLs so the LLM can process them
       const resolvedAttachments = options.attachments
@@ -445,7 +454,7 @@ export default function WebChatPage() {
         skillBody: options.meta?.skillBody,
       });
     },
-    [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId],
+    [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId, router],
   );
 
   const handleSend = useCallback(
