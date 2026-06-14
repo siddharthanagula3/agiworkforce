@@ -439,6 +439,7 @@ export class TauriRuntime implements ChatRuntime {
 
     // Kick off the Rust-side stream after listeners are ready.
     try {
+      const activeMode = useAppModeStore.getState().mode;
       await invoke('chat_send_message', {
         request: {
           content,
@@ -449,7 +450,10 @@ export class TauriRuntime implements ChatRuntime {
           attachments: attachments ?? [],
           stream: true,
           frontendMessageId,
-          preferCloudCredits: useAppModeStore.getState().mode === 'cloud',
+          // activeMode is the authoritative trust-boundary signal.  The backend
+          // MUST honor this: "local" => no ManagedCloud, "cloud" => cloud only.
+          activeMode,
+          preferCloudCredits: activeMode === 'cloud',
           // Composer controls — the Rust ChatSendMessageRequest already accepts
           // these camelCase aliases; they were previously dropped client-side.
           thinkingMode: thinkingEnabled,
@@ -506,8 +510,12 @@ export class TauriRuntime implements ChatRuntime {
   }
 
   async loadConversations(): Promise<Conversation[]> {
+    // Pass the active mode so the backend applies strict mode-scoped filtering:
+    // Local conversations never appear in Cloud mode and vice-versa.
+    const appMode = useAppModeStore.getState().mode;
     const raw = await invoke<RawConversation[]>('chat_get_conversations', {
       userId: this.getCurrentUserId(),
+      appMode,
     });
     return Array.isArray(raw) ? raw.map(mapConversation) : [];
   }
