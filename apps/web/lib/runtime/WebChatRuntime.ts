@@ -117,11 +117,11 @@ export class WebChatRuntime implements ChatRuntime {
     // Append the new user message
     history.push({ role: 'user', content });
 
-    // Pass approval_mode=auto so the server-side tool loop executes MCP tools
-    // immediately and feeds results back in-stream. The tool_call/tool_result
-    // StreamEvents below update the ToolTimeline in the chat UI. When the
-    // route has no MCP tools configured the query param is ignored.
-    const completionsUrl = '/api/llm/v1/chat/completions?approval_mode=auto';
+    // Fail-closed: the client never requests auto-approval (that would let a
+    // client skip the per-tool gate). The server-side tool loop owns approval
+    // policy (default manual) and emits x_tool_approval_request events that the
+    // tool_call StreamEvents below surface as an Approve/Reject prompt.
+    const completionsUrl = '/api/llm/v1/chat/completions';
 
     const response = await fetch(completionsUrl, {
       method: 'POST',
