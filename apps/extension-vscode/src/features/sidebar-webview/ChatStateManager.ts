@@ -46,6 +46,7 @@ import { getTokenCounter } from '../../data/tokenCounter';
 import { guardProviderSwitch } from '../../integrations/providerSwitchGuard';
 import { resolveTier } from '../../integrations/tierResolver';
 import { loadFacts } from '../../memory/memoryStore';
+import { getCheckpointManager } from '../../data/checkpointManager';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -597,6 +598,18 @@ export class ChatStateManager {
           : selection;
         const originalText = selection.isEmpty ? '' : editor.document.getText(selection);
         void language; // language recorded for future syntax-aware diffing
+
+        // Create a checkpoint before applying AI-proposed edits so the user
+        // can restore the prior state via agi-workforce.restoreCheckpoint.
+        const checkpointMgr = getCheckpointManager();
+        if (checkpointMgr !== undefined) {
+          const relPath = vscode.workspace.asRelativePath(editor.document.uri);
+          // Best-effort — don't block the diff if checkpointing fails.
+          checkpointMgr
+            .createCheckpoint(`Before AI edit: ${relPath}`.slice(0, 100))
+            .catch(() => undefined);
+        }
+
         const session = this._diffDecorationProvider.showDiff(editor, originalText, code, range, {
           filePath: vscode.workspace.asRelativePath(editor.document.uri),
         });
