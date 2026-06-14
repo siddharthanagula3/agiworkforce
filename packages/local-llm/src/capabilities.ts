@@ -2,6 +2,19 @@ import { NativeModules, Platform } from 'react-native';
 import type { DeviceCapabilities } from './types';
 
 const TIER2_MIN_RAM_MB = 3500;
+let lastThermalThrottled = false;
+
+function hasExecutorchRuntime(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('react-native-executorch') as {
+      LLMModule?: unknown;
+    };
+    return Boolean(mod.LLMModule);
+  } catch {
+    return false;
+  }
+}
 
 export async function detectCapabilities(): Promise<DeviceCapabilities> {
   let tier1Available = false;
@@ -20,8 +33,8 @@ export async function detectCapabilities(): Promise<DeviceCapabilities> {
         totalRAMMB = caps.totalRAMMB ?? 0;
         osVersion = caps.osVersion ?? '';
         thermalThrottled = !!caps.thermalThrottled;
-      } catch {
-        // module unavailable
+      } catch (error) {
+        console.warn('[local-llm] iOS capability detection failed:', error);
       }
     }
   } else if (Platform.OS === 'android') {
@@ -34,13 +47,16 @@ export async function detectCapabilities(): Promise<DeviceCapabilities> {
         totalRAMMB = caps.totalRAMMB ?? 0;
         osVersion = caps.osVersion ?? '';
         thermalThrottled = !!caps.thermalThrottled;
-      } catch {
-        // module unavailable
+      } catch (error) {
+        console.warn('[local-llm] Android capability detection failed:', error);
       }
     }
   }
 
-  const tier2Available = totalRAMMB >= TIER2_MIN_RAM_MB;
+  lastThermalThrottled = thermalThrottled;
+
+  const tier2Available =
+    totalRAMMB >= TIER2_MIN_RAM_MB || (totalRAMMB === 0 && hasExecutorchRuntime());
   const tier3Available = true as const;
 
   return {
@@ -55,11 +71,5 @@ export async function detectCapabilities(): Promise<DeviceCapabilities> {
 }
 
 export function isThermallyThrottled(): boolean {
-  if (Platform.OS === 'ios') {
-    return !!NativeModules.AGIFoundationModels?.isThermallyThrottled?.();
-  }
-  if (Platform.OS === 'android') {
-    return !!NativeModules.AGIAICore?.isThermallyThrottled?.();
-  }
-  return false;
+  return lastThermalThrottled;
 }

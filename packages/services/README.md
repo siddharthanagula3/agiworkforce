@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Platform lead
-Last updated: 2026-05-22
+Last updated: 2026-06-06
 Kind: ts-package
 Criticality: high
 
@@ -37,9 +37,9 @@ a new public subpath.
   registry, future computer-use orchestration).
 - Sync-rule and trust-boundary gating logic that wraps the canonical
   contracts in `@agiworkforce/types`.
-- v1 LOCAL ONLY enforcement: services that would touch cloud must return
-  waitlist-gated results when `privacyMode` is `byok` or `managed` and the
-  cloud endpoint is not yet enabled.
+- Local/Cloud trust-boundary enforcement: services that would touch managed
+  cloud must return waitlist-gated results when the cloud endpoint is not yet
+  enabled.
 
 ## What Does Not Belong Here
 
@@ -52,9 +52,10 @@ a new public subpath.
 
 - `artifacts.ts` — `publishArtifact({ artifact, privacyMode, surface, localFileWriter })`.
   Enforces `assertSurfaceCanSyncChats` + `assertGeneratedFileTrustBoundary`.
-  v1 LOCAL ONLY: returns local `file://` URL for `privacyMode: 'local'`;
-  returns waitlist-gated result for `byok` / `managed`. Hosts (web/desktop/
-  mobile) inject a `localFileWriter` adapter for the local path.
+  Returns a local `file://` URL for `privacyMode: 'local'`; returns a
+  waitlist-gated result for managed cloud until the publish endpoint is proven.
+  Hosts (web/desktop/mobile) inject a `localFileWriter` adapter for the local
+  path.
 
 ## Testing
 
