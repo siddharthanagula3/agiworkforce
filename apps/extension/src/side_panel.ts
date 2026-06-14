@@ -6,6 +6,7 @@ import {
   PROVIDER_DISPLAY,
   CAPABILITY_LABEL,
   getModelMetadataById,
+  getPickerModelTier,
   type ProviderId,
   type CapabilityTier,
 } from '@agiworkforce/types';
@@ -64,6 +65,14 @@ import {
 } from './features/native-bridge/pairing';
 import { isMemoryItem, MEMORY_STORAGE_KEY } from './background/memory-bridge';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
+import {
+  getAuthToken,
+  getRemainingFreePrompts,
+  storeSessionToken,
+  clearAuthToken,
+  FREE_TRIAL_PROMPT_LIMIT,
+  FREE_TRIAL_MODEL,
+} from './features/cloud-bridge/freeTrialClient';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -76,6 +85,17 @@ const SP_SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 /** Session timer for the stats footer in the drawer */
 let _drawerSessionStart = Date.now();
 let _drawerSessionTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Module-level reference to the cloud account UI refresh function.
+ * Populated by buildUI() after the inner function is created so that the
+ * chrome.runtime.onMessage listener (which runs at module scope, outside
+ * buildUI's closure) can call it to update the quota bar and header badge
+ * in response to FREE_PROMPTS_UPDATED / __QUOTA_EXCEEDED__ / __AUTH_REQUIRED__.
+ */
+let refreshCloudAccountUI: () => Promise<void> = async () => {
+  /* no-op until buildUI() initialises the real implementation */
+};
 
 /**
  * Side-panel UI message shape.
@@ -313,6 +333,8 @@ function injectStyles(): void {
       display: flex;
       align-items: center;
       justify-content: center;
+      /* currentColor for the 11 gray spokes; amber spoke is hard-wired in SVG */
+      color: var(--agi-ext-text-muted);
     }
     #sp-logo svg {
       width: 24px;
@@ -1503,7 +1525,7 @@ function injectStyles(): void {
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-model-selector-btn .sp-chevron { font-size: 8px; transition: transform 0.15s; }
     #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
-    #sp-model-dropdown { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; min-width: 180px; max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
+    #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
     #sp-model-dropdown.open { display: block; }
     .sp-model-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 11px; color: var(--agi-ext-text-muted); }
     .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
@@ -1548,6 +1570,22 @@ function injectStyles(): void {
     }
     .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent); opacity: 0.7; }
     .sp-model-option:hover .sp-model-option-sublabel { color: var(--agi-ext-text-muted); }
+
+    /* ── Free-tier model gating: Upgrade badge on premium models ── */
+    .sp-model-option.premium-gated { opacity: 0.75; }
+    .sp-model-option.premium-gated:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); opacity: 1; cursor: pointer; }
+    .sp-model-upgrade-tag {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(90deg, #f59e0b, #f97316);
+      border-radius: 3px;
+      padding: 1px 5px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
 
     /* "Best (auto)" option — visually distinct row */
     .sp-model-option-auto {
@@ -2094,6 +2132,208 @@ function injectStyles(): void {
       transition: background 0.15s, border-color 0.15s;
     }
     .sp-drawer-cloud-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); border-color: var(--agi-ext-accent); }
+
+    /* ── AGI Cloud sign-in / quota UI ── */
+    .sp-cloud-account {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sp-cloud-signed-in {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sp-cloud-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent);
+      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 35%, transparent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--agi-ext-accent);
+      flex-shrink: 0;
+    }
+    .sp-cloud-user-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .sp-cloud-user-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--agi-ext-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sp-cloud-user-tier {
+      font-size: 10px;
+      color: var(--agi-ext-text-muted);
+    }
+    .sp-cloud-signout-btn {
+      background: transparent;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 5px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      padding: 3px 7px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .sp-cloud-signout-btn:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+
+    /* Quota bar */
+    .sp-quota-bar-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sp-quota-bar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--agi-ext-text-muted);
+    }
+    .sp-quota-bar-model {
+      font-size: 9px;
+      color: var(--agi-ext-text-muted);
+      opacity: 0.7;
+    }
+    .sp-quota-bar-bg {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--agi-ext-border);
+      overflow: hidden;
+    }
+    .sp-quota-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--agi-ext-accent);
+      transition: width 0.3s ease;
+    }
+    .sp-quota-bar-fill.exhausted {
+      background: var(--agi-ext-danger);
+    }
+    .sp-quota-upgrade-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .sp-quota-upgrade-btn {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--agi-ext-accent);
+      background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 25%, transparent);
+      border-radius: 5px;
+      padding: 3px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.12s;
+    }
+    .sp-quota-upgrade-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent); }
+
+    /* Sign-in prompt (when not signed in) */
+    .sp-cloud-signin-prompt {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sp-cloud-signin-desc {
+      font-size: 11px;
+      color: var(--agi-ext-text-muted);
+      line-height: 1.45;
+    }
+    .sp-cloud-signin-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      background: var(--agi-ext-accent);
+      border: none;
+      border-radius: 7px;
+      color: var(--agi-ext-on-accent);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 14px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .sp-cloud-signin-btn:hover { opacity: 0.88; }
+    .sp-cloud-token-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .sp-cloud-token-input {
+      flex: 1;
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 6px;
+      color: var(--agi-ext-text);
+      font-size: 10px;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      padding: 5px 8px;
+      outline: none;
+      min-width: 0;
+      transition: border-color 0.15s;
+    }
+    .sp-cloud-token-input:focus { border-color: var(--agi-ext-focus); }
+    .sp-cloud-token-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.55; }
+    .sp-cloud-token-save-btn {
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 6px;
+      color: var(--agi-ext-text);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 5px 9px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.12s;
+    }
+    .sp-cloud-token-save-btn:hover { background: var(--agi-ext-hover); }
+    .sp-cloud-token-hint {
+      font-size: 9px;
+      color: var(--agi-ext-text-muted);
+      opacity: 0.7;
+      line-height: 1.4;
+    }
+
+    /* Quota badge in the chat header */
+    #sp-quota-badge {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 10px;
+      padding: 2px 7px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #sp-quota-badge.visible { display: flex; }
+    #sp-quota-badge.has-prompts {
+      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+      color: var(--agi-ext-accent);
+      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 28%, transparent);
+    }
+    #sp-quota-badge.exhausted {
+      background: var(--agi-ext-danger-bg);
+      color: var(--agi-ext-danger);
+      border: 1px solid var(--agi-ext-danger-border);
+    }
+    #sp-quota-badge:hover { opacity: 0.8; }
+
     /* Drawer footer */
     #sp-drawer-footer {
       padding: 10px 14px;
@@ -3134,13 +3374,22 @@ function buildUI(): void {
   // DOMParser-based import. Same end result — static SVG literal rendered
   // into the wrapper — but no HTML parser involved.
   const logoEl = el('div', { id: 'sp-logo' });
-  const logoSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect width="24" height="24" rx="6" fill="url(#logoGrad)"/>
-    <circle cx="12" cy="9" r="3" stroke="white" stroke-width="1.5"/>
-    <path d="M6 19c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-    <defs><linearGradient id="logoGrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#21808d"/><stop offset="1" stop-color="#da7756"/>
-    </linearGradient></defs>
+  // AGI brand mark: 12 spokes radiating from center (inner r=4.6, outer r=9).
+  // Spoke at index 0 (12 o'clock) uses amber/terra accent; others inherit text
+  // color via currentColor. Geometry mirrors packages/ui/src/AgiMark.tsx.
+  const logoSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AGI" role="img">
+    <line x1="12" y1="7.4" x2="12" y2="3" stroke="var(--agi-ext-accent-secondary,#da7756)" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="14.3" y1="8.016" x2="16.5" y2="4.206" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="15.984" y1="9.7" x2="19.794" y2="7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="16.6" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="15.984" y1="14.3" x2="19.794" y2="16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="14.3" y1="15.984" x2="16.5" y2="19.794" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="12" y1="16.6" x2="12" y2="21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="9.7" y1="15.984" x2="7.5" y2="19.794" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="8.016" y1="14.3" x2="4.206" y2="16.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="7.4" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="8.016" y1="9.7" x2="4.206" y2="7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="9.7" y1="8.016" x2="7.5" y2="4.206" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
   </svg>`;
   appendSvgString(logoEl, logoSvg);
   headerLeft.appendChild(logoEl);
@@ -3182,10 +3431,20 @@ function buildUI(): void {
    */
   function buildModelOptionRow(m: SidePanelModelOption, isSelected: boolean): HTMLElement {
     const isAuto = m.value === 'auto';
+
+    // FREE-TIER MODEL GATING:
+    // Economy models (in tierAllowedModels.economy) are selectable by all users.
+    // Pro-additions and flagship models are visible but gated with an "Upgrade"
+    // badge. Clicking a gated model opens the pricing/waitlist page instead of
+    // selecting the model. The "auto" option is always freely selectable.
+    const pickerTier = isAuto ? 'economy' : getPickerModelTier(m.value);
+    const isPremiumGated = !isAuto && (pickerTier === 'balanced' || pickerTier === 'premium');
+
     const classes = [
       'sp-model-option',
       isSelected ? 'selected' : '',
       isAuto ? 'sp-model-option-auto' : '',
+      isPremiumGated ? 'premium-gated' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -3228,17 +3487,28 @@ function buildUI(): void {
     }
     opt.appendChild(textBlock);
 
-    // Checkmark
-    opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
-
-    opt.addEventListener('click', () => {
-      currentModelValue = m.value;
-      chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
-      updateModelBadge(m.value);
-      renderModelDropdown();
-      modelDropdownEl.classList.remove('open');
-      modelSelectorBtn.classList.remove('open');
-    });
+    if (isPremiumGated) {
+      // Show "Upgrade" badge instead of checkmark — clicking opens pricing page.
+      opt.appendChild(el('span', { class: 'sp-model-upgrade-tag' }, 'Upgrade'));
+      opt.addEventListener('click', () => {
+        // Close dropdown
+        modelDropdownEl.classList.remove('open');
+        modelSelectorBtn.classList.remove('open');
+        // Navigate to pricing/waitlist page
+        chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' }).catch(() => {});
+      });
+    } else {
+      // Checkmark for economy/auto (selectable) models
+      opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
+      opt.addEventListener('click', () => {
+        currentModelValue = m.value;
+        chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
+        updateModelBadge(m.value);
+        renderModelDropdown();
+        modelDropdownEl.classList.remove('open');
+        modelSelectorBtn.classList.remove('open');
+      });
+    }
 
     return opt;
   }
@@ -3345,7 +3615,16 @@ function buildUI(): void {
     if (chrome.runtime.lastError) return;
     const stored = result['agi_model'] as string | undefined;
     if (stored) {
-      currentModelValue = normalizeModelId(stored) ?? stored;
+      const resolved = normalizeModelId(stored) ?? stored;
+      // FREE-TIER GATE: if the previously stored model is premium-gated, reset
+      // to 'auto' so the user cannot bypass the tier check via stale storage.
+      const storedTier = getPickerModelTier(resolved);
+      if (storedTier === 'balanced' || storedTier === 'premium') {
+        currentModelValue = 'auto';
+        chrome.storage.local.remove('agi_model').catch(() => {});
+      } else {
+        currentModelValue = resolved;
+      }
     }
     const storedThinking = result['agi_thinking_enabled'] as boolean | undefined;
     if (storedThinking !== undefined) {
@@ -3395,6 +3674,19 @@ function buildUI(): void {
     renderMessages();
   });
   headerRight.appendChild(newChatBtn);
+
+  // ── Quota badge (cloud free-prompts remaining) ─────────────────────────────
+  // Built in the drawer section block but inserted into the header here so it
+  // appears between the new-chat button and the menu button.
+  // `quotaBadgeEl` is defined later when the drawer is built; we use a late
+  // reference via getElementById at reveal time so the element is available
+  // after the initial DOM pass. For the header we create a placeholder span
+  // that becomes the actual badge once the drawer code runs.
+  // NOTE: quotaBadgeEl is declared via `let` in the drawer closure below and
+  // appended to headerRight there. We reserve the slot here via a wrapper so
+  // the layout order is correct.
+  const quotaBadgeSlot = el('span', { id: 'sp-quota-badge-slot' });
+  headerRight.appendChild(quotaBadgeSlot);
 
   // ── ⋮ menu button (opens settings drawer) ─────────────────────────────────
   const menuBtn = el('button', {
@@ -4371,18 +4663,150 @@ function buildUI(): void {
     if (e.key === 'Enter') drawerSaveBridgeUrl();
   });
 
-  // ── Section 8: Unlock AGI Cloud ───────────────────────────────────────────
+  // ── Section 8: AGI Cloud (sign-in + free-trial quota) ────────────────────
   const cloudSection = el('div', { class: 'sp-drawer-section' });
   cloudSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'AGI Cloud'));
+
+  // Container that swaps between signed-in and signed-out views
+  const cloudAccountEl = el('div', { class: 'sp-cloud-account', id: 'sp-cloud-account' });
+
+  // ── Signed-out view ──────────────────────────────────────────────────────
+  const signinPrompt = el('div', {
+    class: 'sp-cloud-signin-prompt',
+    id: 'sp-cloud-signin-prompt',
+  });
+  signinPrompt.appendChild(
+    el(
+      'span',
+      { class: 'sp-cloud-signin-desc' },
+      'Sign in to get 3 free cloud chat prompts routed through AGI economy models.',
+    ),
+  );
+
+  const signinBtn = el('button', { class: 'sp-cloud-signin-btn', id: 'sp-cloud-signin-btn' });
+  signinBtn.textContent = 'Sign in to AGI Cloud';
+  signinBtn.addEventListener('click', () => {
+    // Open the web sign-in page. After signing in, the user can copy their
+    // session token from the developer tools or the extension token page.
+    chrome.tabs.create({ url: 'https://agiworkforce.com/sign-in' }).catch(() => {});
+  });
+  signinPrompt.appendChild(signinBtn);
+
+  // Token paste row (for users who are already signed in on web)
+  const tokenRow = el('div', { class: 'sp-cloud-token-row' });
+  const tokenInput = el('input', {
+    type: 'password',
+    class: 'sp-cloud-token-input',
+    id: 'sp-cloud-token-input',
+    placeholder: 'Paste Clerk session token…',
+    autocomplete: 'off',
+    spellcheck: 'false',
+  }) as HTMLInputElement;
+  const tokenSaveBtn = el(
+    'button',
+    { class: 'sp-cloud-token-save-btn', id: 'sp-cloud-token-save-btn' },
+    'Save',
+  );
+  tokenRow.appendChild(tokenInput);
+  tokenRow.appendChild(tokenSaveBtn);
+  signinPrompt.appendChild(tokenRow);
+  signinPrompt.appendChild(
+    el(
+      'span',
+      { class: 'sp-cloud-token-hint' },
+      'Already signed in on agiworkforce.com? Copy your token from Account settings.',
+    ),
+  );
+
+  // ── Signed-in view ───────────────────────────────────────────────────────
+  const signedInView = el('div', {
+    class: 'sp-cloud-signed-in',
+    id: 'sp-cloud-signed-in',
+    style: 'display:none',
+  });
+  const avatarEl = el('div', { class: 'sp-cloud-avatar', id: 'sp-cloud-avatar' }, 'A');
+  const userInfoEl = el('div', { class: 'sp-cloud-user-info' });
+  const userLabelEl = el('div', {
+    class: 'sp-cloud-user-label',
+    id: 'sp-cloud-user-label',
+  });
+  userLabelEl.textContent = 'AGI Account';
+  const userTierEl = el('div', { class: 'sp-cloud-user-tier', id: 'sp-cloud-user-tier' });
+  userTierEl.textContent = 'Free tier';
+  userInfoEl.appendChild(userLabelEl);
+  userInfoEl.appendChild(userTierEl);
+  const signoutBtn = el(
+    'button',
+    { class: 'sp-cloud-signout-btn', id: 'sp-cloud-signout-btn' },
+    'Sign out',
+  );
+  signedInView.appendChild(avatarEl);
+  signedInView.appendChild(userInfoEl);
+  signedInView.appendChild(signoutBtn);
+
+  // ── Quota bar ────────────────────────────────────────────────────────────
+  const quotaWrap = el('div', {
+    class: 'sp-quota-bar-wrap',
+    id: 'sp-quota-bar-wrap',
+    style: 'display:none',
+  });
+  const quotaTopRow = el('div', { class: 'sp-quota-bar-row' });
+  const quotaLabel = el('span', { id: 'sp-quota-label' }, 'Free prompts');
+  const quotaCount = el('span', { id: 'sp-quota-count' }, `0 / ${FREE_TRIAL_PROMPT_LIMIT}`);
+  quotaTopRow.appendChild(quotaLabel);
+  quotaTopRow.appendChild(quotaCount);
+  const quotaBarBg = el('div', { class: 'sp-quota-bar-bg' });
+  const quotaBarFill = el('div', {
+    class: 'sp-quota-bar-fill',
+    id: 'sp-quota-bar-fill',
+    style: 'width:0%',
+  });
+  quotaBarBg.appendChild(quotaBarFill);
+  const quotaModelRow = el('div', { class: 'sp-quota-bar-row' });
+  const quotaModelLabel = el(
+    'span',
+    { class: 'sp-quota-bar-model', id: 'sp-quota-model-label' },
+    `Model: ${FREE_TRIAL_MODEL}`,
+  );
+  quotaModelRow.appendChild(quotaModelLabel);
+  quotaWrap.appendChild(quotaTopRow);
+  quotaWrap.appendChild(quotaBarBg);
+  quotaWrap.appendChild(quotaModelRow);
+
+  // Upgrade row (shown when quota exhausted)
+  const quotaUpgradeRow = el('div', {
+    class: 'sp-quota-upgrade-row',
+    id: 'sp-quota-upgrade-row',
+    style: 'display:none',
+  });
+  const quotaExhaustedLabel = el(
+    'span',
+    { style: 'font-size:10px;color:var(--agi-ext-danger)' },
+    'Free prompts used',
+  );
+  const quotaUpgradeBtn = el(
+    'button',
+    { class: 'sp-quota-upgrade-btn', id: 'sp-quota-upgrade-btn' },
+    'Upgrade',
+  );
+  quotaUpgradeRow.appendChild(quotaExhaustedLabel);
+  quotaUpgradeRow.appendChild(quotaUpgradeBtn);
+  quotaWrap.appendChild(quotaUpgradeRow);
+
+  cloudAccountEl.appendChild(signinPrompt);
+  cloudAccountEl.appendChild(signedInView);
+  cloudAccountEl.appendChild(quotaWrap);
+  cloudSection.appendChild(cloudAccountEl);
+  drawerBody.appendChild(cloudSection);
+
+  // ── "Unlock AGI Cloud" button (invite-code path, kept below sign-in) ────
+  let drawerCloudModal: ReturnType<typeof mountInviteCodeModal> | null = null;
+  const inviteCodeSection = el('div', { class: 'sp-drawer-section' });
   const drawerCloudBtn = el(
     'button',
-    {
-      class: 'sp-drawer-cloud-btn',
-      id: 'sp-drawer-cloud-btn',
-    },
-    'Unlock AGI Cloud',
+    { class: 'sp-drawer-cloud-btn', id: 'sp-drawer-cloud-btn' },
+    'Enter invite code',
   );
-  let drawerCloudModal: ReturnType<typeof mountInviteCodeModal> | null = null;
   drawerCloudBtn.addEventListener('click', () => {
     if (!drawerCloudModal) {
       drawerCloudModal = mountInviteCodeModal(document.body, {
@@ -4391,15 +4815,106 @@ function buildUI(): void {
         defaultTab: 'invite',
         onClose: () => drawerCloudModal?.update({ open: false }),
         onRedeemed: (_inviteId) => {
-          // Could refresh tier display here in future
+          void refreshCloudAccountUI();
         },
       });
     } else {
       drawerCloudModal.show();
     }
   });
-  cloudSection.appendChild(drawerCloudBtn);
-  drawerBody.appendChild(cloudSection);
+  inviteCodeSection.appendChild(drawerCloudBtn);
+  drawerBody.appendChild(inviteCodeSection);
+
+  // ── Quota badge in header (click opens drawer to cloud section) ──────────
+  // Insert into the slot reserved in the header above.
+  const quotaBadgeEl = el('div', {
+    id: 'sp-quota-badge',
+    title: 'AGI Cloud free prompts',
+    style: 'cursor:pointer',
+  });
+  quotaBadgeEl.addEventListener('click', () => {
+    const drawerEl = document.getElementById('sp-drawer');
+    if (drawerEl && !drawerEl.classList.contains('open')) {
+      drawerEl.classList.add('open');
+      const overlayEl = document.getElementById('sp-drawer-overlay');
+      if (overlayEl) overlayEl.classList.add('open');
+    }
+  });
+  // Attach to the slot created in the header section above
+  const quotaSlot = document.getElementById('sp-quota-badge-slot');
+  if (quotaSlot) quotaSlot.replaceWith(quotaBadgeEl);
+  else document.body.appendChild(quotaBadgeEl);
+
+  // ── Cloud UI state helpers ───────────────────────────────────────────────
+  // Wire the module-level placeholder to the real implementation (which closes
+  // over signinPrompt, signedInView, quotaWrap, quotaBadgeEl, etc.).
+  refreshCloudAccountUI = async function (): Promise<void> {
+    const token = await getAuthToken();
+    if (!token) {
+      // Signed out
+      signinPrompt.style.display = '';
+      signedInView.style.display = 'none';
+      quotaWrap.style.display = 'none';
+      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
+      return;
+    }
+
+    // Signed in
+    signinPrompt.style.display = 'none';
+    signedInView.style.display = '';
+    quotaWrap.style.display = '';
+
+    const remaining = await getRemainingFreePrompts();
+    const used = FREE_TRIAL_PROMPT_LIMIT - remaining;
+    const pct = Math.round((used / FREE_TRIAL_PROMPT_LIMIT) * 100);
+
+    quotaCount.textContent = `${remaining} / ${FREE_TRIAL_PROMPT_LIMIT} remaining`;
+    (quotaBarFill as HTMLElement).style.width = `${pct}%`;
+    if (remaining === 0) {
+      (quotaBarFill as HTMLElement).classList.add('exhausted');
+      quotaUpgradeRow.style.display = '';
+    } else {
+      (quotaBarFill as HTMLElement).classList.remove('exhausted');
+      quotaUpgradeRow.style.display = 'none';
+    }
+
+    // Header badge
+    quotaBadgeEl.classList.add('visible');
+    quotaBadgeEl.classList.remove('has-prompts', 'exhausted');
+    if (remaining > 0) {
+      quotaBadgeEl.textContent = `${remaining} free`;
+      quotaBadgeEl.classList.add('has-prompts');
+    } else {
+      quotaBadgeEl.textContent = 'Upgrade';
+      quotaBadgeEl.classList.add('exhausted');
+    }
+  };
+
+  // Token save handler
+  tokenSaveBtn.addEventListener('click', async () => {
+    const raw = tokenInput.value.trim();
+    if (!raw) return;
+    await storeSessionToken(raw);
+    tokenInput.value = '';
+    await refreshCloudAccountUI();
+  });
+  tokenInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') tokenSaveBtn.click();
+  });
+
+  // Sign-out handler
+  signoutBtn.addEventListener('click', async () => {
+    await clearAuthToken();
+    await refreshCloudAccountUI();
+  });
+
+  // Upgrade button — open agiworkforce.com pricing
+  quotaUpgradeBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' }).catch(() => {});
+  });
+
+  // Initial load
+  void refreshCloudAccountUI();
 
   drawer.appendChild(drawerBody);
 
@@ -5925,6 +6440,14 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
+  // Cloud free-trial quota refresh — background emits this after each streamed
+  // response so the quota bar and header badge stay current without a full page
+  // reload.
+  if (envelope.type === 'FREE_PROMPTS_UPDATED') {
+    void refreshCloudAccountUI();
+    return;
+  }
+
   // Live connection-status updates from the background service worker.
   // Background now also broadcasts these via chrome.runtime.sendMessage so
   // extension views (side panel, popup) receive them — not just content scripts.
@@ -5947,6 +6470,54 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.id !== _ctx.currentStreamId) return;
 
   if (chunk.error) {
+    // Cloud free-trial sentinels: show actionable UI instead of a generic error
+    // bubble.  The background sets these when the gateway returns a 403 quota
+    // response or a 401 auth failure so we can guide the user to upgrade/sign-in
+    // rather than surfacing a confusing "request failed" message.
+    if (chunk.error === '__QUOTA_EXCEEDED__') {
+      // Snap the local counter so the quota bar shows 0 immediately, then open
+      // the upgrade row in the cloud section without a full drawer toggle.
+      void refreshCloudAccountUI();
+      // Remove the thinking bubble if still present.
+      removeThinking();
+      _ctx.isStreaming = false;
+      _ctx.currentStreamId = null;
+      updateSendButton();
+      // Show an inline assistant bubble explaining the limit, pointing user to drawer.
+      const limitMsg: ChatMessage = {
+        id: chunk.id,
+        role: 'assistant',
+        content:
+          "You've used all 3 free cloud prompts. Open the **AGI Cloud** section in the drawer to upgrade or enter an invite code.",
+        error: true,
+        timestamp: Date.now(),
+      };
+      if (!_ctx.messages.find((m) => m.id === chunk.id)) {
+        _ctx.messages.push(limitMsg);
+      }
+      renderMessages();
+      return;
+    }
+    if (chunk.error === '__AUTH_REQUIRED__') {
+      removeThinking();
+      _ctx.isStreaming = false;
+      _ctx.currentStreamId = null;
+      updateSendButton();
+      void refreshCloudAccountUI();
+      const authMsg: ChatMessage = {
+        id: chunk.id,
+        role: 'assistant',
+        content:
+          'Sign in to AGI Cloud to send messages. Open the **AGI Cloud** section in the drawer.',
+        error: true,
+        timestamp: Date.now(),
+      };
+      if (!_ctx.messages.find((m) => m.id === chunk.id)) {
+        _ctx.messages.push(authMsg);
+      }
+      renderMessages();
+      return;
+    }
     handleStreamError(chunk.id, chunk.error);
     return;
   }

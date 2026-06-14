@@ -5,11 +5,11 @@
 export type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 export type { PaywallErrorState, SendMessageOptions } from './chat/chatExecutionStore';
 
-export { useChatMessageStore } from './chat/chatMessageStore';
+export { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
 export { useChatExecutionStore } from './chat/chatExecutionStore';
 export { useChatViewStore } from './chat/chatViewStore';
 
-import { useChatMessageStore } from './chat/chatMessageStore';
+import { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
 import { useChatExecutionStore } from './chat/chatExecutionStore';
 import { useChatViewStore } from './chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
@@ -104,13 +104,20 @@ export interface CombinedChatState {
 
 function buildCombinedState(
   msg: ReturnType<typeof useChatMessageStore.getState>,
+  cloud: ReturnType<typeof useChatCloudMessageStore.getState>,
   exec: ReturnType<typeof useChatExecutionStore.getState>,
   view: ReturnType<typeof useChatViewStore.getState>,
 ): CombinedChatState {
+  // SEPARATION-FIX: merge Local + Cloud conversations for UI display only.
+  // The two lists live in physically separate MMKV namespaces and must never
+  // be written back into each other's stores. Cloud conversations come after
+  // local so local chats are shown first in list order.
+  const mergedConversations = [...msg.conversations, ...cloud.conversations];
+  const mergedMessages = { ...msg.messages, ...cloud.messages };
   return {
-    conversations: msg.conversations,
+    conversations: mergedConversations,
     currentConversationId: msg.currentConversationId,
-    messages: msg.messages,
+    messages: mergedMessages,
     isLoadingConversations: msg.isLoadingConversations,
     isLoadingMessages: msg.isLoadingMessages,
     setCurrentConversationId: msg.setCurrentConversationId,
@@ -181,14 +188,16 @@ type SettableState = Partial<
  */
 export function useChatStore<T>(selector: (state: CombinedChatState) => T): T {
   const msgSlice = useChatMessageStore();
+  const cloudSlice = useChatCloudMessageStore();
   const execSlice = useChatExecutionStore();
   const viewSlice = useChatViewStore();
-  return selector(buildCombinedState(msgSlice, execSlice, viewSlice));
+  return selector(buildCombinedState(msgSlice, cloudSlice, execSlice, viewSlice));
 }
 
 useChatStore.getState = (): CombinedChatState => {
   return buildCombinedState(
     useChatMessageStore.getState(),
+    useChatCloudMessageStore.getState(),
     useChatExecutionStore.getState(),
     useChatViewStore.getState(),
   );
