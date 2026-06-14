@@ -1,15 +1,17 @@
 #![allow(dead_code, unused_imports)]
 
-//! Cloud mode: BYOK execution with top agentic coding models.
+//! Managed cloud status and model catalog.
 //!
-//! Model list comes from `model_catalog.rs` (cloud_eligible = true).
-//! Update models there, not here.
+//! Execution is private beta and fails closed until the backend contract is
+//! available. BYOK provider execution uses the normal model path, not this
+//! managed cloud stub.
 
 use anyhow::{bail, Result};
 use colored::Colorize;
 use std::collections::HashMap;
 
 use crate::model_catalog;
+use crate::terminal_style as ts;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cloud eligibility — delegated to model_catalog
@@ -23,7 +25,7 @@ pub fn format_cloud_models() -> String {
     let models = model_catalog::cloud_models();
     let mut out = format!(
         "{}\n\n",
-        "Cloud Models — Top Agentic Coding Models (March 2026)".bold()
+        "Managed Cloud Models — Private Beta".bold()
     );
     out.push_str(&format!(
         "  {:<22} {:<12} {:>8} {:>8} {}\n",
@@ -47,9 +49,23 @@ pub fn format_cloud_models() -> String {
 // BYOK config
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ByokConfig {
     pub api_keys: HashMap<String, String>,
+}
+
+// Manual Debug that redacts BYOK API key *values* — only the configured
+// provider names are printed. A derived Debug would emit plaintext secrets into
+// any `{:?}`/`tracing` call that touches this struct (or `CloudConfig`).
+impl std::fmt::Debug for ByokConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut providers: Vec<&str> = self.api_keys.keys().map(String::as_str).collect();
+        providers.sort_unstable();
+        f.debug_struct("ByokConfig")
+            .field("providers", &providers)
+            .field("api_keys", &"<redacted>")
+            .finish()
+    }
 }
 
 impl ByokConfig {
@@ -134,9 +150,9 @@ pub fn print_cloud_status(config: &CloudConfig) {
             continue;
         } // local, no key needed
         let st = if config.byok.has_key(p) {
-            "configured".green()
+            ts::success("configured")
         } else {
-            "not set".red()
+            ts::danger("not set")
         };
         println!("  {:<12} {}", p, st);
     }

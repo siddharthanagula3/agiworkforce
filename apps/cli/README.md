@@ -213,19 +213,17 @@ agi doctor --json
 
 - Pure Rust workspace (12 utility crates + `apps/cli` + `apps/desktop/src-tauri`).
   `cargo build --release -p agiworkforce-cli --bin agi` produces the primary 5.7 MB binary.
-- TUI: ratatui + crossterm. 195 source files; 125 TUI files (~155 K LOC incl.
-  snapshot tests). 914+ `#[test]` / `#[tokio::test]` cases.
+- TUI: ratatui + crossterm. 171 source files; 29 TUI files (run
+  `find apps/cli/src -name '*.rs' | wc -l` to recount). 914+ `#[test]` /
+  `#[tokio::test]` cases.
 - Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
   Landlock are enum stubs (Phase 2).
 - MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).
-- Hooks: 19 events shipped (`apps/cli/src/hooks.rs`); aligned with the Sprint
-  B5 canonical vocabulary (Claude Code aliases like `BeforeToolUse` map to
-  canonical `PreToolUse`).
-- 10+ providers via OpenAI-compatible adapter, with mid-conversation switch:
-  Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu,
-  Ollama (local + cloud), LM Studio, plus user-defined endpoints (OpenRouter,
-  NVIDIA NIM, Groq, Together, Fireworks, etc.) registered through
-  `~/.agiworkforce/config.toml`. (Web/desktop platform = 25.)
+- Hooks: 33 events shipped (`apps/cli/src/features/hooks/hooks.rs`); aligned
+  with the Sprint B5 canonical vocabulary (Claude Code aliases like
+  `BeforeToolUse` map to canonical `PreToolUse`).
+- Catalog-driven provider routes through AGI-owned adapters and user-defined
+  endpoints registered through `~/.agiworkforce/config.toml`.
 - Models loaded from `models.json` (no hardcoded model IDs anywhere).
 
 ## Roadmap
@@ -234,8 +232,8 @@ agi doctor --json
   `init`.
 - **Phase 1 (Sprint B, complete)** — MCP SSE + HTTP + OAuth, plugin manifest
   discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`),
-  hook event vocabulary canonicalized to 19 events, OpenAI-compatible adapter
-  for 10+ providers + user-defined custom endpoints.
+  hook event vocabulary canonicalized (now 33 events), provider adapter
+  support, and user-defined custom endpoints.
 - **Phase 2 (next)** — Routing strategy resurrection (the differentiator),
   hot reload, `--from-pr`, OS keychain (sprint1-vault-rewire), Linux Landlock +
   Windows sandbox, OpenTelemetry minimal.

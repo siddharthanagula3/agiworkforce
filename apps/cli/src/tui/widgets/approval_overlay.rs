@@ -26,11 +26,12 @@
 #![allow(dead_code)]
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_warning};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -162,7 +163,7 @@ impl ApprovalOverlayState {
         let block = Block::default()
             .title(" Tool Approval ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Yellow));
+            .border_style(Style::default().fg(ui_warning()));
 
         let inner = block.inner(box_area);
         frame.render_widget(block, box_area);
@@ -187,7 +188,7 @@ impl ApprovalOverlayState {
             for d in &self.detail {
                 lines.push(Line::from(vec![
                     Span::raw("    "),
-                    Span::styled(d.as_str(), Style::default().fg(Color::DarkGray)),
+                    Span::styled(d.as_str(), Style::default().fg(ui_muted())),
                 ]));
             }
         }
@@ -200,11 +201,11 @@ impl ApprovalOverlayState {
             let selected = i == self.cursor;
             let style = if selected {
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Yellow)
+                    .fg(ui_on_light())
+                    .bg(ui_warning())
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default()
             };
             let label = format!("[{}]", choice.label());
             button_spans.push(Span::styled(label, style));
@@ -215,7 +216,7 @@ impl ApprovalOverlayState {
         // Hint line
         lines.push(Line::from(vec![Span::styled(
             "  \u{2190}/\u{2192} move   Enter confirm   Esc = No",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         )]));
 
         let para = Paragraph::new(lines);
@@ -361,6 +362,8 @@ impl InteractiveView for ApprovalOverlayState {
 mod tests {
     use super::*;
     use crate::tui::widgets::interactive::{KeyAction, ViewAction};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
 
     fn open_overlay() -> ApprovalOverlayState {
         let mut s = ApprovalOverlayState::default();
@@ -369,6 +372,17 @@ mod tests {
             vec!["src/main.rs  (+42 / -3 lines)".to_string()],
         );
         s
+    }
+
+    fn draw_overlay(
+        state: &ApprovalOverlayState,
+        width: u16,
+        height: u16,
+    ) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+        let area = Rect::new(0, 0, width, height);
+        terminal.draw(|f| state.render_into(f, area)).expect("draw");
+        terminal
     }
 
     #[test]
@@ -387,6 +401,15 @@ mod tests {
         assert_eq!(s.cursor, 0); // Yes
         assert!(s.result.is_none());
         assert!(!s.is_done());
+    }
+
+    #[test]
+    fn render_approval_overlay_snapshot() {
+        let mut state = open_overlay();
+        state.cursor = ApprovalChoice::AllowSession.index();
+
+        let terminal = draw_overlay(&state, 88, 20);
+        insta::assert_snapshot!("approval_overlay_baseline", terminal.backend());
     }
 
     #[test]

@@ -3,25 +3,19 @@
 //! Triggered by `/model` (no arg). Layout:
 //!
 //! ```text
-//! ┌─ Select Model (/ search, ↑↓ navigate, Enter select, Esc close) ───────────┐
-//! │ Search: █                                                                   │
-//! ├─────────────────────────────────────────────────────────────────────────────┤
-//! │ ▶ Anthropic                                                                 │
-//! │   ● claude-opus-4-8            Most capable   200K ctx  $15/$75            │
-//! │     claude-sonnet-4-6          Balanced        200K ctx  $3/$15            │
-//! │     claude-haiku-4-5           Fastest         200K ctx  $0.25/$1.25       │
-//! │                                                                             │
-//! │   OpenAI                                                                    │
-//! │     gpt-5.5                    Balanced        128K ctx  $10/$30           │
-//! │     gpt-5.5-mini               Fastest         128K ctx  $1/$3             │
-//! │  ...                                                                        │
-//! │                                                                             │
-//! │  [Thinking: ON] [Effort: Medium ◀▶]                                        │
-//! └─────────────────────────────────────────────────────────────────────────────┘
+//! ┌─ Models  Local · BYOK · Cloud ────────────────────────────────────────────┐
+//! │/ type to filter by name or provider...                                    │
+//! │───────────────────────────────────────────────────────────────────────────│
+//! │Bring your own key · your own provider keys                                │
+//! │  Anthropic                                                                │
+//! │  ● claude-sonnet                 Balanced      200K ctx                   │
+//! │    claude-haiku                  Fastest       200K ctx                   │
+//! │ Thinking: on · Effort: ◀ Medium ▶   Tab/←→                                │
+//! └───────────────────────────────────────────────────────────────────────────┘
 //! ```
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 
@@ -29,6 +23,7 @@ use crate::design_system::{
     capability_for_model, capability_label, provider_display, AccessMode, Effort, ProviderId,
 };
 use crate::model_catalog::Model;
+use crate::tui::terminal_palette::{ui_accent, ui_muted};
 
 // ---------------------------------------------------------------------------
 // Public state
@@ -279,22 +274,16 @@ pub fn render(
     frame.render_widget(Clear, popup_area);
 
     // ── outer border ──────────────────────────────────────────────────────────
-    // Build a two-part title: left = controls hint, right = "13+ providers" badge.
-    // We use ratatui's `Line`-based title so each segment can carry its own style.
-    let hint_span = Span::styled(
-        " Select Model  (/ search  ↑↓ navigate  Tab jump-provider  Enter select  Esc close)",
-        Style::default(),
-    );
+    // Keep the title short. Long control hints clipped in 80-column terminals.
+    let hint_span = Span::styled(" Models ", Style::default().add_modifier(Modifier::BOLD));
     let badge_span = Span::styled(
         " Local · BYOK · Cloud ",
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::DIM),
+        Style::default().fg(ui_muted()).add_modifier(Modifier::DIM),
     );
     let title_line = Line::from(vec![hint_span, badge_span]);
     let outer_block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Green))
+        .border_style(Style::default().fg(ui_muted()))
         .title(title_line);
     frame.render_widget(outer_block, popup_area);
 
@@ -337,22 +326,25 @@ fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &ModelPickerStat
         Span::styled(
             "/ ",
             Style::default()
-                .fg(Color::Yellow)
+                .fg(ui_accent())
                 .add_modifier(Modifier::BOLD),
         )
     } else {
-        Span::styled("/ ", Style::default().fg(Color::DarkGray))
+        Span::styled(
+            "/ ",
+            Style::default().fg(ui_muted()).add_modifier(Modifier::DIM),
+        )
     };
 
     let text_span = if state.search.is_empty() {
         Span::styled(
             "type to filter by name or provider...",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(ui_muted())
                 .add_modifier(Modifier::ITALIC),
         )
     } else {
-        Span::styled(state.search.clone(), Style::default().fg(Color::White))
+        Span::styled(state.search.clone(), Style::default())
     };
 
     let line = Line::from(vec![prompt, text_span]);
@@ -364,7 +356,7 @@ fn render_divider(frame: &mut ratatui::Frame, area: Rect, width: u16) {
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             line,
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(ui_muted()),
         ))),
         area,
     );
@@ -394,21 +386,17 @@ fn render_list(
         .map(|(i, row)| match row {
             PickerRow::AccessModeHeader { mode } => {
                 // Top-level section: the AGI value proposition, front and centre.
-                let text = format!("{}  ·  {}", mode.label().to_uppercase(), mode.tagline());
+                let text = format!("{} · {}", mode.label(), mode.tagline());
                 ListItem::new(text).style(
                     Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                        .fg(ui_accent())
+                        .add_modifier(Modifier::BOLD),
                 )
             }
             PickerRow::ProviderHeader { provider_id } => {
                 let disp = provider_display(*provider_id);
                 let text = format!("  {}", disp.label);
-                ListItem::new(text).style(
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )
+                ListItem::new(text).style(Style::default().add_modifier(Modifier::BOLD))
             }
             PickerRow::ModelRow { model, .. } => {
                 let is_cursor = i == state.cursor;
@@ -419,22 +407,18 @@ fn render_list(
                 let tier_label = capability_label(tier);
                 let ctx_k = model.context_window / 1000;
 
-                let text = format!(
-                    "  {} {:<30}  {:<12}  {:>4}K ctx",
-                    bullet, model.id, tier_label, ctx_k,
-                );
+                let text = format_model_row(area.width, bullet, &model.id, tier_label, ctx_k);
 
                 let style = if is_cursor {
                     Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Green)
-                        .add_modifier(Modifier::BOLD)
+                        .fg(ui_accent())
+                        .add_modifier(Modifier::BOLD | Modifier::REVERSED)
                 } else if is_current {
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(ui_accent())
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default()
                 };
 
                 ListItem::new(text).style(style)
@@ -446,21 +430,64 @@ fn render_list(
 }
 
 fn render_effort_bar(frame: &mut ratatui::Frame, area: Rect, state: &ModelPickerState) {
-    let thinking_text = " [Thinking: ON] ";
+    let thinking_text = " Thinking: on · ";
     let effort_label = state.effort.label();
-    let effort_text = format!("[Effort: ◀ {} ▶]  Tab/←→ to change", effort_label);
+    let effort_text = format!("Effort: ◀ {} ▶   Tab/←→", effort_label);
 
     let line = Line::from(vec![
         Span::styled(
             thinking_text,
             Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+                .fg(ui_muted())
+                .add_modifier(Modifier::BOLD | Modifier::DIM),
         ),
-        Span::styled(effort_text, Style::default().fg(Color::Cyan)),
+        Span::styled(effort_text, Style::default().fg(ui_accent())),
     ]);
 
     frame.render_widget(Paragraph::new(line), area);
+}
+
+fn format_model_row(
+    width: u16,
+    bullet: &str,
+    model_id: &str,
+    tier_label: &str,
+    ctx_k: usize,
+) -> String {
+    let row_width = width as usize;
+    let prefix = format!("  {bullet} ");
+    if row_width < 38 {
+        return format!(
+            "{}{}",
+            prefix,
+            truncate_chars(model_id, row_width.saturating_sub(prefix.chars().count()))
+        );
+    }
+
+    let suffix = format!("  {:<12} {:>4}K ctx", tier_label, ctx_k);
+    let id_width = row_width
+        .saturating_sub(prefix.chars().count() + suffix.chars().count())
+        .max(12)
+        .min(34);
+    format!(
+        "{}{:<id_width$}{}",
+        prefix,
+        truncate_chars(model_id, id_width),
+        suffix,
+        id_width = id_width
+    )
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+    if max_chars <= 1 {
+        return "…".to_string();
+    }
+    let mut out: String = value.chars().take(max_chars - 1).collect();
+    out.push('…');
+    out
 }
 
 // ---------------------------------------------------------------------------

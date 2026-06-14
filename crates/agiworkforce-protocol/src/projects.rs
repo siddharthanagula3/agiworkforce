@@ -487,4 +487,132 @@ mod tests {
         assert!(instructions.format_preference.is_none());
         assert!(instructions.safety_directives.is_none());
     }
+
+    // -- Parity guard against the TS canonical contract --
+    //
+    // These tests read the canonical TS source
+    // (`packages/types/src/suite-contracts.ts`) at test time and assert that
+    // this hand-maintained Rust mirror enumerates exactly the same wire-form
+    // string-literal members. If the TS side adds/removes/renames a variant
+    // (e.g. a new `PrivacyMode` or `SourceSurface`), these tests fail loudly so
+    // the mirror cannot desynchronize silently and break cross-surface
+    // deserialization of project payloads.
+
+    /// Absolute path to the canonical TS contract, resolved from the crate's
+    /// manifest dir so it works regardless of the test runner's cwd.
+    fn suite_contracts_ts() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packages/types/src/suite-contracts.ts")
+    }
+
+    /// Extract the string-literal members of a single-line TS union type
+    /// declaration of the form `export type Name = 'a' | 'b' | 'c';`.
+    fn ts_union_members(source: &str, type_name: &str) -> Vec<String> {
+        let needle = format!("export type {type_name} =");
+        let line = source
+            .lines()
+            .find(|l| l.trim_start().starts_with(&needle))
+            .unwrap_or_else(|| {
+                panic!("type `{type_name}` not found in suite-contracts.ts — TS contract changed")
+            });
+        let rhs = line
+            .split_once('=')
+            .expect("union declaration has `=`")
+            .1;
+        let mut members: Vec<String> = rhs
+            .split('|')
+            .filter_map(|part| {
+                let part = part.trim().trim_end_matches(';').trim();
+                let inner = part.strip_prefix('\'')?.strip_suffix('\'')?;
+                Some(inner.to_string())
+            })
+            .collect();
+        members.sort();
+        assert!(
+            !members.is_empty(),
+            "no string-literal members parsed for `{type_name}` — TS declaration format changed"
+        );
+        members
+    }
+
+    /// Serialize an enum value and strip the surrounding JSON quotes to recover
+    /// its on-the-wire string form.
+    fn wire_form<T: Serialize>(value: &T) -> String {
+        serde_json::to_string(value)
+            .expect("serialize")
+            .trim_matches('"')
+            .to_string()
+    }
+
+    fn sorted(mut v: Vec<String>) -> Vec<String> {
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn privacy_mode_matches_ts_canonical() {
+        let ts = std::fs::read_to_string(suite_contracts_ts())
+            .expect("read suite-contracts.ts");
+        let ts_members = ts_union_members(&ts, "PrivacyMode");
+        let rust_members = sorted(
+            [
+                ProjectPrivacyMode::Local,
+                ProjectPrivacyMode::Byok,
+                ProjectPrivacyMode::Managed,
+            ]
+            .iter()
+            .map(wire_form)
+            .collect(),
+        );
+        assert_eq!(
+            rust_members, ts_members,
+            "ProjectPrivacyMode wire forms drifted from TS `PrivacyMode`"
+        );
+    }
+
+    #[test]
+    fn provider_mode_matches_ts_canonical() {
+        let ts = std::fs::read_to_string(suite_contracts_ts())
+            .expect("read suite-contracts.ts");
+        let ts_members = ts_union_members(&ts, "ProviderMode");
+        let rust_members = sorted(
+            [
+                ProjectProviderMode::Local,
+                ProjectProviderMode::DirectByok,
+                ProjectProviderMode::ManagedGateway,
+                ProjectProviderMode::ManagedNative,
+            ]
+            .iter()
+            .map(wire_form)
+            .collect(),
+        );
+        assert_eq!(
+            rust_members, ts_members,
+            "ProjectProviderMode wire forms drifted from TS `ProviderMode`"
+        );
+    }
+
+    #[test]
+    fn source_surface_matches_ts_canonical() {
+        let ts = std::fs::read_to_string(suite_contracts_ts())
+            .expect("read suite-contracts.ts");
+        let ts_members = ts_union_members(&ts, "SourceSurface");
+        let rust_members = sorted(
+            [
+                ProjectSourceSurface::Web,
+                ProjectSourceSurface::Desktop,
+                ProjectSourceSurface::Mobile,
+                ProjectSourceSurface::Cli,
+                ProjectSourceSurface::Vscode,
+                ProjectSourceSurface::Chrome,
+            ]
+            .iter()
+            .map(wire_form)
+            .collect(),
+        );
+        assert_eq!(
+            rust_members, ts_members,
+            "ProjectSourceSurface wire forms drifted from TS `SourceSurface`"
+        );
+    }
 }

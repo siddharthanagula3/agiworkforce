@@ -4,9 +4,10 @@
 //!   `/name [alias1, alias2, ...]`
 //!
 //! Update the golden by setting `AGIWORKFORCE_UPDATE_GOLDEN=1`; without it,
-//! drift fails CI. The golden was last calibrated 2026-05-14 against the
-//! Claude Code v2.1.128 capture run at
-//! `/Users/siddhartha/Desktop/reference/ui-capture-runs/20260513-185809-agent-platform-reference/screenshots/claude-code/607-618_cli_slash-command-palette*.txt`.
+//! drift fails CI. The golden was last calibrated 2026-05-14 against a local
+//! Claude Code v2.1.128 slash-command-palette capture run
+//! (`607-618_cli_slash-command-palette*.txt` in the agent-platform UI capture
+//! reference set; not checked into this repo).
 
 use agiworkforce_command_registry::builtin_slash_registry_commands;
 

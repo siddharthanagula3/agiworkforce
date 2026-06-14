@@ -64,21 +64,47 @@ pub struct WorkspacePolicy {
     pub rules: Vec<PolicyRule>,
 }
 
+/// A policy rule paired with its pre-compiled regex (if any).
+///
+/// Patterns are compiled **once** when the policy is loaded so the hot
+/// approval path in [`PolicyEngine::evaluate`] never recompiles a regex per
+/// tool call. A policy with many rules would otherwise pay repeated regex
+/// compilation on every tool invocation.
+struct CompiledRule {
+    rule: PolicyRule,
+    /// `Some` when the rule has a `pattern`; the regex compiled successfully
+    /// at load time (load fails closed on an invalid pattern, so this is never
+    /// a silently-skipped bad regex).
+    regex: Option<regex::Regex>,
+}
+
 /// Policy engine that evaluates tool calls against workspace rules.
 pub struct PolicyEngine {
-    policy: WorkspacePolicy,
+    /// Rules with their pre-compiled regexes, in declaration order.
+    rules: Vec<CompiledRule>,
 }
 
 impl PolicyEngine {
     /// Load policy from workspace `.agiworkforce/policy.toml`.
     /// Returns an empty policy if the file doesn't exist.
+    ///
+    /// ## Pattern anchoring
+    ///
+    /// Rule `pattern`s are standard (unanchored) regexes matched with
+    /// [`regex::Regex::is_match`], so a pattern matches if it occurs *anywhere*
+    /// in the argument. This means a bare `deny` pattern like `"rm"` also
+    /// matches `"warm"`/`"format"`, and a loose `allow` pattern can over-match
+    /// commands the author never intended — over-broad `allow` rules silently
+    /// auto-approve dangerous calls and weaken the approval gate. Policy
+    /// authors who want an exact match must anchor explicitly (`^rm$`) or scope
+    /// with word boundaries (`\brm\b`); prefer the narrowest pattern that still
+    /// matches the intended commands, and reserve broad `allow` rules for cases
+    /// where over-matching is acceptable.
     pub fn load_workspace(workspace_root: &Path) -> Result<Self> {
         let policy_path = workspace_root.join(".agiworkforce").join("policy.toml");
 
         if !policy_path.exists() {
-            return Ok(Self {
-                policy: WorkspacePolicy::default(),
-            });
+            return Ok(Self { rules: Vec::new() });
         }
 
         let contents = std::fs::read_to_string(&policy_path)
@@ -87,8 +113,10 @@ impl PolicyEngine {
         let policy: WorkspacePolicy = toml::from_str(&contents)
             .with_context(|| format!("Failed to parse {}", policy_path.display()))?;
 
-        // Validate priority ranges
-        for (i, rule) in policy.rules.iter().enumerate() {
+        // Validate rules and pre-compile their regexes once, here at load time,
+        // so the hot `evaluate` path never recompiles per tool call.
+        let mut rules = Vec::with_capacity(policy.rules.len());
+        for (i, rule) in policy.rules.into_iter().enumerate() {
             if rule.priority > 999 {
                 anyhow::bail!(
                     "Rule {} has priority {} (max 999) in {}",
@@ -97,6 +125,25 @@ impl PolicyEngine {
                     policy_path.display()
                 );
             }
+            // Compile the regex pattern at LOAD time and fail closed on a typo
+            // — otherwise an invalid pattern on a `deny` rule would be silently
+            // skipped during evaluation and the dangerous call would fall
+            // through to the default Ask/Allow.
+            let regex = match rule.pattern {
+                Some(ref pattern) => match regex::Regex::new(pattern) {
+                    Ok(re) => Some(re),
+                    Err(e) => {
+                        anyhow::bail!(
+                            "Rule {} has invalid regex pattern '{}' ({}) in {}",
+                            i + 1,
+                            pattern,
+                            e,
+                            policy_path.display()
+                        );
+                    }
+                },
+                None => None,
+            };
             // Validate decision string
             match rule.decision.as_str() {
                 "allow" | "deny" | "ask" => {}
@@ -109,9 +156,10 @@ impl PolicyEngine {
                     );
                 }
             }
+            rules.push(CompiledRule { rule, regex });
         }
 
-        Ok(Self { policy })
+        Ok(Self { rules })
     }
 
     /// Evaluate a tool call against loaded policy rules.
@@ -120,27 +168,18 @@ impl PolicyEngine {
     pub fn evaluate(&self, tool_name: &str, primary_arg: &str) -> PolicyDecision {
         let mut best_match: Option<(&PolicyRule, u16)> = None;
 
-        for rule in &self.policy.rules {
+        for compiled in &self.rules {
+            let rule = &compiled.rule;
             // Check tool name match (supports "*" wildcard)
             if rule.tool != "*" && rule.tool != tool_name {
                 continue;
             }
 
-            // Check pattern match (if specified)
-            if let Some(ref pattern) = rule.pattern {
-                match regex::Regex::new(pattern) {
-                    Ok(re) => {
-                        if !re.is_match(primary_arg) {
-                            continue;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "[policy] invalid regex pattern '{}': {e}, skipping rule",
-                            pattern
-                        );
-                        continue;
-                    }
+            // Check pattern match (if specified). The regex was compiled once
+            // at load time — no per-call recompilation on this hot path.
+            if let Some(ref re) = compiled.regex {
+                if !re.is_match(primary_arg) {
+                    continue;
                 }
             }
 
@@ -163,7 +202,7 @@ impl PolicyEngine {
 
     /// Returns true if any rules are loaded.
     pub fn has_rules(&self) -> bool {
-        !self.policy.rules.is_empty()
+        !self.rules.is_empty()
     }
 }
 
@@ -172,9 +211,19 @@ mod tests {
     use super::*;
 
     fn make_engine(rules: Vec<PolicyRule>) -> PolicyEngine {
-        PolicyEngine {
-            policy: WorkspacePolicy { rules },
-        }
+        // Mirror the load-time pre-compilation so tests exercise the real
+        // cached-regex evaluation path. Patterns are expected to be valid.
+        let compiled = rules
+            .into_iter()
+            .map(|rule| {
+                let regex = rule
+                    .pattern
+                    .as_ref()
+                    .map(|p| regex::Regex::new(p).expect("test pattern must compile"));
+                CompiledRule { rule, regex }
+            })
+            .collect();
+        PolicyEngine { rules: compiled }
     }
 
     #[test]
