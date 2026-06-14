@@ -474,6 +474,7 @@ fn gemini_function_declarations_json(tool_defs: &[ToolDefinition]) -> Vec<Value>
 
 /// Send a streaming chat completion request and invoke `on_chunk` for each text delta.
 /// Returns a `CompletionResult` with text, tool calls, and token usage.
+#[allow(clippy::too_many_arguments)]
 pub async fn stream_completion(
     config: &CliConfig,
     provider: &Provider,
