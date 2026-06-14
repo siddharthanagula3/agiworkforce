@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use once_cell::sync::Lazy;
 
 use crate::safety::DANGEROUS_COMMANDS;
+use crate::terminal_style as ts;
 
 pub(super) static SCRIPT_RE: Lazy<regex::Regex> =
     Lazy::new(|| regex::Regex::new(r"(?is)<script[^>]*>.*?</script>").expect("valid regex"));
@@ -22,11 +23,10 @@ pub(super) fn validate_file_path(path_str: &str) -> std::result::Result<PathBuf,
 }
 
 pub(super) fn print_tool_status(tool_name: &str, display: &str) {
-    use colored::Colorize;
     eprintln!(
         "  {} {}",
-        format!("[{}]", tool_name).cyan().bold(),
-        display.dimmed()
+        ts::accent_header(format!("[{}]", tool_name)),
+        ts::muted(display)
     );
 }
 
@@ -258,6 +258,11 @@ pub(super) fn truncate_line(line: &str) -> String {
     if line.len() <= MAX_LINE_LENGTH {
         line.to_string()
     } else {
-        format!("{}... [truncated]", &line[..MAX_LINE_LENGTH])
+        // Truncate on a char boundary: slicing `&line[..MAX_LINE_LENGTH]` on a
+        // raw byte index can land mid-codepoint and panic. `chars().take(..)`
+        // bounds by chars (mirrors `cap_chars`/`skip_chars` above), keeping the
+        // result a valid &str without panicking on multibyte input.
+        let truncated: String = line.chars().take(MAX_LINE_LENGTH).collect();
+        format!("{truncated}... [truncated]")
     }
 }

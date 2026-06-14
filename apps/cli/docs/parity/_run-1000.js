@@ -25,7 +25,16 @@ export const meta = {
 };
 
 const DATE = (args && args.date) || '2026-06-01';
-const REPO = '/Users/siddhartha/Desktop/agiworkforce';
+
+// Repo root, resolved without hardcoding a developer machine path so the
+// harness runs for any contributor / CI runner. Priority:
+//   1. explicit --repo arg (args.repo)
+//   2. process.cwd() when the harness is launched from the repo root
+//   3. last-resort fallback for the original author's layout
+const REPO =
+  (args && args.repo) ||
+  (typeof process !== 'undefined' && process.cwd && process.cwd()) ||
+  '/Users/siddhartha/Desktop/agiworkforce';
 const ART = REPO + '/apps/cli/docs/parity';
 
 const CITE =
@@ -161,25 +170,48 @@ const approvalJobs = [
 ];
 
 // ---- Phase: RefStudy (72) --------------------------------------------------
-const REF = [
-  ['claude-ink-ui', '/Users/siddhartha/Desktop/claude_reference/src'],
-  ['codex-tui', '/Users/siddhartha/Desktop/reference/codex-cli/codex-rs/tui/src'],
-  [
-    'codex-bottom-pane',
-    '/Users/siddhartha/Desktop/reference/codex-cli/codex-rs/tui/src/bottom_pane',
-  ],
-  ['codex-history-cells', '/Users/siddhartha/Desktop/reference/codex-cli/codex-rs/tui/src'],
-  ['gemini-ui', '/Users/siddhartha/Desktop/reference/gemini-cli/packages/cli/src/ui'],
-  ['gemini-messages', '/Users/siddhartha/Desktop/reference/gemini-cli/packages/cli/src/ui'],
-  [
-    'opencode-tui',
-    '/Users/siddhartha/Desktop/reference/opencode/packages/opencode/src/cli/cmd/tui',
-  ],
-  [
-    'opencode-prompt',
-    '/Users/siddhartha/Desktop/reference/opencode/packages/opencode/src/cli/cmd/tui',
-  ],
+// External reference checkouts live outside the repo and are not present on
+// most machines (CI, other contributors). Allow overriding the base dir via
+// --refRoot and existence-check each entry so missing references are skipped
+// (logged) instead of dispatching agents against non-existent paths that would
+// silently produce empty/garbage findings.
+const REF_ROOT = (args && args.refRoot) || '/Users/siddhartha/Desktop';
+
+// Best-effort synchronous existence check. Loaded once; if the fs module is
+// unavailable in the harness sandbox we keep all entries (preserving prior
+// behavior) rather than silently dropping every reference.
+let fsExistsSync = null;
+try {
+  fsExistsSync = (await import('node:fs')).existsSync;
+} catch (_e) {
+  fsExistsSync = null;
+}
+const pathExists = (p) => {
+  if (!fsExistsSync) return true;
+  try {
+    return fsExistsSync(p);
+  } catch (_e) {
+    return false;
+  }
+};
+
+const ALL_REF = [
+  ['claude-ink-ui', REF_ROOT + '/claude_reference/src'],
+  ['codex-tui', REF_ROOT + '/reference/codex-cli/codex-rs/tui/src'],
+  ['codex-bottom-pane', REF_ROOT + '/reference/codex-cli/codex-rs/tui/src/bottom_pane'],
+  ['codex-history-cells', REF_ROOT + '/reference/codex-cli/codex-rs/tui/src'],
+  ['gemini-ui', REF_ROOT + '/reference/gemini-cli/packages/cli/src/ui'],
+  ['gemini-messages', REF_ROOT + '/reference/gemini-cli/packages/cli/src/ui'],
+  ['opencode-tui', REF_ROOT + '/reference/opencode/packages/opencode/src/cli/cmd/tui'],
+  ['opencode-prompt', REF_ROOT + '/reference/opencode/packages/opencode/src/cli/cmd/tui'],
 ];
+const REF = ALL_REF.filter(([name, p]) => {
+  const ok = pathExists(p);
+  if (!ok && typeof log === 'function') {
+    log('skipping missing reference: ' + name + ' (' + p + ')');
+  }
+  return ok;
+});
 const REF_FACETS = [
   'module layout & architecture',
   'event loop / frame scheduling / redraw coalescing',

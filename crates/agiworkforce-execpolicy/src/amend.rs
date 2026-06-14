@@ -131,7 +131,12 @@ fn append_rule_line(policy_path: &Path, rule: &str) -> Result<(), AmendError> {
         .ok_or_else(|| AmendError::MissingParent {
             path: policy_path.to_path_buf(),
         })?;
-    match std::fs::create_dir(dir) {
+    // Use create_dir_all so the full parent chain is created (matching the
+    // proxy/cert directory handling); plain create_dir fails with NotFound when
+    // more than one path component is missing, blocking the user-approval
+    // persistence path under a not-yet-created nested policy directory tree.
+    // create_dir_all returns Ok(()) when the directory already exists.
+    match std::fs::create_dir_all(dir) {
         Ok(()) => {}
         Err(ref source) if source.kind() == std::io::ErrorKind::AlreadyExists => {}
         Err(source) => {
@@ -202,7 +207,15 @@ mod tests {
     #[test]
     fn appends_rule_and_creates_directories() {
         let tmp = tempdir().expect("create temp dir");
-        let policy_path = tmp.path().join("rules").join("default.rules");
+        // Nest several not-yet-created components so this exercises the
+        // create_dir_all path; a non-recursive create_dir would fail here with
+        // NotFound and block the user-approval persistence path.
+        let policy_path = tmp
+            .path()
+            .join("nested")
+            .join("policy")
+            .join("rules")
+            .join("default.rules");
 
         blocking_append_allow_prefix_rule(
             &policy_path,

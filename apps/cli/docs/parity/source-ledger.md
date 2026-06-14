@@ -11,7 +11,7 @@
 - [Claude Code slash commands (built-in + custom), argument hints, and the command-popup UX — conventions for AGI's Rust/Ratatui CLI command palette](#claude-slash)
 - [Claude Code Subagents and the Agent tool, formerly Task — AGI Rust and Ratatui Task and Subagent cell rendering](#claude-subagents)
 - [Claude Code MCP integration (server config, tool namespacing, resources, prompts, elicitation/approval) — requirements for AGI's /mcp panel + MCP approval](#claude-mcp)
-- [Claude Code CLI input/composer UX (Ink/React PromptInput) for AGI Rust/Ratatui ChatComposer. NOTE TO READER: the structured sources[] array could not be transmitted due to a harness serialization defect that strips any nested-object value under the parameter named sources (19 encodings tested; an identical object array transmits fine under key_findings but is silently dropped under sources). Full cited deliverable is persisted at /Users/siddhartha (see /tmp/agi_composer_research.json) and every source path is inlined into the findings below.](#claude-input-ux)
+- [Claude Code CLI input/composer UX (Ink/React PromptInput) for AGI Rust/Ratatui ChatComposer](#claude-input-ux)
 - [Codex CLI TUI architecture: event loop, frame scheduling, app/bottom-pane/history wiring for AGI's Rust/Ratatui CLI](#codex-tui-arch)
 - [Codex CLI approval overlay (queue/render/resolve) vs AGI approval_broker.rs, for a Rust/Ratatui CLI](#codex-approval)
 - [Codex CLI `ChatComposer` (codex-rs TUI bottom pane) — feature map for AGI's CLI ChatComposer](#codex-composer)
@@ -190,7 +190,9 @@ Claude Code connects to MCP servers over multiple transports (stdio, http/stream
 
 ---
 
-## Claude Code CLI input/composer UX (Ink/React PromptInput) for AGI Rust/Ratatui ChatComposer. NOTE TO READER: the structured sources[] array could not be transmitted due to a harness serialization defect that strips any nested-object value under the parameter named sources (19 encodings tested; an identical object array transmits fine under key_findings but is silently dropped under sources). Full cited deliverable is persisted at /Users/siddhartha (see /tmp/agi_composer_research.json) and every source path is inlined into the findings below.
+## Claude Code CLI input/composer UX (Ink/React PromptInput) for AGI Rust/Ratatui ChatComposer
+
+> Provenance note: every source for this section is inlined directly into the prose and key-findings below (each finding is prefixed with its `[src: ...]` path). There is no separate `sources[]` table for this entry.
 
 <a id="claude-input-ux"></a>
 

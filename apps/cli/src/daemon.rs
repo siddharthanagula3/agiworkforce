@@ -10,10 +10,9 @@
 use anyhow::{Context, Result};
 use axum::response::IntoResponse;
 use chrono::Local;
-use colored::Colorize;
 use cron::Schedule;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Semaphore};
@@ -22,6 +21,7 @@ use crate::agent::AgentSession;
 use crate::config::CliConfig;
 use crate::context;
 use crate::hooks::{self, HookEvent, HookInput, HooksConfig, TriggerConfig, TriggerType};
+use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
 // Security helpers
@@ -119,7 +119,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
         None => {
             eprintln!(
                 "{} No triggers.json found at ~/.agiworkforce/triggers.json",
-                "daemon:".bright_yellow()
+                ts::warning("daemon:")
             );
             eprintln!("  Create triggers.json to define cron, webhook, or file-watcher triggers.");
             eprintln!("  Example:");
@@ -149,7 +149,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     if enabled.is_empty() {
         eprintln!(
             "{} triggers.json loaded but no enabled triggers found.",
-            "daemon:".bright_yellow()
+            ts::warning("daemon:")
         );
         return Ok(());
     }
@@ -165,14 +165,14 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
 
     eprintln!(
         "{} Starting with {} trigger(s), max_parallel={}",
-        "daemon:".bright_green(),
+        ts::success("daemon:"),
         enabled.len(),
         triggers_config.max_parallel
     );
     for t in &enabled {
         eprintln!(
             "  {} [{}] {:?}",
-            t.id.bright_cyan(),
+            ts::accent(&t.id),
             format!("{:?}", t.trigger_type).to_lowercase(),
             t.prompt.as_deref().unwrap_or("(no prompt)")
         );
@@ -257,7 +257,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
             )
             .await
             {
-                eprintln!("{} Webhook server error: {}", "daemon:".bright_red(), e);
+                eprintln!("{} Webhook server error: {}", ts::danger("daemon:"), e);
             }
         }));
     }
@@ -277,7 +277,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
             if let Err(e) =
                 run_file_watcher(watcher_triggers, tx_watcher, &mut shutdown_rx_watcher).await
             {
-                eprintln!("{} File watcher error: {}", "daemon:".bright_red(), e);
+                eprintln!("{} File watcher error: {}", ts::danger("daemon:"), e);
             }
         }));
     }
@@ -304,7 +304,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     // Wait for SIGINT/SIGTERM
     wait_for_shutdown_signal().await;
 
-    eprintln!("\n{} Shutting down...", "daemon:".bright_yellow());
+    eprintln!("\n{} Shutting down...", ts::warning("daemon:"));
 
     // Signal all tasks to stop
     let _ = shutdown_tx.send(true);
@@ -326,7 +326,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     )
     .await;
 
-    eprintln!("{} Stopped.", "daemon:".bright_green());
+    eprintln!("{} Stopped.", ts::success("daemon:"));
     Ok(())
 }
 
@@ -452,7 +452,7 @@ async fn run_cron_scheduler(
 
                         eprintln!(
                             "{} Cron trigger '{}' fired at {}",
-                            "daemon:".bright_blue(),
+                            ts::accent("daemon:"),
                             trigger.id,
                             now.format("%H:%M:%S")
                         );
@@ -529,7 +529,7 @@ async fn run_webhook_server(
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     eprintln!(
         "{} Webhook server listening on http://{}",
-        "daemon:".bright_blue(),
+        ts::accent("daemon:"),
         addr
     );
 
@@ -615,7 +615,7 @@ async fn webhook_handler(
 
     eprintln!(
         "{} Webhook trigger '{}' fired via {}",
-        "daemon:".bright_blue(),
+        ts::accent("daemon:"),
         trigger.id,
         path
     );
@@ -677,7 +677,7 @@ async fn run_file_watcher(
                 ))?;
             eprintln!(
                 "{} Watching '{}' for trigger '{}'",
-                "daemon:".bright_blue(),
+                ts::accent("daemon:"),
                 watch_path,
                 t.id
             );
@@ -718,8 +718,11 @@ async fn run_file_watcher(
                             None => continue,
                         };
 
-                        // Check if the changed file is under the watch path
-                        if !path_str.starts_with(watch_path) {
+                        // Check if the changed file is under the watch path.
+                        // Use component-aware Path::starts_with (not a raw byte
+                        // prefix) so a watch of `/tmp` does not match a sibling
+                        // like `/tmpfoo/x`.
+                        if !path.starts_with(Path::new(watch_path)) {
                             continue;
                         }
 
@@ -757,7 +760,7 @@ async fn run_file_watcher(
 
                         eprintln!(
                             "{} File change detected for trigger '{}': {}",
-                            "daemon:".bright_blue(),
+                            ts::accent("daemon:"),
                             t.id,
                             path_str
                         );
@@ -820,7 +823,7 @@ async fn run_execution_loop(
 
                     if let Err(err) = execute_trigger(event, &config, &hooks_config, &log_dir).await
                     {
-                        eprintln!("{} Trigger execution failed: {:#}", "daemon:".bright_red(), err);
+                        eprintln!("{} Trigger execution failed: {:#}", ts::danger("daemon:"), err);
                     }
                 });
                 // Detach but log panic: spawn a watcher that awaits the handle.
@@ -931,7 +934,7 @@ async fn execute_trigger(
     ) {
         eprintln!(
             "{} Failed to write log file {}: {}",
-            "daemon:".bright_red(),
+            ts::danger("daemon:"),
             log_path.display(),
             e
         );
@@ -945,7 +948,7 @@ async fn execute_trigger(
         if let Err(e) = std::fs::set_permissions(&log_path, perms) {
             eprintln!(
                 "{} Failed to set log file permissions {}: {}",
-                "daemon:".bright_red(),
+                ts::danger("daemon:"),
                 log_path.display(),
                 e
             );
@@ -954,7 +957,7 @@ async fn execute_trigger(
 
     eprintln!(
         "{} Trigger '{}' completed in {:.1}s [{}]",
-        "daemon:".bright_green(),
+        ts::success("daemon:"),
         event.trigger_id,
         duration.as_secs_f64(),
         status

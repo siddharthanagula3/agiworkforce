@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use crate::terminal_style as ts;
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Types
 // ──────────────────────────────────────────────────────────────────────────────
@@ -397,9 +399,9 @@ pub async fn login_copilot() -> Result<AuthEntry> {
     println!(
         "\n  {}  {}\n  {}  {}\n",
         "Go to:".bold(),
-        device.verification_uri.cyan(),
+        ts::link(device.verification_uri),
         "Enter code:".bold(),
-        device.user_code.green().bold(),
+        ts::success_header(device.user_code),
     );
     println!("  {}", "Waiting for authorization...".dimmed());
 
@@ -502,9 +504,9 @@ pub async fn login_chatgpt() -> Result<AuthEntry> {
     println!(
         "\n  {}  {}\n  {}  {}\n",
         "Go to:".bold(),
-        "https://auth.openai.com/codex/device".cyan(),
+        ts::link("https://auth.openai.com/codex/device"),
         "Enter code:".bold(),
-        device.user_code.green().bold(),
+        ts::success_header(&device.user_code),
     );
     println!("  {}", "Waiting for authorization...".dimmed());
 
@@ -827,12 +829,12 @@ pub async fn interactive_login() -> Result<()> {
 
     let (key, entry) = match selection {
         0 => {
-            println!("\n{}", "Connecting to GitHub Copilot...".cyan());
+            println!("\n{}", ts::accent("Connecting to GitHub Copilot..."));
             let entry = login_copilot().await?;
             ("copilot".to_string(), entry)
         }
         1 => {
-            println!("\n{}", "Connecting to ChatGPT...".cyan());
+            println!("\n{}", ts::accent("Connecting to ChatGPT..."));
             let entry = login_chatgpt().await?;
             ("chatgpt".to_string(), entry)
         }
@@ -848,7 +850,7 @@ pub async fn interactive_login() -> Result<()> {
 
     println!(
         "\n  {} {} authentication saved to {}",
-        "Done!".green().bold(),
+        ts::success_header("Done!"),
         key,
         auth_path()?.display()
     );
@@ -996,7 +998,7 @@ pub async fn interactive_api_key_login_for_provider(provider: &str) -> Result<()
     save_auth_entry(provider.id, AuthEntry::ApiKey { key })?;
     println!(
         "  {} {} API key saved to auth.json.",
-        "Done!".green().bold(),
+        ts::success_header("Done!"),
         provider.label,
     );
     Ok(())
@@ -1013,12 +1015,12 @@ pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()
 
     match provider {
         Some("copilot") => {
-            println!("\n{}", "Connecting to GitHub Copilot...".cyan());
+            println!("\n{}", ts::accent("Connecting to GitHub Copilot..."));
             let entry = login_copilot().await?;
             save_auth_entry("copilot", entry)
         }
         Some("chatgpt") => {
-            println!("\n{}", "Connecting to ChatGPT...".cyan());
+            println!("\n{}", ts::accent("Connecting to ChatGPT..."));
             let entry = login_chatgpt().await?;
             save_auth_entry("chatgpt", entry)
         }
