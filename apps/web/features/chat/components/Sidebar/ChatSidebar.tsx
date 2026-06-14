@@ -47,7 +47,7 @@ import type { KeyboardShortcut } from '@features/chat/hooks/use-keyboard-shortcu
 // Types
 // ---------------------------------------------------------------------------
 
-/** Minimal session shape accepted by ChatSidebar — compatible with both chat-store.ChatSession and shared/types.ChatSession */
+/** Minimal session shape accepted by ChatSidebar · compatible with both chat-store.ChatSession and shared/types.ChatSession */
 export interface SessionLike {
   id: string;
   title: string;
@@ -67,7 +67,7 @@ export interface ChatSidebarProps {
   onRenameSession: (sessionId: string, title: string) => void;
   onToggleSidebar?: () => void;
   collapsed?: boolean;
-  /** Optional rich-action callbacks — rendered in ConversationListItem when provided */
+  /** Optional rich-action callbacks · rendered in ConversationListItem when provided */
   onPinSession?: (sessionId: string) => void;
   onStarSession?: (sessionId: string) => void;
   onArchiveSession?: (sessionId: string) => void;
@@ -375,7 +375,7 @@ const UserProfileArea = React.memo(function UserProfileArea({
 });
 
 // ---------------------------------------------------------------------------
-// Collapsed Sidebar — claude.ai icon-rail pattern (~50px)
+// Collapsed Sidebar · claude.ai icon-rail pattern (~50px)
 // ---------------------------------------------------------------------------
 
 const RAIL_BTN =
@@ -482,7 +482,7 @@ function CollapsedSidebar({
 }
 
 // ---------------------------------------------------------------------------
-// Free Plan Nudge — only shown when user is on the free tier
+// Free Plan Nudge · only shown when user is on the free tier
 // ---------------------------------------------------------------------------
 
 const FreePlanNudge = React.memo(function FreePlanNudge({
@@ -585,6 +585,20 @@ function ChatSidebarContent({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [bulkMode, exitBulkMode]);
+
+  // Listen for custom events dispatched by the global keyboard shortcut hook
+  // so that Cmd+K / Cmd+/ open the dialogs that live inside the sidebar,
+  // without requiring state to be lifted to the page level.
+  useEffect(() => {
+    const openSearch = () => setSearchDialogOpen(true);
+    const openShortcuts = () => setKeyboardShortcutsOpen(true);
+    window.addEventListener('agi:open-search', openSearch);
+    window.addEventListener('agi:open-shortcuts', openShortcuts);
+    return () => {
+      window.removeEventListener('agi:open-search', openSearch);
+      window.removeEventListener('agi:open-shortcuts', openShortcuts);
+    };
+  }, []);
 
   const keyboardShortcuts = useMemo<KeyboardShortcut[]>(() => {
     const shortcuts: KeyboardShortcut[] = [
@@ -830,7 +844,7 @@ function ChatSidebarContent({
 }
 
 // ---------------------------------------------------------------------------
-// Public export — wrapped in ErrorBoundary
+// Public export · wrapped in ErrorBoundary
 // ---------------------------------------------------------------------------
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = (props) => {
