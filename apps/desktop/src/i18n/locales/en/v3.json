@@ -38,6 +38,15 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "pinned": "Pinned",
+    "actions": {
+      "more": "More options",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "rename": "Rename",
+      "delete": "Delete",
+      "confirmDelete": "Confirm delete"
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
