@@ -287,6 +287,31 @@ function isThinkingEnabled(): boolean {
   return vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.thinking') ?? false;
 }
 
+/**
+ * Map the user-selected effort level to model request parameters.
+ * Effort controls reasoning depth via max_tokens and temperature.
+ *
+ *   low    → 2048 tokens,  temp 0.3  (fast, cheap)
+ *   medium → 4096 tokens,  temp 0.2  (default balanced)
+ *   high   → 8192 tokens,  temp 0.15 (deeper reasoning)
+ *   max    → 16384 tokens, temp 0.1  (maximum budget)
+ */
+function getEffortParams(): { max_tokens: number; temperature: number } {
+  const effort =
+    vscode.workspace.getConfiguration('agiWorkforce').get<string>('agent.effort') ?? 'medium';
+  switch (effort) {
+    case 'low':
+      return { max_tokens: 2048, temperature: 0.3 };
+    case 'high':
+      return { max_tokens: 8192, temperature: 0.15 };
+    case 'max':
+      return { max_tokens: 16384, temperature: 0.1 };
+    case 'medium':
+    default:
+      return { max_tokens: 4096, temperature: 0.2 };
+  }
+}
+
 function getFeatureFlags(): {
   mcpEnabled: boolean;
   desktopBridgeEnabled: boolean;
@@ -533,18 +558,24 @@ export async function streamChatCompletion(
   const streaming = isStreamingEnabled();
   const features = getFeatureFlags();
   const thinking = isThinkingEnabled();
+  const { max_tokens, temperature } = getEffortParams();
+
+  // Resolve the effective agent mode for metadata (ask/auto/plan/bypass).
+  const agentMode =
+    vscode.workspace.getConfiguration('agiWorkforce').get<string>('agent.mode') ?? 'auto';
 
   const requestBody: ChatCompletionRequest = {
     model,
     messages,
     stream: streaming,
-    temperature: 0.2,
-    max_tokens: 4096,
+    temperature,
+    max_tokens,
     ...(thinking ? { thinking: true } : {}),
     metadata: {
       mcp_enabled: features.mcpEnabled,
       desktop_bridge_enabled: features.desktopBridgeEnabled,
       desktop_bridge_port: features.desktopBridgePort,
+      agent_mode: agentMode,
     },
   };
 
