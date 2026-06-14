@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
@@ -199,7 +199,9 @@ export default function WebChatPage() {
   const { getToken } = useAuth();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const urlConversationId = params?.['sessionId'] as string | undefined;
+  const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -248,6 +250,7 @@ export default function WebChatPage() {
   }, []);
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
+  const [isUserTyping, setIsUserTyping] = useState(false);
   const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
   const [selectedHandoffContextIds, setSelectedHandoffContextIds] = useState<string[]>([]);
@@ -711,6 +714,33 @@ export default function WebChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayedMessages.length, displayedConversationId, conversations, updateConversation]);
 
+  // Scroll to and flash-highlight a message when navigated from global search results.
+  // GlobalSearchDialog navigates to /chat/[sessionId]?highlightMessage=<msgId>.
+  // We wait for messages to load before scrolling, then clear the param from the URL.
+  useEffect(() => {
+    if (!highlightMessageId || displayedMessages.length === 0) return;
+    const el = document.querySelector<HTMLElement>(`[data-message-id="${highlightMessageId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'outline 0s, outline-color 0.3s';
+    el.style.outline = '2px solid var(--chat-accent-primary)';
+    el.style.borderRadius = '8px';
+    const clear = setTimeout(() => {
+      el.style.outline = '2px solid transparent';
+      const removeParams = setTimeout(() => {
+        el.style.outline = '';
+        el.style.transition = '';
+        el.style.borderRadius = '';
+        // Remove the query param without adding a history entry.
+        const url = new URL(window.location.href);
+        url.searchParams.delete('highlightMessage');
+        router.replace(url.pathname + url.search);
+      }, 400);
+      return () => clearTimeout(removeParams);
+    }, 1800);
+    return () => clearTimeout(clear);
+  }, [highlightMessageId, displayedMessages.length, router]);
+
   const deletePersistedMessages = useCallback(
     async (ids: string[]): Promise<boolean> => {
       if (!displayedConversationId || ids.length === 0) return false;
@@ -754,6 +784,10 @@ export default function WebChatPage() {
     },
     [deleteMessage],
   );
+
+  const handleTypingChange = useCallback((typing: boolean) => {
+    setIsUserTyping(typing);
+  }, []);
 
   const handleEditMessage = useCallback(
     async (id: string) => {
@@ -1007,6 +1041,7 @@ export default function WebChatPage() {
                     placeholder="How can I help you today?"
                     prefillText={composerPrefill}
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
@@ -1026,6 +1061,7 @@ export default function WebChatPage() {
                 <ChatMessageList
                   messages={chatMessages}
                   isLoading={isLoading && !isStreaming}
+                  isUserTyping={isUserTyping}
                   onRegenerate={handleRegenerateMessage}
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
@@ -1057,6 +1093,7 @@ export default function WebChatPage() {
                     placeholder="How can I help you today?"
                     prefillText={composerPrefill}
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     onUpgradeRequest={handleOpenCloudWaitlist}

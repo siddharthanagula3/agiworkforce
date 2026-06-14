@@ -333,6 +333,7 @@ const MessageBubbleComponent = function MessageBubble({
   return (
     <motion.div
       data-role={isUser ? 'user' : 'assistant'}
+      data-message-id={message.id}
       variants={messageBubbleVariants}
       initial="hidden"
       animate="visible"
