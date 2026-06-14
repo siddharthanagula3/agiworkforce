@@ -158,9 +158,14 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
             // Schema not parseable, skip
           }
         }
+        // SECURITY (audit batch-221 [MEDIUM] content-script trust, fixed 2026-06-13):
+        // imperative page-supplied tool names/descriptions must get the same
+        // isValidToolName + length-cap hardening the declarative path applies,
+        // since these names later flow into escapeAttrValue() selector construction.
+        if (!isValidToolName(tool.name)) continue;
         tools.push({
           name: tool.name,
-          description: tool.description,
+          description: (tool.description ?? '').slice(0, TOOL_DESCRIPTION_MAX_CHARS),
           inputSchema: parsedSchema,
           source: 'imperative',
         });
@@ -188,9 +193,10 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
     try {
       const registered = mc.listTools();
       for (const tool of registered) {
+        if (!isValidToolName(tool.name)) continue;
         tools.push({
           name: tool.name,
-          description: tool.description || '',
+          description: (tool.description || '').slice(0, TOOL_DESCRIPTION_MAX_CHARS),
           inputSchema: tool.inputSchema,
           source: 'imperative',
         });

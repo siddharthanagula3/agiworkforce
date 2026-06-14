@@ -32,6 +32,19 @@ export function createElementWith(opts: CreateElementOptions): HTMLElement {
   if (opts.text !== undefined) el.textContent = opts.text;
   if (opts.attrs) {
     for (const [k, v] of Object.entries(opts.attrs)) {
+      // SECURITY (audit batch-221 [HIGH] insecure output handling, fixed
+      // 2026-06-13): defensively drop event-handler attributes (on*) and
+      // javascript:/data:/vbscript: URL schemes on url-bearing attributes so a
+      // caller cannot inject executable attributes through this helper. All
+      // current callers pass only static presentational attrs.
+      const key = k.toLowerCase();
+      if (key.startsWith('on')) continue;
+      if (
+        (key === 'href' || key === 'src' || key === 'xlink:href' || key === 'formaction') &&
+        /^\s*(?:javascript|data|vbscript):/i.test(v)
+      ) {
+        continue;
+      }
       el.setAttribute(k, v);
     }
   }
