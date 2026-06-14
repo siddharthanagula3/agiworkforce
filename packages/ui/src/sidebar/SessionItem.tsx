@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SessionItem — a single conversation row, ChatGPT-style: title + preview,
  * active highlight, inline-rename, and a hover 3-dots menu exposing pin/star/
