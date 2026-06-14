@@ -892,7 +892,7 @@ export default function WebChatPage() {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div
             className={cn(
-              'flex h-11 shrink-0 items-center justify-between px-4',
+              'relative flex h-11 shrink-0 items-center justify-between px-4',
               isEmptyChat
                 ? 'border-b border-transparent'
                 : 'border-b border-[var(--chat-border-subtle)]',
@@ -913,6 +913,14 @@ export default function WebChatPage() {
                 </Button>
               )}
             </div>
+
+            {/* Conversation title - centered in header when in an active chat */}
+            {activeConversationTitle && activeConversationTitle !== 'New Chat' && (
+              <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 max-w-[40%] truncate text-sm font-medium text-[var(--chat-text-secondary)]">
+                {activeConversationTitle}
+              </h1>
+            )}
+
             <div className="flex items-center gap-1.5">
               <ResearchToggleButton count={researchSourceCount} />
               <ArtifactsToggleButton />
