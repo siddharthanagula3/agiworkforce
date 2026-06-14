@@ -28,7 +28,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">01 — What we collect</p>
+          <p className="agi-section-eyebrow">01 · What we collect</p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -88,7 +88,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">02 — What we do not collect</p>
+          <p className="agi-section-eyebrow">02 · What we do not collect</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
               <h3 className="agi-reason-h">Training data</h3>
@@ -116,7 +116,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">03 — How we use it</p>
+          <p className="agi-section-eyebrow">03 · How we use it</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             To run the service, bill you, secure the system, respond to support requests, and comply
             with the law. We do not use your data to advertise to you, and we do not share it with
@@ -125,7 +125,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">04 — Sharing</p>
+          <p className="agi-section-eyebrow">04 · Sharing</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We share data only with the subprocessors listed at{' '}
             <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
@@ -138,7 +138,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">05 — Retention and deletion</p>
+          <p className="agi-section-eyebrow">05 · Retention and deletion</p>
           <table className="agi-ledger">
             <tbody>
               <tr>
@@ -169,7 +169,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">06 — Your rights</p>
+          <p className="agi-section-eyebrow">06 · Your rights</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Under GDPR, CCPA, and similar laws, you have the right to access, correct, delete, port,
             and object to processing of your personal data. To exercise any of these, email{' '}
@@ -182,12 +182,12 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">07 — International transfers and EU residency</p>
+          <p className="agi-section-eyebrow">07 · International transfers and EU residency</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             <strong>EU residency status:</strong> AGI data is hosted in the United States by
             default. We do not currently offer European residency for stored data; European
             customers&rsquo; data is transferred to and processed in the US. For EU/UK personal data
-            we use Standard Contractual Clauses through our DPA — see{' '}
+            we use Standard Contractual Clauses through our DPA. See{' '}
             <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
               /dpa
             </Link>
@@ -200,7 +200,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">08 — Children</p>
+          <p className="agi-section-eyebrow">08 · Children</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI is not directed at children under 13 (or 16 in the EU/UK). We do not knowingly
             collect data from children.
@@ -208,7 +208,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">09 — Changes</p>
+          <p className="agi-section-eyebrow">09 · Changes</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We may update this policy. Material changes are announced via email and on{' '}
             <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
@@ -219,7 +219,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">10 — Contact</p>
+          <p className="agi-section-eyebrow">10 · Contact</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI Automation LLC, Austin, Texas, USA. Email{' '}
             <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>

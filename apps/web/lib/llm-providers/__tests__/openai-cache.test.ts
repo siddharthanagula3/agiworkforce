@@ -58,7 +58,7 @@ describe('OpenAIProvider cache behavior', () => {
     provider = new OpenAIProvider(MOCK_KEY);
   });
 
-  describe('sendRequest — NO cache_control header (OpenAI-specific)', () => {
+  describe('sendRequest · NO cache_control header (OpenAI-specific)', () => {
     it('does NOT add cache_control to any message even with usePromptCache=true', async () => {
       mockFetch.mockResolvedValueOnce(okOpenAiJson());
 
@@ -81,7 +81,7 @@ describe('OpenAIProvider cache behavior', () => {
     });
   });
 
-  describe('sendRequest — cached_tokens from usage response', () => {
+  describe('sendRequest · cached_tokens from usage response', () => {
     it('reads cached_tokens from prompt_tokens_details when present', async () => {
       mockFetch.mockResolvedValueOnce(okOpenAiJson({ cached_tokens: 512 }));
 
@@ -149,7 +149,7 @@ describe('OpenAIProvider cache behavior', () => {
 
       const result = await provider.sendRequest(makeRequest());
 
-      // 0 is falsy but defined — ensure it's passed through.
+      // 0 is falsy but defined · ensure it's passed through.
       expect(result.cachedInputTokens).toBe(0);
     });
 
@@ -163,7 +163,7 @@ describe('OpenAIProvider cache behavior', () => {
     });
   });
 
-  describe('sendRequest — reasoningOutputTokens', () => {
+  describe('sendRequest · reasoningOutputTokens', () => {
     it('reads reasoning_tokens from completion_tokens_details (Chat Completions shape)', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -215,7 +215,7 @@ describe('OpenAIProvider cache behavior', () => {
     });
   });
 
-  describe('streamRequest — no cache_control', () => {
+  describe('streamRequest · no cache_control', () => {
     it('does NOT add cache_control in streaming path', async () => {
       const mockBody = {} as ReadableStream;
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockBody });

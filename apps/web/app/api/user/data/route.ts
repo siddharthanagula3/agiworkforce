@@ -33,7 +33,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
  * Rate Limit: 3 requests per hour (security-sensitive)
  */
 
-// Hardcoded deletion order — children first to respect FK constraints.
+// Hardcoded deletion order · children first to respect FK constraints.
 // NEVER interpolate user-supplied values into SQL; these names are constants.
 const TABLES_TO_DELETE = [
   { table: 'credit_transactions', column: 'user_id' },
@@ -129,7 +129,7 @@ async function handleDeleteUserData(request: NextRequest) {
     }
 
     // Fallback: manual deletion in FK-safe order using parameterized SQL.
-    // Table names come from the hardcoded TABLES_TO_DELETE constant — no user input.
+    // Table names come from the hardcoded TABLES_TO_DELETE constant · no user input.
     const deletionResults: Record<string, { deleted: boolean; error?: string }> = {};
 
     for (const { table, column } of TABLES_TO_DELETE) {

@@ -14,6 +14,8 @@ import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import { getTaskModelForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
 
 /**
  * Mission Control API
@@ -203,12 +205,28 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
 
   messages.push({ role: 'user', content: input });
 
+  const missionModel =
+    getTaskModelForProvider('anthropic', 'fast_completion') ??
+    requireProviderDefaultModel('anthropic');
+  const missionProvider = 'anthropic';
+
+  const managedGateResponse = buildManagedComputeGateResponse(
+    request,
+    {
+      provider: missionProvider,
+      model: missionModel,
+      feature: 'mission_control',
+    },
+    {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  );
+  if (managedGateResponse) return managedGateResponse;
+
   // Estimate cost for pre-flight credit check
   const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
   const estimatedTokens = Math.ceil(totalChars / 3.5) + 500; // +500 for output buffer
-  // Use claude-haiku-4.5 as the mission planner - cost-effective and fast
-  const missionModel = 'claude-haiku-4.5';
-  const missionProvider = 'anthropic';
   const estimatedCostCents = Math.max(
     1,
     Math.ceil((estimatedTokens * 2 * 0.001) / 1000), // rough: $0.001/1K tokens average

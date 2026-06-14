@@ -1,7 +1,7 @@
 /**
  * Support Tickets (authenticated path).
  *
- * POST /api/support/tickets — create a support ticket (auth required).
+ * POST /api/support/tickets · create a support ticket (auth required).
  *
  * The existing POST /api/support route also creates tickets (used by
  * support-service.ts submitTicket()). This route provides a named path

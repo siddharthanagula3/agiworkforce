@@ -60,7 +60,7 @@ export function InlineCitation({ citation }: InlineCitationProps) {
 }
 
 /**
- * InlineSourceTags — renders citations as compact inline superscript-style tags
+ * InlineSourceTags · renders citations as compact inline superscript-style tags
  * positioned immediately after the response prose, matching Claude's visual pattern
  * where source names appear as `[Source Name]` chips rather than a separate footer list.
  */
@@ -104,7 +104,7 @@ export function InlineSourceTags({ citations }: { citations: Citation[] }) {
 }
 
 /**
- * CitationFooter — kept for backward compat; new callers should prefer InlineSourceTags.
+ * CitationFooter · kept for backward compat; new callers should prefer InlineSourceTags.
  * @deprecated Use InlineSourceTags for inline placement after prose.
  */
 export function CitationFooter({ citations }: { citations: Citation[] }) {

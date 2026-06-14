@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Accessibility',
   description:
-    'How AGI supports accessibility — keyboard, screen-reader, prefers-reduced-motion, contrast.',
+    'How AGI supports accessibility · keyboard, screen-reader, prefers-reduced-motion, contrast.',
   alternates: { canonical: 'https://agiworkforce.com/accessibility' },
 };
 
@@ -21,7 +21,7 @@ export default function AccessibilityPage() {
             We aim for WCAG 2.1 AA across the web app and the marketing site.{' '}
             <strong>
               Below is what we&rsquo;ve done, what is in flight, and the known gaps. If you hit a
-              barrier, email contact@agiworkforce.com — we treat it as a P0.
+              barrier, email contact@agiworkforce.com · we treat it as a P0.
             </strong>
           </p>
         </section>
@@ -39,7 +39,7 @@ export default function AccessibilityPage() {
               <tr>
                 <td>Screen reader</td>
                 <td>
-                  Semantic HTML throughout — landmarks, headings in order, lists, labelled controls.
+                  Semantic HTML throughout · landmarks, headings in order, lists, labelled controls.
                   ARIA labels where semantics aren&rsquo;t enough.
                 </td>
               </tr>

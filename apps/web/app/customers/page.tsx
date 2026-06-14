@@ -2,11 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { CapabilityGrid, FinalCta } from '../../components/marketing/FlagshipSections';
 
 export const metadata: Metadata = {
   title: 'Customers',
   description:
-    'Real teams using AGI. Case studies coming once we have written permission to share them.',
+    'Case studies will appear here once we have written permission to share customer names and outcomes.',
   alternates: { canonical: 'https://agiworkforce.com/customers' },
 };
 
@@ -15,66 +16,71 @@ export default function CustomersPage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Customers.</h1>
-          <p className="agi-page-lede">
-            Real teams use AGI.{' '}
+
+        <section className="agi-fl-hero" aria-labelledby="agi-customers-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Customers</p>
+          <h1 id="agi-customers-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Case studies,</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">named with permission.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            We publish customer stories only with consent.{' '}
             <strong>
               Case studies will appear here once we have written permission to share customer names
               and outcomes.
             </strong>{' '}
-            We don&rsquo;t list logos we haven&rsquo;t cleared.
+            We don't list logos we haven't cleared.
           </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Where we show up most</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Engineering teams</h3>
-              <p className="agi-reason-p">
-                CLI in CI, VS Code extension for editor work, desktop app for harder problems — with
-                the same chat history across all three.
-              </p>
-              <Link href="/use-cases/startups" className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                Read the startup case →
+          <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
+            <div className="agi-fl-cta-row">
+              <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+                Download AGI
               </Link>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Consulting firms</h3>
-              <p className="agi-reason-p">
-                Research, deliverables, audit-grade outputs across multi-provider AI without vendor
-                lock-in.
-              </p>
-              <Link href="/use-cases/consulting" className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                Read the consulting case →
+              <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--secondary">
+                Talk to Sales
               </Link>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">IT service providers</h3>
-              <p className="agi-reason-p">
-                Triage, runbooks, ticket-grade automation with sandboxed tool execution.
-              </p>
-              <Link
-                href="/use-cases/it-providers"
-                className="agi-cta-ghost"
-                style={{ marginTop: 4 }}
-              >
-                Read the MSP case →
-              </Link>
-            </li>
-          </ul>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Use it</p>
-          <div className="agi-cta-row">
-            <Link href="/download" className="agi-cta-primary">
-              Install
-            </Link>
-            <Link href="/contact-sales" className="agi-cta-ghost">
-              Talk to sales →
-            </Link>
+            </div>
           </div>
         </section>
+
+        <CapabilityGrid
+          eyebrow="Where AGI fits"
+          title="The work AGI is built for."
+          items={[
+            {
+              meta: 'Engineering',
+              title: 'Engineering teams',
+              body: 'CLI in CI, the VS Code extension for editor work, and the desktop app for harder problems.',
+              href: '/use-cases/startups',
+            },
+            {
+              meta: 'Consulting',
+              title: 'Consulting firms',
+              body: 'Research, deliverables, and auditable outputs across multi-provider AI without vendor lock-in.',
+              href: '/use-cases/consulting',
+            },
+            {
+              meta: 'IT services',
+              title: 'IT service providers',
+              body: 'Triage, runbooks, and ticket-grade automation with sandboxed tool execution.',
+              href: '/use-cases/it-providers',
+            },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow="Use it"
+          title="Be the case study we ask to publish."
+          body="Install AGI and put it to work. If it earns a place in your stack, we'll ask your permission before your name ever appears here."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/contact-sales', label: 'Talk to Sales' },
+          ]}
+        />
+
         <MarketingFooter />
       </main>
     </div>

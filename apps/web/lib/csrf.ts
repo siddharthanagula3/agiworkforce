@@ -17,7 +17,7 @@ let cachedPrevSecret: string | null | undefined = undefined; // undefined = not 
 function assertSufficientEntropy(name: string, value: string): void {
   if (Buffer.byteLength(value, 'utf8') < MIN_CSRF_SECRET_BYTES) {
     throw new Error(
-      `${name} must be at least ${MIN_CSRF_SECRET_BYTES} bytes (UTF-8) — got ${Buffer.byteLength(value, 'utf8')}`,
+      `${name} must be at least ${MIN_CSRF_SECRET_BYTES} bytes (UTF-8) · got ${Buffer.byteLength(value, 'utf8')}`,
     );
   }
 }
@@ -64,7 +64,7 @@ const CSRF_HEADER = 'x-csrf-token';
  *
  * SECURITY (web-HIGH-1, audit 2026-05-05): the previous implementation called
  * `cookies.match(/<name>=([^;]+)/)` with no leading anchor. That regex matches
- * any cookie whose name *ends with* the target — so `x-anon-session-id=evil;
+ * any cookie whose name *ends with* the target · so `x-anon-session-id=evil;
  * anon-session-id=real` returned `evil` (the leftmost match), and an attacker
  * who could plant `crafted-anon-session-id=<known>` via subdomain cookie
  * injection could forge any user's CSRF binding by pre-seeding the value.
@@ -73,7 +73,7 @@ const CSRF_HEADER = 'x-csrf-token';
  * regex-escaped before interpolation so a caller passing a name with `.`
  * or `*` does not accidentally widen the match.
  *
- * Exported for unit-test access. Treat as internal — production code in this
+ * Exported for unit-test access. Treat as internal · production code in this
  * file should be the only consumer.
  *
  * @internal
@@ -136,7 +136,7 @@ export function verifyCsrfToken(
 
   // SEV-WEB-07 / WEB-33: accept tokens signed with EITHER the current or
   // the previous secret. The previous secret is honored only when
-  // CSRF_SECRET_PREV is explicitly set — remove the env var to close the
+  // CSRF_SECRET_PREV is explicitly set · remove the env var to close the
   // rotation window. Both branches use the same constant-time
   // comparison; the order does not leak which secret matched.
   const currentMatch = constantTimeSignatureMatch(data, signature, getCsrfSecret());
@@ -191,7 +191,7 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
 
   // Option 1: Cookie-based fallback for anonymous users.
   // All cookie reads below go through readCookie() which anchors to the
-  // cookie-name boundary — see web-HIGH-1 fix at the helper definition.
+  // cookie-name boundary · see web-HIGH-1 fix at the helper definition.
   const cookies = _request.headers.get('cookie') || '';
 
   const sessionId = readCookie(cookies, 'session-id');
@@ -240,7 +240,7 @@ export async function getOrCreateAnonSession(
   const cookies = request.headers.get('cookie') || '';
 
   // Option 1: Prefer authenticated session cookies (no new cookie needed).
-  // All cookie reads use the anchored readCookie helper — see web-HIGH-1.
+  // All cookie reads use the anchored readCookie helper · see web-HIGH-1.
   const sessionId = readCookie(cookies, 'session-id');
   if (sessionId) {
     return { id: sessionId };
@@ -259,7 +259,7 @@ export async function getOrCreateAnonSession(
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
-    // `__Host-` requires Path=/, Secure, and no Domain attribute — all set.
+    // `__Host-` requires Path=/, Secure, and no Domain attribute · all set.
     newCookie: `__Host-anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
   };
 }
@@ -270,7 +270,7 @@ export async function getOrCreateAnonSession(
  * The old code bypassed CSRF for ANY request with `Authorization: Bearer <anything>`,
  * including invalid/garbage tokens. This created a bypass window: an attacker could
  * add `Authorization: Bearer bogus` to a cross-origin request, skip CSRF, then let
- * auth fail later — leaving any endpoint that checked CSRF before auth vulnerable.
+ * auth fail later · leaving any endpoint that checked CSRF before auth vulnerable.
  *
  * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Clerk
  * user. If verification fails, fall through to the CSRF token check as normal.
@@ -278,13 +278,13 @@ export async function getOrCreateAnonSession(
  * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) — Bearer-bypass invariant         │
+ * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) · Bearer-bypass invariant         │
  * │                                                                          │
  * │ The Bearer-bypass branch is only sound because cross-origin browsers     │
  * │ cannot forge a valid Clerk JWT (same-origin policy blocks reading        │
  * │ another origin's localStorage / injecting Authorization on third-party   │
  * │ requests). It is NOT a generic "skip CSRF if any Bearer header is        │
- * │ present" — that pattern was the RT-04 vulnerability.                     │
+ * │ present" · that pattern was the RT-04 vulnerability.                     │
  * │                                                                          │
  * │ DO NOT add new routes that check CSRF BEFORE auth and rely on this       │
  * │ helper to skip CSRF. If such a route ever passes `Authorization: Bearer  │
@@ -334,7 +334,7 @@ export async function validateCsrfFromRequest(
   }
 
   // RT-04 fix: Only bypass CSRF when the Bearer token is cryptographically valid.
-  // Previously ANY Bearer string (including `Bearer bogus`) bypassed CSRF — this
+  // Previously ANY Bearer string (including `Bearer bogus`) bypassed CSRF · this
   // created a bypass for any endpoint checking CSRF before auth.
   // Threat model: a cross-origin page cannot forge a valid Bearer JWT (SOP blocks
   // reading localStorage / injecting Authorization on third-party requests), so a
@@ -343,9 +343,9 @@ export async function validateCsrfFromRequest(
   if (authHeader?.startsWith('Bearer ')) {
     const validBearer = await isBearerTokenValid(authHeader);
     if (validBearer) {
-      return true; // Legitimate Bearer auth — CSRF bypass is safe
+      return true; // Legitimate Bearer auth · CSRF bypass is safe
     }
-    // Invalid Bearer + possible session cookie — fall through to CSRF token check
+    // Invalid Bearer + possible session cookie · fall through to CSRF token check
   }
 
   const token = request.headers.get(CSRF_HEADER);
@@ -380,7 +380,7 @@ export async function requireCsrfToken(
   if (authHeader?.startsWith('Bearer ')) {
     const validBearer = await isBearerTokenValid(authHeader);
     if (validBearer) {
-      return null; // Legitimate Bearer auth — CSRF bypass is safe
+      return null; // Legitimate Bearer auth · CSRF bypass is safe
     }
     // Invalid Bearer falls through to CSRF token check
   }

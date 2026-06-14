@@ -14,7 +14,7 @@ import { WebSearchModalCmdK } from './WebSearchModalCmdK';
 
 // ─── mode type ───────────────────────────────────────────────────────────────
 
-export type V3Mode = 'chat' | 'cowork' | 'code';
+export type V3Mode = 'chat' | 'work' | 'code';
 
 // ─── props ───────────────────────────────────────────────────────────────────
 
@@ -31,10 +31,10 @@ const VIEW_ROUTES: Record<string, string> = {
   projects: '/projects',
   artifacts: '/gallery',
   'customize-home': '/customize',
-  'cowork-projects': '/cowork',
-  'cowork-scheduled': '/cowork',
-  'cowork-artifacts': '/gallery',
-  'cowork-dispatch': '/cowork',
+  'work-projects': '/agi-work',
+  'work-scheduled': '/agi-work',
+  'work-artifacts': '/gallery',
+  'work-dispatch': '/agi-work',
   code: '/agi-code',
   routines: '/agi-code',
   'voice-settings': '/settings/voice',

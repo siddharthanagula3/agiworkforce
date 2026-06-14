@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { CapabilityGrid } from '../../components/marketing/FlagshipSections';
+import { MARKETING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Help',
@@ -9,81 +11,99 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://agiworkforce.com/help' },
 };
 
-const QUICK: { href: string; label: string; body: string }[] = [
-  { href: '/download', label: 'Install', body: 'Homebrew, cargo, curl. macOS, Linux, Windows.' },
-  {
-    href: '/byok',
-    label: 'Add an API key',
-    body: 'Bring your own key for any provider. Encrypted on device.',
-  },
-  {
-    href: '/local',
-    label: 'Run offline',
-    body: 'Ollama or LM Studio. No keys, no quotas, no internet.',
-  },
-  {
-    href: '/providers',
-    label: 'Switch models',
-    body: 'Twelve providers in one thread. Switch mid-conversation.',
-  },
-  {
-    href: '/cli',
-    label: 'Use the CLI',
-    body: 'Pure Rust, headless mode for CI, replayable sessions.',
-  },
-  {
-    href: '/pricing',
-    label: 'See pricing',
-    body: 'Local + BYOK free forever. Hobby $10/mo or $5/mo annual.',
-  },
-];
-
 export default function HelpPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Help.</h1>
-          <p className="agi-page-lede">
-            The fastest way to get unstuck.{' '}
-            <strong>
-              For anything below the surface, email{' '}
-              <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
-                contact@agiworkforce.com
-              </a>
-            </strong>{' '}
-            — a real human reads it.
+
+        <section className="agi-fl-hero" aria-labelledby="agi-help-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">Help</p>
+          <h1 id="agi-help-hero-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">Get unstuck,</span>
+            <span className="agi-fl-h1-line">
+              <em className="agi-fl-h1-em">fast.</em>
+            </span>
+          </h1>
+          <p className="agi-fl-lede">
+            The six things people ask about most, each one link away. For anything else, email
+            contact@agiworkforce.com. A real human reads it.
           </p>
+          <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
+            <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+              <li>Local · on-device</li>
+              <li>BYOK · your keys</li>
+              <li>Cloud · by invite</li>
+            </ul>
+          </div>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Common asks</p>
-          <ul className="agi-reasons">
-            {QUICK.map((q) => (
-              <li className="agi-reason" key={q.href}>
-                <h3 className="agi-reason-h">{q.label}</h3>
-                <p className="agi-reason-p">{q.body}</p>
-                <Link href={q.href} className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                  Open →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">More</p>
-          <div className="agi-cta-row">
-            <Link href="/faq" className="agi-cta-primary">
+
+        <CapabilityGrid
+          eyebrow="Common asks"
+          title="Start with the page that answers it."
+          items={[
+            {
+              meta: 'Install',
+              title: 'Get the apps',
+              body: 'Desktop installer routes for macOS, Windows, and Linux open as release assets become available. The CLI page carries the current agi install guide.',
+              href: '/download',
+            },
+            {
+              meta: 'BYOK',
+              title: 'Add your API key',
+              body: 'Bring your own provider keys on Desktop and CLI, encrypted at rest on your machine.',
+              href: '/byok',
+            },
+            {
+              meta: 'Local',
+              title: 'Run offline',
+              body: 'Ollama or LM Studio on your own hardware. No keys, no quotas, no internet.',
+              href: '/local',
+            },
+            {
+              meta: 'Models',
+              title: 'Switch models',
+              body: `${MARKETING.models.display} models across ${MARKETING.providers.display} providers, switchable mid-conversation.`,
+              href: '/providers',
+            },
+            {
+              meta: 'Terminal',
+              title: 'Use the CLI',
+              body: 'A Rust-native developer agent: resumable sessions, sandboxed execution, offline-capable.',
+              href: '/cli',
+            },
+            {
+              meta: 'Plans',
+              title: 'See pricing',
+              body: 'Local and BYOK are free. Hosted plans are waitlist-only. Current details live on the pricing page.',
+              href: '/pricing',
+            },
+          ]}
+        />
+
+        <section className="agi-fl-section" aria-labelledby="agi-help-more-title">
+          <p className="agi-fl-eyebrow">More</p>
+          <h2 id="agi-help-more-title" className="agi-fl-h2">
+            Still stuck? Ask a human.
+          </h2>
+          <p className="agi-fl-section-lede">
+            The FAQ covers the why, support covers the what-now, and the inbox covers everything
+            else.
+          </p>
+          <div className="agi-fl-cta-row">
+            <Link href="/faq" className="agi-fl-cta agi-fl-cta--primary">
               Read the FAQ
             </Link>
-            <Link href="/support" className="agi-cta-ghost">
-              Support →
+            <Link href="/support" className="agi-fl-cta agi-fl-cta--secondary">
+              Get Support
             </Link>
-            <a href="mailto:contact@agiworkforce.com" className="agi-cta-ghost">
-              Email us →
+            <a href="mailto:contact@agiworkforce.com" className="agi-fl-cta agi-fl-cta--ghost">
+              Email Us
             </a>
           </div>
         </section>
+
         <MarketingFooter />
       </main>
     </div>

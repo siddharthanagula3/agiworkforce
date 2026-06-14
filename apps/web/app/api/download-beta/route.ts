@@ -35,10 +35,10 @@ const FILE_PATHS: Record<string, string> = {
 };
 
 /**
- * FIX (audit 2026-05-20, §3 — open-redirect): externalUrl flows from
+ * FIX (audit 2026-05-20, §3 · open-redirect): externalUrl flows from
  * `process.env[info.envVar]` straight into `NextResponse.redirect`. The
  * pre-fix code's only check was `!externalUrl.startsWith('/')`, which is a
- * loose "not a same-site relative path" test — any absolute URL would be
+ * loose "not a same-site relative path" test · any absolute URL would be
  * accepted as a 307 redirect target, including attacker-controlled hosts
  * if env-var control were ever achievable (CI compromise, supply-chain,
  * misconfigured staging).
@@ -75,7 +75,7 @@ function isExternalRedirectAllowed(rawUrl: string): boolean {
   if (parsed.protocol !== 'https:') return false;
   if (!EXTERNAL_URL_ALLOWED_HOSTS.has(parsed.hostname)) return false;
   // For github.com, only allow /<trusted-owner>/<trusted-repo>/releases/*
-  // — not a generic GitHub redirect.
+  // · not a generic GitHub redirect.
   if (parsed.hostname === 'github.com') {
     const segments = parsed.pathname.split('/').filter(Boolean);
     if (segments.length < 4) return false;

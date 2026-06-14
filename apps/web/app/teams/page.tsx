@@ -1,16 +1,12 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  LedgerSection,
-} from '../../components/marketing/LandingSections';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+import { FeatureGrid, LedgerSection } from '../../components/marketing/LandingSections';
+import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI for Teams - Shared projects, governance, and BYOK policy',
+  title: 'AGI for Teams: Shared projects, governance, and BYOK policy',
   description:
     'Team workspace controls for AGI: shared projects, admin policy, connector governance, usage visibility, BYOK enforcement, and invite-only managed cloud.',
   alternates: { canonical: 'https://agiworkforce.com/teams' },
@@ -21,20 +17,18 @@ export default function TeamsPage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Team rollout`}
-          title="A shared AI workspace without a single-provider mandate."
-          lede={`Teams need the familiar workflow: chats, files, projects, artifacts, apps, and code. AGI adds model routing and explicit policy around Local, BYOK, and Cloud. ${POSITIONING.trustBoundary}`}
-          primaryCta={{ href: '/contact-sales', label: 'Design a team rollout' }}
-          secondaryCta={{ href: '/business', label: 'Business overview' }}
-          chips={['Shared projects', 'Usage controls', 'Connector policy', 'BYOK enforcement']}
-          panelTitle="Team controls"
-          panelRows={[
-            { k: 'Identity', v: 'Workspace accounts now; SSO/SCIM for enterprise contracts' },
-            { k: 'Projects', v: 'Shared files, instructions, memory, and artifacts' },
-            { k: 'Policy', v: 'Provider, connector, cloud, and data-retention controls' },
-            { k: 'Launch', v: LAUNCH.date },
+
+        <FlagshipHero
+          eyebrow="AGI for teams"
+          titleLines={['Shared work.', 'Visible routes.']}
+          em="Visible routes."
+          lede="Bring chats, files, projects, artifacts, and code into one shared workspace. Explicit policy covers what runs locally, what goes through your own provider keys on Desktop and CLI, and what waits for an AGI Cloud invite."
+          ctas={[
+            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/business', label: 'See the Business Overview' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
           ]}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
         />
 
         <FeatureGrid
@@ -44,34 +38,34 @@ export default function TeamsPage() {
             {
               meta: 'Access',
               title: 'Workspace membership and roles',
-              body: 'Invite team members, separate personal and work spaces, and prepare for enterprise SSO/SCIM when the account needs procurement.',
+              body: 'Invite team members, separate personal and work spaces, and prepare for enterprise SSO/SCIM when procurement needs it.',
             },
             {
               meta: 'Provider policy',
-              title: 'Decide which providers are allowed',
-              body: 'Let a workspace require BYOK, allow approved providers only, or keep sensitive projects local until security review clears cloud use.',
+              title: 'Keep provider routes explicit',
+              body: 'Local, BYOK, and Cloud stay separate, labeled routes for every member. Org-wide provider policy and BYOK enforcement are scoped on enterprise contracts.',
             },
             {
               meta: 'Connectors',
               title: 'Govern apps and MCP tools',
-              body: 'Enable services at the workspace level while keeping individual authentication and per-tool approval boundaries visible.',
+              body: 'Members connect services with individual authentication and per-tool approval boundaries that stay visible. Workspace-level connector policy is scoped on enterprise contracts.',
               href: '/apps',
             },
             {
               meta: 'Knowledge',
               title: 'Shared projects instead of scattered prompts',
-              body: 'Store files, instructions, memory, chats, and artifacts under the workstream so the team does not keep rebuilding context.',
+              body: 'Store files, instructions, memory, chats, and artifacts under the workstream so the team stops rebuilding context.',
               href: '/features/projects',
             },
             {
               meta: 'Usage',
-              title: 'See Local, BYOK, and Cloud usage separately',
-              body: 'Separate AGI-managed spend from provider-paid BYOK and local device work so finance can understand what is happening.',
+              title: 'Keep Local, BYOK, and Cloud spend separate',
+              body: 'Local work costs nothing and BYOK bills go straight to your providers. Managed spend exists only for workspaces invited into AGI Cloud.',
             },
             {
               meta: 'Security',
-              title: 'Audit what models and tools touched',
-              body: 'Capture provider labels, tool calls, approvals, shared chats, artifact publishing, and cloud handoffs for review.',
+              title: 'Know which models and tools touched the work',
+              body: 'Provider labels and tool approvals stay visible in the product. Audit export for review is scoped on enterprise contracts.',
               href: '/trust',
             },
           ]}
@@ -79,7 +73,7 @@ export default function TeamsPage() {
 
         <LedgerSection
           eyebrow="Rollout plan"
-          title="How teams should phase AGI."
+          title="How teams phase AGI in."
           rows={[
             {
               k: 'Phase 1',
@@ -87,11 +81,11 @@ export default function TeamsPage() {
             },
             {
               k: 'Phase 2',
-              v: 'Enable shared projects, apps/connectors, and provider policy for repeat workflows.',
+              v: 'Enable shared projects, apps and connectors, and provider policy for repeat workflows.',
             },
             {
               k: 'Phase 3',
-              v: 'Invite selected users into Cloud for hosted sync, managed compute, and more automated workflows.',
+              v: 'Bring selected users into AGI Cloud by invite for hosted sync and managed compute.',
             },
             {
               k: 'Phase 4',
@@ -100,12 +94,18 @@ export default function TeamsPage() {
           ]}
         />
 
-        <LaunchCta
-          title="Run the team pilot before you buy a cloud bill."
-          body="AGI is designed for the wedge you described: free Local and BYOK adoption first, then invite-only Cloud when users prove demand."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/contact-sales', label: 'Talk to sales' }}
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Pilot the workspace before you buy compute."
+          body="Start the team on free Local and BYOK modes today, then bring selected users into AGI Cloud by invite when access opens."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/contact-sales', label: 'Contact Sales' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
         />
+
         <MarketingFooter />
       </main>
     </div>

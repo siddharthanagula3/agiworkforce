@@ -28,18 +28,18 @@ https://agiworkforce.com/mobile
 
 ---
 
-Hi HN. I am the founder of AGI Automation LLC and today we are launching AGI Mobile — a free Local AI assistant for iOS and Android, with Cloud by invite.
+Hi HN. I am the founder of AGI Automation LLC and we are preparing AGI Mobile, a free Local Mode assistant for iOS and Android, with Cloud by invite.
 
 **What it does**
 
-It is a chat assistant (text, image Q&A, voice, OCR, translate, memory, projects) with two explicit mobile routes: Local mode and Cloud by invite. Local mode works in airplane mode and is not silently routed to Cloud.
+It is a chat assistant with Local Mode, memory, projects, artifacts preview, voice input where supported, and Cloud by invite. Local mode works in airplane mode when the selected local model is available and is not silently routed to Cloud.
 
 **On-device AI stack**
 
-- iOS: Apple Foundation Models on iPhone 15 Pro and later. Executorch / llama.rn on older devices. Universal fallback: Qwen3-4B.
-- Android: Gemini Nano via AICore on supported flagships (Pixel 9+, Galaxy S26+). Gemma + LiteRT (Google's canonical path for non-Nano Android) on everything else with 4 GB+ RAM. Universal fallback: Qwen3-4B.
+- iOS: local model availability is device-dependent and shown in the model picker.
+- Android: local model availability is device-dependent and shown in the model picker.
 
-The Qwen3-4B fallback is what makes this work on mid-range Android — Redmi Note 13, Vivo Y200, and similar. Those devices can not run Gemini Nano. Gemma + LiteRT covers most of them. Qwen3-4B covers the rest.
+The key product requirement is honest state: installed, downloadable, unavailable, runtime-offline, and Cloud invite-gated should all be visible.
 
 **Why we built it this way**
 
@@ -47,12 +47,11 @@ Every AI assistant I used forced one default cloud path. I wanted mobile users t
 
 **Tech stack**
 
-- Expo 53 + React Native 0.83.6
+- Expo 55 + React Native 0.83.6
 - expo-sqlite (conversation persistence)
 - MMKV + expo-secure-store (keys and preferences)
-- llama.rn (executorch-backed on-device inference)
-- react-native-google-ai-edge (Gemma + LiteRT)
-- Sentry (crash reporting, strings stripped >40 chars, no session replay)
+- local model runtimes where supported
+- crash diagnostics and analytics are separated from conversation content
 
 **What is not in v1**
 
@@ -60,11 +59,11 @@ Cloud models, cross-device sync, and team features are invite-gated. Local is th
 
 **What I would like feedback on**
 
-1. The inference latency on Android mid-range. We average around 12 tokens/second on Qwen3-4B on Redmi Note 13. Is that good enough? What is your threshold?
-2. The memory design. We persist a rolling summary of past conversations and inject it into context. Interested whether HN readers think that is the right abstraction or whether they want something more explicit.
-3. On-device models on iOS. We are using llama.rn (executorch backend) for non-Pro iPhones. If you have built with Apple Foundation Models and have opinions on when to prefer AFM vs llama.rn on Pro devices, I would like to hear them.
+1. The local model state UX. Is it clear enough when a model is installed, needs download, is unavailable, or requires Cloud invite access?
+2. The memory design. Do users want explicit local memory controls, project-scoped memory, or automatic summaries by default?
+3. On-device model routing. What runtime/device-state labels make the tradeoff clear without sounding technical?
 
-App Store and Google Play: agiworkforce.com/mobile
+Mobile page: agiworkforce.com/mobile
 
 Happy to answer technical questions.
 
@@ -73,7 +72,7 @@ Happy to answer technical questions.
 ## Backup title (if primary is rejected)
 
 ```
-Show HN: Free on-device AI for Android mid-range phones (Gemma+LiteRT+Qwen3)
+Show HN: AGI Mobile shows Local, downloadable, unavailable, and Cloud routes
 ```
 
 ---

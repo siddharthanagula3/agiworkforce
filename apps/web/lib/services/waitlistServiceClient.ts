@@ -2,7 +2,7 @@
  * Client-side waitlist and invite-code service.
  *
  * This file is the browser-safe companion to waitlistService.ts (server-only).
- * Routes through active Next.js API endpoints — direct browser database access removed.
+ * Routes through active Next.js API endpoints · direct browser database access removed.
  */
 
 import type { InviteCodeError } from '@/components/cloud-bridge/types';
@@ -88,11 +88,46 @@ export async function redeemInviteCode(code: string, source: string): Promise<Re
 }
 
 /**
+ * Anonymous waitlist signup via /api/waitlist/public.
+ *
+ * Used by the public marketing site (waitlist modal, hero CTAs). Unlike
+ * joinWaitlist below, this does NOT require a signed-in Clerk session ·
+ * the server attaches the user id opportunistically when one exists.
+ */
+export async function joinPublicWaitlist(entry: WaitlistEntry): Promise<JoinWaitlistResult> {
+  try {
+    const allowedSources = new Set(['website', 'byok', 'sync', 'billing', 'mobile', 'other']);
+    const source =
+      entry.referralSource && allowedSources.has(entry.referralSource)
+        ? entry.referralSource
+        : 'website';
+
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    const res = await fetch('/api/waitlist/public', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: entry.email.toLowerCase().trim(),
+        source,
+      }),
+    });
+
+    if (!res.ok) {
+      return { success: false, error: 'Failed to join waitlist. Please try again.' };
+    }
+
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Failed to join waitlist. Please try again.' };
+  }
+}
+
+/**
  * Waitlist signup via /api/waitlist/cloud-managed.
  */
 export async function joinWaitlist(entry: WaitlistEntry): Promise<JoinWaitlistResult> {
   try {
-    const allowedSources = new Set(['byok', 'sync', 'billing', 'other']);
+    const allowedSources = new Set(['byok', 'sync', 'billing', 'mobile', 'other']);
     const source =
       entry.referralSource && allowedSources.has(entry.referralSource)
         ? entry.referralSource

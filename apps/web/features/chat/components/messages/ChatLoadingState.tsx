@@ -6,7 +6,7 @@ import { MessageBubbleSkeleton } from './MessageBubbleSkeleton';
 interface ChatLoadingStateProps {
   /**
    * Number of skeleton message bubbles to display.
-   * Defaults to 4 — a balanced visual weight that covers most viewports.
+   * Defaults to 4 · a balanced visual weight that covers most viewports.
    */
   count?: number;
   /**
@@ -22,8 +22,8 @@ interface ChatLoadingStateProps {
  * conversation while chat history is loading from the database.
  *
  * Pattern (repeating pair):
- *   1. user message   — right-aligned, 1 line (short query)
- *   2. assistant msg  — left-aligned,  2-3 lines (longer reply)
+ *   1. user message   · right-aligned, 1 line (short query)
+ *   2. assistant msg  · left-aligned,  2-3 lines (longer reply)
  *
  * Matches the layout container used by MessageListNew (flex h-full flex-col
  * overflow-y-auto with flex-1 spacer pushing messages to bottom).

@@ -1,5 +1,6 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
-import { NextRequest, NextResponse } from 'next/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import type { NextMiddleware, NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /**
  * Build a per-request Content-Security-Policy string with a nonce.
@@ -42,7 +43,7 @@ function buildCspWithNonce(nonce: string): string {
     .trim();
 }
 
-export const proxy = clerkMiddleware((_auth, request: NextRequest) => {
+function buildCspResponse(request: NextRequest): NextResponse {
   // Generate a cryptographically-secure per-request nonce
   const nonce = btoa(crypto.randomUUID());
   const csp = buildCspWithNonce(nonce);
@@ -59,7 +60,68 @@ export const proxy = clerkMiddleware((_auth, request: NextRequest) => {
   response.headers.set('Content-Security-Policy', csp);
 
   return response;
+}
+
+function hasBrowserSessionCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some(({ name }) => {
+    return name === '__session' || name === '__client' || name.startsWith('__clerk');
+  });
+}
+
+function buildSignedOutRedirect(request: NextRequest): NextResponse {
+  const requestedPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+  const redirectUrl = new URL('/login', request.url);
+  redirectUrl.searchParams.set('redirectTo', requestedPath);
+  const response = NextResponse.redirect(redirectUrl);
+  response.headers.set('Content-Security-Policy', buildCspWithNonce(btoa(crypto.randomUUID())));
+  return response;
+}
+
+const isProtectedAppRoute = createRouteMatcher([
+  '/chat(.*)',
+  '/chats(.*)',
+  '/settings(.*)',
+  '/billing(.*)',
+  '/admin(.*)',
+]);
+
+const isPublicApiRoute = createRouteMatcher([
+  '/api/health',
+  '/api/download(.*)',
+  '/api/download-beta(.*)',
+  '/api/models',
+  '/api/waitlist(.*)',
+]);
+
+const isClerkSessionRoute = createRouteMatcher([
+  '/__clerk/(.*)',
+  '/chat(.*)',
+  '/chats(.*)',
+  '/settings(.*)',
+  '/billing(.*)',
+  '/admin(.*)',
+  '/api/(.*)',
+]);
+
+const clerkAwareProxy = clerkMiddleware((_auth, request: NextRequest) => {
+  return buildCspResponse(request);
 });
+
+export const proxy: NextMiddleware = (request, event) => {
+  if (isProtectedAppRoute(request) && !hasBrowserSessionCookie(request)) {
+    return buildSignedOutRedirect(request);
+  }
+
+  if (isPublicApiRoute(request)) {
+    return buildCspResponse(request);
+  }
+
+  if (isClerkSessionRoute(request)) {
+    return clerkAwareProxy(request, event);
+  }
+
+  return buildCspResponse(request);
+};
 
 export const config = {
   matcher: [

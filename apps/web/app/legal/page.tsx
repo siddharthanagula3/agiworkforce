@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Legal',
   description:
-    'Index of legal documents — terms, privacy, DPA, SLA, subprocessors, refund policy, accessibility, and trust posture.',
+    'Index of legal documents: terms, privacy, DPA, SLA, subprocessors, refund policy, accessibility, and trust posture.',
   alternates: { canonical: 'https://agiworkforce.com/legal' },
 };
 
@@ -51,7 +51,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/security',
     label: 'Security',
-    body: 'Operational details — encryption, sandboxing, audit trails.',
+    body: 'Operational details: encryption, sandboxing, audit trails.',
   },
 ];
 

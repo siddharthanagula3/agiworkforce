@@ -1,9 +1,9 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Pricing Plans',
+  title: 'Pricing | Free Local & BYOK, AGI Cloud by Invite',
   description:
-    'AGI pricing: local and BYOK stay free, web trial includes a small Auto Economy cap, and higher hosted cloud capacity opens through account-bound request access.',
+    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, the web trial includes a small Auto Economy cap, and hosted AGI Cloud plans open by waitlist invite.',
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -13,9 +13,9 @@ export const metadata: Metadata = {
     'AI subscription',
   ],
   openGraph: {
-    title: 'Pricing Plans',
+    title: 'Pricing | Free Local & BYOK, AGI Cloud by Invite',
     description:
-      'Local and BYOK first, a capped hosted web trial, and request access for higher AGI Cloud capacity.',
+      'Local and BYOK stay free forever, the hosted web trial is capped, and AGI Cloud plans open by waitlist invite.',
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -23,15 +23,15 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'AGI Pricing Plans',
+        alt: 'AGI pricing plans',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pricing Plans',
+    title: 'Pricing | Free Local & BYOK, AGI Cloud by Invite',
     description:
-      'Local and BYOK first, a capped hosted web trial, and request access for higher AGI Cloud capacity.',
+      'Local and BYOK stay free forever, the hosted web trial is capped, and AGI Cloud plans open by waitlist invite.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

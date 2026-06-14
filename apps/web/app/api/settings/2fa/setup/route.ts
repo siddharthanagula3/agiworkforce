@@ -6,7 +6,7 @@
  * Returns: { secret, otpauth_url, backup_codes }
  *
  * The QR code image is rendered client-side from the returned otpauth_url.
- * Backup codes are returned in plaintext once — they are stored as SHA-256
+ * Backup codes are returned in plaintext once · they are stored as SHA-256
  * hashes and cannot be retrieved again.
  *
  * 2FA is NOT enabled until the user calls POST /api/settings/2fa/verify with
@@ -48,7 +48,7 @@ async function handleSetup2FA(request: NextRequest) {
   // Hash backup codes for storage
   const hashedCodes = await Promise.all(backupCodes.map((c) => hashBackupCode(c)));
 
-  // Encrypt the TOTP secret for storage — will throw if TOTP_ENCRYPTION_KEY is not set
+  // Encrypt the TOTP secret for storage · will throw if TOTP_ENCRYPTION_KEY is not set
   const encryptedSecret = await encryptTOTPSecret(secret);
 
   // Upsert into DB (enabled=false until /verify is called)

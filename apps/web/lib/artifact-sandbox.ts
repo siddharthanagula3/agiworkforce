@@ -12,7 +12,7 @@
  *   that origin. Components load `<iframe src="${sandbox}/" sandbox="allow-scripts">`
  *   and ship the artifact via `postMessage`.
  * - If unset, `getSandboxOrigin()` returns `null`. Components fall back to
- *   `<iframe sandbox="allow-scripts" srcDoc=...>` — same-origin but without
+ *   `<iframe sandbox="allow-scripts" srcDoc=...>` · same-origin but without
  *   `allow-same-origin`, which still closes the dual-flag bypass.
  *
  * See `apps/sandbox/` for the renderer and its CSP envelope.
@@ -32,7 +32,7 @@ export interface ArtifactRenderPayload {
   /** Plain text for kind=text / markdown / code rendering. */
   text?: string;
   /**
-   * Opt-in script-execution flag for kind=html. Default false — inline
+   * Opt-in script-execution flag for kind=html. Default false · inline
    * `<script>` tags in `html` do NOT execute unless the caller explicitly
    * marks the artifact as needing them.
    */
@@ -85,7 +85,7 @@ export function isFromSandbox(event: MessageEvent): boolean {
 
 /**
  * Build the iframe URL for the sandbox. Returns `null` if the sandbox
- * isn't configured — callers should then fall back to `srcDoc`.
+ * isn't configured · callers should then fall back to `srcDoc`.
  */
 export function buildSandboxIframeUrl(): string | null {
   const origin = getSandboxOrigin();
@@ -103,7 +103,7 @@ export function postRenderToSandbox(
 ): void {
   const origin = getSandboxOrigin();
   if (!origin) {
-    throw new Error('Sandbox origin not configured — cannot postMessage');
+    throw new Error('Sandbox origin not configured · cannot postMessage');
   }
   const target = iframe.contentWindow;
   if (!target) return;
