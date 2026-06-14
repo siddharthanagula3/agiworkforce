@@ -1518,6 +1518,7 @@ pub async fn run_main() -> Result<()> {
                     normalized_cli_options.allowed_tools.clone(),
                     normalized_cli_options.disallowed_tools.clone(),
                     normalized_cli_options.mcp_config_load_options(),
+                    None,
                 )
                 .await
             }
@@ -1550,6 +1551,7 @@ pub async fn run_main() -> Result<()> {
                     normalized_cli_options.allowed_tools.clone(),
                     normalized_cli_options.disallowed_tools.clone(),
                     normalized_cli_options.mcp_config_load_options(),
+                    None,
                 )
                 .await
             }
@@ -2432,6 +2434,7 @@ pub async fn run_main() -> Result<()> {
             cli.max_budget_usd,
             cli.session_id_override.clone(),
             cli.json_events,
+            cli.agent.clone(),
         )
         .await;
     }
@@ -2572,6 +2575,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
+            cli.agent.clone(),
         )
         .await
     } else {
@@ -2596,6 +2600,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
+            cli.agent.clone(),
         )
         .await
     }
@@ -2809,6 +2814,7 @@ pub async fn run_oneshot(
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
     json_events: bool,
+    agent_name: Option<String>,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new_checked(
         model,
@@ -2835,6 +2841,17 @@ pub async fn run_oneshot(
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
+    }
+    // Wire --agent: load the named agent definition and apply overrides to the session.
+    if let Some(ref name) = agent_name {
+        match agents::find_agent(name) {
+            Some(agent_def) => {
+                agent_def.apply_to_session(&mut session);
+            }
+            None => {
+                eprintln!("Warning: agent '{}' not found. Continuing without agent.", name);
+            }
+        }
     }
     session.enable_managed_session()?;
     // Wire --session-id: override the auto-generated session UUID with the
