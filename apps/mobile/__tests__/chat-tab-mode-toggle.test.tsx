@@ -106,11 +106,17 @@ jest.mock('lucide-react-native', () => {
   return {
     Cloud: Icon,
     Cpu: Icon,
+    Download: Icon,
     Menu: Icon,
     Plus: Icon,
     SquarePen: Icon,
   };
 });
+
+jest.mock('@/src/features/model-picker/installStore', () => ({
+  useModelInstallStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ installedModelIds: [], readySystemModelIds: [], jobs: {} }),
+}));
 
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -133,17 +139,6 @@ import { DEFAULT_LOCAL_MODEL_ID } from '../src/features/model-picker/service';
 describe('Chat tab mode toggle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    useWaitlistStore.setState({
-      joined: false,
-      email: undefined,
-      country: undefined,
-      rank: undefined,
-      joinedAt: undefined,
-      cloudUnlocked: true,
-      inviteId: 'mobile-alpha-tester',
-      inviteCode: 'ALPHATESTER',
-      cloudUnlockedAt: new Date().toISOString(),
-    });
     useChatAppModeStore.setState({ appMode: 'local' });
     useModelStore.setState({
       selectedModel: DEFAULT_LOCAL_MODEL_ID,
@@ -155,7 +150,56 @@ describe('Chat tab mode toggle', () => {
     });
   });
 
-  it('keeps Local selected and opens invite when mobile Cloud chat is disabled', async () => {
+  it('switches to Cloud and hides project bar when cloud is unlocked', async () => {
+    // Set up cloud-unlocked state (invite accepted).
+    useWaitlistStore.setState({
+      joined: true,
+      email: 'tester@example.com',
+      country: 'US',
+      rank: 1,
+      joinedAt: new Date().toISOString(),
+      cloudUnlocked: true,
+      inviteId: 'mobile-alpha-tester',
+      inviteCode: 'ALPHATESTER',
+      cloudUnlockedAt: new Date().toISOString(),
+    });
+
+    const { getByTestId, queryByTestId } = render(<ChatTabScreen />);
+
+    // ProjectSelectorBar is visible in Local mode.
+    expect(queryByTestId('project-selector-bar')).toBeTruthy();
+    expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
+    expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(false);
+
+    // Tap Cloud — cloud is unlocked so it should switch (no invite modal).
+    fireEvent.press(getByTestId('chat.mode-toggle.cloud'));
+
+    await waitFor(() => {
+      expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(true);
+    });
+
+    expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(false);
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    // ProjectSelectorBar is hidden in Cloud mode.
+    expect(queryByTestId('project-selector-bar')).toBeNull();
+    // No invite/waitlist modal needed since cloud is already unlocked.
+    expect(queryByTestId('invite-code-modal')).toBeNull();
+  });
+
+  it('keeps Local selected and shows invite modal when cloud is not unlocked', async () => {
+    // Cloud not unlocked — invite gate should open.
+    useWaitlistStore.setState({
+      joined: false,
+      email: undefined,
+      country: undefined,
+      rank: undefined,
+      joinedAt: undefined,
+      cloudUnlocked: false,
+      inviteId: undefined,
+      inviteCode: undefined,
+      cloudUnlockedAt: undefined,
+    });
+
     const { getByTestId, queryByTestId } = render(<ChatTabScreen />);
     expect(queryByTestId('project-selector-bar')).toBeTruthy();
 
