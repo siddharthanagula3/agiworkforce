@@ -21,7 +21,8 @@
  * because the closure captured by runWithContext() holds the entire context object
  * alive until all .then() callbacks settle.
  *
- * Reference: agentContext.ts:24-179 from ~/Desktop/reference/src/utils/
+ * Pattern reference: prior local reference research on per-command agent context.
+ * This is an AGI-owned implementation; do not copy reference code.
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks';

@@ -60,7 +60,6 @@ const uiDirectIoBaseline = new Set([
   'apps/mobile/app/(app)/usage.tsx',
   'apps/mobile/app/(app)/profile/index.tsx',
   'apps/mobile/app/(app)/companion/index.tsx',
-  'apps/mobile/src/features/auth/components/OAuthButtons.tsx',
   'apps/mobile/src/features/feedback/index.tsx',
 ]);
 

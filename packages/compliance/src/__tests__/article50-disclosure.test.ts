@@ -20,8 +20,10 @@ describe('Article50Disclosure — compose', () => {
     // consent flow + adds explicit chatbot label" without double-prompting.
     expect(copy.title).toBe('Before you start');
     expect(copy.summary).toContain('You are interacting with an AI system');
+    expect(copy.summary).toContain('Responses can be inaccurate');
     expect(copy.summary).toContain('Anthropic, OpenAI, Google');
     expect(copy.summary).toContain('OFF by default');
+    expect(copy.acceptLabel).toBe('I understand, continue');
   });
 
   it('omits the managed-cloud sentence when the surface is BYOK-only', () => {
