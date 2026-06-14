@@ -6,6 +6,7 @@ import {
   PROVIDER_DISPLAY,
   CAPABILITY_LABEL,
   getModelMetadataById,
+  getPickerModelTier,
   type ProviderId,
   type CapabilityTier,
 } from '@agiworkforce/types';
@@ -1569,6 +1570,22 @@ function injectStyles(): void {
     }
     .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent); opacity: 0.7; }
     .sp-model-option:hover .sp-model-option-sublabel { color: var(--agi-ext-text-muted); }
+
+    /* ── Free-tier model gating: Upgrade badge on premium models ── */
+    .sp-model-option.premium-gated { opacity: 0.75; }
+    .sp-model-option.premium-gated:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); opacity: 1; cursor: pointer; }
+    .sp-model-upgrade-tag {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fff;
+      background: linear-gradient(90deg, #f59e0b, #f97316);
+      border-radius: 3px;
+      padding: 1px 5px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
 
     /* "Best (auto)" option — visually distinct row */
     .sp-model-option-auto {
@@ -3414,10 +3431,20 @@ function buildUI(): void {
    */
   function buildModelOptionRow(m: SidePanelModelOption, isSelected: boolean): HTMLElement {
     const isAuto = m.value === 'auto';
+
+    // FREE-TIER MODEL GATING:
+    // Economy models (in tierAllowedModels.economy) are selectable by all users.
+    // Pro-additions and flagship models are visible but gated with an "Upgrade"
+    // badge. Clicking a gated model opens the pricing/waitlist page instead of
+    // selecting the model. The "auto" option is always freely selectable.
+    const pickerTier = isAuto ? 'economy' : getPickerModelTier(m.value);
+    const isPremiumGated = !isAuto && (pickerTier === 'balanced' || pickerTier === 'premium');
+
     const classes = [
       'sp-model-option',
       isSelected ? 'selected' : '',
       isAuto ? 'sp-model-option-auto' : '',
+      isPremiumGated ? 'premium-gated' : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -3460,17 +3487,28 @@ function buildUI(): void {
     }
     opt.appendChild(textBlock);
 
-    // Checkmark
-    opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
-
-    opt.addEventListener('click', () => {
-      currentModelValue = m.value;
-      chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
-      updateModelBadge(m.value);
-      renderModelDropdown();
-      modelDropdownEl.classList.remove('open');
-      modelSelectorBtn.classList.remove('open');
-    });
+    if (isPremiumGated) {
+      // Show "Upgrade" badge instead of checkmark — clicking opens pricing page.
+      opt.appendChild(el('span', { class: 'sp-model-upgrade-tag' }, 'Upgrade'));
+      opt.addEventListener('click', () => {
+        // Close dropdown
+        modelDropdownEl.classList.remove('open');
+        modelSelectorBtn.classList.remove('open');
+        // Navigate to pricing/waitlist page
+        chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' }).catch(() => {});
+      });
+    } else {
+      // Checkmark for economy/auto (selectable) models
+      opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
+      opt.addEventListener('click', () => {
+        currentModelValue = m.value;
+        chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
+        updateModelBadge(m.value);
+        renderModelDropdown();
+        modelDropdownEl.classList.remove('open');
+        modelSelectorBtn.classList.remove('open');
+      });
+    }
 
     return opt;
   }
@@ -3577,7 +3615,16 @@ function buildUI(): void {
     if (chrome.runtime.lastError) return;
     const stored = result['agi_model'] as string | undefined;
     if (stored) {
-      currentModelValue = normalizeModelId(stored) ?? stored;
+      const resolved = normalizeModelId(stored) ?? stored;
+      // FREE-TIER GATE: if the previously stored model is premium-gated, reset
+      // to 'auto' so the user cannot bypass the tier check via stale storage.
+      const storedTier = getPickerModelTier(resolved);
+      if (storedTier === 'balanced' || storedTier === 'premium') {
+        currentModelValue = 'auto';
+        chrome.storage.local.remove('agi_model').catch(() => {});
+      } else {
+        currentModelValue = resolved;
+      }
     }
     const storedThinking = result['agi_thinking_enabled'] as boolean | undefined;
     if (storedThinking !== undefined) {
