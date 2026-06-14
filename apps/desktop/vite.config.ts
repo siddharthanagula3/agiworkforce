@@ -22,7 +22,12 @@ const DEFAULT_DEV_PORT = 5173;
 export default defineConfig(async ({ mode }: ConfigEnv) => {
   // Load environment variables based on mode (development, production, test)
   const env = loadEnv(mode, process.cwd(), ['VITE_', 'TAURI_']);
-  const isWebBuild = env['VITE_BUILD_TARGET'] === 'web';
+  // loadEnv only reads .env files; honor a VITE_BUILD_TARGET passed as a process
+  // env var too (CI sets it as a step env; `build:cloud` sets it inline). Without
+  // this, `build:web` falls through to the native safari14 target and esbuild
+  // fails lowering destructuring (368 errors).
+  const isWebBuild =
+    env['VITE_BUILD_TARGET'] === 'web' || process.env['VITE_BUILD_TARGET'] === 'web';
 
   // Determine port configuration
   const requestedPort = Number(env['VITE_DEV_PORT']) || DEFAULT_DEV_PORT;

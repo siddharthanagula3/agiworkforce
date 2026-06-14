@@ -377,6 +377,10 @@ export const GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>([
   'https://api.agiworkforce.com',
   'https://gateway.agiworkforce.com',
   'https://staging-api.agiworkforce.com',
+  // Web app origin: hosts the Next.js /api/llm/v1/chat/completions route that
+  // supports free-tier users (reserveFreeTrialPrompt). The Express gateway at
+  // api.agiworkforce.com blocks free-tier users; this origin does not.
+  'https://agiworkforce.com',
 ]);
 
 /**

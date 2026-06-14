@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from 'react';
 import { ProjectGallery, ProjectCard, useChatProjectStore } from '@agiworkforce/unified-chat';
 import type { Project } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
 import { useProjectStore } from '@features/projects/stores/project-store';
 
@@ -86,6 +88,24 @@ export default function ProjectsPage() {
           gap: 24,
         }}
       >
+        {/* Back navigation */}
+        <div style={{ marginBottom: 8 }}>
+          <Link
+            href="/chat"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 13,
+              color: 'var(--agi-ink-2)',
+              textDecoration: 'none',
+            }}
+          >
+            <ArrowLeft style={{ width: 14, height: 14 }} />
+            Back to Chat
+          </Link>
+        </div>
+
         {/* Page header with sort control */}
         <div
           style={{

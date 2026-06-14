@@ -8,7 +8,13 @@ import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTr
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@shared/ui/switch';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@shared/ui/tooltip';
-import { EFFORT_LABEL, PROVIDER_DISPLAY, type Effort, type ProviderId } from '@agiworkforce/types';
+import {
+  EFFORT_LABEL,
+  PROVIDER_DISPLAY,
+  type Effort,
+  type ProviderId,
+  getPickerModelTier,
+} from '@agiworkforce/types';
 import { useBillingStore } from '@/stores/unified/auth';
 import {
   getAllowedAutoModesForTier,
@@ -233,7 +239,12 @@ function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string; size?:
   );
 }
 
-/** Renders a single model row. Locked rows show an inline "Upgrade" text link instead of an amber pill. */
+/**
+ * Renders a single model row.
+ * Locked rows are fully clickable and open the upgrade dialog; they show a
+ * styled "Upgrade" badge so the affordance is obvious. Economy (free) rows
+ * behave normally.
+ */
 function ModelRow({
   model,
   isSelected,
@@ -247,30 +258,48 @@ function ModelRow({
   onSelect?: () => void;
   onUpgradeRequest?: () => void;
 }) {
+  // Derive which picker tier this model belongs to so we can label the badge
+  // accurately (Balanced vs Premium) without hard-coding model IDs.
+  const pickerTier = isLocked ? getPickerModelTier(model.id) : 'economy';
+
+  const handleLockedClick = () => {
+    onUpgradeRequest?.();
+  };
+
   const rowContent = (
     <div
       className={[
         'flex items-center gap-2 rounded px-3 py-1.5 transition-colors',
-        isLocked ? 'cursor-default' : 'cursor-pointer hover:bg-muted/60',
+        isLocked
+          ? 'cursor-pointer hover:bg-muted/40 opacity-80 hover:opacity-100'
+          : 'cursor-pointer hover:bg-muted/60',
         isSelected ? 'bg-muted/40' : '',
       ].join(' ')}
-      onClick={isLocked ? undefined : onSelect}
-      role={isLocked ? undefined : 'button'}
-      tabIndex={isLocked ? -1 : 0}
-      onKeyDown={
-        isLocked
-          ? undefined
-          : (e) => {
-              if (e.key === 'Enter' || e.key === ' ') onSelect?.();
-            }
-      }
+      onClick={isLocked ? handleLockedClick : onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (isLocked) {
+            handleLockedClick();
+          } else {
+            onSelect?.();
+          }
+        }
+      }}
+      aria-label={isLocked ? `${model.name} - requires upgrade` : model.name}
     >
       <ProviderLogo providerKey={model.providerKey} size={14} />
       <span className="min-w-0 flex-1">
         <span
           className={[
             'block truncate text-sm',
-            isSelected ? 'font-medium text-foreground' : 'text-foreground/80',
+            isLocked
+              ? 'text-foreground/60'
+              : isSelected
+                ? 'font-medium text-foreground'
+                : 'text-foreground/80',
           ].join(' ')}
         >
           {model.name}
@@ -280,17 +309,12 @@ function ModelRow({
         )}
       </span>
       {isLocked && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onUpgradeRequest?.();
-          }}
-          className="ml-auto shrink-0 text-xs text-primary hover:underline"
-          aria-label="Upgrade to unlock this model"
+        <span
+          className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+          aria-label="Requires upgrade"
         >
-          Upgrade
-        </button>
+          {pickerTier === 'premium' ? 'Pro' : 'Upgrade'}
+        </span>
       )}
       {isSelected && !isLocked && (
         <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />

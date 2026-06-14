@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { auth } from '@clerk/nextjs/server';
 
 // Lazily get CSRF_SECRET to avoid errors during build/static generation.
@@ -28,7 +28,20 @@ function getCsrfSecret(): string {
   }
   const secret = process.env['CSRF_SECRET'];
   if (!secret) {
-    throw new Error('CSRF_SECRET environment variable is required');
+    // CSRF_SECRET is not set. Log a server-side warning and return a per-process
+    // random sentinel so that CSRF verification always fails for non-Bearer
+    // requests (a clean 403) rather than crashing the handler with a 500.
+    // Bearer-authenticated requests are already bypassed before this is called.
+    // Operators must set CSRF_SECRET in production to secure cookie-session flows.
+    console.error(
+      '[csrf] CRITICAL: CSRF_SECRET environment variable is not set. ' +
+        'Cookie-session CSRF protection is DISABLED. ' +
+        'Set CSRF_SECRET (≥32 bytes) in your Vercel/environment config. ' +
+        'Bearer-authenticated requests (web app) are unaffected.',
+    );
+    // Sentinel: random 64-char hex that never matches any real token.
+    cachedSecret = randomBytes(32).toString('hex');
+    return cachedSecret;
   }
   assertSufficientEntropy('CSRF_SECRET', secret);
   cachedSecret = secret;
