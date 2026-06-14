@@ -2,13 +2,15 @@
 // Markdown rendering with syntax highlighting
 
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::sync::OnceLock;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{Theme, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
+
+use crate::tui::terminal_palette::{rgb_color, ui_accent, ui_muted, ui_success};
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 static THEME: OnceLock<Theme> = OnceLock::new();
@@ -65,7 +67,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 };
                 lines.push(Line::from(Span::styled(
                     format!("    ┌─ {lang_display} ─"),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(ui_muted()),
                 )));
             }
             Event::End(TagEnd::CodeBlock) => {
@@ -74,7 +76,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 lines.extend(highlighted);
                 lines.push(Line::from(Span::styled(
                     "    └──────────",
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(ui_muted()),
                 )));
                 in_code_block = false;
             }
@@ -87,14 +89,12 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 // Style the heading
                 let style = match heading_level {
                     1 => Style::default()
-                        .fg(Color::Cyan)
+                        .fg(ui_accent())
                         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
                     2 => Style::default()
-                        .fg(Color::Cyan)
+                        .fg(ui_accent())
                         .add_modifier(Modifier::BOLD),
-                    _ => Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::ITALIC),
+                    _ => Style::default().add_modifier(Modifier::ITALIC),
                 };
                 let prefix = "#".repeat(heading_level as usize);
                 let heading_text: String = current_spans
@@ -121,7 +121,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             Event::Code(code) => {
                 current_spans.push(Span::styled(
                     code.to_string(),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(ui_accent()),
                 ));
             }
             Event::Start(Tag::Link { .. }) => {
@@ -148,7 +148,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 } else {
                     "    • ".to_string()
                 };
-                current_spans.push(Span::styled(bullet, Style::default().fg(Color::LightBlue)));
+                current_spans.push(Span::styled(bullet, Style::default().fg(ui_accent())));
             }
             Event::End(TagEnd::Item) => {
                 flush_line(&mut lines, &mut current_spans);
@@ -180,14 +180,14 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                         Style::default().add_modifier(Modifier::ITALIC)
                     } else if in_link {
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(ui_accent())
                             .add_modifier(Modifier::UNDERLINED)
                     } else if in_blockquote {
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(ui_success())
                             .add_modifier(Modifier::ITALIC)
                     } else {
-                        Style::default().fg(Color::White)
+                        Style::default()
                     };
 
                     let prefix = if in_blockquote && current_spans.is_empty() {
@@ -201,7 +201,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                     if !prefix.is_empty() {
                         current_spans.push(Span::styled(
                             prefix.to_string(),
-                            Style::default().fg(Color::DarkGray),
+                            Style::default().fg(ui_muted()),
                         ));
                     }
                     current_spans.push(Span::styled(text.to_string(), style));
@@ -218,7 +218,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 flush_line(&mut lines, &mut current_spans);
                 lines.push(Line::from(Span::styled(
                     "    ────────────────────────────────",
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(ui_muted()),
                 )));
             }
             _ => {}
@@ -256,10 +256,11 @@ fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
         match h.highlight_line(line_text, ss) {
             Ok(ranges) => {
                 let mut spans: Vec<Span<'static>> = Vec::new();
-                spans.push(Span::styled("    │ ", Style::default().fg(Color::DarkGray)));
+                spans.push(Span::styled("    │ ", Style::default().fg(ui_muted())));
 
                 for (style, text) in ranges {
-                    let fg = Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b);
+                    let fg =
+                        rgb_color((style.foreground.r, style.foreground.g, style.foreground.b));
                     let mut ratatui_style = Style::default().fg(fg);
                     if style
                         .font_style
@@ -284,11 +285,8 @@ fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
             Err(_) => {
                 // Fallback: plain text
                 result.push(Line::from(vec![
-                    Span::styled("    │ ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(
-                        line_text.trim_end().to_string(),
-                        Style::default().fg(Color::White),
-                    ),
+                    Span::styled("    │ ", Style::default().fg(ui_muted())),
+                    Span::styled(line_text.trim_end().to_string(), Style::default()),
                 ]));
             }
         }

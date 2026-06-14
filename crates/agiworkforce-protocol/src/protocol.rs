@@ -849,11 +849,19 @@ impl InterAgentCommunication {
     }
 
     pub fn to_response_input_item(&self) -> ResponseInputItem {
+        let text = serde_json::to_string(self).unwrap_or_else(|e| {
+            // Serializing this struct (only AgentPath/Vec/String/bool fields)
+            // should never fail. If it ever does, log loudly so we do not
+            // silently inject an empty inter-agent message into model history.
+            error!(
+                "failed to serialize InterAgentCommunication ({} -> {}): {e}",
+                self.author, self.recipient
+            );
+            String::new()
+        });
         ResponseInputItem::Message {
             role: "assistant".to_string(),
-            content: vec![ContentItem::OutputText {
-                text: serde_json::to_string(self).unwrap_or_default(),
-            }],
+            content: vec![ContentItem::OutputText { text }],
             phase: Some(MessagePhase::Commentary),
         }
     }
@@ -1249,7 +1257,18 @@ impl SandboxPolicy {
     }
 
     pub fn has_full_disk_read_access(&self) -> bool {
-        true
+        match self {
+            SandboxPolicy::DangerFullAccess => true,
+            // An external sandbox manages its own read scope; treat as full.
+            SandboxPolicy::ExternalSandbox { .. } => true,
+            // Honor a Restricted read configuration instead of failing open: a
+            // read-restricted policy must NOT report full disk read access, or
+            // consumers gating on this method silently skip read enforcement.
+            SandboxPolicy::ReadOnly { access, .. } => access.has_full_disk_read_access(),
+            SandboxPolicy::WorkspaceWrite {
+                read_only_access, ..
+            } => read_only_access.has_full_disk_read_access(),
+        }
     }
 
     pub fn has_full_disk_write_access(&self) -> bool {
@@ -1290,7 +1309,9 @@ impl SandboxPolicy {
 
                 // Always include defaults: cwd, /tmp (if present on Unix), and
                 // on macOS, the per-user TMPDIR unless explicitly excluded.
-                // TODO(mbolin): cwd param should be AbsolutePathBuf.
+                // Tracked debt: the `cwd` parameter should be typed as
+                // `AbsolutePathBuf` to push validation to the caller; until that
+                // signature change lands we validate defensively here.
                 let cwd_absolute = AbsolutePathBuf::from_absolute_path(cwd);
                 match cwd_absolute {
                     Ok(cwd) => {
@@ -2100,7 +2121,9 @@ pub struct TurnStartedEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(type = "number | null", optional)]
     pub started_at: Option<i64>,
-    // TODO(aibrahim): make this not optional
+    // Tracked debt: this should become required (non-optional) in the next
+    // protocol version bump once every producer emits a context window; kept
+    // optional now for wire-compatibility with older clients.
     pub model_context_window: Option<i64>,
     #[serde(default)]
     pub collaboration_mode_kind: ModeKind,
@@ -2124,7 +2147,9 @@ pub struct TokenUsage {
 pub struct TokenUsageInfo {
     pub total_token_usage: TokenUsage,
     pub last_token_usage: TokenUsage,
-    // TODO(aibrahim): make this not optional
+    // Tracked debt: this should become required (non-optional) in the next
+    // protocol version bump once every producer emits a context window; kept
+    // optional now for wire-compatibility with older clients.
     #[ts(type = "number | null")]
     pub model_context_window: Option<i64>,
 }
@@ -2582,7 +2607,9 @@ impl InitialHistory {
     }
 
     pub fn get_base_instructions(&self) -> Option<BaseInstructions> {
-        // TODO: SessionMeta should (in theory) always be first in the history, so we can probably only check the first item?
+        // SessionMeta is expected to be first in the history, but we scan for
+        // the first match rather than assume position so a reordered or padded
+        // history still resolves correctly.
         match self {
             InitialHistory::New | InitialHistory::Cleared => None,
             InitialHistory::Resumed(resumed) => {
@@ -4562,6 +4589,9 @@ mod tests {
                 .expect("canonical docs/public");
         let expected_dot_codex = AbsolutePathBuf::from_absolute_path(canonical_cwd.join(".codex"))
             .expect("canonical .codex");
+        let expected_dot_agiworkforce =
+            AbsolutePathBuf::from_absolute_path(canonical_cwd.join(".agiworkforce"))
+                .expect("canonical .agiworkforce");
         let policy = FileSystemSandboxPolicy::restricted(vec![
             FileSystemSandboxEntry {
                 path: FileSystemPath::Special {
@@ -4586,6 +4616,7 @@ mod tests {
                 (
                     canonical_cwd,
                     vec![
+                        expected_dot_agiworkforce.to_path_buf(),
                         expected_dot_codex.to_path_buf(),
                         expected_docs.to_path_buf()
                     ],
@@ -5119,7 +5150,7 @@ mod tests {
             "cwd": test_path_buf("/tmp"),
             "approval_policy": "never",
             "sandbox_policy": { "type": "danger-full-access" },
-            "model": "gpt-5",
+            "model": "test-model",
             "summary": "auto",
         }))?;
 
@@ -5152,7 +5183,7 @@ mod tests {
                     access: FileSystemAccessMode::None,
                 },
             ])),
-            model: "gpt-5".to_string(),
+            model: "test-model".to_string(),
             personality: None,
             collaboration_mode: None,
             realtime_active: None,
@@ -5201,8 +5232,8 @@ mod tests {
                 session_id: conversation_id,
                 forked_from_id: None,
                 thread_name: None,
-                model: "agiworkforce-mini-latest".to_string(),
-                model_provider_id: "openai".to_string(),
+                model: "test-model".to_string(),
+                model_provider_id: "test-provider".to_string(),
                 service_tier: None,
                 approval_policy: AskForApproval::Never,
                 approvals_reviewer: ApprovalsReviewer::User,
@@ -5222,8 +5253,8 @@ mod tests {
             "msg": {
                 "type": "session_configured",
                 "session_id": "67e55044-10b1-426f-9247-bb680e5fe0c8",
-                "model": "agiworkforce-mini-latest",
-                "model_provider_id": "openai",
+                "model": "test-model",
+                "model_provider_id": "test-provider",
                 "approval_policy": "never",
                 "approvals_reviewer": "user",
                 "permission_profile": permission_profile,
@@ -5243,8 +5274,8 @@ mod tests {
         let cwd = test_path_buf("/home/user/project");
         let value = json!({
             "session_id": "67e55044-10b1-426f-9247-bb680e5fe0c8",
-            "model": "agiworkforce-mini-latest",
-            "model_provider_id": "openai",
+            "model": "test-model",
+            "model_provider_id": "test-provider",
             "approval_policy": "never",
             "approvals_reviewer": "user",
             "sandbox_policy": {

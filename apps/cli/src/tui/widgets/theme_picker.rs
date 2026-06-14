@@ -3,26 +3,30 @@
 //! Triggered by `/theme` (no arg). Layout:
 //!
 //! ```text
-//! ┌─ Select Theme (↑↓ navigate  Enter select  Esc close) ────────────────┐
-//! │                                                                        │
-//! │  ● Dark              Neutral dark background                           │
-//! │    Light             Light background for bright terminals             │
-//! │    Ansi              Pure 16-color ANSI compatible                     │
-//! │    Solarized Dark    Solarized palette, dark variant                   │
-//! │    Solarized Light   Solarized palette, light variant                  │
-//! │    Colorblind        High-contrast deuteranopia-friendly               │
-//! │                                                                        │
-//! │  Preview:                                                              │
-//! │    fn hello() -> &'static str {                                        │
-//! │        "world"  // returns a greeting                                  │
-//! │    }                                                                   │
-//! └────────────────────────────────────────────────────────────────────────┘
+//! ┌─ Theme ───────────────────────────────────────────────────────────────┐
+//! │                                                                      │
+//! │●  Dark              Neutral dark background                          │
+//! │   Light             Light background for bright terminals            │
+//! │   Ansi              Pure 16-color ANSI compatible                    │
+//! │   Solarized Dark    Solarized palette, dark variant                  │
+//! │   Solarized Light   Solarized palette, light variant                 │
+//! │   Colorblind        High-contrast deuteranopia-friendly              │
+//! │                                                                      │
+//! │  Preview: Solarized Dark                                             │
+//! │  fn hello() -> &'static str {                                        │
+//! │      "world"  // returns a greeting                                  │
+//! │  }                                                                   │
+//! └──────────────────────────────────────────────────────────────────────┘
 //! ```
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
+
+use crate::tui::terminal_palette::{
+    ui_accent, ui_brand, ui_cloud, ui_muted, ui_on_light, ui_success, ui_warning,
+};
 
 // ---------------------------------------------------------------------------
 // Theme definitions
@@ -93,12 +97,12 @@ impl ThemeChoice {
     /// Accent color used by the picker row highlight for this theme.
     fn accent(self) -> Color {
         match self {
-            ThemeChoice::Dark => Color::Blue,
-            ThemeChoice::Light => Color::Yellow,
-            ThemeChoice::Ansi => Color::White,
-            ThemeChoice::SolarizedDark => Color::Cyan,
-            ThemeChoice::SolarizedLight => Color::Green,
-            ThemeChoice::Colorblind => Color::Magenta,
+            ThemeChoice::Dark => ui_brand(),
+            ThemeChoice::Light => ui_warning(),
+            ThemeChoice::Ansi => ui_muted(),
+            ThemeChoice::SolarizedDark => ui_accent(),
+            ThemeChoice::SolarizedLight => ui_success(),
+            ThemeChoice::Colorblind => ui_cloud(),
         }
     }
 }
@@ -236,8 +240,8 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Magenta))
-        .title(" Select Theme  (↑↓ navigate  Enter select  Esc close) ");
+        .border_style(Style::default().fg(ui_muted()))
+        .title(" Theme ");
     frame.render_widget(block, popup_area);
 
     let inner = Rect {
@@ -279,7 +283,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
 
             let style = if is_cursor {
                 Style::default()
-                    .fg(Color::Black)
+                    .fg(ui_on_light())
                     .bg(choice.accent())
                     .add_modifier(Modifier::BOLD)
             } else if is_active {
@@ -287,7 +291,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
                     .fg(choice.accent())
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default()
             };
 
             ListItem::new(Line::from(Span::styled(label, style)))
@@ -299,7 +303,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
     // ── preview label ─────────────────────────────────────────────────────────
     let current_choice = state.selected();
     let preview_header = Line::from(vec![
-        Span::styled("  Preview: ", Style::default().fg(Color::DarkGray)),
+        Span::styled("  Preview: ", Style::default().fg(ui_muted())),
         Span::styled(
             current_choice.label(),
             Style::default()
@@ -318,4 +322,31 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
         .collect();
 
     frame.render_widget(Paragraph::new(code_lines), chunks[4]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
+
+    fn draw_picker(state: &ThemePickerState, width: u16, height: u16) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+        let area = Rect::new(0, 0, width, height);
+        terminal.draw(|f| render(f, area, state)).expect("draw");
+        terminal
+    }
+
+    #[test]
+    fn render_theme_picker_snapshot() {
+        let mut state = ThemePickerState::default();
+        state.open(ThemeChoice::Dark);
+        state.cursor_down();
+        state.cursor_down();
+        state.cursor_down();
+
+        let terminal = draw_picker(&state, 84, 22);
+        insta::assert_snapshot!("theme_picker_overlay_baseline", terminal.backend());
+    }
 }

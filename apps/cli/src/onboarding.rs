@@ -1,40 +1,9 @@
 use anyhow::{bail, Context, Result};
-use colored::Colorize;
 
 use crate::model_catalog;
 use crate::project_registry::ProjectRegistry;
 use crate::project_scope::resolve_project_scope;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Amber/gold brand color (warm palette)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Print text in brand amber color (TrueColor: #FFB000, fallback: yellow).
-///
-/// Checks `COLORTERM` env var for truecolor support instead of depending on
-/// the `supports_color` crate.
-fn amber(text: &str) -> String {
-    let has_truecolor = std::env::var("COLORTERM")
-        .map(|v| v == "truecolor" || v == "24bit")
-        .unwrap_or(false);
-    if has_truecolor {
-        format!("\x1b[38;2;255;176;0m{text}\x1b[0m")
-    } else {
-        format!("{}", text.yellow())
-    }
-}
-
-/// Print text in brand amber + bold
-fn amber_bold(text: &str) -> String {
-    let has_truecolor = std::env::var("COLORTERM")
-        .map(|v| v == "truecolor" || v == "24bit")
-        .unwrap_or(false);
-    if has_truecolor {
-        format!("\x1b[1;38;2;255;176;0m{text}\x1b[0m")
-    } else {
-        format!("{}", text.yellow().bold())
-    }
-}
+use crate::terminal_style as ts;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // First-run detection
@@ -95,42 +64,45 @@ fn print_welcome_banner() {
  /_/   \_\____|___|    \_/\_/ \___/|_|  |_|\_\_|  \___/|_|  \___\___|
     "#;
 
-    eprintln!("{}", amber(logo));
+    eprintln!("{}", ts::brand(logo));
     eprintln!(
         "  {} {}",
-        amber_bold("Welcome to AGI"),
-        format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
-    );
-    eprintln!("  {}\n", "Multi-model AI agent in your terminal.".dimmed());
-    eprintln!("  {}", "What makes us different:".dimmed());
-    eprintln!(
-        "  {}  {}",
-        "✦".cyan(),
-        "Live cost HUD — see tokens, $, and context % in real time".dimmed()
-    );
-    eprintln!(
-        "  {}  {}",
-        "✦".cyan(),
-        "JSON event stream — `--json-events` for CI / dashboards / automation".dimmed()
-    );
-    eprintln!(
-        "  {}  {}",
-        "✦".cyan(),
-        format!(
-            "Multi-model fallback — `{}`",
-            multi_model_fallback_example()
-        )
-        .dimmed()
-    );
-    eprintln!(
-        "  {}  {}\n",
-        "✦".cyan(),
-        "Session replay — `agi session fork <id> --at-turn N --as <name>`".dimmed()
+        ts::brand_header("Welcome to AGI"),
+        ts::muted(format!("v{}", env!("CARGO_PKG_VERSION"))),
     );
     eprintln!(
         "  {}\n",
-        "Sign in with your preferred AI provider to get started,\n  or connect an API key for usage-based billing."
-            .dimmed()
+        ts::muted("Multi-model AI agent in your terminal.")
+    );
+    eprintln!("  {}", ts::muted("What makes us different:"));
+    eprintln!(
+        "  {}  {}",
+        ts::accent("✦"),
+        ts::muted("Live cost HUD — see tokens, $, and context % in real time")
+    );
+    eprintln!(
+        "  {}  {}",
+        ts::accent("✦"),
+        ts::muted("JSON event stream — `--json-events` for CI / dashboards / automation")
+    );
+    eprintln!(
+        "  {}  {}",
+        ts::accent("✦"),
+        ts::muted(format!(
+            "Multi-model fallback — `{}`",
+            multi_model_fallback_example()
+        ))
+    );
+    eprintln!(
+        "  {}  {}\n",
+        ts::accent("✦"),
+        ts::muted("Session replay — `agi session fork <id> --at-turn N --as <name>`")
+    );
+    eprintln!(
+        "  {}\n",
+        ts::muted(
+            "Sign in with your preferred AI provider to get started,\n  or connect an API key for usage-based billing."
+        )
     );
 }
 
@@ -156,21 +128,24 @@ fn maybe_trust_current_directory() -> Result<bool> {
         return Ok(true);
     }
 
-    eprintln!("\n  {}", amber_bold("Trust This Directory"));
+    eprintln!("\n  {}", ts::brand_header("Trust This Directory"));
     eprintln!(
         "  {}\n",
-        "Working with untrusted code comes with higher prompt-injection risk.".dimmed()
+        ts::muted("Working with untrusted code comes with higher prompt-injection risk.")
     );
     eprintln!(
         "  {} {}",
-        "•".yellow(),
-        format!("Current directory: {}", cwd.display()).dimmed()
+        ts::warning("•"),
+        ts::muted(format!("Current directory: {}", cwd.display()))
     );
     if target != cwd {
         eprintln!(
             "  {} {}",
-            "•".yellow(),
-            format!("Trust will apply to repository root: {}", target.display()).dimmed()
+            ts::warning("•"),
+            ts::muted(format!(
+                "Trust will apply to repository root: {}",
+                target.display()
+            ))
         );
     }
     eprintln!();
@@ -191,13 +166,13 @@ fn maybe_trust_current_directory() -> Result<bool> {
         {
             eprintln!(
                 "  {} Failed to record trust decision: {}",
-                "⚠".yellow().bold(),
+                ts::warning_header("⚠"),
                 err
             );
         }
         eprintln!(
             "\n  {}",
-            "Setup canceled. Re-run onboarding when you trust this directory.".dimmed()
+            ts::muted("Setup canceled. Re-run onboarding when you trust this directory.")
         );
         return Ok(false);
     }
@@ -209,18 +184,18 @@ fn maybe_trust_current_directory() -> Result<bool> {
     {
         eprintln!(
             "\n  {} Failed to save trust decision: {}",
-            "⚠".yellow().bold(),
+            ts::warning_header("⚠"),
             err
         );
         eprintln!(
             "  {}",
-            "Continuing anyway. You can set trust later in config.toml.".dimmed()
+            ts::muted("Continuing anyway. You can set trust later in config.toml.")
         );
     } else {
         eprintln!(
             "\n  {} Trusted {}",
-            "✓".green().bold(),
-            amber_bold(&target.display().to_string())
+            ts::success_header("✓"),
+            ts::brand_header(target.display().to_string())
         );
     }
 
@@ -300,7 +275,7 @@ async fn select_local_model(preferred_provider: Option<&str>) -> Result<(String,
 
     eprintln!(
         "\n  {}",
-        crate::local_models::format_probe_report(&probes).dimmed()
+        ts::muted(crate::local_models::format_probe_report(&probes))
     );
 
     if matches!(preferred_provider, Some("lmstudio")) {
@@ -321,10 +296,9 @@ async fn select_local_model(preferred_provider: Option<&str>) -> Result<(String,
         .unwrap_or("an Ollama model");
     eprintln!(
         "  {}",
-        format!(
+        ts::muted(format!(
             "No installed Ollama models were detected. Start Ollama and run `ollama pull {suggested_pull}`, or enter an installed model name."
-        )
-        .dimmed()
+        ))
     );
     let model_id: String = dialoguer::Input::new()
         .with_prompt("  Enter your installed Ollama model name")
@@ -505,10 +479,10 @@ fn is_catalog_provider(provider: &str) -> bool {
 }
 
 fn select_model_for_providers(providers: &[&str]) -> Result<(String, String, bool)> {
-    eprintln!("\n  {}", amber_bold("Select Model"));
+    eprintln!("\n  {}", ts::brand_header("Select Model"));
     eprintln!(
         "  {}\n",
-        "Access other models by running /model or in your config.toml".dimmed()
+        ts::muted("Access other models by running /model or in your config.toml")
     );
     let onboarding_models = onboarding_models(providers);
     if onboarding_models.is_empty() {
@@ -572,11 +546,11 @@ fn select_model_for_providers(providers: &[&str]) -> Result<(String, String, boo
 fn select_reasoning_effort(model_label: &str) -> Result<String> {
     eprintln!(
         "\n  {}",
-        amber_bold(&format!("Select Reasoning Level for {model_label}"))
+        ts::brand_header(format!("Select Reasoning Level for {model_label}"))
     );
     eprintln!(
         "  {}\n",
-        "Press Enter to confirm or Esc to go back.".dimmed()
+        ts::muted("Press Enter to confirm or Esc to go back.")
     );
 
     let choices = &[
@@ -667,22 +641,22 @@ pub(crate) fn update_config_model(
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn print_safety_notes() {
-    eprintln!("\n  {}", amber_bold("Before you start:"));
-    eprintln!("  {}", "─".repeat(50).dimmed());
+    eprintln!("\n  {}", ts::brand_header("Before you start:"));
+    eprintln!("  {}", ts::muted("─".repeat(50)));
     eprintln!();
-    eprintln!("  {}  AGI can make mistakes.", "•".yellow());
+    eprintln!("  {}  AGI can make mistakes.", ts::warning("•"));
     eprintln!(
         "      {}",
-        "Review the code it writes and commands it runs.".dimmed()
+        ts::muted("Review the code it writes and commands it runs.")
     );
     eprintln!();
     eprintln!(
         "  {}  Tool calls (file edits, shell commands) require your approval.",
-        "•".yellow()
+        ts::warning("•")
     );
     eprintln!(
         "      {}",
-        "Use Shift+Tab to cycle through autonomy levels.".dimmed()
+        ts::muted("Use Shift+Tab to cycle through autonomy levels.")
     );
     eprintln!();
 }
@@ -696,7 +670,7 @@ fn select_approval_mode() -> Result<String> {
 
     eprintln!(
         "  {}\n",
-        "Decide how much autonomy you want to grant:".dimmed()
+        ts::muted("Decide how much autonomy you want to grant:")
     );
 
     let selection = dialoguer::Select::new()
@@ -752,6 +726,14 @@ fn update_config_approval_mode(mode: &str) -> Result<()> {
     }
 
     std::fs::write(&config_path, content)?;
+    // Match the hardening in `update_config_model`: this path can create or
+    // rewrite config.toml, so restrict it to owner read/write (0o600) instead
+    // of leaving world-readable default permissions.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600));
+    }
     Ok(())
 }
 
@@ -762,8 +744,8 @@ fn update_config_approval_mode(mode: &str) -> Result<()> {
 fn wait_for_enter() {
     eprintln!(
         "\n  {} {}",
-        amber_bold("Press Enter to start..."),
-        "(or Ctrl+C to quit)".dimmed()
+        ts::brand_header("Press Enter to start..."),
+        ts::muted("(or Ctrl+C to quit)")
     );
     let _ = dialoguer::Input::<String>::new()
         .allow_empty(true)
@@ -787,7 +769,7 @@ pub async fn run_onboarding() -> Result<bool> {
         Err(_) => {
             eprintln!(
                 "\n  {}",
-                "Setup interrupted. Run again to continue.".dimmed()
+                ts::muted("Setup interrupted. Run again to continue.")
             );
             return Ok(false);
         }
@@ -800,7 +782,7 @@ pub async fn run_onboarding() -> Result<bool> {
             // Ctrl+C or error — don't write marker, re-run next time
             eprintln!(
                 "\n  {}",
-                "Setup interrupted. Run again to continue.".dimmed()
+                ts::muted("Setup interrupted. Run again to continue.")
             );
             return Ok(false);
         }
@@ -825,49 +807,60 @@ pub async fn run_onboarding() -> Result<bool> {
             // must never appear here (the v1 local-only first-run bug).
             eprintln!(
                 "\n  {} Local model — no account needed.",
-                "✓".green().bold()
+                ts::success_header("✓")
             );
             eprintln!(
                 "  {}",
-                format!(
+                ts::muted(format!(
                     "Runs on your machine. Start Ollama or LM Studio, then {}",
                     local_pull_hint()
-                )
-                .dimmed()
+                ))
             );
         }
         AuthChoice::Provider(provider) => {
             if let Err(e) = crate::auth::interactive_login_for_provider(Some(provider)).await {
-                eprintln!("\n  {} Authentication failed: {}", "⚠".yellow().bold(), e);
+                eprintln!(
+                    "\n  {} Authentication failed: {}",
+                    ts::warning_header("⚠"),
+                    e
+                );
                 eprintln!(
                     "  {}",
-                    "You can try again later with /login or `agi login`.".dimmed()
+                    ts::muted("You can try again later with /login or `agi login`.")
                 );
             }
         }
         AuthChoice::ApiKeyProvider(provider) => {
             if let Err(e) = crate::auth::interactive_api_key_login_for_provider(provider).await {
-                eprintln!("\n  {} API key setup failed: {}", "⚠".yellow().bold(), e);
+                eprintln!(
+                    "\n  {} API key setup failed: {}",
+                    ts::warning_header("⚠"),
+                    e
+                );
                 eprintln!(
                     "  {}",
-                    "You can try again later with /login or `agi login`.".dimmed()
+                    ts::muted("You can try again later with /login or `agi login`.")
                 );
             }
         }
         AuthChoice::ApiKey => {
             if let Err(e) = run_api_key_flow().await {
-                eprintln!("\n  {} API key setup failed: {}", "⚠".yellow().bold(), e);
+                eprintln!(
+                    "\n  {} API key setup failed: {}",
+                    ts::warning_header("⚠"),
+                    e
+                );
                 eprintln!(
                     "  {}",
-                    "You can try again later with /login or `agi login`.".dimmed()
+                    ts::muted("You can try again later with /login or `agi login`.")
                 );
             }
         }
         AuthChoice::OtherProviders | AuthChoice::Skip => {
-            eprintln!("\n  {} Skipped authentication.", "→".dimmed());
+            eprintln!("\n  {} Skipped authentication.", ts::muted("→"));
             eprintln!(
                 "  {}",
-                "Use /login or `agi login` to authenticate later.".dimmed()
+                ts::muted("Use /login or `agi login` to authenticate later.")
             );
         }
     }
@@ -891,33 +884,34 @@ pub async fn run_onboarding() -> Result<bool> {
             if let Err(e) = update_config_model(&model_id, &provider, reasoning.as_deref()) {
                 eprintln!(
                     "  {} Failed to save model selection: {}",
-                    "⚠".yellow().bold(),
+                    ts::warning_header("⚠"),
                     e
                 );
             } else {
                 eprintln!(
                     "\n  {} Using {} {}",
-                    "✓".green().bold(),
-                    amber_bold(&model_id),
-                    reasoning
-                        .as_ref()
-                        .map(|r| format!("with {} reasoning", r))
-                        .unwrap_or_default()
-                        .dimmed()
+                    ts::success_header("✓"),
+                    ts::brand_header(&model_id),
+                    ts::muted(
+                        reasoning
+                            .as_ref()
+                            .map(|r| format!("with {} reasoning", r))
+                            .unwrap_or_default()
+                    )
                 );
             }
         }
         Err(_) if chose_local => {
-            eprintln!("\n  {} No local model selected.", "→".dimmed());
+            eprintln!("\n  {} No local model selected.", ts::muted("→"));
             eprintln!(
                 "  {}",
-                "Leaving the existing model config unchanged. Run `agi models scan` and `agi models set <model>` after starting Ollama or LM Studio.".dimmed()
+                ts::muted("Leaving the existing model config unchanged. Run `agi models scan` and `agi models set <model>` after starting Ollama or LM Studio.")
             );
         }
         Err(_) => {
             eprintln!(
                 "\n  {} Using default model ({}).",
-                "→".dimmed(),
+                ts::muted("→"),
                 model_catalog::default_model()
             );
         }
@@ -931,7 +925,7 @@ pub async fn run_onboarding() -> Result<bool> {
         Err(_) => {
             eprintln!(
                 "\n  {}",
-                "Setup interrupted. Run again to continue.".dimmed()
+                ts::muted("Setup interrupted. Run again to continue.")
             );
             return Ok(false);
         }
@@ -940,7 +934,7 @@ pub async fn run_onboarding() -> Result<bool> {
     if let Err(e) = update_config_approval_mode(&approval_mode) {
         eprintln!(
             "  {} Failed to save approval mode: {}",
-            "⚠".yellow().bold(),
+            ts::warning_header("⚠"),
             e
         );
     }

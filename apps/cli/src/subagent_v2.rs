@@ -49,10 +49,16 @@ pub trait SubagentTaskRunner: Send + Sync + 'static {
     /// Run the task body. Receives prompts from inbox_rx, sends responses
     /// via outbox_tx, exits cleanly when inbox_rx returns None or when the
     /// returned future is dropped (kill via abort).
+    ///
+    /// `max_turns` is the per-subagent cap on user turns the runner is allowed
+    /// to service before exiting; runners that drive a provider MUST honor it so
+    /// a runaway parent driver cannot generate unbounded provider calls. Runners
+    /// with no provider cost (echo/mock) may ignore it.
     async fn run(
         &self,
         id: SubagentId,
         model: String,
+        max_turns: usize,
         inbox_rx: mpsc::Receiver<String>,
         outbox_tx: mpsc::Sender<SubagentMessage>,
     );
@@ -67,6 +73,7 @@ impl SubagentTaskRunner for EchoRunner {
         &self,
         id: SubagentId,
         model: String,
+        _max_turns: usize,
         mut inbox_rx: mpsc::Receiver<String>,
         outbox_tx: mpsc::Sender<SubagentMessage>,
     ) {
@@ -96,6 +103,7 @@ impl SubagentTaskRunner for MockRunner {
         &self,
         id: SubagentId,
         _model: String,
+        _max_turns: usize,
         mut inbox_rx: mpsc::Receiver<String>,
         outbox_tx: mpsc::Sender<SubagentMessage>,
     ) {
@@ -158,6 +166,7 @@ impl SubagentTaskRunner for AgentSessionRunner {
         &self,
         id: SubagentId,
         model: String,
+        max_turns: usize,
         mut inbox_rx: mpsc::Receiver<String>,
         outbox_tx: mpsc::Sender<SubagentMessage>,
     ) {
@@ -168,7 +177,22 @@ impl SubagentTaskRunner for AgentSessionRunner {
                 content: sys.clone(),
             });
         }
+        let mut turns_used = 0usize;
         while let Some(prompt) = inbox_rx.recv().await {
+            // Enforce the per-subagent turn cap so a runaway parent driver cannot
+            // keep feeding prompts and rack up unbounded provider calls. A
+            // `max_turns` of 0 means "no cap".
+            if max_turns != 0 && turns_used >= max_turns {
+                let _ = outbox_tx
+                    .send(SubagentMessage {
+                        from: id,
+                        kind: MessageKind::Error,
+                        body: format!("max_turns ({max_turns}) reached; subagent stopped"),
+                    })
+                    .await;
+                break;
+            }
+            turns_used += 1;
             history.push(ConversationTurn {
                 role: TurnRole::User,
                 content: prompt,
@@ -340,13 +364,14 @@ impl SubagentRegistry {
         let status_for_task = status.clone();
         let runner = spec.runner.clone();
         let model = spec.model.clone();
+        let max_turns = spec.max_turns;
         let join_handle = tokio::spawn(async move {
             *status_for_task.write().await = SubagentStatus::Running;
             tokio::select! {
                 _ = &mut kill_rx => {
                     // Killed externally; runner is dropped.
                 }
-                _ = runner.run(id, model, inbox_rx, outbox_tx) => {}
+                _ = runner.run(id, model, max_turns, inbox_rx, outbox_tx) => {}
             }
             // Status only transitions to Completed if not already Killed.
             let mut s = status_for_task.write().await;
@@ -696,6 +721,40 @@ mod tests {
         let msg = handle.recv_message().await.unwrap();
         assert_eq!(msg.kind, MessageKind::Error);
         assert!(msg.body.contains("rate limit"));
+    }
+
+    #[tokio::test]
+    async fn agent_session_runner_enforces_max_turns() {
+        // Two scripted responses available, but max_turns caps the runner at 1
+        // serviced turn: the second prompt must yield a max_turns Error, never a
+        // second provider call / Response.
+        let caller = Arc::new(MockLlmCaller {
+            responses: std::sync::Mutex::new(vec![
+                Ok("turn one".into()),
+                Ok("turn two".into()),
+            ]),
+        });
+        let runner = Arc::new(AgentSessionRunner {
+            caller,
+            system_prompt: None,
+        });
+        let r = SubagentRegistry::new();
+        let mut spec = SubagentSpec::new("claude-opus-4-8");
+        spec.max_turns = 1;
+        spec.runner = runner;
+        let id = r.spawn(spec).await.unwrap();
+        let arc = r.get(id).await.unwrap();
+        let handle = arc.read().await;
+
+        handle.send_message("first".into()).await.unwrap();
+        let first = handle.recv_message().await.unwrap();
+        assert_eq!(first.kind, MessageKind::Response);
+        assert!(first.body.contains("turn one"));
+
+        handle.send_message("second".into()).await.unwrap();
+        let second = handle.recv_message().await.unwrap();
+        assert_eq!(second.kind, MessageKind::Error);
+        assert!(second.body.contains("max_turns"));
     }
 
     #[test]

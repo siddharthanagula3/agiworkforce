@@ -115,9 +115,11 @@ impl AgentEvent {
     }
 }
 
-/// Crude secret-redaction for tool arguments. Replaces values longer than 12
-/// chars whose key matches /key|token|secret|password/i with `<redacted>`. Not
-/// a security boundary; just a UX nicety for the JSON event stream.
+/// Crude secret-redaction for tool arguments. When the input contains any of
+/// `key|token|secret|password` (case-insensitive), the whole value is redacted
+/// regardless of length: inputs longer than 64 chars become `<redacted-long>`,
+/// shorter ones become `<redacted>`. Not a security boundary; just a UX nicety
+/// for the JSON event stream.
 #[allow(dead_code)]
 pub fn redact_args(raw: &str) -> String {
     let lower = raw.to_lowercase();

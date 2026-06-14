@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 // ---------------------------------------------------------------------------
-// Context overflow detection — 16 regex patterns covering every major provider
+// Context overflow detection — 17 regex patterns covering every major provider
 // ---------------------------------------------------------------------------
 
 /// Compiled regex patterns that detect context/token overflow errors across

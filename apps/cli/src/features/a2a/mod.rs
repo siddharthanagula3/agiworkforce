@@ -33,6 +33,7 @@ use colored::Colorize;
 use std::collections::HashMap;
 
 use crate::config::CliConfig;
+use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
 // Agent ID helper
@@ -101,7 +102,7 @@ pub async fn handle_a2a_command(
 
             eprintln!(
                 "  {} Delegating task to {} ({})",
-                "[a2a]".cyan().bold(),
+                ts::accent_header("[a2a]"),
                 target.name.bold(),
                 target.endpoint.dimmed()
             );
@@ -130,7 +131,7 @@ pub async fn handle_a2a_command(
             let auth_token = generate_random_token(32);
             eprintln!(
                 "  {} A2A auth token (use as Bearer token): {}",
-                "[a2a]".cyan().bold(),
+                ts::accent_header("[a2a]"),
                 auth_token
             );
 
@@ -158,7 +159,7 @@ pub async fn handle_a2a_command(
             if let Err(e) = save_local_registry(&registry) {
                 eprintln!(
                     "  {} Failed to update agent registry: {}",
-                    "Warning:".yellow(),
+                    ts::warning("Warning:"),
                     e
                 );
             }

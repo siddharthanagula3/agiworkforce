@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use anyhow::Result;
-use colored::Colorize;
 
 use super::common::print_tool_status;
 use super::ToolResult;
@@ -744,7 +743,11 @@ pub(super) async fn execute_ask_user(args: &HashMap<String, String>) -> Result<T
         }
     };
 
-    eprintln!("\n{} {}", "Agent asks:".cyan().bold(), question);
+    eprintln!(
+        "\n{} {}",
+        crate::terminal_style::accent_header("Agent asks:"),
+        question
+    );
 
     let answer = dialoguer::Input::<String>::new()
         .with_prompt("Your answer")

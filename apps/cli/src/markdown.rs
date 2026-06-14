@@ -1,5 +1,7 @@
 use colored::Colorize;
 
+use crate::terminal_style as ts;
+
 // ---------------------------------------------------------------------------
 // Streaming Markdown Renderer
 // ---------------------------------------------------------------------------
@@ -158,21 +160,25 @@ impl MarkdownRenderer {
         if is_horizontal_rule(line) {
             let width = self.terminal_width.min(80);
             let rule = "\u{2500}".repeat(width);
-            return format!("{}\n", rule.cyan().dimmed());
+            return format!("{}\n", ts::muted(rule));
         }
 
         // Headers: # ## ### etc.
         if let Some(header) = parse_header(line) {
-            return format!("{} {}\n", header.prefix.dimmed(), header.text.cyan().bold());
+            return format!(
+                "{} {}\n",
+                ts::muted(header.prefix),
+                ts::accent_header(header.text)
+            );
         }
 
         // Blockquote: > text
         if let Some(text) = line.strip_prefix("> ") {
             let rendered_text = self.render_inline(text);
-            return format!("{} {}\n", "\u{2502}".dimmed(), rendered_text);
+            return format!("{} {}\n", ts::muted("\u{2502}"), rendered_text);
         }
         if line == ">" {
-            return format!("{}\n", "\u{2502}".dimmed());
+            return format!("{}\n", ts::muted("\u{2502}"));
         }
 
         // Nested list handling -- check before top-level lists
@@ -182,11 +188,16 @@ impl MarkdownRenderer {
             let bullet = nested_bullet_marker(depth);
             return match marker {
                 ListMarker::Unordered => {
-                    format!("{}{} {}\n", indent, bullet.cyan(), rendered)
+                    format!("{}{} {}\n", indent, ts::accent(bullet), rendered)
                 }
                 ListMarker::Ordered(num) => {
                     // Right-align numbers within 3 chars
-                    format!("{}{} {}\n", indent, format!("{:>3}.", num).cyan(), rendered)
+                    format!(
+                        "{}{} {}\n",
+                        indent,
+                        ts::accent(format!("{:>3}.", num)),
+                        rendered
+                    )
                 }
             };
         }
@@ -194,18 +205,18 @@ impl MarkdownRenderer {
         // Top-level unordered list: - item or * item (but not ** which is bold)
         if let Some(text) = line.strip_prefix("- ") {
             let rendered = self.render_inline(text);
-            return format!("  {} {}\n", "\u{2022}".cyan(), rendered);
+            return format!("  {} {}\n", ts::accent("\u{2022}"), rendered);
         }
         if line.starts_with("* ") && !line.starts_with("**") {
             let text = &line[2..];
             let rendered = self.render_inline(text);
-            return format!("  {} {}\n", "\u{2022}".cyan(), rendered);
+            return format!("  {} {}\n", ts::accent("\u{2022}"), rendered);
         }
 
         // Top-level numbered list: 1. item, 2. item, etc.
         if let Some((num, text)) = parse_numbered_list(line) {
             let rendered = self.render_inline(text);
-            return format!("  {} {}\n", format!("{:>3}.", num).cyan(), rendered);
+            return format!("  {} {}\n", ts::accent(format!("{:>3}.", num)), rendered);
         }
 
         // Regular text with inline formatting
@@ -235,37 +246,41 @@ impl MarkdownRenderer {
         if lang_display.is_empty() {
             output.push_str(&format!(
                 "{}{}\n",
-                "\u{250c}\u{2500}".dimmed(),
-                "\u{2500}".repeat(border_width - 2).dimmed()
+                ts::muted("\u{250c}\u{2500}"),
+                ts::muted("\u{2500}".repeat(border_width - 2))
             ));
         } else {
             // Language label line: ---- rust ----
             let label_line = format!(
                 "{} {} {}",
-                "\u{2500}".repeat(4).dimmed(),
-                lang_display.trim().cyan().bold(),
-                "\u{2500}".repeat(dash_count.saturating_sub(4)).dimmed()
+                ts::muted("\u{2500}".repeat(4)),
+                ts::accent_header(lang_display.trim()),
+                ts::muted("\u{2500}".repeat(dash_count.saturating_sub(4)))
             );
             output.push_str(&format!("{}\n", label_line));
             // Top border
             output.push_str(&format!(
                 "{}{}\n",
-                "\u{250c}\u{2500}".dimmed(),
-                "\u{2500}".repeat(border_width - 2).dimmed()
+                ts::muted("\u{250c}\u{2500}"),
+                ts::muted("\u{2500}".repeat(border_width - 2))
             ));
         }
 
         // Code content in green
         let content = self.code_content.trim_end_matches('\n');
         for code_line in content.split('\n') {
-            output.push_str(&format!("{} {}\n", "\u{2502}".dimmed(), code_line.green()));
+            output.push_str(&format!(
+                "{} {}\n",
+                ts::muted("\u{2502}"),
+                ts::success(code_line)
+            ));
         }
 
         // Bottom border
         output.push_str(&format!(
             "{}{}\n",
-            "\u{2514}".dimmed(),
-            "\u{2500}".repeat(border_width - 1).dimmed()
+            ts::muted("\u{2514}"),
+            ts::muted("\u{2500}".repeat(border_width - 1))
         ));
 
         output
@@ -311,13 +326,13 @@ impl MarkdownRenderer {
         for (row_idx, row) in self.table_rows.iter().enumerate() {
             // Data row: │ cell │ cell │
             let mut line = String::new();
-            line.push_str(&"\u{2502}".dimmed().to_string());
+            line.push_str(&ts::muted("\u{2502}").to_string());
             for (i, width) in col_widths.iter().enumerate() {
                 let cell = row.get(i).map(|s| s.as_str()).unwrap_or("");
                 line.push_str(&format!(
                     " {:<width$} {}",
                     cell,
-                    "\u{2502}".dimmed(),
+                    ts::muted("\u{2502}"),
                     width = width
                 ));
             }
@@ -360,9 +375,9 @@ impl MarkdownRenderer {
                 if let Some((code_text, end)) = extract_delimited(&chars, i, '`', '`') {
                     result.push_str(&format!(
                         "{}{}{}",
-                        "`".dimmed(),
-                        code_text.white().bold(),
-                        "`".dimmed()
+                        ts::muted("`"),
+                        ts::code(code_text),
+                        ts::muted("`")
                     ));
                     i = end;
                     continue;
@@ -399,7 +414,7 @@ impl MarkdownRenderer {
             // Italic: *...* (single asterisk, not at word boundary issues)
             if chars[i] == '*' && (i + 1 < len && chars[i + 1] != '*' && chars[i + 1] != ' ') {
                 if let Some((italic_text, end)) = extract_delimited(&chars, i, '*', '*') {
-                    result.push_str(&format!("{}", italic_text.dimmed()));
+                    result.push_str(&format!("{}", ts::muted(italic_text)));
                     i = end;
                     continue;
                 }
@@ -408,7 +423,7 @@ impl MarkdownRenderer {
             // Italic: _..._ (single underscore)
             if chars[i] == '_' && (i + 1 < len && chars[i + 1] != '_' && chars[i + 1] != ' ') {
                 if let Some((italic_text, end)) = extract_delimited(&chars, i, '_', '_') {
-                    result.push_str(&format!("{}", italic_text.dimmed()));
+                    result.push_str(&format!("{}", ts::muted(italic_text)));
                     i = end;
                     continue;
                 }
@@ -419,8 +434,8 @@ impl MarkdownRenderer {
                 if let Some((link_text, url, end)) = extract_link(&chars, i) {
                     result.push_str(&format!(
                         "{} {}",
-                        link_text.cyan().underline(),
-                        format!("({})", url).dimmed()
+                        ts::link(link_text),
+                        ts::muted(format!("({})", url))
                     ));
                     i = end;
                     continue;
@@ -430,7 +445,7 @@ impl MarkdownRenderer {
             // Bare URLs: http:// or https://
             if chars[i] == 'h' {
                 if let Some((url, end)) = extract_bare_url(&chars, i) {
-                    result.push_str(&format!("{}", url.cyan()));
+                    result.push_str(&format!("{}", ts::link(url)));
                     i = end;
                     continue;
                 }
@@ -480,15 +495,15 @@ fn parse_table_row(line: &str) -> Vec<String> {
 /// Build a table border line using box-drawing characters.
 fn build_table_border(col_widths: &[usize], left: &str, mid: &str, right: &str) -> String {
     let mut line = String::new();
-    line.push_str(&left.dimmed().to_string());
+    line.push_str(&ts::muted(left).to_string());
     for (i, width) in col_widths.iter().enumerate() {
         // +2 for the spaces around cell content
-        line.push_str(&"\u{2500}".repeat(width + 2).dimmed().to_string());
+        line.push_str(&ts::muted("\u{2500}".repeat(width + 2)).to_string());
         if i < col_widths.len() - 1 {
-            line.push_str(&mid.dimmed().to_string());
+            line.push_str(&ts::muted(mid).to_string());
         }
     }
-    line.push_str(&right.dimmed().to_string());
+    line.push_str(&ts::muted(right).to_string());
     line.push('\n');
     line
 }

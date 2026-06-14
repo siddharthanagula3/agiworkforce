@@ -30,6 +30,42 @@ fn agiworkforce_cmd() -> Command {
     Command::cargo_bin("agiworkforce").expect("binary must be built")
 }
 
+/// Resolve two distinct Anthropic model IDs from the canonical catalog
+/// (`packages/types/src/models.json`) rather than hardcoding literals, per the
+/// repo rule that model IDs are canonical only in the shared catalog.
+///
+/// Both IDs must detect as `Provider::Anthropic` so the exec privacy_mode
+/// starts as Byok. We prefer two of the catalog's primary Anthropic slots
+/// (Opus/Sonnet/Haiku api ids); if only one distinct id is available we
+/// duplicate it (the demo-fallback chain still exercises two turns).
+fn anthropic_models_arg() -> String {
+    use agiworkforce_cli::model_catalog;
+
+    let mut ids: Vec<String> = model_catalog::anthropic_primary_models()
+        .into_iter()
+        .map(|(api_id, _name, _tier)| api_id)
+        .collect();
+
+    if ids.is_empty() {
+        // Fall back to the fast-completion routing slot for Anthropic.
+        ids.push(model_catalog::fast_completion_model("anthropic"));
+    }
+
+    let primary = ids
+        .first()
+        .cloned()
+        .expect("canonical catalog must expose at least one Anthropic model id");
+    let fallback = ids.get(1).cloned().unwrap_or_else(|| primary.clone());
+
+    assert_eq!(
+        model_catalog::provider_for(&primary),
+        Some("anthropic"),
+        "primary test model '{primary}' must be an Anthropic catalog model"
+    );
+
+    format!("{primary},{fallback}")
+}
+
 /// Helper: run the binary and collect stdout lines (non-empty, trimmed).
 fn run_json_events(models_arg: &str, prompt: &str) -> (Vec<String>, String, String) {
     let output = agiworkforce_cmd()
@@ -53,8 +89,7 @@ fn json_events_stdout_is_strict_jsonl_across_demo_fallback() {
     // privacy_mode starts as Byok (not Local), allowing the privacy check to
     // pass.  --demo forces a rate-limit on the primary and activates demo mode
     // on the fallback, exercising the chat.rs demo-fallback code path.
-    let (lines, stdout, stderr) =
-        run_json_events("claude-haiku-4-5,claude-haiku-4-5-20251001", "hello");
+    let (lines, stdout, stderr) = run_json_events(&anthropic_models_arg(), "hello");
 
     // There must be at least one output line.
     assert!(
@@ -101,8 +136,7 @@ fn json_events_stdout_is_strict_jsonl_across_demo_fallback() {
 /// the fallback continuation turn.
 #[test]
 fn json_events_message_delta_session_id_matches_spawning_session_id() {
-    let (lines, stdout, stderr) =
-        run_json_events("claude-haiku-4-5,claude-haiku-4-5-20251001", "hello");
+    let (lines, stdout, stderr) = run_json_events(&anthropic_models_arg(), "hello");
 
     // Parse all lines as JSON.
     let parsed: Vec<serde_json::Value> = lines
@@ -131,6 +165,18 @@ fn json_events_message_delta_session_id_matches_spawning_session_id() {
         })
         .collect();
 
+    // The session-id consistency contract must not pass vacuously: the
+    // json-events stream always carries the assistant text as message_delta
+    // events (see the strict-JSONL test above), so at least one must be present
+    // regardless of whether a spawning event was emitted.
+    assert!(
+        !delta_sids.is_empty(),
+        "expected at least one message_delta event carrying a session_id; got none.\n\
+         Full stdout:\n{}\nstderr:\n{}",
+        stdout,
+        stderr
+    );
+
     if let Some(sid) = spawning_sid {
         // Every message_delta must have the same session_id as spawning.
         for delta_sid in &delta_sids {
@@ -142,6 +188,7 @@ fn json_events_message_delta_session_id_matches_spawning_session_id() {
             );
         }
     }
-    // If there's no spawning event (e.g. session path differs), we just verify
-    // the message_delta events are present — the strict-JSONL test above covers purity.
+    // If there's no spawning event (e.g. the session path differs), the
+    // !delta_sids.is_empty() assertion above still guarantees the message_delta
+    // events were threaded with a session_id; the strict-JSONL test covers purity.
 }

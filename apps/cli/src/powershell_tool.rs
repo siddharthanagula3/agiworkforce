@@ -115,7 +115,7 @@ pub fn safety_check(command: &str) -> Vec<String> {
     ];
     if dynamic_eval_tokens.iter().any(|tok| lc.contains(tok)) {
         warnings.push(
-            "Dynamic code execution detected (Invoke-Expression / IEX /              Invoke-Command -ScriptBlock / ScriptBlock::Create / `& $var`)"
+            "Dynamic code execution detected (Invoke-Expression / IEX / Invoke-Command -ScriptBlock / ScriptBlock::Create / `& $var`)"
                 .into(),
         );
     }
@@ -164,7 +164,7 @@ pub fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
         // override is missing. Both must be open to permit execution.
         if req.safe_mode || !env_allow_unsafe {
             anyhow::bail!(
-                "PowerShell command blocked by safety_check (set safe_mode=false AND                  AGI_POWERSHELL_ALLOW_UNSAFE=1 to override). Concerns: {}",
+                "PowerShell command blocked by safety_check (set safe_mode=false AND AGI_POWERSHELL_ALLOW_UNSAFE=1 to override). Concerns: {}",
                 warnings.join(", ")
             );
         }
@@ -178,17 +178,63 @@ pub fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
     cmd.arg("-NoProfile")
         .arg("-NonInteractive")
         .arg("-Command")
-        .arg(&req.command);
+        .arg(&req.command)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
     if let Some(wd) = &req.working_dir {
         cmd.current_dir(wd);
     }
-    let output = cmd
-        .output()
+
+    let mut child = cmd
+        .spawn()
         .with_context(|| format!("invoke {interpreter}"))?;
+
+    // Drain stdout/stderr on background threads so large output cannot fill the
+    // pipe buffer and deadlock while we poll for the timeout.
+    let stdout_reader = child.stdout.take().map(|mut s| {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = Vec::new();
+            let _ = s.read_to_end(&mut buf);
+            buf
+        })
+    });
+    let stderr_reader = child.stderr.take().map(|mut s| {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = Vec::new();
+            let _ = s.read_to_end(&mut buf);
+            buf
+        })
+    });
+
+    // Enforce the documented `timeout_sec`: kill the child if it overruns
+    // instead of blocking the calling thread indefinitely.
+    let timeout = std::time::Duration::from_secs(req.timeout_sec.max(1));
+    let start = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().context("wait on PowerShell child")? {
+            break status;
+        }
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!(
+                "PowerShell command timed out after {}s (timeout_sec)",
+                req.timeout_sec
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+
+    let stdout = stdout_reader.and_then(|h| h.join().ok()).unwrap_or_default();
+    let stderr = stderr_reader.and_then(|h| h.join().ok()).unwrap_or_default();
+
     Ok(PowerShellResult {
-        exit_code: output.status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        exit_code: status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
         interpreter,
         warnings,
     })

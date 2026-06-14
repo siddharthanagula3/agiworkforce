@@ -22,6 +22,12 @@ pub(super) async fn execute_team_tool(
     team_manager: &Option<teams::TeamManager>,
     name: &str,
     args: &std::collections::HashMap<String, String>,
+    // The authenticated identity of the executing teammate, when known. Forces
+    // the message sender so a turn cannot forge a message "from" another
+    // teammate. `None` in today's single-orchestrator session (single trust
+    // boundary); wire the executing teammate's name here once teammate-scoped
+    // sessions exist.
+    acting_sender: Option<&str>,
 ) -> Result<tools::ToolResult> {
     let tm = match team_manager {
         Some(tm) => tm,
@@ -35,7 +41,7 @@ pub(super) async fn execute_team_tool(
     };
 
     match name {
-        "send_message" => teams::execute_send_message(tm, args).await,
+        "send_message" => teams::execute_send_message(tm, args, acting_sender).await,
         "team_task" => teams::execute_team_task(tm, args).await,
         "read_messages" => teams::execute_read_messages(tm, args).await,
         "list_teammates" => teams::execute_list_teammates(tm).await,

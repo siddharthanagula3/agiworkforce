@@ -27,15 +27,25 @@ pub struct WindowsSandboxOptions {
     pub container_name: String,
 }
 
-/// AppContainer capabilities mapped from the preset. Each string is the
-/// well-known name (resolved at runtime via Windows API to a SID).
-pub fn allowed_capabilities(preset: WindowsSandboxPreset) -> Vec<&'static str> {
-    match preset {
+/// AppContainer capabilities mapped from the full sandbox options. Each string
+/// is the well-known name (resolved at runtime via Windows API to a SID).
+///
+/// `internetClient` is gated on `allow_network` so the returned SID list matches
+/// the documented preset semantics: `ReadOnly` means "no network" and therefore
+/// must NOT grant `internetClient` unless the caller explicitly opts in via
+/// `allow_network`. This prevents a future AppContainer integration that
+/// consumes this list directly from granting outbound network to a ReadOnly
+/// sandbox.
+pub fn allowed_capabilities(opts: &WindowsSandboxOptions) -> Vec<&'static str> {
+    match opts.preset {
         WindowsSandboxPreset::Unrestricted => vec![],
-        WindowsSandboxPreset::ReadOnly => vec![
-            "internetClient", // Outbound network; gated by allow_network elsewhere
-            "documentsLibrary",
-        ],
+        WindowsSandboxPreset::ReadOnly => {
+            let mut caps = vec!["documentsLibrary"];
+            if opts.allow_network {
+                caps.push("internetClient");
+            }
+            caps
+        }
         WindowsSandboxPreset::Contained => vec![
             "internetClient",
             "internetClientServer",
@@ -50,7 +60,7 @@ pub fn allowed_capabilities(preset: WindowsSandboxPreset) -> Vec<&'static str> {
 
 /// Render a one-line summary for `/sandbox` and `/doctor` overlays.
 pub fn describe_filter(opts: &WindowsSandboxOptions) -> String {
-    let caps = allowed_capabilities(opts.preset);
+    let caps = allowed_capabilities(opts);
     let net = if opts.allow_network { "yes" } else { "no" };
     format!(
         "windows-appcontainer preset={:?} container={} capabilities={} network={}",
@@ -86,23 +96,40 @@ pub fn install_filter(_opts: &WindowsSandboxOptions) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    fn opts_for(preset: WindowsSandboxPreset, allow_network: bool) -> WindowsSandboxOptions {
+        WindowsSandboxOptions {
+            preset,
+            allow_network,
+            container_name: "test".into(),
+        }
+    }
+
     #[test]
     fn unrestricted_returns_no_capabilities() {
-        let caps = allowed_capabilities(WindowsSandboxPreset::Unrestricted);
+        let caps = allowed_capabilities(&opts_for(WindowsSandboxPreset::Unrestricted, true));
         assert!(caps.is_empty());
     }
 
     #[test]
-    fn readonly_has_internet_client_and_docs() {
-        let caps = allowed_capabilities(WindowsSandboxPreset::ReadOnly);
+    fn readonly_without_network_has_no_internet_client() {
+        // ReadOnly is documented as "no network": internetClient must be absent
+        // unless the caller explicitly opts in via allow_network.
+        let caps = allowed_capabilities(&opts_for(WindowsSandboxPreset::ReadOnly, false));
+        assert!(!caps.contains(&"internetClient"));
+        assert!(caps.contains(&"documentsLibrary"));
+    }
+
+    #[test]
+    fn readonly_with_network_opt_in_has_internet_client() {
+        let caps = allowed_capabilities(&opts_for(WindowsSandboxPreset::ReadOnly, true));
         assert!(caps.contains(&"internetClient"));
         assert!(caps.contains(&"documentsLibrary"));
     }
 
     #[test]
     fn contained_has_strictly_more_capabilities_than_readonly() {
-        let ro = allowed_capabilities(WindowsSandboxPreset::ReadOnly);
-        let cn = allowed_capabilities(WindowsSandboxPreset::Contained);
+        let ro = allowed_capabilities(&opts_for(WindowsSandboxPreset::ReadOnly, false));
+        let cn = allowed_capabilities(&opts_for(WindowsSandboxPreset::Contained, false));
         assert!(cn.len() > ro.len());
     }
 
