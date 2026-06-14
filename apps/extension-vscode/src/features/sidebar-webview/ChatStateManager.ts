@@ -12,7 +12,7 @@ import {
   streamChatCompletion,
   setApiKey,
   clearApiKey,
-  getApiKey,
+  getAccountToken,
   AgiWorkforceApiError,
   type LlmChatMessage,
 } from '../../utils/api';
@@ -25,6 +25,7 @@ import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
   buildGroupedQuickPickItems,
+  AGI_CLOUD_BRAND_COLOR,
 } from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
@@ -51,6 +52,7 @@ export type WebviewToExtMessage =
   | { type: 'sendMessage'; payload: { text: string; model?: string } }
   | { type: 'setApiKey'; payload: { key: string } }
   | { type: 'clearApiKey' }
+  | { type: 'signIn' }
   | { type: 'ready' }
   | { type: 'getModel' }
   | { type: 'openSettings' }
@@ -188,7 +190,9 @@ export class ChatStateManager {
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
-        const hasKey = (await getApiKey(this._secrets)) !== undefined;
+        // "hasKey" now means "signed in to AGI Cloud" (account token present),
+        // so the sidebar shows the Sign-in CTA only when not signed in.
+        const hasKey = (await getAccountToken(this._secrets)) !== undefined;
         this._post({ type: 'apiKeyStatus', payload: { hasKey } });
 
         const model = normalizeConfiguredModelId(
@@ -220,6 +224,11 @@ export class ChatStateManager {
       case 'clearApiKey': {
         await clearApiKey(this._secrets);
         this._post({ type: 'apiKeyStatus', payload: { hasKey: false } });
+        break;
+      }
+
+      case 'signIn': {
+        await vscode.commands.executeCommand('agi-workforce.signIn');
         break;
       }
 
@@ -681,7 +690,7 @@ export class ChatStateManager {
     if (modelId.startsWith('auto-')) {
       this._post({
         type: 'providerBadge',
-        payload: { providerLabel: 'AGI Cloud', brandColor: '#F59E0B' },
+        payload: { providerLabel: 'AGI Cloud', brandColor: AGI_CLOUD_BRAND_COLOR },
       });
       return;
     }
