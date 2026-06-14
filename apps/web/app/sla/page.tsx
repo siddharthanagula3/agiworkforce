@@ -5,7 +5,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
   title: 'SLA',
-  description: 'Service level agreement — uptime targets, response times, and credit terms.',
+  description: 'Service level agreement · uptime targets, response times, and credit terms.',
   alternates: { canonical: 'https://agiworkforce.com/sla' },
 };
 

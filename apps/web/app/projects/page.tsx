@@ -8,7 +8,7 @@ import { ProjectSettingsDialog } from '@features/projects/components/ProjectSett
 import { useProjectStore } from '@features/projects/stores/project-store';
 
 /**
- * /projects — top-level Projects hub on web.
+ * /projects · top-level Projects hub on web.
  *
  * Mounts the shared `ProjectGallery` for the default "Updated" sort (which
  * already sorts starred-first then by updatedAt). For other sort modes

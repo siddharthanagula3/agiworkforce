@@ -27,7 +27,7 @@ function sourceLabel(source: string): string {
   return 'Custom';
 }
 
-// ── Inner component — only rendered once plugin is confirmed non-null ──────────
+// ── Inner component · only rendered once plugin is confirmed non-null ──────────
 
 function PluginDetail({ plugin }: { plugin: Plugin }) {
   const { connectedIds, loading: connectorsLoading } = useConnectors();
@@ -171,7 +171,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
   );
 }
 
-// ── Page entry point — resolves params, guards 404 before rendering detail ─────
+// ── Page entry point · resolves params, guards 404 before rendering detail ─────
 
 interface Props {
   params: Promise<{ id: string }>;

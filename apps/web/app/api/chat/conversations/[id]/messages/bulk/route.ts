@@ -79,7 +79,15 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
   try {
     for (const msg of messages) {
       if (msg.id) {
-        // Upsert by provided ID
+        // Upsert by provided ID.
+        //
+        // AUDIT-FIX (CRITICAL #17, IDOR): the conflict target is the global
+        // PK and msg.id is client-supplied · without the conversation guard
+        // on the DO UPDATE, posting a victim's message UUID into the
+        // attacker's own (ownership-checked) conversation would overwrite
+        // the victim's row and leak its provider/token/cost fields via
+        // RETURNING. The WHERE clause makes a foreign-row conflict a no-op,
+        // which is rejected explicitly below instead of silently skipped.
         const [row] = await db.query<ChatMessageRow>(
           `
             insert into web_messages
@@ -89,6 +97,7 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
               set content = excluded.content,
                   model = excluded.model,
                   metadata = excluded.metadata
+              where web_messages.conversation_id = excluded.conversation_id
             returning id, role, content, model, provider,
                       input_tokens, output_tokens, cost_cents, created_at, metadata
           `,
@@ -101,7 +110,11 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
             JSON.stringify(normalizeMessageMetadata(msg.metadata) ?? {}),
           ],
         );
-        if (row) saved.push(row);
+        if (!row) {
+          // Conflict on a message that belongs to a different conversation.
+          throw createError.validation('Message id belongs to another conversation');
+        }
+        saved.push(row);
       } else {
         // Insert without explicit ID
         const [row] = await db.query<ChatMessageRow>(
@@ -126,6 +139,10 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ saved: saved.length, messages: saved });
   } catch (error) {
+    // Re-throw typed AppErrors (e.g. the cross-conversation rejection above).
+    if (error && typeof error === 'object' && ('status' in error || 'statusCode' in error)) {
+      throw error;
+    }
     logger.error({ error, conversationId }, 'Failed to bulk save messages');
     throw createError.internal('Failed to save messages');
   }

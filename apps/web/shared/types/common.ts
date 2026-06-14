@@ -126,7 +126,7 @@ export interface MessageMetadata {
 }
 
 /**
- * Base chat message interface — web surface variant.
+ * Base chat message interface · web surface variant.
  *
  * Field mapping to canonical `ChatMessage` from `@agiworkforce/types`:
  *   - `id`        → canonical `id`
@@ -404,12 +404,12 @@ export interface AIEmployeeBasic {
 
 /**
  * AI agent for marketplace display
- * All agents are freely available — no ownership or pricing model
+ * All agents are freely available · no ownership or pricing model
  */
 export interface MarketplaceEmployee extends AIEmployeeBasic {
   category: string;
   provider: AIProvider;
-  /** @deprecated Pricing removed — all agents are free to chat with */
+  /** @deprecated Pricing removed · all agents are free to chat with */
   price?: number;
   /** @deprecated Pricing removed */
   originalPrice?: number;
@@ -420,7 +420,7 @@ export interface MarketplaceEmployee extends AIEmployeeBasic {
   fitLevel?: 'excellent' | 'good' | 'fair';
   popular?: boolean;
   new?: boolean;
-  /** @deprecated Ownership model removed — all agents always available */
+  /** @deprecated Ownership model removed · all agents always available */
   isHired?: boolean;
   /** @deprecated Ratings removed */
   rating?: number;

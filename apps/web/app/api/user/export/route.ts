@@ -179,7 +179,7 @@ async function collectUserData(
     };
   }
 
-  // Organization memberships — two queries, joined in JS (PostgREST embedding not available)
+  // Organization memberships · two queries, joined in JS (PostgREST embedding not available)
   const orgMemberRows = await db
     .query<
       Record<string, unknown>
@@ -204,7 +204,7 @@ async function collectUserData(
     }));
   }
 
-  // Beta redemptions — two queries, joined in JS
+  // Beta redemptions · two queries, joined in JS
   const betaRows = await db
     .query<Record<string, unknown>>('select * from beta_redemptions where user_id = $1', [user.id])
     .catch(() => []);

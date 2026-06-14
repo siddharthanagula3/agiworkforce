@@ -6,7 +6,7 @@ import { Copy, Check, LogOut, Trash2 } from 'lucide-react';
 import { useBillingStore } from '@/stores/unified/auth';
 
 /**
- * /settings/account — Log out all devices, delete account, org ID, active sessions.
+ * /settings/account · Log out all devices, delete account, org ID, active sessions.
  * UI reference: desktop/claude/2026-05-13/extended/025-settings-account.png
  *
  * Danger-zone (delete account) lives in /settings/profile for historic reasons

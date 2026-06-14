@@ -1,85 +1,78 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import {
-  CampaignHero,
-  FeatureGrid,
-  LaunchCta,
-  LedgerSection,
-} from '../../components/marketing/LandingSections';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+import { FeatureGrid, LedgerSection } from '../../components/marketing/LandingSections';
+import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Cowork - Desktop agents for browser, files, apps, and dispatch',
+  title: 'AGI Work: Scheduled work and dispatch on your desktop',
   description:
-    'AGI Cowork is the desktop agent mode for computer use, browser tasks, files, scheduled tasks, dispatch, and live artifacts.',
-  alternates: { canonical: 'https://agiworkforce.com/cowork' },
+    'AGI Work is the Desktop mode for scheduled routines, local file work, approved tools, and mobile-to-desktop dispatch. Explicit approvals on every sensitive action.',
+  alternates: { canonical: 'https://agiworkforce.com/agi-work' },
 };
 
-export default function CoworkPage() {
+export default function AgiWorkPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <CampaignHero
-          eyebrow={`${LAUNCH.publicLabel} · Desktop agent mode`}
-          title="Let AGI work on the computer you already own."
-          lede={`Cowork is the desktop mode for browser use, file work, local apps, scheduled tasks, live artifacts, and mobile-to-desktop dispatch. ${POSITIONING.trustBoundary}`}
-          primaryCta={{ href: '/desktop', label: 'See desktop app' }}
-          secondaryCta={{ href: '/mobile', label: 'Mobile dispatch' }}
-          chips={['Ask mode', 'Act mode', 'Dispatch', 'Scheduled tasks', 'Local extensions']}
-          panelTitle="Cowork loop"
-          panelRows={[
-            { k: 'Observe', v: 'Screenshots, DOM/page context, files, and app state' },
-            { k: 'Decide', v: 'Provider-selected model reasons over the next action' },
-            { k: 'Approve', v: 'Ask before actions or use explicit act mode' },
-            { k: 'Execute', v: 'Browser, keyboard, mouse, files, apps, and connectors' },
+
+        <FlagshipHero
+          eyebrow="AGI Work · on Desktop"
+          titleLines={['Your desktop,', 'on schedule.']}
+          em="on schedule."
+          lede="AGI Work is the Desktop mode for scheduled work and dispatched tasks: set routines that run on your own machine, send a task from your phone to the Desktop host, and approve the steps that matter before they run. The compute is yours, and so is every decision."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/desktop', label: 'See AGI Desktop' },
+            { href: '/mobile', label: 'See Mobile Dispatch' },
           ]}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
         />
 
         <FeatureGrid
           eyebrow="Desktop workflows"
-          title="What Cowork needs to make visible."
+          title="What AGI Work does on your machine."
           items={[
             {
-              meta: 'Browser',
-              title: 'Use websites with approval',
-              body: 'Click, type, scroll, read pages, and fill forms while showing each action and its risk before execution when approval is required.',
-            },
-            {
-              meta: 'Files',
-              title: 'Work with local folders',
-              body: 'Read, organize, summarize, and create files through local extensions and path-scoped permissions.',
-            },
-            {
-              meta: 'Apps',
-              title: 'Operate installed tools',
-              body: 'Use approved desktop extensions for notes, spreadsheets, browser sessions, and local MCP servers.',
-              href: '/apps',
+              meta: 'Schedule',
+              title: 'Scheduled work',
+              body: 'Run daily or weekly routines on your own machine, with results waiting in the thread when you come back.',
             },
             {
               meta: 'Dispatch',
-              title: 'Send tasks from mobile to desktop',
-              body: 'Start a task from the phone and let the desktop host run it while progress streams back.',
+              title: 'Mobile-to-desktop dispatch',
+              body: 'Start a task from the phone; the Desktop host runs it and progress streams back to your pocket.',
               href: '/mobile',
             },
             {
-              meta: 'Automation',
-              title: 'Scheduled tasks and live artifacts',
-              body: 'Run daily or weekly routines and keep dashboards fresh from connected data sources.',
-              href: '/features/artifacts',
+              meta: 'Files',
+              title: 'Local file work',
+              body: 'Read, organize, summarize, and draft against local folders through path-scoped permissions.',
             },
             {
-              meta: 'Safety',
-              title: 'Separate local action from cloud inference',
-              body: 'Cowork must show which model is reasoning and what local context is leaving the machine before any BYOK or Cloud handoff.',
+              meta: 'Tools',
+              title: 'Apps and connectors',
+              body: 'Use approved desktop extensions and local MCP servers behind explicit tool approvals.',
+              href: '/apps',
+            },
+            {
+              meta: 'Approvals',
+              title: 'Approval-first execution',
+              body: 'Sensitive actions wait for your explicit approval, with the action visible before it runs.',
+            },
+            {
+              meta: 'Boundary',
+              title: 'Visible routing',
+              body: 'AGI Work shows which model is reasoning and what local context would leave the machine before any BYOK or Cloud handoff.',
             },
           ]}
         />
 
         <LedgerSection
           eyebrow="Mode design"
-          title="Cowork must be one chat, not a second universe."
+          title="One chat, not a second universe."
           rows={[
             {
               k: 'Normal chat',
@@ -87,25 +80,31 @@ export default function CoworkPage() {
             },
             {
               k: 'Focused file work',
-              v: 'Selecting a file should add context and affordances inside the same chat rather than moving users to another chat product.',
+              v: 'Selecting a file adds context and affordances inside the same chat instead of moving you to another product.',
             },
             {
-              k: 'Ask vs Act',
-              v: 'Ask mode requires approval for actions. Act mode is explicit and can be restricted by site, app, tool, or project.',
+              k: 'Approvals',
+              v: 'Actions ask before they run. Broader automation is an explicit, scoped choice. Never a silent default.',
             },
             {
-              k: 'Cloud waitlist',
-              v: 'Managed Cowork Cloud is invite-only until hosted execution, fraud, metering, and data controls are ready.',
+              k: 'Hosted AGI Work',
+              v: 'Managed cloud execution stays invite-only until metering, fraud, and data controls are proven.',
             },
           ]}
         />
 
-        <LaunchCta
-          title="Cowork is the desktop reason to install AGI."
-          body="Local and BYOK chat can start the relationship. Cowork turns the desktop into the private execution host for browser, file, app, and dispatch workflows."
-          primary={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondary={{ href: '/desktop', label: 'Desktop details' }}
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Put your desktop on the roster."
+          body="Install AGI Desktop, schedule the first routine, and dispatch work from your phone. Every sensitive action stays visible and approved before it runs."
+          ctas={[
+            { href: '/download', label: 'Download AGI' },
+            { href: '/desktop', label: 'See AGI Desktop' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
         />
+
         <MarketingFooter />
       </main>
     </div>

@@ -193,7 +193,7 @@ export function ProjectSettingsDialog({
                 <Upload className="h-5 w-5 text-muted-foreground" />
                 <span className="text-muted-foreground">Drop files or click to upload</span>
                 <span className="text-[10px] text-muted-foreground/60">
-                  PDF, DOCX, TXT, CSV, MD — max 30MB each
+                  PDF, DOCX, TXT, CSV, MD · max 30MB each
                 </span>
               </button>
 

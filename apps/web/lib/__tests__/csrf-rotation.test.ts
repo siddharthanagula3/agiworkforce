@@ -17,7 +17,7 @@ const ORIG_SECRET = process.env['CSRF_SECRET'];
 const ORIG_PREV = process.env['CSRF_SECRET_PREV'];
 
 // 32-byte UTF-8 strings (the minimum entropy bar)
-const SECRET_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; // 38 chars (rejected later — repeats)
+const SECRET_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; // 38 chars (rejected later · repeats)
 const HIGH_ENTROPY_A = 'qF7T3vJL92zXp8MeB6sNcW1uHk5RyG4DaPoZ';
 const HIGH_ENTROPY_B = 'eY8K2bV9wXcZqL4mN7Rt6sUjGfHpD3aoP5iE';
 
@@ -81,7 +81,7 @@ describe('CSRF rotation (WEB-33)', () => {
     const oldToken = sessionTokenSignedWith('session-1', HIGH_ENTROPY_B);
     expect(verifyCsrfToken(oldToken, 'session-1')).toBe(true);
 
-    // Remove the PREV — old tokens should now fail
+    // Remove the PREV · old tokens should now fail
     delete process.env['CSRF_SECRET_PREV'];
     resetCsrfCache();
     expect(verifyCsrfToken(oldToken, 'session-1')).toBe(false);
@@ -106,9 +106,9 @@ describe('CSRF rotation (WEB-33)', () => {
   });
 
   it('repeated-character secret still passes if length ≥ 32 (entropy check is byte-length only)', () => {
-    // SECRET_A = 'a' * 38 — long enough for the byte-length guard. The repeated-
+    // SECRET_A = 'a' * 38 · long enough for the byte-length guard. The repeated-
     // char heuristic is in desktop-token's stricter assertHighEntropyKeysource(),
-    // not in CSRF (the CSRF secret is an HMAC key — length ≥ 32 random bytes
+    // not in CSRF (the CSRF secret is an HMAC key · length ≥ 32 random bytes
     // is the correctness bar, and operators are expected to use crypto.randomBytes).
     process.env['CSRF_SECRET'] = SECRET_A;
     delete process.env['CSRF_SECRET_PREV'];

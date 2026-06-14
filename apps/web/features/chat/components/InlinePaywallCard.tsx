@@ -15,7 +15,7 @@
  *     not a barrel re-export.
  *   - rendering-conditional-render: all conditionals use ternary (? :), not &&.
  *   - server-serialization: only accepts the minimal props needed (currentTier,
- *     requiredTier, feature, reason) — no currentUser object.
+ *     requiredTier, feature, reason) · no currentUser object.
  */
 
 import { memo } from 'react';
@@ -93,7 +93,7 @@ const FEATURE_LABELS: Record<PaywallFeature, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Sub-components — top-level to satisfy rerender-no-inline-components
+// Sub-components · top-level to satisfy rerender-no-inline-components
 // ---------------------------------------------------------------------------
 
 interface FeatureIconProps {
@@ -108,7 +108,7 @@ interface FeatureIconProps {
 const FeatureIcon = memo(function FeatureIcon({ feature, className }: FeatureIconProps) {
   const iconClass = cn('h-5 w-5', className);
 
-  // Use explicit ternary chain — rendering-conditional-render
+  // Use explicit ternary chain · rendering-conditional-render
   return feature === 'video_generation' ? (
     <Video className={iconClass} aria-hidden="true" />
   ) : feature === 'opus_4_7' ? (

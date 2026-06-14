@@ -2,174 +2,82 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
-
-// All user-visible copy is declared here so a translator can find every string
-// in one place. Future Hindi translation = one object swap.
-const COPY = {
-  // Hero
-  heroEyebrow: `iOS + Android, launching ${LAUNCH.isoDate}`,
-  heroHeadline: 'AGI on your phone.',
-  heroSubline: 'Free Local. Cloud by invite.',
-  heroLede:
-    'A ChatGPT and Claude-style mobile assistant where users can run small on-device local models or unlock AGI Cloud with an invite code.',
-  heroChip_offline: 'Works offline',
-  heroChip_ondevice: 'Local mode',
-  heroChip_dpdp: 'Designed for DPDP 2023',
-  heroChip_free: 'Free Local',
-  heroWaitlistCta: LAUNCH.ctaLabel,
-  heroWaitlistNote: POSITIONING.trustBoundary,
-
-  // What's different
-  diffEyebrow: 'What makes it different',
-  diffCards: [
-    {
-      label: 'Local mode',
-      headline: 'Your phone runs the AI.',
-      body: 'In Local mode there is no model-provider call during inference. Works on a plane, in a basement, or anywhere network access is unreliable.',
-    },
-    {
-      label: 'Mobile Cloud',
-      headline: 'Hosted models wait for an invite.',
-      body: 'Mobile Cloud requires invite access and subscription-backed account state. The mobile setup stays focused on Local and invite-gated Cloud.',
-    },
-    {
-      label: 'Cloud invite',
-      headline: 'Managed power when users ask for it.',
-      body: 'Cloud is invite-only for hosted sync, managed tools, and higher-capacity workflows. Local chats do not silently move to Cloud.',
-    },
-  ],
-
-  // On-device AI section
-  onDeviceEyebrow: 'Your phone already has AI',
-  onDeviceHeadline: 'We gave it a front door.',
-  onDeviceLede:
-    'Modern phones ship with AI inference chips. Apple built one into the A17 Pro. Google built one into Tensor G4. AGI Mobile uses what is already there.',
-  onDeviceIosLabel: 'On iPhone',
-  onDeviceAndroidLabel: 'On Android',
-  onDeviceIosRows: [
-    ['Apple Foundation Models', 'Supported Apple on-device runtime where available'],
-    ['react-native-executorch', 'A15+ class devices with downloadable small models'],
-  ],
-  onDeviceAndroidRows: [
-    ['Gemini Nano (AICore)', 'AICore-capable devices when the runtime is available'],
-    ['react-native-executorch', 'Mid-range Android devices with downloadable small models'],
-    ['llama.rn fallback', 'Manual local model route for older supported devices'],
-  ],
-  onDeviceNote:
-    'Local model availability is device-dependent. AGI Mobile must show installed, downloadable, unavailable, and runtime-offline states instead of silently switching to Cloud.',
-
-  // Feature grid
-  featureEyebrow: 'Features in v1',
-  featureHeadline: 'A full AI assistant. On your phone.',
-  features: [
-    { icon: '💬', label: 'Chat', body: 'Text conversation with persistent memory and context.' },
-    { icon: '📷', label: 'Image Q&A', body: 'Take a photo. Ask anything about what you see.' },
-    { icon: '🎙', label: 'Voice', body: 'Speak your question. Read the answer.' },
-    { icon: '📄', label: 'OCR + Scan', body: 'Point at a document or sign. Extract and ask.' },
-    {
-      icon: '🌐',
-      label: 'Translate',
-      body: 'Supported language pairs, on-device after the required language models are available.',
-    },
-    { icon: '🧠', label: 'Memory', body: 'Remembers facts you tell it across conversations.' },
-    { icon: '📁', label: 'Projects', body: 'Topic workspaces. Keep context separate.' },
-    {
-      icon: '⚡',
-      label: 'Skills',
-      body: `${MARKETING.skills.display} built-in skills across ${MARKETING.categories.display} categories.`,
-    },
-    { icon: '❤️', label: 'HealthKit', body: 'iOS: weekly activity recap in plain language.' },
-    {
-      icon: '🇮🇳',
-      label: 'Hindi',
-      body: 'Hindi-facing copy and support paths are part of the Mobile v1 readiness work.',
-    },
-  ],
-
-  // Privacy section
-  privacyEyebrow: 'Privacy',
-  privacyHeadline: 'Two mobile modes. Clear trust boundaries.',
-  privacyLede:
-    'AGI Mobile does not blur Local and Cloud. Local stays on-device. Cloud requires an invite, subscription-backed account state, and an explicit provider label.',
-  privacyPoints: [
-    {
-      label: 'Local mode',
-      body: 'Local conversations run on the device using supported on-device or local model routes. They are not silently sent to AGI Cloud.',
-    },
-    {
-      label: 'Simple mobile setup',
-      body: 'Mobile v1 keeps setup focused on Local and invite-gated Cloud so users always know which mode they are using.',
-    },
-    {
-      label: 'Cloud mode',
-      body: 'Managed Cloud is invite-gated for hosted sync and managed compute. It is separate from Local by design.',
-    },
-    {
-      label: 'No silent route changes',
-      body: 'Moving Local context into Cloud requires an explicit continuation, context selection, visible provider label, and user consent.',
-    },
-    {
-      label: 'Telemetry controls',
-      body: 'Crash reports and analytics are separated from conversation content. AI screens avoid session replay, and analytics defaults should remain user-controlled.',
-    },
-    {
-      label: 'Compliance path',
-      body: 'Mobile is designed around DPDP, GDPR, and EU AI Act disclosures. Formal verification remains part of launch readiness before public release.',
-    },
-  ],
-
-  // Waitlist tease
-  waitlistEyebrow: 'Cloud by invite',
-  waitlistHeadline: 'Managed compute after demand is proven.',
-  waitlistLede: `${MARKETING.providers.display} providers, synced chats, hosted tools, and managed compute become available with invite codes. Free Local creates the mobile demand signal first.`,
-  waitlistCta: 'Request Cloud invite',
-
-  // Footer section
-  aboutCompany: 'AGI Automation LLC',
-  aboutTagline: MARKETING.tagline,
-} as const;
+import {
+  CapabilityGrid,
+  FinalCta,
+  TrustTriptych,
+} from '../../components/marketing/FlagshipSections';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { Reveal } from '../../components/marketing/Reveal';
+import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Mobile: On-device AI for iOS and Android',
-  description: `${POSITIONING.wedge} AGI Mobile launches July 12, 2026 for iOS and Android.`,
+  title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
+  description:
+    'AGI Mobile runs chat on your phone in Local Mode by default. Chats, memory, projects, and files stay on-device unless you choose otherwise. AGI Cloud opens by invite.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
-    title: 'AGI Mobile: On-device AI for iOS and Android',
-    description: `${POSITIONING.wedge} AGI Mobile launches July 12, 2026 for iOS and Android.`,
+    title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
+    description:
+      'On-device Local chat by default. Your data stays on the phone unless you explicitly choose otherwise. AGI Cloud by invite.',
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
-    images: [{ url: '/mobile-preview.png', width: 1200, height: 630, alt: 'AGI Mobile' }],
+    images: [{ url: '/app-preview.png', width: 1024, height: 665, alt: 'AGI app preview' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Mobile: On-device AI for iOS and Android',
-    description: `${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
-    images: ['/mobile-preview.png'],
+    title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
+    description: `Local Mode by default. AGI Cloud by invite. ${LAUNCH.publicLabel}.`,
+    images: ['/app-preview.png'],
   },
 };
 
-// Trust chip component (inline — no new files needed for a simple chip)
-function TrustChip({ label }: { label: string }) {
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '5px 12px',
-        borderRadius: 100,
-        fontSize: 12,
-        fontWeight: 600,
-        letterSpacing: '0.04em',
-        textTransform: 'uppercase',
-        background: 'var(--agi-card)',
-        border: '1px solid var(--agi-rule-strong)',
-        color: 'var(--agi-ink-2)',
-      }}
-    >
-      {label}
-    </span>
-  );
-}
+/** Local-first feature stories, rendered as alternating copy/visual rows. */
+const LOCAL_STORIES = [
+  {
+    name: 'Chat that runs on the phone',
+    tagline: 'Local Mode is the default, not a setting.',
+    body: 'Open the app and start talking. Inference runs on-device through AGI Standard. No account required. No network call during a Local chat.',
+    capabilities: [
+      'On-device Local chat',
+      'Works offline',
+      'AGI Standard runtime',
+      'Clear model availability states',
+    ],
+    platforms: 'iPhone · Android',
+    status: 'Local by default',
+    frame: { title: 'AGI Mobile', badge: 'Local' },
+  },
+  {
+    name: 'Your data stays on the phone',
+    tagline: 'No silent routes. No surprise sync.',
+    body: 'Chats, memory, projects, and files live on-device. Nothing moves to a server unless you choose it. When you do, the route is labeled before anything leaves.',
+    capabilities: [
+      'Chats & memory on-device',
+      'Projects & files on-device',
+      'Personalization on-device',
+      'Explicit, labeled continuation',
+    ],
+    platforms: 'iPhone · Android',
+    status: 'On-device by default',
+    frame: { title: 'AGI Mobile', badge: 'On-device' },
+  },
+  {
+    name: 'A complete workspace, not a companion app',
+    tagline: 'The full AGI workspace. One hand.',
+    body: 'Switch models from the picker. Organize work with the projects drawer. Tune memory, appearance, and safety from full settings. All without leaving Local Mode.',
+    capabilities: [
+      'Model picker',
+      'Projects & recents drawer',
+      'Full settings',
+      'Memory & personalization controls',
+    ],
+    platforms: 'iPhone · Android',
+    status: 'Local + Cloud invite',
+    frame: { title: 'AGI Mobile', badge: 'Local' },
+  },
+] as const;
 
 export default function MobilePage() {
   return (
@@ -177,423 +85,182 @@ export default function MobilePage() {
       <main className="agi-shell">
         <Header />
 
-        {/* ---- 1. HERO ---- */}
-        <section className="agi-hero" style={{ paddingBottom: 64 }}>
-          <p
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: 'var(--agi-amber)',
-              marginBottom: 16,
-            }}
-          >
-            {COPY.heroEyebrow}
-          </p>
-          <h1 className="agi-h1" aria-label={`${COPY.heroHeadline} ${COPY.heroSubline}`}>
-            <span className="agi-h1-line">{COPY.heroHeadline}</span>
-            <span className="agi-h1-line agi-h1-line--quiet">{COPY.heroSubline}</span>
-          </h1>
-          <p className="agi-lede">{COPY.heroLede}</p>
-
-          {/* Launch notice */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '12px 20px',
-              background: 'var(--agi-card)',
-              border: '1px solid var(--agi-rule-strong)',
-              borderRadius: 10,
-              marginTop: 32,
-              marginBottom: 20,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: 'var(--agi-ink)',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              {LAUNCH.publicLabel} · iOS and Android
-            </span>
-          </div>
-
-          {/* Trust chips */}
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              marginBottom: 32,
-            }}
-            role="list"
-            aria-label="Trust indicators"
-          >
-            <div role="listitem">
-              <TrustChip label={COPY.heroChip_offline} />
-            </div>
-            <div role="listitem">
-              <TrustChip label={COPY.heroChip_ondevice} />
-            </div>
-            <div role="listitem">
-              <TrustChip label={COPY.heroChip_dpdp} />
-            </div>
-            <div role="listitem">
-              <TrustChip label={COPY.heroChip_free} />
-            </div>
-          </div>
-
-          {/* Waitlist sub-CTA */}
-          <div className="agi-cta-row">
-            <Link href="/download" className="agi-cta-ghost">
-              {COPY.heroWaitlistCta} →
-            </Link>
-          </div>
-          <p
-            style={{
-              fontSize: 13,
-              color: 'var(--agi-ink-quiet)',
-              marginTop: 10,
-              letterSpacing: '0.01em',
-            }}
-          >
-            {COPY.heroWaitlistNote}
-          </p>
-        </section>
-
-        {/* ---- 1b. SCREENSHOTS ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">How it looks</p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: 16,
-            }}
-          >
-            {[
-              {
-                title: 'Chat: on-device, offline',
-                desc: 'Conversation screen with streaming response from Apple Foundation Models. No network activity indicator visible.',
-              },
-              {
-                title: 'Image Q&A: point and ask',
-                desc: 'Camera feed with AGI overlay. User pointed at a handwritten recipe. AI extracted ingredients and suggested substitutions.',
-              },
-              {
-                title: 'Voice mode',
-                desc: 'Voice input active. Waveform animation shows live transcription. Response reads back in the selected voice.',
-              },
-            ].map((shot) => (
-              <div
-                key={shot.title}
-                style={{
-                  background: 'var(--agi-card)',
-                  border: '1px solid var(--agi-rule-strong)',
-                  borderRadius: 16,
-                  overflow: 'hidden',
-                }}
-              >
-                {/* Phone status bar mock */}
-                <div
-                  style={{
-                    background: 'var(--agi-bg-3)',
-                    borderBottom: '1px solid var(--agi-rule)',
-                    padding: '8px 16px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    fontSize: 10,
-                    color: 'var(--agi-ink-quiet)',
-                    fontFamily: 'var(--mono)',
-                  }}
-                >
-                  <span>9:41 AM</span>
-                  <span>{shot.title}</span>
-                  <span>100%</span>
-                </div>
-                <div
-                  style={{
-                    padding: '28px 16px',
-                    minHeight: 160,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    background:
-                      'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.05em',
-                      textTransform: 'uppercase',
-                      color: 'var(--agi-amber)',
-                      margin: 0,
-                    }}
-                  >
-                    Product view
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 13,
-                      color: 'var(--agi-ink-2)',
-                      textAlign: 'center',
-                      maxWidth: 240,
-                      lineHeight: 1.5,
-                      margin: 0,
-                    }}
-                  >
-                    {shot.desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ---- 2. WHAT'S DIFFERENT (3 cards) ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">{COPY.diffEyebrow}</p>
-          <ul className="agi-reasons" aria-label="Differentiators">
-            {COPY.diffCards.map((card) => (
-              <li key={card.label} className="agi-reason">
-                <div className="agi-callout" style={{ height: '100%' }}>
-                  <p
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      color: 'var(--agi-amber)',
-                      margin: '0 0 8px',
-                    }}
-                  >
-                    {card.label}
-                  </p>
-                  <h3 className="agi-callout-h">{card.headline}</h3>
-                  <p className="agi-callout-p">{card.body}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ---- 3. ON-DEVICE AI EXPLANATION ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">{COPY.onDeviceEyebrow}</p>
-          <h2 className="agi-section-h2">{COPY.onDeviceHeadline}</h2>
-          <p
-            style={{
-              color: 'var(--agi-ink-2)',
-              fontSize: 15,
-              lineHeight: 1.7,
-              maxWidth: 620,
-              marginBottom: 40,
-            }}
-          >
-            {COPY.onDeviceLede}
-          </p>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 20,
-            }}
-          >
-            {/* iOS */}
-            <div>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--agi-amber)',
-                  marginBottom: 12,
-                }}
-              >
-                {COPY.onDeviceIosLabel}
-              </p>
-              <table className="agi-ledger">
-                <tbody>
-                  {COPY.onDeviceIosRows.map(([model, note]) => (
-                    <tr key={model}>
-                      <td style={{ fontWeight: 600, fontSize: 13 }}>{model}</td>
-                      <td style={{ color: 'var(--agi-ink-2)', fontSize: 13 }}>{note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Android */}
-            <div>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--agi-amber)',
-                  marginBottom: 12,
-                }}
-              >
-                {COPY.onDeviceAndroidLabel}
-              </p>
-              <table className="agi-ledger">
-                <tbody>
-                  {COPY.onDeviceAndroidRows.map(([model, note]) => (
-                    <tr key={model}>
-                      <td style={{ fontWeight: 600, fontSize: 13 }}>{model}</td>
-                      <td style={{ color: 'var(--agi-ink-2)', fontSize: 13 }}>{note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div
-            className="agi-callout"
-            style={{ marginTop: 24, borderColor: 'var(--agi-amber)', borderWidth: 1 }}
-          >
-            <p className="agi-callout-p">{COPY.onDeviceNote}</p>
-          </div>
-        </section>
-
-        {/* ---- 4. FEATURE GRID ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">{COPY.featureEyebrow}</p>
-          <h2 className="agi-section-h2">{COPY.featureHeadline}</h2>
-          <ul className="agi-perks-grid" style={{ marginTop: 32 }} aria-label="Feature list">
-            {COPY.features.map((f) => (
-              <li key={f.label} className="agi-perk-card">
-                <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1, marginBottom: 4 }}>
-                  {f.icon}
+        <section className="agi-fl-hero" aria-labelledby="agi-mobile-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">AGI Mobile · iPhone &amp; Android</p>
+              <h1 id="agi-mobile-hero-title" className="agi-fl-h1">
+                <span className="agi-fl-h1-line">Private AI,</span>
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">in your pocket.</em>
                 </span>
-                <p className="agi-perk-title">{f.label}</p>
-                <p className="agi-perk-description">{f.body}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ---- 5. PRIVACY SECTION ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">{COPY.privacyEyebrow}</p>
-          <h2 className="agi-section-h2">{COPY.privacyHeadline}</h2>
-          <p
-            style={{
-              color: 'var(--agi-ink-2)',
-              fontSize: 15,
-              lineHeight: 1.7,
-              maxWidth: 620,
-              marginBottom: 40,
-            }}
-          >
-            {COPY.privacyLede}
-          </p>
-          <ul className="agi-reasons" aria-label="Privacy facts">
-            {COPY.privacyPoints.map((pt) => (
-              <li key={pt.label} className="agi-reason">
-                <h3 className="agi-reason-h">{pt.label}</h3>
-                <p className="agi-reason-p">{pt.body}</p>
-              </li>
-            ))}
-          </ul>
-          <div style={{ marginTop: 32 }}>
-            <Link
-              href="/mobile/legal"
-              className="agi-cta-ghost"
-              style={{ display: 'inline-block' }}
-            >
-              Read the mobile privacy policy →
-            </Link>
-          </div>
-        </section>
-
-        {/* ---- 6. CLOUD WAITLIST TEASE ---- */}
-        <section className="agi-section">
-          <div className="agi-callout">
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--agi-amber)',
-                marginBottom: 10,
-              }}
-            >
-              {COPY.waitlistEyebrow}
-            </p>
-            <h2 className="agi-callout-h">{COPY.waitlistHeadline}</h2>
-            <p className="agi-callout-p" style={{ marginBottom: 24 }}>
-              {COPY.waitlistLede}
-            </p>
-            <Link href="/waitlist" className="agi-cta-primary" style={{ display: 'inline-block' }}>
-              {COPY.waitlistCta}
-            </Link>
-          </div>
-        </section>
-
-        {/* ---- 7. ABOUT FOOTER NOTE ---- */}
-        <section className="agi-section">
-          <div className="agi-colophon">
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Developer</span>
-              <span className="agi-colophon-val">{COPY.aboutCompany}, USA</span>
-            </div>
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Platform</span>
-              <span className="agi-colophon-val">iOS 17+ and Android 14+</span>
-            </div>
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Bundle ID (iOS)</span>
-              <span className="agi-colophon-val">com.agiworkforce.app</span>
-            </div>
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Package (Android)</span>
-              <span className="agi-colophon-val">com.agiworkforce.app</span>
-            </div>
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Framework</span>
-              <span className="agi-colophon-val">Expo 53 + React Native 0.83.6</span>
-            </div>
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Launch date</span>
-              <span className="agi-colophon-val">
-                {LAUNCH.isoDate}, simultaneously iOS and Android
-              </span>
-            </div>
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Support</span>
-              <span className="agi-colophon-val">
-                <a href="mailto:support@agiworkforce.com" style={{ color: 'var(--agi-amber)' }}>
-                  support@agiworkforce.com
-                </a>
-              </span>
-            </div>
-            <div className="agi-colophon-row">
-              <span className="agi-colophon-key">Legal</span>
-              <span className="agi-colophon-val">
-                <Link href="/mobile/legal" style={{ color: 'var(--agi-amber)' }}>
-                  Privacy policy and Terms of service
+              </h1>
+              <p className="agi-fl-lede">
+                Every chat starts in Local Mode. The model runs on your phone. Chats, memory, and
+                files stay on-device unless you say otherwise. AGI Cloud arrives by invite, never by
+                default.
+              </p>
+              <div className="agi-fl-cta-row">
+                <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+                  Get Launch Access
                 </Link>
-              </span>
+                <WaitlistTrigger
+                  label="Join Cloud Waitlist"
+                  source="website"
+                  className="agi-fl-cta agi-fl-cta--secondary"
+                />
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="Mobile trust modes">
+                <li>Local · on-device</li>
+                <li>Cloud · by invite</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <ProductFrame variant="phone" title="AGI Mobile" badge="Local" />
             </div>
           </div>
         </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-mobile-local-title">
+          <p className="agi-fl-eyebrow">Local-first</p>
+          <h2 id="agi-mobile-local-title" className="agi-fl-h2">
+            The phone is the computer.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Inference, memory, and your workspace live on the device. The cloud is an explicit,
+            invite-gated option. Not the default route.
+          </p>
+
+          <ul className="agi-fl-surface-list">
+            {LOCAL_STORIES.map((story) => (
+              <Reveal as="li" key={story.name} className="agi-fl-surface-row">
+                <div className="agi-fl-surface-copy">
+                  <h3 className="agi-fl-surface-name">{story.name}</h3>
+                  <p className="agi-fl-surface-tagline">{story.tagline}</p>
+                  <p className="agi-fl-surface-body">{story.body}</p>
+                  <ul className="agi-fl-surface-caps">
+                    {story.capabilities.map((cap) => (
+                      <li key={cap}>{cap}</li>
+                    ))}
+                  </ul>
+                  <p className="agi-fl-surface-meta">
+                    <span>{story.platforms}</span>
+                    <span className="agi-fl-surface-status">{story.status}</span>
+                  </p>
+                </div>
+                <div className="agi-fl-surface-visual">
+                  <ProductFrame
+                    variant="phone"
+                    title={story.frame.title}
+                    badge={story.frame.badge}
+                  />
+                </div>
+              </Reveal>
+            ))}
+          </ul>
+        </section>
+
+        <TrustTriptych
+          eyebrow="Trust boundary"
+          title="Two modes. One hard line between them."
+          lede="AGI Mobile keeps Local and AGI Cloud separate by design. A Local thread stays Local. Continuing one in the cloud is an explicit, labeled choice."
+          cards={[
+            {
+              mode: 'Local',
+              glyph: '◆',
+              title: 'Yours alone, free forever.',
+              body: 'On-device chat is the default on every install.',
+              points: [
+                'Conversations run on the phone',
+                'Works offline',
+                'No account required',
+                'Free forever',
+              ],
+              cta: { href: '/local', label: 'See How Local Works' },
+            },
+            {
+              mode: 'The boundary',
+              glyph: '◇',
+              title: 'Nothing moves without you.',
+              body: 'Routes are visible, and changing one is always your call.',
+              points: [
+                'Local chats never silently route to the cloud',
+                'Continuation requires explicit consent',
+                'Telemetry separated from conversation content',
+                'DPDP & GDPR disclosures, in progress',
+              ],
+              cta: { href: '/mobile/legal', label: 'Read the Mobile Privacy Policy' },
+            },
+            {
+              mode: 'AGI Cloud',
+              glyph: '●',
+              title: 'Managed compute, by invite.',
+              body: 'Hosted capacity opens carefully as controls are proven.',
+              points: [
+                'Private beta via waitlist and invite codes',
+                'Synced chats and hosted models when access opens',
+                'Separate from Local by design',
+                'One email when your access opens',
+              ],
+              cta: { label: 'Join the Waitlist', waitlist: true },
+            },
+          ]}
+        />
+
+        <CapabilityGrid
+          eyebrow="In the app"
+          title="The full feature set. Your phone."
+          items={[
+            {
+              meta: 'Chat',
+              title: 'Local Chat',
+              body: 'Fast on-device conversations with the AGI Standard runtime. Online or off.',
+              href: '/features/ai-chat',
+            },
+            {
+              meta: 'Models',
+              title: 'Model Picker',
+              body: 'Choose your model and see clear installed, downloadable, and locked states.',
+              href: '/local',
+            },
+            {
+              meta: 'Projects',
+              title: 'Projects & Recents',
+              body: 'A drawer that keeps work organized by topic and one tap away.',
+              href: '/features/projects',
+            },
+            {
+              meta: 'Memory',
+              title: 'Memory',
+              body: 'On-device memory and personalization you can inspect and control.',
+              href: '/features/memory',
+            },
+            {
+              meta: 'Artifacts',
+              title: 'Artifacts',
+              body: 'A gallery and preview for the documents and outputs you generate.',
+              href: '/features/artifacts',
+            },
+            {
+              meta: 'Settings',
+              title: 'Full Settings',
+              body: 'Appearance, data controls, app lock, and safety. All on the device.',
+              href: '/security',
+            },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Take AGI with you."
+          body="AGI Mobile launches on iPhone and Android. Local Mode is the default. Join the waitlist if you want AGI Cloud when invites open."
+          ctas={[
+            { href: '/download', label: 'Get Launch Access' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`iPhone & Android · ${LAUNCH.date}`}
+        />
 
         <MarketingFooter />
       </main>

@@ -33,7 +33,7 @@ function mapEventType(eventType: string): string {
 
 /**
  * GET /api/settings/activity
- * User activity log — returns the current user's recent security audit events
+ * User activity log · returns the current user's recent security audit events
  * mapped to the UserActivity shape the UI expects.
  */
 async function handleGetActivity(request: NextRequest) {

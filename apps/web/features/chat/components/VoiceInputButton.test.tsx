@@ -71,7 +71,7 @@ class MockSpeechRecognition {
 // Module-level instance updated in beforeEach
 let recognition: MockSpeechRecognition;
 
-// Regular function constructor (NOT arrow function) — required for `new`
+// Regular function constructor (NOT arrow function) · required for `new`
 function SpeechRecognitionCtor(this: MockSpeechRecognition) {
   return recognition;
 }

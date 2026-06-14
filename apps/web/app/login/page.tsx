@@ -1,6 +1,5 @@
 import { SignIn } from '@clerk/nextjs';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { Header } from '../../components/layout/Header';
+import { AuthShell } from '../../components/marketing/AuthShell';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 import { agiClerkAppearance } from '../auth/clerkAppearance';
 
@@ -15,28 +14,22 @@ export default async function LoginPage({
   const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/chat');
 
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section
-          className="agi-section agi-auth-page"
-          style={{
-            minHeight: 'calc(100vh - 220px)',
-            display: 'grid',
-            placeItems: 'center',
-            borderBottom: 'none',
-          }}
-        >
-          <SignIn
-            routing="hash"
-            signUpUrl="/signup"
-            fallbackRedirectUrl={redirectTo}
-            signUpFallbackRedirectUrl={redirectTo}
-            appearance={agiClerkAppearance}
-          />
-        </section>
-        <MarketingFooter />
-      </main>
-    </div>
+    <AuthShell
+      title="Welcome back."
+      lede="Sign in to pick up your chats, projects, and artifacts. Manage your AGI Cloud waitlist status here too."
+      points={[
+        'One account across Web, Mobile & Desktop Cloud',
+        'Local Mode never requires an account',
+        'Your route is visible before work leaves a device',
+      ]}
+    >
+      <SignIn
+        routing="hash"
+        signUpUrl="/signup"
+        fallbackRedirectUrl={redirectTo}
+        signUpFallbackRedirectUrl={redirectTo}
+        appearance={agiClerkAppearance}
+      />
+    </AuthShell>
   );
 }

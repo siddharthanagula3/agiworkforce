@@ -228,7 +228,7 @@ export const Usage: React.FC<UsageProps> = ({
                               Expires {String(pm.card.expMonth).padStart(2, '0')}/{pm.card.expYear}
                               {isExpired && (
                                 <span className="ml-2 text-destructive">
-                                  — Please update your card
+                                  · Please update your card
                                 </span>
                               )}
                             </p>
@@ -331,7 +331,7 @@ export const Usage: React.FC<UsageProps> = ({
                         <p className="text-sm text-muted-foreground">{formatDate(invoice.date)}</p>
                         {invoice.status === 'failed' && (
                           <p className="mt-0.5 text-xs text-destructive">
-                            Payment failed — please update your payment method
+                            Payment failed · please update your payment method
                           </p>
                         )}
                       </div>

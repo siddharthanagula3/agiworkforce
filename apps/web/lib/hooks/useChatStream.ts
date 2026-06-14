@@ -13,10 +13,14 @@ import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { Effort } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
-  buildAutoEconomyTrialPaywallSlot,
-  isAutoEconomyTrialErrorCode,
-  useAutoEconomyTrialStore,
-} from '@/features/chat/stores/autoEconomyTrialStore';
+  buildFreeTrialPaywallSlot,
+  isFreeTrialErrorCode,
+  useFreeTrialStore,
+} from '@/features/chat/stores/freeTrialStore';
+import {
+  createSendReplayMetadata,
+  hasWebSearchSources,
+} from '@/features/chat/types/message-metadata';
 
 interface SendMessageOptions {
   model?: string;
@@ -205,6 +209,13 @@ export function useChatStream(): UseChatStreamReturn {
       abortControllerRef.current = new AbortController();
 
       const model = options.model || selectedModel;
+      const sendReplay = createSendReplayMetadata({
+        webSearchEnabled: options.webSearch,
+        thinkingEnabled: options.thinkingEnabled,
+        codeExecutionEnabled: options.codeExecution,
+        styleMode: options.styleMode,
+        hasSkillInstruction: Boolean(options.skillBody),
+      });
       const authToken = await getToken();
       if (!authToken) {
         throw new Error('Not authenticated');
@@ -218,6 +229,7 @@ export function useChatStream(): UseChatStreamReturn {
         content: content.trim(),
         createdAt: new Date().toISOString(),
         attachments: options.attachments,
+        metadata: sendReplay ? { sendReplay } : undefined,
       };
       addMessage(userMessage);
 
@@ -229,7 +241,12 @@ export function useChatStream(): UseChatStreamReturn {
       if (!isTemporaryConversation) {
         saveMessageToDb(
           conversationId,
-          { id: userMessageId, role: 'user', content: content.trim() },
+          {
+            id: userMessageId,
+            role: 'user',
+            content: content.trim(),
+            metadata: sendReplay ? { sendReplay } : undefined,
+          },
           authToken,
         )
           .then((saved) => {
@@ -351,7 +368,7 @@ export function useChatStream(): UseChatStreamReturn {
         if (toolTimeline.length > 0) {
           metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
         }
-        if (currentSearchResults && currentSearchResults.length > 0) {
+        if (hasWebSearchSources(currentSearchResults)) {
           metadata.searchResults = currentSearchResults;
         }
         if (currentCodeExecutionResult) {
@@ -440,7 +457,7 @@ export function useChatStream(): UseChatStreamReturn {
           signal: abortControllerRef.current.signal,
         });
 
-        useAutoEconomyTrialStore.getState().applyHeaders(response.headers);
+        useFreeTrialStore.getState().applyHeaders(response.headers);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -736,9 +753,9 @@ export function useChatStream(): UseChatStreamReturn {
         } else {
           const errorMessage = getVisibleErrorMessage(error);
           const errorCode = error instanceof ChatApiError ? error.code : undefined;
-          if (isAutoEconomyTrialErrorCode(errorCode)) {
+          if (isFreeTrialErrorCode(errorCode)) {
             if (errorCode === 'website_trial_prompt_limit_reached') {
-              useAutoEconomyTrialStore.getState().markExhausted();
+              useFreeTrialStore.getState().markExhausted();
             }
             finishRunningTools('failed', errorMessage);
             updateMessage(assistantMessageId, {
@@ -746,7 +763,7 @@ export function useChatStream(): UseChatStreamReturn {
               content: '',
               error: false,
               metadata: {
-                paywall: buildAutoEconomyTrialPaywallSlot(errorCode, errorMessage),
+                paywall: buildFreeTrialPaywallSlot(errorCode, errorMessage),
               },
             });
             setError(errorMessage);

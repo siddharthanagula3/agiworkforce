@@ -1,18 +1,18 @@
 // apps/web/app/dev/inline-toolcall-demo/page.tsx
 //
-// R23 lane A — static-render smoke-test harness for the R22 inline tool-call
+// R23 lane A · static-render smoke-test harness for the R22 inline tool-call
 // badge visual (commits 9707de324 → e361da768).
 //
 // SYNTHETIC DATA: this harness hand-crafts InlineToolCall / InlineToolCallGroup
 // / WebSearchCard props so we can verify the visual without a live provider +
-// tool-use loop (the v1 LOCAL ONLY repo has no BYOK/cloud configured per
-// locks/v1-local-only-cloud-waitlist-2026-05-18.md).
+// tool-use loop. This route is a visual harness only and does not prove BYOK or
+// managed-cloud runtime availability.
 //
 // Reference image: ~/Desktop/reference/ui/desktop/claude-artifacts/02_*.png and
 // 06_*.png. This page renders all the badge variants in a column so the
 // captured screenshot can be diffed visually side-by-side with Claude.
 //
-// Read-only on app code — this is the only new mount we add for the smoke test.
+// Read-only on app code · this is the only new mount we add for the smoke test.
 
 'use client';
 
@@ -32,7 +32,7 @@ const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
   },
   {
     url: 'https://docs.anthropic.com/en/docs/build-with-claude/tool-use',
-    title: 'Tool use with Claude — Anthropic API documentation',
+    title: 'Tool use with Claude · Anthropic API documentation',
     domain: 'docs.anthropic.com',
     faviconUrl: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=32',
   },
@@ -44,13 +44,13 @@ const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
   },
   {
     url: 'https://en.wikipedia.org/wiki/Artificial_general_intelligence',
-    title: 'Artificial general intelligence — Wikipedia',
+    title: 'Artificial general intelligence · Wikipedia',
     domain: 'en.wikipedia.org',
     faviconUrl: 'https://www.google.com/s2/favicons?domain=wikipedia.org&sz=32',
   },
   {
     url: 'https://news.ycombinator.com/item?id=12345678',
-    title: 'AGI Workforce launches in private beta — Hacker News',
+    title: 'AGI Workforce launches in private beta · Hacker News',
     domain: 'news.ycombinator.com',
     faviconUrl: 'https://www.google.com/s2/favicons?domain=ycombinator.com&sz=32',
   },
@@ -66,7 +66,7 @@ export default function InlineToolCallDemoPage() {
       <div className="mx-auto max-w-3xl px-8 py-12 font-sans">
         <header className="mb-10">
           <h1 className="text-2xl font-semibold tracking-tight">
-            R22 inline tool-call badge — static smoke-test harness
+            R22 inline tool-call badge · static smoke-test harness
           </h1>
           <p className="mt-2 text-sm text-stone-500">
             Synthetic props. Reference:{' '}
@@ -76,10 +76,10 @@ export default function InlineToolCallDemoPage() {
           </p>
         </header>
 
-        {/* ── Block 1 — Reference parity (image 02): Filesystem integration ── */}
+        {/* ── Block 1 · Reference parity (image 02): Filesystem integration ── */}
         <section className="mb-12">
           <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
-            Block 1 — Filesystem integration group (image 02 parity)
+            Block 1 · Filesystem integration group (image 02 parity)
           </h2>
           <div
             data-testid="block-filesystem-group"
@@ -132,10 +132,10 @@ export default function InlineToolCallDemoPage() {
           </div>
         </section>
 
-        {/* ── Block 2 — All badge letter / glyph variants ── */}
+        {/* ── Block 2 · All badge letter / glyph variants ── */}
         <section className="mb-12">
           <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
-            Block 2 — All InlineToolKind → badge variants
+            Block 2 · All InlineToolKind → badge variants
           </h2>
           <div
             data-testid="block-all-kinds"
@@ -229,10 +229,10 @@ export default function InlineToolCallDemoPage() {
           </div>
         </section>
 
-        {/* ── Block 3 — Lifecycle states ── */}
+        {/* ── Block 3 · Lifecycle states ── */}
         <section className="mb-12">
           <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
-            Block 3 — Lifecycle states (pending / running / success / error / partial)
+            Block 3 · Lifecycle states (pending / running / success / error / partial)
           </h2>
           <div
             data-testid="block-states"
@@ -277,10 +277,10 @@ export default function InlineToolCallDemoPage() {
           </div>
         </section>
 
-        {/* ── Block 4 — Web search card (image 06 parity) ── */}
+        {/* ── Block 4 · Web search card (image 06 parity) ── */}
         <section className="mb-12">
           <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
-            Block 4 — WebSearchCard with favicons (image 06 parity)
+            Block 4 · WebSearchCard with favicons (image 06 parity)
           </h2>
           <div
             data-testid="block-web-search"
@@ -294,10 +294,10 @@ export default function InlineToolCallDemoPage() {
           </div>
         </section>
 
-        {/* ── Block 5 — Multi-row group, compact (image 08 parity) ── */}
+        {/* ── Block 5 · Multi-row group, compact (image 08 parity) ── */}
         <section className="mb-12">
           <h2 className="mb-3 text-base font-medium text-stone-700 dark:text-stone-300">
-            Block 5 — Compact stacked tool messages (image 08 parity)
+            Block 5 · Compact stacked tool messages (image 08 parity)
           </h2>
           <div
             data-testid="block-compact"
@@ -340,7 +340,7 @@ export default function InlineToolCallDemoPage() {
         </section>
 
         <footer className="mt-12 border-t border-stone-200 dark:border-stone-800 pt-4 text-xs text-stone-500">
-          Smoke-test harness — synthetic props, no live provider connection.{' '}
+          Smoke-test harness · synthetic props, no live provider connection.{' '}
           <span data-testid="harness-marker">R23-LANE-A</span>
         </footer>
       </div>

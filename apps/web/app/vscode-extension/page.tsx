@@ -2,261 +2,164 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+import { DevBand, FinalCta, TrustTriptych } from '../../components/marketing/FlagshipSections';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'VS Code Extension: Multi-provider coding assistant',
-  description: `Multi-provider coding assistant for VS Code. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
+  title: 'AGI in VS Code: the @agi chat participant',
+  description:
+    'Chat with @agi inside VS Code with workspace-scoped context, six slash commands, and diff review. Plus an explicit local bridge to AGI Desktop. Developer preview.',
   alternates: { canonical: 'https://agiworkforce.com/vscode-extension' },
 };
 
 const SLASH: { cmd: string; desc: string }[] = [
   { cmd: '/explain', desc: 'Explain the selection in plain language' },
   { cmd: '/fix', desc: 'Find and fix bugs in the selection' },
-  { cmd: '/refactor', desc: 'Suggest or apply refactoring' },
-  { cmd: '/tests', desc: 'Generate unit tests for the selection' },
-  { cmd: '/docs', desc: 'Write doc comments for the selection' },
+  { cmd: '/refactor', desc: 'Suggest refactoring improvements, each change explained' },
+  { cmd: '/tests', desc: 'Generate unit tests covering edge cases and error paths' },
+  { cmd: '/docs', desc: 'Write doc comments in the style of the language' },
   { cmd: '/model', desc: 'Switch the active provider and model' },
 ];
-
-const FEATURES = [
-  {
-    label: 'AGI chat panel',
-    body: 'A dedicated sidebar panel for code questions, refactors, and slash commands. Runs independently in VS Code without depending on Copilot or any other extension.',
-  },
-  {
-    label: 'Multi-provider switching',
-    body: '10+ providers available. Status-bar picker lets you swap model mid-session without leaving the editor.',
-  },
-  {
-    label: 'BYOK',
-    body: 'Bring your own keys. Pay providers directly. No AGI subscription required to use the editor extension.',
-  },
-  {
-    label: 'Desktop bridge (optional)',
-    body: 'Connect to AGI Desktop on localhost:8787 to unlock computer-use, full tool call routing, and multi-model pipelines.',
-  },
-];
-
-function EditorProductView({ label, description }: { label: string; description: string }) {
-  return (
-    <div
-      style={{
-        background: 'var(--agi-card)',
-        border: '1px solid var(--agi-rule-strong)',
-        borderRadius: 10,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Editor title bar */}
-      <div
-        style={{
-          background: 'var(--agi-bg-3)',
-          borderBottom: '1px solid var(--agi-rule)',
-          padding: '8px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <span
-          style={{
-            width: 10,
-            height: 10,
-            borderRadius: 2,
-            background: 'var(--agi-amber-soft)',
-            border: '1px solid var(--agi-amber)',
-            display: 'inline-block',
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            fontSize: 11,
-            color: 'var(--agi-ink-2)',
-            fontFamily: 'var(--mono)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {label}
-        </span>
-      </div>
-      {/* Content area */}
-      <div
-        style={{
-          padding: '28px 20px',
-          minHeight: 140,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          background: `linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)`,
-        }}
-      >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-            color: 'var(--agi-amber)',
-            margin: 0,
-          }}
-        >
-          Product view
-        </p>
-        <p
-          style={{
-            fontSize: 13,
-            color: 'var(--agi-ink-2)',
-            textAlign: 'center',
-            maxWidth: 300,
-            lineHeight: 1.5,
-            margin: 0,
-          }}
-        >
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 export default function VscodeExtensionPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
-            {LAUNCH.publicLabel}
-          </p>
-          <h1 className="agi-page-h1">Multi-provider coding assistant.</h1>
-          <p className="agi-page-lede">
-            10+ providers in one VS Code extension. A standalone AGI chat panel for code questions,
-            refactors, and slash commands.{' '}
-            <strong>
-              Not locked to one model. Bring your own keys, run local through Desktop, or use Cloud
-              by invite.
-            </strong>
-          </p>
-          <div className="agi-cta-row">
-            <Link href="/waitlist" className="agi-cta-primary">
-              Get VSIX access
-            </Link>
-            <Link href="/providers" className="agi-cta-ghost">
-              See the providers &rarr;
-            </Link>
+
+        <section className="agi-fl-hero" aria-labelledby="agi-vscode-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">AGI in VS Code · developer preview</p>
+              <h1 id="agi-vscode-hero-title" className="agi-fl-h1">
+                <span className="agi-fl-h1-line">Your editor,</span>
+                <span className="agi-fl-h1-line">with an agent</span>
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">on call.</em>
+                </span>
+              </h1>
+              <p className="agi-fl-lede">
+                Mention @agi in VS Code chat. Work with an assistant grounded in your workspace. Run
+                /explain and /tests, review diffs, and hand heavier work to Desktop over an explicit
+                local bridge.
+              </p>
+              <div className="agi-fl-cta-row">
+                <WaitlistTrigger
+                  label="Get VSIX Access"
+                  source="website"
+                  className="agi-fl-cta agi-fl-cta--primary"
+                />
+                <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
+                  Explore AGI Code
+                </Link>
+                <Link href="/cli" className="agi-fl-cta agi-fl-cta--ghost">
+                  See the CLI
+                </Link>
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="Extension highlights">
+                <li>@agi · chat participant</li>
+                <li>Context · workspace-scoped</li>
+                <li>Handoffs · explicit</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <ProductFrame variant="editor" title="AGI · VS Code" badge="@agi" />
+            </div>
           </div>
         </section>
 
-        {/* ---- SCREENSHOTS ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">How it looks</p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 16,
-            }}
-          >
-            <EditorProductView
-              label="AGI chat panel"
-              description="Standalone AGI sidebar panel answering a question about the open file. Runs independently without Copilot or other extensions."
-            />
-            <EditorProductView
-              label="Provider switcher"
-              description="Status-bar model picker showing available providers. Switch mid-session without leaving the editor or touching a config file."
-            />
-          </div>
-        </section>
+        <TrustTriptych
+          eyebrow="In the preview"
+          title="A focused start, on the suite's rules."
+          lede="AGI in VS Code ships the way every AGI surface does: visible context, reviewable changes, no silent routing. Here's what works today."
+          cards={[
+            {
+              mode: '@agi chat',
+              glyph: '◆',
+              title: "Ask where you're typing.",
+              body: 'A chat participant grounded in your workspace.',
+              points: [
+                'Reads the active file, selection, and language',
+                'Adds diagnostics, open files, and project structure',
+                'Pinned files travel with the conversation',
+              ],
+              cta: { label: 'Get VSIX Access', waitlist: true },
+            },
+            {
+              mode: 'Diff review',
+              glyph: '◇',
+              title: 'Changes land on your terms.',
+              body: 'Proposed edits arrive as diffs you review first.',
+              points: [
+                'See exactly what would change before it touches your files',
+                '/fix and /refactor explain every change they propose',
+                'You decide what gets applied',
+              ],
+              cta: { href: '/agi-code', label: 'Explore AGI Code' },
+            },
+            {
+              mode: 'Desktop bridge',
+              glyph: '●',
+              title: 'Heavier work, handed off explicitly.',
+              body: 'Pair the editor with AGI Desktop when you choose to.',
+              points: [
+                'Local WebSocket bridge on port 8787',
+                'Authenticated handshake with allowlisted message types',
+                "Degrades gracefully when Desktop isn't running",
+              ],
+              cta: { href: '/desktop', label: 'See AGI Desktop' },
+            },
+          ]}
+        />
 
-        {/* ---- FEATURES GRID ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Features</p>
-          <ul
-            className="agi-perks-grid"
-            style={{ marginTop: 24 }}
-            aria-label="VS Code extension features"
-          >
-            {FEATURES.map((f) => (
-              <li key={f.label} className="agi-perk-card">
-                <p className="agi-perk-title">{f.label}</p>
-                <p className="agi-perk-description">{f.body}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">What you get</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">AGI chat panel</h3>
-              <p className="agi-reason-p">
-                A dedicated sidebar panel. Ask questions, request refactors, run slash commands
-                without leaving the editor. No dependency on Copilot or other extensions.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Multi-provider switching</h3>
-              <p className="agi-reason-p">
-                10+ providers in the status-bar picker. Switch model mid-session without leaving the
-                editor or touching a config file.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">BYOK</h3>
-              <p className="agi-reason-p">
-                Bring your own keys. Pay providers directly. No AGI subscription required to use the
-                editor extension.
-              </p>
-            </li>
-          </ul>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Slash commands</p>
-          <table className="agi-ledger">
-            <tbody>
-              {SLASH.map((s) => (
-                <tr key={s.cmd}>
-                  <td style={{ fontFamily: 'var(--agi-font-mono)', textTransform: 'lowercase' }}>
-                    {s.cmd}
-                  </td>
-                  <td>{s.desc}</td>
-                </tr>
+        <section className="agi-fl-section" aria-labelledby="agi-vscode-slash-title">
+          <p className="agi-fl-eyebrow">Slash commands</p>
+          <h2 id="agi-vscode-slash-title" className="agi-fl-h2">
+            Six commands, zero context switching.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Type / in the @agi chat to act on your selection: explain it, fix it, test it, document
+            it, or switch the model behind the conversation.
+          </p>
+          <div className="agi-terminal">
+            <div className="agi-terminal-bar">@agi · VS Code chat</div>
+            <pre className="agi-terminal-pre">
+              {SLASH.map((s, i) => (
+                <span key={s.cmd}>
+                  {i > 0 ? '\n' : null}
+                  <span className="agi-terminal-prompt">{s.cmd.padEnd(11, ' ')}</span>
+                  {s.desc}
+                </span>
               ))}
-            </tbody>
-          </table>
+            </pre>
+          </div>
         </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Distribution</p>
-          <table className="agi-ledger">
-            <tbody>
-              <tr>
-                <td>Marketplace</td>
-                <td>
-                  Public release aligned to {LAUNCH.date}; VSIX route opens with the release asset
-                </td>
-              </tr>
-              <tr>
-                <td>Cursor / forks</td>
-                <td>Compatible with VS Code forks; install the same VSIX</td>
-              </tr>
-              <tr>
-                <td>Desktop bridge</td>
-                <td>Optional: connects to desktop on localhost:8787 for full computer use</td>
-              </tr>
-              <tr>
-                <td>Auth</td>
-                <td>{POSITIONING.trustBoundary}</td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+
+        <DevBand
+          eyebrow="AGI Code"
+          title="One developer story, two surfaces."
+          body="AGI in VS Code pairs with the AGI CLI. Assistance in the editor when you want context and diffs. An agent in the terminal when you want resumable sessions and sandboxed execution. Developer sessions stay separate from consumer chat sync. Every cloud or local handoff is explicit."
+          ctas={[
+            { href: '/agi-code', label: 'Explore AGI Code' },
+            { href: '/cli', label: 'See the CLI' },
+          ]}
+        />
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Bring @agi into your editor."
+          body="AGI in VS Code is in developer preview and ships as a VSIX. Request access and pair it with AGI Desktop and the AGI CLI. Installers open at public launch."
+          ctas={[
+            { label: 'Get VSIX Access', waitlist: true },
+            { href: '/download', label: 'Get Launch Access' },
+            { href: '/cli', label: 'See the CLI' },
+          ]}
+          stamp="Developer preview · VSIX distribution"
+        />
+
         <MarketingFooter />
       </main>
     </div>

@@ -7,7 +7,7 @@ import { OfficialConnectorLogo } from '@/features/connectors/components/Official
 import { CONNECTORS as CONNECTOR_CATALOG } from '@/features/connectors/data/connectors';
 
 /**
- * /settings/connections — account connector status for hosted cloud.
+ * /settings/connections · account connector status for hosted cloud.
  * Local-mode and BYOK users can attach equivalent tools through MCP without
  * granting AGI-hosted cloud access.
  */

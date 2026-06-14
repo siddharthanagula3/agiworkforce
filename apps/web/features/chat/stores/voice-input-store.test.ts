@@ -32,7 +32,7 @@ class MockSpeechRecognition {
   abort = vi.fn();
 }
 
-// Module-level reference to the current mock instance — updated in beforeEach
+// Module-level reference to the current mock instance · updated in beforeEach
 let currentMockRecognition: MockSpeechRecognition;
 
 // Must be a regular `function` (not arrow) so it can be used with `new`
@@ -181,7 +181,7 @@ describe('voiceInputStore', () => {
 
   // ── startListening (Web Speech path) ──────────────────────────────────────
 
-  describe('startListening — Web Speech API path', () => {
+  describe('startListening · Web Speech API path', () => {
     beforeEach(() => {
       currentMockRecognition = new MockSpeechRecognition();
       Object.defineProperty(window, 'SpeechRecognition', {
@@ -242,7 +242,7 @@ describe('voiceInputStore', () => {
 
   // ── stopListening (Web Speech path) ───────────────────────────────────────
 
-  describe('stopListening — mode guard', () => {
+  describe('stopListening · mode guard', () => {
     it('returns immediately if not in listening mode', async () => {
       useVoiceInputStore.setState({ mode: 'idle' });
       await expect(useVoiceInputStore.getState().stopListening()).resolves.toBeUndefined();
@@ -253,7 +253,7 @@ describe('voiceInputStore', () => {
 
   // ── startListening (MediaRecorder / server path) ───────────────────────────
 
-  describe('startListening — MediaRecorder path', () => {
+  describe('startListening · MediaRecorder path', () => {
     let mockStream: MediaStream;
 
     beforeEach(() => {
@@ -333,7 +333,7 @@ describe('voiceInputStore', () => {
 
   // ── transcribeViaServer posts to /api/voice/transcribe ────────────────────
 
-  describe('transcribeViaServer — correct endpoint URL', () => {
+  describe('transcribeViaServer · correct endpoint URL', () => {
     let mockStream: MediaStream;
 
     beforeEach(() => {

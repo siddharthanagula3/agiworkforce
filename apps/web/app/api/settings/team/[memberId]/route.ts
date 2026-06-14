@@ -12,7 +12,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
-// memberId param format: "<organizationId>:<userId>" — matches the composite
+// memberId param format: "<organizationId>:<userId>" · matches the composite
 // key shape returned by the team list route so the caller does not need to
 // carry both IDs separately.
 const MEMBER_ID_RE = /^([0-9a-f-]{36}):(.+)$/;
@@ -73,7 +73,7 @@ async function handleRemove(
   const db = getNeonDb();
   const requester = await requireAdminAccess(db, organizationId, requesterId);
 
-  // Prevent self-removal via this endpoint — use a separate leave flow.
+  // Prevent self-removal via this endpoint · use a separate leave flow.
   if (targetUserId === requesterId) {
     throw createError.validation('You cannot remove yourself. Use the leave organization flow.');
   }

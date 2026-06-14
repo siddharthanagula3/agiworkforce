@@ -18,7 +18,7 @@ import type { ChatMessage } from '@agiworkforce/unified-chat';
 // Global setup
 // ---------------------------------------------------------------------------
 
-// jsdom doesn't implement scrollIntoView — mock it globally for all tests
+// jsdom doesn't implement scrollIntoView · mock it globally for all tests
 beforeEach(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });
@@ -27,7 +27,7 @@ beforeEach(() => {
 // Mocks
 // ---------------------------------------------------------------------------
 
-// Silence framer-motion in jsdom — avoids CSS/animation timing issues
+// Silence framer-motion in jsdom · avoids CSS/animation timing issues
 vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
