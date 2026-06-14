@@ -28,7 +28,11 @@ import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import { CLERK_PUBLISHABLE_KEY, setClerkTokenGetter, getClerkUserId } from '@/lib/clerk';
+import {
+  CLERK_PUBLISHABLE_KEY,
+  setClerkTokenGetter,
+  getClerkUserId,
+} from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   registerForPushNotifications,
