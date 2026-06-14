@@ -56,7 +56,13 @@ async function handleChatCompletions(request: NextRequest) {
   const authResult = await runAuthGate(request);
   if (!authResult.ok) return authResult.response;
 
-  const { userId, token } = authResult;
+  const { userId, token, subscription } = authResult;
+
+  // Free-tier (no subscription or plan_tier === 'free') users are on the economy
+  // free-trial path. Allow them through the managed-compute gate regardless of the
+  // private-beta flag so brand-new users can always chat.
+  const isFreeTierRequest =
+    !subscription || !subscription.plan_tier || subscription.plan_tier.toLowerCase() === 'free';
 
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
@@ -64,6 +70,7 @@ async function handleChatCompletions(request: NextRequest) {
       provider: 'managed',
       model: 'chat-completions',
       feature: 'llm_v1_chat_completions',
+      isFreeTrial: isFreeTierRequest,
     },
     getSecurityHeaders(),
   );
