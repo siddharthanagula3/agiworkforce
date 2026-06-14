@@ -370,6 +370,11 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
 
 function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
+  // Claude-style front door: clicking the toolbar icon opens the side-panel chat
+  // (no popup). Persistent + idempotent, so calling it on every SW start is safe.
+  chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
+    logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
+  });
   setupContextMenu();
   connectToNativeHost();
   checkDesktopConnection();
@@ -2459,6 +2464,8 @@ function setupContextMenu(): void {
     { id: 'get-element-info', title: 'Get Element Info', contexts: ['all'] },
     { id: 'discover-webmcp-tools', title: 'Discover AI Tools on Page', contexts: ['all'] },
     { id: 'add-to-tab-group', title: 'Add Tab to AGI Workforce Group', contexts: ['page'] },
+    // Phase 3: 'open-agi-controls' context-menu item removed. All pairing,
+    // allowlist, and memory controls are now in the side-panel ⋮ settings drawer.
   ];
 
   for (const item of menuItems) {
@@ -3127,16 +3134,22 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith(TASK_ALARM_PREFIX)) {
     const taskId = alarm.name.slice(TASK_ALARM_PREFIX.length);
     void loadScheduledTasks()
-      .then((tasks) => {
+      .then(async (tasks) => {
         const task = tasks.find((t) => t.id === taskId);
         if (!task?.enabled) return;
-        chrome.notifications.create(`agi_task_notif_${taskId}`, {
-          type: 'basic',
-          iconUrl: 'icons/icon48.png',
-          title: 'AGI Task Running',
-          message: task.name,
-          priority: 0,
+        // Respect the user's "Task notifications" preference (Options page). Defaults to on.
+        const { agi_task_notifications: notificationsEnabled } = await chrome.storage.local.get({
+          agi_task_notifications: true,
         });
+        if (notificationsEnabled !== false) {
+          chrome.notifications.create(`agi_task_notif_${taskId}`, {
+            type: 'basic',
+            iconUrl: 'icons/icon48.png',
+            title: 'AGI Task Running',
+            message: task.name,
+            priority: 0,
+          });
+        }
         void executeScheduledTask(task);
       })
       .catch((err) => {
