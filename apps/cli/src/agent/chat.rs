@@ -358,6 +358,7 @@ message -- revise and call `update_plan` again.\n\n",
                 max_tokens,
                 Some(&tool_defs),
                 on_chunk,
+                self.thinking_budget_tokens,
             )
             .await
         };
@@ -393,6 +394,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 max_tokens,
                                 Some(&tool_defs),
                                 self.continuation_sink(),
+                                self.thinking_budget_tokens,
                             )
                             .await
                             {
@@ -482,6 +484,7 @@ message -- revise and call `update_plan` again.\n\n",
                                         max_tokens,
                                         Some(&tool_defs),
                                         self.continuation_sink(),
+                                        self.thinking_budget_tokens,
                                     )
                                     .await
                                 };
@@ -1465,6 +1468,7 @@ message -- revise and call `update_plan` again.\n\n",
                 max_tokens,
                 Some(&tool_defs),
                 self.continuation_sink(),
+                self.thinking_budget_tokens,
             )
             .await
             {
@@ -1490,6 +1494,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 max_tokens,
                                 Some(&tool_defs),
                                 self.continuation_sink(),
+                                self.thinking_budget_tokens,
                             )
                             .await?
                         } else {
@@ -1703,6 +1708,7 @@ message -- revise and call `update_plan` again.\n\n",
             max_tokens,
             None,
             on_chunk,
+            None, // send_btw never uses extended thinking
         )
         .await?;
 
