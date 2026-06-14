@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Pressable, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
-import { Menu, SquarePen } from 'lucide-react-native';
+import { Download, Menu, SquarePen } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -37,6 +37,7 @@ import {
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
@@ -88,7 +89,10 @@ export default function ChatTabScreen() {
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
+  const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
+  const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
   const activeMode = appMode;
+  const hasReadyLocalModel = installedModelIds.length > 0 || readySystemModelIds.length > 0;
   const cloudChatAvailable = FEATURES.cloudChat && Boolean(DEFAULT_CLOUD_MODEL_ID);
   const modeDescription =
     activeMode === 'cloud'
@@ -417,6 +421,11 @@ export default function ChatTabScreen() {
           </Text>
         ) : (
           <View style={{ width: '100%', marginTop: 8 }}>
+            {!hasReadyLocalModel && (
+              <DownloadModelBanner
+                onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
+              />
+            )}
             <ConversationStarters />
           </View>
         )}
@@ -469,5 +478,59 @@ export default function ChatTabScreen() {
         defaultTab={cloudAccessDefaultTab}
       />
     </SafeAreaView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DownloadModelBanner — shown in local mode when no model is installed yet.
+// ---------------------------------------------------------------------------
+
+interface DownloadModelBannerProps {
+  onPress: () => void;
+}
+
+function DownloadModelBanner({ onPress }: DownloadModelBannerProps) {
+  const c = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Download a model to chat"
+      accessibilityHint="Opens the model library to download a local AI model"
+      testID="download-model-banner"
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: pressed ? c.surfaceHover : c.accentSurface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: c.accentBorder,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 16,
+      })}
+    >
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          backgroundColor: c.accentSurface,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Download size={16} color={c.teal} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: c.textPrimary }}>
+          Download a model to chat
+        </Text>
+        <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 2 }}>
+          Run AI privately on this device — no account needed.
+        </Text>
+      </View>
+    </Pressable>
   );
 }
