@@ -25,8 +25,14 @@ const BASE_STYLES =
   `body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: CanvasText; background: Canvas; } ` +
   `</style>`;
 
+// NOTE: `\s` is intentionally a single required whitespace (not `\s+`). A
+// `\s+` here overlaps the following `[^>]*` (space is also a non-`>` char),
+// producing two adjacent unbounded quantifiers over the same input — quadratic
+// backtracking on hostile strings like `<meta ` + many spaces (CodeQL
+// js/polynomial-redos). One fixed-width `\s` is language-equivalent (the
+// `[^>]*` already absorbs any further whitespace) but backtracks linearly.
 const CSP_META_TAG_PATTERN =
-  /<meta\s+[^>]*http-equiv\s*=\s*(["']?)content-security-policy\1[^>]*>/gi;
+  /<meta\s[^>]*http-equiv\s*=\s*(["']?)content-security-policy\1[^>]*>/gi;
 
 function stripCspMetaTags(content: string): string {
   return content.replace(CSP_META_TAG_PATTERN, '');
