@@ -197,6 +197,10 @@ interface Message {
      * Set by the composer paste handler; renders a "PASTED" badge (Fix 42).
      */
     isPasted?: boolean;
+    /** Persisted thumbs-up/down reaction from the user (stored in cloud messages.metadata). */
+    reaction?: 'thumbsUp' | 'thumbsDown' | null;
+    /** Paywall feature that triggered a capability gate message. */
+    paywall?: { feature: string; requiredTier: string };
   };
 }
 
@@ -814,28 +818,76 @@ const MessageBubbleComponent = function MessageBubble({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
-                          onClick={() => onReact(message.id, 'up')}
-                          aria-label="Rate as good response"
+                          className={cn(
+                            'h-7 w-7',
+                            message.metadata?.reaction === 'thumbsUp' &&
+                              'text-[var(--chat-accent-primary)]',
+                          )}
+                          onClick={() =>
+                            onReact(
+                              message.id,
+                              message.metadata?.reaction === 'thumbsUp' ? null : 'up',
+                            )
+                          }
+                          aria-label={
+                            message.metadata?.reaction === 'thumbsUp'
+                              ? 'Remove good response rating'
+                              : 'Rate as good response'
+                          }
+                          aria-pressed={message.metadata?.reaction === 'thumbsUp'}
                         >
-                          <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
+                          <ThumbsUp
+                            className={cn(
+                              'h-3.5 w-3.5',
+                              message.metadata?.reaction === 'thumbsUp' && 'fill-current',
+                            )}
+                            aria-hidden="true"
+                          />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Good response</TooltipContent>
+                      <TooltipContent>
+                        {message.metadata?.reaction === 'thumbsUp'
+                          ? 'Remove rating'
+                          : 'Good response'}
+                      </TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
-                          onClick={() => onReact(message.id, 'down')}
-                          aria-label="Rate as poor response"
+                          className={cn(
+                            'h-7 w-7',
+                            message.metadata?.reaction === 'thumbsDown' &&
+                              'text-[var(--chat-accent-primary)]',
+                          )}
+                          onClick={() =>
+                            onReact(
+                              message.id,
+                              message.metadata?.reaction === 'thumbsDown' ? null : 'down',
+                            )
+                          }
+                          aria-label={
+                            message.metadata?.reaction === 'thumbsDown'
+                              ? 'Remove poor response rating'
+                              : 'Rate as poor response'
+                          }
+                          aria-pressed={message.metadata?.reaction === 'thumbsDown'}
                         >
-                          <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
+                          <ThumbsDown
+                            className={cn(
+                              'h-3.5 w-3.5',
+                              message.metadata?.reaction === 'thumbsDown' && 'fill-current',
+                            )}
+                            aria-hidden="true"
+                          />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Poor response</TooltipContent>
+                      <TooltipContent>
+                        {message.metadata?.reaction === 'thumbsDown'
+                          ? 'Remove rating'
+                          : 'Poor response'}
+                      </TooltipContent>
                     </Tooltip>
                   </>
                 )}
