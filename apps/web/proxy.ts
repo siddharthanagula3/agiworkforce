@@ -52,6 +52,12 @@ function buildCspResponse(request: NextRequest): NextResponse {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('x-agi-pathname', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  // CRITICAL: Next.js reads the nonce from the Content-Security-Policy *request*
+  // header to stamp it onto every framework-injected inline <script>. Without
+  // this, the bootstrap/hydration scripts have no nonce and the response CSP
+  // blocks them, breaking the page. (Next.js CSP guide — set CSP on both the
+  // request and the response.)
+  requestHeaders.set('Content-Security-Policy', csp);
 
   // Create new pass-through response with the modified request headers
   const response = NextResponse.next({ request: { headers: requestHeaders } });
