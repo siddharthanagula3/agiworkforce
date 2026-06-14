@@ -1,5 +1,5 @@
 /**
- * GET /api/support/faqs/search?q=<query> — search FAQs by keyword.
+ * GET /api/support/faqs/search?q=<query> · search FAQs by keyword.
  * Static data; performs case-insensitive substring match on question and answer.
  */
 

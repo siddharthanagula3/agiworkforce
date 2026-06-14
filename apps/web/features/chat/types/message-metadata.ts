@@ -10,7 +10,65 @@
  */
 
 // Re-exported from integrations so consumers don't reach across feature roots.
-export type { SearchResponse } from '@core/integrations/web-search-handler';
+import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
+export type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
+export type WebSearchResults = SearchResponse | SearchResult[];
+export type WebChatStyleMode = 'concise' | 'formal' | 'explanatory';
+
+export interface SendReplayMetadata {
+  webSearchEnabled?: boolean;
+  thinkingEnabled?: boolean;
+  codeExecutionEnabled?: boolean;
+  styleMode?: WebChatStyleMode;
+  hasSkillInstruction?: boolean;
+}
+
+export function isWebSearchResponse(value: unknown): value is SearchResponse {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Array.isArray((value as { results?: unknown }).results)
+  );
+}
+
+export function countWebSearchSources(searchResults: WebSearchResults | undefined): number {
+  if (!searchResults) return 0;
+  if (Array.isArray(searchResults)) {
+    return searchResults.filter((result) => Boolean(result.url)).length;
+  }
+
+  const resultUrls = searchResults.results.filter((result) => Boolean(result.url)).length;
+  const sourceUrls = (searchResults.sources ?? []).filter(Boolean).length;
+  return resultUrls + sourceUrls;
+}
+
+export function hasWebSearchSources(searchResults: WebSearchResults | undefined): boolean {
+  return countWebSearchSources(searchResults) > 0;
+}
+
+function isWebChatStyleMode(value: unknown): value is WebChatStyleMode {
+  return value === 'concise' || value === 'formal' || value === 'explanatory';
+}
+
+export function createSendReplayMetadata(params: {
+  webSearchEnabled?: boolean;
+  thinkingEnabled?: boolean;
+  codeExecutionEnabled?: boolean;
+  styleMode?: string;
+  hasSkillInstruction?: boolean;
+}): SendReplayMetadata | undefined {
+  const replay: SendReplayMetadata = {};
+  if (typeof params.webSearchEnabled === 'boolean')
+    replay.webSearchEnabled = params.webSearchEnabled;
+  if (typeof params.thinkingEnabled === 'boolean') replay.thinkingEnabled = params.thinkingEnabled;
+  if (typeof params.codeExecutionEnabled === 'boolean') {
+    replay.codeExecutionEnabled = params.codeExecutionEnabled;
+  }
+  if (isWebChatStyleMode(params.styleMode)) replay.styleMode = params.styleMode;
+  if (params.hasSkillInstruction) replay.hasSkillInstruction = true;
+  return Object.keys(replay).length > 0 ? replay : undefined;
+}
 
 // Inline types for shapes that live only in feature/chat.
 export interface PaywallSlot {
@@ -68,9 +126,12 @@ export interface WebChatMessageMetadata {
   // Streaming state
   isStreaming?: boolean;
 
+  // Safe replay metadata for regenerate. Raw skill bodies are intentionally not persisted.
+  sendReplay?: SendReplayMetadata;
+
   // Search
   isSearching?: boolean;
-  searchResults?: unknown[];
+  searchResults?: WebSearchResults;
 
   // Code execution
   isExecutingCode?: boolean;

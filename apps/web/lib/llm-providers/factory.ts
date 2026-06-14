@@ -152,6 +152,7 @@ export class LLMProviderFactory {
     'generativelanguage.googleapis.com',
     'api.x.ai',
     'dashscope.aliyuncs.com',
+    'api.mulerouter.ai',
     'api.moonshot.cn',
     'api.deepseek.com',
     'api.perplexity.ai',

@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Terms of service',
   description:
-    'Terms of service for AGI — license, account responsibilities, payment, termination.',
+    'Terms of service for AGI · license, account responsibilities, payment, termination.',
   alternates: { canonical: 'https://agiworkforce.com/terms' },
 };
 
@@ -28,7 +28,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">01 — License</p>
+          <p className="agi-section-eyebrow">01 · License</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI Automation LLC grants you a non-exclusive, non-transferable, revocable license to
             install and use AGI on devices you own or control, subject to these terms. The software
@@ -38,10 +38,10 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">02 — Your account</p>
+          <p className="agi-section-eyebrow">02 · Your account</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             You are responsible for keeping your account credentials and master password secure. We
-            cannot recover the master password used to encrypt your local key vault — see the{' '}
+            cannot recover the master password used to encrypt your local key vault · see the{' '}
             <Link href="/byok" style={{ color: 'var(--agi-ink)' }}>
               BYOK posture
             </Link>
@@ -50,7 +50,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">03 — Payment, refunds, and auto-renewal</p>
+          <p className="agi-section-eyebrow">03 · Payment, refunds, and auto-renewal</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Paid tiers (Hobby and above) are billed in advance through Stripe.{' '}
             <strong>Auto-renewal:</strong> subscriptions auto-renew at the end of each billing
@@ -66,7 +66,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">04 — Acceptable use</p>
+          <p className="agi-section-eyebrow">04 · Acceptable use</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Don&rsquo;t use AGI to break the law, harass people, generate child sexual abuse
             material, or build weapons. Don&rsquo;t reverse-engineer or stress-test the service
@@ -86,7 +86,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">06 — Termination</p>
+          <p className="agi-section-eyebrow">06 · Termination</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             You can terminate at any time by deleting your account. We may terminate or suspend
             access for material breach of these terms, with notice where reasonable. Sections that
@@ -97,7 +97,7 @@ export default function TermsPage() {
 
         <section className="agi-section">
           <p className="agi-section-eyebrow">
-            07 — Warranty disclaimer and Limitation of Liability
+            07 · Warranty disclaimer and Limitation of Liability
           </p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             <strong>Warranty disclaimer:</strong> AGI is provided &ldquo;AS IS&rdquo; and
@@ -114,7 +114,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">08 — Governing law, arbitration, and disputes</p>
+          <p className="agi-section-eyebrow">08 · Governing law, arbitration, and disputes</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             These terms are governed by the laws of the State of Texas, USA, without regard to
             conflict-of-laws principles.
@@ -132,7 +132,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">08a — Indemnification</p>
+          <p className="agi-section-eyebrow">08a · Indemnification</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             <strong>Indemnification:</strong> you agree to indemnify, defend, and hold harmless AGI
             Automation LLC, its officers, employees, and agents from any claims, damages, or
@@ -145,7 +145,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">09 — Changes to these terms</p>
+          <p className="agi-section-eyebrow">09 · Changes to these terms</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We may update these terms with notice posted on this page. Material changes will be
             announced via email and via{' '}
@@ -157,7 +157,7 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">10 — Contact</p>
+          <p className="agi-section-eyebrow">10 · Contact</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI Automation LLC, Austin, Texas, USA. Email{' '}
             <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>

@@ -1,9 +1,9 @@
 /**
- * conversationSync.sync-rule.test — verify the /goal sync-rule is
+ * conversationSync.sync-rule.test · verify the /goal sync-rule is
  * runtime-enforced at the ConversationSyncService constructor.
  *
  * Before this verification (2026-05-22), `assertSurfaceCanSyncChats`
- * existed in @agiworkforce/types but was never called in production —
+ * existed in @agiworkforce/types but was never called in production ·
  * sync-rule violation would silently enrol a developer surface into
  * the chat-history realtime channel. Now the assertion fires at
  * construction time.
@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { ConversationSyncService } from '../conversationSync';
 
-describe('ConversationSyncService — /goal sync-rule enforcement', () => {
+describe('ConversationSyncService · /goal sync-rule enforcement', () => {
   // Constructor short-circuits on the sync-rule assertion BEFORE touching
   // the ignored legacy constructor argument, so a stub is fine.
   const ignoredClient = {};

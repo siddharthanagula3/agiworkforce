@@ -6,7 +6,7 @@
  * 2. Returns the SERVER response (not a fake success).
  * 3. Surfaces an error when the server returns a non-ok response.
  *
- * No toast.success is ever called from the service layer — that is the
+ * No toast.success is ever called from the service layer · that is the
  * hooks layer's responsibility, so we do not test it here.
  *
  * NOTE: vitest.config.ts sets mockReset: true, which clears mock
@@ -45,7 +45,7 @@ async function setupMocks() {
   vi.mocked(getCsrfToken).mockResolvedValue('test-csrf-token');
 }
 
-describe('settingsService — getSettings', () => {
+describe('settingsService · getSettings', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -65,7 +65,7 @@ describe('settingsService — getSettings', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Server value overrides default — proves we surfaced the server result.
+    // Server value overrides default · proves we surfaced the server result.
     expect(result.data.theme).toBe('light');
     expect(result.data.email_notifications).toBe(false);
     expect(result.error).toBeUndefined();
@@ -85,7 +85,7 @@ describe('settingsService — getSettings', () => {
   });
 });
 
-describe('settingsService — updateSettings', () => {
+describe('settingsService · updateSettings', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -110,7 +110,7 @@ describe('settingsService — updateSettings', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('surfaces server error — does NOT return empty success on 422', async () => {
+  it('surfaces server error · does NOT return empty success on 422', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Invalid payload' }, 422));
 
     const { settingsService } = await import('./user-preferences');
@@ -120,7 +120,7 @@ describe('settingsService — updateSettings', () => {
   });
 });
 
-describe('settingsService — updateProfile', () => {
+describe('settingsService · updateProfile', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -147,7 +147,7 @@ describe('settingsService — updateProfile', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('surfaces server error from PATCH /api/me — old code was a no-op returning {}', async () => {
+  it('surfaces server error from PATCH /api/me · old code was a no-op returning {}', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Unauthorized' }, 401));
 
     const { settingsService } = await import('./user-preferences');
@@ -157,7 +157,7 @@ describe('settingsService — updateProfile', () => {
   });
 
   it('stores extended fields via PUT /api/settings/preferences for bio/phone/timezone/language', async () => {
-    // Only an extended field — no PATCH /api/me should be called.
+    // Only an extended field · no PATCH /api/me should be called.
     fetchMock.mockResolvedValueOnce(makeResponse({ settings: {} }));
 
     const { settingsService } = await import('./user-preferences');
@@ -181,7 +181,7 @@ describe('settingsService — updateProfile', () => {
   });
 });
 
-describe('settingsService — getProfile (round-trip: extended fields read from preferences)', () => {
+describe('settingsService · getProfile (round-trip: extended fields read from preferences)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -227,7 +227,7 @@ describe('settingsService — getProfile (round-trip: extended fields read from 
     expect(result.data?.language).toBe('ja');
   });
 
-  it('surfaces stored bio and phone — which were previously invisible', async () => {
+  it('surfaces stored bio and phone · which were previously invisible', async () => {
     fetchMock
       .mockResolvedValueOnce(makeResponse(mePayload))
       .mockResolvedValueOnce(
@@ -241,7 +241,7 @@ describe('settingsService — getProfile (round-trip: extended fields read from 
     expect(result.data?.phone).toBe('+1-555-0100');
   });
 
-  it('falls back to safe defaults when preferences fetch fails — does not error the whole call', async () => {
+  it('falls back to safe defaults when preferences fetch fails · does not error the whole call', async () => {
     fetchMock
       .mockResolvedValueOnce(makeResponse(mePayload))
       .mockResolvedValueOnce(makeResponse({ error: 'DB error' }, 500));
@@ -258,7 +258,7 @@ describe('settingsService — getProfile (round-trip: extended fields read from 
     expect(result.data?.bio).toBeUndefined();
   });
 
-  it('returns error only when /api/me fails — not when preferences fetch fails', async () => {
+  it('returns error only when /api/me fails · not when preferences fetch fails', async () => {
     fetchMock
       .mockResolvedValueOnce(makeResponse({ error: 'Unauthorized' }, 401))
       .mockResolvedValueOnce(makeResponse({ settings: {} }));
@@ -271,7 +271,7 @@ describe('settingsService — getProfile (round-trip: extended fields read from 
   });
 });
 
-describe('settingsService — getAPIKeys', () => {
+describe('settingsService · getAPIKeys', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -296,7 +296,7 @@ describe('settingsService — getAPIKeys', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('returns error on 500 — old code returned [] with no error', async () => {
+  it('returns error on 500 · old code returned [] with no error', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'DB error' }, 500));
 
     const { settingsService } = await import('./user-preferences');
@@ -307,7 +307,7 @@ describe('settingsService — getAPIKeys', () => {
   });
 });
 
-describe('settingsService — createAPIKey', () => {
+describe('settingsService · createAPIKey', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -340,7 +340,7 @@ describe('settingsService — createAPIKey', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('surfaces server error — old code returned hardcoded "not yet available" string', async () => {
+  it('surfaces server error · old code returned hardcoded "not yet available" string', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Key limit exceeded' }, 422));
 
     const { settingsService } = await import('./user-preferences');
@@ -353,7 +353,7 @@ describe('settingsService — createAPIKey', () => {
   });
 });
 
-describe('settingsService — deleteAPIKey', () => {
+describe('settingsService · deleteAPIKey', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -376,7 +376,7 @@ describe('settingsService — deleteAPIKey', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('surfaces server error — old code always returned hardcoded "not yet available" string', async () => {
+  it('surfaces server error · old code always returned hardcoded "not yet available" string', async () => {
     fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Not found' }, 404));
 
     const { settingsService } = await import('./user-preferences');

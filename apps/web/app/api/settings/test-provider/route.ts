@@ -9,20 +9,41 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getProviderProbeModel, normalizeModelId, type Provider } from '@agiworkforce/types';
 
-/**
- * Maps provider names from the settings UI to internal provider IDs.
- */
-const SETTINGS_PROVIDER_MAP: Record<string, Provider> = {
-  OpenAI: 'openai',
-  Anthropic: 'anthropic',
-  Google: 'google',
-  Perplexity: 'perplexity',
-  Grok: 'xai',
-  DeepSeek: 'deepseek',
-  Qwen: 'qwen',
+const SETTINGS_PROVIDER_ALIASES: Record<string, Provider> = {
+  anthropic: 'anthropic',
+  claude: 'anthropic',
+  deepseek: 'deepseek',
+  gemini: 'google',
+  glm: 'zhipu',
+  google: 'google',
+  grok: 'xai',
+  kimi: 'moonshot',
+  moonshot: 'moonshot',
+  openai: 'openai',
+  perplexity: 'perplexity',
+  qwen: 'qwen',
+  sonar: 'perplexity',
+  'x.ai': 'xai',
+  xai: 'xai',
+  zhipu: 'zhipu',
 };
+
+function normalizeSettingsProvider(input: string): Provider | null {
+  const key = input
+    .trim()
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9.]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+  return (
+    SETTINGS_PROVIDER_ALIASES[key] ?? SETTINGS_PROVIDER_ALIASES[key.replace(/\s+/g, '')] ?? null
+  );
+}
 
 async function handleTestProvider(request: NextRequest) {
   // CSRF protection
@@ -35,15 +56,23 @@ async function handleTestProvider(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
 
-  // Parse body
-  const body = (await request.json()) as { provider?: string };
-  const providerKey = body.provider;
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw createError.badRequest('Invalid JSON in request body');
+  }
+
+  const providerKey =
+    typeof body === 'object' && body !== null
+      ? (body as { provider?: unknown }).provider
+      : undefined;
 
   if (!providerKey || typeof providerKey !== 'string') {
     throw createError.badRequest('provider is required');
   }
 
-  const provider = SETTINGS_PROVIDER_MAP[providerKey];
+  const provider = normalizeSettingsProvider(providerKey);
   if (!provider) {
     throw createError.badRequest(`Unknown provider: ${providerKey}`);
   }
@@ -51,6 +80,13 @@ async function handleTestProvider(request: NextRequest) {
   if (!probeModel) {
     throw createError.badRequest(`No probe model configured for provider: ${providerKey}`);
   }
+
+  const managedGateResponse = buildManagedComputeGateResponse(request, {
+    provider,
+    model: probeModel,
+    feature: 'provider_probe',
+  });
+  if (managedGateResponse) return managedGateResponse;
 
   // Send a minimal test completion to verify the provider is reachable
   try {
@@ -75,14 +111,11 @@ async function handleTestProvider(request: NextRequest) {
       stream: false,
     });
 
-    logger.info(
-      { provider: providerKey, model: probeModel, userId: userId },
-      'Provider test succeeded',
-    );
+    logger.info({ provider, model: probeModel, userId }, 'Provider test succeeded');
 
     return NextResponse.json({
       success: true,
-      provider: providerKey,
+      provider,
       model: probeModel,
       message: 'Provider is reachable and responding correctly',
     });
@@ -113,13 +146,13 @@ async function handleTestProvider(request: NextRequest) {
       lowered.includes('etimedout') ||
       lowered.includes('econnreset')
     ) {
-      clientError = 'Provider unreachable — network timeout';
+      clientError = 'Provider unreachable · network timeout';
     } else if (lowered.includes('econnrefused')) {
-      clientError = 'Provider unreachable — connection refused';
+      clientError = 'Provider unreachable · connection refused';
     } else if (lowered.includes('quota') || lowered.includes('insufficient')) {
       clientError = 'Provider quota exhausted on configured key';
     } else {
-      clientError = 'Provider test failed — see server logs for details';
+      clientError = 'Provider test failed · see server logs for details';
     }
     logger.warn(
       { provider: providerKey, model: probeModel, userId: userId, error: message },
@@ -129,7 +162,7 @@ async function handleTestProvider(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        provider: providerKey,
+        provider,
         error: clientError,
       },
       { status: 502 },

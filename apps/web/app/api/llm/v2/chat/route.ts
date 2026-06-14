@@ -31,6 +31,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -81,7 +82,7 @@ const V2ChatRequestSchema = z.object({
             text: z.string().optional(),
             image_url: z
               .object({
-                // AUDIT-FIX: C-3 — block SSRF via image URLs.
+                // AUDIT-FIX: C-3 · block SSRF via image URLs.
                 url: z.string().superRefine((value, ctx) => {
                   try {
                     validateUserImageUrl(value);
@@ -647,6 +648,17 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
       { status: 403, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
     );
   }
+
+  const managedGateResponse = buildManagedComputeGateResponse(
+    request,
+    {
+      provider: providerModeDecision.providerMode,
+      model: chatRequest.model,
+      feature: 'llm_v2_chat',
+    },
+    { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  );
+  if (managedGateResponse) return managedGateResponse;
 
   const useAiSdk = request.headers.get('x-use-ai-sdk') !== 'false'; // default on for this route
 

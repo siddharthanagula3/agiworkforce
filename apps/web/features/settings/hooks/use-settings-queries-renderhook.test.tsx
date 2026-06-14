@@ -14,7 +14,7 @@
  *   useUserActivity          → GET /api/settings/activity
  *   useAuditLogActions       → GET /api/settings/audit-logs/actions
  *
- * NOTE: vitest.config.ts sets mockReset: true — each beforeEach restores
+ * NOTE: vitest.config.ts sets mockReset: true · each beforeEach restores
  *       mock implementations.
  */
 
@@ -48,7 +48,7 @@ vi.mock('@agiworkforce/types', () => ({
 }));
 
 // Stub settingsService (the inline fetch hooks call fetch directly, but
-// useUserSettings/useUserProfile/useAPIKeys use the service — stub it so
+// useUserSettings/useUserProfile/useAPIKeys use the service · stub it so
 // the QueryClient doesn't try to fetch unrelated endpoints).
 vi.mock('../services/user-preferences', () => ({
   default: {
@@ -117,7 +117,7 @@ function makeWrapper() {
 // useOrganizationSettings
 // ============================================================================
 
-describe('useOrganizationSettings — renderHook (GET /api/settings/organization)', () => {
+describe('useOrganizationSettings · renderHook (GET /api/settings/organization)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -166,7 +166,7 @@ describe('useOrganizationSettings — renderHook (GET /api/settings/organization
     expect(result.current.data).toEqual(org);
   });
 
-  it('surfaces error when server returns 403 — was previously silently null', async () => {
+  it('surfaces error when server returns 403 · was previously silently null', async () => {
     fetchMock.mockResolvedValue(makeResponse({ error: 'Forbidden' }, 403));
 
     const { useOrganizationSettings } = await import('./use-settings-queries');
@@ -185,7 +185,7 @@ describe('useOrganizationSettings — renderHook (GET /api/settings/organization
 // useTeamMembers
 // ============================================================================
 
-describe('useTeamMembers — renderHook (GET /api/settings/team)', () => {
+describe('useTeamMembers · renderHook (GET /api/settings/team)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -223,11 +223,11 @@ describe('useTeamMembers — renderHook (GET /api/settings/team)', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Hook data comes from the server — old queryFn always returned [].
+    // Hook data comes from the server · old queryFn always returned [].
     expect(result.current.data).toEqual(members);
   });
 
-  it('surfaces error when server returns 403 — old queryFn returned [] silently', async () => {
+  it('surfaces error when server returns 403 · old queryFn returned [] silently', async () => {
     fetchMock.mockResolvedValue(makeResponse({ error: 'Forbidden' }, 403));
 
     const { useTeamMembers } = await import('./use-settings-queries');
@@ -258,7 +258,7 @@ describe('useTeamMembers — renderHook (GET /api/settings/team)', () => {
 // useUserActivity
 // ============================================================================
 
-describe('useUserActivity — renderHook (GET /api/settings/activity)', () => {
+describe('useUserActivity · renderHook (GET /api/settings/activity)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -295,11 +295,11 @@ describe('useUserActivity — renderHook (GET /api/settings/activity)', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Hook data comes from the server — old queryFn always returned [].
+    // Hook data comes from the server · old queryFn always returned [].
     expect(result.current.data).toEqual(activities);
   });
 
-  it('surfaces error when server returns 401 — old queryFn returned [] silently', async () => {
+  it('surfaces error when server returns 401 · old queryFn returned [] silently', async () => {
     fetchMock.mockResolvedValue(makeResponse({ error: 'Unauthorized' }, 401));
 
     const { useUserActivity } = await import('./use-settings-queries');
@@ -318,7 +318,7 @@ describe('useUserActivity — renderHook (GET /api/settings/activity)', () => {
 // useAuditLogActions
 // ============================================================================
 
-describe('useAuditLogActions — renderHook (GET /api/settings/audit-logs/actions)', () => {
+describe('useAuditLogActions · renderHook (GET /api/settings/audit-logs/actions)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -341,11 +341,11 @@ describe('useAuditLogActions — renderHook (GET /api/settings/audit-logs/action
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Hook data comes from the server — old queryFn always returned [].
+    // Hook data comes from the server · old queryFn always returned [].
     expect(result.current.data).toEqual(actions);
   });
 
-  it('surfaces error when server returns 401 — old queryFn returned [] silently', async () => {
+  it('surfaces error when server returns 401 · old queryFn returned [] silently', async () => {
     fetchMock.mockResolvedValue(makeResponse({ error: 'Unauthorized' }, 401));
 
     const { useAuditLogActions } = await import('./use-settings-queries');
@@ -361,11 +361,11 @@ describe('useAuditLogActions — renderHook (GET /api/settings/audit-logs/action
 });
 
 // ============================================================================
-// useToggle2FA — enable honesty (A9): enable2FA() is setup-only; the hook must
+// useToggle2FA · enable honesty (A9): enable2FA() is setup-only; the hook must
 // NOT claim "2FA enabled" when the server keeps it off until a code is verified.
 // ============================================================================
 
-describe('useToggle2FA — enable must not falsely report success (A9)', () => {
+describe('useToggle2FA · enable must not falsely report success (A9)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
     await setupMocks();
@@ -393,7 +393,7 @@ describe('useToggle2FA — enable must not falsely report success (A9)', () => {
     expect(vi.mocked(toast.error)).toHaveBeenCalled();
   });
 
-  it('enable mutation ends in error state — 2FA is not actually turned on', async () => {
+  it('enable mutation ends in error state · 2FA is not actually turned on', async () => {
     const { useToggle2FA } = await import('./use-settings-queries');
     const { result } = renderHook(() => useToggle2FA(), { wrapper: makeWrapper() });
 

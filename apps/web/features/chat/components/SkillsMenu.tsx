@@ -15,15 +15,12 @@ import type { Skill } from '@agiworkforce/skills';
 import { cn } from '@shared/lib/utils';
 
 /**
- * `SkillSummary` is `Skill` minus its `body` field -- the flat picker does
- * not need body content.  `location` and `source` carry the filesystem path
- * and precedence-source string from the shared package's `Skill` type so the
- * consumer UI stays in sync with server-side parsing.
+ * `SkillSummary` is `Skill` minus host-only fields. The flat picker does not
+ * need body content or filesystem paths.
  */
 interface SkillSummary {
   name: Skill['name'];
   description: Skill['description'];
-  location: Skill['filePath'];
   source: Skill['source'];
 }
 

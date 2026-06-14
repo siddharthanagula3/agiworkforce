@@ -117,6 +117,7 @@ global.fetch = mockFetch;
 // Import route after all mocks are in place
 // ---------------------------------------------------------------------------
 import { POST, OPTIONS } from '@/app/api/media/video/generate/route';
+import { MANAGED_COMPUTE_PRIVATE_BETA_ENV } from '@/lib/managed-compute-gate';
 
 // ---------------------------------------------------------------------------
 // Shared test helpers
@@ -168,6 +169,7 @@ describe('POST /api/media/video/generate', () => {
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
 
     // Set env vars
+    process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     delete process.env['GOOGLE_API_KEY'];
   });
@@ -176,6 +178,7 @@ describe('POST /api/media/video/generate', () => {
     vi.restoreAllMocks();
     delete process.env['RUNWAY_API_KEY'];
     delete process.env['GOOGLE_API_KEY'];
+    delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
   });
 
   // =========================================================================

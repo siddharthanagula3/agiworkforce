@@ -1,5 +1,5 @@
 /**
- * Project Meta Store — web-surface local metadata keyed by project id.
+ * Project Meta Store · web-surface local metadata keyed by project id.
  *
  * Stores per-project preferences that are not part of the canonical
  * `@agiworkforce/unified-chat` `Project` shape: the selected model id

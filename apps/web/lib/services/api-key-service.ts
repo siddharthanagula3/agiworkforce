@@ -282,7 +282,7 @@ export class ApiKeyService {
     // Regex allows both new format (with embedded keyId) and old format (no underscore separator).
     const VALID_KEY_PATTERN = /^sk_(?:live|test)_[A-Za-z0-9_]{20,}$/;
     if (!VALID_KEY_PATTERN.test(rawKey)) {
-      // No Argon2 work — immediate rejection
+      // No Argon2 work · immediate rejection
       return null;
     }
 
@@ -335,9 +335,9 @@ export class ApiKeyService {
       return keyWithoutSecrets as unknown as ApiKey;
     }
 
-    // LEGACY PATH: Old key format — no key_id prefix. Scan user's keys only.
+    // LEGACY PATH: Old key format · no key_id prefix. Scan user's keys only.
     // Caller MUST enforce per-IP rate limiting (5/min) before reaching this path.
-    logger.warn({ keyPrefix: rawKey.slice(0, 12) }, 'RT-02: legacy key format — slow Argon2 path');
+    logger.warn({ keyPrefix: rawKey.slice(0, 12) }, 'RT-02: legacy key format · slow Argon2 path');
 
     // Fetch only required columns for verification to reduce data transfer
     const keys = await db.query<ApiKeyRow>(

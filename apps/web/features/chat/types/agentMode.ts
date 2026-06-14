@@ -1,5 +1,5 @@
 /**
- * Agent execution mode — controls how proactively the agent takes actions.
+ * Agent execution mode · controls how proactively the agent takes actions.
  *
  * Extracted from `apps/web/components/UnifiedAgenticChat/AgentModeSwitcher.tsx`
  * (now-deleted 36K-LOC monolith) to a single-source-of-truth type file so that

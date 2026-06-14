@@ -7,7 +7,7 @@ import { requireAdmin } from '@/lib/auth-guards';
 import { isAppError } from '@/lib/errors';
 
 /**
- * Stripe webhook configuration probe — admin only.
+ * Stripe webhook configuration probe · admin only.
  *
  * WEB-24 / WEB-26 (audit 2026-05-19): the previous shared `verifyDiagnosticSecret`
  * helper accepted any caller when `CRON_SECRET` was unset in a non-production

@@ -107,6 +107,7 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     vi.clearAllMocks();
     // NODE_ENV is read-only in TypeScript but we can mutate via index access
     (process.env as Record<string, string>)['NODE_ENV'] = 'test';
+    process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';
     // Default: authenticated user with credits
     mockGetAuthenticatedUser.mockResolvedValue({ userId: 'user-123', email: 'user@example.com' });
     mockCheckAvailable.mockResolvedValue(true);

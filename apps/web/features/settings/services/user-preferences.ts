@@ -96,9 +96,8 @@ async function getTOTPEncryptionKey(): Promise<CryptoKey> {
 }
 
 /**
- * Encrypt a TOTP secret for secure storage
- * Returns base64-encoded string with IV prepended
- * TODO: Used by /api/settings/2fa/setup once server route is implemented.
+ * Encrypt a TOTP secret for secure storage (AES-GCM, random IV prepended,
+ * base64-encoded). Consumed by the 2FA setup flow.
  */
 
 async function encryptTOTPSecret(secret: string): Promise<string> {
@@ -120,9 +119,8 @@ async function encryptTOTPSecret(secret: string): Promise<string> {
 }
 
 /**
- * Decrypt a TOTP secret from storage
- * Expects base64-encoded string with IV prepended
- * TODO: Used by /api/settings/2fa/* routes once server routes are implemented.
+ * Decrypt a TOTP secret from storage (base64-encoded, IV prepended).
+ * Consumed by the 2FA verification flow.
  */
 
 async function decryptTOTPSecret(encryptedSecret: string): Promise<string> {
@@ -532,7 +530,7 @@ class SettingsService {
       }
 
       // Fetch both endpoints in parallel; a failure on the preferences side is
-      // non-fatal — we fall back to defaults for the extended fields only.
+      // non-fatal · we fall back to defaults for the extended fields only.
       const [meRes, prefRes] = await Promise.all([
         fetch('/api/me', {
           headers: { Authorization: `Bearer ${token}` },
@@ -953,7 +951,7 @@ class SettingsService {
   }
 
   /**
-   * Initialize 2FA setup — generates a new TOTP secret and backup codes.
+   * Initialize 2FA setup · generates a new TOTP secret and backup codes.
    * Calls POST /api/settings/2fa/setup
    * The secret is never stored in plaintext; the server encrypts before saving.
    */
@@ -1022,7 +1020,7 @@ class SettingsService {
   }
 
   /**
-   * Validate a TOTP code for step-up auth (not login — Clerk handles login).
+   * Validate a TOTP code for step-up auth (not login · Clerk handles login).
    * Calls POST /api/settings/2fa/validate
    */
   async validateTOTPCode(code: string): Promise<{

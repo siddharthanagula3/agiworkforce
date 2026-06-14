@@ -17,7 +17,7 @@ function renderButton(props: Parameters<typeof SendButton>[0]) {
 
 // ── Send state ────────────────────────────────────────────────────────────────
 
-describe('SendButton — send mode', () => {
+describe('SendButton · send mode', () => {
   it('renders the ArrowUp icon', () => {
     renderButton({ mode: 'send', onClick: vi.fn() });
     // lucide renders SVG; check aria-label
@@ -75,7 +75,7 @@ describe('SendButton — send mode', () => {
 
 // ── Stop state ────────────────────────────────────────────────────────────────
 
-describe('SendButton — stop mode', () => {
+describe('SendButton · stop mode', () => {
   it('renders with stop aria-label', () => {
     renderButton({ mode: 'stop', onClick: vi.fn() });
     expect(screen.getByRole('button', { name: 'Stop the current response' })).toBeInTheDocument();
@@ -114,7 +114,7 @@ describe('SendButton — stop mode', () => {
 
 // ── Queue state ───────────────────────────────────────────────────────────────
 
-describe('SendButton — queue mode', () => {
+describe('SendButton · queue mode', () => {
   it('renders with queue aria-label', () => {
     renderButton({ mode: 'queue', onClick: vi.fn() });
     expect(screen.getByRole('button', { name: 'Add message to queue' })).toBeInTheDocument();
@@ -148,14 +148,14 @@ describe('SendButton — queue mode', () => {
     const btn = screen.getByRole('button');
     expect(btn).toHaveAttribute(
       'title',
-      'Queue message — will send after current response finishes',
+      'Queue message · will send after current response finishes',
     );
   });
 });
 
 // ── type="button" on all states ───────────────────────────────────────────────
 
-describe('SendButton — button type', () => {
+describe('SendButton · button type', () => {
   it.each(['send', 'stop', 'queue'] as const)(
     'renders type="button" in %s mode to prevent accidental form submission',
     (mode) => {

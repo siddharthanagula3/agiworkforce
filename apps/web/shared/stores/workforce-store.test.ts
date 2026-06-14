@@ -22,7 +22,7 @@ vi.mock('./authentication-store', () => ({
   },
 }));
 
-// Mock CSRF helper — returns headers with a fake token
+// Mock CSRF helper · returns headers with a fake token
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: Record<string, string> = {}) => ({
     ...headers,

@@ -167,7 +167,7 @@ export const Topup: React.FC<TopupProps> = ({
               <div>
                 <span className="font-medium">Zero Markup</span>
                 <p className="text-muted-foreground">
-                  Same input/output token prices as the LLM providers — no extra charge
+                  Same input/output token prices as the LLM providers · no extra charge
                 </p>
               </div>
             </div>
@@ -192,7 +192,7 @@ export const Topup: React.FC<TopupProps> = ({
                 <h4 className="mb-1 font-semibold">Better Value: Upgrade to Pro</h4>
                 <p className="mb-3 text-sm text-muted-foreground">
                   Get {getPlanUsageBudgetCents('pro').toLocaleString()} credits/month for $
-                  {getPlanPriceUsd('pro', 'monthly')} — better value than buying credit packs if you
+                  {getPlanPriceUsd('pro', 'monthly')} · better value than buying credit packs if you
                   use AI regularly
                 </p>
                 <Button variant="outline" size="sm" onClick={onUpgradePro}>

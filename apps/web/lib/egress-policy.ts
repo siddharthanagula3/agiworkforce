@@ -4,7 +4,7 @@
  *
  * WEB-NEW-009 hardening (2026-05-04 audit): the original allowlist correctly
  * rejected `https://169.254.169.254/...` (no allowlist hit) but offered no
- * defense-in-depth — a single allowlist regression (e.g., adding `*.com` by
+ * defense-in-depth · a single allowlist regression (e.g., adding `*.com` by
  * accident) would expose internal services. We now reject IP-literal hosts
  * and reserved/private ranges *before* the allowlist check, so even an
  * over-broad allowlist cannot be coerced into reaching internal addresses.
@@ -14,6 +14,9 @@
  * registration), giving them defense-in-depth without forcing the full
  * service-allowlist semantics.
  */
+
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 
 const ALLOWED_HOSTNAMES = [
   'api.anthropic.com',
@@ -38,7 +41,7 @@ export class EgressPolicyError extends Error {
 
 /**
  * Returns true when the hostname resolves (lexically) to an internal,
- * loopback, link-local, or private-range address. Lexical-only check —
+ * loopback, link-local, or private-range address. Lexical-only check ·
  * does NOT defend against DNS rebinding for hostnames that look public
  * but resolve internally; that requires a post-DNS check at request time.
  */
@@ -50,7 +53,7 @@ export function isInternalHostname(hostname: string): boolean {
 
   if (LOCALHOST_NAMES.has(host)) return true;
 
-  // IPv4 literal — parse octets and reject loopback / link-local / private.
+  // IPv4 literal · parse octets and reject loopback / link-local / private.
   const m = IPV4_LITERAL.exec(unbracketed);
   if (m) {
     const oct = m.slice(1, 5).map((s) => Number(s));
@@ -67,7 +70,7 @@ export function isInternalHostname(hostname: string): boolean {
     return false;
   }
 
-  // IPv6 literal — coarse but adequate: reject ::1, fc00::/7 (ULA), fe80::/10 (link-local).
+  // IPv6 literal · coarse but adequate: reject ::1, fc00::/7 (ULA), fe80::/10 (link-local).
   if (unbracketed.includes(':')) {
     if (unbracketed === '::1' || unbracketed === '::' || unbracketed === '0:0:0:0:0:0:0:1')
       return true;
@@ -82,7 +85,7 @@ export function isInternalHostname(hostname: string): boolean {
 
 /**
  * Throws if the URL points at an internal/loopback/private address.
- * Cheaper than `validateEgressUrl` — does not enforce the service
+ * Cheaper than `validateEgressUrl` · does not enforce the service
  * allowlist, just the never-route-internally invariant. Suitable for
  * URLs that originate from user input (e.g., custom OpenAI-compatible
  * base URLs that users legitimately want to point at any cloud provider,
@@ -97,6 +100,36 @@ export function assertNonInternalHostname(urlString: string): void {
   }
   if (isInternalHostname(url.hostname)) {
     throw new EgressPolicyError(urlString);
+  }
+}
+
+export async function assertResolvedPublicHostname(urlString: string): Promise<void> {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    throw new EgressPolicyError(urlString);
+  }
+
+  assertNonInternalHostname(urlString);
+
+  if (isIP(url.hostname) !== 0) return;
+
+  let addresses: Array<{ address: string }>;
+  try {
+    addresses = await lookup(url.hostname, { all: true, verbatim: true });
+  } catch {
+    throw new EgressPolicyError(urlString);
+  }
+
+  if (addresses.length === 0) {
+    throw new EgressPolicyError(urlString);
+  }
+
+  for (const entry of addresses) {
+    if (isInternalHostname(entry.address)) {
+      throw new EgressPolicyError(urlString);
+    }
   }
 }
 
@@ -157,7 +190,7 @@ export function isDataUrl(urlString: string): boolean {
  * payloads (Anthropic / OpenAI / Google). Pre-fix the chat completions
  * route forwarded these unchanged, so a request with
  *     image_url.url = "http://169.254.169.254/latest/meta-data/"
- * caused Anthropic's server to fetch IMDS — SSRF amplification (red-team
+ * caused Anthropic's server to fetch IMDS · SSRF amplification (red-team
  * finding WEB-MULTIMODAL-IMAGE-SSRF, 2026-05).
  *
  * Differences from validateEgressUrl():
@@ -168,7 +201,7 @@ export function isDataUrl(urlString: string): boolean {
  *   `isInternalHostname`, since a public-DNS hostname can still resolve
  *   to a public IP that is hosting `redis://1.2.3.4:6379` (or that the
  *   attacker controls).
- * - Rejects URLs containing userinfo (`https://user:pass@host/`) — that
+ * - Rejects URLs containing userinfo (`https://user:pass@host/`) · that
  *   pattern is overwhelmingly phishing/exfil, never legitimate images.
  */
 export function validateUserImageUrl(urlString: string): void {
