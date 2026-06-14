@@ -111,6 +111,8 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
+  /** Provider/model string set by useChatStream (e.g. "anthropic/claude-sonnet-4-6"). */
+  model?: string;
   employeeId?: string;
   employeeName?: string;
   employeeAvatar?: string;
@@ -770,11 +772,13 @@ const MessageBubbleComponent = function MessageBubble({
             </Collapsible>
           )}
 
-          {/* Model name · shown under completed assistant messages, hidden while streaming */}
-          {!isUser && !message.isStreaming && message.metadata?.model && (
+          {/* Model name · shown under completed assistant messages, hidden while streaming.
+              Read from top-level message.model first (set by useChatStream), then fall
+              back to message.metadata.model (set on messages loaded from DB). */}
+          {!isUser && !message.isStreaming && (message.model ?? message.metadata?.model) && (
             <div className="mt-1.5 text-[11px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100">
               {
-                message.metadata.model
+                (message.model ?? message.metadata?.model ?? '')
                   .replace(
                     /^(anthropic|openai|google|xai|deepseek|perplexity|qwen|moonshot|zhipu|ollama|lmstudio)\//i,
                     '',
