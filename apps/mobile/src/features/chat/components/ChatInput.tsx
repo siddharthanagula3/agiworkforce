@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
-import { getDisplayName } from '@/src/features/model-picker/service';
+import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
@@ -43,6 +43,12 @@ interface ChatInputProps {
   attachmentPrivacyShortLabel?: string;
   /** When true, composer placeholder reads "Reply to AGI" instead of "Ask anything..." */
   isThreadActive?: boolean;
+  /**
+   * Pre-fill text for the composer on first render (e.g. from a conversation
+   * starter or URL prompt param). Only applied once — subsequent changes to
+   * this prop are ignored after mount.
+   */
+  initialText?: string;
 }
 
 export function ChatInput({
@@ -60,8 +66,9 @@ export function ChatInput({
   attachRef,
   attachmentPrivacyShortLabel,
   isThreadActive = false,
+  initialText,
 }: ChatInputProps) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText ?? '');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
@@ -76,7 +83,7 @@ export function ChatInput({
   const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const modelName = getDisplayName(selectedModel);
+  const modelName = getShortDisplayName(selectedModel);
 
   const applyTranscript = useCallback((transcript: string) => {
     const cleanedTranscript = cleanupVoiceDictation(transcript);
@@ -259,10 +266,11 @@ export function ChatInput({
   }, [hapticsEnabled, onOpenAddToChat]);
 
   const handleConnectorsPress = useCallback(() => {
+    if (!onOpenConnectors) return;
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    onOpenConnectors?.();
+    onOpenConnectors();
   }, [hapticsEnabled, onOpenConnectors]);
 
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
@@ -346,14 +354,18 @@ export function ChatInput({
           }}
         >
           {/* Left group: [+] and [Model] */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1 }}>
             {/* [+] Add to Chat button */}
             <Pressable
               onPress={handlePlusPress}
               style={{
-                padding: 6,
+                width: 36,
+                height: 36,
                 borderRadius: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
+              hitSlop={6}
               accessibilityLabel="Add to chat"
               accessibilityHint="Opens attachment, mode, and feature options"
               accessibilityRole="button"
@@ -366,22 +378,26 @@ export function ChatInput({
           </View>
 
           {/* Right group: [connectors] [mic] [send/stop] */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-            {/* Connectors link -- hidden during streaming */}
-            {!isStreaming && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+            {/* Connectors link -- hidden unless the host has a real destination */}
+            {!isStreaming && onOpenConnectors ? (
               <Pressable
                 onPress={handleConnectorsPress}
                 style={{
-                  padding: 6,
+                  width: 36,
+                  height: 36,
                   borderRadius: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
+                hitSlop={6}
                 accessibilityLabel="Sources and connectors"
                 accessibilityHint="Opens connectors page"
                 accessibilityRole="button"
               >
                 <LinkIcon size={18} color={themeColors.textMuted} />
               </Pressable>
-            )}
+            ) : null}
 
             {/* Voice input button */}
             <View testID="chat.composer.mic">
