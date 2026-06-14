@@ -9,6 +9,35 @@
 
 export { ProviderMark, hasProviderMark } from './ProviderMark';
 export { AgiMark } from './AgiMark';
+export { cn } from './cn';
+export {
+  Sidebar,
+  type SidebarProps,
+  ProjectsView,
+  type ProjectsViewProps,
+  type ProjectViewProject,
+  type ProjectViewConversation,
+  type ProjectViewFile,
+  SessionItem,
+  type SessionItemProps,
+  type SessionItemHandlers,
+  SearchOverlay,
+  type SearchOverlayProps,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  type MenuProps,
+  type MenuItemProps,
+  getTemporalGroup,
+  TEMPORAL_LABELS,
+  toSafeDate,
+  type SidebarSession,
+  type SidebarProject,
+  type SidebarMode,
+  type SidebarTemporalGroup,
+  type SidebarNavItem,
+  type SidebarIconComponent,
+} from './sidebar';
 export {
   SETTINGS_NAV,
   SETTINGS_NAV_GROUPS,
