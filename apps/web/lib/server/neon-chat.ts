@@ -10,6 +10,7 @@ export type ChatConversationRow = {
   title: string;
   model: string | null;
   project_id: string | null;
+  pinned: boolean;
   created_at: string;
   updated_at: string;
 };
