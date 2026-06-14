@@ -20,6 +20,7 @@ import type { ChatState, ConversationSummary } from '../../stores/chat';
 import { useProjectStore, type Project } from '../../stores/projectStore';
 import { ConversationRow } from './ConversationRow';
 import { ProjectRow } from './ProjectRow';
+import { LocalCloudToggle } from './LocalCloudToggle';
 import {
   useUnifiedAuthStore,
   selectUser,
@@ -653,6 +654,11 @@ export function Sidebar({
         }}
       >
         <UpdatePill collapsed={collapsed} />
+      </div>
+
+      {/* Local ↔ Cloud mode toggle — the primary mode nav, sits just above Settings */}
+      <div style={{ flexShrink: 0, padding: '4px 8px 6px' }}>
+        <LocalCloudToggle collapsed={collapsed} />
       </div>
 
       {/* Footer: avatar + tier badge */}
