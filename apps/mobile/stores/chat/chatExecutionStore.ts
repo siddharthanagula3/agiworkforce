@@ -415,6 +415,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
     } else if (attachments && attachments.length > 0) {
+      // LOCAL-DATA-TO-CLOUD FIX: local files must not be uploaded to the cloud
+      // API without explicit user consent. Show a confirmation before upload.
+      const fileNames = attachments.map((a) => a.fileName).join(', ');
+      const userConsented = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          'Send files to AGI Cloud?',
+          `"${fileNames}" will be uploaded to AGI Cloud to process your message. Files leave this device.`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Upload & Send', style: 'default', onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        );
+      });
+
+      if (!userConsented) {
+        // User declined — send message without attachments (or abort).
+        // We abort the whole send to avoid silently dropping files the user
+        // thought were attached; they can choose to re-send without files.
+        set({
+          error: 'File upload cancelled. Re-send without files or tap Upload & Send to confirm.',
+          paywallError: null,
+          isStreaming: streamingConversations.size > 0,
+        });
+        return;
+      }
+
       try {
         const uploadResults = await Promise.all(
           attachments.map((a) =>
