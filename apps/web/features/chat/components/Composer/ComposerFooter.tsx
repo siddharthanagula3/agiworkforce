@@ -180,7 +180,10 @@ function partitionModels(
 }
 
 /** Provider logo: AGI mark for Auto modes → official vector mark → local SVG → brand dot. */
-function ProviderLogo({ providerKey, size = 14 }: { providerKey: string; size?: number }) {
+function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string; size?: number }) {
+  // No resolved provider (e.g. a model without a provider) → render no logo
+  // rather than crashing on providerKey.toLowerCase().
+  if (!providerKey) return null;
   // Auto modes (managed cloud) carry the AGI brand mark in the brand accent colour.
   if (providerKey === 'managed_cloud') {
     return (
