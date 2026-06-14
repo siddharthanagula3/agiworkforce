@@ -5,15 +5,18 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import type { DimensionValue } from 'react-native';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface SkeletonProps {
-  width?: number | string;
+  width?: DimensionValue;
   height?: number;
   borderRadius?: number;
   className?: string;
 }
 
 export function Skeleton({ width, height = 16, borderRadius = 8, className = '' }: SkeletonProps) {
+  const colors = useThemeColors();
   const opacity = useSharedValue(0.3);
 
   useEffect(() => {
@@ -26,8 +29,11 @@ export function Skeleton({ width, height = 16, borderRadius = 8, className = '' 
 
   return (
     <Animated.View
-      style={[{ width: width as number, height, borderRadius }, animatedStyle]}
-      className={`bg-white/10 ${className}`}
+      style={[
+        { width, height, borderRadius, backgroundColor: colors.neutralSurface },
+        animatedStyle,
+      ]}
+      className={className}
     />
   );
 }

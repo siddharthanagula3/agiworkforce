@@ -4,7 +4,7 @@
 
 We pin React 19.2.6 across the monorepo via root `package.json` →
 `pnpm.overrides`. This is a workspace-wide decision driven by
-desktop + web + Next 14 needs; the mobile surface inherits it.
+desktop + web + current Next.js needs; the mobile surface inherits it.
 
 Running `npx expo install --check` will warn:
 

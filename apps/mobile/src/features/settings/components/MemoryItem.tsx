@@ -12,7 +12,7 @@ import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
 
 function formatRelativeTime(ts: number): string {
@@ -48,6 +48,7 @@ interface MemoryItemProps {
 }
 
 export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItemProps) {
+  const colors = useThemeColors();
   const reducedMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
 
@@ -69,14 +70,15 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
     () => (
       <Pressable
         onPress={() => onDelete(memory.id)}
-        className="bg-red-500/20 items-center justify-center px-6 rounded-r-xl"
+        className="items-center justify-center px-6 rounded-r-xl"
+        style={{ backgroundColor: colors.dangerSurface }}
         accessibilityLabel="Delete memory"
         accessibilityRole="button"
       >
         <Trash2 size={20} color={colors.agentError} />
       </Pressable>
     ),
-    [memory.id, onDelete],
+    [memory.id, onDelete, colors.agentError, colors.dangerSurface],
   );
 
   return (
@@ -93,21 +95,27 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
               accessibilityHint={expanded ? 'Tap to collapse' : 'Tap to expand'}
             >
               <Text
-                className="text-sm text-white leading-5"
+                className="text-sm leading-5"
+                style={{ color: colors.textPrimary }}
                 numberOfLines={expanded ? undefined : 3}
               >
                 {memory.fact}
               </Text>
 
               {!expanded && memory.fact.length > 150 && (
-                <Text className="text-xs text-teal-400 mt-1">Tap to expand</Text>
+                <Text className="text-xs mt-1" style={{ color: colors.teal }}>
+                  Tap to expand
+                </Text>
               )}
             </Pressable>
 
             <View className="flex-row gap-1 items-center">
               <Pressable
                 onPress={() => onTogglePin(memory.id)}
-                className="p-1.5 rounded-md active:bg-white/5"
+                className="p-1.5 rounded-md"
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                })}
                 accessibilityLabel={memory.pinned ? 'Unpin memory' : 'Pin memory'}
                 accessibilityRole="button"
               >
@@ -120,7 +128,10 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
 
               <Pressable
                 onPress={() => onEdit(memory)}
-                className="p-1.5 rounded-md active:bg-white/5"
+                className="p-1.5 rounded-md"
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                })}
                 accessibilityLabel="Edit memory"
                 accessibilityRole="button"
               >
@@ -135,7 +146,7 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
           <View className="flex-row items-center mt-2.5 gap-2">
             {memory.pinned && <Badge label="Pinned" color="teal" />}
             <View className="flex-1" />
-            <Text className="text-[10px] text-white/30">
+            <Text style={{ color: colors.textMuted, fontSize: 10 }}>
               {formatRelativeTime(memory.created_at)}
             </Text>
           </View>

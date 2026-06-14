@@ -187,11 +187,12 @@ describe('Personalization page', () => {
     expect(personalization.fullName).toBe('Alice Wonder');
   });
 
-  it('Save button navigates back', () => {
+  it('Save button returns to settings', () => {
     const { getByLabelText } = render(<PersonalizationScreen />);
 
     fireEvent.press(getByLabelText('Save personalization settings'));
-    expect(mockBack).toHaveBeenCalled();
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/settings');
   });
 
   it('renders the Save button', () => {

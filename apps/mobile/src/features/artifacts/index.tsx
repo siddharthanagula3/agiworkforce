@@ -9,8 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
-import { useNavigation } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BarChart3,
@@ -28,6 +27,7 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors } from '@/src/ui/theme';
+import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useArtifactStore, accentColorForKind } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 
@@ -90,12 +90,7 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
   );
 
   const openDrawer = useCallback(() => {
-    const parent = navigation.getParent?.();
-    if (parent) {
-      parent.dispatch(DrawerActions.openDrawer());
-      return;
-    }
-    navigation.dispatch(DrawerActions.openDrawer());
+    openNearestDrawer(navigation);
   }, [navigation]);
 
   const gridWidth = Math.min(width, 920) - HORIZONTAL_PADDING * 2;
@@ -130,23 +125,33 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       {/* Header bar */}
-      <View className="h-16 justify-center px-4">
+      <View className="h-12 flex-row items-center px-3 gap-2">
         <Pressable
           testID="artifacts-open-drawer"
           onPress={openDrawer}
-          className="absolute left-4 w-12 h-12 rounded-full items-center justify-center border active:opacity-80"
-          style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: pressed ? c.surfaceHover : c.transparent,
+          })}
           accessibilityLabel="Open navigation drawer"
           accessibilityRole="button"
+          hitSlop={8}
         >
-          <Menu size={24} color={c.textSecondary} />
-          <View
-            className="absolute w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: c.terraCotta, right: 13, top: 12 }}
-          />
+          <Menu size={20} color={c.textSecondary} />
         </Pressable>
 
-        <Text className="text-center text-[20px] font-semibold" style={{ color: c.textPrimary }}>
+        <Text
+          style={{
+            flex: 1,
+            color: c.textPrimary,
+            fontSize: 17,
+            fontWeight: '700',
+          }}
+        >
           Artifacts
         </Text>
       </View>

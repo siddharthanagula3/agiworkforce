@@ -1,48 +1,13 @@
-import { View } from 'react-native';
 import { BarChart3, Box, MessageSquareDashed, Smartphone, Vibrate } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Switch } from '@/components/ui/switch';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
 import {
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
+  SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { useRouter } from 'expo-router';
-
-function ToggleRow({
-  label,
-  value,
-  onValueChange,
-  isLast,
-}: {
-  label: string;
-  value: boolean;
-  onValueChange: (value: boolean) => void;
-  isLast?: boolean;
-}) {
-  const colors = useThemeColors();
-  return (
-    <View
-      style={{
-        minHeight: 52,
-        paddingHorizontal: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        borderBottomWidth: isLast ? 0 : 1,
-        borderBottomColor: colors.border,
-      }}
-      accessibilityLabel={`${label}. ${value ? 'On' : 'Off'}`}
-    >
-      <Vibrate size={19} color={colors.textSecondary} />
-      <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>{label}</Text>
-      <Switch value={value} onValueChange={onValueChange} />
-    </View>
-  );
-}
 
 export default function GeneralSettingsScreen() {
   const router = useRouter();
@@ -55,17 +20,19 @@ export default function GeneralSettingsScreen() {
     <SettingsScreenShell title="General">
       <SettingsInfo
         title="Local defaults"
-        body="These controls affect this device. Cloud sync remains invite-gated."
+        body="These controls affect this device only. AGI Cloud settings are managed separately."
         icon={Smartphone}
       />
       <SettingsGroup>
-        <ToggleRow
+        <SettingsSwitchRow
           label="Haptic Feedback"
+          icon={Vibrate}
           value={hapticsEnabled}
           onValueChange={setHapticsEnabled}
         />
-        <ToggleRow
+        <SettingsSwitchRow
           label="Temporary Chat"
+          icon={MessageSquareDashed}
           value={isTemporaryChat}
           onValueChange={setTemporaryChat}
           isLast
@@ -89,7 +56,10 @@ export default function GeneralSettingsScreen() {
           icon={MessageSquareDashed}
           isLast
           onPress={() =>
-            router.push('/(app)/settings/storage' as Parameters<typeof router.push>[0])
+            router.push({
+              pathname: '/(app)/settings/storage',
+              params: { returnTo: '/(app)/settings/general' },
+            } as Parameters<typeof router.push>[0])
           }
         />
       </SettingsGroup>

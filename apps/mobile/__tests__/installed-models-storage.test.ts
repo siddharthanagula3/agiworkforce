@@ -101,6 +101,69 @@ describe('installed model storage repository', () => {
     expect(rows[0]?.format).toBe('pte');
   });
 
+  it('ignores malformed installed model rows instead of leaking bad local state', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockDb.getAllAsync.mockResolvedValue([
+      {
+        id: 'model-a',
+        display_name: 'Model A',
+        runtime: 'local',
+        format: 'pte',
+        size_bytes: 10,
+        sha256: null,
+        local_path: null,
+        installed_at: 1,
+        last_used_at: null,
+        capabilities: null,
+      },
+      {
+        id: 'broken-model',
+        display_name: 'Broken Model',
+        runtime: 'local',
+        format: 'pte',
+        size_bytes: null,
+        sha256: null,
+        local_path: null,
+        installed_at: 1,
+        last_used_at: null,
+        capabilities: null,
+      },
+    ]);
+
+    const rows = await listInstalledModels();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe('model-a');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[installedModels] Ignoring malformed installed model row:',
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('returns null when a fetched installed model row is malformed', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockDb.getFirstAsync.mockResolvedValue({
+      id: 'broken-model',
+      display_name: 'Broken Model',
+      runtime: 'unsupported-runtime',
+      format: 'pte',
+      size_bytes: 10,
+      sha256: null,
+      local_path: null,
+      installed_at: 1,
+      last_used_at: null,
+      capabilities: null,
+    });
+
+    await expect(getInstalledModel('broken-model')).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[installedModels] Ignoring malformed installed model row:',
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
+  });
+
   it('removes installed model metadata by id', async () => {
     await removeInstalledModel('qwen3-4b');
 

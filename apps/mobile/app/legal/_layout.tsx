@@ -1,16 +1,19 @@
 import { Stack } from 'expo-router';
+import { useThemeColors } from '@/src/ui/theme';
 
 export default function LegalLayout() {
+  const colors = useThemeColors();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: '#0f1012' },
-        headerTintColor: '#ffffff',
-        headerTitleStyle: { color: '#ffffff' },
-        contentStyle: { backgroundColor: '#0f1012' },
+        headerStyle: { backgroundColor: colors.surfaceBase },
+        headerTintColor: colors.textPrimary,
+        headerTitleStyle: { color: colors.textPrimary },
+        contentStyle: { backgroundColor: colors.surfaceBase },
       }}
     >
-      <Stack.Screen name="article-50" options={{ title: 'EU AI Act — Article 50' }} />
+      <Stack.Screen name="article-50" options={{ title: 'EU AI Act Article 50' }} />
     </Stack>
   );
 }

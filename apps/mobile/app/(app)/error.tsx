@@ -15,11 +15,11 @@ export default function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const colors = useThemeColors();
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <View className="flex-1 items-center justify-center px-8">
         <View
           className="w-20 h-20 rounded-2xl items-center justify-center mb-5"
-          style={{ backgroundColor: `${colors.agentError}15` }}
+          style={{ backgroundColor: colors.dangerSurface }}
         >
           <AlertTriangle size={36} color={colors.agentError} />
         </View>
@@ -27,10 +27,17 @@ export default function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         <Text variant="heading" className="text-center mb-2">
           Something went wrong
         </Text>
-        <Text className="text-white/50 text-center text-sm mb-2 leading-5">
+        <Text
+          className="text-center text-sm mb-2 leading-5"
+          style={{ color: colors.textSecondary }}
+        >
           An unexpected error occurred. Please try again.
         </Text>
-        <Text className="text-white/30 text-center text-xs mb-8 leading-4" numberOfLines={3}>
+        <Text
+          className="text-center text-xs mb-8 leading-4"
+          style={{ color: colors.textMuted }}
+          numberOfLines={3}
+        >
           {error.message}
         </Text>
 
@@ -41,8 +48,10 @@ export default function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
           accessibilityLabel="Retry"
           accessibilityRole="button"
         >
-          <RotateCcw size={18} color={colors.white} />
-          <Text className="text-sm font-semibold text-white">Try Again</Text>
+          <RotateCcw size={18} color={colors.accentText} />
+          <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
+            Try Again
+          </Text>
         </Pressable>
 
         <Pressable
@@ -50,11 +59,16 @@ export default function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
             if (router.canGoBack()) router.back();
             else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
           }}
-          className="px-6 py-2 rounded-lg active:bg-white/5"
+          className="px-6 py-2 rounded-lg"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <Text className="text-sm text-white/40">Go Back</Text>
+          <Text className="text-sm" style={{ color: colors.textMuted }}>
+            Go Back
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>
