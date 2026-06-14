@@ -11,6 +11,7 @@ interface ApiConversation {
   title: string;
   model?: string | null;
   project_id?: string | null;
+  pinned?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -35,7 +36,7 @@ interface UseConversationsReturn {
   loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (
     id: string,
-    updates: { title?: string; model?: string; projectId?: string | null },
+    updates: { title?: string; model?: string; projectId?: string | null; pinned?: boolean },
   ) => Promise<boolean>;
   deleteConversation: (id: string) => Promise<boolean>;
   setActiveConversation: (id: string | null) => void;
@@ -103,6 +104,7 @@ export function useConversations(): UseConversationsReturn {
           title: c.title,
           model: c.model ?? null,
           projectId: c.project_id ?? null,
+          isPinned: c.pinned ?? false,
           createdAt: c.created_at,
           updatedAt: c.updated_at,
         }),
@@ -182,6 +184,7 @@ export function useConversations(): UseConversationsReturn {
             title: loadedConversation.title,
             model: loadedConversation.model ?? null,
             projectId: loadedConversation.project_id ?? null,
+            isPinned: loadedConversation.pinned ?? false,
             updatedAt: loadedConversation.updated_at,
           });
         }
@@ -219,7 +222,7 @@ export function useConversations(): UseConversationsReturn {
   const updateConversation = useCallback(
     async (
       id: string,
-      updates: { title?: string; model?: string; projectId?: string | null },
+      updates: { title?: string; model?: string; projectId?: string | null; pinned?: boolean },
     ): Promise<boolean> => {
       try {
         const headers = await addCsrfHeaders(await getAuthHeaders());
@@ -239,6 +242,7 @@ export function useConversations(): UseConversationsReturn {
           title: data.conversation.title,
           model: data.conversation.model ?? undefined,
           projectId: data.conversation.project_id ?? null,
+          isPinned: data.conversation.pinned ?? false,
           updatedAt: data.conversation.updated_at,
         });
         return true;
