@@ -15,7 +15,7 @@ import { logRateLimitExceeded } from './security-audit';
 // FIX (Codex P1, 2026-05-20): scope by *phase*, not by *Vercel*. The previous
 // patch over-narrowed the guard to `VERCEL_ENV === 'production'`, which
 // removed the runtime protection from self-hosted/horizontally-scaled prod
-// deployments (AWS / GCP / Fly / bare Node) — exactly the topology this
+// deployments (AWS / GCP / Fly / bare Node) · exactly the topology this
 // guard was created for. Instead, distinguish build-time from runtime via
 // Next.js's canonical `NEXT_PHASE`: `phase-production-build` is the build,
 // anything else (`phase-production-server`, undefined) is runtime. CI and
@@ -41,7 +41,7 @@ if (isProductionRuntime && !hasRedisEnv) {
   );
 }
 
-// Initialize Redis client (falls back to in-memory if not configured — only
+// Initialize Redis client (falls back to in-memory if not configured · only
 // safe in local dev / Vercel preview after the production guard above).
 const redis = hasRedisEnv
   ? new Redis({
@@ -364,7 +364,7 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
-  // Waitlist signup endpoints — unauthenticated PII intake, tight limit
+  // Waitlist signup endpoints · unauthenticated PII intake, tight limit
   waitlist: {
     limit: 5,
     window: '1 h', // 5 signups per hour per IP to prevent enumeration and spam
@@ -548,7 +548,7 @@ function getRateLimiter(key: RateLimitKey): Ratelimit {
  * the Bearer JWT payload (no signature verification) and used `sub` as the
  * rate-limit bucket. An attacker could forge a JWT with `sub` = victim UUID,
  * call any rate-limited route, and the victim's bucket would be incremented
- * — even though JWT verification at the route handler rejected the request.
+ * · even though JWT verification at the route handler rejected the request.
  * That branch is removed. Routes that need user-keyed rate-limiting must
  * pass the verified user.id explicitly via the `identifier` parameter (after
  * `getAuthenticatedUser`); anonymous traffic falls through to IP-keyed.

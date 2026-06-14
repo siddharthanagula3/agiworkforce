@@ -72,8 +72,8 @@ export class SubscriptionService {
    * authenticated user's rows.
    *
    * Supports two call forms (mirrors credit-service overload pattern):
-   *   getSubscription(db, userId)  — caller provides adapter
-   *   getSubscription(userId)      — service creates its own adapter internally
+   *   getSubscription(db, userId)  · caller provides adapter
+   *   getSubscription(userId)      · service creates its own adapter internally
    *
    * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
    */
@@ -478,7 +478,7 @@ export class SubscriptionService {
         'Upserting subscription data',
       );
 
-      // Primary upsert — includes all columns
+      // Primary upsert · includes all columns
       let rows: SubscriptionRow[];
       try {
         rows = await db.query<SubscriptionRow>(

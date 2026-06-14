@@ -9,7 +9,8 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
 import { logger } from '@/lib/logger';
-import { createError } from '@/lib/errors';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import { randomUUID } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -31,8 +32,8 @@ const ALLOWED_PROVIDER_IDS = new Set([
   'lmstudio',
 ]);
 
-// Minimum credit estimate for a streaming request (in cents). Charged up-front;
-// any unspent portion is refunded after the stream closes.
+// Minimum credit reservation for a streaming request (in cents). This proxy
+// refunds the reservation when upstream fails before a stream is handed off.
 const MIN_STREAM_COST_CENTS = 1;
 
 // Zod schema for the request body. Only validates structural shape; detailed
@@ -52,11 +53,70 @@ const StreamBodySchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
 });
 
+function validateGatewayUrl(): string | NextResponse {
+  const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
+
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const parsed = new URL(gatewayUrl);
+      if (parsed.protocol !== 'https:') {
+        logger.error({ gatewayUrl }, 'RT-01: API_GATEWAY_URL must use https in production');
+        return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
+    }
+  }
+
+  return gatewayUrl;
+}
+
+function getStreamRequestId(request: NextRequest): string {
+  const rawHeader = request.headers.get('idempotency-key')?.trim();
+  if (rawHeader && /^[a-zA-Z0-9._:-]{8,128}$/.test(rawHeader)) {
+    return rawHeader;
+  }
+  return randomUUID();
+}
+
+async function refundStreamReservation(params: {
+  db: ReturnType<typeof getNeonDb>;
+  userId: string;
+  providerId: string;
+  model: string;
+  requestId: string;
+  reason: string;
+}) {
+  const refundKey = CreditService.generateIdempotencyKey(params.userId, 'refund', params.requestId);
+  const result = await CreditService.deductCredits(
+    params.db,
+    params.userId,
+    -MIN_STREAM_COST_CENTS,
+    'Stream refund (upstream error)',
+    {
+      provider: params.providerId,
+      providerId: params.providerId,
+      model: params.model,
+      requestId: params.requestId,
+      reason: params.reason,
+      type: 'refund',
+    },
+    refundKey,
+  );
+
+  if (!result.success) {
+    logger.error(
+      { providerId: params.providerId, userId: params.userId, requestId: params.requestId, result },
+      'Stream refund failed',
+    );
+  }
+}
+
 /**
- * POST /api/v1/providers/:providerId/stream — authenticated proxy to api-gateway provider stream.
+ * POST /api/v1/providers/:providerId/stream · authenticated proxy to api-gateway provider stream.
  *
  * Security controls added per RT-01 red-team finding (2026-05-04):
- * 1. JWT auth required (getAuthenticatedUser — Bearer or cookie).
+ * 1. JWT auth required (getAuthenticatedUser · Bearer or cookie).
  * 2. Per-user rate limiting via withRateLimit('llm-streaming').
  * 3. Credit pre-check and deduction before upstream call.
  * 4. providerId validated against ALLOWED_PROVIDER_IDS allowlist.
@@ -71,7 +131,7 @@ export async function POST(
   const rateLimitResponse = await withRateLimit(request, 'llm-streaming');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // 2. Authenticate — throws AppError(401) if missing/invalid
+  // 2. Authenticate · throws AppError(401) if missing/invalid
   let userId: string;
   try {
     const auth = await getClerkAuthUser(request);
@@ -83,8 +143,6 @@ export async function POST(
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const db = getNeonDb();
-
   // 3. Validate providerId against allowlist
   const { providerId } = await params;
   if (!ALLOWED_PROVIDER_IDS.has(providerId)) {
@@ -102,6 +160,20 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
+  const managedGateResponse = buildManagedComputeGateResponse(request, {
+    provider: providerId,
+    model: parsedBody.model,
+    feature: 'provider_stream',
+  });
+  if (managedGateResponse) return managedGateResponse;
+
+  const gatewayUrlOrResponse = validateGatewayUrl();
+  if (typeof gatewayUrlOrResponse !== 'string') return gatewayUrlOrResponse;
+
+  const gatewayUrl = gatewayUrlOrResponse;
+  const requestId = getStreamRequestId(request);
+  const db = getNeonDb();
+
   // 5. Credit pre-check
   const canAfford = await CreditService.checkAvailable(db, userId, MIN_STREAM_COST_CENTS);
   if (!canAfford) {
@@ -110,35 +182,17 @@ export async function POST(
   }
 
   // 6. Deduct credits up-front (fire-and-forget on success; refund path below)
-  const idempotencyKey = CreditService.generateIdempotencyKey(
-    userId,
-    'reservation',
-    `stream-${Date.now()}`,
-  );
+  const idempotencyKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const deductResult = await CreditService.deductCredits(
     db,
     userId,
     MIN_STREAM_COST_CENTS,
     'Provider stream request',
-    { providerId, model: parsedBody.model },
+    { provider: providerId, providerId, model: parsedBody.model },
     idempotencyKey,
   );
   if (!deductResult.success) {
     return NextResponse.json({ error: 'insufficient_credits' }, { status: 402 });
-  }
-
-  // 7. Validate gateway URL (production must be https, not localhost)
-  const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
-  if (process.env.NODE_ENV === 'production') {
-    try {
-      const parsed = new URL(gatewayUrl);
-      if (parsed.protocol !== 'https:') {
-        logger.error({ gatewayUrl }, 'RT-01: API_GATEWAY_URL must use https in production');
-        return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
-      }
-    } catch {
-      return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
-    }
   }
 
   // 8. Forward to upstream (re-serialize validated body to prevent injection)
@@ -160,20 +214,20 @@ export async function POST(
         },
         body: upstreamBody,
         signal: connectController.signal,
-        // @ts-expect-error — Next.js Node runtime accepts duplex on streamed bodies.
+        // @ts-expect-error · Next.js Node runtime accepts duplex on streamed bodies.
         duplex: 'half',
       },
     );
   } catch (fetchErr) {
     logger.error({ fetchErr, providerId }, 'Upstream fetch failed');
-    // Refund on hard failure
-    void CreditService.deductCredits(
+    await refundStreamReservation({
       db,
       userId,
-      -MIN_STREAM_COST_CENTS,
-      'Stream refund (upstream error)',
-      { idempotencyKey },
-    );
+      providerId,
+      model: parsedBody.model,
+      requestId,
+      reason: 'fetch_exception',
+    });
     return NextResponse.json({ error: 'Upstream unavailable' }, { status: 502 });
   } finally {
     clearTimeout(connectTimeout);
@@ -181,16 +235,17 @@ export async function POST(
 
   if (!upstream.ok || !upstream.body) {
     const errText = await upstream.text().catch(() => '');
-    // Refund on upstream error
-    void CreditService.deductCredits(
+    await refundStreamReservation({
       db,
       userId,
-      -MIN_STREAM_COST_CENTS,
-      'Stream refund (upstream error)',
-      { idempotencyKey },
-    );
+      providerId,
+      model: parsedBody.model,
+      requestId,
+      reason: `upstream_${upstream.status || 502}`,
+    });
+    logger.warn({ providerId, status: upstream.status, error: errText }, 'Upstream stream failed');
     return NextResponse.json(
-      { error: errText || `Upstream error ${upstream.status}` },
+      { error: `Upstream error ${upstream.status || 502}` },
       { status: upstream.status || 502 },
     );
   }
@@ -208,6 +263,3 @@ export async function POST(
 
 // Re-export for test access
 export { ALLOWED_PROVIDER_IDS };
-
-// Satisfy unused import warning from createError (used in type context above)
-void createError;

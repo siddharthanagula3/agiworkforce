@@ -2,135 +2,82 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
+import { FinalCta } from '../../components/marketing/FlagshipSections';
+import { ProductFrame } from '../../components/marketing/ProductFrame';
+import { Reveal } from '../../components/marketing/Reveal';
+import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Chrome Extension: AI alongside every webpage',
-  description: `A Chrome side panel for page-aware AGI workflows. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
+  title: 'AGI in Chrome | Browser Context, Desktop Execution',
+  description:
+    'A Chrome Manifest V3 side panel that captures page context on request and hands real work to AGI Desktop over a paired, HMAC-signed native-messaging bridge. Scoped task permissions, workflow recording, and scheduled tasks.',
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
 };
 
-function ExtensionProductView({ label, description }: { label: string; description: string }) {
-  return (
-    <div
-      style={{
-        background: 'var(--agi-card)',
-        border: '1px solid var(--agi-rule-strong)',
-        borderRadius: 12,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Browser chrome bar */}
-      <div
-        style={{
-          background: 'var(--agi-bg-3)',
-          borderBottom: '1px solid var(--agi-rule)',
-          padding: '10px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--agi-rule-strong)',
-            display: 'inline-block',
-          }}
-        />
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--agi-rule-strong)',
-            display: 'inline-block',
-          }}
-        />
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--agi-rule-strong)',
-            display: 'inline-block',
-          }}
-        />
-        <span
-          style={{
-            marginLeft: 8,
-            fontSize: 11,
-            color: 'var(--agi-ink-quiet)',
-            fontFamily: 'var(--mono)',
-          }}
-        >
-          {label}
-        </span>
-      </div>
-      <div
-        style={{
-          padding: '32px 24px',
-          minHeight: 160,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 10,
-          background: 'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
-        }}
-      >
-        <p
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-            color: 'var(--agi-amber)',
-            margin: 0,
-          }}
-        >
-          Product view
-        </p>
-        <p
-          style={{
-            fontSize: 14,
-            color: 'var(--agi-ink-2)',
-            textAlign: 'center',
-            maxWidth: 320,
-            lineHeight: 1.5,
-            margin: 0,
-          }}
-        >
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
+const ARCHITECTURE_STEPS = [
+  {
+    n: '01',
+    title: 'Browser captures intent',
+    body: 'The side panel and content scripts read the active tab and your prompt only when you ask. No inference, no provider keys, no model traffic in the browser process.',
+  },
+  {
+    n: '02',
+    title: 'One paired bridge',
+    body: "Work crosses Chrome's native-messaging bridge to AGI Desktop on localhost port 8787. You pair the two once, explicitly, and every message is HMAC-signed.",
+  },
+  {
+    n: '03',
+    title: 'Desktop executes',
+    body: 'Models and tools run on Desktop in the route you chose there. Results stream back into the panel with the route visible.',
+  },
+];
 
-const FEATURES = [
+const CAPABILITIES = [
   {
-    label: 'Side panel chat',
-    body: 'Persistent side panel alongside any tab. The conversation carries page context automatically.',
+    meta: 'Panel',
+    title: 'Side panel on any page',
+    body: 'A persistent Manifest V3 side panel opens beside the tab you are reading. No window juggling, no copy-paste.',
   },
   {
-    label: 'Page reader',
-    body: 'Content scripts extract structured text from articles, docs, and tickets. No copy-paste.',
+    meta: 'Context',
+    title: 'Page context on request',
+    body: 'Content scripts capture page content when you ask. Capture is an explicit action you take, never something running in the background.',
   },
   {
-    label: 'Desktop bridge',
-    body: 'Native messaging to AGI Desktop lets the extension use Local, BYOK, or invited Cloud without storing model keys in Chrome.',
+    meta: 'Bridge',
+    title: 'Paired Desktop bridge',
+    body: 'Native messaging connects to AGI Desktop on localhost port 8787 with explicit pairing and HMAC-signed messages. Provider keys never enter the browser.',
   },
   {
-    label: 'BYOK across providers',
-    body: 'Model execution does not happen inside the extension. Keys stay in the selected Local, BYOK, or invited Cloud boundary.',
+    meta: 'Permissions',
+    title: 'Scoped task permissions',
+    body: 'Page interaction runs on approved sites with permissions scoped to the task at hand. Not a blanket grant across your browsing.',
   },
   {
-    label: 'Privacy by design',
-    body: 'Page context follows the selected trust boundary: Local desktop, chosen BYOK provider, or invited Cloud.',
+    meta: 'Automation',
+    title: 'Workflow recording',
+    body: 'Record a browser flow as element selectors. Field values stay out of the recording by default. Replay it when the task comes back.',
   },
+  {
+    meta: 'Automation',
+    title: 'Scheduled tasks',
+    body: "Put recurring browser work on a schedule. Tasks persist in the extension and fire through Chrome's built-in alarms.",
+  },
+];
+
+const BOUNDARY_LEDGER = [
+  { k: 'Manifest', v: 'Chrome MV3 with side panel' },
+  { k: 'Bridge', v: 'Native messaging to AGI Desktop · localhost port 8787' },
+  { k: 'Pairing', v: 'Explicit pairing · HMAC-signed messages' },
+  { k: 'Inference in Chrome', v: 'None. Execution happens on Desktop.' },
+  { k: 'Keys in Chrome', v: 'None. Keys stay on Desktop, encrypted at rest.' },
+  {
+    k: 'Chat-memory sync',
+    v: 'No default global sync. Chats stay in local extension storage.',
+  },
+  { k: 'Security story', v: 'Threat model maintained in the repo (THREAT_MODEL.md)' },
+  { k: 'Status', v: 'Desktop-bridge scoped' },
 ];
 
 export default function ChromeExtensionPage() {
@@ -138,140 +85,125 @@ export default function ChromeExtensionPage() {
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
-            {LAUNCH.publicLabel}
-          </p>
-          <h1 className="agi-page-h1">AI alongside every webpage.</h1>
-          <p className="agi-page-lede">
-            A side panel that lives on top of any tab. Read the page you&rsquo;re on, ask a
-            question.{' '}
-            <strong>The extension is the UI. Desktop, BYOK, or invited Cloud is the brain.</strong>{' '}
-            {POSITIONING.trustBoundary}
-          </p>
-          <div className="agi-cta-row">
-            <Link href="/waitlist" className="agi-cta-primary">
-              {LAUNCH.ctaLabel}
-            </Link>
-            <Link href="/desktop" className="agi-cta-ghost">
-              Pair with desktop &rarr;
-            </Link>
+
+        <section className="agi-fl-hero" aria-labelledby="agi-fl-chrome-hero-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">AGI in Chrome · Desktop-bridge scoped</p>
+              <h1 id="agi-fl-chrome-hero-title" className="agi-fl-h1">
+                <span className="agi-fl-h1-line">Your browser,</span>
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">with context.</em>
+                </span>
+              </h1>
+              <p className="agi-fl-lede">
+                AGI opens in a side panel beside any tab. It captures page context only when you
+                ask, then hands the work to AGI Desktop over a paired native-messaging bridge.
+                Execution, models, and keys stay on your machine.
+              </p>
+              <div className="agi-fl-cta-row">
+                <Link href="/desktop" className="agi-fl-cta agi-fl-cta--primary">
+                  Pair with AGI Desktop
+                </Link>
+                <WaitlistTrigger
+                  label="Join Cloud Waitlist"
+                  source="website"
+                  className="agi-fl-cta agi-fl-cta--secondary"
+                />
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="Bridge guarantees">
+                <li>Capture · on request</li>
+                <li>Bridge · paired + HMAC</li>
+                <li>Execute · on Desktop</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <ProductFrame variant="browser" title="AGI · side panel" badge="Scoped" />
+            </div>
           </div>
         </section>
 
-        {/* ---- SCREENSHOTS ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">How it looks</p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 16,
-            }}
-          >
-            <ExtensionProductView
-              label="Side panel: chat alongside any tab"
-              description="AGI side panel open next to a GitHub pull request. Ask about the diff, request a summary, or run a slash command."
-            />
-            <ExtensionProductView
-              label="Page reader"
-              description="Content scripts extract structured text from articles, docs, and tickets. No copy-paste needed."
-            />
-          </div>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">The architecture</p>
+        <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-arch-title">
+          <p className="agi-fl-eyebrow">The architecture</p>
+          <h2 id="agi-fl-chrome-arch-title" className="agi-fl-h2">
+            The browser asks. Your desktop answers.
+          </h2>
+          <p className="agi-fl-section-lede">
+            AGI in Chrome never runs models and never stores provider keys. It captures what you
+            point at, crosses one paired bridge, and lets Desktop do the heavy lifting. The trust
+            boundary you chose on Desktop is the one that applies here.
+          </p>
           <ol className="agi-steps">
-            <li className="agi-step">
-              <span className="agi-step-n">01 / Browser captures intent</span>
-              <h3 className="agi-step-h">Browser captures intent</h3>
-              <p className="agi-step-body">
-                Side panel + content scripts read the active tab and your composed prompt. No keys,
-                no inference, no model traffic in the browser process.
-              </p>
-            </li>
-            <li className="agi-step">
-              <span className="agi-step-n">02 / Native messaging bridge</span>
-              <h3 className="agi-step-h">Bridge to your desktop</h3>
-              <p className="agi-step-body">
-                Intent routes through Chrome&rsquo;s native messaging API to the AGI desktop process
-                when the user chooses Local or BYOK execution.
-              </p>
-            </li>
-            <li className="agi-step">
-              <span className="agi-step-n">03 / Desktop executes</span>
-              <h3 className="agi-step-h">Desktop executes</h3>
-              <p className="agi-step-body">
-                Tool calls and model traffic happen through the selected trust boundary. Results
-                stream back into the side panel with the active route visible.
-              </p>
-            </li>
+            {ARCHITECTURE_STEPS.map((step, i) => (
+              <Reveal as="li" key={step.n} delay={i * 80} className="agi-step">
+                <span className="agi-step-n" aria-hidden="true">
+                  {step.n}
+                </span>
+                <h3 className="agi-step-h">{step.title}</h3>
+                <p className="agi-step-body">{step.body}</p>
+              </Reveal>
+            ))}
           </ol>
         </section>
 
-        {/* ---- FEATURES GRID ---- */}
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Features</p>
-          <ul className="agi-perks-grid" style={{ marginTop: 24 }} aria-label="Extension features">
-            {FEATURES.map((f) => (
-              <li key={f.label} className="agi-perk-card">
-                <p className="agi-perk-title">{f.label}</p>
-                <p className="agi-perk-description">{f.body}</p>
-              </li>
+        <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-caps-title">
+          <p className="agi-fl-eyebrow">Capabilities</p>
+          <h2 id="agi-fl-chrome-caps-title" className="agi-fl-h2">
+            A working surface, not a wrapper.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Everything below is built into the extension, scoped to the pages and tasks you approve.
+          </p>
+          <div className="agi-signal-grid">
+            {CAPABILITIES.map((item, i) => (
+              <Reveal
+                as="article"
+                key={item.title}
+                delay={(i % 3) * 60}
+                className="agi-signal-card"
+              >
+                <p className="agi-signal-meta">{item.meta}</p>
+                <h3 className="agi-signal-title">{item.title}</h3>
+                <p className="agi-signal-body">{item.body}</p>
+              </Reveal>
             ))}
-          </ul>
+          </div>
         </section>
 
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Built-in</p>
-          <ul className="agi-reasons">
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Side panel chat</h3>
-              <p className="agi-reason-p">
-                Persistent side panel alongside any tab. The conversation carries page context
-                automatically.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Page reader</h3>
-              <p className="agi-reason-p">
-                Content scripts extract structured text from articles, docs, and tickets. No
-                copy-paste.
-              </p>
-            </li>
-            <li className="agi-reason">
-              <h3 className="agi-reason-h">Desktop bridge</h3>
-              <p className="agi-reason-p">
-                Native messaging to AGI Desktop keeps model keys and local tools out of the browser
-                extension process.
-              </p>
-            </li>
-          </ul>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Distribution</p>
+        <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-boundary-title">
+          <p className="agi-fl-eyebrow">Trust boundary</p>
+          <h2 id="agi-fl-chrome-boundary-title" className="agi-fl-h2">
+            What stays where.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Local, BYOK, and AGI Cloud are separate trust boundaries. The extension inherits the one
+            you chose on Desktop. Nothing about your browsing changes that silently. Your chats and
+            memory don't sync anywhere by default.
+          </p>
           <table className="agi-ledger">
             <tbody>
-              <tr>
-                <td>Manifest</td>
-                <td>Chrome MV3</td>
-              </tr>
-              <tr>
-                <td>Bridge</td>
-                <td>Native messaging to AGI Desktop on the July 12 public release path</td>
-              </tr>
-              <tr>
-                <td>Browser model</td>
-                <td>None; desktop runs all inference</td>
-              </tr>
-              <tr>
-                <td>Web Store</td>
-                <td>Public release aligned to {LAUNCH.date}</td>
-              </tr>
+              {BOUNDARY_LEDGER.map((row) => (
+                <tr key={row.k}>
+                  <td>{row.k}</td>
+                  <td>{row.v}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </section>
+
+        <FinalCta
+          eyebrow={LAUNCH.publicLabel}
+          title="Put AGI beside the page."
+          body="Start with AGI Desktop. The extension hands every job to it across one paired, signed bridge. AGI Cloud stays invite-only. Join the waitlist and you'll get one email when access opens."
+          ctas={[
+            { href: '/desktop', label: 'Pair with AGI Desktop' },
+            { label: 'Join Cloud Waitlist', waitlist: true },
+          ]}
+          stamp={`Public launch · ${LAUNCH.date}`}
+        />
+
         <MarketingFooter />
       </main>
     </div>

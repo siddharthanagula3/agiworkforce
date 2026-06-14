@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Bot } from 'lucide-react';
 import type { ChatMessage } from '../../types';
-import type { SearchResponse } from '@core/integrations/web-search-handler';
+import { isWebSearchResponse, type WebSearchResults } from '../../types/message-metadata';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
 import { MessageBubble, messageListVariants } from '../messages/MessageBubble';
@@ -62,7 +62,7 @@ interface MessageMetadata {
   videoUrl?: string;
   thumbnailUrl?: string;
   videoData?: { url?: string; thumbnailUrl?: string; duration?: number };
-  searchResults?: Array<{ title: string; url: string; snippet: string }>;
+  searchResults?: WebSearchResults;
   documentData?: { title?: string; content?: string; format?: string };
   downloadData?: { filename: string; content: string; contentType: string };
   // Citations from server-managed web search tools
@@ -161,7 +161,7 @@ function getValidatedMetadata(
   if (md['videoData'] && typeof md['videoData'] === 'object') {
     result.videoData = md['videoData'] as MessageMetadata['videoData'];
   }
-  if (Array.isArray(md['searchResults'])) {
+  if (Array.isArray(md['searchResults']) || isWebSearchResponse(md['searchResults'])) {
     result.searchResults = md['searchResults'] as MessageMetadata['searchResults'];
   }
   if (md['documentData'] && typeof md['documentData'] === 'object') {
@@ -395,7 +395,7 @@ const MessageListComponent: React.FC<MessageListProps> = ({
                       videoUrl: meta.videoUrl,
                       thumbnailUrl: meta.thumbnailUrl,
                       videoData: meta.videoData as MediaGenerationResult | undefined,
-                      searchResults: meta.searchResults as unknown as SearchResponse | undefined,
+                      searchResults: meta.searchResults,
                       documentData: meta.documentData as GeneratedDocument | undefined,
                       citations: meta.citations,
                     },

@@ -11,6 +11,7 @@ import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { storeVideoTask } from '@/lib/video-task-store';
 import { randomUUID } from 'crypto';
 
@@ -319,6 +320,20 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // Authentication
   const { userId } = await getClerkAuthUser(request);
+
+  const managedGateResponse = buildManagedComputeGateResponse(
+    request,
+    {
+      provider: 'managed-media',
+      model: 'video-generation',
+      feature: 'media_video_generation',
+    },
+    {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  );
+  if (managedGateResponse) return managedGateResponse;
 
   // Get subscription and check tier
   const subscription = await SubscriptionService.getSubscription(userId);

@@ -9,6 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 
 const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions';
 
@@ -19,12 +20,12 @@ const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions
  * MIME allowlist a check on actual content rather than the client's claim.
  *
  * Signatures covered:
- *   - ID3 / 0xFFFB / 0xFFF3 / 0xFFF2 — MP3
- *   - "RIFF" ... "WAVE" — WAV
- *   - "OggS" — Ogg (Vorbis/Opus)
- *   - "ftyp" at offset 4 — MP4 / M4A
- *   - "fLaC" — FLAC
- *   - 0x1A 0x45 0xDF 0xA3 — Matroska/WebM (EBML)
+ *   - ID3 / 0xFFFB / 0xFFF3 / 0xFFF2 · MP3
+ *   - "RIFF" ... "WAVE" · WAV
+ *   - "OggS" · Ogg (Vorbis/Opus)
+ *   - "ftyp" at offset 4 · MP4 / M4A
+ *   - "fLaC" · FLAC
+ *   - 0x1A 0x45 0xDF 0xA3 · Matroska/WebM (EBML)
  */
 function isLikelyAudio(head: Uint8Array): boolean {
   if (head.length < 4) return false;
@@ -71,6 +72,20 @@ async function handleTranscriptions(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   await getClerkAuthUser(request);
+
+  const managedGateResponse = buildManagedComputeGateResponse(
+    request,
+    {
+      provider: 'openai',
+      model: 'audio-transcription',
+      feature: 'audio_transcription',
+    },
+    {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  );
+  if (managedGateResponse) return managedGateResponse;
 
   let formData: FormData;
   try {

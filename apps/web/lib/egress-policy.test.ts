@@ -11,14 +11,29 @@
  * calls before any provider call. These tests pin its contract.
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+
+const dnsMocks = vi.hoisted(() => ({
+  lookup: vi.fn(),
+}));
+
+vi.mock('node:dns/promises', () => ({
+  default: { lookup: dnsMocks.lookup },
+  lookup: dnsMocks.lookup,
+}));
+
 import {
+  assertResolvedPublicHostname,
   validateEgressUrl,
   validateUserImageUrl,
   isInternalHostname,
   isDataUrl,
   EgressPolicyError,
 } from './egress-policy';
+
+beforeEach(() => {
+  dnsMocks.lookup.mockReset();
+});
 
 describe('isDataUrl', () => {
   it.each([
@@ -103,7 +118,7 @@ describe('isInternalHostname', () => {
   });
 });
 
-describe('validateUserImageUrl — accepts', () => {
+describe('validateUserImageUrl · accepts', () => {
   it.each([
     'data:image/png;base64,iVBORw0KG...',
     'data:image/jpeg;base64,/9j/4AAQ...',
@@ -117,7 +132,7 @@ describe('validateUserImageUrl — accepts', () => {
   });
 });
 
-describe('validateUserImageUrl — rejects', () => {
+describe('validateUserImageUrl · rejects', () => {
   // The exact PoC from the red-team finding
   it('blocks AWS IMDS (the original PoC)', () => {
     expect(() => validateUserImageUrl('http://169.254.169.254/latest/meta-data/')).toThrow(
@@ -154,7 +169,7 @@ describe('validateUserImageUrl — rejects', () => {
     expect(() => validateUserImageUrl(url)).toThrow(EgressPolicyError);
   });
 
-  // Internal-service ports — even on otherwise-valid public hostnames
+  // Internal-service ports · even on otherwise-valid public hostnames
   it.each([
     'https://example.com:22/key.pub',
     'https://example.com:5432/x',
@@ -173,7 +188,7 @@ describe('validateUserImageUrl — rejects', () => {
   });
 });
 
-describe('validateEgressUrl — service allowlist (unchanged behavior)', () => {
+describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
   it('allows known providers', () => {
     expect(() => validateEgressUrl('https://api.anthropic.com/v1/messages')).not.toThrow();
     expect(() => validateEgressUrl('https://api.openai.com/v1/chat/completions')).not.toThrow();
@@ -194,6 +209,30 @@ describe('validateEgressUrl — service allowlist (unchanged behavior)', () => {
 
   it('blocks http (must be https)', () => {
     expect(() => validateEgressUrl('http://api.anthropic.com/v1/messages')).toThrow(
+      EgressPolicyError,
+    );
+  });
+});
+
+describe('assertResolvedPublicHostname', () => {
+  it('allows a hostname whose resolved addresses are public', async () => {
+    dnsMocks.lookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
+
+    await expect(assertResolvedPublicHostname('https://example.com/mcp')).resolves.toBeUndefined();
+  });
+
+  it('blocks a hostname whose DNS resolves to a private address', async () => {
+    dnsMocks.lookup.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+
+    await expect(assertResolvedPublicHostname('https://attacker.example/mcp')).rejects.toThrow(
+      EgressPolicyError,
+    );
+  });
+
+  it('fails closed when DNS lookup fails', async () => {
+    dnsMocks.lookup.mockRejectedValueOnce(new Error('NXDOMAIN'));
+
+    await expect(assertResolvedPublicHostname('https://missing.example/mcp')).rejects.toThrow(
       EgressPolicyError,
     );
   });

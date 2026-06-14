@@ -25,13 +25,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/providers', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/byok', priority: 0.9, changeFrequency: 'monthly' },
     { path: '/local', priority: 0.9, changeFrequency: 'monthly' },
-    { path: '/compare', priority: 0.8, changeFrequency: 'monthly' },
-    { path: '/compare/claude', priority: 0.7, changeFrequency: 'monthly' },
-    { path: '/compare/claude-code', priority: 0.75, changeFrequency: 'monthly' },
-    { path: '/compare/chatgpt', priority: 0.7, changeFrequency: 'monthly' },
-    { path: '/compare/codex', priority: 0.75, changeFrequency: 'monthly' },
-    { path: '/compare/gemini', priority: 0.7, changeFrequency: 'monthly' },
-    { path: '/compare/perplexity', priority: 0.7, changeFrequency: 'monthly' },
 
     // Surface landing pages
     { path: '/desktop', priority: 0.8, changeFrequency: 'weekly' },
@@ -41,17 +34,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/chrome-extension', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/vscode-extension', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/agi-code', priority: 0.9, changeFrequency: 'weekly' },
-    { path: '/cowork', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/agi-work', priority: 0.8, changeFrequency: 'weekly' },
 
     // Feature pages
     { path: '/apps', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/skills', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/connectors', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/connectors/mcp-directory', priority: 0.6, changeFrequency: 'weekly' },
+    { path: '/features', priority: 0.85, changeFrequency: 'weekly' },
     { path: '/features/artifacts', priority: 0.85, changeFrequency: 'weekly' },
     { path: '/features/deep-research', priority: 0.85, changeFrequency: 'weekly' },
     { path: '/features/projects', priority: 0.85, changeFrequency: 'weekly' },
     { path: '/features/memory', priority: 0.8, changeFrequency: 'weekly' },
+
+    // Cloud waitlist
+    { path: '/waitlist', priority: 0.8, changeFrequency: 'weekly' },
 
     // Documentation / developer
     { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
@@ -70,7 +67,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/resources', priority: 0.6, changeFrequency: 'weekly' },
     { path: '/customers', priority: 0.7, changeFrequency: 'monthly' },
     { path: '/partners', priority: 0.6, changeFrequency: 'monthly' },
-    { path: '/partner-perks', priority: 0.5, changeFrequency: 'monthly' },
     { path: '/press', priority: 0.5, changeFrequency: 'monthly' },
     { path: '/community', priority: 0.6, changeFrequency: 'weekly' },
     { path: '/enterprise', priority: 0.8, changeFrequency: 'monthly' },

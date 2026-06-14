@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Mocks — set up before the module under test is imported
+// Mocks · set up before the module under test is imported
 // ---------------------------------------------------------------------------
 
 // Mock server-only so it doesn't error in jsdom
@@ -254,7 +254,7 @@ beforeEach(() => {
   mockExecute.mockResolvedValue(0);
 });
 
-describe('assertQuota — Free tier (tokenCapPerMonth = 100_000)', () => {
+describe('assertQuota · Free tier (tokenCapPerMonth = 100_000)', () => {
   it('returns ok when well below 80% threshold', async () => {
     // 50k used of 100k cap = 50%, plus 1k requested = still ~50%
     seedUsageRow({ credits_used_cents: 50_000, credits_allocated_cents: 100_000 });
@@ -307,14 +307,14 @@ describe('assertQuota — Free tier (tokenCapPerMonth = 100_000)', () => {
   });
 
   it('returns paywall when already past 150% (cumulative > hardCap)', async () => {
-    // Already at 200% — every new request should be refused
+    // Already at 200% · every new request should be refused
     seedUsageRow({ credits_used_cents: 200_000, credits_allocated_cents: 100_000 });
     const result = await assertQuota({ ...BASE_OPTS, tier: 'free', requestedTokens: 100 });
     expect(result.kind).toBe('paywall');
   });
 
   it('returns ok when no usage row exists (new user, 0 used)', async () => {
-    // No row = 0 used, requesting 1_000 of 100_000 = 1% — well below warnAt
+    // No row = 0 used, requesting 1_000 of 100_000 = 1% · well below warnAt
     seedNoUsageRow();
     const result = await assertQuota({ ...BASE_OPTS, tier: 'free', requestedTokens: 1_000 });
     expect(result.kind).toBe('ok');
@@ -328,7 +328,7 @@ describe('assertQuota — Free tier (tokenCapPerMonth = 100_000)', () => {
   });
 });
 
-describe('assertQuota — Hobby tier (tokenCapPerMonth = 2_000_000)', () => {
+describe('assertQuota · Hobby tier (tokenCapPerMonth = 2_000_000)', () => {
   it('returns ok well below 80%', async () => {
     // 1M used / 2M allocated = 50%
     seedUsageRow({ credits_used_cents: 1_000_000, credits_allocated_cents: 2_000_000 });
@@ -370,7 +370,7 @@ describe('assertQuota — Hobby tier (tokenCapPerMonth = 2_000_000)', () => {
   });
 });
 
-describe('assertQuota — tier boundary exactly at threshold', () => {
+describe('assertQuota · tier boundary exactly at threshold', () => {
   it('treats pctUsed exactly == warnAt as warn (inclusive lower bound)', async () => {
     // 80_000 / 100_000 = exactly 80% = warnAt. No additional tokens requested.
     seedUsageRow({ credits_used_cents: 80_000, credits_allocated_cents: 100_000 });
@@ -393,7 +393,7 @@ describe('assertQuota — tier boundary exactly at threshold', () => {
   });
 });
 
-describe('assertQuota — image sub-quota (Hobby: 10/mo)', () => {
+describe('assertQuota · image sub-quota (Hobby: 10/mo)', () => {
   it('returns paywall for image on free tier (not allowed)', async () => {
     seedNoUsageRow();
     const result = await assertQuota({
@@ -424,7 +424,7 @@ describe('assertQuota — image sub-quota (Hobby: 10/mo)', () => {
   });
 });
 
-describe('assertQuota — video sub-quota', () => {
+describe('assertQuota · video sub-quota', () => {
   it('returns paywall for video on free tier', async () => {
     seedNoUsageRow();
     const result = await assertQuota({
@@ -451,7 +451,7 @@ describe('assertQuota — video sub-quota', () => {
   });
 });
 
-describe('assertQuota — computer_use sub-quota', () => {
+describe('assertQuota · computer_use sub-quota', () => {
   it('returns paywall for computer_use on free tier', async () => {
     seedNoUsageRow();
     const result = await assertQuota({
@@ -478,7 +478,7 @@ describe('assertQuota — computer_use sub-quota', () => {
   });
 });
 
-describe('assertQuota — mcp sub-quota', () => {
+describe('assertQuota · mcp sub-quota', () => {
   it('returns paywall for mcp on free tier', async () => {
     seedNoUsageRow();
     const result = await assertQuota({
@@ -504,7 +504,7 @@ describe('assertQuota — mcp sub-quota', () => {
   });
 });
 
-describe('assertQuota — sub-quota independence', () => {
+describe('assertQuota · sub-quota independence', () => {
   it('token paywall takes precedence over image ok', async () => {
     // Token at 200% (paywall) + image not requested separately
     seedUsageRow({ credits_used_cents: 200_000, credits_allocated_cents: 100_000 });
@@ -536,7 +536,7 @@ describe('assertQuota — sub-quota independence', () => {
   });
 });
 
-describe('assertQuota — tiers without token cap', () => {
+describe('assertQuota · tiers without token cap', () => {
   it('returns ok for pro tier with low usage (has tokenCapPerMonth = 10M)', async () => {
     // Pro tier has a 10M monthly token cap. With 0 prior usage and 1k requested, well under 80%.
     seedNoUsageRow();
@@ -558,11 +558,11 @@ describe('assertQuota — tiers without token cap', () => {
   });
 });
 
-describe('assertQuota — concurrent calls do not double-charge', () => {
+describe('assertQuota · concurrent calls do not double-charge', () => {
   it('concurrent parallel calls both see the same usage snapshot', async () => {
     // In production, cache() deduplicates. In tests, cache() is a pass-through,
     // so both calls will hit the mock. Both calls see the same seeded data.
-    // The key property is that neither call WRITES to the DB — that is
+    // The key property is that neither call WRITES to the DB · that is
     // exclusively done via reconcileUsage -> db.execute('select increment_usage(...)').
     const row: UsageRow = {
       credits_used_cents: 50_000,
@@ -581,7 +581,7 @@ describe('assertQuota — concurrent calls do not double-charge', () => {
     // Both should be ok (50% + 1% = 51% < 80%)
     expect(r1.kind).toBe('ok');
     expect(r2.kind).toBe('ok');
-    // No writes happened — only reads
+    // No writes happened · only reads
     expect(mockExecute).not.toHaveBeenCalled();
   });
 });
@@ -665,10 +665,10 @@ describe('reconcileUsage', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Pro tier tests — tokenCapPerMonth = 10_000_000, capBehavior same cadence
+// Pro tier tests · tokenCapPerMonth = 10_000_000, capBehavior same cadence
 // ---------------------------------------------------------------------------
 
-describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
+describe('assertQuota · Pro tier (tokenCapPerMonth = 10_000_000)', () => {
   // Token cap: 10M. capBehavior: { warnAt: 0.8, downgradeAt: 1.0, hardCapAt: 1.5 }
   // Credits surrogate: pctUsed = credits_used_cents / credits_allocated_cents.
 
@@ -690,7 +690,7 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
   });
 
   it('warn between 80% and 100% (9M tokens)', async () => {
-    // 9M used / 10M cap = 90% — above warnAt, below downgradeAt.
+    // 9M used / 10M cap = 90% · above warnAt, below downgradeAt.
     seedUsageRow({ credits_used_cents: 9_000_000, credits_allocated_cents: 10_000_000 });
     const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 1_000 });
     expect(result.kind).toBe('warn');
@@ -707,7 +707,7 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
   });
 
   it('downgrade between 100% and 150% (12M tokens)', async () => {
-    // 12M used / 10M cap = 120% — above downgradeAt, below hardCapAt.
+    // 12M used / 10M cap = 120% · above downgradeAt, below hardCapAt.
     seedUsageRow({ credits_used_cents: 12_000_000, credits_allocated_cents: 10_000_000 });
     const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 1_000 });
     expect(result.kind).toBe('downgrade');
@@ -726,7 +726,7 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
   });
 
   it('paywall when already past 150% (17M tokens)', async () => {
-    // 17M used / 10M cap = 170% — already past hardCapAt.
+    // 17M used / 10M cap = 170% · already past hardCapAt.
     seedUsageRow({ credits_used_cents: 17_000_000, credits_allocated_cents: 10_000_000 });
     const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 100 });
     expect(result.kind).toBe('paywall');
@@ -773,14 +773,14 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
 // matching Pro slot (sonnet-4.6 / gpt-5.4-mini). 150% = paywall.
 // ---------------------------------------------------------------------------
 
-describe('assertQuota — Pro+ flagship daily cap (15K tokens/day)', () => {
-  /** ISO timestamp for "5 minutes ago" — counter is live. */
+describe('assertQuota · Pro+ flagship daily cap (15K tokens/day)', () => {
+  /** ISO timestamp for "5 minutes ago" · counter is live. */
   const liveResetAt = () => new Date(Date.now() - 5 * 60 * 1000).toISOString();
-  /** ISO timestamp for "26 hours ago" — counter is stale (lazy reset). */
+  /** ISO timestamp for "26 hours ago" · counter is stale (lazy reset). */
   const staleResetAt = () => new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
 
   it('does not check daily cap when slot is omitted (legacy callers)', async () => {
-    // Pro+ user, plenty of monthly headroom, daily counter at 14K tokens — no slot
+    // Pro+ user, plenty of monthly headroom, daily counter at 14K tokens · no slot
     // means assertQuota cannot tell that the request is flagship-bound, so the
     // daily cap is skipped. This protects legacy chat completions callers.
     seedUsageRow({
@@ -869,7 +869,7 @@ describe('assertQuota — Pro+ flagship daily cap (15K tokens/day)', () => {
     });
     expect(result.kind).toBe('downgrade');
     if (result.kind === 'downgrade') {
-      // Routes to coding_premium_pro slot model — Sonnet 4.6.
+      // Routes to coding_premium_pro slot model · Sonnet 4.6.
       expect(result.modelOverride).toBe('claude-sonnet-4.6');
       expect(result.reason).toContain('Pro+ daily flagship cap');
     }
@@ -916,7 +916,7 @@ describe('assertQuota — Pro+ flagship daily cap (15K tokens/day)', () => {
     }
   });
 
-  it('treats stale reset_at (>24h) as 0 used — lazy reset', async () => {
+  it('treats stale reset_at (>24h) as 0 used · lazy reset', async () => {
     // Counter shows 14_999 but reset_at is 26h ago: assertQuota treats the
     // counter as expired and computes pctUsed using 0 + requested = 1K/15K.
     seedUsageRow({

@@ -1,5 +1,5 @@
 /**
- * Provider stream client — browser-side SSE consumer for the
+ * Provider stream client · browser-side SSE consumer for the
  * `/api/v1/providers/:providerId/stream` proxy route.
  *
  * Yields canonical `StreamChunk` objects (defined in `@agiworkforce/types`)

@@ -16,7 +16,6 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 interface ApiSkill {
   name: string;
   description: string;
-  location: string;
   source: string;
 }
 
@@ -26,7 +25,6 @@ interface SkillCardItem {
   id: string;
   name: string;
   description: string;
-  location: string;
   source: string;
   tags: string[];
   icon: LucideIcon;
@@ -55,7 +53,6 @@ function mapApiSkill(s: ApiSkill): SkillCardItem {
     id: s.name,
     name: s.name,
     description: s.description || '',
-    location: s.location || '',
     source: s.source,
     tags: tagsForSkill(s.source),
     icon: iconForSkill(s.name, s.source),

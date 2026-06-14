@@ -4,7 +4,7 @@
  * Logs security-relevant events to the security_audit_logs table.
  * Use this for tracking authentication failures, rate limits, authorization failures, etc.
  *
- * SECURITY: 'server-only' import is defense-in-depth — this module must never
+ * SECURITY: 'server-only' import is defense-in-depth · this module must never
  * be imported by client components.
  */
 import 'server-only';
@@ -74,7 +74,7 @@ export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void>
  * the END of `x-forwarded-for`. The leftmost value is client-supplied and
  * trivially spoofable via `curl -H 'X-Forwarded-For: 1.2.3.4'`. Reading the
  * leftmost IP poisons audit logs and breaks IP-based alerting (rate-limit
- * keys at `lib/rate-limit.ts:421` correctly use the rightmost — this path
+ * keys at `lib/rate-limit.ts:421` correctly use the rightmost · this path
  * was the divergence). Prefer `x-real-ip` (set by the platform, not client-
  * settable on Vercel), then fall back to the rightmost x-forwarded-for hop.
  */

@@ -68,15 +68,6 @@ function SkillDetailPane({ skill }: { skill: SkillItem }) {
           </p>
           <p className="font-mono text-xs text-foreground/80">Not specified</p>
         </div>
-
-        {skill.location && (
-          <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-              Location
-            </p>
-            <p className="break-all font-mono text-xs text-foreground/80">{skill.location}</p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -130,7 +121,7 @@ function SkillsList({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       </div>
     );
   }
@@ -146,8 +137,7 @@ function SkillsList({
           <Layers className="h-4 w-4 text-muted-foreground/60" aria-hidden="true" />
         </div>
         <p className="text-xs text-muted-foreground">
-          No skills yet. Create skills under{' '}
-          <code className="rounded bg-muted px-1 py-0.5">~/.claude/skills/</code>.
+          No skills yet. Installed skills will appear here after they are available to AGI.
         </p>
       </div>
     );
@@ -176,7 +166,10 @@ function SkillsList({
                 <p className="truncate font-mono text-sm font-medium">/{skill.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{skill.description}</p>
               </div>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+              <ChevronRight
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40"
+                aria-hidden="true"
+              />
             </button>
           ))}
         </div>
@@ -231,7 +224,7 @@ function ConnectorDetailPane({
             disabled={mutating}
             className="rounded-lg border border-destructive/40 px-4 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
           >
-            {mutating ? 'Disconnecting...' : 'Disconnect'}
+            {mutating ? 'Disconnecting…' : 'Disconnect'}
           </button>
         ) : (
           <button
@@ -239,7 +232,7 @@ function ConnectorDetailPane({
             disabled={mutating}
             className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {mutating ? 'Connecting...' : 'Connect'}
+            {mutating ? 'Connecting…' : 'Connect'}
           </button>
         )}
       </div>
@@ -270,7 +263,7 @@ function ConnectorsList({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
       </div>
     );
   }
@@ -297,9 +290,12 @@ function ConnectorsList({
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {connected && (
-                <span className="h-1.5 w-1.5 rounded-full bg-green-400" aria-label="connected" />
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-400" aria-hidden="true" />
+                  <span className="sr-only">Connected</span>
+                </>
               )}
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" aria-hidden="true" />
             </div>
           </button>
         );

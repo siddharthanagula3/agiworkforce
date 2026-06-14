@@ -9,13 +9,13 @@ import crypto from 'crypto';
  *
  * UPDATED 2026-05-20: the KDF migrated from raw SHA-256 to scrypt(N=2^15)
  * with a fixed app-domain salt. The entropy gate is still required as
- * defense-in-depth — a stretched KDF only delays an attacker by ~2^16
+ * defense-in-depth · a stretched KDF only delays an attacker by ~2^16
  * iterations against a low-entropy input. This file mirrors the same
  * assertion logic used inside getEncryptionKey() because the helper is
  * module-scoped and we cannot easily invoke the POST handler from here.
  *
  * NEW: boundary tests at exactly 63 bytes (rejected) and exactly 64 bytes
- * (accepted) — the audit specifically called out the missing boundary
+ * (accepted) · the audit specifically called out the missing boundary
  * case as an open finding. Any future tightening of the gate must keep
  * the inequality strict (>= 64).
  */
@@ -26,7 +26,7 @@ const DESKTOP_ORIG = process.env['DESKTOP_TOKEN_SECRET'];
 async function loadAndDeriveKey(): Promise<Buffer | Error> {
   // Reset the module cache so the env-var read happens fresh.
   // The module reads env vars inside getEncryptionKey (called lazily),
-  // not at top-level, so a fresh import isn't strictly required — but
+  // not at top-level, so a fresh import isn't strictly required · but
   // we keep the pattern in case of future refactor.
   try {
     const mod = await import('../route');

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock getAuthToken so SettingsService#setup2FA reaches the fetch call.
 // NOTE: vi.mock is hoisted to top of file by vitest; the factory runs once.
-// Do NOT call vi.resetModules() in beforeEach — it would clear the mock
+// Do NOT call vi.resetModules() in beforeEach · it would clear the mock
 // registry and cause re-imports to fail to find the mock, making
 // getAuthToken return undefined instead of 'mock-token'.
 vi.mock('@shared/lib/get-auth-token', () => ({

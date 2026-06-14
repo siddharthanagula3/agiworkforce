@@ -19,12 +19,11 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/solutions', label: 'Solutions' },
       { href: '/apps', label: 'Apps and connectors' },
       { href: '/agi-code', label: 'AGI Code' },
-      { href: '/cowork', label: 'Cowork' },
+      { href: '/agi-work', label: 'AGI Work' },
       { href: '/providers', label: 'Providers' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/byok', label: 'BYOK' },
       { href: '/local', label: 'Local mode' },
-      { href: '/compare', label: 'Compare' },
     ],
   },
   {
@@ -37,17 +36,6 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/chrome-extension', label: 'Chrome extension' },
       { href: '/vscode-extension', label: 'VS Code extension' },
       { href: '/download', label: 'Download' },
-    ],
-  },
-  {
-    title: 'Compare',
-    links: [
-      { href: '/compare/claude', label: 'vs Claude' },
-      { href: '/compare/claude-code', label: 'vs Claude Code' },
-      { href: '/compare/chatgpt', label: 'vs ChatGPT' },
-      { href: '/compare/codex', label: 'vs Codex' },
-      { href: '/compare/gemini', label: 'vs Gemini' },
-      { href: '/compare/perplexity', label: 'vs Perplexity' },
     ],
   },
   {
