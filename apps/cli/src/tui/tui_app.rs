@@ -2441,6 +2441,7 @@ pub async fn run(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: crate::mcp::McpConfigLoadOptions,
+    agent_name: Option<String>,
 ) -> Result<()> {
     let effective_provider_override = crate::models::selection_provider_override(
         model,
@@ -2470,6 +2471,18 @@ pub async fn run(
     }
     if team_mode {
         session.enable_team_mode();
+    }
+    // Wire --agent: load the named agent definition and apply overrides to the session.
+    if let Some(ref name) = agent_name {
+        match crate::agents::find_agent(name) {
+            Some(agent_def) => {
+                agent_def.apply_to_session(&mut session);
+                eprintln!("Agent '{}' loaded.", agent_def.name);
+            }
+            None => {
+                eprintln!("Warning: agent '{}' not found. Run /agents to list available agents.", name);
+            }
+        }
     }
 
     match (resume_messages, resume_managed_session) {

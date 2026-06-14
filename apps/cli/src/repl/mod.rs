@@ -50,6 +50,7 @@ pub async fn run_repl(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: crate::mcp::McpConfigLoadOptions,
+    agent_name: Option<String>,
 ) -> Result<()> {
     let provider_override = crate::models::selection_provider_override(
         model,
@@ -77,6 +78,18 @@ pub async fn run_repl(
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
+    }
+    // Wire --agent: load the named agent definition and apply overrides to the session.
+    if let Some(ref name) = agent_name {
+        match crate::agents::find_agent(name) {
+            Some(agent_def) => {
+                agent_def.apply_to_session(&mut session);
+                eprintln!("Agent '{}' loaded.", agent_def.name);
+            }
+            None => {
+                eprintln!("Warning: agent '{}' not found. Run /agents to list available agents.", name);
+            }
+        }
     }
 
     if team_mode {
