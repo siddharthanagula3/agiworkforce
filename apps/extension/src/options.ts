@@ -13,6 +13,8 @@ import { getExtensionTokensCss } from './tokens';
 
 const SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 const API_KEY_STORAGE_KEY = 'agi_api_key';
+const AUTOFILL_PROFILE_KEY = 'agi_autofill_profile';
+const DEV_BEARER_KEY = 'agi_dev_bearer_token';
 
 // ── Constructable Stylesheets (no <style> tag created) ──────────────────────
 
@@ -291,6 +293,124 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       text-align: center;
     }
+
+    /* Profile editor */
+    .opt-profile-grid {
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+    }
+
+    .opt-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .opt-field.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .opt-field label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--agi-ext-text-muted);
+    }
+
+    .opt-field input,
+    .opt-field textarea,
+    .opt-field select {
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--agi-ext-text);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .opt-field input:focus,
+    .opt-field textarea:focus,
+    .opt-field select:focus {
+      border-color: var(--agi-ext-accent);
+    }
+
+    .opt-field textarea {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    .opt-profile-actions {
+      padding: 10px 16px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+
+    .opt-btn-primary {
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      border: none;
+      border-radius: 6px;
+      padding: 6px 16px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .opt-btn-primary:hover {
+      background: color-mix(in srgb, var(--agi-ext-accent) 80%, black);
+    }
+
+    .opt-save-status {
+      font-size: 11px;
+      color: var(--agi-ext-text-muted);
+    }
+
+    .opt-save-status.saved {
+      color: var(--agi-ext-success, #22c55e);
+    }
+
+    /* Dev bearer token section */
+    .opt-bearer-body {
+      padding: 12px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .opt-bearer-help {
+      font-size: 11px;
+      color: var(--agi-ext-text-muted);
+      line-height: 1.5;
+    }
+
+    .opt-bearer-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .opt-bearer-input {
+      flex: 1;
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: var(--agi-ext-text);
+      font-family: monospace;
+      outline: none;
+    }
+
+    .opt-bearer-input:focus {
+      border-color: var(--agi-ext-accent);
+    }
   `);
   document.adoptedStyleSheets = [sheet];
 }
@@ -516,6 +636,193 @@ async function buildPage(): Promise<void> {
   logoutRow.appendChild(logoutBtn);
   accountSection.appendChild(logoutRow);
   page.appendChild(accountSection);
+
+  // ── Section: Autofill Profile ─────────────────────────────────────────────
+
+  const profileSection = el('div', { class: 'opt-section' });
+  const profileHeader = el('div', { class: 'opt-section-header' });
+  profileHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Autofill Profile'));
+  profileHeader.appendChild(
+    el(
+      'div',
+      { class: 'opt-row-hint', style: 'padding-top:4px' },
+      'Stored only on this device. Used by the deterministic fast-path filler and the AGI computer-use agent.',
+    ),
+  );
+  profileSection.appendChild(profileHeader);
+
+  // Profile fields — two-column grid
+  type ProfileKey =
+    | 'firstName'
+    | 'lastName'
+    | 'email'
+    | 'phone'
+    | 'locationCity'
+    | 'locationState'
+    | 'locationCountry'
+    | 'currentTitle'
+    | 'currentCompany'
+    | 'yearsOfExperience'
+    | 'linkedinUrl'
+    | 'githubUrl'
+    | 'portfolioUrl'
+    | 'workAuthorization'
+    | 'salaryExpectation'
+    | 'coverLetterText';
+
+  const PROFILE_FIELDS: Array<{ key: ProfileKey; label: string; type?: string; full?: boolean }> = [
+    { key: 'firstName', label: 'First name' },
+    { key: 'lastName', label: 'Last name' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'phone', label: 'Phone', type: 'tel' },
+    { key: 'locationCity', label: 'City' },
+    { key: 'locationState', label: 'State / Province' },
+    { key: 'locationCountry', label: 'Country' },
+    { key: 'currentTitle', label: 'Current title' },
+    { key: 'currentCompany', label: 'Current company' },
+    { key: 'yearsOfExperience', label: 'Years of experience', type: 'number' },
+    { key: 'linkedinUrl', label: 'LinkedIn URL', type: 'url' },
+    { key: 'githubUrl', label: 'GitHub URL', type: 'url' },
+    { key: 'portfolioUrl', label: 'Portfolio / Website URL', type: 'url' },
+    { key: 'workAuthorization', label: 'Work authorization' },
+    { key: 'salaryExpectation', label: 'Salary expectation' },
+    { key: 'coverLetterText', label: 'Cover letter (text)', full: true },
+  ];
+
+  const profileGrid = el('div', { class: 'opt-profile-grid' });
+  const profileInputs: Partial<Record<ProfileKey, HTMLInputElement | HTMLTextAreaElement>> = {};
+
+  for (const field of PROFILE_FIELDS) {
+    const wrapper = el('div', { class: field.full ? 'opt-field full-width' : 'opt-field' });
+    const label = el('label', { for: `profile-${field.key}` }, field.label);
+    wrapper.appendChild(label);
+
+    if (field.full) {
+      const ta = el('textarea', { id: `profile-${field.key}`, rows: '4' }) as HTMLTextAreaElement;
+      wrapper.appendChild(ta);
+      profileInputs[field.key] = ta;
+    } else {
+      const input = el('input', {
+        id: `profile-${field.key}`,
+        type: field.type ?? 'text',
+        autocomplete: 'off',
+      }) as HTMLInputElement;
+      wrapper.appendChild(input);
+      profileInputs[field.key] = input;
+    }
+    profileGrid.appendChild(wrapper);
+  }
+
+  profileSection.appendChild(profileGrid);
+
+  const profileActions = el('div', { class: 'opt-profile-actions' });
+  const saveProfileBtn = el(
+    'button',
+    { class: 'opt-btn-primary' },
+    'Save profile',
+  ) as HTMLButtonElement;
+  const saveStatus = el('span', { class: 'opt-save-status' }, '');
+  profileActions.appendChild(saveProfileBtn);
+  profileActions.appendChild(saveStatus);
+  profileSection.appendChild(profileActions);
+
+  // Load saved profile into inputs
+  chrome.storage.local.get([AUTOFILL_PROFILE_KEY], (result) => {
+    const saved = result[AUTOFILL_PROFILE_KEY] as Record<string, string> | undefined;
+    if (!saved) return;
+    for (const field of PROFILE_FIELDS) {
+      const input = profileInputs[field.key];
+      if (input && saved[field.key]) input.value = String(saved[field.key]);
+    }
+  });
+
+  saveProfileBtn.addEventListener('click', async () => {
+    const profile: Record<string, string> = {};
+    for (const field of PROFILE_FIELDS) {
+      const input = profileInputs[field.key];
+      if (input?.value.trim()) profile[field.key] = input.value.trim();
+    }
+    await chrome.storage.local.set({ [AUTOFILL_PROFILE_KEY]: profile });
+    saveStatus.textContent = 'Saved';
+    saveStatus.className = 'opt-save-status saved';
+    setTimeout(() => {
+      saveStatus.textContent = '';
+      saveStatus.className = 'opt-save-status';
+    }, 2000);
+  });
+
+  page.appendChild(profileSection);
+
+  // ── Section: Dev Bearer Token (computer-use auth) ─────────────────────────
+
+  const bearerSection = el('div', { class: 'opt-section' });
+  const bearerHeader = el('div', { class: 'opt-section-header' });
+  bearerHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Computer Use — Cloud Auth'));
+  bearerSection.appendChild(bearerHeader);
+
+  const bearerBody = el('div', { class: 'opt-bearer-body' });
+  bearerBody.appendChild(
+    el(
+      'p',
+      { class: 'opt-bearer-help' },
+      'Dev/demo path: paste a Clerk session JWT here. The agent loop uses this as the Bearer token ' +
+        'when calling api.agiworkforce.com. Cleared on extension uninstall. ' +
+        'Get your token: open agiworkforce.com, open DevTools → Application → Cookies → ' +
+        'copy the value of __session (Clerk JWT). Expires after the Clerk session TTL.',
+    ),
+  );
+
+  const bearerRow = el('div', { class: 'opt-bearer-row' });
+  const bearerInput = el('input', {
+    class: 'opt-bearer-input',
+    type: 'password',
+    placeholder: 'Paste Clerk JWT here…',
+    id: 'opt-bearer-input',
+    autocomplete: 'off',
+  }) as HTMLInputElement;
+  const saveBearerBtn = el('button', { class: 'opt-btn-primary' }, 'Save') as HTMLButtonElement;
+  const clearBearerBtn = el(
+    'button',
+    { class: 'opt-btn-danger', style: 'margin-left:4px' },
+    'Clear',
+  ) as HTMLButtonElement;
+  const bearerStatus = el('span', { class: 'opt-save-status' }, '');
+
+  bearerRow.appendChild(bearerInput);
+  bearerRow.appendChild(saveBearerBtn);
+  bearerRow.appendChild(clearBearerBtn);
+  bearerBody.appendChild(bearerRow);
+  bearerBody.appendChild(bearerStatus);
+  bearerSection.appendChild(bearerBody);
+
+  // Load existing token (show masked)
+  chrome.storage.local.get([DEV_BEARER_KEY], (result) => {
+    if (result[DEV_BEARER_KEY]) {
+      bearerStatus.textContent = 'Token stored';
+      bearerStatus.className = 'opt-save-status saved';
+    }
+  });
+
+  saveBearerBtn.addEventListener('click', async () => {
+    const val = bearerInput.value.trim();
+    if (!val) return;
+    await chrome.storage.local.set({ [DEV_BEARER_KEY]: val });
+    bearerInput.value = '';
+    bearerStatus.textContent = 'Token saved';
+    bearerStatus.className = 'opt-save-status saved';
+  });
+
+  clearBearerBtn.addEventListener('click', async () => {
+    await chrome.storage.local.remove([DEV_BEARER_KEY]);
+    bearerInput.value = '';
+    bearerStatus.textContent = 'Cleared';
+    bearerStatus.className = 'opt-save-status';
+    setTimeout(() => {
+      bearerStatus.textContent = '';
+    }, 1500);
+  });
+
+  page.appendChild(bearerSection);
 
   // ── Section: Shortcuts ────────────────────────────────────────────────────
 

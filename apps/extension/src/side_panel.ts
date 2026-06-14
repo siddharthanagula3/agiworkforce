@@ -57,6 +57,11 @@ import {
   Square,
   renderIcon,
 } from './assets/icons';
+import {
+  buildComputerUsePanel,
+  COMPUTER_USE_PANEL_CSS,
+  type ComputerUsePanelAPI,
+} from './features/side-panel/computerUsePanel';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -212,7 +217,7 @@ const pendingAttachments: string[] = [];
  */
 let currentPageHostname = '';
 
-type SidePanelTab = 'chat' | 'workflows';
+type SidePanelTab = 'chat' | 'workflows' | 'computer-use';
 
 const STORAGE_KEY = 'agi_side_panel_messages';
 const MAX_STORED_MESSAGES = 50;
@@ -1715,7 +1720,7 @@ function injectStyles(): void {
     typeof (CSSStyleSheet.prototype as { replaceSync?: unknown }).replaceSync === 'function'
   ) {
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(cssText);
+    sheet.replaceSync(cssText + '\n' + COMPUTER_USE_PANEL_CSS);
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
     // Fallback path for environments without Constructable Stylesheets
@@ -2770,7 +2775,14 @@ function buildUI(): void {
     // 0. Provider count badge header
     const pickerHeader = el('div', { class: 'sp-model-picker-header' });
     pickerHeader.appendChild(el('span', { class: 'sp-model-picker-title' }, 'Select model'));
-    pickerHeader.appendChild(el('span', { class: 'provider-count-badge' }, '13+ providers'));
+    // FIX (audit batch-222 [LOW] documentation drift, 2026-06-13): derive the
+    // provider count from the actual model options instead of a hardcoded "13+".
+    const providerCount = new Set(
+      SIDE_PANEL_MODEL_OPTIONS.map((o) => o.provider).filter((p): p is string => Boolean(p)),
+    ).size;
+    pickerHeader.appendChild(
+      el('span', { class: 'provider-count-badge' }, `${providerCount} providers`),
+    );
     modelDropdownEl.appendChild(pickerHeader);
 
     // 1. "Best (auto)" as the first option, visually distinct
@@ -3175,9 +3187,14 @@ function buildUI(): void {
   const tabBar = el('div', { id: 'sp-tab-bar' });
   const chatTabBtn = el('button', { class: 'sp-tab sp-tab-active', 'data-tab': 'chat' }, 'Chat');
   const workflowsTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'workflows' }, 'Workflows');
+  const cuTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'computer-use' }, 'Computer Use');
   tabBar.appendChild(chatTabBtn);
   tabBar.appendChild(workflowsTabBtn);
+  tabBar.appendChild(cuTabBtn);
   document.body.appendChild(tabBar);
+
+  // Build computer-use panel (kept in module scope so event handlers can reach it)
+  const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
 
   function switchTab(tab: SidePanelTab): void {
     const chatPanelEl = document.getElementById('sp-chat-panel');
@@ -3186,8 +3203,10 @@ function buildUI(): void {
     const toolbarEl = document.getElementById('sp-toolbar');
     chatTabBtn.classList.toggle('sp-tab-active', tab === 'chat');
     workflowsTabBtn.classList.toggle('sp-tab-active', tab === 'workflows');
+    cuTabBtn.classList.toggle('sp-tab-active', tab === 'computer-use');
     if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
     if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
+    cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
     if (tab === 'workflows') {
@@ -3197,6 +3216,7 @@ function buildUI(): void {
   }
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
   workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
+  cuTabBtn.addEventListener('click', () => switchTab('computer-use'));
 
   const chatPanel = el('div', { id: 'sp-chat-panel' });
 
@@ -3759,6 +3779,111 @@ function buildUI(): void {
   groupsSection.appendChild(groupBtnsRow);
   workflowsPanel.appendChild(groupsSection);
   document.body.appendChild(workflowsPanel);
+
+  // Computer Use panel — append after workflows; shown/hidden by switchTab()
+  document.body.appendChild(cuPanel.panelEl);
+
+  // Wire escalation events from content scripts / background into the panel UI.
+  // The background relays 'agi:escalate' CustomEvents as runtime messages.
+  chrome.runtime.onMessage.addListener((msg: unknown) => {
+    if (!msg || typeof msg !== 'object') return;
+    const m = msg as Record<string, unknown>;
+    if (m['type'] === 'AGI_CU_STEP') {
+      const step = m['step'] as Parameters<ComputerUsePanelAPI['appendStep']>[0];
+      cuPanel.appendStep(step);
+      // Auto-switch to Computer Use tab when the agent starts
+      switchTab('computer-use');
+    } else if (m['type'] === 'AGI_CU_ESCALATE') {
+      const reason = typeof m['reason'] === 'string' ? m['reason'] : 'Fast-path autofill stalled.';
+      cuPanel.showHandoffBanner(reason);
+      switchTab('computer-use');
+    } else if (m['type'] === 'AGI_CU_APPROVE_REQUEST') {
+      // Background is asking the panel to show an approval card for an action.
+      // The panel resolves the card and replies with AGI_CU_APPROVE_RESPONSE.
+      const requestId = typeof m['requestId'] === 'string' ? m['requestId'] : '';
+      const toolName = typeof m['toolName'] === 'string' ? m['toolName'] : 'action';
+      const description = typeof m['description'] === 'string' ? m['description'] : '';
+      switchTab('computer-use');
+      cuPanel.showApprovalCard(toolName, description, (allowed: boolean) => {
+        void chrome.runtime.sendMessage({
+          type: 'AGI_CU_APPROVE_RESPONSE',
+          requestId,
+          allowed,
+        });
+      });
+    }
+  });
+
+  // ── "Run Autofill" button orchestration ───────────────────────────────────
+  // Message flow (secure 3-context design):
+  //   1. User clicks "Run Autofill" in the Computer Use tab controls bar.
+  //   2. Side panel sends AGI_RUN_AUTOFILL to the content script of the
+  //      active tab (DOM work only — no CDP).
+  //   3. Content script returns { success, platform, autofill, escalation }.
+  //   4. If escalation.shouldEscalate, side panel:
+  //      a. Shows the handoff banner.
+  //      b. Switches to the Computer Use tab.
+  //      c. Sends AGI_START_COMPUTER_USE to the BACKGROUND (CDP-capable).
+  //   5. Background validates the tab's origin against siteAllowlistCache,
+  //      then starts runAgentLoop() and streams AGI_CU_STEP events back.
+  cuPanel.onRunAutofill(() => {
+    void (async () => {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const activeTabId = activeTab?.id;
+      if (!activeTabId) {
+        cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.');
+        return;
+      }
+
+      let resp: Record<string, unknown> | null = null;
+      try {
+        resp = (await chrome.tabs.sendMessage(activeTabId, {
+          type: 'AGI_RUN_AUTOFILL',
+        })) as Record<string, unknown> | null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        cuPanel.showHandoffBanner(`Autofill failed: ${msg}`);
+        return;
+      }
+
+      if (!resp || !resp['success']) {
+        const errMsg = typeof resp?.['error'] === 'string' ? resp['error'] : 'Autofill failed';
+        cuPanel.showHandoffBanner(String(errMsg));
+        return;
+      }
+
+      const escalation = resp['escalation'] as
+        | { shouldEscalate?: boolean; agentGoal?: string; triggers?: unknown[] }
+        | undefined;
+
+      if (!escalation?.shouldEscalate) {
+        // Fast-path completed cleanly — no agent loop needed.
+        cuPanel.showHandoffBanner('Autofill complete. No agent escalation needed.');
+        switchTab('computer-use');
+        return;
+      }
+
+      // Fast-path stalled → hand off to the computer-use agent loop.
+      const goal = typeof escalation.agentGoal === 'string' ? escalation.agentGoal : '';
+      cuPanel.showHandoffBanner(
+        `Fast-path autofill stalled (${String(escalation.triggers?.length ?? 0)} trigger(s)). ` +
+          `Switching to computer use…`,
+      );
+      switchTab('computer-use');
+
+      // Persist the "ask before acting" preference so the background can read it.
+      await chrome.storage.local.set({
+        agi_cu_ask_before_acting: cuPanel.isAskBeforeActing(),
+      });
+
+      // Ask background to start the CDP agent loop.
+      void chrome.runtime.sendMessage({
+        type: 'AGI_START_COMPUTER_USE',
+        goal,
+        tabId: activeTabId,
+      });
+    })();
+  });
 
   const toolbar = el('div', { id: 'sp-toolbar' });
 

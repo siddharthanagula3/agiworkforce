@@ -53,6 +53,7 @@ import {
 } from './browserTool';
 import { migrateAutofillProfile } from './autofill/filler';
 import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
+import { runAgentLoop } from './features/computer-use/agentLoop';
 import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
@@ -1663,6 +1664,129 @@ async function handleMessageAsync(
           }
         }
       }
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'AGI_START_COMPUTER_USE' as ExtensionMessage['type']: {
+      // SECURITY: 'AGI_START_COMPUTER_USE' is in EXTENSION_PAGE_ONLY_MESSAGE_TYPES —
+      // the handleMessage guard above already rejected any non-UI sender before we
+      // reach this case. Here we additionally re-validate the target tab's origin
+      // against siteAllowlistCache before starting the CDP loop.
+      const cuMsg = message as import('./types').StartComputerUseMessage;
+      const cuTabId = cuMsg.tabId;
+      const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.slice(0, 4096) : '';
+
+      if (!cuGoal) {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: goal is required',
+        } as ExtensionResponse;
+      }
+      if (typeof cuTabId !== 'number') {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: tabId is required',
+        } as ExtensionResponse;
+      }
+
+      // Re-validate the tab's origin against the allowlist (belt-and-suspenders).
+      let cuTab: chrome.tabs.Tab | undefined;
+      try {
+        cuTab = await chrome.tabs.get(cuTabId);
+      } catch {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: tab not found',
+        } as ExtensionResponse;
+      }
+      if (!cuTab?.url) {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: tab has no URL',
+        } as ExtensionResponse;
+      }
+      let cuOrigin: string;
+      try {
+        cuOrigin = new URL(cuTab.url).origin;
+      } catch {
+        return {
+          success: false,
+          error: 'AGI_START_COMPUTER_USE: invalid tab URL',
+        } as ExtensionResponse;
+      }
+      if (!siteAllowlistCache.has(cuOrigin)) {
+        return {
+          success: false,
+          error:
+            `AGI_START_COMPUTER_USE: tab origin "${cuOrigin}" is not on the site allowlist. ` +
+            'Add it via the extension popup before starting computer use.',
+        } as ExtensionResponse;
+      }
+
+      // Read the "ask before acting" preference stored by the side panel.
+      // The side panel writes 'agi_cu_ask_before_acting' (boolean) to
+      // chrome.storage.local when the toggle changes. Default: false (allow-all).
+      const askPref = await chrome.storage.local.get('agi_cu_ask_before_acting');
+      const askBeforeActing = askPref['agi_cu_ask_before_acting'] === true;
+
+      // onBeforeAction wiring:
+      //   - When askBeforeActing is false (default): no gate — every action is
+      //     allowed immediately (lowest-friction path for automated scenarios).
+      //   - When askBeforeActing is true: the background sends an AGI_CU_APPROVE_REQUEST
+      //     message to the side panel, then waits for an AGI_CU_APPROVE_RESPONSE
+      //     (allow/deny). The side panel's showApprovalCard() provides the UI.
+      //     A 30 s timeout is applied; no response = allow (fail-open) to prevent
+      //     the loop from hanging forever if the panel is closed.
+      const onBeforeAction = askBeforeActing
+        ? async (toolName: string, args: Record<string, unknown>): Promise<boolean> => {
+            const requestId = `cu_approve_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            // Notify the side panel to show an approval card
+            void chrome.runtime.sendMessage({
+              type: 'AGI_CU_APPROVE_REQUEST',
+              requestId,
+              toolName,
+              description: `${toolName}(${Object.entries(args)
+                .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+                .join(', ')})`,
+            });
+            // Wait for the side panel's response (or timeout after 30 s)
+            const decision = await new Promise<boolean>((resolve) => {
+              const timeout = setTimeout(() => {
+                chrome.runtime.onMessage.removeListener(listener);
+                resolve(true); // fail-open: allow after timeout
+              }, 30_000);
+              function listener(msg: unknown): void {
+                if (
+                  typeof msg === 'object' &&
+                  msg !== null &&
+                  (msg as Record<string, unknown>)['type'] === 'AGI_CU_APPROVE_RESPONSE' &&
+                  (msg as Record<string, unknown>)['requestId'] === requestId
+                ) {
+                  clearTimeout(timeout);
+                  chrome.runtime.onMessage.removeListener(listener);
+                  resolve((msg as Record<string, unknown>)['allowed'] === true);
+                }
+              }
+              chrome.runtime.onMessage.addListener(listener);
+            });
+            return decision;
+          }
+        : undefined; // allow-all (no gate)
+
+      // Run the agent loop in a detached promise so we can return immediately.
+      // Progress updates are broadcast via AGI_CU_STEP messages so the side
+      // panel's existing listener (side_panel.ts:3781) picks them up.
+      void runAgentLoop(cuGoal, cuTabId, {
+        onBeforeAction,
+        onProgress: (step) => {
+          void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
+        },
+      }).catch((err) => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logger.error('Computer-use agent loop error', err);
+        void chrome.runtime.sendMessage({ type: 'AGI_CU_ESCALATE', reason: errMsg });
+      });
+
       return { success: true } as ExtensionResponse;
     }
 

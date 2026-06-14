@@ -57,7 +57,9 @@ export async function saveConversation(messages: HistoryMessage[]): Promise<stri
   const all = await readAll();
   const pruned = pruneExpired(all);
   const entry: ConversationEntry = {
-    id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    // SECURITY (audit batch-220 [LOW] weak entropy, fixed 2026-06-13): crypto-backed
+    // UUID suffix instead of Math.random (matches policy.ts::generateRecordId).
+    id: `conv-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
     title: deriveTitle(messages),
     messages,
     savedAt: Date.now(),

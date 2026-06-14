@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "AGI Workforce Browser Automation",
+  "name": "AGI Browser Companion",
   "version": "1.2.0",
-  "description": "Intelligent browser automation and integration for AGI Workforce desktop application",
-  "author": "AGI Workforce",
+  "description": "Approved-site browser context and automation for AGI Desktop",
+  "author": "AGI",
   "homepage_url": "https://agiworkforce.com",
+  "_debugger_permission_note": "Added for CDP-based computer-use agent (Day-1 foundation). chrome.debugger is required to call Page.captureScreenshot, Input.dispatchMouseEvent, Input.insertText, and Page.navigate via the Chrome DevTools Protocol — the content-script executor cannot reliably implement these at demo quality. Scope: the cdpDriver attaches only to tabs that pass the existing GATEWAY_URL_ALLOWLIST_EXACT / site-allowlist policy gate and detaches on completion or error. Threat-model impact: adds the ability to attach to and instrument any tab the user has open; mitigated by (a) requiring the tab to be on an approved origin before the agent loop runs, (b) the debugger detaches on every code path, and (c) the feature is only reachable from the service worker under explicit user invocation. Update THREAT_MODEL.md accordingly before Chrome Web Store submission.",
   "permissions": [
     "activeTab",
     "tabs",
@@ -16,7 +17,8 @@
     "scripting",
     "cookies",
     "notifications",
-    "tabGroups"
+    "tabGroups",
+    "debugger"
   ],
   "_host_permissions_note": "Broad localhost/* is intentional: the bridge port is user-configurable via chrome.storage.local agi_bridge_url (default 8787, matches VS Code extension and desktop bridge). Restricting to a fixed port would break configurability. Runtime enforcement: validateBridgeUrl() in background.ts rejects any non-local URL.",
   "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
@@ -46,7 +48,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "AGI Workforce"
+    "default_title": "AGI"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -60,7 +62,7 @@
         "default": "Ctrl+Shift+A",
         "mac": "Command+Shift+A"
       },
-      "description": "Open AGI Workforce popup"
+      "description": "Open AGI popup"
     },
     "capture_page": {
       "suggested_key": {
