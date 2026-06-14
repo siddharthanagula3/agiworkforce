@@ -52,6 +52,11 @@
       "open": "Open project",
       "newProject": "New project"
     },
+    "mode": {
+      "local": "Local",
+      "cloud": "Cloud",
+      "aria": "Switch between Local and Cloud"
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
