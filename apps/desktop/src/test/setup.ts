@@ -175,6 +175,7 @@ vi.mock('../lib/tauri-mock', async () => {
     invoke: (core as any).invoke,
     isTauri: false,
     isCloudWeb: false,
+    isDesktopUiDevLocal: false,
     supportsLocalAppMode: false,
     isTauriContext: () => false,
     listen: vi.fn().mockResolvedValue(() => {}),

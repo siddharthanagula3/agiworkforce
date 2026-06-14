@@ -4,7 +4,7 @@
  * Toolbar displayed on artifacts in chat messages with quick actions.
  */
 
-import { Check, Copy, Download, ExternalLink, Share2 } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import { useShallow } from 'zustand/react/shallow';
 import { useArtifactStore, type ArtifactType } from '@/stores/artifactStore';
-import { shareArtifact } from '@/services/artifactSharing';
 import { useIsMounted } from '@/hooks/useIsMounted';
 
 interface ArtifactToolbarProps {
@@ -35,10 +34,8 @@ export function ArtifactToolbar({
     useShallow((s) => ({ setActiveArtifact: s.setActiveArtifact, openPanel: s.openPanel })),
   );
   const [copied, setCopied] = useState(false);
-  const [isSharing, setIsSharing] = useState(false);
   // Toolbar may unmount mid-promise when the artifact panel closes or
-  // the active artifact swaps. Guard the post-await setState in
-  // handleCopy + handleShare.
+  // the active artifact swaps. Guard the post-await setState in handleCopy.
   const isMounted = useIsMounted();
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,37 +74,6 @@ export function ArtifactToolbar({
     openPanel();
   }, [artifactId, setActiveArtifact, openPanel]);
 
-  const handleShare = useCallback(async () => {
-    if (isSharing) return;
-    setIsSharing(true);
-    try {
-      const result = await shareArtifact({
-        id: artifactId,
-        title: title || 'Artifact',
-        type: artifactType,
-        content,
-      });
-      toast.success('Link ready', {
-        description: result.url,
-        action: {
-          label: 'Copy',
-          onClick: () => {
-            void navigator.clipboard.writeText(result.url);
-          },
-        },
-        duration: 8000,
-      });
-    } catch (err) {
-      toast.error('Failed to generate share link', {
-        description: err instanceof Error ? err.message : 'Unknown error',
-      });
-    } finally {
-      if (isMounted.current) {
-        setIsSharing(false);
-      }
-    }
-  }, [artifactId, title, artifactType, content, isSharing, isMounted]);
-
   return (
     <div
       className={cn(
@@ -137,20 +103,6 @@ export function ArtifactToolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent>Download</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={handleShare}
-              disabled={isSharing}
-            >
-              <Share2 className="h-3 w-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{isSharing ? 'Generating link...' : 'Share'}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

@@ -518,7 +518,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
     );
   }
 
-  // Claude-style vertical timeline: thinking + tool calls grouped into a collapsible phase
+  // Vertical timeline: thinking + tool calls grouped into a collapsible phase.
   const renderTimeline = (embedded = false) => {
     const hasTimelineData = messageToolTimeline.length > 0 || messageThinkingContent;
     if (!hasTimelineData) {
