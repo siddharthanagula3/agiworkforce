@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Loader2, Plug, Layers, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, Plug, Layers, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useConnectors } from '@features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@features/connectors/data/connectors';
@@ -334,6 +335,17 @@ export default function CustomizePage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-6xl px-6 py-8">
+        {/* Back navigation */}
+        <div className="mb-4">
+          <Link
+            href="/chat"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Chat
+          </Link>
+        </div>
+
         {/* Page header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground">Customize</h1>
