@@ -116,7 +116,20 @@ const config = {
           NSPrivacyAccessedAPITypeReasons: ['C617.1'],
         },
       ],
-      NSPrivacyCollectedDataTypes: [],
+      NSPrivacyCollectedDataTypes: [
+        {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeEmailAddress',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        },
+        {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeName',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        },
+      ],
       NSPrivacyTracking: false,
     },
   },
@@ -159,6 +172,9 @@ const config = {
   plugins: [
     'expo-router',
     'expo-secure-store',
+    // Clerk cloud auth (native AuthView + secure token cache). Adds the Clerk
+    // iOS/Android native modules; requires a native rebuild (expo run:ios).
+    '@clerk/expo',
     ...conditionalPlugins,
     // AUDIT-FIX: STT-WIRE — on-device speech recognition via iOS Speech
     // framework / Android SpeechRecognizer. Microphone usage description is
@@ -187,7 +203,14 @@ const config = {
         cameraPermission: 'Allow $(DISPLAYNAME) to access your camera.',
       },
     ],
-    'expo-sqlite',
+    // SQLCipher: enables encrypted SQLite at the native layer (replaces the stock
+    // SQLite pod/AAR with the SQLCipher variant). This is required for the
+    // PRAGMA key ceremony in storage/db.ts to actually encrypt agi_mobile.db.
+    // Without this option expo-sqlite links stock SQLite and the PRAGMA key is
+    // a silent no-op, leaving the DB plaintext at rest.
+    // NOTE: changing this setting requires a `pod install` / native rebuild —
+    // it is not a JS-only change.
+    ['expo-sqlite', { useSQLCipher: true }],
     'expo-updates',
     'expo-web-browser',
     [
@@ -213,6 +236,10 @@ const config = {
     './native/ios/withAGINativeModulesIOS.cjs',
     // iOS local device builds: remove production-only entitlement keys after Expo package plugins run.
     './native/ios/withAGIDevEntitlements.cjs',
+    // iOS: opt Clerk's static-linked Google pods (GoogleUtilities/RecaptchaInterop/
+    // AppCheckCore) into modular headers so pod install succeeds without switching
+    // the whole app to use_frameworks!.
+    './native/ios/withClerkModularHeaders.cjs',
     // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
     // Injects com.google.mlkit:genai-common gradle dep + registers AGIAICorePackage in MainApplication.kt.
     './native/android/withAGIAICore.cjs',
