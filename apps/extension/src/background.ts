@@ -64,6 +64,13 @@ import {
   validateBridgeUrl,
   validateShortcutActions,
 } from './background/policy';
+import {
+  getAuthToken,
+  getRemainingFreePrompts,
+  streamFreeChat,
+  FREE_TRIAL_PROMPT_LIMIT,
+  FREE_TRIAL_MODEL,
+} from './features/cloud-bridge/freeTrialClient';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -2863,6 +2870,115 @@ async function handleChatMessage(
   messages.push({ role: 'user', content: userContent });
 
   try {
+    // ── CLOUD FREE-TRIAL PATH ──────────────────────────────────────────────
+    // If the user has a Clerk session token and remaining free prompts, route
+    // through the AGI Cloud economy endpoint BEFORE trying the local bridge.
+    // This is the explicit Cloud path; it never runs for Local/bridge sessions.
+    // Local↔Cloud separation: this runs only when the user has explicitly
+    // signed in (token present). Desktop bridge is still attempted as fallback
+    // if the cloud path is unavailable.
+    const clerkToken = await getAuthToken();
+    if (clerkToken) {
+      const remaining = await getRemainingFreePrompts();
+
+      if (remaining <= 0) {
+        // Quota exhausted — broadcast a special QUOTA_EXCEEDED message so the
+        // side panel can show the upgrade modal.
+        const quotaMsg: import('./types').ChatChunkMessage = {
+          type: 'CHAT_CHUNK',
+          id,
+          text: '',
+          done: true,
+          error: '__QUOTA_EXCEEDED__',
+        };
+        chrome.runtime.sendMessage(quotaMsg).catch(() => {});
+        return;
+      }
+
+      // Attempt cloud stream. On success, return immediately (no bridge fallback).
+      // On network/server error, fall through to the bridge path so the user
+      // still gets a response.
+      let cloudStreamed = false;
+      try {
+        const cloudMessages = messages.map((m) => ({
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+        }));
+
+        for await (const chunk of streamFreeChat(
+          cloudMessages,
+          clerkToken,
+          streamController.signal,
+        )) {
+          if (streamController.signal.aborted) {
+            if (!activeStream.cancelNotified) {
+              activeStream.cancelNotified = true;
+              broadcastChunk('', true, activeStream.cancelRequested ? 'Cancelled.' : undefined);
+            }
+            return;
+          }
+
+          if (chunk.type === 'text') {
+            cloudStreamed = true;
+            broadcastChunk(chunk.text, false);
+          } else if (chunk.type === 'done') {
+            broadcastChunk('', true);
+            // Notify side panel of updated remaining count
+            const newRemaining = await getRemainingFreePrompts();
+            chrome.runtime
+              .sendMessage({
+                type: 'FREE_PROMPTS_UPDATED',
+                remaining: newRemaining,
+                limit: FREE_TRIAL_PROMPT_LIMIT,
+                model: FREE_TRIAL_MODEL,
+              })
+              .catch(() => {});
+            return;
+          } else if (chunk.type === 'error') {
+            if (chunk.code === 'quota_exceeded') {
+              // Server confirmed quota exhausted — show upgrade modal
+              const quotaMsg: import('./types').ChatChunkMessage = {
+                type: 'CHAT_CHUNK',
+                id,
+                text: '',
+                done: true,
+                error: '__QUOTA_EXCEEDED__',
+              };
+              chrome.runtime.sendMessage(quotaMsg).catch(() => {});
+              return;
+            }
+            if (chunk.code === 'auth_required') {
+              // Token invalid — broadcast auth-required signal
+              const authMsg: import('./types').ChatChunkMessage = {
+                type: 'CHAT_CHUNK',
+                id,
+                text: '',
+                done: true,
+                error: '__AUTH_REQUIRED__',
+              };
+              chrome.runtime.sendMessage(authMsg).catch(() => {});
+              return;
+            }
+            // Other error (network / 5xx) — fall through to bridge
+            logger.debug('Free-trial cloud chat error, falling back to bridge', chunk.message);
+            if (cloudStreamed) {
+              // Already emitted some text — close the stream rather than bridging
+              broadcastChunk('', true, chunk.message);
+              return;
+            }
+            break; // fall through to bridge path below
+          }
+        }
+      } catch (cloudErr) {
+        // Unexpected error in the cloud path — fall through to bridge
+        logger.debug(
+          'Free-trial cloud stream threw unexpectedly, falling back to bridge',
+          cloudErr,
+        );
+      }
+    }
+    // ── END CLOUD FREE-TRIAL PATH ──────────────────────────────────────────
+
     // Resolve the bridge URL at call time so it picks up any in-session changes.
     const AGI_API_BASE = await getAgiBridgeBaseUrl();
     if (streamController.signal.aborted) {
