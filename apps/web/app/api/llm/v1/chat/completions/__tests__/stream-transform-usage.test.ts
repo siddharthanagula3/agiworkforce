@@ -1,5 +1,5 @@
 /**
- * stream-transform.ts — final OpenAI/OpenRouter usage event capture.
+ * stream-transform.ts · final OpenAI/OpenRouter usage event capture.
  *
  * When stream_options.include_usage=true is set, OpenAI emits a final SSE event
  * before [DONE] that contains a usage object with complete token counts including
@@ -109,7 +109,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('buildStreamResponse — final OpenAI usage event capture', () => {
+describe('buildStreamResponse · final OpenAI usage event capture', () => {
   it('captures prompt_tokens and completion_tokens from final usage event', async () => {
     const events = [
       JSON.stringify({ choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'gpt-5.5' }),
