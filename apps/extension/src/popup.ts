@@ -11,6 +11,7 @@ import { loadPairingState, requestPairing, unpair } from './features/native-brid
 import type { PairingState } from './features/native-bridge/pairing';
 import type { MemoryItem } from './background/memory-bridge';
 import { isMemoryItem, MEMORY_STORAGE_KEY } from './background/memory-bridge';
+import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 
 // UI feedback durations
 const UI_FEEDBACK_DURATION_MS = 2000;
@@ -40,6 +41,7 @@ async function initializePopup(): Promise<void> {
     await initAllowlistUI();
     await initMemoryUI();
     await initPairingUI();
+    initCloudUnlockBtn();
   } catch (error) {
     logger.error('Failed to initialize popup', error);
   }
@@ -1065,6 +1067,38 @@ export async function initMemoryUI(): Promise<void> {
   await refreshMemoryUI();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cloud unlock CTA
+//
+// Mounts the InviteCodeModal (invite code + waitlist tabs) as a shadow-DOM
+// element on document.body and wires the footer button to open it.
+// The modal is created lazily on first click to avoid any startup cost.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function initCloudUnlockBtn(): void {
+  const btn = document.getElementById('cloudUnlockBtn') as HTMLButtonElement | null;
+  if (!btn) return;
+
+  let modal: ReturnType<typeof mountInviteCodeModal> | null = null;
+
+  btn.addEventListener('click', () => {
+    if (!modal) {
+      modal = mountInviteCodeModal(document.body, {
+        open: true,
+        source: 'computer-use',
+        defaultTab: 'invite',
+        onClose: () => modal?.update({ open: false }),
+        onRedeemed: (_inviteId) => {
+          // Refresh tier display after successful cloud unlock.
+          void updateTierDisplay();
+        },
+      });
+    } else {
+      modal.show();
+    }
+  });
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializePopup);
 } else {
@@ -1083,6 +1117,7 @@ export {
   initInPagePanelToggle,
   initPairingUI,
   initAllowlistUI,
+  initCloudUnlockBtn,
   readAllowlist,
   writeAllowlist,
   applyPairingState,
