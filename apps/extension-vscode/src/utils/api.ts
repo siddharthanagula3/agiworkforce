@@ -125,6 +125,8 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SECRET_KEY = 'agiWorkforce.apiKey';
+/** AGI Cloud account session token (Clerk JWT) obtained via device sign-in. */
+const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
 
 // ─── Secret storage ───────────────────────────────────────────────────────────
@@ -150,6 +152,33 @@ export async function setApiKey(secrets: vscode.SecretStorage, apiKey: string): 
  */
 export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> {
   await secrets.delete(SECRET_KEY);
+}
+
+// ─── Account session token (AGI Cloud sign-in) ────────────────────────────────
+//
+// The cloud-only surface authenticates via a Clerk session token obtained
+// through the device sign-in flow (features/account-auth/deviceAuth.ts), stored
+// in SecretStorage and sent as the Bearer for every cloud call.
+
+export async function getAccountToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
+  return secrets.get(ACCOUNT_TOKEN_KEY);
+}
+
+export async function setAccountToken(secrets: vscode.SecretStorage, token: string): Promise<void> {
+  await secrets.store(ACCOUNT_TOKEN_KEY, token);
+}
+
+export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
+  await secrets.delete(ACCOUNT_TOKEN_KEY);
+}
+
+/**
+ * Resolve the auth token for cloud calls: prefer the AGI Cloud account token;
+ * fall back to a legacy BYOK key if one is still stored (dormant during the
+ * cloud-only transition — no UI sets it anymore).
+ */
+async function getAuthToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
+  return (await getAccountToken(secrets)) ?? (await getApiKey(secrets));
 }
 
 // ─── Trusted-config helper (VSCODE-01 fix) ────────────────────────────────────
@@ -226,6 +255,18 @@ function getGlobalConfig<T>(section: string, key: string, defaultValue: T): T {
 function getCloudApiEndpoint(): string {
   const raw = getGlobalConfig('agiWorkforce', 'apiEndpoint', DEFAULT_ENDPOINT);
   return validateEndpointUrl(raw) ?? DEFAULT_ENDPOINT;
+}
+
+/**
+ * Web app origin (e.g. https://agiworkforce.com) derived from the cloud
+ * endpoint. Used by account sign-in for the connect page + device poll.
+ */
+export function getCloudWebOrigin(): string {
+  try {
+    return new URL(getCloudApiEndpoint()).origin;
+  } catch {
+    return new URL(DEFAULT_ENDPOINT).origin;
+  }
 }
 
 function getModel(): string {
@@ -478,12 +519,12 @@ export async function streamChatCompletion(
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
 ): Promise<void> {
-  const apiKey = await getApiKey(secrets);
+  const apiKey = await getAuthToken(secrets);
   if (apiKey === undefined || apiKey === '') {
     throw new AgiWorkforceApiError(
-      'No AGI Workforce API key configured. Run "AGI Workforce: Set API Key".',
+      'Not signed in. Run "AGI: Sign in to AGI Cloud" to start chatting.',
       401,
-      'NO_API_KEY',
+      'NOT_SIGNED_IN',
     );
   }
 
@@ -676,7 +717,7 @@ export interface TierInfo {
  * should treat undefined as "unknown tier".
  */
 export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
-  const apiKey = await getApiKey(secrets);
+  const apiKey = await getAuthToken(secrets);
   if (apiKey === undefined || apiKey === '') {
     return undefined;
   }

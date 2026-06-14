@@ -25,7 +25,8 @@ import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
-import { getApiKey, setApiKey, clearApiKey, fetchTierInfo } from '../utils/api';
+import { getApiKey, setApiKey, clearApiKey, clearAccountToken, fetchTierInfo } from '../utils/api';
+import { signInToAgiCloud } from '../features/account-auth/deviceAuth';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
 import {
@@ -286,6 +287,21 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── API key / auth commands ─────────────────────────────────────────────────
+    vscode.commands.registerCommand('agi-workforce.signIn', async () => {
+      // Cloud-only surface: secretless device sign-in. Opens the browser connect
+      // page, then polls for the approved token (deviceAuth). Requires the web
+      // /connect/vscode endpoint (docs/web-vscode-signin-spec.md) to be live.
+      const ok = await signInToAgiCloud(context.secrets, context.globalState);
+      if (ok) {
+        await vscode.commands.executeCommand('agi-workforce.chat');
+      }
+    }),
+
+    vscode.commands.registerCommand('agi-workforce.signOut', async () => {
+      await clearAccountToken(context.secrets);
+      vscode.window.showInformationMessage('Signed out of AGI Cloud.');
+    }),
+
     vscode.commands.registerCommand('agi-workforce.setApiKey', async () => {
       const existing = await getApiKey(context.secrets);
       const placeholder = existing !== undefined ? '(already set — enter new key to replace)' : '';
@@ -340,7 +356,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
 
       const picked = await vscode.window.showQuickPick(allItems, {
-        title: 'AGI Workforce — Select Model (10+ providers)',
+        title: 'AGI Workforce — Select Model',
         placeHolder: `Current: ${currentModel}`,
         matchOnDescription: true,
         matchOnDetail: true,
@@ -352,7 +368,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const guardResult = guardProviderSwitch(currentModel, picked.modelId, tier);
       if (guardResult === 'upgrade-required') {
         const choice = await vscode.window.showInformationMessage(
-          'Pro+ unlocks multi-provider chat in VS Code. Upgrade for $49.99/mo.',
+          'This model switch requires an eligible AGI plan.',
           'Upgrade',
           'Cancel',
         );
@@ -844,18 +860,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const workspaceRoot = folder.uri.fsPath;
 
       let testCmd = 'npm test';
-      // PR-3B (F-18): JSON.parse on package.json was unguarded — a malformed
-      // file would crash the command. Wrap in try/catch; on failure, fall
-      // back to the default `npm test`.
+      // Default `npm test`, refined to the detected package manager by lockfile.
+      // (audit 216 L855: the previous `if (pkg.scripts?.['test']) testCmd =
+      // 'npm test'` was a no-op — it re-assigned the value already held — and the
+      // package.json parse existed only to feed it, so both are removed.)
       if (fs.existsSync(path.join(workspaceRoot, 'package.json'))) {
-        try {
-          const pkg = JSON.parse(
-            fs.readFileSync(path.join(workspaceRoot, 'package.json'), 'utf8'),
-          ) as { scripts?: Record<string, string> };
-          if (pkg.scripts?.['test']) testCmd = 'npm test';
-        } catch {
-          // Malformed package.json — proceed with default npm test
-        }
         if (fs.existsSync(path.join(workspaceRoot, 'pnpm-lock.yaml'))) testCmd = 'pnpm test';
         if (fs.existsSync(path.join(workspaceRoot, 'yarn.lock'))) testCmd = 'yarn test';
       }
