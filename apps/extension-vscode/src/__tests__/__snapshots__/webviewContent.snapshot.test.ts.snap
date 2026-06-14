@@ -1660,13 +1660,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           accumulatedContent = '';
         }
         accumulatedContent += msg.payload.text;
-        currentAssistantEl.textContent = accumulatedContent;
+        // Render markdown incrementally so there is no raw-markdown → HTML
+        // flash at stream completion. renderAssistant falls back to escaped
+        // plain text if window.agiRender is not yet loaded.
+        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
+          // Content is already rendered; re-render once to ensure the final
+          // token is flushed, then bind copy buttons on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCopyButtons(currentAssistantEl);
         }
@@ -3659,13 +3664,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           accumulatedContent = '';
         }
         accumulatedContent += msg.payload.text;
-        currentAssistantEl.textContent = accumulatedContent;
+        // Render markdown incrementally so there is no raw-markdown → HTML
+        // flash at stream completion. renderAssistant falls back to escaped
+        // plain text if window.agiRender is not yet loaded.
+        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
+          // Content is already rendered; re-render once to ensure the final
+          // token is flushed, then bind copy buttons on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCopyButtons(currentAssistantEl);
         }
@@ -5658,13 +5668,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           accumulatedContent = '';
         }
         accumulatedContent += msg.payload.text;
-        currentAssistantEl.textContent = accumulatedContent;
+        // Render markdown incrementally so there is no raw-markdown → HTML
+        // flash at stream completion. renderAssistant falls back to escaped
+        // plain text if window.agiRender is not yet loaded.
+        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
       else if (msg.type === 'done') {
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
+          // Content is already rendered; re-render once to ensure the final
+          // token is flushed, then bind copy buttons on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCopyButtons(currentAssistantEl);
         }
