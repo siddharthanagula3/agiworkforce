@@ -47,32 +47,6 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-/** Calculate countdown string from a reset timestamp */
-function formatCountdown(resetAt: string | null): string {
-  if (!resetAt) return '';
-  const now = Date.now();
-  const target = new Date(resetAt).getTime();
-  const diffMs = target - now;
-  if (diffMs <= 0) return 'Resetting...';
-
-  const hours = Math.floor(diffMs / (1000 * 60 * 60));
-  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (hours > 0) return `Resets in ${hours}h ${minutes}m`;
-  return `Resets in ${minutes}m`;
-}
-
-/** Format a reset date for monthly display */
-function formatResetDate(resetAt: string | null): string {
-  if (!resetAt) return '';
-  try {
-    const date = new Date(resetAt);
-    return `Resets ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-  } catch {
-    return '';
-  }
-}
-
 /** Return the 3-letter weekday abbreviation for an ISO date string */
 function dayLabel(isoDate: string): string {
   try {
@@ -84,86 +58,43 @@ function dayLabel(isoDate: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Progress Bar
-// ---------------------------------------------------------------------------
-
-function ProgressBar({ percentage, label }: { percentage: number; label: string }) {
-  const colors = useThemeColors();
-  const clamped = Math.max(0, Math.min(100, percentage));
-  return (
-    <View className="gap-2">
-      <View
-        className="h-2.5 rounded-full overflow-hidden"
-        style={{ backgroundColor: colors.charcoal700 }}
-      >
-        <View
-          className="h-full rounded-full"
-          style={{
-            width: `${clamped}%`,
-            backgroundColor: clamped > 80 ? colors.agentWarning : colors.teal,
-          }}
-        />
-      </View>
-      <Text className="text-[13px] text-white/60">{label}</Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Usage cards
 // ---------------------------------------------------------------------------
 
-function UsageLimitsCard({ summary }: { summary: UsageSummary }) {
-  const SESSION_TOKEN_LIMIT = 100_000;
-  const sessionPercent =
-    summary.totalTokens > 0
-      ? Math.min(100, Math.round((summary.totalTokens / SESSION_TOKEN_LIMIT) * 100))
-      : 0;
-
-  const monthlyBudget = 50;
-  const monthlyPercent = Math.min(100, Math.round((summary.totalCost / monthlyBudget) * 100));
-
-  const now = new Date();
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const monthlyResetAt = nextMonth.toISOString();
-
+function UsageOverviewCard({ summary }: { summary: UsageSummary }) {
+  const rows = [
+    ['Period', summary.period],
+    ['Tokens', formatNumber(summary.totalTokens)],
+    ['Input', formatNumber(summary.totalInputTokens)],
+    ['Output', formatNumber(summary.totalOutputTokens)],
+  ] as const;
   return (
     <Card>
       <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-4">
-        Usage Limits
+        Usage This Period
       </Text>
-      <View className="gap-4">
-        <View>
-          <Text className="text-[12px] text-white/60 mb-2">Context window</Text>
-          <ProgressBar
-            percentage={sessionPercent}
-            label={`${formatNumber(summary.totalTokens)} / ${formatNumber(SESSION_TOKEN_LIMIT)} tokens`}
-          />
-        </View>
-        <View>
-          <Text className="text-[12px] text-white/60 mb-2">Monthly quota</Text>
-          <ProgressBar
-            percentage={monthlyPercent}
-            label={`${monthlyPercent}% of $${monthlyBudget} used`}
-          />
-          <Text className="text-[11px] text-white/30 mt-1">{formatResetDate(monthlyResetAt)}</Text>
-        </View>
+      <View className="gap-3">
+        {rows.map(([label, value]) => (
+          <View key={label} className="flex-row items-center justify-between gap-4">
+            <Text className="text-[13px] text-white/50">{label}</Text>
+            <Text className="text-[13px] text-white font-medium" numberOfLines={1}>
+              {value}
+            </Text>
+          </View>
+        ))}
       </View>
     </Card>
   );
 }
 
 function ApiSpendCard({ summary }: { summary: UsageSummary }) {
-  const budget = 50;
   return (
     <Card>
       <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-2">
-        API Spend
+        Estimated API Spend
       </Text>
-      <Text className="text-2xl font-bold text-white">
-        {formatCost(summary.totalCost)}{' '}
-        <Text className="text-base text-white/30 font-normal">/ {formatCost(budget)}</Text>
-      </Text>
+      <Text className="text-2xl font-bold text-white">{formatCost(summary.totalCost)}</Text>
+      <Text className="text-[12px] text-white/40 mt-1">{summary.period}</Text>
     </Card>
   );
 }
@@ -462,9 +393,9 @@ export default function UsageScreen() {
           </Animated.View>
         ) : (
           <>
-            {/* Dual progress bars */}
+            {/* Usage returned by the billing API. Do not invent plan quotas here. */}
             <Animated.View entering={FadeInDown.duration(250)}>
-              <UsageLimitsCard summary={summary} />
+              <UsageOverviewCard summary={summary} />
             </Animated.View>
 
             <Animated.View entering={FadeInDown.duration(250).delay(40)}>

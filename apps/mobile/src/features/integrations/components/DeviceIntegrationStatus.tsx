@@ -14,7 +14,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import {
   getCalendarPermissionStatus,
   getContactsPermissionStatus,
@@ -105,12 +105,12 @@ function statusLabel(status: IntegrationStatus): string {
 // Status icon component
 // ---------------------------------------------------------------------------
 
-function StatusIcon({ status }: { status: IntegrationStatus }) {
+function StatusIcon({ status, colors }: { status: IntegrationStatus; colors: ColorScheme }) {
   switch (status) {
     case 'active':
-      return <CheckCircle size={14} color="#10b981" />;
+      return <CheckCircle size={14} color={colors.agentSuccess} />;
     case 'needs-permission':
-      return <XCircle size={14} color="#ef4444" />;
+      return <XCircle size={14} color={colors.agentError} />;
     case 'inactive':
     case 'unavailable':
       return <HelpCircle size={14} color={colors.textMuted} />;
@@ -124,10 +124,11 @@ function StatusIcon({ status }: { status: IntegrationStatus }) {
 interface IntegrationRowProps {
   integration: DeviceIntegration;
   icon: React.ReactNode;
+  colors: ColorScheme;
   onPress?: () => void;
 }
 
-function IntegrationRow({ integration, icon, onPress }: IntegrationRowProps) {
+function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -137,17 +138,26 @@ function IntegrationRow({ integration, icon, onPress }: IntegrationRowProps) {
       accessibilityRole={onPress ? 'button' : 'none'}
     >
       {/* Icon */}
-      <View className="w-9 h-9 rounded-lg bg-white/5 items-center justify-center">{icon}</View>
+      <View
+        className="w-9 h-9 rounded-lg items-center justify-center"
+        style={{ backgroundColor: colors.neutralSurface }}
+      >
+        {icon}
+      </View>
 
       {/* Name + description */}
       <View className="flex-1">
         <View className="flex-row items-center gap-2">
-          <Text className="text-sm font-medium text-white">{integration.name}</Text>
-          <StatusIcon status={integration.status} />
+          <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+            {integration.name}
+          </Text>
+          <StatusIcon status={integration.status} colors={colors} />
         </View>
-        <Text className="text-xs text-white/40 mt-0.5 leading-4">{integration.description}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16, marginTop: 2 }}>
+          {integration.description}
+        </Text>
         {integration.lastSync && integration.status === 'active' ? (
-          <Text className="text-[10px] text-white/30 mt-0.5">
+          <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 2 }}>
             Last sync: {integration.lastSync}
           </Text>
         ) : null}
@@ -163,18 +173,21 @@ function IntegrationRow({ integration, icon, onPress }: IntegrationRowProps) {
 // Icon registry
 // ---------------------------------------------------------------------------
 
-const ICON_MAP: Record<string, React.ReactNode> = {
-  health: <Heart size={18} color="#ef4444" />,
-  calendar: <Calendar size={18} color="#3b82f6" />,
-  contacts: <Users size={18} color="#a855f7" />,
-  notifications: <Bell size={18} color={colors.teal} />,
-};
+function getIconMap(colors: ColorScheme): Record<string, React.ReactNode> {
+  return {
+    health: <Heart size={18} color={colors.agentError} />,
+    calendar: <Calendar size={18} color={colors.agentActive} />,
+    contacts: <Users size={18} color={colors.purple} />,
+    notifications: <Bell size={18} color={colors.teal} />,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Main exported component
 // ---------------------------------------------------------------------------
 
 export function DeviceIntegrationStatus() {
+  const colors = useThemeColors();
   const [integrations, setIntegrations] = useState<DeviceIntegration[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -264,19 +277,29 @@ export function DeviceIntegrationStatus() {
       <Card>
         <View className="flex-row items-center gap-2 py-2">
           <RefreshCw size={14} color={colors.textMuted} />
-          <Text className="text-xs text-white/40">Checking device integrations...</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+            Checking device integrations...
+          </Text>
         </View>
       </Card>
     );
   }
 
   const activeCount = integrations.filter((i) => i.status === 'active').length;
+  const iconMap = getIconMap(colors);
 
   return (
     <Card>
       {/* Section header */}
       <View className="flex-row items-center justify-between mb-1">
-        <Text className="text-xs font-medium text-white/50 uppercase tracking-wider">
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: 12,
+            fontWeight: '600',
+            textTransform: 'uppercase',
+          }}
+        >
           Device Access
         </Text>
         <Badge
@@ -290,7 +313,8 @@ export function DeviceIntegrationStatus() {
           {index > 0 && <Separator />}
           <IntegrationRow
             integration={integration}
-            icon={ICON_MAP[integration.id]}
+            icon={iconMap[integration.id]}
+            colors={colors}
             onPress={
               integration.status === 'unavailable' ? undefined : () => handleRowPress(integration)
             }

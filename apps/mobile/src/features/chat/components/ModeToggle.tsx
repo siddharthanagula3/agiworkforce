@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { Pressable, View } from 'react-native';
-import { Cloud, Cpu, Lock } from 'lucide-react-native';
+import { Cloud, Cpu } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type { AppMode } from './ModeSwitchModal';
@@ -10,7 +10,9 @@ export interface ModeToggleProps {
   cloudJoined?: boolean;
   cloudUnlocked?: boolean;
   waitlistRank?: number | undefined;
+  compact?: boolean;
   onChange?: (mode: AppMode) => void;
+  onTapLocal?: () => void;
   onTapCloud?: () => void;
 }
 
@@ -19,19 +21,45 @@ export function ModeToggle({
   cloudJoined = false,
   cloudUnlocked = false,
   waitlistRank,
+  compact = false,
+  onTapLocal,
   onTapCloud,
 }: ModeToggleProps): ReactElement {
   const colors = useThemeColors();
-  const cloudLabel = cloudUnlocked
-    ? 'Cloud'
+  const cloudLabel = 'Cloud';
+  const cloudActive = mode === 'cloud';
+  const cloudAccessibilityLabel = cloudUnlocked
+    ? 'AGI Cloud'
     : cloudJoined
       ? waitlistRank
-        ? `Waitlist #${waitlistRank}`
-        : 'Waitlisted'
-      : 'Waitlist';
-  const cloudActive = mode === 'cloud';
-  const cloudAccessible = cloudUnlocked || cloudJoined;
-  const cloudAccessibilityLabel = cloudUnlocked ? 'AGI Cloud' : `AGI Cloud ${cloudLabel}`;
+        ? `AGI Cloud waitlist number ${waitlistRank}`
+        : 'AGI Cloud waitlist joined'
+      : 'AGI Cloud, invite required';
+  const toggleWidth = compact ? 172 : 216;
+  const selectedBackground = colors.charcoal700;
+  const selectedBorderColor = colors.borderLight;
+  const selectedTextColor = colors.textPrimary;
+  const inactiveTextColor = colors.textMuted;
+  const selectedSegmentStyle = {
+    borderColor: selectedBorderColor,
+    backgroundColor: selectedBackground,
+  };
+  const inactiveSegmentStyle = {
+    borderColor: colors.transparent,
+    backgroundColor: colors.transparent,
+  };
+  const segmentStyle = (selected: boolean) => ({
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 8,
+    height: 28,
+    flex: 1,
+    minWidth: 80,
+    flexShrink: 0,
+    borderRadius: 999,
+    borderWidth: 1,
+    ...(selected ? selectedSegmentStyle : inactiveSegmentStyle),
+  });
 
   return (
     <View
@@ -44,74 +72,84 @@ export function ModeToggle({
         borderWidth: 1,
         borderColor: colors.border,
         padding: 3,
-        maxWidth: 190,
+        height: 36,
+        width: toggleWidth,
+        flexWrap: 'nowrap',
+        overflow: 'hidden',
       }}
       accessibilityRole="tablist"
       accessibilityLabel="Chat execution mode"
     >
-      <View
+      <Pressable
         testID="chat.mode-toggle.local"
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 5,
-          paddingHorizontal: 10,
-          height: 28,
-          borderRadius: 999,
-          backgroundColor: mode === 'local' ? colors.accentSurface : colors.transparent,
-        }}
-        accessibilityRole="tab"
+        onPress={onTapLocal}
+        disabled={!onTapLocal}
+        style={segmentStyle(mode === 'local')}
+        accessibilityRole={onTapLocal ? 'button' : 'tab'}
         accessibilityState={{ selected: mode === 'local' }}
         accessibilityLabel="Local Mode"
+        accessibilityHint={onTapLocal ? 'Switches to Local Mode without Cloud context' : undefined}
       >
-        <Cpu size={13} color={mode === 'local' ? colors.teal : colors.textMuted} />
-        <Text
-          numberOfLines={1}
+        <View
           style={{
-            fontSize: 12,
-            fontWeight: '600',
-            color: mode === 'local' ? colors.teal : colors.textMuted,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+            minWidth: 58,
           }}
         >
-          Local Mode
-        </Text>
-      </View>
-
-      <Pressable
-        testID="chat.mode-toggle.cloud"
-        onPress={onTapCloud}
-        style={({ pressed }) => ({
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 5,
-          paddingHorizontal: 9,
-          height: 28,
-          borderRadius: 999,
-          backgroundColor: cloudActive ? colors.accentSurface : colors.transparent,
-          opacity: pressed ? 0.75 : 1,
-        })}
-        accessibilityRole="button"
-        accessibilityLabel={cloudAccessibilityLabel}
-        accessibilityHint="Opens AGI Cloud access"
-      >
-        {cloudAccessible ? (
-          <Cloud size={13} color={cloudActive ? colors.teal : colors.textSecondary} />
-        ) : (
-          <Lock size={12} color={colors.textMuted} />
-        )}
-        {cloudAccessible ? (
+          <Cpu size={13} color={mode === 'local' ? selectedTextColor : inactiveTextColor} />
           <Text
             numberOfLines={1}
             style={{
               fontSize: 12,
+              lineHeight: 14,
+              fontWeight: '600',
+              color: mode === 'local' ? selectedTextColor : inactiveTextColor,
+              flexShrink: 0,
+              includeFontPadding: false,
+            }}
+          >
+            Local
+          </Text>
+        </View>
+      </Pressable>
+
+      <Pressable
+        testID="chat.mode-toggle.cloud"
+        onPress={onTapCloud}
+        hitSlop={8}
+        style={segmentStyle(cloudActive)}
+        accessibilityRole="button"
+        accessibilityLabel={cloudAccessibilityLabel}
+        accessibilityHint="Opens AGI Cloud access"
+        accessibilityState={{ selected: cloudActive }}
+      >
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+            minWidth: 62,
+          }}
+        >
+          <Cloud size={13} color={cloudActive ? selectedTextColor : inactiveTextColor} />
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 12,
+              lineHeight: 14,
               fontWeight: cloudActive ? '600' : '500',
-              color: cloudActive ? colors.teal : colors.textSecondary,
-              maxWidth: 70,
+              color: cloudActive ? selectedTextColor : inactiveTextColor,
+              flexShrink: 0,
+              includeFontPadding: false,
             }}
           >
             {cloudLabel}
           </Text>
-        ) : null}
+        </View>
       </Pressable>
     </View>
   );

@@ -7,7 +7,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface ImageFullScreenProps {
   imageUrl: string | null;
@@ -22,6 +22,7 @@ interface ImageFullScreenProps {
  */
 export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFullScreenProps) {
   const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
   const { width: screenWidth } = useWindowDimensions();
 
   // Zoom state via reanimated shared values
@@ -139,7 +140,7 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
         <View
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.95)',
+            backgroundColor: colors.black,
           }}
         >
           {/* Header */}
@@ -161,7 +162,7 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
               style={{
                 padding: 10,
                 borderRadius: 8,
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: colors.neutralSurface,
               }}
               accessibilityLabel="Share image"
               accessibilityRole="button"
@@ -175,7 +176,7 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
               style={{
                 padding: 10,
                 borderRadius: 8,
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                backgroundColor: colors.neutralSurface,
               }}
               accessibilityLabel="Close"
               accessibilityRole="button"

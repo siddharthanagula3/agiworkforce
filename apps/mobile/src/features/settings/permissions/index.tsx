@@ -1,9 +1,8 @@
 /**
  * Permissions Settings Screen — Index
  *
- * Displays the 6 top-priority permission rows: microphone, camera, location,
- * photos, notifications, contacts. Each row shows an icon, label, the current
- * OS status as a binary toggle, and a chevron to the per-permission detail.
+ * Displays native-backed permission rows. Each row shows an icon, label, the
+ * current OS status, and a chevron to the per-permission detail.
  *
  * Read-on-focus via getPermissionsAsync (no prompt). User action → detail
  * screen handles the actual request/Settings redirect.
@@ -13,11 +12,11 @@ import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { usePermissionsStore } from '@/stores/permissionsStore';
 import { PERMISSION_REGISTRY, PERMISSION_KINDS, isPermissionGranted } from './registry';
 import type { MobilePermissionKind } from './types';
@@ -37,48 +36,72 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
   const entry = PERMISSION_REGISTRY[kind];
   const Icon = entry.icon;
   const permState = usePermissionsStore((s) => s.permissions[kind]);
-  const granted = isPermissionGranted(permState?.lastObservedStatus ?? 'undetermined');
-
-  const handleToggle = useCallback(() => {
-    // Delegate all prompt / Settings-redirect logic to the detail screen
-    onPressDetail(kind);
-  }, [kind, onPressDetail]);
+  const status = permState?.lastObservedStatus ?? 'undetermined';
+  const granted = isPermissionGranted(status);
+  const statusLabel = granted ? 'On' : status === 'undetermined' ? 'Ask' : 'Off';
 
   return (
     <View>
       <Pressable
         onPress={() => onPressDetail(kind)}
-        className="flex-row items-center px-1 py-3.5 active:bg-white/5 rounded-lg"
         accessibilityRole="button"
         accessibilityLabel={`${entry.label} permission. Currently ${granted ? 'allowed' : 'denied'}. Tap to manage.`}
+        style={{
+          minHeight: 72,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          paddingVertical: 10,
+          paddingHorizontal: 10,
+        }}
       >
-        {/* Icon badge */}
         <View
-          className="w-9 h-9 rounded-[9px] items-center justify-center mr-3"
           style={{
-            backgroundColor: granted ? `${c.teal}20` : `${c.textMuted}18`,
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            alignSelf: 'center',
+            backgroundColor: granted ? c.successSurface : c.neutralSurface,
           }}
         >
-          <Icon size={18} color={granted ? c.teal : c.textMuted} />
+          <Icon size={19} color={granted ? c.teal : c.textSecondary} />
         </View>
 
-        {/* Label + description */}
-        <View className="flex-1 mr-2">
-          <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '600' }}>
             {entry.label}
           </Text>
-          <Text className="text-[11px] mt-0.5" style={{ color: c.textMuted }}>
+          <Text
+            numberOfLines={2}
+            style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 2 }}
+          >
             {entry.description}
           </Text>
         </View>
 
-        {/* Toggle (tap → detail for proper OS flow) */}
-        <View className="mr-2">
-          <Switch value={granted} onValueChange={handleToggle} />
+        <View
+          style={{
+            minWidth: 50,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            flexShrink: 0,
+            gap: 6,
+          }}
+        >
+          <Text
+            style={{
+              color: granted ? c.agentSuccess : c.textMuted,
+              fontSize: 13,
+              fontWeight: '600',
+            }}
+          >
+            {statusLabel}
+          </Text>
+          <ChevronRight size={17} color={c.textMuted} style={{ flexShrink: 0 }} />
         </View>
-
-        {/* Chevron */}
-        <ChevronRight size={14} color={c.textMuted} />
       </Pressable>
 
       {!isLast && <Separator />}
@@ -92,7 +115,7 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
 
 export default function PermissionsScreen() {
   const router = useRouter();
-  const c = useThemeColors();
+  const { colors: c, statusBarStyle } = useTheme();
   const setObservedStatus = usePermissionsStore((s) => s.setObservedStatus);
 
   // Read-only OS status poll on every focus (useFocusEffect so back-from-Settings refreshes)
@@ -116,8 +139,7 @@ export default function PermissionsScreen() {
   );
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    router.navigate('/(app)/settings/safety-security' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
   const handlePressDetail = useCallback(
@@ -129,30 +151,53 @@ export default function PermissionsScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
+      <StatusBar style={statusBarStyle} />
       {/* Header */}
-      <View className="flex-row items-center px-3 h-12">
+      <View
+        style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
+      >
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
+          hitSlop={8}
+          style={({ pressed }) => ({
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: pressed ? c.neutralSurface : 'transparent',
+          })}
         >
-          <ArrowLeft size={20} color={c.textSecondary} />
+          <ArrowLeft size={22} color={c.textPrimary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1" style={{ color: c.textPrimary }}>
+        <Text
+          style={{
+            flex: 1,
+            color: c.textPrimary,
+            fontSize: 20,
+            fontWeight: '700',
+            marginLeft: 4,
+          }}
+        >
           Permissions
         </Text>
       </View>
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="mt-3 mb-2">
+        <View style={{ marginTop: 10, marginBottom: 12 }}>
           <Text
-            className="text-[11px] uppercase tracking-wider mb-3"
-            style={{ color: c.textMuted }}
+            style={{
+              color: c.textMuted,
+              fontSize: 12,
+              fontWeight: '700',
+              textTransform: 'uppercase',
+            }}
           >
             App Permissions
           </Text>
@@ -161,12 +206,12 @@ export default function PermissionsScreen() {
         {/* Permission card */}
         <View
           style={{
-            borderRadius: 14,
+            borderRadius: 18,
             borderWidth: 1,
             borderColor: c.border,
             backgroundColor: c.surfaceElevated,
             overflow: 'hidden',
-            paddingHorizontal: 12,
+            paddingHorizontal: 10,
           }}
         >
           {PERMISSION_KINDS.map((kind, idx) => (
@@ -181,12 +226,18 @@ export default function PermissionsScreen() {
 
         {/* Footer info */}
         <View
-          className="mt-4 px-3 py-2.5 rounded-xl"
-          style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+          style={{
+            marginTop: 16,
+            borderRadius: 18,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            backgroundColor: c.surfaceElevated,
+            borderWidth: 1,
+            borderColor: c.border,
+          }}
         >
-          <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
-            Permissions are managed by your device OS. Toggling a permission may open your device
-            Settings app.
+          <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>
+            Permissions are managed by your device. Changing a permission may open Settings.
           </Text>
         </View>
       </ScrollView>

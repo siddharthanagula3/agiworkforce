@@ -40,16 +40,25 @@ function LinkRow({
   const c = useThemeColors();
   return (
     <Pressable
-      className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
       onPress={onPress}
       accessibilityLabel={label}
       accessibilityRole="button"
+      style={({ pressed }) => ({
+        width: '100%',
+        minHeight: 40,
+        borderRadius: 10,
+        paddingHorizontal: 4,
+        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: pressed ? c.surfaceHover : c.transparent,
+      })}
     >
-      <View className="flex-row items-center gap-3">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Icon size={18} color={c.textSecondary} />
-        <Text className="text-sm text-white">{label}</Text>
+        <Text style={{ color: c.textPrimary, fontSize: 14 }}>{label}</Text>
       </View>
-      <ExternalLink size={14} color={c.textMuted} />
     </Pressable>
   );
 }
@@ -59,12 +68,31 @@ function LinkRow({
 // ---------------------------------------------------------------------------
 
 function InfoRow({ label, value }: { label: string; value: string }) {
+  const c = useThemeColors();
   return (
-    <View className="flex-row items-center justify-between py-2.5 px-1">
-      <Text className="text-sm text-white/60">{label}</Text>
-      <Text className="text-sm text-white/50">{value}</Text>
+    <View
+      style={{
+        minHeight: 36,
+        paddingHorizontal: 4,
+        paddingVertical: 7,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+      }}
+    >
+      <Text style={{ color: c.textSecondary, fontSize: 14 }}>{label}</Text>
+      <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: 14, flexShrink: 1 }}>
+        {value}
+      </Text>
     </View>
   );
+}
+
+function platformDisplayName(os: string): string {
+  if (os === 'ios') return 'iOS';
+  if (os === 'android') return 'Android';
+  return os.charAt(0).toUpperCase() + os.slice(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -93,48 +121,84 @@ export default function AboutScreen() {
     }
   }, []);
 
-  const platformVersion = `${Platform.OS.charAt(0).toUpperCase()}${Platform.OS.slice(1)} ${String(Platform.Version)}`;
+  const platformVersion = `${platformDisplayName(Platform.OS)} ${String(Platform.Version)}`;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
       {/* Header */}
-      <View className="flex-row items-center px-3 h-12">
+      <View
+        style={{
+          height: 48,
+          paddingHorizontal: 12,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
           accessibilityLabel="Go back"
           accessibilityRole="button"
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: pressed ? c.surfaceHover : c.transparent,
+          })}
         >
           <ArrowLeft size={20} color={c.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2">
+        <Text
+          variant="subheading"
+          style={{ marginLeft: 8, color: c.textPrimary, fontWeight: '700' }}
+        >
           About
         </Text>
       </View>
 
-      <ScrollView className="flex-1 px-4" contentContainerClassName="pb-10 gap-5">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 14 }}
+      >
         {/* Logo + identity */}
-        <View className="items-center pt-4 pb-2 gap-3">
+        <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 2, gap: 8 }}>
           <View
-            className="w-20 h-20 rounded-full items-center justify-center"
-            style={{ backgroundColor: `${c.teal}22` }}
+            style={{
+              width: 68,
+              height: 68,
+              borderRadius: 34,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: c.accentSurface,
+            }}
           >
-            <Sparkles size={36} color={c.teal} />
+            <Sparkles size={30} color={c.teal} />
           </View>
-          <View className="items-center gap-1">
-            <Text className="text-2xl font-bold text-white">AGI Workforce</Text>
-            <Text className="text-base text-white/50">v{APP_VERSION}</Text>
+          <View style={{ alignItems: 'center', gap: 4 }}>
+            <Text style={{ color: c.textPrimary, fontSize: 22, fontWeight: '700' }}>
+              AGI Workforce
+            </Text>
+            <Text style={{ color: c.textMuted, fontSize: 16 }}>v{APP_VERSION}</Text>
           </View>
-          <Text className="text-sm text-white/40 text-center px-8">
-            Your AI desktop agent, in your pocket.
+          <Text
+            style={{
+              color: c.textMuted,
+              fontSize: 14,
+              textAlign: 'center',
+              paddingHorizontal: 32,
+              lineHeight: 19,
+            }}
+          >
+            Private Local Mode and AGI Cloud, on your phone.
           </Text>
         </View>
 
         {/* Build info */}
-        <Card>
-          <View className="flex-row items-center gap-2 mb-3">
+        <Card style={{ padding: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Info size={14} color={c.textMuted} />
-            <Text variant="caption" className="uppercase tracking-wider">
+            <Text variant="caption" style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
               Build Info
             </Text>
           </View>
@@ -146,8 +210,11 @@ export default function AboutScreen() {
         </Card>
 
         {/* Links */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
+        <Card style={{ padding: 14 }}>
+          <Text
+            variant="caption"
+            style={{ marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}
+          >
             Resources
           </Text>
           <LinkRow
@@ -176,21 +243,38 @@ export default function AboutScreen() {
         </Card>
 
         {/* Support */}
-        <Card>
-          <Text variant="caption" className="mb-3 uppercase tracking-wider">
+        <Card style={{ padding: 14 }}>
+          <Text
+            variant="caption"
+            style={{ marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}
+          >
             Support
           </Text>
           <Pressable
-            className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
-            onPress={() => router.push('/(app)/feedback' as Parameters<typeof router.push>[0])}
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/feedback',
+                params: { returnTo: '/(app)/about' },
+              } as Parameters<typeof router.push>[0])
+            }
             accessibilityLabel="Send Feedback"
             accessibilityRole="button"
+            style={({ pressed }) => ({
+              width: '100%',
+              minHeight: 40,
+              borderRadius: 10,
+              paddingHorizontal: 4,
+              paddingVertical: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: pressed ? c.surfaceHover : c.transparent,
+            })}
           >
-            <View className="flex-row items-center gap-3">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <MessageCircle size={18} color={c.textSecondary} />
-              <Text className="text-sm text-white">Send Feedback</Text>
+              <Text style={{ color: c.textPrimary, fontSize: 14 }}>Send Feedback</Text>
             </View>
-            <ExternalLink size={14} color={c.textMuted} />
           </Pressable>
           <Separator />
           <LinkRow
@@ -201,8 +285,8 @@ export default function AboutScreen() {
         </Card>
 
         {/* Footer */}
-        <View className="items-center pt-2">
-          <Text className="text-[11px] text-white/20">Built in San Francisco</Text>
+        <View style={{ alignItems: 'center', paddingTop: 8 }}>
+          <Text style={{ color: c.textMuted, fontSize: 11 }}>AGI Automation LLC · USA</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -13,7 +13,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
   <View
     style={
       {
-        "backgroundColor": "rgba(0, 0, 0, 0.85)",
+        "backgroundColor": "#080808",
         "flex": 1,
       }
     }
@@ -85,7 +85,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
         onStartShouldSetResponder={[Function]}
         style={
           {
-            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "backgroundColor": "#242424",
             "borderRadius": 8,
             "padding": 8,
           }
@@ -131,7 +131,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
         onStartShouldSetResponder={[Function]}
         style={
           {
-            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "backgroundColor": "#242424",
             "borderRadius": 8,
             "padding": 8,
           }
@@ -177,7 +177,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
         onStartShouldSetResponder={[Function]}
         style={
           {
-            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "backgroundColor": "#242424",
             "borderRadius": 8,
             "padding": 8,
           }
@@ -208,7 +208,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
         <View
           style={
             {
-              "backgroundColor": "rgba(0, 0, 0, 0.4)",
+              "backgroundColor": "#111",
               "borderColor": "#333",
               "borderRadius": 8,
               "borderWidth": 1,
@@ -250,7 +250,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
   <View
     style={
       {
-        "backgroundColor": "rgba(0, 0, 0, 0.85)",
+        "backgroundColor": "#080808",
         "flex": 1,
       }
     }
@@ -322,7 +322,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
         onStartShouldSetResponder={[Function]}
         style={
           {
-            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "backgroundColor": "#242424",
             "borderRadius": 8,
             "padding": 8,
           }
@@ -368,7 +368,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
         onStartShouldSetResponder={[Function]}
         style={
           {
-            "backgroundColor": "rgba(255, 255, 255, 0.05)",
+            "backgroundColor": "#242424",
             "borderRadius": 8,
             "padding": 8,
           }
@@ -399,7 +399,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
         <View
           style={
             {
-              "backgroundColor": "rgba(0, 0, 0, 0.4)",
+              "backgroundColor": "#111",
               "borderColor": "#333",
               "borderRadius": 8,
               "borderWidth": 1,

@@ -27,22 +27,37 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { formatNotificationTime } from '@/src/features/notifications/time';
 import {
   useNotificationCenter,
-  getPriorityColor,
   getPriorityLabel,
   type NotificationCenterItem,
   type NotificationPriority,
 } from '@/services/notifications';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Priority Icon
 // ---------------------------------------------------------------------------
 
-function PriorityIcon({ priority }: { priority: NotificationPriority }) {
-  const color = getPriorityColor(priority);
+function getPriorityTone(
+  priority: NotificationPriority,
+  colors: ColorScheme,
+): { color: string; border: string } {
+  switch (priority) {
+    case 'critical':
+      return { color: colors.agentError, border: colors.dangerBorder };
+    case 'high':
+      return { color: colors.agentWarning, border: colors.warningBorder };
+    case 'normal':
+      return { color: colors.teal, border: colors.successBorder };
+    case 'low':
+      return { color: colors.textMuted, border: colors.neutralBorder };
+  }
+}
+
+function PriorityIcon({ priority, color }: { priority: NotificationPriority; color: string }) {
   switch (priority) {
     case 'critical':
       return <AlertOctagon size={16} color={color} />;
@@ -79,7 +94,8 @@ interface NotificationItemProps {
 }
 
 function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) {
-  const priorityColor = getPriorityColor(item.priority);
+  const colors = useThemeColors();
+  const priorityTone = getPriorityTone(item.priority, colors);
   const timeLabel = formatNotificationTime(item.receivedAt);
 
   return (
@@ -93,20 +109,21 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
         <View
           className="p-4 rounded-xl"
           style={{
-            backgroundColor: item.read ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
+            backgroundColor: item.read ? colors.surfaceElevated : colors.neutralSurface,
             borderWidth: 1,
-            borderColor: item.read ? 'rgba(255,255,255,0.06)' : `${priorityColor}30`,
+            borderColor: item.read ? colors.borderLight : priorityTone.border,
           }}
         >
           {/* Header row */}
           <View className="flex-row items-start gap-2.5 mb-1">
             <View style={{ marginTop: 1 }}>
-              <PriorityIcon priority={item.priority} />
+              <PriorityIcon priority={item.priority} color={priorityTone.color} />
             </View>
             <View className="flex-1">
               <View className="flex-row items-center gap-2 mb-0.5">
                 <Text
-                  className={`text-xs font-semibold flex-1 ${item.read ? 'text-white/60' : 'text-white'}`}
+                  className="text-xs font-semibold flex-1"
+                  style={{ color: item.read ? colors.textSecondary : colors.textPrimary }}
                   numberOfLines={1}
                 >
                   {item.title}
@@ -114,18 +131,19 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
                 {!item.read && (
                   <View
                     className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: priorityColor }}
+                    style={{ backgroundColor: priorityTone.color }}
                   />
                 )}
               </View>
               <Text
-                className={`text-[11px] leading-4 ${item.read ? 'text-white/35' : 'text-white/60'}`}
+                className="text-[11px] leading-4"
+                style={{ color: item.read ? colors.textMuted : colors.textSecondary }}
                 numberOfLines={2}
               >
                 {item.body}
               </Text>
             </View>
-            <ChevronRight size={14} color="rgba(255,255,255,0.3)" style={{ marginTop: 2 }} />
+            <ChevronRight size={14} color={colors.textMuted} style={{ marginTop: 2 }} />
           </View>
 
           {/* Footer row: priority badge + time + mark read */}
@@ -134,15 +152,22 @@ function NotificationItem({ item, onPress, onMarkRead }: NotificationItemProps) 
               label={getPriorityLabel(item.priority)}
               color={getPriorityBadgeColor(item.priority)}
             />
-            <Text className="text-[10px] text-white/30 flex-1">{timeLabel}</Text>
+            <Text className="text-[10px] flex-1" style={{ color: colors.textMuted }}>
+              {timeLabel}
+            </Text>
             {!item.read && (
               <Pressable
                 onPress={() => onMarkRead(item.id)}
-                className="px-2 py-0.5 rounded-md bg-white/5 active:bg-white/10"
+                className="px-2 py-0.5 rounded-md"
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.surfaceHover : colors.neutralSurface,
+                })}
                 accessibilityLabel="Mark as read"
                 accessibilityRole="button"
               >
-                <Text className="text-[10px] text-white/50">Mark read</Text>
+                <Text className="text-[10px]" style={{ color: colors.textSecondary }}>
+                  Mark read
+                </Text>
               </Pressable>
             )}
           </View>
@@ -233,23 +258,29 @@ export default function NotificationCenterScreen() {
   if (!FEATURES.cloudChat) return null;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-3 h-12">
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
+          className="p-2 rounded-lg"
+          style={({ pressed }) => pressed && { backgroundColor: colors.surfaceHover }}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1">
+        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
           Notifications
         </Text>
         {unreadCount > 0 && (
-          <View className="bg-teal-500/20 rounded-full px-2 py-0.5 mr-2">
-            <Text className="text-teal-400 text-[10px] font-bold">{unreadCount}</Text>
+          <View
+            className="rounded-full px-2 py-0.5 mr-2"
+            style={{ backgroundColor: colors.successSurface }}
+          >
+            <Text className="text-[10px] font-bold" style={{ color: colors.teal }}>
+              {unreadCount}
+            </Text>
           </View>
         )}
         {items.length > 0 && (
@@ -257,7 +288,8 @@ export default function NotificationCenterScreen() {
             {unreadCount > 0 && (
               <Pressable
                 onPress={markAllRead}
-                className="p-2 rounded-lg active:bg-white/5"
+                className="p-2 rounded-lg"
+                style={({ pressed }) => pressed && { backgroundColor: colors.surfaceHover }}
                 accessibilityLabel="Mark all as read"
                 accessibilityRole="button"
               >
@@ -266,7 +298,8 @@ export default function NotificationCenterScreen() {
             )}
             <Pressable
               onPress={handleClearAll}
-              className="p-2 rounded-lg active:bg-white/5"
+              className="p-2 rounded-lg"
+              style={({ pressed }) => pressed && { backgroundColor: colors.surfaceHover }}
               accessibilityLabel="Clear all notifications"
               accessibilityRole="button"
             >
@@ -279,11 +312,16 @@ export default function NotificationCenterScreen() {
       {/* Content */}
       {items.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
-          <View className="w-16 h-16 rounded-2xl bg-white/5 items-center justify-center mb-4">
+          <View
+            className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
+            style={{ backgroundColor: colors.neutralSurface }}
+          >
             <BellOff size={28} color={colors.textMuted} />
           </View>
-          <Text className="text-white/60 text-center text-sm">No notifications yet.</Text>
-          <Text className="text-white/40 text-center text-xs mt-1">
+          <Text className="text-center text-sm" style={{ color: colors.textSecondary }}>
+            No notifications yet.
+          </Text>
+          <Text className="text-center text-xs mt-1" style={{ color: colors.textMuted }}>
             Agent alerts, approvals, and task updates will appear here.
           </Text>
         </View>
@@ -299,7 +337,7 @@ export default function NotificationCenterScreen() {
           ListHeaderComponent={
             items.length > 0 ? (
               <View className="py-3">
-                <Text className="text-xs text-white/40">
+                <Text className="text-xs" style={{ color: colors.textMuted }}>
                   {unreadCount > 0
                     ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`
                     : 'All caught up'}
@@ -311,26 +349,4 @@ export default function NotificationCenterScreen() {
       )}
     </SafeAreaView>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatNotificationTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const now = Date.now();
-    const diffMs = now - d.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-
-    if (diffSec < 60) return 'just now';
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch {
-    return '';
-  }
 }

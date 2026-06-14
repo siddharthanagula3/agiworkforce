@@ -1,7 +1,7 @@
 /**
  * Voice Companion Mode — full-screen screen.
  *
- * Flow: idle → Listen (STT via on-device capture) → Think (local Qwen3-4B)
+ * Flow: idle → Listen (STT via on-device capture) → Think (selected local model)
  *       → Speak (on-device TTS) → loop back to Listen.
  *
  * Design: pulsing terracotta orb, dark gradient background.
@@ -9,9 +9,9 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Pressable, StatusBar, useWindowDimensions, StyleSheet } from 'react-native';
+import { Alert, View, Pressable, StatusBar, useWindowDimensions, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -35,6 +35,10 @@ import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { colors } from '@/src/ui/theme';
 import { getDisplayName } from '@/src/features/model-picker/service';
+import {
+  createMessageIdSet,
+  findNewAssistantResponse,
+} from '@/src/features/voice/utils/assistantResponse';
 
 // ---------------------------------------------------------------------------
 // Phase state
@@ -48,6 +52,20 @@ const PHASE_LABEL: Record<Phase, string> = {
   thinking: 'Thinking...',
   speaking: 'Speaking...',
 };
+
+function voiceCaptureMessage(err: unknown): string {
+  if (err instanceof VoiceInput.VoiceCaptureError) {
+    if (err.code === 'mic-permission-denied') {
+      return 'Microphone access is off. Enable microphone permission in Settings to use voice.';
+    }
+    if (err.code === 'on-device-recognition-unavailable') {
+      return 'On-device speech recognition is not available for this device or language yet.';
+    }
+    if (err.code === 'already-active') return 'Voice capture is already running.';
+    return err.message;
+  }
+  return 'Voice input could not start. Please try again.';
+}
 
 const PHASE_SUBLABEL: Record<Phase, string> = {
   idle: 'Voice companion — on-device',
@@ -74,9 +92,9 @@ function DarkGradientBg() {
     >
       <Defs>
         <RadialGradient id="voiceBg" cx="50%" cy="42%" r="55%" fx="50%" fy="42%">
-          <Stop offset="0%" stopColor="#2a1010" stopOpacity="1" />
-          <Stop offset="45%" stopColor="#0e0808" stopOpacity="1" />
-          <Stop offset="100%" stopColor="#050305" stopOpacity="1" />
+          <Stop offset="0%" stopColor={colors.voiceCompanionBgStart} stopOpacity="1" />
+          <Stop offset="45%" stopColor={colors.voiceCompanionBgMid} stopOpacity="1" />
+          <Stop offset="100%" stopColor={colors.voiceCompanionBgEnd} stopOpacity="1" />
         </RadialGradient>
       </Defs>
       <Rect width={width} height={height} fill="url(#voiceBg)" />
@@ -177,6 +195,7 @@ function TerraCottaOrb({
 
 export default function VoiceScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
   const insets = useSafeAreaInsets();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
@@ -194,6 +213,7 @@ export default function VoiceScreen() {
   const activeRef = useRef(true);
   const autoListenRef = useRef(true);
   const convIdRef = useRef<string | null>(null);
+  const captureSessionRef = useRef<VoiceInput.VoiceCaptureSession | null>(null);
 
   // Ensure a conversation is ready for the session
   useEffect(() => {
@@ -207,6 +227,7 @@ export default function VoiceScreen() {
     return () => {
       activeRef.current = false;
       autoListenRef.current = false;
+      captureSessionRef.current = null;
       VoiceInput.cancelCapture().catch(() => {});
       VoiceOutput.stop().catch(() => {});
     };
@@ -215,17 +236,22 @@ export default function VoiceScreen() {
   const startListening = useCallback(async () => {
     if (!activeRef.current || muted) return;
     try {
-      setPhase('listening');
       setTranscriptPreview('');
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      await VoiceInput.startCapture((event) => {
+      const session = await VoiceInput.startCaptureSession((event) => {
         if (!activeRef.current) return;
         const norm = Math.max(0, Math.min(1, (event.metering + 60) / 60));
         setAudioLevel(norm);
       });
-    } catch {
-      if (activeRef.current) setPhase('idle');
+      captureSessionRef.current = session;
+      session.result.catch(() => {});
+      if (activeRef.current) setPhase('listening');
+    } catch (err) {
+      if (activeRef.current) {
+        setPhase('idle');
+        Alert.alert('Voice unavailable', voiceCaptureMessage(err));
+      }
     }
   }, [muted, hapticsEnabled]);
 
@@ -236,18 +262,19 @@ export default function VoiceScreen() {
       setAudioLevel(0);
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      // AUDIT-FIX: STT-WIRE — stopCapture now resolves to void; the live
-      // transcript is captured by the recognizer and re-read from the
-      // module-local state via transcribeOnDevice('').
+      const session = captureSessionRef.current;
+      if (!session) {
+        if (activeRef.current) setPhase('idle');
+        return;
+      }
       await VoiceInput.stopCapture();
       const t0 = Date.now();
-      const { text } = await VoiceInput.transcribeOnDevice('');
+      const { text } = await session.result;
+      captureSessionRef.current = null;
       const sttMs = Date.now() - t0;
 
       if (!activeRef.current) return;
 
-      // For on-device STT stub: if text is empty, fall through to idle
-      // (Wave 3: real ASR will provide transcript)
       if (!text.trim()) {
         if (activeRef.current) setPhase('idle');
         return;
@@ -263,16 +290,28 @@ export default function VoiceScreen() {
         return;
       }
 
-      let aiResponse = '';
+      let aiResponse: string | null = null;
       try {
+        const previousMessageIds = createMessageIdSet(
+          useChatStore.getState().messages[convId] ?? [],
+        );
         await sendMessage(convId, text.trim(), selectedModel);
-        aiResponse = `Received: ${text.trim()}`;
+        aiResponse = findNewAssistantResponse(
+          useChatStore.getState().messages[convId] ?? [],
+          previousMessageIds,
+        );
       } catch {
         if (activeRef.current) setPhase('idle');
         return;
       }
 
       if (!activeRef.current) return;
+      if (!aiResponse) {
+        setTranscriptPreview('Sent to chat.');
+        setPhase('idle');
+        setAudioLevel(0);
+        return;
+      }
 
       // Speak response on-device
       setPhase('speaking');
@@ -297,6 +336,7 @@ export default function VoiceScreen() {
         },
       });
     } catch {
+      captureSessionRef.current = null;
       if (activeRef.current) {
         setPhase('idle');
         setAudioLevel(0);
@@ -323,6 +363,7 @@ export default function VoiceScreen() {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (next && phase === 'listening') {
       VoiceInput.cancelCapture().catch(() => {});
+      captureSessionRef.current = null;
       setPhase('idle');
       setAudioLevel(0);
     }
@@ -332,10 +373,15 @@ export default function VoiceScreen() {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     activeRef.current = false;
     autoListenRef.current = false;
+    captureSessionRef.current = null;
     VoiceInput.cancelCapture().catch(() => {});
     VoiceOutput.stop().catch(() => {});
+    if (params.returnTo === '/(app)/settings/voice') {
+      router.replace('/(app)/settings/voice' as Parameters<typeof router.replace>[0]);
+      return;
+    }
     if (router.canGoBack()) router.back();
-  }, [hapticsEnabled, router]);
+  }, [hapticsEnabled, params.returnTo, router]);
 
   const modelLabel = getDisplayName(selectedModel);
 
@@ -351,7 +397,7 @@ export default function VoiceScreen() {
         accessibilityLabel="Close voice companion"
         accessibilityRole="button"
       >
-        <X size={20} color="rgba(255,255,255,0.6)" />
+        <X size={20} color={colors.textSecondary} />
       </Pressable>
 
       {/* Main content */}
@@ -396,7 +442,7 @@ export default function VoiceScreen() {
           onPress={handleMuteToggle}
           style={[
             styles.controlBtn,
-            { backgroundColor: muted ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)' },
+            { backgroundColor: muted ? colors.dangerSurface : colors.voiceControlSurface },
           ]}
           accessibilityLabel={muted ? 'Unmute' : 'Mute microphone'}
           accessibilityRole="button"
@@ -404,13 +450,13 @@ export default function VoiceScreen() {
           {muted ? (
             <MicOff size={22} color={colors.agentError} />
           ) : (
-            <Mic size={22} color="rgba(255,255,255,0.8)" />
+            <Mic size={22} color={colors.textSecondary} />
           )}
         </Pressable>
 
         {/* TTS indicator — static, shows TTS is always on-device */}
         <View style={styles.controlBtn}>
-          <Volume2 size={22} color="rgba(218,119,86,0.7)" />
+          <Volume2 size={22} color={colors.terraCotta} />
         </View>
       </View>
     </SafeAreaView>
@@ -420,7 +466,7 @@ export default function VoiceScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#050305',
+    backgroundColor: colors.voiceCompanionBgEnd,
   },
   closeBtn: {
     position: 'absolute',
@@ -429,7 +475,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.voiceControlSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -441,7 +487,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   sublabel: {
-    color: 'rgba(255,255,255,0.35)',
+    color: colors.textMuted,
     fontSize: 13,
     letterSpacing: 0.3,
   },
@@ -469,7 +515,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   modelLabel: {
-    color: 'rgba(255,255,255,0.3)',
+    color: colors.textMuted,
     fontSize: 11,
     letterSpacing: 1.2,
   },
@@ -485,13 +531,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.voiceTranscriptSurface,
     borderWidth: 1,
-    borderColor: 'rgba(218,119,86,0.2)',
+    borderColor: colors.voiceAccentBorder,
     maxWidth: '90%',
   },
   transcriptText: {
-    color: 'rgba(255,255,255,0.5)',
+    color: colors.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 20,
@@ -509,6 +555,6 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.voiceControlSurface,
   },
 });

@@ -72,6 +72,25 @@ function generateChunkId(conversationId: string, index: number): string {
   return `${conversationId}_chunk_${index}`;
 }
 
+/**
+ * Escape SQL LIKE metacharacters (`\`, `%`, `_`) in a literal string so it can
+ * be embedded in a LIKE pattern and matched literally. Pair with `ESCAPE '\'`.
+ */
+function escapeLikeLiteral(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
+ * Build the LIKE prefix pattern that matches every chunk_id belonging to a
+ * conversation. The conversationId and the literal `_chunk_` separator are
+ * escaped so only the trailing `%` acts as a wildcard — a conversationId that
+ * contains `_` or `%` can no longer over-match another conversation's chunks.
+ * Use with `ESCAPE '\'` in the SQL statement.
+ */
+function chunkIdLikePattern(conversationId: string): string {
+  return `${escapeLikeLiteral(conversationId)}\\_chunk\\_%`;
+}
+
 async function ensureDocChunkVecTable(db: Awaited<ReturnType<typeof getDb>>): Promise<boolean> {
   try {
     await db.execAsync(`
@@ -195,9 +214,9 @@ export async function retrieve(conversationId: string, query: string, k = 5): Pr
       const rows = await db.getAllAsync<{ chunk_id: string }>(
         `SELECT chunk_id FROM doc_chunk_vectors
          WHERE embedding MATCH ?
-           AND chunk_id LIKE ?
+           AND chunk_id LIKE ? ESCAPE '\\'
          ORDER BY distance LIMIT ?;`,
-        [queryEmbedding as unknown as string, `${conversationId}_chunk_%`, k],
+        [queryEmbedding as unknown as string, chunkIdLikePattern(conversationId), k],
       );
       if (rows.length > 0) {
         const ids = rows.map((r: { chunk_id: string }) => r.chunk_id);
@@ -230,8 +249,8 @@ export async function deleteDocument(conversationId: string): Promise<void> {
   const db = await getDb();
   await deleteDocChunks(conversationId);
   try {
-    await db.runAsync(`DELETE FROM doc_chunk_vectors WHERE chunk_id LIKE ?;`, [
-      `${conversationId}_chunk_%`,
+    await db.runAsync(`DELETE FROM doc_chunk_vectors WHERE chunk_id LIKE ? ESCAPE '\\';`, [
+      chunkIdLikePattern(conversationId),
     ]);
   } catch (error) {
     // sqlite-vec table may not exist.

@@ -331,7 +331,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
 
   _activeDownloads.delete(modelId);
 
-  if (!result || result.status !== 200) {
+  if (!result || (result.status !== 200 && result.status !== 206)) {
     throw new ModelDownloadError(
       'network_error',
       `Download failed: server returned ${result?.status ?? 'unknown status'}`,

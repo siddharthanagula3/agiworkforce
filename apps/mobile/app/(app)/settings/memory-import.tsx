@@ -9,7 +9,7 @@ import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-re
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
 
@@ -26,16 +26,16 @@ interface ImportState {
 }
 
 const SOURCE_LABELS: Record<ImportSource, string> = {
-  chatgpt: 'ChatGPT',
-  claude: 'Claude',
-  gemini: 'Gemini',
+  chatgpt: 'Conversation export',
+  claude: 'Assistant export',
+  gemini: 'Google export',
   text: 'Plain text / Notes',
 };
 
 const SOURCE_DESCRIPTIONS: Record<ImportSource, string> = {
-  chatgpt: 'Export from ChatGPT settings — conversations.json or export.json',
-  claude: 'Export from Claude settings — conversations JSON',
-  gemini: 'Google Takeout Gemini export',
+  chatgpt: 'JSON conversation file such as conversations.json or export.json',
+  claude: 'JSON assistant conversation export',
+  gemini: 'Google Takeout conversation export',
   text: 'Any .txt or .md file with notes, one per line or paragraph',
 };
 
@@ -43,6 +43,7 @@ const IMPORT_SOURCES: ImportSource[] = ['chatgpt', 'claude', 'gemini', 'text'];
 
 export default function MemoryImportScreen() {
   const router = useRouter();
+  const colors = useThemeColors();
   const { bulkInsert } = useMemoryStore();
 
   const [state, setState] = useState<ImportState>({
@@ -157,17 +158,29 @@ export default function MemoryImportScreen() {
     });
   }, []);
 
+  const goBackToMemory = useCallback(() => {
+    router.navigate('/(app)/settings/memory' as Parameters<typeof router.navigate>[0]);
+  }, [router]);
+
   const isProcessing =
     state.status === 'picking' || state.status === 'parsing' || state.status === 'importing';
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
-        <Pressable onPress={() => router.back()} className="p-2 -ml-2 rounded-lg active:bg-white/5">
+        <Pressable
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          onPress={goBackToMemory}
+          className="p-2 -ml-2 rounded-lg"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          })}
+        >
           <ArrowLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1">
+        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
           Import Memories
         </Text>
       </View>
@@ -179,9 +192,18 @@ export default function MemoryImportScreen() {
       >
         {/* Privacy notice */}
         <Animated.View entering={FadeIn.duration(300)} className="mb-5 mt-2">
-          <View className="bg-teal-500/10 border border-teal-500/20 rounded-xl px-4 py-3">
-            <Text className="text-xs text-teal-400 font-semibold mb-1">On-device only</Text>
-            <Text className="text-xs text-white/60 leading-5">
+          <View
+            className="rounded-xl px-4 py-3"
+            style={{
+              backgroundColor: colors.successSurface,
+              borderColor: colors.successBorder,
+              borderWidth: 1,
+            }}
+          >
+            <Text className="text-xs font-semibold mb-1" style={{ color: colors.teal }}>
+              On-device only
+            </Text>
+            <Text className="text-xs leading-5" style={{ color: colors.textSecondary }}>
               Files are read locally. No data is uploaded to any server. Your imports stay on this
               device.
             </Text>
@@ -189,18 +211,26 @@ export default function MemoryImportScreen() {
         </Animated.View>
 
         {/* Supported sources */}
-        <Text className="text-xs text-white/40 uppercase tracking-wider font-semibold mb-3">
+        <Text
+          className="text-xs uppercase font-semibold mb-3"
+          style={{ color: colors.textMuted, letterSpacing: 0 }}
+        >
           Supported formats
         </Text>
         {IMPORT_SOURCES.map((src) => (
           <Card key={src} variant="default" className="mb-2">
             <View className="flex-row items-center gap-3">
-              <View className="w-8 h-8 rounded-lg bg-white/5 items-center justify-center">
+              <View
+                className="w-8 h-8 rounded-lg items-center justify-center"
+                style={{ backgroundColor: colors.neutralSurface }}
+              >
                 <FileText size={16} color={colors.textMuted} />
               </View>
               <View className="flex-1">
-                <Text className="text-sm font-medium text-white">{SOURCE_LABELS[src]}</Text>
-                <Text className="text-xs text-white/40 mt-0.5 leading-4">
+                <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                  {SOURCE_LABELS[src]}
+                </Text>
+                <Text className="text-xs mt-0.5 leading-4" style={{ color: colors.textMuted }}>
                   {SOURCE_DESCRIPTIONS[src]}
                 </Text>
               </View>
@@ -211,15 +241,24 @@ export default function MemoryImportScreen() {
         {/* Result display */}
         {state.status === 'done' && (
           <Animated.View entering={FadeIn.duration(300)} className="mt-5">
-            <View className="bg-teal-500/10 border border-teal-500/20 rounded-xl px-4 py-4 items-center">
+            <View
+              className="rounded-xl px-4 py-4 items-center"
+              style={{
+                backgroundColor: colors.successSurface,
+                borderColor: colors.successBorder,
+                borderWidth: 1,
+              }}
+            >
               <CheckCircle size={32} color={colors.teal} />
-              <Text className="text-base font-semibold text-white mt-2">Import complete</Text>
+              <Text className="text-base font-semibold mt-2" style={{ color: colors.textPrimary }}>
+                Import complete
+              </Text>
               {state.source && (
-                <Text className="text-sm text-white/50 mt-0.5">
+                <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
                   From {SOURCE_LABELS[state.source]}
                 </Text>
               )}
-              <Text className="text-sm text-white/70 mt-3 text-center">
+              <Text className="text-sm mt-3 text-center" style={{ color: colors.textSecondary }}>
                 Added {state.inserted} {state.inserted === 1 ? 'memory' : 'memories'}
                 {state.skipped > 0 ? `, ${state.skipped} skipped` : ''}
               </Text>
@@ -236,7 +275,7 @@ export default function MemoryImportScreen() {
                 title="Done"
                 variant="primary"
                 size="md"
-                onPress={() => router.back()}
+                onPress={goBackToMemory}
                 className="flex-1"
               />
             </View>
@@ -245,10 +284,21 @@ export default function MemoryImportScreen() {
 
         {state.status === 'error' && state.errorMessage && (
           <Animated.View entering={FadeIn.duration(300)} className="mt-5">
-            <View className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-4 items-center">
+            <View
+              className="rounded-xl px-4 py-4 items-center"
+              style={{
+                backgroundColor: colors.dangerSurface,
+                borderColor: colors.dangerBorder,
+                borderWidth: 1,
+              }}
+            >
               <AlertCircle size={32} color={colors.agentError} />
-              <Text className="text-base font-semibold text-white mt-2">Import failed</Text>
-              <Text className="text-sm text-white/60 mt-1 text-center">{state.errorMessage}</Text>
+              <Text className="text-base font-semibold mt-2" style={{ color: colors.textPrimary }}>
+                Import failed
+              </Text>
+              <Text className="text-sm mt-1 text-center" style={{ color: colors.textSecondary }}>
+                {state.errorMessage}
+              </Text>
             </View>
             <Button
               title="Try again"
@@ -266,7 +316,7 @@ export default function MemoryImportScreen() {
             {isProcessing ? (
               <View className="items-center gap-3 py-6">
                 <ActivityIndicator size="large" color={colors.teal} />
-                <Text className="text-sm text-white/50">
+                <Text className="text-sm" style={{ color: colors.textMuted }}>
                   {state.status === 'picking'
                     ? 'Opening file picker…'
                     : state.status === 'parsing'
@@ -277,16 +327,27 @@ export default function MemoryImportScreen() {
             ) : (
               <Pressable
                 onPress={handlePickFile}
-                className="border-2 border-dashed border-white/20 rounded-2xl items-center justify-center py-10 gap-3 active:border-teal-500/40 active:bg-teal-500/5"
+                className="border-2 border-dashed rounded-2xl items-center justify-center py-10 gap-3"
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.successSurface : colors.transparent,
+                  borderColor: pressed ? colors.successBorder : colors.border,
+                })}
                 accessibilityLabel="Select file to import"
                 accessibilityRole="button"
               >
-                <View className="w-16 h-16 rounded-2xl bg-white/5 items-center justify-center">
+                <View
+                  className="w-16 h-16 rounded-2xl items-center justify-center"
+                  style={{ backgroundColor: colors.neutralSurface }}
+                >
                   <Upload size={28} color={colors.textMuted} />
                 </View>
                 <View className="items-center">
-                  <Text className="text-base font-semibold text-white">Select file</Text>
-                  <Text className="text-sm text-white/40 mt-1">JSON or plain text export</Text>
+                  <Text className="text-base font-semibold" style={{ color: colors.textPrimary }}>
+                    Select file
+                  </Text>
+                  <Text className="text-sm mt-1" style={{ color: colors.textMuted }}>
+                    JSON or plain text export
+                  </Text>
                 </View>
               </Pressable>
             )}

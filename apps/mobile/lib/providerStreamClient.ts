@@ -12,8 +12,17 @@
 
 import type { Effort } from '@agiworkforce/types';
 import { secureFetch } from '@/services/secureFetch';
+import { combineAbortSignals } from '@/lib/abortSignal';
 
-export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
+export type ProviderStreamProvider =
+  | 'anthropic'
+  | 'openai'
+  | 'ollama'
+  | 'google'
+  | 'xai'
+  | 'deepseek'
+  | 'qwen'
+  | 'moonshot';
 
 export interface ProviderStreamMessage {
   role: 'user' | 'assistant' | 'system';
@@ -57,25 +66,79 @@ export interface StreamFromProviderParams {
   signal?: AbortSignal;
 }
 
+const STREAM_IDLE_TIMEOUT_MS = 45_000;
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'Provider stream failed.';
+}
+
+function createIdleWatchdog(parentSignal?: AbortSignal): {
+  signal: AbortSignal;
+  reset: () => void;
+  dispose: () => void;
+} {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const reset = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      controller.abort(new Error('Provider stream timed out while waiting for data.'));
+    }, STREAM_IDLE_TIMEOUT_MS);
+  };
+
+  reset();
+
+  return {
+    signal: parentSignal
+      ? combineAbortSignals([parentSignal, controller.signal])
+      : controller.signal,
+    reset,
+    dispose: () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    },
+  };
+}
+
 export async function* streamFromProvider(
   params: StreamFromProviderParams,
 ): AsyncIterable<StreamChunk> {
   const url = `${params.gatewayUrl.replace(/\/+$/, '')}/api/v1/providers/${encodeURIComponent(
     params.providerId,
   )}/stream`;
-  const res = await secureFetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${params.authToken}`,
-      'x-requested-with': 'agiworkforce-mobile',
-    },
-    body: JSON.stringify(params.request),
-    ...(params.signal ? { signal: params.signal } : {}),
-  });
+  const watchdog = createIdleWatchdog(params.signal);
+  let res: Response;
+
+  try {
+    res = await secureFetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${params.authToken}`,
+        'x-requested-with': 'agiworkforce-mobile',
+      },
+      body: JSON.stringify(params.request),
+      signal: watchdog.signal,
+    });
+  } catch (error) {
+    watchdog.dispose();
+    yield {
+      type: 'error',
+      code: watchdog.signal.aborted ? 'STREAM_TIMEOUT_OR_ABORT' : 'STREAM_FETCH_ERROR',
+      message: errorMessage(error),
+      retryable: !params.signal?.aborted,
+    };
+    yield { type: 'stop', reason: params.signal?.aborted ? 'cancel' : 'error' };
+    return;
+  }
 
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => '');
+    watchdog.dispose();
     yield {
       type: 'error',
       message: text || `Upstream error ${res.status}`,
@@ -93,6 +156,7 @@ export async function* streamFromProvider(
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
+      watchdog.reset();
       buffer += decoder.decode(value, { stream: true });
       let frameEnd: number;
       while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
@@ -107,12 +171,26 @@ export async function* streamFromProvider(
         if (data === '[DONE]') return;
         try {
           yield JSON.parse(data) as StreamChunk;
-        } catch {
-          // ignore malformed
+        } catch (error) {
+          yield {
+            type: 'error',
+            code: 'MALFORMED_SSE_FRAME',
+            message: `Malformed provider stream frame: ${errorMessage(error)}`,
+            retryable: false,
+          };
         }
       }
     }
+  } catch (error) {
+    yield {
+      type: 'error',
+      code: watchdog.signal.aborted ? 'STREAM_TIMEOUT_OR_ABORT' : 'STREAM_READ_ERROR',
+      message: errorMessage(error),
+      retryable: !params.signal?.aborted,
+    };
+    yield { type: 'stop', reason: params.signal?.aborted ? 'cancel' : 'error' };
   } finally {
     reader.releaseLock();
+    watchdog.dispose();
   }
 }

@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { type ModelDef } from '@/src/features/model-picker/service';
 import type { ModelInstallJob } from '@/src/features/model-picker/installStore';
 import { useThemeColors } from '@/src/ui/theme';
-import { ProviderLogo } from './ProviderLogo';
+import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 
 interface ModelRowProps {
   model: ModelDef;
@@ -47,9 +47,11 @@ export function ModelRow({
   const isFailed = installStatus.status === 'failed';
   const isReady = installStatus.status === 'ready';
   const disabled = isDownloading || isUnavailable;
+  const visiblySelected = isSelected && (!isLocal || isReady);
   const progressPercent = Math.round(installStatus.progress * 100);
   const unavailableHint =
     installStatus.error ?? 'This model package/system model is unavailable on this device.';
+  const providerLogoSize = usesProviderAppTile(model.provider) ? 28 : 20;
 
   const handlePress = () => {
     if (disabled) return;
@@ -72,7 +74,7 @@ export function ModelRow({
     onToggleThinking(model.id);
   };
 
-  const iconBackground = isSelected
+  const iconBackground = visiblySelected
     ? colors.accentSurface
     : isLocked
       ? colors.warningSurface
@@ -85,7 +87,7 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         disabled={disabled}
-        accessibilityLabel={`${model.name}${isSelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, invite required, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}`}
+        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, invite required, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}`}
         accessibilityRole="button"
         accessibilityHint={
           isLocked
@@ -100,7 +102,7 @@ export function ModelRow({
                     ? 'Tap to download, long press to favorite'
                     : 'Tap to select, long press to favorite'
         }
-        accessibilityState={{ selected: isSelected, disabled }}
+        accessibilityState={{ selected: visiblySelected, disabled }}
         style={{
           minHeight: 62,
           paddingHorizontal: 16,
@@ -108,7 +110,7 @@ export function ModelRow({
           flexDirection: 'row',
           alignItems: 'center',
           gap: 12,
-          backgroundColor: isSelected ? colors.accentSurface : colors.transparent,
+          backgroundColor: visiblySelected ? colors.accentSurface : colors.transparent,
           opacity: disabled ? 0.62 : 1,
         }}
       >
@@ -124,9 +126,9 @@ export function ModelRow({
           }}
         >
           {isLocal ? (
-            <Cpu size={17} color={isSelected ? colors.teal : colors.textSecondary} />
+            <Cpu size={17} color={visiblySelected ? colors.teal : colors.textSecondary} />
           ) : (
-            <ProviderLogo providerId={model.provider} size={20} />
+            <ProviderLogo providerId={model.provider} size={providerLogoSize} />
           )}
         </View>
 
@@ -134,7 +136,7 @@ export function ModelRow({
           <Text
             numberOfLines={1}
             style={{
-              color: isSelected ? colors.teal : colors.textPrimary,
+              color: visiblySelected ? colors.teal : colors.textPrimary,
               fontSize: 15,
               fontWeight: '600',
             }}
@@ -173,7 +175,7 @@ export function ModelRow({
               <Lock size={14} color={colors.agentWarning} />
             </>
           ) : null}
-          {isSelected ? <Check size={17} color={colors.teal} /> : null}
+          {visiblySelected ? <Check size={17} color={colors.teal} /> : null}
           {isFavorite ? (
             <Star size={14} color={colors.agentWarning} fill={colors.agentWarning} />
           ) : null}

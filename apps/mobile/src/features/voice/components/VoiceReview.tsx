@@ -5,7 +5,7 @@
  * Also shows a PerformanceChip indicating the on-device STT inference details.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { X, Check, Mic } from 'lucide-react-native';
@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface VoiceReviewProps {
   /** Whether the review panel is visible */
@@ -38,6 +38,7 @@ export function VoiceReview({
   onReRecord,
   latencyMs,
 }: VoiceReviewProps) {
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [editedText, setEditedText] = useState(transcript);
 
@@ -46,10 +47,9 @@ export function VoiceReview({
     setEditedText(text);
   }, []);
 
-  // Reset edited text when transcript prop changes
-  if (editedText !== transcript && !editedText) {
+  useEffect(() => {
     setEditedText(transcript);
-  }
+  }, [transcript]);
 
   const handleConfirm = useCallback(() => {
     if (!editedText.trim()) return;
@@ -73,29 +73,37 @@ export function VoiceReview({
     <Animated.View
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(150)}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.surfaceElevated }]}
       accessible
       accessibilityLabel="Review your transcription before sending"
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Review</Text>
+        <Text style={[styles.title, { color: colors.textSecondary }]}>Review</Text>
         {latencyMs !== undefined && (
-          <PerformanceChip model="on-device STT" tier="Tier 2" firstTokenLatencyMs={latencyMs} />
+          <PerformanceChip model="on-device STT" firstTokenLatencyMs={latencyMs} />
         )}
       </View>
 
       {/* Editable transcript */}
-      <View style={styles.transcriptBox}>
+      <View
+        style={[
+          styles.transcriptBox,
+          {
+            backgroundColor: colors.inputSurface,
+            borderColor: colors.accentBorder,
+          },
+        ]}
+      >
         <TextInput
           value={editedText}
           onChangeText={handleTranscriptChange}
-          style={styles.transcriptInput}
+          style={[styles.transcriptInput, { color: colors.textPrimary }]}
           multiline
           autoFocus
           selectionColor={colors.terraCotta}
           placeholder="Transcription will appear here..."
-          placeholderTextColor="rgba(255,255,255,0.2)"
+          placeholderTextColor={colors.textMuted}
           accessibilityLabel="Edit transcription"
           accessibilityHint="Edit the transcribed text before sending"
         />
@@ -106,7 +114,7 @@ export function VoiceReview({
         {/* Cancel */}
         <Pressable
           onPress={handleCancel}
-          style={styles.cancelBtn}
+          style={[styles.cancelBtn, { backgroundColor: colors.neutralSurface }]}
           accessibilityLabel="Cancel and discard"
           accessibilityRole="button"
         >
@@ -117,7 +125,7 @@ export function VoiceReview({
         {onReRecord && (
           <Pressable
             onPress={handleReRecord}
-            style={styles.reRecordBtn}
+            style={[styles.reRecordBtn, { backgroundColor: colors.accentSurface }]}
             accessibilityLabel="Re-record voice"
             accessibilityRole="button"
           >
@@ -130,7 +138,7 @@ export function VoiceReview({
           onPress={handleConfirm}
           style={[
             styles.confirmBtn,
-            { backgroundColor: editedText.trim() ? colors.terraCotta : 'rgba(218,119,86,0.3)' },
+            { backgroundColor: editedText.trim() ? colors.terraCotta : colors.neutralSurface },
           ]}
           disabled={!editedText.trim()}
           accessibilityLabel="Send transcription"
@@ -146,7 +154,6 @@ export function VoiceReview({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(12,12,16,0.97)',
     borderRadius: 20,
     padding: 20,
     marginHorizontal: 16,
@@ -159,23 +166,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    color: 'rgba(255,255,255,0.6)',
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   transcriptBox: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(218,119,86,0.25)',
     paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 80,
   },
   transcriptInput: {
-    color: colors.textPrimary,
     fontSize: 15,
     lineHeight: 22,
   },
@@ -189,7 +192,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -197,7 +199,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(218,119,86,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },

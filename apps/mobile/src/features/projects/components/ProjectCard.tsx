@@ -2,7 +2,7 @@ import { View, Pressable } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { FolderOpen, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import type { Project } from '@/src/features/projects/store';
 
@@ -16,6 +16,7 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, index, isActive, onPress, onLongPress }: ProjectCardProps) {
   const reducedMotion = useReducedMotion();
+  const colors = useThemeColors();
   return (
     <Animated.View
       entering={
@@ -32,8 +33,8 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
         className="rounded-xl overflow-hidden active:opacity-80"
         style={{
           backgroundColor: colors.surfaceElevated,
-          borderWidth: isActive ? 1.5 : 0,
-          borderColor: isActive ? colors.teal : 'transparent',
+          borderWidth: 1,
+          borderColor: isActive ? colors.accentBorder : colors.border,
         }}
         accessibilityLabel={`Project: ${project.name}${isActive ? ', active' : ''}`}
         accessibilityRole="button"
@@ -45,20 +46,24 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
             <View
               className="w-10 h-10 rounded-xl items-center justify-center"
               style={{
-                backgroundColor: isActive ? `${colors.teal}20` : `${colors.textMuted}15`,
+                backgroundColor: isActive ? colors.accentSurface : colors.neutralSurface,
               }}
             >
               <FolderOpen size={20} color={isActive ? colors.teal : colors.textMuted} />
             </View>
             <View className="flex-1">
-              <Text className="text-[15px] font-semibold text-white" numberOfLines={1}>
+              <Text
+                className="text-[15px] font-semibold"
+                style={{ color: colors.textPrimary }}
+                numberOfLines={1}
+              >
                 {project.name}
               </Text>
             </View>
             {isActive && (
               <View
                 className="w-6 h-6 rounded-full items-center justify-center"
-                style={{ backgroundColor: `${colors.teal}25` }}
+                style={{ backgroundColor: colors.accentSurface }}
               >
                 <Check size={14} color={colors.teal} />
               </View>
@@ -69,7 +74,8 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
           {project.description ? (
             <Text
               variant="caption"
-              className="text-white/50 text-[13px] leading-[18px]"
+              className="text-[13px] leading-[18px]"
+              style={{ color: colors.textSecondary }}
               numberOfLines={2}
             >
               {project.description}
@@ -78,7 +84,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
 
           {/* Footer: last updated */}
           <View className="flex-row items-center justify-between pt-1">
-            <Text variant="caption" className="text-white/30 text-[11px]">
+            <Text variant="caption" className="text-[11px]" style={{ color: colors.textMuted }}>
               Updated {formatRelativeTime(project.updatedAt)}
             </Text>
           </View>

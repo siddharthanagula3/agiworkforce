@@ -9,7 +9,7 @@ import Animated, {
 import { Paperclip, Globe, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
-import { colors } from '@/src/ui/theme';
+import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 
 interface Source {
   url: string;
@@ -19,17 +19,6 @@ interface Source {
 
 interface CollapsibleSourcesProps {
   sources: Source[];
-}
-
-const ALLOWED_SCHEMES = ['http:', 'https:'];
-
-function isValidExternalUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return ALLOWED_SCHEMES.includes(parsed.protocol);
-  } catch {
-    return false;
-  }
 }
 
 function getDomain(url: string): string {
@@ -50,12 +39,12 @@ function getDomain(url: string): string {
  * Rendered at the end of an AI message when `message.citations` exists.
  */
 export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
-  const { colors: themeColors, isDark } = useTheme();
+  const { colors: themeColors } = useTheme();
   const [expanded, setExpanded] = useState(false);
   const animatedHeight = useSharedValue(0);
 
-  const cardBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
-  const hoverBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  const cardBg = themeColors.inputSurface;
+  const hoverBg = themeColors.surfaceHover;
 
   const toggleExpanded = useCallback(() => {
     const nextExpanded = !expanded;
@@ -73,7 +62,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
   }));
 
   const handleSourcePress = useCallback((url: string) => {
-    if (isValidExternalUrl(url)) {
+    if (isValidExternalHttpUrl(url)) {
       Linking.openURL(url);
     }
   }, []);
@@ -142,7 +131,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                 paddingVertical: 8,
                 paddingHorizontal: 8,
                 borderRadius: 8,
-                backgroundColor: pressed ? hoverBg : 'transparent',
+                backgroundColor: pressed ? hoverBg : themeColors.transparent,
               })}
               accessibilityLabel={`Source ${index + 1}: ${source.title ?? getDomain(source.url)}`}
               accessibilityRole="link"
@@ -154,7 +143,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                   width: 20,
                   height: 20,
                   borderRadius: 4,
-                  backgroundColor: 'rgba(33, 128, 141, 0.15)',
+                  backgroundColor: themeColors.accentSurface,
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginTop: 1,
@@ -164,7 +153,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
                   style={{
                     fontSize: 10,
                     fontWeight: '700',
-                    color: colors.teal,
+                    color: themeColors.teal,
                   }}
                 >
                   {index + 1}
