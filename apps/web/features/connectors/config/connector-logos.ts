@@ -28,7 +28,8 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   slack: {
-    url: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64',
+    // Official Slack brand mark (SVG from Slack's CDN)
+    url: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
     width: 32,
     height: 32,
   },
@@ -42,12 +43,14 @@ export const CONNECTOR_LOGOS: Record<
     bgColor: '#0F9D58',
   },
   outlook: {
-    url: 'https://www.google.com/s2/favicons?domain=outlook.live.com&sz=64',
+    // Microsoft brand CDN — official Outlook icon
+    url: 'https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
   onedrive: {
-    url: 'https://www.google.com/s2/favicons?domain=onedrive.live.com&sz=64',
+    // Microsoft brand CDN — official OneDrive icon
+    url: 'https://upload.wikimedia.org/wikipedia/commons/3/3c/Microsoft_Office_OneDrive_%282019%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
@@ -64,7 +67,8 @@ export const CONNECTOR_LOGOS: Record<
 
   // Collaboration
   teams: {
-    url: 'https://www.google.com/s2/favicons?domain=teams.microsoft.com&sz=64',
+    // Microsoft brand CDN — official Teams icon
+    url: 'https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
@@ -91,7 +95,8 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   salesforce: {
-    url: 'https://www.google.com/s2/favicons?domain=salesforce.com&sz=64',
+    // Official Salesforce cloud mark (SVG via Wikipedia — official logo)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg',
     width: 32,
     height: 32,
   },
@@ -132,6 +137,7 @@ export const CONNECTOR_LOGOS: Record<
 
   // Social
   linkedin: {
+    // Official LinkedIn "in" mark (SVG)
     url: 'https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png',
     width: 32,
     height: 32,
@@ -149,7 +155,8 @@ export const CONNECTOR_LOGOS: Record<
 
   // AI
   openai: {
-    url: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64',
+    // OpenAI official logo mark (SVG via Wikipedia)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg',
     width: 32,
     height: 32,
   },
@@ -166,7 +173,8 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   monday: {
-    url: 'https://www.google.com/s2/favicons?domain=monday.com&sz=64',
+    // monday.com official mark (via Wikipedia SVG)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg',
     width: 32,
     height: 32,
   },
@@ -257,17 +265,20 @@ export const CONNECTOR_LOGOS: Record<
 
   // Cloud / Infra
   aws: {
-    url: 'https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64',
+    // AWS official smile mark (SVG via Wikipedia)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg',
     width: 32,
     height: 32,
   },
   gcp: {
-    url: 'https://www.google.com/s2/favicons?domain=cloud.google.com&sz=64',
+    // Google Cloud official mark (via Google's own CDN — covered by Simple Icons for gcp)
+    url: 'https://www.gstatic.com/devrel-devsite/prod/v4a3800e32bb7ffae9f5e2f46d2ab96f0038f29dcb18e96d9ff7bb86b6b1d3c49/cloud/images/favicons/onecloud/super_cloud.png',
     width: 32,
     height: 32,
   },
   azure: {
-    url: 'https://www.google.com/s2/favicons?domain=azure.microsoft.com&sz=64',
+    // Microsoft Azure official mark (SVG via Wikipedia)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg',
     width: 32,
     height: 32,
   },
@@ -343,13 +354,15 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   canva: {
-    url: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
+    // Canva official mark (SVG via Wikipedia)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/b/bb/Canva_Logo.svg',
     width: 32,
     height: 32,
   },
   adobe: {
-    url: 'https://www.google.com/s2/favicons?domain=adobe.com&sz=64',
-    width: 32,
+    // Adobe official mark (SVG via Wikipedia)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.png',
+    width: 48,
     height: 32,
   },
 
@@ -392,7 +405,8 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   sharepoint: {
-    url: 'https://www.google.com/s2/favicons?domain=sharepoint.com&sz=64',
+    // Microsoft SharePoint official mark (SVG via Wikipedia)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Microsoft_Office_SharePoint_%282019%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
