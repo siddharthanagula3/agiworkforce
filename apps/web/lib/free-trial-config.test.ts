@@ -18,7 +18,7 @@ describe('free trial config', () => {
   });
 
   it('derives the default model and model set from the catalog (no hardcoded IDs)', () => {
-    expect(FREE_TRIAL_MODEL).toBe(getRoutingSlotModel('general_fast'));
+    expect(FREE_TRIAL_MODEL).toBe(getRoutingSlotModel('general_balanced'));
     expect(FREE_TRIAL_MODELS).toEqual(getAllowedModelsForTier('economy'));
     // the default selection must live inside the selectable Hobby set
     expect(FREE_TRIAL_MODELS).toContain(FREE_TRIAL_MODEL);
