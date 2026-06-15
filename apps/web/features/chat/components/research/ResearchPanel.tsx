@@ -16,6 +16,7 @@ import { Globe, X, ExternalLink, Search, PanelRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
+import { useChatStore } from '@/stores/chatStore';
 
 // ============================================================================
 // Source row
@@ -117,7 +118,13 @@ function EmptyState() {
 // ============================================================================
 
 export function ResearchPanel() {
-  const { panelOpen, sources, query, closePanel } = useResearchPanelStore();
+  const panelOpen = useResearchPanelStore((s) => s.panelOpen);
+  const closePanel = useResearchPanelStore((s) => s.closePanel);
+  const sourcesFor = useResearchPanelStore((s) => s.sourcesFor);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  // Scope to the active conversation: a chat that didn't run a web search shows
+  // no sources, never a previous chat's leftover sources.
+  const { sources, query } = sourcesFor(activeConversationId);
 
   if (!panelOpen) return null;
 
@@ -231,6 +238,7 @@ interface InlineSourcesListProps {
 
 export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
   const openPanel = useResearchPanelStore((s) => s.openPanel);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
 
   if (sources.length === 0) return null;
 
@@ -275,7 +283,7 @@ export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
       {/* View all link -- opens the full-detail panel */}
       <button
         type="button"
-        onClick={() => openPanel(sources, query)}
+        onClick={() => openPanel(activeConversationId, sources, query)}
         className="inline-flex items-center gap-1 rounded-full border border-border/20 bg-transparent px-2 py-0.5 text-[11px] text-muted-foreground/70 transition-colors hover:border-border/50 hover:text-primary"
         aria-label="Open all sources in panel"
       >

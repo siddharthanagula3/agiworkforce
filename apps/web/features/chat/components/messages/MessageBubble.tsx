@@ -409,9 +409,11 @@ const MessageBubbleComponent = function MessageBubble({
   const setResearchSources = useResearchPanelStore((s) => s.setSources);
   useEffect(() => {
     if (!isUser && searchSources.length > 0) {
-      setResearchSources(searchSources, searchQuery);
+      // Scope the sources to this conversation so the Sources panel never shows
+      // a previous chat's sources in a chat that didn't run a web search.
+      setResearchSources(artifactConversationId ?? null, searchSources, searchQuery);
     }
-  }, [isUser, searchSources, searchQuery, setResearchSources]);
+  }, [isUser, searchSources, searchQuery, setResearchSources, artifactConversationId]);
 
   return (
     <motion.div
