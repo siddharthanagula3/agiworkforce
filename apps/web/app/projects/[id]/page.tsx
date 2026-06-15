@@ -82,6 +82,41 @@ export default function ProjectDetailPage() {
   const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
   const updateProject = useProjectStore((s) => s.updateProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const setProjects = useProjectStore((s) => s.setProjects);
+
+  // Hydrate the project store from the server so a server-created project (in
+  // user_projects) resolves here even when it isn't in this device's local
+  // store yet — e.g. just created, or opened from another device. Without this
+  // the page falsely shows "Project not found". Merge server rows with any
+  // local-only projects, server winning on id conflicts.
+  const [hydratingProjects, setHydratingProjects] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/projects?limit=100', { credentials: 'same-origin' });
+        if (res.ok) {
+          const json = (await res.json()) as { projects?: Array<{ id: string }> };
+          const serverProjects = Array.isArray(json.projects) ? json.projects : [];
+          if (!cancelled && serverProjects.length > 0) {
+            const serverIds = new Set(serverProjects.map((p) => p.id));
+            const localOnly = useProjectStore
+              .getState()
+              .projects.filter((p) => !serverIds.has(p.id));
+
+            setProjects([...(serverProjects as any), ...localOnly]);
+          }
+        }
+      } catch {
+        // Non-fatal: fall back to whatever is already in the store.
+      } finally {
+        if (!cancelled) setHydratingProjects(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setProjects]);
 
   // Per-project model selection.
   // On mount: apply any saved per-project model to the global model store so
@@ -164,6 +199,27 @@ export default function ProjectDetailPage() {
     });
     return map;
   }, [allConversations]);
+
+  // While the server hydration is in flight, show a neutral loading state rather
+  // than flashing "Project not found" for a project that does exist server-side.
+  if (!project && hydratingProjects) {
+    return (
+      <main
+        data-design="agi"
+        style={{
+          minHeight: '100vh',
+          background: 'var(--agi-bg-2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--agi-ink-2)',
+          fontSize: 14,
+        }}
+      >
+        Loading project…
+      </main>
+    );
+  }
 
   if (!project || !headerPresentation) {
     return (
