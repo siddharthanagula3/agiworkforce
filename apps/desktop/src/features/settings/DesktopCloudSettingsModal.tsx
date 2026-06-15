@@ -347,12 +347,15 @@ export function DesktopCloudSettingsModal({
   const setGlobalHotkeyCombo = useSettingsStore((s) => s.setGlobalHotkeyCombo);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
 
-  const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
+  const resolvedWindowPreferences = useMemo(
+    () => windowPreferences ?? createDefaultWindowPreferences(),
+    [windowPreferences],
+  );
   const defaultGlobalHotkeyCombo = getDefaultGlobalHotkeyCombo();
-  const resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences = globalHotkeyPreferences ?? {
-    enabled: true,
-    combo: defaultGlobalHotkeyCombo,
-  };
+  const resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences = useMemo(
+    () => globalHotkeyPreferences ?? { enabled: true, combo: defaultGlobalHotkeyCombo },
+    [globalHotkeyPreferences, defaultGlobalHotkeyCombo],
+  );
 
   // ── Governance workspace opener (for PrivacyTab) ─────────────────────────
   const openGovernanceWorkspace = useCallback(() => {
