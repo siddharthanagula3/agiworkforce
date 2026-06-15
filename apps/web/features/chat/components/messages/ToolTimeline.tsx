@@ -2,7 +2,19 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, CircleCheck, GitBranch, Wrench } from 'lucide-react';
+import {
+  ChevronRight,
+  CircleCheck,
+  GitBranch,
+  FileText,
+  FilePlus2,
+  FilePen,
+  SquareTerminal,
+  FolderOpen,
+  Globe,
+  Sparkles,
+  Search,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -20,14 +32,49 @@ function getFileName(args?: string): string | null {
   return match?.[1] ?? null;
 }
 
-/** Shared file-name pill: FileTypeIcon + truncated filename (Claude-style). */
-function FileBadge({ filename }: { filename: string }) {
-  return (
-    <span className="absolute right-0 top-0.5 z-10 inline-flex max-w-[55%] items-center gap-1 rounded-md bg-muted/70 px-1.5 py-px">
-      <FileTypeIcon filename={filename} className="h-3 w-3" />
-      <span className="truncate font-mono text-[10px] text-muted-foreground">{filename}</span>
-    </span>
-  );
+/**
+ * Return the icon component for a tool step based on its name.
+ * Matches the Claude reference: file-type-specific icon for file ops,
+ * semantic lucide glyphs for other tool types.
+ */
+type IconComponent = React.FC<{ className?: string }>;
+
+function getToolIcon(toolName: string, filename?: string | null): IconComponent {
+  const n = toolName.toLowerCase();
+
+  // File-type icon is handled separately in the step row when filename is present
+  if (filename) return FileText; // placeholder; step renders FileTypeIcon directly
+
+  if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep')) {
+    return Search;
+  }
+  if (n.includes('web') || n.includes('fetch') || n.includes('http') || n.includes('url')) {
+    return Globe;
+  }
+  if (n.includes('write') || n.includes('create')) {
+    return FilePlus2;
+  }
+  if (n.includes('edit') || n.includes('patch') || n.includes('update')) {
+    return FilePen;
+  }
+  if (
+    n.includes('bash') ||
+    n.includes('exec') ||
+    n.includes('run') ||
+    n.includes('command') ||
+    n.includes('terminal') ||
+    n.includes('script')
+  ) {
+    return SquareTerminal;
+  }
+  if (n.includes('list') || n.includes('ls') || n.includes('dir')) {
+    return FolderOpen;
+  }
+  if (n.includes('skill') || n.includes('learn')) {
+    return Sparkles;
+  }
+  // Default: file-read / view
+  return FileText;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -111,23 +158,17 @@ function groupTools(tools: ToolEntry[]): EntryGroup[] {
   return groups;
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
 /**
- * Build a compact semantic summary from a list of tool entries.
- * Returns a human-readable description of what was accomplished, not a
- * mechanical count. For example: "Read and analyzed files", "Searched the
- * codebase", "Ran shell commands and edited code".
+ * Build a compact action-phrased summary from a list of tool entries.
+ * Uses Claude-style counted verb phrases: "Ran 5 commands, created a file, read a file".
+ * Never emits a mechanical "N tools" count.
  */
 function buildCompactSummary(tools: ToolEntry[]): string {
-  // Bucket each tool into a semantic category
   type Bucket =
     | 'shell'
     | 'file-read'
     | 'file-write'
+    | 'file-edit'
     | 'web-search'
     | 'web-fetch'
     | 'codebase-search'
@@ -135,62 +176,138 @@ function buildCompactSummary(tools: ToolEntry[]): string {
 
   function categorize(name: string): Bucket {
     const n = name.toLowerCase();
-    if (n.includes('bash') || n.includes('exec') || n.includes('run') || n.includes('command')) {
+    if (
+      n.includes('bash') ||
+      n.includes('exec') ||
+      n.includes('run') ||
+      n.includes('command') ||
+      n.includes('terminal') ||
+      n.includes('script')
+    )
       return 'shell';
-    }
-    if (n.includes('write') || n.includes('create') || n.includes('edit') || n.includes('patch')) {
-      return 'file-write';
-    }
-    if (n.includes('read') || n.includes('view') || n.includes('cat') || n.includes('open')) {
+    if (n.includes('create') || n.includes('write') || n.includes('new')) return 'file-write';
+    if (n.includes('edit') || n.includes('patch') || n.includes('update')) return 'file-edit';
+    if (
+      n.includes('read') ||
+      n.includes('view') ||
+      n.includes('cat') ||
+      n.includes('open') ||
+      n.includes('show')
+    )
       return 'file-read';
-    }
-    if (n.includes('web') && (n.includes('search') || n.includes('query'))) {
+    if (
+      (n.includes('web') || n.includes('perplexity')) &&
+      (n.includes('search') || n.includes('query'))
+    )
       return 'web-search';
-    }
-    if (n.includes('fetch') || n.includes('http') || n.includes('url') || n.includes('web')) {
+    if (n.includes('fetch') || n.includes('http') || n.includes('url') || n.includes('web'))
       return 'web-fetch';
-    }
-    if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep')) {
+    if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep'))
       return 'codebase-search';
-    }
-    if (n.includes('list') || n.includes('ls') || n.includes('dir')) {
-      return 'list';
-    }
+    if (n.includes('list') || n.includes('ls') || n.includes('dir')) return 'list';
     return 'shell';
   }
 
-  // Collect unique categories in order of first appearance
-  const seen = new Set<Bucket>();
+  // Count occurrences per bucket in order of first appearance
+  const counts = new Map<Bucket, number>();
+  const order: Bucket[] = [];
+
   for (const tool of tools) {
-    seen.add(categorize(tool.name));
+    const b = categorize(tool.name);
+    if (!counts.has(b)) {
+      counts.set(b, 0);
+      order.push(b);
+    }
+    counts.set(b, counts.get(b)! + 1);
   }
-  const categories = [...seen];
 
-  // Semantic label per bucket (no counts)
-  const semanticLabel: Record<Bucket, string> = {
-    'file-read': 'Read and analyzed files',
-    'file-write': 'Edited code',
-    shell: 'Ran shell commands',
-    'web-search': 'Searched the web',
-    'web-fetch': 'Fetched web content',
-    'codebase-search': 'Searched the codebase',
-    list: 'Listed directory contents',
-  };
+  // Phrase builder: count-aware singular/plural
+  function phrase(bucket: Bucket, count: number): string {
+    const n = count;
+    switch (bucket) {
+      case 'shell':
+        return n === 1 ? 'ran a command' : `ran ${n} commands`;
+      case 'file-write':
+        return n === 1 ? 'created a file' : `created ${n} files`;
+      case 'file-edit':
+        return n === 1 ? 'edited a file' : `edited ${n} files`;
+      case 'file-read':
+        return n === 1 ? 'read a file' : `read ${n} files`;
+      case 'web-search':
+        return n === 1 ? 'searched the web' : 'searched the web';
+      case 'web-fetch':
+        return n === 1 ? 'fetched a page' : `fetched ${n} pages`;
+      case 'codebase-search':
+        return n === 1 ? 'searched the codebase' : 'searched the codebase';
+      case 'list':
+        return n === 1 ? 'listed a directory' : `listed ${n} directories`;
+    }
+  }
 
-  if (categories.length === 0) return 'Used tools';
+  if (order.length === 0) return 'Used tools';
 
-  // Combine multiple semantic labels with commas + "and"
-  const labels = categories.map((c) => semanticLabel[c]);
-  if (labels.length === 1) return labels[0]!;
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  const last = labels.pop()!;
-  return `${labels.join(', ')}, and ${last}`;
+  const phrases = order.map((b) => phrase(b, counts.get(b)!));
+
+  // Capitalize only the first phrase
+  const [first, ...rest] = phrases;
+  const capitalized = (first ?? '').charAt(0).toUpperCase() + (first ?? '').slice(1);
+
+  if (rest.length === 0) return capitalized;
+  if (rest.length === 1) return `${capitalized}, ${rest[0]}`;
+  const last = rest.pop()!;
+  return `${capitalized}, ${rest.join(', ')}, ${last}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 // Threshold: auto-compact when more than this many steps
 const COMPACT_THRESHOLD = 3;
+
+/**
+ * A single timeline step row: tool icon + label + optional filename chip below.
+ * Matches the Claude reference layout in image 385.
+ */
+function TimelineStepRow({
+  tool,
+  toolCall,
+  showParameters,
+}: {
+  tool: ToolEntry;
+  toolCall: ToolCall;
+  showParameters: boolean;
+}) {
+  const filename = getFileName(tool.args);
+  const hasFile = filename != null;
+  const StepIcon = hasFile ? null : getToolIcon(tool.name, null);
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {/* Row: icon + label */}
+      <div className="flex items-start gap-2.5">
+        {/* Icon column */}
+        <div className="mt-0.5 shrink-0">
+          {hasFile ? (
+            <FileTypeIcon filename={filename} className="h-4 w-4 text-muted-foreground" />
+          ) : StepIcon ? (
+            <StepIcon className="h-4 w-4 text-muted-foreground" />
+          ) : null}
+        </div>
+        {/* Tool call card (label + expand) */}
+        <div className="flex-1 min-w-0">
+          <ToolCallCard toolCall={toolCall} showParameters={showParameters} />
+        </div>
+      </div>
+      {/* Filename chip: BELOW the label row, indented to align with the label text */}
+      {hasFile && (
+        <div className="pl-7">
+          <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 max-w-full">
+            <span className="truncate font-mono text-[10px] text-muted-foreground">{filename}</span>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -217,12 +334,8 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
   // Auto-expand while tools are running, but respect the user's manual close
   const isOpen = userForcedClosed ? false : hasRunning || isExpanded;
 
-  const totalDuration = useMemo(
-    () => tools.reduce((sum, t) => sum + (t.durationMs ?? 0), 0),
-    [tools],
-  );
-
   const groups = useMemo(() => groupTools(tools), [tools]);
+  const summary = useMemo(() => buildCompactSummary(tools), [tools]);
 
   const handleToggle = useCallback(() => {
     if (isOpen) {
@@ -239,79 +352,70 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
   if (tools.length === 0) return null;
 
   // ── Compact render ────────────────────────────────────────────────────────
+  // Compact = collapsed single-line summary with right-pointing chevron.
+  // No Wrench icon, no "N tools" count, no duration.
   if (isCompact && !compactExpanded) {
-    const summary = buildCompactSummary(tools);
     return (
-      <div className={cn('flex items-center gap-1.5', className)}>
+      <div className={cn('flex items-center', className)}>
         <button
           type="button"
           onClick={() => setCompactExpanded(true)}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 rounded-md py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Expand tool details"
         >
-          <Wrench className="w-3 h-3 shrink-0" aria-hidden="true" />
-          <span className="capitalize">{summary}</span>
-          {totalDuration > 0 && (
-            <span className="text-muted-foreground/60">· {formatDuration(totalDuration)}</span>
-          )}
-          {errorCount > 0 && <span className="text-rose-400">· {errorCount} failed</span>}
-          <ChevronDown className="w-3 h-3 shrink-0 -rotate-90" aria-hidden="true" />
+          <span>{summary}</span>
+          {errorCount > 0 && <span className="text-rose-400 text-xs">{errorCount} failed</span>}
+          <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
         </button>
       </div>
     );
   }
 
   // ── Full / expanded render ────────────────────────────────────────────────
+  // Header: action-phrased summary + right-aligned chevron.
+  // No Wrench icon. Chevron is right-pointing when closed, down when open.
   return (
-    <div className={cn('border border-border/30 rounded-lg overflow-hidden', className)}>
+    <div className={cn('', className)}>
       {/* Compact collapse button · shown when user has expanded from compact mode */}
       {isCompact && compactExpanded && (
-        <button
-          type="button"
-          onClick={() => setCompactExpanded(false)}
-          className="w-full flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/30 transition-colors border-b border-border/20"
-          aria-label="Collapse tool details"
-        >
-          <ChevronDown className="w-3 h-3 shrink-0 rotate-180" aria-hidden="true" />
-          <span>Collapse</span>
-        </button>
+        <div className="mb-1">
+          {/* Header row handled below — the collapse affordance is just clicking the header */}
+        </div>
       )}
+
       {/* Header · always visible */}
       <button
         type="button"
-        onClick={handleToggle}
-        aria-expanded={isOpen}
+        onClick={isCompact ? () => setCompactExpanded(false) : handleToggle}
+        aria-expanded={isCompact ? true : isOpen}
         aria-label="Toggle tool timeline"
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+        className="w-full flex items-center gap-2 py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <motion.span
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="shrink-0"
-        >
-          <ChevronDown className="w-3 h-3" />
-        </motion.span>
-        <Wrench className="w-3 h-3 shrink-0" />
-        <span>
+        <span className="flex-1 text-left">
           {hasRunning ? (
             <span className="text-primary">Running tools...</span>
           ) : (
             <>
-              {tools.length} tool{tools.length !== 1 ? 's' : ''}
-              {totalDuration > 0 && (
-                <span className="text-muted-foreground/60 ml-1">
-                  · {formatDuration(totalDuration)} total
-                </span>
+              {summary}
+              {errorCount > 0 && (
+                <span className="text-rose-400 ml-1.5 text-xs">{errorCount} failed</span>
               )}
-              {errorCount > 0 && <span className="text-rose-400 ml-1">· {errorCount} failed</span>}
             </>
           )}
         </span>
+        {/* Chevron at the right end of the header line */}
+        <motion.span
+          animate={{ rotate: isOpen || (isCompact && compactExpanded) ? 90 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="shrink-0"
+        >
+          <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+        </motion.span>
       </button>
 
       {/* Expandable tool list with framer-motion height + opacity animation */}
       <AnimatePresence initial={false}>
-        {isOpen && (
+        {(isOpen || (isCompact && compactExpanded)) && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -322,9 +426,14 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
             }}
             className="overflow-hidden"
           >
-            {/* Vertical connector line wraps all sequential steps */}
-            <div className="border-t border-border/20">
-              <div className="relative ml-4 border-l border-border/30 pl-3 pb-3 pt-2 space-y-1.5">
+            {/* Vertical timeline: thin connector line runs along the left edge of icons */}
+            <div className="relative mt-2 pl-2">
+              {/* Vertical connector line */}
+              <div
+                className="absolute left-4 top-2 bottom-6 w-px bg-border/40"
+                aria-hidden="true"
+              />
+              <div className="space-y-3">
                 {groups.map((group, gi) => {
                   const isParallel = group.parallelGroup != null && group.entries.length > 1;
 
@@ -332,7 +441,7 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                     return (
                       <div
                         key={group.parallelGroup ?? gi}
-                        className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-1.5 mx-0"
+                        className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-3 ml-2"
                       >
                         <div className="flex items-center gap-1 mb-0.5">
                           <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
@@ -347,15 +456,13 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                             durationMs: tool.durationMs,
                             parameters: buildParameters(tool.args, tool.parameters),
                           };
-                          const fileName = getFileName(tool.args);
                           return (
-                            <div key={id} className="relative">
-                              {fileName && <FileBadge filename={fileName} />}
-                              <ToolCallCard
-                                toolCall={toolCall}
-                                showParameters={Boolean(tool.args ?? tool.parameters)}
-                              />
-                            </div>
+                            <TimelineStepRow
+                              key={id}
+                              tool={tool}
+                              toolCall={toolCall}
+                              showParameters={Boolean(tool.args ?? tool.parameters)}
+                            />
                           );
                         })}
                       </div>
@@ -371,27 +478,25 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                       durationMs: tool.durationMs,
                       parameters: buildParameters(tool.args, tool.parameters),
                     };
-                    const fileName = getFileName(tool.args);
                     return (
-                      <div key={id} className="relative">
-                        {fileName && <FileBadge filename={fileName} />}
-                        <ToolCallCard
-                          toolCall={toolCall}
-                          showParameters={Boolean(tool.args ?? tool.parameters)}
-                        />
-                      </div>
+                      <TimelineStepRow
+                        key={id}
+                        tool={tool}
+                        toolCall={toolCall}
+                        showParameters={Boolean(tool.args ?? tool.parameters)}
+                      />
                     );
                   });
                 })}
 
-                {/* Done row · shown when every tool completed without error */}
+                {/* Done row: neutral outline circle-check (not green) + "Done" in normal foreground */}
                 {!hasRunning && errorCount === 0 && (
-                  <div className="flex items-center gap-1.5 pt-0.5">
+                  <div className="flex items-center gap-2 pt-1">
                     <CircleCheck
-                      className="w-3.5 h-3.5 shrink-0 text-emerald-500"
+                      className="w-4 h-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <span className="text-xs text-emerald-500 font-medium">Done</span>
+                    <span className="text-sm text-foreground">Done</span>
                   </div>
                 )}
               </div>
