@@ -11,7 +11,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, type Variants } from 'framer-motion';
-import NextImage from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -24,7 +23,6 @@ import {
   ChevronRight,
   Sparkles,
   Brain,
-  Download,
   MoreHorizontal,
   Pin,
   Pencil,
@@ -67,6 +65,8 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
+import { ImageGenerationCard } from '../ImageGenerationCard';
+import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -167,6 +167,12 @@ interface Message {
     toolResult?: boolean;
     toolType?: string;
     imageUrl?: string;
+    /** Original prompt used for image generation (used by edit/re-generate flow). */
+    imageGenPrompt?: string;
+    /** Aspect ratio that was used when generating the image. */
+    imageGenAspect?: string;
+    /** Model id used for image generation. */
+    imageGenModel?: string;
     imageData?: MediaGenerationResult;
     videoUrl?: string;
     thumbnailUrl?: string;
@@ -216,6 +222,12 @@ interface MessageBubbleProps {
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onBranch?: (messageId: string) => void;
   hasBranches?: boolean;
+  /** Re-generates an image result in-place (edit/aspect-ratio change). */
+  onRegenerateImage?: (opts: {
+    prompt: string;
+    aspectRatio: ImageAspectRatio;
+    modelId?: string;
+  }) => Promise<string>;
   /**
    * When provided and the parent renders a motion container with
    * `messageListVariants`, this prop is unused (stagger is driven by the
@@ -235,11 +247,11 @@ const MessageBubbleComponent = function MessageBubble({
   onBranch,
   hasBranches,
   animationIndex = 0,
+  onRegenerateImage,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
-  const [imageError, setImageError] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const isUser = message.role === 'user';
 
@@ -653,37 +665,18 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Inline artifact thumbnail cards · quick visual summary, click to open panel */}
           {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
 
-          {/* Image Result with Error Handling */}
-          {!isUser &&
-            message.metadata?.toolType === 'image-generation' &&
-            message.metadata?.imageUrl && (
-              <div className="mt-4">
-                <div className="overflow-hidden rounded-xl border border-border">
-                  {imageError ? (
-                    <div className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground">
-                      <span className="text-sm">Image failed to load</span>
-                    </div>
-                  ) : (
-                    <NextImage
-                      src={message.metadata.imageUrl as string}
-                      alt="Generated image"
-                      width={800}
-                      height={600}
-                      className="max-h-96 w-auto"
-                      onError={() => setImageError(true)}
-                    />
-                  )}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                    <a href={message.metadata.imageUrl} download>
-                      <Download className="mr-1.5 h-3 w-3" aria-hidden="true" />
-                      Download
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            )}
+          {/* Image generation card (states A/B/C/D) */}
+          {!isUser && message.metadata?.toolType === 'image-generation' && (
+            <div className="mt-4">
+              <ImageGenerationCard
+                imageUrl={message.metadata.imageUrl as string | undefined}
+                prompt={message.metadata.imageGenPrompt as string | undefined}
+                aspectRatio={message.metadata.imageGenAspect as ImageAspectRatio | undefined}
+                modelId={message.metadata.imageGenModel as string | undefined}
+                onRegenerate={onRegenerateImage}
+              />
+            </div>
+          )}
 
           {/* Video Result with Error Handling */}
           {!isUser &&
