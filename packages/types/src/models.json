@@ -751,7 +751,8 @@
       "qualityTier": "balanced",
       "bestFor": ["Image Generation", "Native Gemini Image Gen"],
       "released": "March 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "imageApi": "gemini"
     },
     "grok-4.3": {
       "id": "grok-4.3",
@@ -1471,7 +1472,8 @@
       "qualityTier": "balanced",
       "bestFor": ["Photorealistic Images", "Creative Content"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "imageApi": "imagen"
     },
     "imagen-4-fast": {
       "id": "imagen-4-fast",
@@ -1503,6 +1505,7 @@
       "released": "2026",
       "deprecation_date": null,
       "imagePerImageCost": 0.02,
+      "imageApi": "imagen",
       "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot."
     },
     "runway-gen-4": {
@@ -1565,7 +1568,8 @@
       "qualityTier": "best",
       "bestFor": ["Ultra HD Images", "Professional Quality"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "imageApi": "imagen"
     },
     "ideogram-2": {
       "id": "ideogram-2",
@@ -1655,7 +1659,8 @@
       "qualityTier": "fast",
       "bestFor": ["Open Source Image Gen", "Custom Style", "Self-Host Path"],
       "released": "July 2023",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "imageApi": "stability"
     },
     "gpt-image-2": {
       "id": "gpt-image-2",
@@ -1687,6 +1692,7 @@
       "bestFor": ["HD Image Generation", "Image Editing", "Text Rendering in Images"],
       "released": "April 2026",
       "deprecation_date": null,
+      "imageApi": "openai",
       "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high."
     },
     "tts-1": {

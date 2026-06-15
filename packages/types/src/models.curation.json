@@ -771,6 +771,7 @@
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
       "apiModelId": "gemini-3.1-flash-image-preview",
+      "imageApi": "gemini",
       "name": "Gemini 3.1 Flash Image",
       "provider": "google",
       "modelType": "image",
@@ -1177,6 +1178,7 @@
     "imagen-4": {
       "id": "imagen-4",
       "apiModelId": "imagen-4.0-generate-001",
+      "imageApi": "imagen",
       "name": "Imagen 4",
       "provider": "google",
       "modelType": "image",
@@ -1209,6 +1211,7 @@
     "imagen-4-fast": {
       "id": "imagen-4-fast",
       "apiModelId": "imagen-4.0-fast-generate-001",
+      "imageApi": "imagen",
       "name": "Imagen 4 Fast",
       "provider": "google",
       "modelType": "image",
@@ -1277,6 +1280,7 @@
     "imagen-4-ultra": {
       "id": "imagen-4-ultra",
       "apiModelId": "imagen-4.0-ultra-generate-001",
+      "imageApi": "imagen",
       "name": "Imagen 4 Ultra",
       "provider": "google",
       "modelType": "image",
@@ -1373,6 +1377,7 @@
     "stable-diffusion-xl": {
       "id": "stable-diffusion-xl",
       "apiModelId": "stable-diffusion-xl-1024-v1-0",
+      "imageApi": "stability",
       "name": "Stable Diffusion XL",
       "provider": "managed_cloud",
       "modelType": "image",
@@ -1405,6 +1410,7 @@
     "gpt-image-2": {
       "id": "gpt-image-2",
       "apiModelId": "gpt-image-2",
+      "imageApi": "openai",
       "name": "GPT Image 2",
       "provider": "openai",
       "modelType": "image",

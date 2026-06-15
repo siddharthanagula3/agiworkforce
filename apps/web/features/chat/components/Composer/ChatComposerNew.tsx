@@ -157,35 +157,31 @@ export interface ImageModelOption {
   provider: 'google' | 'openai' | 'stability';
 }
 
-/**
- * Map an image-model id to the provider enum the /api/media/image/generate route
- * accepts ('google' | 'openai' | 'stability'). Returns null for image models the
- * route has no provider path for (e.g. managed-cloud-only ideogram), which are
- * then excluded from the picker. This is id-pattern logic, NOT a hardcoded model
- * id — the ids themselves come from the models.json catalog below.
- */
-function imageModelRouteProvider(id: string): ImageModelOption['provider'] | null {
-  if (id.startsWith('gpt-image')) return 'openai';
-  if (id.startsWith('stable-diffusion') || id.startsWith('sdxl')) return 'stability';
-  if (id.startsWith('gemini') || id.startsWith('imagen')) return 'google';
-  return null;
-}
+// Map the catalog's declarative `imageApi` backend → the provider enum the
+// /api/media/image/generate route accepts. This is the ONLY place the two
+// vocabularies meet; everything else is data. An image model with no imageApi
+// (no route adapter, e.g. managed-cloud-only ideogram) is excluded from the picker.
+const IMAGE_API_TO_PROVIDER: Record<string, ImageModelOption['provider']> = {
+  gemini: 'google',
+  imagen: 'google',
+  openai: 'openai',
+  stability: 'stability',
+};
 
-// Image-generation models for the in-composer picker, derived from the canonical
-// models.json catalog (single source of truth) — never hardcoded. We read every
-// `modelType: 'image'` model and keep those the image route can actually serve.
+// Image-generation models for the in-composer picker, derived entirely from the
+// canonical models.json catalog (single source of truth) — never hardcoded.
+// Adding a new image model is a models.curation.json edit (set modelType:'image'
+// + imageApi); it then shows up here and routes correctly with ZERO code change.
 export const IMAGE_MODELS: ImageModelOption[] = getModels({ modelTypes: ['image'] })
   .map((m) => {
-    const provider = imageModelRouteProvider(m.id);
+    const provider = m.imageApi ? IMAGE_API_TO_PROVIDER[m.imageApi] : undefined;
     return provider ? { id: m.id, label: m.name, provider } : null;
   })
   .filter((m): m is ImageModelOption => m !== null);
 
-// Default to the Gemini image model when present (matches the route's preferred
-// Google image model), else the first catalog image model. Pattern-based, not a
-// hardcoded id.
-const IMAGE_MODEL_DEFAULT =
-  IMAGE_MODELS.find((m) => m.id.startsWith('gemini'))?.id ?? IMAGE_MODELS[0]?.id ?? '';
+// Default = the first image model in catalog order (the founder controls the
+// default purely by ordering models.curation.json — no id referenced in code).
+const IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0]?.id ?? '';
 
 /** Toggle row used in the + menu for connected send options. */
 function MenuToggleRow({
