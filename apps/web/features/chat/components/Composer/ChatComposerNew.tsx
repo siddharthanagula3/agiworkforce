@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   Plus,
   X,
-  Image as ImageIcon,
+  Paperclip,
   Globe,
   Sparkles,
   Wand2,
@@ -920,8 +920,8 @@ const ChatComposerNewComponent = ({
                       )}
                       title={modelSupportsVision ? undefined : 'This model can’t read images'}
                     >
-                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                      <span className="flex-1 text-left">Add photos</span>
+                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                      <span className="flex-1 text-left">Add photos &amp; files</span>
                     </button>
 
                     {/* 2. Take a screenshot */}
