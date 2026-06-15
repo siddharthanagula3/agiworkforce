@@ -106,6 +106,33 @@ export const TOOL_TIMELINE_ICON_NAME = {
 } as const;
 
 /**
+ * Short integration "source" badge for a tool, à la Claude's inline tool-call
+ * UI where MCP/connector tools show a letter mark (e.g. "F" for Filesystem)
+ * to the left of the step.
+ *
+ * Returns a 1-char uppercase badge for MCP/namespaced tools
+ * (`mcp__filesystem__list` → "F", `github__create_issue` → "G"), or null for
+ * native tools (which are represented by their own icon, no source mark).
+ */
+export function getToolSourceBadge(rawName: string | null | undefined): string | null {
+  const n = (rawName ?? '').trim();
+  if (!n) return null;
+  const mcp = n.match(/^mcp__([a-z0-9_-]+)__/i);
+  if (mcp?.[1])
+    return (
+      mcp[1]
+        .replace(/^[_-]+/, '')
+        .charAt(0)
+        .toUpperCase() || null
+    );
+  const composite = n.match(/^([a-z0-9-]+)__/i);
+  if (composite?.[1] && composite[1].toLowerCase() !== 'mcp') {
+    return composite[1].charAt(0).toUpperCase();
+  }
+  return null;
+}
+
+/**
  * Resolve the lucide icon name for a tool.
  *
  * @param name      raw tool name OR its friendly display name

@@ -144,6 +144,7 @@ export function buildRunningToolTimelineEntry(input: {
     displayName: label.displayName,
     displayArgs: label.displayArgs,
     status: 'running',
+    ...(input.rawName ? { rawName: input.rawName } : {}),
     ...(input.parallelGroup ? { parallelGroup: input.parallelGroup } : {}),
   };
 }
