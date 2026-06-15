@@ -83,6 +83,12 @@ import { countWebSearchSources, type WebChatMessageMetadata } from '../types/mes
 import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
 import { useProjectStore, ProjectSettingsDialog, type Project } from '@features/projects';
+import { useMediaGeneration } from '@/lib/hooks/useMediaGeneration';
+import {
+  IMAGE_ASPECT_OPTIONS,
+  IMAGE_MODELS,
+  type ImageAspectRatio,
+} from '../components/Composer/ChatComposerNew';
 
 type SendMeta = {
   agentMode?: string;
@@ -580,6 +586,161 @@ export default function WebChatPage() {
       });
     },
     [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId, router],
+  );
+
+  const { generateImage } = useMediaGeneration();
+
+  // ---------------------------------------------------------------------------
+  // Shared helper: resolve size + provider from composer options
+  // ---------------------------------------------------------------------------
+  const resolveImageParams = useCallback((aspectRatio: ImageAspectRatio, modelId?: string) => {
+    const aspectOption = IMAGE_ASPECT_OPTIONS.find((o) => o.id === aspectRatio);
+    const size = aspectOption?.size ?? '1024x1024';
+    const modelEntry = IMAGE_MODELS.find((m) => m.id === modelId);
+    const provider = modelEntry?.provider ?? 'google';
+    return { size, provider };
+  }, []);
+
+  // Shared paywall/error helper
+  const applyImageError = useCallback(
+    (msgId: string, raw: string) => {
+      const isPaywall =
+        raw.includes('403') ||
+        raw.includes('plan_upgrade_required') ||
+        raw.includes('subscription_required');
+      updateMessage(msgId, {
+        isStreaming: false,
+        content: isPaywall ? '' : `Image generation failed: ${raw}`,
+        metadata: isPaywall
+          ? {
+              paywall: {
+                feature: 'image_generation',
+                requiredTier: 'pro',
+                reason:
+                  'Image generation requires a Pro or higher plan. Upgrade to generate images.',
+              },
+            }
+          : undefined,
+      });
+    },
+    [updateMessage],
+  );
+
+  // ---------------------------------------------------------------------------
+  // handleGenerateImage – called by composer; injects user + assistant messages
+  // ---------------------------------------------------------------------------
+  const handleGenerateImage = useCallback(
+    (prompt: string, options: { aspectRatio: ImageAspectRatio; modelId: string }) => {
+      void (async () => {
+        const { size, provider } = resolveImageParams(options.aspectRatio, options.modelId);
+
+        // Ensure a conversation exists (lazy-create, same pattern as sendContent).
+        let convId = displayedConversationId;
+        if (!convId) {
+          const fresh = await createConversation('Image generation', activeModelId);
+          if (fresh) {
+            convId = fresh.id;
+            if (!urlConversationId) setBareChatSessionId(fresh.id);
+            router.replace(`/chat/${fresh.id}`);
+          }
+        }
+        if (!convId) return;
+
+        // User message (prompt)
+        addMessage({
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: prompt,
+          createdAt: new Date().toISOString(),
+        });
+
+        // Placeholder assistant message while generating (isStreaming = true → state A)
+        const assistantMsgId = crypto.randomUUID();
+        addMessage({
+          id: assistantMsgId,
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          createdAt: new Date().toISOString(),
+          metadata: {
+            toolType: 'image-generation',
+            imageGenPrompt: prompt,
+            imageGenAspect: options.aspectRatio,
+            imageGenModel: options.modelId,
+          },
+        });
+
+        try {
+          const imageUrl = await generateImage(prompt, { size, provider });
+          updateMessage(assistantMsgId, {
+            content: '',
+            isStreaming: false,
+            metadata: {
+              toolType: 'image-generation',
+              imageUrl,
+              imageGenPrompt: prompt,
+              imageGenAspect: options.aspectRatio,
+              imageGenModel: options.modelId,
+            },
+          });
+        } catch (err) {
+          applyImageError(assistantMsgId, err instanceof Error ? err.message : String(err));
+        }
+      })();
+    },
+    [
+      resolveImageParams,
+      displayedConversationId,
+      urlConversationId,
+      createConversation,
+      activeModelId,
+      addMessage,
+      updateMessage,
+      generateImage,
+      applyImageError,
+      router,
+    ],
+  );
+
+  // ---------------------------------------------------------------------------
+  // handleRegenerateImageInPlace – called by ImageGenerationCard (edit panel /
+  // aspect-ratio change).  Updates the EXISTING assistant message in-place;
+  // does NOT inject new user/assistant messages.
+  // Returns a Promise<string> so the card can update its local display state.
+  // ---------------------------------------------------------------------------
+  const handleRegenerateImageInPlace = useCallback(
+    async (
+      messageId: string,
+      opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
+    ): Promise<string> => {
+      const { size, provider } = resolveImageParams(opts.aspectRatio, opts.modelId);
+
+      // Mark as regenerating (state A again)
+      updateMessage(messageId, {
+        isStreaming: true,
+        metadata: {
+          toolType: 'image-generation',
+          imageUrl: undefined,
+          imageGenPrompt: opts.prompt,
+          imageGenAspect: opts.aspectRatio,
+          imageGenModel: opts.modelId,
+        },
+      });
+
+      const imageUrl = await generateImage(opts.prompt, { size, provider });
+      updateMessage(messageId, {
+        isStreaming: false,
+        metadata: {
+          toolType: 'image-generation',
+          imageUrl,
+          imageGenPrompt: opts.prompt,
+          imageGenAspect: opts.aspectRatio,
+          imageGenModel: opts.modelId,
+        },
+      });
+      return imageUrl;
+    },
+    [resolveImageParams, updateMessage, generateImage],
   );
 
   const handleSend = useCallback(
@@ -1544,6 +1705,7 @@ export default function WebChatPage() {
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     onUpgradeRequest={handleOpenCloudWaitlist}
+                    onGenerateImage={handleGenerateImage}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
                       promptsUsed: trialPromptsUsed,
@@ -1564,6 +1726,7 @@ export default function WebChatPage() {
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
                   onReact={handleReactMessage}
+                  onRegenerateImage={handleRegenerateImageInPlace}
                   onSendMessage={setComposerPrefill}
                   onPaywallUpgrade={handleOpenCloudWaitlist}
                   onPaywallDismiss={handlePaywallDismiss}
@@ -1592,6 +1755,7 @@ export default function WebChatPage() {
                     clearSignal={composerClearSignal}
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     onUpgradeRequest={handleOpenCloudWaitlist}
+                    onGenerateImage={handleGenerateImage}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
                       promptsUsed: trialPromptsUsed,

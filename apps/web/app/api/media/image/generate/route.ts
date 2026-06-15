@@ -99,6 +99,14 @@ const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> =
   stability: 8,
 };
 
+// Preferred Google image model. Both gemini-3.1-flash-image and imagen-4 are
+// qualityTier "balanced", so a bare find(balanced) is order-dependent and
+// ambiguous. Pin to Gemini 3.1 Flash Image (fast, low-cost, current default).
+// This is a catalog *lookup key* (matched against model.id below), not an
+// inlined API model id — the real API id is read from the catalog's apiModelId.
+// eslint-disable-next-line no-restricted-syntax -- catalog lookup key, not an API id
+const PREFERRED_GOOGLE_IMAGE_MODEL_ID = 'gemini-3.1-flash-image';
+
 function resolveGoogleImageModel() {
   const googleImageModels = getModelsForProvider('google', {
     includeDeprecated: false,
@@ -106,6 +114,7 @@ function resolveGoogleImageModel() {
   });
 
   return (
+    googleImageModels.find((model) => model.id === PREFERRED_GOOGLE_IMAGE_MODEL_ID) ??
     googleImageModels.find((model) => model.qualityTier === 'balanced') ??
     googleImageModels[0] ??
     null
@@ -261,6 +270,15 @@ async function generateWithImagen(
     aspectRatio = '9:16';
   }
 
+  // Google has two distinct image APIs with different request/response shapes:
+  //   - Gemini image models (gemini-*-flash-image*) use `:generateContent` with
+  //     responseModalities and return image bytes in candidates[].content.parts[].inlineData.
+  //   - Imagen models (imagen-*) use `:predict` and return predictions[].bytesBase64Encoded.
+  // Branch on the resolved API model id so the correct endpoint is used.
+  if (model.startsWith('gemini')) {
+    return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n);
+  }
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`,
     {
@@ -309,6 +327,71 @@ async function generateWithImagen(
     images,
     model,
   };
+}
+
+/**
+ * Generate an image with a Gemini image model (e.g. gemini-3.1-flash-image-preview,
+ * gemini-2.5-flash-image) via the `:generateContent` endpoint. Gemini image models
+ * return bytes inline (candidates[].content.parts[].inlineData), not via predict.
+ * See https://ai.google.dev/gemini-api/docs/image-generation
+ */
+async function generateWithGeminiImage(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  aspectRatio: string,
+  n: number,
+): Promise<{ images: GeneratedImage[]; model: string }> {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          imageConfig: { aspectRatio },
+        },
+      }),
+      signal: AbortSignal.timeout(55_000),
+    },
+  );
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const errorObj = errorData['error'] as Record<string, unknown> | undefined;
+    const errorMessage =
+      (errorObj?.['message'] as string) ||
+      `Gemini image API error: ${response.status} ${response.statusText}`;
+    throw new Error(errorMessage);
+  }
+
+  const data = (await response.json()) as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> };
+    }>;
+  };
+
+  const images: GeneratedImage[] = [];
+  for (const candidate of data.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      const b64 = part.inlineData?.data;
+      if (b64) {
+        images.push({ b64_json: b64 });
+        if (images.length >= Math.min(n, 4)) break;
+      }
+    }
+  }
+
+  if (images.length === 0) {
+    throw new Error('Gemini image API returned no image data (response may have been text-only)');
+  }
+
+  return { images, model };
 }
 
 /**

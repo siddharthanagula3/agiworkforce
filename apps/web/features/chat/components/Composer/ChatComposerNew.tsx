@@ -9,10 +9,13 @@ import {
   Sparkles,
   Wand2,
   ChevronRight,
+  ChevronDown,
   Check,
   Camera,
   Brain,
   EyeOff,
+  ImagePlus,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -92,6 +95,15 @@ interface ChatComposerProps {
   attachmentPrivacyShortLabel?: string;
   /** Opens the Cloud Managed waitlist modal from locked model/usage upgrade affordances. */
   onUpgradeRequest?: () => void;
+  /**
+   * Called when the user submits in image-generation mode.
+   * The composer clears its state regardless; the parent owns the async flow and
+   * message injection.
+   */
+  onGenerateImage?: (
+    prompt: string,
+    options: { aspectRatio: ImageAspectRatio; modelId: string },
+  ) => void;
   /** Website free trial state. When enabled, the composer is text-only Auto Economy. */
   freeTrial?: {
     enabled: boolean;
@@ -116,6 +128,51 @@ const STYLE_OPTIONS: StyleOption[] = [
   { id: 'formal', label: 'Formal', description: 'Professional and precise' },
   { id: 'explanatory', label: 'Explanatory', description: 'Detailed with examples' },
 ];
+
+// ---------------------------------------------------------------------------
+// Image mode types and constants
+// ---------------------------------------------------------------------------
+
+export type ImageAspectRatio = 'auto' | '1:1' | '3:4' | '9:16' | '4:3' | '16:9';
+
+export interface ImageAspectOption {
+  id: ImageAspectRatio;
+  label: string;
+  /** Maps to the /api/media/image/generate `size` enum. */
+  size: '1024x1024' | '1024x1792' | '1792x1024';
+}
+
+export const IMAGE_ASPECT_OPTIONS: ImageAspectOption[] = [
+  { id: 'auto', label: 'Auto', size: '1024x1024' },
+  { id: '1:1', label: 'Square 1:1', size: '1024x1024' },
+  { id: '3:4', label: 'Portrait 3:4', size: '1024x1792' },
+  { id: '9:16', label: 'Story 9:16', size: '1024x1792' },
+  { id: '4:3', label: 'Landscape 4:3', size: '1792x1024' },
+  { id: '16:9', label: 'Widescreen 16:9', size: '1792x1024' },
+];
+
+export interface ImageModelOption {
+  id: string;
+  label: string;
+  provider: 'google' | 'openai' | 'stability';
+}
+
+// Image-generation models for the in-composer picker. These ids mirror the
+// `modelType: 'image'` entries in models.json; the catalog helper that would
+// supply them (getModelsForProvider) is server-only, so this client list is
+// kept in sync manually. ids here are catalog lookup keys, not inlined API ids.
+/* eslint-disable no-restricted-syntax -- catalog ids mirrored for the client-side image picker (getModelsForProvider is server-only) */
+export const IMAGE_MODELS: ImageModelOption[] = [
+  { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Flash Image', provider: 'google' },
+  { id: 'imagen-4', label: 'Imagen 4', provider: 'google' },
+  { id: 'imagen-4-fast', label: 'Imagen 4 Fast', provider: 'google' },
+  { id: 'imagen-4-ultra', label: 'Imagen 4 Ultra', provider: 'google' },
+  { id: 'gpt-image-2', label: 'GPT Image 2', provider: 'openai' },
+  { id: 'stable-diffusion-xl', label: 'Stable Diffusion XL', provider: 'stability' },
+];
+/* eslint-enable no-restricted-syntax */
+
+const IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0]!.id;
 
 /** Toggle row used in the + menu for connected send options. */
 function MenuToggleRow({
@@ -167,6 +224,7 @@ const ChatComposerNewComponent = ({
   attachmentPrivacyShortLabel,
   onUpgradeRequest,
   freeTrial,
+  onGenerateImage,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
@@ -201,6 +259,14 @@ const ChatComposerNewComponent = ({
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
   const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
+
+  // Image generation mode state
+  const [imageMode, setImageMode] = useState(false);
+  const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
+  const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
+  const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
+  const [showImageModelMenu, setShowImageModelMenu] = useState(false);
+
   const isFreeTrial = freeTrial?.enabled ?? false;
   const trialPromptLimit = freeTrial?.promptLimit ?? 3;
   const trialPromptsRemaining = getFreeTrialRemaining(
@@ -330,6 +396,9 @@ const ChatComposerNewComponent = ({
     setActiveTags([]);
     setLocalNotice(null);
     clearSuggestion();
+    setImageMode(false);
+    setImageAspectRatio('auto');
+    setImageModelId(IMAGE_MODEL_DEFAULT);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -634,6 +703,16 @@ const ChatComposerNewComponent = ({
         onUpgradeRequest?.();
         return;
       }
+
+      // Image generation mode: delegate entirely to parent via onGenerateImage.
+      if (imageMode) {
+        const prompt = message.trim();
+        if (!prompt) return;
+        onGenerateImage?.(prompt, { aspectRatio: imageAspectRatio, modelId: imageModelId });
+        clearComposerState();
+        return;
+      }
+
       if (isFreeTrial && attachments.length > 0) {
         setLocalNotice(
           'The website free trial is text-only. Upgrade for hosted file and image uploads.',
@@ -674,6 +753,10 @@ const ChatComposerNewComponent = ({
       trialExhausted,
       isFreeTrial,
       onUpgradeRequest,
+      imageMode,
+      imageAspectRatio,
+      imageModelId,
+      onGenerateImage,
       agentMode,
       selectedFolderId,
       thinkingEnabled,
@@ -924,7 +1007,29 @@ const ChatComposerNewComponent = ({
                       <span className="flex-1 text-left">Add photos &amp; files</span>
                     </button>
 
-                    {/* 2. Take a screenshot */}
+                    {/* 2. Create image */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageMode(true);
+                        closeMenu();
+                        setTimeout(() => textareaRef.current?.focus(), 0);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                        imageMode && 'text-primary',
+                      )}
+                    >
+                      <ImagePlus
+                        className={cn(
+                          'h-4 w-4',
+                          imageMode ? 'text-primary' : 'text-muted-foreground',
+                        )}
+                      />
+                      <span className="flex-1 text-left">Create image</span>
+                    </button>
+
+                    {/* 3. Take a screenshot */}
                     <button
                       type="button"
                       disabled
@@ -1235,6 +1340,113 @@ const ChatComposerNewComponent = ({
                   <span className="hidden sm:inline">Incognito</span>
                 </button>
               ) : null}
+
+              {/* Image mode active pill — visible only when imageMode is on */}
+              {imageMode && (
+                <>
+                  {/* Image pill: click to exit image mode */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageMode(false);
+                      setImageAspectRatio('auto');
+                      setImageModelId(IMAGE_MODEL_DEFAULT);
+                    }}
+                    className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
+                    aria-label="Exit image generation mode"
+                    title="Click to exit image generation mode"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    <span>Image</span>
+                    <X className="h-3 w-3 opacity-60" />
+                  </button>
+
+                  {/* Aspect ratio selector */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowImageAspectMenu((p) => !p);
+                        setShowImageModelMenu(false);
+                      }}
+                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                      aria-label="Select aspect ratio"
+                    >
+                      {IMAGE_ASPECT_OPTIONS.find((o) => o.id === imageAspectRatio)?.label ?? 'Auto'}
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                    {showImageAspectMenu && (
+                      <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                        {IMAGE_ASPECT_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setImageAspectRatio(opt.id);
+                              setShowImageAspectMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              imageAspectRatio === opt.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{opt.label}</span>
+                            {imageAspectRatio === opt.id && (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Image model selector */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowImageModelMenu((p) => !p);
+                        setShowImageAspectMenu(false);
+                      }}
+                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                      aria-label="Select image model"
+                    >
+                      <span className="max-w-[120px] truncate">
+                        {IMAGE_MODELS.find((m) => m.id === imageModelId)?.label ??
+                          'Gemini 3.1 Flash Image'}
+                      </span>
+                      <ChevronDown className="h-3 w-3 shrink-0" />
+                    </button>
+                    {showImageModelMenu && (
+                      <div className="absolute bottom-full left-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                        {IMAGE_MODELS.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              setImageModelId(m.id);
+                              setShowImageModelMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              imageModelId === m.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{m.label}</span>
+                            {imageModelId === m.id && (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           }
 
@@ -1259,7 +1471,7 @@ const ChatComposerNewComponent = ({
               onKeyDown={handleKeyDown}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder={placeholder}
+              placeholder={imageMode ? 'Describe or edit an image' : placeholder}
               disabled={isLoading || composerDisabled}
               className={cn(
                 'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
@@ -1279,16 +1491,18 @@ const ChatComposerNewComponent = ({
             )}
           </div>
 
-          {/* Model selector — inline in the control row for BOTH the empty and
-              docked states so it always sits beside the send button, ChatGPT-style. */}
-          <ComposerFooter
-            inline
-            className="order-4 ml-auto"
-            showModelSelector
-            lockModelSelector={false}
-            showStyleSelector={!isFreeTrial}
-            onUpgradeRequest={onUpgradeRequest}
-          />
+          {/* Model selector — hidden in image mode (the image model dropdown lives in
+              the pills row above). In normal mode it sits inline beside the send button. */}
+          {!imageMode && (
+            <ComposerFooter
+              inline
+              className="order-4 ml-auto"
+              showModelSelector
+              lockModelSelector={false}
+              showStyleSelector={!isFreeTrial}
+              onUpgradeRequest={onUpgradeRequest}
+            />
+          )}
 
           {/* Voice Input Button */}
           {!isFreeTrial && (
