@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Progress } from '@shared/ui/progress';
+import { useBillingStore } from '@/stores/unified/auth';
 
 type UsageResponse = {
   plan_tier: string;
@@ -108,9 +109,12 @@ export function UsageSection() {
     void loadUsage();
   }, [loadUsage]);
 
-  const planName = usage?.plan_tier
-    ? usage.plan_tier[0]!.toUpperCase() + usage.plan_tier.slice(1)
-    : 'Free';
+  // Plan label source of truth = the billing store's subscription tier (same as
+  // BillingSection), so Usage and Billing never disagree. Fall back to /api/usage's
+  // plan_tier, then 'free', when the billing store hasn't hydrated.
+  const billingTier = useBillingStore((s) => s.subscription?.tier);
+  const rawTier = usage?.plan_tier ?? billingTier ?? 'free';
+  const planName = rawTier[0]!.toUpperCase() + rawTier.slice(1);
   const creditPercent = Math.min(100, Math.max(0, usage?.usage_percentage ?? 0));
   const currentSessionPercent = useMemo(() => {
     const monthCost = analytics?.stats?.month_cost ?? 0;
