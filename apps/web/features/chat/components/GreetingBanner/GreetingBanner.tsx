@@ -13,7 +13,8 @@
  * All colours come from --chat-* design tokens; no hardcoded hex values.
  */
 
-import { Sparkles, Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
+import { Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
+import { AgiSpark } from '@/components/agi/AgiSpark';
 import { useGreeting } from './useGreeting';
 
 interface SuggestionChip {
@@ -63,11 +64,10 @@ export function GreetingBanner({ onSendMessage }: GreetingBannerProps) {
       {/* AGI brand mark */}
       <div
         aria-hidden="true"
-        style={{ color: 'var(--chat-accent-primary)' }}
         className="flex h-10 w-10 items-center justify-center rounded-full"
         role="presentation"
       >
-        <Sparkles size={22} />
+        <AgiSpark size={30} />
       </div>
 
       {/* Time-aware headline */}
