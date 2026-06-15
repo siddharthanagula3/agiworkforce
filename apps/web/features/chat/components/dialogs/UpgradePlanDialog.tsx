@@ -275,7 +275,9 @@ export function UpgradePlanDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
-          'overflow-hidden border-border/70 bg-background p-0 sm:rounded-2xl',
+          // Cap the height so the expanded 4-tier view never grows past the
+          // viewport (which pushed the title off-screen); scroll inside instead.
+          'max-h-[90vh] overflow-hidden border-border/70 bg-background p-0 sm:rounded-2xl',
           expanded ? 'w-[min(98vw,56rem)]' : 'w-[min(94vw,38rem)]',
         )}
         closeButtonLabel="Close upgrade plan dialog"
@@ -287,7 +289,7 @@ export function UpgradePlanDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-6 pb-4">
+        <div className="max-h-[90vh] overflow-y-auto p-6 pb-4">
           {/* Header */}
           <div className="mb-6 flex items-start justify-between">
             <div>
