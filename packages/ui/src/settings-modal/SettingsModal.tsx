@@ -166,7 +166,7 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
 
-  const connectors = adapter?.connectors ?? [];
+  const connectors = useMemo(() => adapter?.connectors ?? [], [adapter?.connectors]);
   const connected = useMemo(
     () => new Set((adapter?.connectedConnectors ?? []).map((c) => c.connectorId)),
     [adapter?.connectedConnectors],
@@ -329,7 +329,7 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 
 function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
-  const skills = adapter?.skills ?? [];
+  const skills = useMemo(() => adapter?.skills ?? [], [adapter?.skills]);
   const loading = adapter?.skillsLoading ?? false;
 
   const filtered = useMemo(() => {
@@ -405,7 +405,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 
 function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
-  const plugins = adapter?.plugins ?? [];
+  const plugins = useMemo(() => adapter?.plugins ?? [], [adapter?.plugins]);
   const loading = adapter?.pluginsLoading ?? false;
 
   const filtered = useMemo(() => {
