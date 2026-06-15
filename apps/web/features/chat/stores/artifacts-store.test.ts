@@ -113,4 +113,53 @@ describe('chat artifacts sidecar store', () => {
     // No conversationId -> hidden from all conversation-scoped views.
     expect(state.getConversationArtifacts('any-conv')).toHaveLength(0);
   });
+
+  // Regression: an artifact first stored before the active conversation loaded
+  // (conversationId=undefined) must adopt the conversationId on a later upsert
+  // with identical content. artifactsEqual ignores conversationId, so without
+  // an explicit backfill the orphaned artifact stayed hidden from its own
+  // chat's Artifacts panel ("No artifacts yet" despite an inline card).
+  it('backfills a missing conversationId on a later content-equal upsert', () => {
+    const store = useArtifactsStore.getState();
+    const base = {
+      id: 'art-backfill',
+      type: 'html' as const,
+      title: 'Live Color Picker',
+      language: 'html',
+      content: '<input type="range">',
+      messageId: 'msg-bf',
+    };
+
+    // First upsert: active conversation not yet loaded -> no conversationId.
+    store.upsertArtifact({ ...base });
+    expect(useArtifactsStore.getState().getConversationArtifacts('conv-loaded')).toHaveLength(0);
+
+    // Re-stamp once the conversation id is known (same content).
+    store.upsertArtifact({ ...base, conversationId: 'conv-loaded' });
+
+    const state = useArtifactsStore.getState();
+    expect(state.artifacts).toHaveLength(1);
+    expect(state.artifacts[0]?.conversationId).toBe('conv-loaded');
+    expect(state.getConversationArtifacts('conv-loaded')).toHaveLength(1);
+  });
+
+  it('never clobbers a known conversationId with undefined on a later upsert', () => {
+    const store = useArtifactsStore.getState();
+    const base = {
+      id: 'art-keep',
+      type: 'html' as const,
+      title: 'Keeper',
+      language: 'html',
+      content: '<p>x</p>',
+      messageId: 'msg-keep',
+    };
+
+    store.upsertArtifact({ ...base, conversationId: 'conv-keep' });
+    // A later render fires before load completes -> conversationId undefined.
+    store.upsertArtifact({ ...base });
+
+    const state = useArtifactsStore.getState();
+    expect(state.artifacts[0]?.conversationId).toBe('conv-keep');
+    expect(state.getConversationArtifacts('conv-keep')).toHaveLength(1);
+  });
 });
