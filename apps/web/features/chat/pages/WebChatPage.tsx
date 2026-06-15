@@ -11,7 +11,6 @@ import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore } from '@/stores/unified/auth';
 import { getBestAutoModeForTier } from '@/constants/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
-import { SendPreview } from '@agiworkforce/unified-chat';
 import {
   summarizeSendPreview,
   type ProviderMode,
@@ -1410,9 +1409,6 @@ export default function WebChatPage() {
                     sidebarCollapsed ? 'max-w-4xl' : '',
                   )}
                 >
-                  <div className="mb-2">
-                    <SendPreview presentation={sendPreviewPresentation} />
-                  </div>
                   <ChatComposerNew
                     onSend={handleSend}
                     onStop={stopGeneration}
