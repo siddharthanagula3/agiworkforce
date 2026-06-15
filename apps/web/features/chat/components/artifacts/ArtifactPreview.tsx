@@ -29,7 +29,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
-import { sanitizeArtifact, sanitizeSVG, hasXSSRisk } from '@shared/utils/html-sanitizer';
+import {
+  sanitizeArtifact,
+  sanitizeSVG,
+  hasXSSRisk,
+  sanitizeHtmlForSandbox,
+} from '@shared/utils/html-sanitizer';
 import { Alert, AlertDescription } from '@shared/ui/alert';
 import { SandboxedIframe } from '../SandboxedIframe';
 import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox';
@@ -182,17 +187,21 @@ export function ArtifactPreview({
         : artifact.content;
     const renderType = artifact.type === 'document' ? 'code' : artifact.type;
 
-    // SECURITY: Check for XSS risks and show warning
-    // Use queueMicrotask to avoid setState during render
-    if (hasXSSRisk(content)) {
+    // SECURITY: Check for XSS risks — only set the warning if content was
+    // downgraded. For HTML artifacts that will run in the sandbox the warning
+    // is NOT shown because scripts are intentionally preserved; the sandbox
+    // is the security boundary. For non-sandboxed paths (main-document
+    // rendering) the strict sanitizer runs and the warning is appropriate.
+    if (renderType !== 'html' && hasXSSRisk(content)) {
       queueMicrotask(() => setSecurityWarning(true));
     }
 
-    // SECURITY: Sanitize content based on artifact type
-    const sanitizedContent = sanitizeArtifact(content, renderType);
-
     switch (renderType) {
-      case 'html':
+      case 'html': {
+        // For the fallback srcDoc path, use sanitizeHtmlForSandbox so scripts
+        // work. The SandboxedIframe component sets sandbox="allow-scripts"
+        // (no allow-same-origin) on the srcDoc iframe, so this is safe.
+        const sandboxedContent = sanitizeHtmlForSandbox(content);
         return `
 <!DOCTYPE html>
 <html>
@@ -209,12 +218,14 @@ export function ArtifactPreview({
     </style>
   </head>
   <body>
-    ${sanitizedContent}
+    ${sandboxedContent}
   </body>
 </html>`;
+      }
 
-      case 'react':
+      case 'react': {
         // For React, we'd need to transpile JSX - for now, show as HTML
+        const sanitizedReact = sanitizeArtifact(content, renderType);
         return `
 <!DOCTYPE html>
 <html>
@@ -229,10 +240,11 @@ export function ArtifactPreview({
   <body>
     <div id="root"></div>
     <script type="text/babel">
-      ${sanitizedContent}
+      ${sanitizedReact}
     </script>
   </body>
 </html>`;
+      }
 
       case 'svg': {
         // SVG has additional sanitization via sanitizeSVG
@@ -300,19 +312,31 @@ export function ArtifactPreview({
   // SandboxedIframe will post this to sandbox.agiworkforce.com (if configured)
   // or fall back to a same-origin srcDoc iframe with sandbox="allow-scripts"
   // (no allow-same-origin).
+  //
+  // For kind=html we use sanitizeHtmlForSandbox instead of sanitizeArtifact so
+  // that <script> tags and on* event handlers are preserved. The null-origin
+  // sandbox (allow-scripts without allow-same-origin) is the security boundary:
+  // scripts inside it cannot access the parent's cookies, localStorage, or DOM.
   const sandboxPayload = useMemo<ArtifactRenderPayload>(() => {
     const content =
       artifact.versions && artifact.currentVersion !== undefined
         ? artifact!.versions[artifact.currentVersion]!.content
         : artifact.content;
     const renderType = artifact.type === 'document' ? 'code' : artifact.type;
-    const sanitized = sanitizeArtifact(content, renderType);
     const kind: ArtifactKind = renderType === 'code' ? 'code' : (renderType as ArtifactKind);
     switch (renderType) {
       case 'html':
-        return { type: 'render', kind: 'html', html: sanitized, runScripts: true };
+        // sanitizeHtmlForSandbox preserves scripts/handlers for interactive
+        // artifacts; it still strips <base>, <meta http-equiv="refresh">, and
+        // dangerous nested iframe sandbox values that could escape the sandbox.
+        return {
+          type: 'render',
+          kind: 'html',
+          html: sanitizeHtmlForSandbox(content),
+          runScripts: true,
+        };
       case 'react':
-        return { type: 'render', kind: 'react', code: sanitized };
+        return { type: 'render', kind: 'react', code: sanitizeArtifact(content, renderType) };
       case 'svg':
         return { type: 'render', kind: 'svg', svg: sanitizeSVG(content) };
       case 'mermaid':
@@ -586,13 +610,17 @@ export function ArtifactPreview({
         </div>
       </div>
 
-      {/* Security Warning */}
+      {/* Security Warning — only shown for non-HTML types where dangerous
+          patterns were detected and stripped (e.g. script tags in SVG/code
+          artifacts that render in the main document). HTML artifacts run
+          inside a null-origin sandbox where scripts are intentionally
+          preserved, so no warning is needed for that path. */}
       {securityWarning && (
         <Alert className="m-4 border-yellow-500 bg-yellow-50">
           <Shield className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
-            <strong>Security Notice:</strong> This artifact contains potentially risky content. It
-            has been sanitized for your protection, but some functionality may be limited.
+            <strong>Security Notice:</strong> This artifact contained potentially unsafe patterns
+            that were removed before rendering.
           </AlertDescription>
         </Alert>
       )}
