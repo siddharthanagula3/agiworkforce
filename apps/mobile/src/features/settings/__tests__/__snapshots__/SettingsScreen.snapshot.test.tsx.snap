@@ -1090,6 +1090,74 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
           }
         >
           <View
+            accessibilityLabel="Account"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#f59e0b"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-UserRound"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Account
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
             accessibilityLabel="Cloud Personalization. Invite"
             accessibilityRole="button"
             accessibilityState={
@@ -1458,7 +1526,75 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Subscription. Invite"
+            accessibilityLabel="Privacy"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#f59e0b"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-Shield"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Privacy
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            accessibilityLabel="Billing"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1517,32 +1653,8 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                 }
               }
             >
-              Subscription
+              Billing
             </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 10,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Invite
-              </Text>
-            </View>
             <View
               color="#777"
               size={17}
@@ -1550,7 +1662,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Restore Purchases. Cloud"
+            accessibilityLabel="Usage"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1597,7 +1709,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               color="#f59e0b"
               size={19}
               strokeWidth={1.8}
-              testID="icon-RotateCcw"
+              testID="icon-Database"
             />
             <Text
               numberOfLines={1}
@@ -1609,32 +1721,8 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                 }
               }
             >
-              Restore Purchases
+              Usage
             </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 10,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Cloud
-              </Text>
-            </View>
             <View
               color="#777"
               size={17}
@@ -1642,7 +1730,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Connectors. Cloud"
+            accessibilityLabel="Connectors"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1702,6 +1790,74 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               }
             >
               Connectors
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            accessibilityLabel="Skills. Cloud"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#f59e0b"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-Zap"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Skills
             </Text>
             <View
               style={
@@ -1769,7 +1925,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               {
                 "alignItems": "center",
                 "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
+                "borderBottomWidth": 0,
                 "flexDirection": "row",
                 "gap": 12,
                 "minHeight": 50,
@@ -1794,98 +1950,6 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               }
             >
               Plugins
-            </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 10,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Cloud
-              </Text>
-            </View>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityLabel="Skills. Cloud"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 0,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#f59e0b"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Zap"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flex": 1,
-                  "fontSize": 15,
-                }
-              }
-            >
-              Skills
             </Text>
             <View
               style={

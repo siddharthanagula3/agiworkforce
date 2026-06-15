@@ -39,6 +39,8 @@ export default [
       '**/.vscode-test/**',
       '.claude/worktrees/**',
       '**/.claude/worktrees/**',
+      '.claude/workflows/**',
+      '**/.claude/workflows/**',
       '.worktrees/**',
       '**/.worktrees/**',
       '.remember/**',
