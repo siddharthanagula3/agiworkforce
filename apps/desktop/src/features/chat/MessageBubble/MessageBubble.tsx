@@ -7,7 +7,7 @@
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
-import { getToolIconName } from '@agiworkforce/types';
+import { getToolIconName, getToolSourceBadge } from '@agiworkforce/types';
 import { toast } from 'sonner';
 
 // Stable empty array reference to avoid infinite re-render in Zustand selectors.
@@ -568,7 +568,8 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               <TimelineStep
                 key={entry.id}
                 variant="tool"
-                iconName={getToolIconName(entry.displayName)}
+                iconName={getToolIconName(entry.rawName ?? entry.displayName)}
+                sourceBadge={getToolSourceBadge(entry.rawName)}
                 label={entry.displayName}
                 chip={entry.displayArgs || undefined}
                 request={entry.displayArgs || undefined}
