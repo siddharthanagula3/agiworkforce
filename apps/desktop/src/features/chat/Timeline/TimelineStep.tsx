@@ -16,6 +16,12 @@ export interface TimelineStepProps {
    */
   iconName?: string;
   /**
+   * One-letter integration source badge (Claude-style "F" mark) for MCP/connector
+   * tools, from `getToolSourceBadge`. Rendered before the label; omit for native
+   * tools.
+   */
+  sourceBadge?: string | null;
+  /**
    * Short type/arg chip rendered on its own line under the label (Claude inline
    * tool-call style — e.g. a filename `build_resume.js`, a query, or `Script`).
    */
@@ -33,6 +39,7 @@ export function TimelineStep({
   variant,
   label,
   iconName,
+  sourceBadge,
   chip,
   request,
   result,
@@ -95,6 +102,14 @@ export function TimelineStep({
       {/* Content column */}
       <div className="flex-1 min-w-0 pb-3">
         <div className="flex items-center gap-2 flex-wrap">
+          {variant === 'tool' && sourceBadge && (
+            <span
+              title="Integration"
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded bg-muted text-[9px] font-bold text-muted-foreground"
+            >
+              {sourceBadge}
+            </span>
+          )}
           <span
             className={cn(
               'text-xs',
