@@ -132,13 +132,27 @@ function getGoogleToolParameters(
  * OpenAI: { type: "function", function: { name, description, parameters } }
  * Google: { functionDeclarations: [{ name, description, parameters }] }
  */
+/**
+ * Coerce a tool name into Google's function-name grammar:
+ * must start with a letter or underscore, then only [a-zA-Z0-9_.:-], max 128 chars.
+ * Google rejects the whole request (400 INVALID_ARGUMENT) otherwise, which
+ * previously broke web search whenever a turn routed to a Gemini model.
+ */
+function sanitizeGoogleFunctionName(raw: unknown): string {
+  let name = typeof raw === 'string' ? raw : '';
+  name = name.replace(/[^a-zA-Z0-9_.:-]/g, '_');
+  if (!/^[a-zA-Z_]/.test(name)) name = `_${name}`;
+  name = name.slice(0, 128);
+  return name || 'tool';
+}
+
 function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations: unknown[] } {
   const declarations = (tools as Record<string, unknown>[]).map((tool) => {
     // Handle OpenAI format: { type: "function", function: { name, description, parameters } }
     if (tool['function']) {
       const fn = tool['function'] as Record<string, unknown>;
       return {
-        name: fn['name'],
+        name: sanitizeGoogleFunctionName(fn['name']),
         description: fn['description'] || '',
         ...getGoogleToolParameters(fn['parameters']),
       };
@@ -146,14 +160,14 @@ function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations:
     // Handle Anthropic format: { name, description, input_schema }
     if (tool['input_schema']) {
       return {
-        name: tool['name'],
+        name: sanitizeGoogleFunctionName(tool['name']),
         description: tool['description'] || '',
         ...getGoogleToolParameters(tool['input_schema']),
       };
     }
     // Handle flat format (from desktop's transform): { name, description, parameters }
     return {
-      name: tool['name'],
+      name: sanitizeGoogleFunctionName(tool['name']),
       description: tool['description'] || '',
       ...getGoogleToolParameters(tool['parameters']),
     };
