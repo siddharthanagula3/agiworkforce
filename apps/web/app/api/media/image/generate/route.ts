@@ -99,22 +99,18 @@ const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> =
   stability: 8,
 };
 
-// Preferred Google image model. Both gemini-3.1-flash-image and imagen-4 are
-// qualityTier "balanced", so a bare find(balanced) is order-dependent and
-// ambiguous. Pin to Gemini 3.1 Flash Image (fast, low-cost, current default).
-// This is a catalog *lookup key* (matched against model.id below), not an
-// inlined API model id — the real API id is read from the catalog's apiModelId.
-// eslint-disable-next-line no-restricted-syntax -- catalog lookup key, not an API id
-const PREFERRED_GOOGLE_IMAGE_MODEL_ID = 'gemini-3.1-flash-image';
-
 function resolveGoogleImageModel() {
   const googleImageModels = getModelsForProvider('google', {
     includeDeprecated: false,
     modelTypes: ['image'],
   });
 
+  // Prefer the Gemini image model (fast, low-cost) over Imagen. Both share the
+  // "balanced" qualityTier, so a bare find(balanced) is order-dependent; select
+  // by the gemini id prefix instead. This is id-pattern logic, not a hardcoded
+  // model id — every id and the real API id come from the models.json catalog.
   return (
-    googleImageModels.find((model) => model.id === PREFERRED_GOOGLE_IMAGE_MODEL_ID) ??
+    googleImageModels.find((model) => model.id.startsWith('gemini')) ??
     googleImageModels.find((model) => model.qualityTier === 'balanced') ??
     googleImageModels[0] ??
     null
