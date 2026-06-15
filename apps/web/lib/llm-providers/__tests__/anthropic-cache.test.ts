@@ -165,6 +165,56 @@ describe('AnthropicProvider cache_control', () => {
     });
   });
 
+  describe('sendRequest · tools + stable-prefix caching', () => {
+    const toolsReq = (overrides: Record<string, unknown> = {}) =>
+      makeRequest({
+        tools: [
+          { type: 'function', function: { name: 'get_weather', parameters: { type: 'object' } } },
+          { type: 'function', function: { name: 'search', parameters: { type: 'object' } } },
+        ],
+        ...overrides,
+      });
+
+    it('stamps cache_control on the LAST tool definition', async () => {
+      mockFetch.mockResolvedValueOnce(okAnthropicJson());
+      await provider.sendRequest(toolsReq());
+      const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
+      expect(body.tools).toHaveLength(2);
+      expect(body.tools[0].cache_control).toBeUndefined();
+      expect(body.tools[1].cache_control).toBeDefined();
+    });
+
+    it('upgrades the stable prefix (tools + system) to 1h when tools present and retention defaulted', async () => {
+      mockFetch.mockResolvedValueOnce(okAnthropicJson());
+      await provider.sendRequest(toolsReq());
+      const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
+      expect(body.tools[1].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+      expect(body.system[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    });
+
+    it('keeps system at 5m (no 1h upgrade) when no tools present', async () => {
+      mockFetch.mockResolvedValueOnce(okAnthropicJson());
+      await provider.sendRequest(makeRequest());
+      const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
+      expect(body.system[0].cache_control).toEqual({ type: 'ephemeral' });
+    });
+
+    it('honors an explicit short retention even with tools (no 1h upgrade)', async () => {
+      mockFetch.mockResolvedValueOnce(okAnthropicJson());
+      await provider.sendRequest(toolsReq({ cacheRetention: 'short' }));
+      const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
+      expect(body.tools[1].cache_control).toEqual({ type: 'ephemeral' });
+      expect(body.system[0].cache_control).toEqual({ type: 'ephemeral' });
+    });
+
+    it('does not stamp cache_control on tools when usePromptCache=false', async () => {
+      mockFetch.mockResolvedValueOnce(okAnthropicJson());
+      await provider.sendRequest(toolsReq({ usePromptCache: false }));
+      const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
+      expect(body.tools[1].cache_control).toBeUndefined();
+    });
+  });
+
   describe('streamRequest · system message cache_control', () => {
     it('applies cache_control in streaming mode', async () => {
       const mockBody = {} as ReadableStream;

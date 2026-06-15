@@ -81,6 +81,48 @@ describe('OpenAIProvider cache behavior', () => {
     });
   });
 
+  describe('sendRequest · prompt_cache_key', () => {
+    it('sets a stable prompt_cache_key derived from system+tools when caching is on', async () => {
+      mockFetch.mockResolvedValueOnce(okOpenAiJson());
+      await provider.sendRequest(makeRequest());
+      const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
+      expect(typeof body.prompt_cache_key).toBe('string');
+      expect(body.prompt_cache_key).toMatch(/^agi-[0-9a-f]+$/);
+    });
+
+    it('is stable across requests sharing the same system+tools prefix', async () => {
+      mockFetch.mockResolvedValue(okOpenAiJson());
+      await provider.sendRequest(makeRequest());
+      await provider.sendRequest(makeRequest({ messages: makeRequest().messages.slice() }));
+      const key1 = JSON.parse(mockFetch.mock.calls[0]![1]!.body).prompt_cache_key;
+      const key2 = JSON.parse(mockFetch.mock.calls[1]![1]!.body).prompt_cache_key;
+      expect(key1).toBe(key2);
+    });
+
+    it('differs when the system prompt changes', async () => {
+      mockFetch.mockResolvedValue(okOpenAiJson());
+      await provider.sendRequest(makeRequest());
+      await provider.sendRequest(
+        makeRequest({
+          messages: [
+            { role: 'system' as const, content: 'A DIFFERENT system prompt.' },
+            { role: 'user' as const, content: 'Hello' },
+          ],
+        }),
+      );
+      const key1 = JSON.parse(mockFetch.mock.calls[0]![1]!.body).prompt_cache_key;
+      const key2 = JSON.parse(mockFetch.mock.calls[1]![1]!.body).prompt_cache_key;
+      expect(key1).not.toBe(key2);
+    });
+
+    it('omits prompt_cache_key when usePromptCache=false', async () => {
+      mockFetch.mockResolvedValueOnce(okOpenAiJson());
+      await provider.sendRequest(makeRequest({ usePromptCache: false }));
+      const body = JSON.parse(mockFetch.mock.calls[0]![1]!.body);
+      expect(body.prompt_cache_key).toBeUndefined();
+    });
+  });
+
   describe('sendRequest · cached_tokens from usage response', () => {
     it('reads cached_tokens from prompt_tokens_details when present', async () => {
       mockFetch.mockResolvedValueOnce(okOpenAiJson({ cached_tokens: 512 }));

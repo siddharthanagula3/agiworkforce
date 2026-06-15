@@ -725,6 +725,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks"],
+      "costOverride": { "cached_input": 0.3 },
       "deprecation_date": null
     },
     "claude-haiku-4.5": {
@@ -742,6 +743,7 @@
         "High Volume",
         "Cost-Sensitive"
       ],
+      "costOverride": { "cached_input": 0.1 },
       "deprecation_date": null
     },
     "gemini-3.1-pro-preview": {
@@ -754,6 +756,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
+      "costOverride": { "cached_input": 0.2 },
       "deprecation_date": null
     },
     "gemini-3.1-flash-lite": {
@@ -766,6 +769,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Ultra-Fast Inference", "Speed", "Cost-Sensitive", "Long Context"],
+      "costOverride": { "cached_input": 0.025 },
       "deprecation_date": null
     },
     "gemini-3.1-flash-image": {

@@ -41,6 +41,13 @@ export interface ModelCapabilities {
   search: boolean;
   research: boolean;
   codeExecution: boolean;
+  /**
+   * Whether this model supports prompt caching (any form: explicit breakpoints
+   * for Anthropic, automatic prefix caching for OpenAI/DeepSeek, or implicit
+   * context caching for Gemini 2.5+/3.x). Set to true only on models where
+   * cache-read discounts are confirmed available from official provider docs.
+   */
+  caching?: boolean;
 }
 
 /** Model type categories. */
