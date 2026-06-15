@@ -67,7 +67,7 @@ export function GreetingBanner({ onSendMessage }: GreetingBannerProps) {
         className="flex h-10 w-10 items-center justify-center rounded-full"
         role="presentation"
       >
-        <AgiMark size={28} />
+        <AgiMark size={28} spinning />
       </div>
 
       {/* Time-aware headline */}
