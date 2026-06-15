@@ -24,14 +24,21 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Folder,
   FolderOpen,
   Layers,
   MessageSquare,
+  MoreHorizontal,
   PanelLeft,
+  Pencil,
   Pin,
   Plus,
   Search,
+  Settings,
   Sparkles,
+  SquarePen,
+  Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { cn } from '../cn';
@@ -77,6 +84,22 @@ export interface SidebarProps extends SessionItemHandlers {
   onModeClick?: () => void;
   onOpenUsage?: () => void;
 
+  /* ---- ChatGPT-style project list handlers (all optional; list hidden when absent) ---- */
+  /** Open/navigate to a project's conversation list. */
+  onProjectOpen?: (projectId: string) => void;
+  /** Start a new chat scoped to the given project. */
+  onProjectNewChat?: (projectId: string) => void;
+  /** Open rename flow for the project. */
+  onProjectRename?: (projectId: string) => void;
+  /** Share the project. */
+  onProjectShare?: (projectId: string) => void;
+  /** Open project settings dialog. */
+  onProjectSettings?: (projectId: string) => void;
+  /** Toggle pinned state of the project. */
+  onProjectPin?: (projectId: string) => void;
+  /** Delete the project (destructive). */
+  onProjectDelete?: (projectId: string) => void;
+
   /* ---- slots / render props for non-pure chrome ---- */
   /** Extra nav rows (desktop puts Projects/Skills; web puts Chats/Artifacts/…). */
   navItems?: SidebarNavItem[];
@@ -116,6 +139,13 @@ export function Sidebar(props: SidebarProps) {
     onOpenSkills,
     onModeClick,
     onOpenUsage,
+    onProjectOpen,
+    onProjectNewChat,
+    onProjectRename,
+    onProjectShare,
+    onProjectSettings,
+    onProjectPin,
+    onProjectDelete,
     navItems,
     renderNavLink,
     navExtraSlot,
@@ -144,6 +174,27 @@ export function Sidebar(props: SidebarProps) {
     new Set(DEFAULT_EXPANDED),
   );
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [showAllProjects, setShowAllProjects] = useState(false);
+
+  // Whether the project list section is enabled (any of the project handlers present)
+  const projectListEnabled = Boolean(
+    onProjectOpen || onProjectNewChat || onProjectRename || onProjectSettings || onProjectDelete,
+  );
+
+  const pinnedProjects = useMemo(
+    () => (projectListEnabled ? projects.filter((p) => p.pinned) : []),
+    [projects, projectListEnabled],
+  );
+
+  const unpinnedProjects = useMemo(
+    () => (projectListEnabled ? projects.filter((p) => !p.pinned) : []),
+    [projects, projectListEnabled],
+  );
+
+  const PROJECTS_SHOW_LIMIT = 5;
+  const visibleUnpinnedProjects = showAllProjects
+    ? unpinnedProjects
+    : unpinnedProjects.slice(0, PROJECTS_SHOW_LIMIT);
 
   // Surface can override the search overlay entirely (web uses GlobalSearchDialog).
   const handleOpenSearch = useCallback(() => {
@@ -531,8 +582,77 @@ export function Sidebar(props: SidebarProps) {
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-2">
+            {/* Pinned Projects section */}
+            {projectListEnabled && pinnedProjects.length > 0 && (
+              <div className="mb-4">
+                <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  Pinned
+                </div>
+                {pinnedProjects.map((project) => (
+                  <ProjectRow
+                    key={project.id}
+                    project={project}
+                    onOpen={onProjectOpen}
+                    onNewChat={onProjectNewChat}
+                    onRename={onProjectRename}
+                    onShare={onProjectShare}
+                    onSettings={onProjectSettings}
+                    onPin={onProjectPin}
+                    onDelete={onProjectDelete}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Projects list section */}
+            {projectListEnabled && (pinnedProjects.length > 0 || unpinnedProjects.length > 0) && (
+              <div className="mb-4">
+                <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  Projects
+                </div>
+                {visibleUnpinnedProjects.map((project) => (
+                  <ProjectRow
+                    key={project.id}
+                    project={project}
+                    onOpen={onProjectOpen}
+                    onNewChat={onProjectNewChat}
+                    onRename={onProjectRename}
+                    onShare={onProjectShare}
+                    onSettings={onProjectSettings}
+                    onPin={onProjectPin}
+                    onDelete={onProjectDelete}
+                  />
+                ))}
+                {!showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllProjects(true)}
+                    className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                  >
+                    Show more
+                  </button>
+                )}
+                {showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllProjects(false)}
+                    className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                  >
+                    Show less
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Chats section header + pinned sessions */}
+            {(pinned.length > 0 || grouped.size > 0) && (
+              <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                Chats
+              </div>
+            )}
+
             {pinned.length > 0 && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <div className="mb-2 flex items-center gap-1 px-3 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                   <Pin className="h-3 w-3" /> Pinned
                 </div>
@@ -662,5 +782,172 @@ function RailButton({
     >
       <Icon className="h-4 w-4" />
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ProjectRow — ChatGPT-style folder row with hover compose + more-menu
+// ---------------------------------------------------------------------------
+
+interface ProjectRowProps {
+  project: SidebarProject;
+  onOpen?: (id: string) => void;
+  onNewChat?: (id: string) => void;
+  onRename?: (id: string) => void;
+  onShare?: (id: string) => void;
+  onSettings?: (id: string) => void;
+  onPin?: (id: string) => void;
+  onDelete?: (id: string) => void;
+}
+
+function ProjectRow({
+  project,
+  onOpen,
+  onNewChat,
+  onRename,
+  onShare,
+  onSettings,
+  onPin,
+  onDelete,
+}: ProjectRowProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  return (
+    <div
+      className={cn(
+        'group relative flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors',
+        'hover:bg-[hsl(var(--accent))] cursor-pointer',
+        menuOpen && 'bg-[hsl(var(--accent))]',
+      )}
+    >
+      {/* Folder icon + project name */}
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        onClick={() => onOpen?.(project.id)}
+        aria-label={`Open project ${project.name}`}
+      >
+        <Folder
+          className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]"
+          aria-hidden="true"
+        />
+        <span className="flex-1 truncate text-sm text-[hsl(var(--foreground))]">
+          {project.name}
+        </span>
+      </button>
+
+      {/* Hover actions: compose + more-menu */}
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-0.5 transition-opacity',
+          menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        )}
+      >
+        {/* New chat in project */}
+        {onNewChat && (
+          <button
+            type="button"
+            aria-label={`New chat in ${project.name}`}
+            title="New chat in project"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewChat(project.id);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+          >
+            <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
+
+        {/* More actions menu */}
+        <Menu
+          align="end"
+          trigger={({ toggle }) => (
+            <button
+              type="button"
+              aria-label={`More options for ${project.name}`}
+              title="More options"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen(true);
+                toggle();
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+          menuClassName="w-52"
+          className="relative"
+        >
+          {({ close }) => {
+            const handleClose = () => {
+              setMenuOpen(false);
+              close();
+            };
+            return (
+              <>
+                {onShare && (
+                  <MenuItem
+                    close={handleClose}
+                    onSelect={() => onShare(project.id)}
+                    icon={<Upload className="h-4 w-4" />}
+                  >
+                    Share project
+                  </MenuItem>
+                )}
+                {onRename && (
+                  <MenuItem
+                    close={handleClose}
+                    onSelect={() => onRename(project.id)}
+                    icon={<Pencil className="h-4 w-4" />}
+                  >
+                    Rename project
+                  </MenuItem>
+                )}
+                {onSettings && (
+                  <MenuItem
+                    close={handleClose}
+                    onSelect={() => onSettings(project.id)}
+                    icon={<Settings className="h-4 w-4" />}
+                  >
+                    Project settings
+                  </MenuItem>
+                )}
+                {onOpen && (
+                  <MenuItem
+                    close={handleClose}
+                    onSelect={() => onOpen(project.id)}
+                    icon={<Folder className="h-4 w-4" />}
+                  >
+                    Project home
+                  </MenuItem>
+                )}
+                {(onShare || onRename || onSettings || onOpen) && onPin && <MenuSeparator />}
+                {onPin && (
+                  <MenuItem
+                    close={handleClose}
+                    onSelect={() => onPin(project.id)}
+                    icon={<Pin className="h-4 w-4" />}
+                  >
+                    {project.pinned ? 'Unpin project' : 'Pin project'}
+                  </MenuItem>
+                )}
+                {onDelete && (
+                  <MenuItem
+                    close={handleClose}
+                    onSelect={() => onDelete(project.id)}
+                    icon={<Trash2 className="h-4 w-4" />}
+                    destructive
+                  >
+                    Delete project
+                  </MenuItem>
+                )}
+              </>
+            );
+          }}
+        </Menu>
+      </div>
+    </div>
   );
 }
