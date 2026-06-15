@@ -480,9 +480,16 @@ function TimelineStepRow({
             <StepIcon className="h-4 w-4 text-muted-foreground" />
           ) : null}
         </div>
-        {/* Tool call card (label + expand) */}
+        {/* Tool call card (label + expand). Web-search steps have no request/
+            response payload and surface their result as source cards below, so
+            we render a plain label instead of the ToolCallCard's (empty) expand
+            box to avoid a hollow container under "Web search". */}
         <div className="flex-1 min-w-0">
-          <ToolCallCard toolCall={displayToolCall} showParameters={showParameters} />
+          {isWebSearch ? (
+            <span className="text-sm text-foreground">{humanLabel}</span>
+          ) : (
+            <ToolCallCard toolCall={displayToolCall} showParameters={showParameters} />
+          )}
         </div>
       </div>
       {/* Filename chip: BELOW the label row, indented to align with the label text */}

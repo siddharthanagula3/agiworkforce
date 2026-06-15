@@ -65,7 +65,7 @@ import { ArtifactBlock } from '../ArtifactBlock';
 import { ComparisonResponse } from './ComparisonResponse';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
-import type { ResearchSource } from '../../stores/research-panel-store';
+import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -385,6 +385,16 @@ const MessageBubbleComponent = function MessageBubble({
 
     return { searchSources: collected, searchQuery: query };
   }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
+
+  // Mirror this message's web-search sources into the right-hand Sources panel
+  // (research-panel store) so the "Sources" view showcases them, not just the
+  // inline cards inside the tool box.
+  const setResearchSources = useResearchPanelStore((s) => s.setSources);
+  useEffect(() => {
+    if (!isUser && searchSources.length > 0) {
+      setResearchSources(searchSources, searchQuery);
+    }
+  }, [isUser, searchSources, searchQuery, setResearchSources]);
 
   return (
     <motion.div
