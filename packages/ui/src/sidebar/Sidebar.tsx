@@ -414,7 +414,7 @@ export function Sidebar(props: SidebarProps) {
       <div className="flex w-16 flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all duration-300 ease-in-out">
         <div className="flex flex-col items-center gap-4 p-3">
           <RailButton label="Expand sidebar" icon={PanelLeft} onClick={onToggleCollapse} />
-          <RailButton label="New chat" icon={Plus} onClick={onNewChat} />
+          <RailButton label="New chat" icon={SquarePen} onClick={onNewChat} />
           <RailButton label="Search" icon={Search} onClick={handleOpenSearch} />
           {onOpenProjects && (
             <RailButton label="Projects" icon={FolderOpen} onClick={onOpenProjects} />
@@ -476,7 +476,7 @@ export function Sidebar(props: SidebarProps) {
                 aria-label="New chat"
                 className="flex items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
               >
-                <Plus className="h-4 w-4" />
+                <SquarePen className="h-4 w-4" />
                 New Chat
               </button>
             </div>

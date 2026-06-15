@@ -297,8 +297,17 @@ const MessageBubbleComponent = function MessageBubble({
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
-    extractedArtifacts.forEach((artifact) => addArtifactForMessage(message.id, artifact));
-  }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifactForMessage]);
+    extractedArtifacts.forEach((artifact) =>
+      addArtifactForMessage(message.id, artifact, message.sessionId),
+    );
+  }, [
+    message.id,
+    message.sessionId,
+    isUser,
+    existingArtifacts.length,
+    extractedArtifacts,
+    addArtifactForMessage,
+  ]);
 
   useEffect(() => {
     if (isUser || artifacts.length === 0) return;
@@ -308,9 +317,10 @@ const MessageBubbleComponent = function MessageBubble({
         title: artifact.title || 'Untitled',
         language: artifact.language || artifact.type,
         messageId: message.id,
+        conversationId: message.sessionId,
       });
     }
-  }, [artifacts, isUser, message.id, upsertArtifact]);
+  }, [artifacts, isUser, message.id, message.sessionId, upsertArtifact]);
 
   const cleanedContent = useMemo(() => {
     if (artifacts.length === 0) return message.content;
