@@ -161,7 +161,7 @@ describe('Settings page', () => {
 
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
     expect(getByText('Email / Phone Number')).toBeTruthy();
-    expect(getByText('Subscription')).toBeTruthy();
+    expect(getByText('Billing')).toBeTruthy();
     expect(getByText('Connectors')).toBeTruthy();
     expect(getByText('Plugins')).toBeTruthy();
     expect(getByText('Skills')).toBeTruthy();
@@ -174,7 +174,7 @@ describe('Settings page', () => {
     const { getByLabelText, getAllByText } = render(<SettingsTabScreen />);
 
     expect(getByLabelText('Email / Phone Number. Cloud')).toBeTruthy();
-    expect(getByLabelText('Subscription. Cloud')).toBeTruthy();
+    expect(getByLabelText('Cloud Data Controls. Cloud')).toBeTruthy();
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
   });
 
@@ -183,7 +183,7 @@ describe('Settings page', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByLabelText, queryByTestId } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Subscription. Cloud'));
+    fireEvent.press(getByLabelText('Email / Phone Number. Cloud'));
 
     expect(queryByTestId('invite-code-modal')).toBeNull();
     expect(alertSpy).toHaveBeenCalledWith(
@@ -196,7 +196,7 @@ describe('Settings page', () => {
   it('opens invite modal from a cloud row', () => {
     const { getByLabelText, getByTestId } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Subscription. Invite'));
+    fireEvent.press(getByLabelText('Email / Phone Number. Invite'));
 
     expect(getByTestId('invite-code-modal')).toBeTruthy();
   });
