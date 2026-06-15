@@ -315,7 +315,11 @@ export function ConnectorLogo({
 }: ConnectorLogoProps) {
   const [urlFailed, setUrlFailed] = useState(false);
 
-  const id = connectorId.toLowerCase();
+  // Normalize id to the catalog key form. Surfaces differ: web uses hyphen ids
+  // (google-calendar), desktop uses underscores (google_calendar). Map both to
+  // the hyphenated keys in ICON_MAP / CONNECTOR_LOGO_URLS so logos resolve on
+  // every surface instead of falling back to the tile.
+  const id = connectorId.toLowerCase().replace(/_/g, '-');
   const icon = getIcon(id);
   const logoUrl = getLogoUrl(id);
   const { wrapper, svg, img } = SIZE[size];
