@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+'use client';
+
+import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
 
 export default function SettingsIndexPage() {
-  redirect('/settings/general');
+  return <SettingsModalRedirect section="general" />;
 }
