@@ -14,8 +14,10 @@ import type {
   Conversation,
   ChatMessage,
 } from '@agiworkforce/unified-chat';
+import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { getAuthToken as getClerkToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { buildMemorySystemContent, withMemorySystemMessage } from './memory-context';
 
 const DEFAULT_WEB_CHAT_MODEL = 'auto-economy';
 
@@ -116,6 +118,13 @@ export class WebChatRuntime implements ChatRuntime {
     }
     // Append the new user message
     history.push({ role: 'user', content });
+
+    // Inject the user's saved memory facts (Settings → Memory) as a leading
+    // system message so they actually reach the model. Facts live client-side in
+    // the unified-chat memory store; reading them here is what makes the Memory
+    // settings section affect answers instead of being write-only local storage.
+    const memoryContent = buildMemorySystemContent(useMemoryStore.getState().facts);
+    history = withMemorySystemMessage(history, memoryContent);
 
     // Fail-closed: the client never requests auto-approval (that would let a
     // client skip the per-tool gate). The server-side tool loop owns approval
