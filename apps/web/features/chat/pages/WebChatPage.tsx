@@ -671,7 +671,7 @@ export default function WebChatPage() {
         });
 
         try {
-          const imageUrl = await generateImage(prompt, { size, provider });
+          const imageUrl = await generateImage(prompt, { size, provider, model: options.modelId });
           updateMessage(assistantMsgId, {
             content: '',
             isStreaming: false,
@@ -727,7 +727,7 @@ export default function WebChatPage() {
         },
       });
 
-      const imageUrl = await generateImage(opts.prompt, { size, provider });
+      const imageUrl = await generateImage(opts.prompt, { size, provider, model: opts.modelId });
       updateMessage(messageId, {
         isStreaming: false,
         metadata: {

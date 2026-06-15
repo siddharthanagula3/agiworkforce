@@ -11,6 +11,8 @@ async function getAuthToken(): Promise<string> {
 export interface GenerateImageOptions {
   size?: '1024x1024' | '1792x1024' | '1024x1792';
   provider?: 'google' | 'openai' | 'stability';
+  /** Catalog model id (e.g. 'imagen-4-ultra'). The route resolves it to the real API id. */
+  model?: string;
 }
 
 export function useMediaGeneration() {
@@ -42,6 +44,7 @@ export function useMediaGeneration() {
             prompt,
             size: options.size || '1024x1024',
             provider: options.provider,
+            model: options.model,
           }),
         });
 
