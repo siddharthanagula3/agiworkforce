@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { PaywallFeature, RequiredTier } from '../InlinePaywallCard';
+import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 import { MessageBubble } from './MessageBubble';
 import { InlinePaywallCard } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
@@ -43,6 +44,11 @@ export interface ChatMessageListProps {
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
+  /** Called by ImageGenerationCard to re-generate in-place (aspect-ratio change / edit). */
+  onRegenerateImage?: (
+    messageId: string,
+    opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
+  ) => Promise<string>;
   /** Called when user selects a follow-up suggestion pill */
   onSendMessage?: (content: string) => void;
   /** When true, follow-up suggestion pills fade out (user is typing in the composer) */
@@ -175,6 +181,10 @@ interface MessageGroupRowProps {
   onPaywallUpgrade?: (messageId: string) => void;
   /** Called when a paywall Try-later button is clicked. */
   onPaywallDismiss?: (messageId: string) => void;
+  onRegenerateImage?: (
+    messageId: string,
+    opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
+  ) => Promise<string>;
 }
 
 interface MessageRowProps {
@@ -185,6 +195,10 @@ interface MessageRowProps {
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPaywallUpgrade?: (messageId: string) => void;
   onPaywallDismiss?: (messageId: string) => void;
+  onRegenerateImage?: (
+    messageId: string,
+    opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
+  ) => Promise<string>;
 }
 
 // Per-message row component. Stable callbacks bound via useCallback below so
@@ -203,6 +217,7 @@ const MessageRow = ({
   onReact,
   onPaywallUpgrade,
   onPaywallDismiss,
+  onRegenerateImage,
 }: MessageRowProps) => {
   const meta = getMeta(message);
   const paywall = meta?.paywall;
@@ -220,6 +235,11 @@ const MessageRow = ({
   const handlePaywallDismiss = useCallback(
     () => onPaywallDismiss?.(message.id),
     [onPaywallDismiss, message.id],
+  );
+  const handleRegenerateImage = useCallback(
+    (opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string }) =>
+      onRegenerateImage!(message.id, opts),
+    [onRegenerateImage, message.id],
   );
 
   if (paywall) {
@@ -251,6 +271,7 @@ const MessageRow = ({
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
+      onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
     />
   );
 };
@@ -265,6 +286,7 @@ const MessageGroupRow = memo(
     onReact,
     onPaywallUpgrade,
     onPaywallDismiss,
+    onRegenerateImage,
   }: MessageGroupRowProps) => {
     return (
       <div
@@ -280,6 +302,7 @@ const MessageGroupRow = memo(
             onReact={onReact}
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
+            onRegenerateImage={onRegenerateImage}
           />
         ))}
       </div>
@@ -316,7 +339,8 @@ const MessageGroupRow = memo(
       prev.onDelete === next.onDelete &&
       prev.onReact === next.onReact &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
-      prev.onPaywallDismiss === next.onPaywallDismiss
+      prev.onPaywallDismiss === next.onPaywallDismiss &&
+      prev.onRegenerateImage === next.onRegenerateImage
     );
   },
 );
@@ -335,6 +359,7 @@ const ChatMessageListComponent = ({
   onEdit,
   onDelete,
   onReact,
+  onRegenerateImage,
   onSendMessage,
   isUserTyping = false,
   className,
@@ -422,6 +447,14 @@ const ChatMessageListComponent = ({
     [onPaywallDismiss],
   );
 
+  const handleRegenerateImage = useCallback(
+    (
+      messageId: string,
+      opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
+    ) => onRegenerateImage!(messageId, opts),
+    [onRegenerateImage],
+  );
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -476,6 +509,7 @@ const ChatMessageListComponent = ({
                   onReact={handleReact}
                   onPaywallUpgrade={handlePaywallUpgrade}
                   onPaywallDismiss={handlePaywallDismiss}
+                  onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
                 />
               </React.Fragment>
             );
@@ -542,6 +576,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onRegenerate === next.onRegenerate &&
     prev.onDelete === next.onDelete &&
     prev.onReact === next.onReact &&
+    prev.onRegenerateImage === next.onRegenerateImage &&
     prev.onSendMessage === next.onSendMessage &&
     prev.className === next.className &&
     prev.onPaywallUpgrade === next.onPaywallUpgrade &&

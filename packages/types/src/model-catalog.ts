@@ -690,9 +690,9 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'image_generation',
     label: 'Image Generation',
     description:
-      'Image generation and editing lane. GPT Image 2 is the current OpenAI GPT Image model with flexible sizes and high-fidelity inputs.',
-    modelId: 'gpt-image-2',
-    provider: 'openai',
+      'Image generation and editing lane. Gemini 3.1 Flash Image is the current Google image model — fast, low-cost, and supports image inputs for editing.',
+    modelId: 'gemini-3.1-flash-image',
+    provider: 'google',
   },
   video_generation: {
     slot: 'video_generation',
