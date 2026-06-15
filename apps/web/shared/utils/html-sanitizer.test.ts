@@ -1,15 +1,12 @@
 /**
- * Tests for html-sanitizer — focusing on the new sanitizeHtmlForSandbox /
- * sanitizeArtifactForSandbox path.
+ * Tests for html-sanitizer.
  *
- * Existing behavior: sanitizeHTML / sanitizeArtifact strip all scripts and
- * on* handlers (covered by the test cases below that verify the strict path
- * has not regressed).
- *
- * New behavior: sanitizeHtmlForSandbox preserves scripts and handlers for
- * interactive HTML artifacts rendered inside a null-origin sandbox iframe
- * (sandbox="allow-scripts", no allow-same-origin). It still strips the
- * narrow set of things that can escape or widen that sandbox.
+ * Covers:
+ * 1. Strict path (sanitizeHTML / sanitizeArtifact) — scripts/handlers always
+ *    stripped; used for main-document rendering.
+ * 2. Sandbox path (buildSandboxSrcDoc) — scripts/handlers preserved; produces
+ *    a single, non-double-wrapped srcDoc for null-origin sandbox iframes.
+ * 3. Helpers: stripMetaRefreshFromSandboxHtml, isHtmlDocument, hasXSSRisk.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -17,6 +14,8 @@ import {
   sanitizeHTML,
   sanitizeArtifact,
   sanitizeHtmlForSandbox,
+  buildSandboxSrcDoc,
+  isHtmlDocument,
   stripMetaRefreshFromSandboxHtml,
   hasXSSRisk,
 } from './html-sanitizer';
@@ -125,16 +124,20 @@ describe('sanitizeHtmlForSandbox — preserves scripts and handlers', () => {
     expect(hasEventHandler(result, 'oninput')).toBe(true);
   });
 
-  it('preserves external script src', () => {
+  it('preserves external script src (via buildSandboxSrcDoc)', () => {
+    // sanitizeHtmlForSandbox is deprecated; external scripts are only reliably
+    // preserved through buildSandboxSrcDoc which wraps fragments in a proper shell.
     const input = '<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>';
-    const result = sanitizeHtmlForSandbox(input);
+    const result = buildSandboxSrcDoc(input);
     expect(hasScript(result)).toBe(true);
     expect(result).toContain('unpkg.com');
   });
 
-  it('preserves <style> blocks', () => {
+  it('preserves <style> blocks (via buildSandboxSrcDoc)', () => {
+    // sanitizeHtmlForSandbox is deprecated; <style> in a fragment is only
+    // preserved through buildSandboxSrcDoc which wraps it in a full document.
     const input = '<style>body { background: red; }</style><p>Hello</p>';
-    const result = sanitizeHtmlForSandbox(input);
+    const result = buildSandboxSrcDoc(input);
     expect(result).toContain('<style');
     expect(result).toContain('background');
   });
@@ -300,5 +303,365 @@ describe('hasXSSRisk', () => {
 
   it('returns false for plain safe HTML', () => {
     expect(hasXSSRisk('<p>Hello <strong>world</strong></p>')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isHtmlDocument — detection of full document vs fragment
+// ---------------------------------------------------------------------------
+
+describe('isHtmlDocument', () => {
+  it('detects <!DOCTYPE html>', () => {
+    expect(isHtmlDocument('<!DOCTYPE html><html><body></body></html>')).toBe(true);
+  });
+
+  it('detects <!doctype html> (lowercase)', () => {
+    expect(isHtmlDocument('<!doctype html>\n<html><body></body></html>')).toBe(true);
+  });
+
+  it('detects bare <html> opening tag', () => {
+    expect(isHtmlDocument('<html><head></head><body></body></html>')).toBe(true);
+  });
+
+  it('detects <html lang="en">', () => {
+    expect(isHtmlDocument('<html lang="en"><body></body></html>')).toBe(true);
+  });
+
+  it('returns false for a bare fragment', () => {
+    expect(isHtmlDocument('<div id="count">0</div><button onclick="f()">+</button>')).toBe(false);
+  });
+
+  it('returns false for text content', () => {
+    expect(isHtmlDocument('Hello world')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSandboxSrcDoc — the primary production path
+// ---------------------------------------------------------------------------
+
+describe('buildSandboxSrcDoc — full document input (no double-wrap)', () => {
+  const FULL_DOC_COUNTER = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>body { font-family: sans-serif; padding: 1em; }</style>
+</head>
+<body>
+  <h1 id="count">0</h1>
+  <button onclick="increment()">+</button>
+  <script>
+    let n = 0;
+    function increment() {
+      document.getElementById('count').textContent = ++n;
+    }
+  </script>
+</body>
+</html>`;
+
+  it('produces exactly one <html> tag (no double-wrap)', () => {
+    const result = buildSandboxSrcDoc(FULL_DOC_COUNTER);
+    const htmlMatches = result.match(/<html/gi) ?? [];
+    expect(htmlMatches.length).toBe(1);
+  });
+
+  it('preserves inline <script>', () => {
+    const result = buildSandboxSrcDoc(FULL_DOC_COUNTER);
+    expect(hasScript(result)).toBe(true);
+    expect(result).toContain('increment');
+  });
+
+  it('preserves onclick handler', () => {
+    const result = buildSandboxSrcDoc(FULL_DOC_COUNTER);
+    expect(hasEventHandler(result, 'onclick')).toBe(true);
+  });
+
+  it('does NOT inject an inner CSP meta (sandbox is the boundary)', () => {
+    // An inner `script-src` CSP in a null-origin sandboxed iframe has been
+    // observed to block inline scripts in Chrome even with 'unsafe-inline'
+    // because browsers may not resolve 'self' == null origin as expected.
+    // The sandbox="allow-scripts" (no allow-same-origin) attribute is the
+    // correct security boundary — it is sufficient and does not block scripts.
+    // Therefore SANDBOX_CSP_META is intentionally empty and no inner CSP is
+    // injected. This test guards that decision against accidental reversion.
+    const result = buildSandboxSrcDoc(FULL_DOC_COUNTER);
+    expect(result).not.toContain('Content-Security-Policy');
+  });
+
+  it('includes DOCTYPE', () => {
+    const result = buildSandboxSrcDoc(FULL_DOC_COUNTER);
+    expect(/<!doctype html>/i.test(result)).toBe(true);
+  });
+
+  it('strips <base> from full document', () => {
+    const doc = `<!DOCTYPE html><html><head><base href="https://evil.com/"></head><body><p>x</p></body></html>`;
+    expect(hasBase(buildSandboxSrcDoc(doc))).toBe(false);
+  });
+
+  it('strips meta refresh from full document', () => {
+    const doc = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0"></head><body><p>x</p></body></html>`;
+    expect(hasMetaRefresh(buildSandboxSrcDoc(doc))).toBe(false);
+  });
+
+  it('strips allow-same-origin from nested iframe in full doc', () => {
+    const doc = `<!DOCTYPE html><html><body><iframe sandbox="allow-scripts allow-same-origin"></iframe></body></html>`;
+    expect(buildSandboxSrcDoc(doc)).not.toContain('allow-same-origin');
+  });
+});
+
+describe('buildSandboxSrcDoc — fragment input (wraps in shell, no double html)', () => {
+  const FRAGMENT_COUNTER = `<div id="count">0</div>
+<button onclick="increment()">+</button>
+<script>
+  let n = 0;
+  function increment() {
+    document.getElementById('count').textContent = ++n;
+  }
+</script>`;
+
+  it('produces exactly one <html> tag', () => {
+    const result = buildSandboxSrcDoc(FRAGMENT_COUNTER);
+    const htmlMatches = result.match(/<html/gi) ?? [];
+    expect(htmlMatches.length).toBe(1);
+  });
+
+  it('preserves inline <script>', () => {
+    const result = buildSandboxSrcDoc(FRAGMENT_COUNTER);
+    expect(hasScript(result)).toBe(true);
+    expect(result).toContain('increment');
+  });
+
+  it('preserves onclick handler', () => {
+    const result = buildSandboxSrcDoc(FRAGMENT_COUNTER);
+    expect(hasEventHandler(result, 'onclick')).toBe(true);
+  });
+
+  it('does NOT inject an inner CSP meta (sandbox is the boundary)', () => {
+    // See the full-doc variant above for the reasoning. No inner CSP injected.
+    const result = buildSandboxSrcDoc(FRAGMENT_COUNTER);
+    expect(result).not.toContain('Content-Security-Policy');
+  });
+
+  it('includes DOCTYPE', () => {
+    const result = buildSandboxSrcDoc(FRAGMENT_COUNTER);
+    expect(/<!doctype html>/i.test(result)).toBe(true);
+  });
+
+  it('strips <base> from fragment', () => {
+    const frag = `<base href="https://evil.com/"><p>x</p>`;
+    expect(hasBase(buildSandboxSrcDoc(frag))).toBe(false);
+  });
+
+  it('strips meta refresh from fragment', () => {
+    const frag = `<meta http-equiv="refresh" content="0"><p>x</p>`;
+    expect(hasMetaRefresh(buildSandboxSrcDoc(frag))).toBe(false);
+  });
+});
+
+describe('buildSandboxSrcDoc — addEventListener (slider) pattern', () => {
+  it('preserves addEventListener in fragment', () => {
+    const frag = `<input type="range" id="s" min="0" max="100">
+<p id="val">50</p>
+<script>
+  document.getElementById('s').addEventListener('input', function() {
+    document.getElementById('val').textContent = this.value;
+  });
+</script>`;
+    const result = buildSandboxSrcDoc(frag);
+    expect(hasScript(result)).toBe(true);
+    expect(result).toContain('addEventListener');
+  });
+
+  it('preserves addEventListener in full document', () => {
+    const doc = `<!DOCTYPE html>
+<html>
+<body>
+  <input type="range" id="s" min="0" max="100">
+  <p id="val">50</p>
+  <script>
+    document.getElementById('s').addEventListener('input', function() {
+      document.getElementById('val').textContent = this.value;
+    });
+  </script>
+</body>
+</html>`;
+    const result = buildSandboxSrcDoc(doc);
+    expect(result.match(/<html/gi)?.length).toBe(1);
+    expect(hasScript(result)).toBe(true);
+    expect(result).toContain('addEventListener');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EXECUTION TESTS — verify scripts ACTUALLY RUN, not just that they're present.
+//
+// Strategy: instantiate a fresh JSDOM instance with runScripts:'dangerously'
+// (the exact mirror of sandbox="allow-scripts" in a real browser) and assert
+// observable DOM side-effects after script execution.
+//
+// JSDOM is vitest's own test environment dep (v20) and is safe to import here.
+// runScripts:'dangerously' is safe in this test context: the HTML fed to it is
+// the output of buildSandboxSrcDoc() — the same sanitized content that goes to
+// the sandbox iframe. No external input reaches the JSDOM instance.
+// ---------------------------------------------------------------------------
+
+import { JSDOM } from 'jsdom';
+
+describe('buildSandboxSrcDoc — SCRIPT EXECUTION (side-effect verification)', () => {
+  it('onclick counter (full doc): button.click() increments the DOM counter', () => {
+    const counterDoc = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body>
+  <div id="count">0</div>
+  <button id="btn" onclick="increment()">+</button>
+  <script>
+    let n = 0;
+    function increment() {
+      n++;
+      document.getElementById('count').textContent = String(n);
+    }
+  </script>
+</body>
+</html>`;
+    const srcDoc = buildSandboxSrcDoc(counterDoc);
+
+    // Structure: single <html>, no double-wrap.
+    expect((srcDoc.match(/<html/gi) ?? []).length).toBe(1);
+    expect(hasScript(srcDoc)).toBe(true);
+
+    // Execute in JSDOM with script execution enabled.
+    const dom = new JSDOM(srcDoc, { runScripts: 'dangerously' });
+    const btn = dom.window.document.getElementById('btn');
+    const count = dom.window.document.getElementById('count');
+
+    expect(count?.textContent).toBe('0'); // initial state
+    btn?.click();
+    expect(count?.textContent).toBe('1');
+    btn?.click();
+    btn?.click();
+    expect(count?.textContent).toBe('3'); // conclusive: function defined + called
+  });
+
+  it('onclick counter (fragment): button.click() increments the DOM counter', () => {
+    const frag = `<div id="count">0</div>
+<button id="btn" onclick="increment()">+</button>
+<script>
+  let n = 0;
+  function increment() {
+    n++;
+    document.getElementById('count').textContent = String(n);
+  }
+</script>`;
+    const srcDoc = buildSandboxSrcDoc(frag);
+    expect((srcDoc.match(/<html/gi) ?? []).length).toBe(1);
+    expect(hasScript(srcDoc)).toBe(true);
+
+    const dom = new JSDOM(srcDoc, { runScripts: 'dangerously' });
+    const btn = dom.window.document.getElementById('btn');
+    const count = dom.window.document.getElementById('count');
+    btn?.click();
+    btn?.click();
+    expect(count?.textContent).toBe('2');
+  });
+
+  it('addEventListener slider (full doc): input event updates the DOM', () => {
+    // This is the exact pattern from the bug report (Claude Haiku color picker).
+    const sliderDoc = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Color Picker</title></head>
+<body>
+  <input type="range" id="slider" min="0" max="100" value="50">
+  <p id="val">Color: 50</p>
+  <script>
+    document.getElementById('slider').addEventListener('input', function() {
+      document.getElementById('val').textContent = 'Color: ' + this.value;
+    });
+  </script>
+</body>
+</html>`;
+    const srcDoc = buildSandboxSrcDoc(sliderDoc);
+
+    // Structure: single <html>, script + addEventListener present.
+    expect((srcDoc.match(/<html/gi) ?? []).length).toBe(1);
+    expect(hasScript(srcDoc)).toBe(true);
+    expect(srcDoc).toContain('addEventListener');
+
+    // Script body must not be HTML-entity-encoded (would break execution).
+    const scriptBody = srcDoc.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '';
+    expect(scriptBody).toContain('addEventListener');
+    expect(scriptBody).not.toContain('&amp;');
+    expect(scriptBody).not.toContain('&lt;');
+
+    // Execute: dispatch an input event, assert the DOM updates.
+    const dom = new JSDOM(srcDoc, { runScripts: 'dangerously', pretendToBeVisual: true });
+    const slider = dom.window.document.getElementById('slider') as HTMLInputElement | null;
+    const val = dom.window.document.getElementById('val');
+
+    expect(val?.textContent).toBe('Color: 50'); // initial
+    if (slider) {
+      slider.value = '75';
+      slider.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    }
+    expect(val?.textContent).toBe('Color: 75'); // proves listener attached + ran
+  });
+
+  it('execution probe: window.__ran and window.__value set by script', () => {
+    // Minimal probe: script sets two properties, we read them back.
+    const probeDoc = `<!DOCTYPE html>
+<html><body>
+  <script>
+    window.__ran = true;
+    window.__value = 42;
+  </script>
+</body></html>`;
+    const srcDoc = buildSandboxSrcDoc(probeDoc);
+
+    expect(hasScript(srcDoc)).toBe(true);
+    // Verify script text is intact (not escaped).
+    const scriptBody = srcDoc.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '';
+    expect(scriptBody).toContain('window.__ran = true');
+    expect(scriptBody).not.toContain('&amp;');
+
+    const dom = new JSDOM(srcDoc, { runScripts: 'dangerously' });
+
+    const win = dom.window as any;
+    expect(win.__ran).toBe(true);
+    expect(win.__value).toBe(42);
+  });
+
+  it('no-double-wrap: <script> inside <body>, not inside a nested <body>', () => {
+    // The original bug: double-wrap placed the inner <html>/<body>/<script>
+    // as text children of the outer <body>. Browsers silently drop <script>
+    // tags in that position. This test makes it a permanent regression guard.
+    const fullDoc = `<!DOCTYPE html>
+<html>
+<head><style>body{font-family:sans-serif}</style></head>
+<body>
+  <h1 id="count">0</h1>
+  <button id="btn" onclick="inc()">+</button>
+  <script>
+    let n=0;
+    function inc(){ n++; document.getElementById('count').textContent=String(n); }
+  </script>
+</body>
+</html>`;
+    const srcDoc = buildSandboxSrcDoc(fullDoc);
+
+    expect((srcDoc.match(/<html/gi) ?? []).length).toBe(1);
+    // <script> must appear AFTER the first <body> and there must be NO second
+    // <html> between <body> and end — the hallmark of double-wrapping.
+    const bodyIdx = srcDoc.toLowerCase().indexOf('<body');
+    const scriptIdx = srcDoc.toLowerCase().indexOf('<script');
+    expect(scriptIdx).toBeGreaterThan(bodyIdx);
+    const bodyToEnd = srcDoc.slice(bodyIdx);
+    expect((bodyToEnd.match(/<html/gi) ?? []).length).toBe(0);
+
+    // And it executes:
+    const dom = new JSDOM(srcDoc, { runScripts: 'dangerously' });
+    const btn = dom.window.document.getElementById('btn');
+    btn?.click();
+    btn?.click();
+    expect(dom.window.document.getElementById('count')?.textContent).toBe('2');
   });
 });
