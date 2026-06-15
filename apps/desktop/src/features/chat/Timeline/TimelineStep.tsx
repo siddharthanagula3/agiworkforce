@@ -42,6 +42,13 @@ export function TimelineStep({
   duration,
 }: TimelineStepProps) {
   const [resultOpen, setResultOpen] = useState(false);
+  const [textExpanded, setTextExpanded] = useState(false);
+
+  // "Show more" for long thinking blocks (Claude inline reasoning style, ref 386).
+  const THINKING_TRUNCATE = 240;
+  const isLongThinking = variant === 'thinking' && label.length > THINKING_TRUNCATE;
+  const shownLabel =
+    isLongThinking && !textExpanded ? `${label.slice(0, THINKING_TRUNCATE).trimEnd()}…` : label;
 
   const icon = (() => {
     if (variant === 'thinking') {
@@ -98,7 +105,16 @@ export function TimelineStep({
                   : 'text-foreground/80',
             )}
           >
-            {label}
+            {shownLabel}
+            {isLongThinking && (
+              <button
+                type="button"
+                onClick={() => setTextExpanded((o) => !o)}
+                className="ml-1 not-italic font-medium text-muted-foreground/80 hover:text-foreground"
+              >
+                {textExpanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
           </span>
 
           {/* Duration badge */}
