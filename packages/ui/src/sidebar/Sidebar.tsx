@@ -21,12 +21,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   Calendar,
+  Check,
   ChevronDown,
   ChevronRight,
   Clock,
   Folder,
   FolderOpen,
   Layers,
+  List,
   MessageSquare,
   MoreHorizontal,
   PanelLeft,
@@ -184,6 +186,12 @@ export function Sidebar(props: SidebarProps) {
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
   /** Per-project "show more chats" state. */
   const [projectShowAllChats, setProjectShowAllChats] = useState<Set<string>>(new Set());
+  /**
+   * ChatGPT-style "Organize chats" preference: 'by-project' (default) groups
+   * the Chats list by project; 'one-list' shows all chats in a flat list.
+   * This is local state; surfaces may later lift it to their own store.
+   */
+  const [organizeMode, setOrganizeMode] = useState<'by-project' | 'one-list'>('by-project');
 
   // Whether the project list section is enabled (any of the project handlers present)
   const projectListEnabled = Boolean(
@@ -234,12 +242,23 @@ export function Sidebar(props: SidebarProps) {
       : sessions.filter((s) => !s.archived);
     if (selectedProjectFilter) {
       base = base.filter((s) => s.projectId === selectedProjectFilter);
+    } else if (organizeMode === 'by-project' && projectListEnabled) {
+      // In "by-project" mode, sessions that belong to a project appear under their
+      // project folder; exclude them from the flat Chats list to avoid duplication.
+      base = base.filter((s) => !s.projectId);
     }
     if (!term) return base;
     return base.filter((s) =>
       `${s.title ?? ''} ${s.lastMessage ?? s.preview ?? ''}`.toLowerCase().includes(term),
     );
-  }, [sessions, searchQuery, showArchived, selectedProjectFilter]);
+  }, [
+    sessions,
+    searchQuery,
+    showArchived,
+    selectedProjectFilter,
+    organizeMode,
+    projectListEnabled,
+  ]);
 
   const pinned = useMemo(
     () =>
@@ -610,8 +629,9 @@ export function Sidebar(props: SidebarProps) {
                       )}
                     />
                   </button>
-                  {/* Right-side actions: only visible when handlers present */}
-                  <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover/projhdr:opacity-100 transition-opacity">
+                  {/* Right-side actions: always visible at muted color, brighten on hover.
+                      Rendered only when the relevant handlers are present. */}
+                  <div className="flex shrink-0 items-center gap-0.5">
                     {onProjectCreate && (
                       <button
                         type="button"
@@ -626,37 +646,59 @@ export function Sidebar(props: SidebarProps) {
                         <Plus className="h-3 w-3" aria-hidden="true" />
                       </button>
                     )}
-                    {onProjectCreate && (
-                      <Menu
-                        align="end"
-                        trigger={({ toggle }) => (
-                          <button
-                            type="button"
-                            aria-label="Projects options"
-                            title="Projects options"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggle();
-                            }}
-                            className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
-                          >
-                            <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
-                          </button>
-                        )}
-                        menuClassName="w-44"
-                        className="relative"
-                      >
-                        {({ close }) => (
+                    {/* "..." opens the ChatGPT-style "Organize chats" menu */}
+                    <Menu
+                      align="end"
+                      trigger={({ toggle }) => (
+                        <button
+                          type="button"
+                          aria-label="Organize chats"
+                          title="Organize chats"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggle();
+                          }}
+                          className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+                        >
+                          <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
+                        </button>
+                      )}
+                      menuClassName="w-52"
+                    >
+                      {({ close }) => (
+                        <>
+                          {/* Non-interactive section label */}
+                          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                            Organize chats
+                          </div>
+                          <MenuSeparator />
                           <MenuItem
                             close={close}
-                            onSelect={() => onProjectCreate?.()}
-                            icon={<Plus className="h-4 w-4" />}
+                            onSelect={() => setOrganizeMode('one-list')}
+                            icon={<List className="h-4 w-4" />}
+                            trailing={
+                              organizeMode === 'one-list' ? (
+                                <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
+                              ) : undefined
+                            }
                           >
-                            New project
+                            In one list
                           </MenuItem>
-                        )}
-                      </Menu>
-                    )}
+                          <MenuItem
+                            close={close}
+                            onSelect={() => setOrganizeMode('by-project')}
+                            icon={<Folder className="h-4 w-4" />}
+                            trailing={
+                              organizeMode === 'by-project' ? (
+                                <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
+                              ) : undefined
+                            }
+                          >
+                            By project
+                          </MenuItem>
+                        </>
+                      )}
+                    </Menu>
                   </div>
                 </div>
 
@@ -918,6 +960,7 @@ function ProjectRow({
   onSelectSession,
 }: ProjectRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [rowHovered, setRowHovered] = useState(false);
 
   const isExpanded = expandedProjectIds.has(project.id);
   const showAllChats = projectShowAllChats.has(project.id);
@@ -948,10 +991,12 @@ function ProjectRow({
       {/* Main project row */}
       <div
         className={cn(
-          'group/projrow relative flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors',
+          'relative flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors',
           'hover:bg-[hsl(var(--accent))] cursor-pointer',
-          (menuOpen || isExpanded) && 'bg-[hsl(var(--accent))]',
+          (menuOpen || isExpanded || rowHovered) && 'bg-[hsl(var(--accent))]',
         )}
+        onMouseEnter={() => setRowHovered(true)}
+        onMouseLeave={() => setRowHovered(false)}
       >
         {/* Folder icon + project name — clicking toggles expand */}
         <button
@@ -979,11 +1024,11 @@ function ProjectRow({
           </span>
         </button>
 
-        {/* Hover actions: compose + more-menu (visible on hover OR while expanded) */}
+        {/* Hover actions: compose + more-menu (visible on hover OR while menu open / expanded) */}
         <div
           className={cn(
             'flex shrink-0 items-center gap-0.5 transition-opacity',
-            menuOpen || isExpanded ? 'opacity-100' : 'opacity-0 group-hover/projrow:opacity-100',
+            menuOpen || isExpanded || rowHovered ? 'opacity-100' : 'opacity-0',
           )}
         >
           {/* New chat in project (compose icon) */}
