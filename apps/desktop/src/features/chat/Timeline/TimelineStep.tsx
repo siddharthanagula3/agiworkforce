@@ -15,6 +15,13 @@ export interface TimelineStepProps {
    * registry drives desktop/web and mobile. Ignored for thinking/done variants.
    */
   iconName?: string;
+  /**
+   * Short type/arg chip rendered on its own line under the label (Claude inline
+   * tool-call style — e.g. a filename `build_resume.js`, a query, or `Script`).
+   */
+  chip?: string;
+  /** Tool request/args, shown as a labelled "Request" block in the expand. */
+  request?: string;
   result?: string;
   isError?: boolean;
   isRunning?: boolean;
@@ -26,6 +33,8 @@ export function TimelineStep({
   variant,
   label,
   iconName,
+  chip,
+  request,
   result,
   isError = false,
   isRunning = false,
@@ -62,7 +71,9 @@ export function TimelineStep({
     return <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />;
   })();
 
-  const hasResult = variant === 'tool' && result !== undefined && result !== null;
+  const hasResult =
+    variant === 'tool' &&
+    ((result !== undefined && result !== null) || (request !== undefined && request !== null));
 
   return (
     <div className="relative flex gap-3">
@@ -121,6 +132,15 @@ export function TimelineStep({
           )}
         </div>
 
+        {/* Type / arg chip on its own line (Claude inline tool-call style) */}
+        {variant === 'tool' && chip && (
+          <div className="mt-1">
+            <span className="inline-flex max-w-full items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/90">
+              {chip}
+            </span>
+          </div>
+        )}
+
         {/* Result content */}
         <AnimatePresence initial={false}>
           {hasResult && resultOpen && (
@@ -131,14 +151,38 @@ export function TimelineStep({
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <pre
-                className={cn(
-                  'mt-1.5 max-h-64 overflow-y-auto rounded p-2 text-[11px] font-mono leading-relaxed whitespace-pre-wrap break-words',
-                  isError ? 'bg-red-950/40 text-red-300' : 'bg-card/60 text-foreground',
-                )}
-              >
-                {result}
-              </pre>
+              {/* Request block (tool args) — Claude inline expanded-detail style */}
+              {request != null && request !== '' && (
+                <>
+                  <div className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                    Request
+                  </div>
+                  <pre className="mt-1 max-h-48 overflow-y-auto rounded bg-card/60 p-2 font-mono text-[11px] leading-relaxed break-words whitespace-pre-wrap text-foreground">
+                    {request}
+                  </pre>
+                </>
+              )}
+              {/* Response block (tool result) */}
+              {result != null && result !== '' && (
+                <>
+                  <div
+                    className={cn(
+                      'mt-1.5 text-[10px] font-medium uppercase tracking-wide',
+                      isError ? 'text-red-400/80' : 'text-muted-foreground/70',
+                    )}
+                  >
+                    {isError ? 'Error' : 'Response'}
+                  </div>
+                  <pre
+                    className={cn(
+                      'mt-1 max-h-64 overflow-y-auto rounded p-2 font-mono text-[11px] leading-relaxed break-words whitespace-pre-wrap',
+                      isError ? 'bg-red-950/40 text-red-300' : 'bg-card/60 text-foreground',
+                    )}
+                  >
+                    {result}
+                  </pre>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
