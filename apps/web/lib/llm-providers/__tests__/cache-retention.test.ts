@@ -7,19 +7,19 @@ import {
 } from '../cache-retention';
 
 describe('isGooglePromptCacheEligible', () => {
-  it('returns true for gemini-2.5 models', () => {
-    expect(isGooglePromptCacheEligible('google', 'gemini-2.5-flash')).toBe(true);
-    expect(isGooglePromptCacheEligible('google', 'gemini-2.5-pro')).toBe(true);
-  });
-
-  it('returns true for gemini-3.x models', () => {
+  it('returns true for catalog Gemini models that declare caching', () => {
+    // Eligibility is catalog-driven (capabilities.caching / cached_input), not an
+    // id-prefix heuristic — these models are present in models.json with caching.
     expect(isGooglePromptCacheEligible('google', 'gemini-3.1-pro-preview')).toBe(true);
     expect(isGooglePromptCacheEligible('google', 'gemini-3.1-flash-lite')).toBe(true);
+    expect(isGooglePromptCacheEligible('google', 'gemini-3.5-flash')).toBe(true);
   });
 
-  it('returns false for older gemini families', () => {
-    expect(isGooglePromptCacheEligible('google', 'gemini-1.5-pro')).toBe(false);
-    expect(isGooglePromptCacheEligible('google', 'gemini-live-2.5-flash-preview')).toBe(false);
+  it('returns false for Google model ids not in the catalog (no prefix heuristic)', () => {
+    // Eligibility is catalog-driven, not an id-prefix heuristic: a Google id that
+    // is absent from models.json is not eligible until added to models.curation.json.
+    expect(isGooglePromptCacheEligible('google', 'gemini-not-in-catalog-test')).toBe(false);
+    expect(isGooglePromptCacheEligible('google', 'some-unknown-google-model')).toBe(false);
   });
 
   it('returns false for non-google providers even with gemini model id', () => {
@@ -91,8 +91,8 @@ describe('resolveCacheRetention', () => {
     expect(resolveCacheRetention(undefined, 'google', 'gemini-3.1-pro-preview')).toBeUndefined();
   });
 
-  it('passes explicit cacheRetention for google gemini-2.5', () => {
-    expect(resolveCacheRetention({ cacheRetention: 'long' }, 'google', 'gemini-2.5-flash')).toBe(
+  it('passes explicit cacheRetention for a cache-eligible google model', () => {
+    expect(resolveCacheRetention({ cacheRetention: 'long' }, 'google', 'gemini-3.5-flash')).toBe(
       'long',
     );
   });
