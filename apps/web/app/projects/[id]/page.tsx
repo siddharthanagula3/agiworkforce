@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { FolderOpen, MoreHorizontal, Settings2, Pin } from 'lucide-react';
+import { FolderOpen, MoreHorizontal, Settings2, Pin, PinOff } from 'lucide-react';
 import {
   ProjectHeader,
   ModelSelector,
@@ -18,7 +18,7 @@ import {
 import { ChatComposerNew } from '@/features/chat/components/Composer/ChatComposerNew';
 import { useProjectMetaStore } from '@/features/projects/stores/project-meta-store';
 import { useChatStore } from '@/stores/chatStore';
-import { KnowledgeFilesPanel } from '@/features/projects/components/KnowledgeFilesPanel';
+import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 
 /**
@@ -462,10 +462,17 @@ export default function ProjectDetailPage() {
                       (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                     }}
                   >
-                    <Pin
-                      style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                      aria-hidden="true"
-                    />
+                    {project.starred ? (
+                      <PinOff
+                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Pin
+                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                        aria-hidden="true"
+                      />
+                    )}
                     {project.starred ? 'Unpin project' : 'Pin project'}
                   </button>
                 </div>
@@ -693,8 +700,8 @@ export default function ProjectDetailPage() {
               </ul>
             )
           ) : (
-            /* Sources tab: knowledge files inline (also accessible via settings modal) */
-            <KnowledgeFilesPanel projectId={project.id} />
+            /* Sources tab: ChatGPT-style sources experience */
+            <SourcesPanel projectId={project.id} />
           )}
         </div>
       </div>
