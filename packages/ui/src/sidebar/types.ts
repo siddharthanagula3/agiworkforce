@@ -43,6 +43,8 @@ export interface SidebarProject {
   iconEmoji?: string;
   description?: string;
   conversationCount?: number;
+  /** When true, appears in the Pinned section above the Projects list. */
+  pinned?: boolean;
 }
 
 /** Footer mode pill state. Local = on-device; Cloud = AGI managed. */

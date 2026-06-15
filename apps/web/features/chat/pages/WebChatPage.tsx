@@ -37,7 +37,12 @@ import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';
-import { Sidebar, type SidebarSession, type SidebarNavItem } from '@agiworkforce/ui';
+import {
+  Sidebar,
+  type SidebarSession,
+  type SidebarNavItem,
+  type SidebarProject,
+} from '@agiworkforce/ui';
 import { useClerk } from '@clerk/nextjs';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import {
@@ -75,6 +80,7 @@ import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
+import { useProjectStore, ProjectSettingsDialog } from '@features/projects';
 
 type SendMeta = {
   agentMode?: string;
@@ -296,11 +302,35 @@ export default function WebChatPage() {
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
 
+  // Project settings dialog state (opened from sidebar row context menu)
+  const [projectSettingsId, setProjectSettingsId] = useState<string | null>(null);
+
   // Web-specific hooks for the sidebar footer slot.
   const { signOut: clerkSignOut } = useClerk();
   const { user, logout } = useAuthStore();
   const subscription = useBillingStore((s) => s.subscription);
   const openDirectory = useDirectoryStore((s) => s.setOpen);
+
+  // Project store — same data source already used by the filter dropdown in <Sidebar>
+  const storeProjects = useProjectStore((s) => s.projects);
+  const updateProjectInStore = useProjectStore((s) => s.updateProject);
+  const removeProjectFromStore = useProjectStore((s) => s.removeProject);
+
+  // Map store Project[] -> SidebarProject[] (no starred->pinned: use starred as pinned proxy)
+  const sidebarProjects = useMemo<SidebarProject[]>(
+    () =>
+      storeProjects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        accentColor: p.accentColor,
+        iconEmoji: p.iconEmoji,
+        description: p.description,
+        // Use starred as the pinned signal (no dedicated pinned field on Project)
+        pinned: p.starred ?? false,
+      })),
+    [storeProjects],
+  );
 
   // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
   // regardless of which component dispatches them.
@@ -753,6 +783,93 @@ export default function WebChatPage() {
       void updateConversation(sessionId, { projectId });
     },
     [updateConversation],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Project sidebar row handlers
+  // ---------------------------------------------------------------------------
+
+  /** Navigate to the project page (shows project conversations + settings). */
+  const handleProjectOpen = useCallback(
+    (projectId: string) => {
+      router.push(`/projects/${projectId}`);
+    },
+    [router],
+  );
+
+  /**
+   * Start a new chat scoped to the project. We navigate to /chat (new session)
+   * with the projectId in the query so the composer can pick it up. Threading the
+   * projectId straight into createConversation is a follow-up once the API takes it.
+   */
+  const handleProjectNewChat = useCallback(
+    (projectId: string) => {
+      router.push(`/chat?projectId=${projectId}`);
+    },
+    [router],
+  );
+
+  /**
+   * Rename: opens the project settings dialog with that project selected,
+   * which contains the rename input field.
+   */
+  const handleProjectRename = useCallback((projectId: string) => {
+    setProjectSettingsId(projectId);
+  }, []);
+
+  /**
+   * Project settings: open the settings dialog.
+   */
+  const handleProjectSettings = useCallback((projectId: string) => {
+    setProjectSettingsId(projectId);
+  }, []);
+
+  /**
+   * Share project: there is no dedicated project-share API yet, so route to the
+   * project page where the share affordance lives. Tracked as a follow-up gap.
+   */
+  const handleProjectShare = useCallback(
+    (projectId: string) => {
+      router.push(`/projects/${projectId}`);
+    },
+    [router],
+  );
+
+  /**
+   * Pin/unpin: toggle the starred field on the project (starred is the pinned proxy).
+   */
+  const handleProjectPin = useCallback(
+    (projectId: string) => {
+      const project = storeProjects.find((p) => p.id === projectId);
+      if (!project) return;
+      updateProjectInStore(projectId, { starred: !project.starred });
+    },
+    [storeProjects, updateProjectInStore],
+  );
+
+  /**
+   * Delete project from the store after an explicit confirmation so a stray
+   * click in the ... menu can never silently drop a project.
+   */
+  const handleProjectDelete = useCallback(
+    (projectId: string) => {
+      const project = storeProjects.find((p) => p.id === projectId);
+      const label = project?.name ? `"${project.name}"` : 'this project';
+      if (
+        typeof window !== 'undefined' &&
+        !window.confirm(`Delete ${label}? This can't be undone.`)
+      ) {
+        return;
+      }
+      removeProjectFromStore(projectId);
+    },
+    [storeProjects, removeProjectFromStore],
+  );
+
+  // Project settings dialog derived data
+  const projectForSettings = useMemo(
+    () => (projectSettingsId ? storeProjects.find((p) => p.id === projectSettingsId) : null),
+    [projectSettingsId, storeProjects],
   );
 
   // Auto-title: when the second message arrives (first assistant reply), derive title
@@ -1247,6 +1364,7 @@ export default function WebChatPage() {
       {/* Sidebar — @agiworkforce/ui shared component */}
       <Sidebar
         sessions={sidebarSessions}
+        projects={sidebarProjects}
         activeSessionId={displayedConversationId ?? undefined}
         collapsed={sidebarCollapsed}
         mode="cloud"
@@ -1263,6 +1381,13 @@ export default function WebChatPage() {
         onArchive={handleArchiveSession}
         onShare={handleShareSession}
         onMoveToProject={handleMoveToProjectSession}
+        onProjectOpen={handleProjectOpen}
+        onProjectNewChat={handleProjectNewChat}
+        onProjectRename={handleProjectRename}
+        onProjectSettings={handleProjectSettings}
+        onProjectShare={handleProjectShare}
+        onProjectPin={handleProjectPin}
+        onProjectDelete={handleProjectDelete}
         className="bg-[var(--chat-sidebar-bg)] border-[var(--chat-border-strong)]"
       />
 
@@ -1437,6 +1562,21 @@ export default function WebChatPage() {
       </div>
       <DirectoryModal />
       <CloudUpgradeWaitlistDialog open={cloudWaitlistOpen} onOpenChange={setCloudWaitlistOpen} />
+      {/* Project settings dialog — opened from the sidebar project row context menu */}
+      {projectForSettings && (
+        <ProjectSettingsDialog
+          open={Boolean(projectSettingsId)}
+          onOpenChange={(open) => {
+            if (!open) setProjectSettingsId(null);
+          }}
+          project={projectForSettings}
+          onUpdate={(id, updates) => updateProjectInStore(id, updates)}
+          onDelete={(id) => {
+            removeProjectFromStore(id);
+            setProjectSettingsId(null);
+          }}
+        />
+      )}
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
           open={Boolean(pendingByokHandoff)}
