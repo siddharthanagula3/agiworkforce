@@ -2,48 +2,11 @@ import { useCallback, useRef } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import BottomSheet, { BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import {
-  Terminal,
-  FileText,
-  FilePlus2,
-  FilePen,
-  Search,
-  Globe,
-  Folder,
-  Image,
-  MousePointerClick,
-  Plug,
-  CircleCheck,
-  Loader2,
-  CircleX,
-  ChevronRight,
-  Wrench,
-} from 'lucide-react-native';
+import { CircleCheck, Loader2, CircleX, ChevronRight } from 'lucide-react-native';
+import { lucideRNToolIcon } from './toolIconRN';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type { ToolCall } from '@/types/chat';
-
-// §4.6 icon mapping
-function getToolIcon(toolName: string): typeof Terminal {
-  const name = toolName.toLowerCase();
-  if (name.includes('bash') || name.includes('shell') || name.includes('terminal')) return Terminal;
-  if (name.includes('read')) return FileText;
-  if (name.includes('write') || name.includes('create')) return FilePlus2;
-  if (name.includes('edit') || name.includes('patch')) return FilePen;
-  if (name.includes('web_search') || name.includes('search')) return Search;
-  if (
-    name.includes('fetch') ||
-    name.includes('browse') ||
-    name.includes('url') ||
-    name.includes('http')
-  )
-    return Globe;
-  if (name.includes('list') || name.includes('dir') || name.includes('folder')) return Folder;
-  if (name.includes('image') || name.includes('gen')) return Image;
-  if (name.includes('browser') || name.includes('click')) return MousePointerClick;
-  if (name.includes('mcp') || name.includes('plugin')) return Plug;
-  return Wrench;
-}
 
 // §4.4 state label
 function getStatusLabel(status: ToolCall['status']): string | null {
@@ -84,7 +47,7 @@ export function InlineToolCall({ toolCall }: InlineToolCallProps) {
     chevronRotation.value = withTiming(0, { duration: 160 });
   }, [chevronRotation]);
 
-  const ToolIcon = getToolIcon(toolCall.name);
+  const ToolIcon = lucideRNToolIcon(toolCall.name);
   const statusLabel = getStatusLabel(toolCall.status);
 
   const iconColor =
