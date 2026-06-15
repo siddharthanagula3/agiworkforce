@@ -14,10 +14,12 @@ import {
   Globe,
   Sparkles,
   Search,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 import { FileTypeIcon } from './FileTypeIcon';
+import type { ResearchSource } from '../../stores/research-panel-store';
 
 // ─── File reference helper ──────────────────────────────────────────────────
 
@@ -77,6 +79,171 @@ function getToolIcon(toolName: string, filename?: string | null): IconComponent 
   return FileText;
 }
 
+// ─── Web-search tool detection + humanization ─────────────────────────────────
+
+/** Known tool IDs that represent a web/perplexity search */
+const WEB_SEARCH_TOOL_IDS = new Set([
+  'web_search',
+  'WebSearch',
+  'search_web',
+  'browser_search',
+  'perplexity_search',
+  'perplexity',
+  'WebFetch',
+  'fetch_url',
+]);
+
+/**
+ * Returns true when this tool entry represents a web search call.
+ * Used to decide whether to render inline source cards beneath the step.
+ */
+export function isWebSearchTool(name: string): boolean {
+  if (WEB_SEARCH_TOOL_IDS.has(name)) return true;
+  const n = name.toLowerCase();
+  return (
+    (n.includes('web') || n.includes('perplexity') || n.includes('brave') || n.includes('serp')) &&
+    (n.includes('search') || n.includes('query') || n.includes('fetch'))
+  );
+}
+
+/**
+ * Map a raw tool id to a human-readable label.
+ *
+ * Rules (in priority order):
+ *  1. If the tool is a web-search variant and `args` contains a recognizable
+ *     query string (parameters.query or the raw args string), show that query.
+ *  2. Otherwise map known raw IDs to short English labels.
+ *  3. Fall back to the original name (for human-named tools like "Read"/"Bash").
+ */
+export function humanizeToolName(
+  name: string,
+  args?: string,
+  parameters?: Record<string, unknown>,
+): string {
+  // 1. Web-search: prefer showing the actual query
+  if (isWebSearchTool(name)) {
+    const query =
+      (parameters?.['query'] as string | undefined) ||
+      (parameters?.['q'] as string | undefined) ||
+      args?.trim();
+    if (query) return query;
+    return 'Web search';
+  }
+
+  // 2. Known raw snake_case → friendly label map
+  const map: Record<string, string> = {
+    web_search: 'Web search',
+    search_web: 'Web search',
+    browser_search: 'Web search',
+    perplexity_search: 'Web search',
+    file_read: 'Read file',
+    file_write: 'Write file',
+    file_edit: 'Edit file',
+    file_create: 'Create file',
+    file_delete: 'Delete file',
+    shell_command: 'Run command',
+    terminal_execute: 'Run command',
+    terminal_run: 'Run command',
+    bash_execute: 'Run command',
+    code_execute: 'Run code',
+    code_edit: 'Edit code',
+    git_status: 'Git status',
+    git_diff: 'Git diff',
+    git_log: 'Git log',
+    git_commit: 'Git commit',
+    git_push: 'Git push',
+    db_query: 'Database query',
+    database_query: 'Database query',
+    sql_query: 'SQL query',
+    api_call: 'API call',
+    http_request: 'HTTP request',
+  };
+  if (map[name]) return map[name]!;
+
+  // 3. Return as-is (human-named tools: "Read", "Bash", "Write", etc.)
+  return name;
+}
+
+// ─── Inline source cards (rendered inside the web-search step) ────────────────
+
+interface InlineSourceCardsProps {
+  sources: ResearchSource[];
+  query?: string;
+}
+
+function InlineSourceCards({ sources, query: _query }: InlineSourceCardsProps) {
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="mt-2 space-y-0.5">
+      {/* Results container matching image-381: bordered rounded box, rows inside */}
+      <div className="rounded-lg border border-border/40 bg-muted/10 overflow-hidden">
+        <div className="divide-y divide-border/20 px-3">
+          {sources.map((source, i) => (
+            <InlineSourceRow key={`${source.url}-${i}`} source={source} index={i} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InlineSourceRow({ source, index }: { source: ResearchSource; index: number }) {
+  const [imgError, setImgError] = useState(false);
+
+  // Derive a clean display hostname, handling Vertex AI redirect URIs gracefully
+  let displayHost = source.url;
+  try {
+    const parsed = new URL(source.url);
+    displayHost = parsed.hostname.replace(/^www\./, '');
+  } catch {
+    // keep raw
+  }
+
+  // Favicon: provided by source, else fall back to Google's favicon service
+  const faviconSrc =
+    source.favicon && !imgError
+      ? source.favicon
+      : (() => {
+          try {
+            const domain = new URL(source.url).hostname;
+            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+          } catch {
+            return undefined;
+          }
+        })();
+
+  return (
+    <a
+      href={/^https?:\/\//i.test(source.url || '') ? source.url : '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 py-1.5 min-w-0 hover:opacity-80 transition-opacity"
+      aria-label={`Source ${source.citationIndex ?? index + 1}: ${source.title || displayHost}`}
+    >
+      {/* Favicon */}
+      {faviconSrc ? (
+        <img
+          src={faviconSrc}
+          alt=""
+          className="h-3.5 w-3.5 shrink-0 rounded-sm"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      )}
+      {/* Title: takes remaining space, truncated */}
+      <span className="flex-1 truncate text-xs text-foreground">{source.title || displayHost}</span>
+      {/* Domain: right-aligned, muted */}
+      <span className="shrink-0 text-[10px] text-muted-foreground/60 ml-2">{displayHost}</span>
+      <ExternalLink
+        className="h-2.5 w-2.5 shrink-0 text-muted-foreground/0 group-hover:text-muted-foreground/50"
+        aria-hidden="true"
+      />
+    </a>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ToolEntry {
@@ -105,6 +272,13 @@ interface ToolTimelineProps {
    * Pass `compact={false}` to always show the full timeline.
    */
   compact?: boolean;
+  /**
+   * Web search source cards to render INSIDE the web-search step (Claude reference).
+   * Collected from message.metadata.searchResults / citations by MessageBubble.
+   */
+  searchSources?: ResearchSource[];
+  /** The search query string corresponding to searchSources. */
+  searchQuery?: string;
 }
 
 interface EntryGroup {
@@ -266,19 +440,33 @@ const COMPACT_THRESHOLD = 3;
 /**
  * A single timeline step row: tool icon + label + optional filename chip below.
  * Matches the Claude reference layout in image 385.
+ *
+ * When `searchSources` is provided and this step is a web-search tool, the
+ * source cards render INSIDE this row (directly below the label), matching
+ * the Claude reference (image 381).
  */
 function TimelineStepRow({
   tool,
   toolCall,
   showParameters,
+  searchSources,
+  searchQuery,
 }: {
   tool: ToolEntry;
   toolCall: ToolCall;
   showParameters: boolean;
+  searchSources?: ResearchSource[];
+  searchQuery?: string;
 }) {
   const filename = getFileName(tool.args);
   const hasFile = filename != null;
   const StepIcon = hasFile ? null : getToolIcon(tool.name, null);
+  const isWebSearch = isWebSearchTool(tool.name);
+  const hasSources = isWebSearch && searchSources && searchSources.length > 0;
+
+  // Build the humanized label for this tool call
+  const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters);
+  const displayToolCall: ToolCall = { ...toolCall, name: humanLabel };
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -294,7 +482,7 @@ function TimelineStepRow({
         </div>
         {/* Tool call card (label + expand) */}
         <div className="flex-1 min-w-0">
-          <ToolCallCard toolCall={toolCall} showParameters={showParameters} />
+          <ToolCallCard toolCall={displayToolCall} showParameters={showParameters} />
         </div>
       </div>
       {/* Filename chip: BELOW the label row, indented to align with the label text */}
@@ -305,11 +493,23 @@ function TimelineStepRow({
           </span>
         </div>
       )}
+      {/* Inline source cards: rendered INSIDE the web-search step (Claude reference image 381) */}
+      {hasSources && (
+        <div className="pl-7 mt-1">
+          <InlineSourceCards sources={searchSources!} query={searchQuery} />
+        </div>
+      )}
     </div>
   );
 }
 
-function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelineProps) {
+function ToolTimeline({
+  tools,
+  className,
+  compact: compactProp,
+  searchSources,
+  searchQuery,
+}: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
   // Compact expanded state · separate from the regular isExpanded
@@ -434,60 +634,82 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                 aria-hidden="true"
               />
               <div className="space-y-3">
-                {groups.map((group, gi) => {
-                  const isParallel = group.parallelGroup != null && group.entries.length > 1;
+                {(() => {
+                  // Track whether we've attached the search sources to a step yet.
+                  // Sources render only on the FIRST web-search step to avoid duplication.
+                  let sourcesAttached = false;
 
-                  if (isParallel) {
-                    return (
-                      <div
-                        key={group.parallelGroup ?? gi}
-                        className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-3 ml-2"
-                      >
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                          <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                  return groups.map((group, gi) => {
+                    const isParallel = group.parallelGroup != null && group.entries.length > 1;
+
+                    if (isParallel) {
+                      return (
+                        <div
+                          key={group.parallelGroup ?? gi}
+                          className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-3 ml-2"
+                        >
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
+                            <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                          </div>
+                          {group.entries.map((tool, ti) => {
+                            const id = stableId(tool, gi * 100 + ti);
+                            const toolCall: ToolCall = {
+                              id,
+                              name: tool.name,
+                              status: toToolCallStatus(tool.status),
+                              durationMs: tool.durationMs,
+                              parameters: buildParameters(tool.args, tool.parameters),
+                            };
+                            const attachSources =
+                              !sourcesAttached &&
+                              isWebSearchTool(tool.name) &&
+                              searchSources &&
+                              searchSources.length > 0;
+                            if (attachSources) sourcesAttached = true;
+                            return (
+                              <TimelineStepRow
+                                key={id}
+                                tool={tool}
+                                toolCall={toolCall}
+                                showParameters={Boolean(tool.args ?? tool.parameters)}
+                                searchSources={attachSources ? searchSources : undefined}
+                                searchQuery={attachSources ? searchQuery : undefined}
+                              />
+                            );
+                          })}
                         </div>
-                        {group.entries.map((tool, ti) => {
-                          const id = stableId(tool, gi * 100 + ti);
-                          const toolCall: ToolCall = {
-                            id,
-                            name: tool.name,
-                            status: toToolCallStatus(tool.status),
-                            durationMs: tool.durationMs,
-                            parameters: buildParameters(tool.args, tool.parameters),
-                          };
-                          return (
-                            <TimelineStepRow
-                              key={id}
-                              tool={tool}
-                              toolCall={toolCall}
-                              showParameters={Boolean(tool.args ?? tool.parameters)}
-                            />
-                          );
-                        })}
-                      </div>
-                    );
-                  }
+                      );
+                    }
 
-                  return group.entries.map((tool, ti) => {
-                    const id = stableId(tool, gi * 100 + ti);
-                    const toolCall: ToolCall = {
-                      id,
-                      name: tool.name,
-                      status: toToolCallStatus(tool.status),
-                      durationMs: tool.durationMs,
-                      parameters: buildParameters(tool.args, tool.parameters),
-                    };
-                    return (
-                      <TimelineStepRow
-                        key={id}
-                        tool={tool}
-                        toolCall={toolCall}
-                        showParameters={Boolean(tool.args ?? tool.parameters)}
-                      />
-                    );
+                    return group.entries.map((tool, ti) => {
+                      const id = stableId(tool, gi * 100 + ti);
+                      const toolCall: ToolCall = {
+                        id,
+                        name: tool.name,
+                        status: toToolCallStatus(tool.status),
+                        durationMs: tool.durationMs,
+                        parameters: buildParameters(tool.args, tool.parameters),
+                      };
+                      const attachSources =
+                        !sourcesAttached &&
+                        isWebSearchTool(tool.name) &&
+                        searchSources &&
+                        searchSources.length > 0;
+                      if (attachSources) sourcesAttached = true;
+                      return (
+                        <TimelineStepRow
+                          key={id}
+                          tool={tool}
+                          toolCall={toolCall}
+                          showParameters={Boolean(tool.args ?? tool.parameters)}
+                          searchSources={attachSources ? searchSources : undefined}
+                          searchQuery={attachSources ? searchQuery : undefined}
+                        />
+                      );
+                    });
                   });
-                })}
+                })()}
 
                 {/* Done row: neutral outline circle-check (not green) + "Done" in normal foreground */}
                 {!hasRunning && errorCount === 0 && (
@@ -512,6 +734,8 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
 const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   if (prev.className !== next.className) return false;
   if (prev.compact !== next.compact) return false;
+  if (prev.searchQuery !== next.searchQuery) return false;
+  if ((prev.searchSources?.length ?? 0) !== (next.searchSources?.length ?? 0)) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
   for (let i = 0; i < prev.tools.length; i++) {
