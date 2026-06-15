@@ -33,7 +33,7 @@ import {
   sanitizeArtifact,
   sanitizeSVG,
   hasXSSRisk,
-  sanitizeHtmlForSandbox,
+  buildSandboxSrcDoc,
 } from '@shared/utils/html-sanitizer';
 import { Alert, AlertDescription } from '@shared/ui/alert';
 import { SandboxedIframe } from '../SandboxedIframe';
@@ -197,31 +197,15 @@ export function ArtifactPreview({
     }
 
     switch (renderType) {
-      case 'html': {
-        // For the fallback srcDoc path, use sanitizeHtmlForSandbox so scripts
-        // work. The SandboxedIframe component sets sandbox="allow-scripts"
-        // (no allow-same-origin) on the srcDoc iframe, so this is safe.
-        const sandboxedContent = sanitizeHtmlForSandbox(content);
-        return `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https:;">
-    <style>
-      body {
-        margin: 0;
-        padding: 16px;
-        font-family: system-ui, -apple-system, sans-serif;
-      }
-    </style>
-  </head>
-  <body>
-    ${sandboxedContent}
-  </body>
-</html>`;
-      }
+      case 'html':
+        // buildSandboxSrcDoc produces a complete, non-double-wrapped srcDoc.
+        // It detects whether `content` is a full document or a fragment and
+        // handles each correctly (full doc: inject CSP into existing <head>;
+        // fragment: wrap in a minimal shell). Do NOT wrap the result further.
+        // The SandboxedIframe uses sandbox="allow-scripts allow-modals" with
+        // NO allow-same-origin, so the null-origin sandbox is the security
+        // boundary and scripts execute safely.
+        return buildSandboxSrcDoc(content);
 
       case 'react': {
         // For React, we'd need to transpile JSX - for now, show as HTML
@@ -313,10 +297,10 @@ export function ArtifactPreview({
   // or fall back to a same-origin srcDoc iframe with sandbox="allow-scripts"
   // (no allow-same-origin).
   //
-  // For kind=html we use sanitizeHtmlForSandbox instead of sanitizeArtifact so
-  // that <script> tags and on* event handlers are preserved. The null-origin
-  // sandbox (allow-scripts without allow-same-origin) is the security boundary:
-  // scripts inside it cannot access the parent's cookies, localStorage, or DOM.
+  // For kind=html we use buildSandboxSrcDoc to produce a complete, non-wrapped
+  // document. The null-origin sandbox (allow-scripts without allow-same-origin)
+  // is the security boundary: scripts inside it cannot access the parent's
+  // cookies, localStorage, or DOM.
   const sandboxPayload = useMemo<ArtifactRenderPayload>(() => {
     const content =
       artifact.versions && artifact.currentVersion !== undefined
@@ -326,13 +310,13 @@ export function ArtifactPreview({
     const kind: ArtifactKind = renderType === 'code' ? 'code' : (renderType as ArtifactKind);
     switch (renderType) {
       case 'html':
-        // sanitizeHtmlForSandbox preserves scripts/handlers for interactive
-        // artifacts; it still strips <base>, <meta http-equiv="refresh">, and
-        // dangerous nested iframe sandbox values that could escape the sandbox.
+        // buildSandboxSrcDoc handles full-doc vs fragment correctly and injects
+        // the CSP meta without double-wrapping. Pass the result as `html` so
+        // the cross-origin sandbox renderer can use it directly as a srcDoc.
         return {
           type: 'render',
           kind: 'html',
-          html: sanitizeHtmlForSandbox(content),
+          html: buildSandboxSrcDoc(content),
           runScripts: true,
         };
       case 'react':

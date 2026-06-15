@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
-import { sanitizeHtmlForSandbox } from '@shared/utils/html-sanitizer';
+import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import type { ArtifactData } from './ArtifactPreview';
 
@@ -117,16 +117,17 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
             title={artifact.title || 'Artifact preview'}
             sandbox="allow-scripts"
             srcDoc={(() => {
-              // For html artifacts: use sanitizeHtmlForSandbox so scripts and
-              // event handlers in the thumbnail are preserved. The iframe has
-              // sandbox="allow-scripts" (NO allow-same-origin), which is the
-              // correct isolation boundary — null-origin context.
-              // For other types: inject raw content into a minimal shell; those
-              // types (react/svg/mermaid) don't contain script tags that need
-              // execution in the thumbnail.
+              // For html artifacts: use buildSandboxSrcDoc so the thumbnail
+              // preview is a correctly structured single document (no double-
+              // wrap). The iframe has sandbox="allow-scripts" (NO
+              // allow-same-origin), so the null-origin sandbox is the boundary.
+              // For other types: inject raw content into a minimal shell (they
+              // don't contain scripts that need execution in the thumbnail).
+              if (artifact.type === 'html') {
+                return buildSandboxSrcDoc(artifact.content.slice(0, 800));
+              }
               const preview = artifact.content.slice(0, 800);
-              const body = artifact.type === 'html' ? sanitizeHtmlForSandbox(preview) : preview;
-              return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${body}</body></html>`;
+              return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${preview}</body></html>`;
             })()}
             className="pointer-events-none h-full w-full"
             style={{
