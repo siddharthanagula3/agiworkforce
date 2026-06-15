@@ -172,14 +172,33 @@ describe('ToolTimeline · header metadata', () => {
 // ─── ToolCallCard rendering ───────────────────────────────────────────────────
 
 describe('ToolTimeline · ToolCallCard rendering', () => {
-  it('renders ToolCallCard with tool name when expanded', async () => {
+  it('renders ToolCallCard with humanized label when expanded', async () => {
+    // WebSearch is a known web-search tool id: humanized to "Web search" (no query args)
     const tools = [{ name: 'WebSearch', status: 'completed' as const, durationMs: 300 }];
     render(<ToolTimeline tools={tools} />);
 
     fireEvent.click(screen.getByRole('button'));
 
     await waitFor(() => {
-      expect(screen.getByText('WebSearch')).toBeInTheDocument();
+      expect(screen.getByText('Web search')).toBeInTheDocument();
+    });
+  });
+
+  it('renders ToolCallCard with query as label when args provided for web search', async () => {
+    const tools = [
+      {
+        name: 'web_search',
+        status: 'completed' as const,
+        args: 'best resume templates 2025',
+        durationMs: 300,
+      },
+    ];
+    render(<ToolTimeline tools={tools} />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('best resume templates 2025')).toBeInTheDocument();
     });
   });
 

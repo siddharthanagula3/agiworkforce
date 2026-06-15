@@ -332,6 +332,60 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata.collaborationMessages.length > 0;
   const toolTimeline = !isUser && message.metadata?.tools ? message.metadata.tools : [];
 
+  // Collect web-search sources from metadata (searchResults and/or citations).
+  // These are passed INTO the ToolTimeline so they render inside the web-search step box
+  // (matching the Claude reference). A fallback renders them if there is no tool timeline.
+  const { searchSources, searchQuery } = useMemo(() => {
+    if (isUser) return { searchSources: [] as ResearchSource[], searchQuery: undefined };
+
+    const collected: ResearchSource[] = [];
+    let query: string | undefined;
+
+    const sr = message.metadata?.searchResults;
+    if (sr) {
+      query = Array.isArray(sr) ? undefined : sr.query;
+      const results = Array.isArray(sr) ? sr : (sr.results ?? []);
+      results.forEach((r, i) => {
+        if (r.url) {
+          collected.push({
+            url: r.url,
+            title: r.title || '',
+            snippet: r.snippet,
+            favicon: r.favicon,
+            citationIndex: i + 1,
+          });
+        }
+      });
+      // Perplexity plain-URL sources list
+      if (!Array.isArray(sr)) {
+        (sr.sources ?? []).forEach((url) => {
+          if (url && !collected.some((s) => s.url === url)) {
+            collected.push({ url, title: '', citationIndex: collected.length + 1 });
+          }
+        });
+      }
+    }
+
+    const citations = message.metadata?.citations;
+    if (citations && citations.length > 0 && collected.length === 0) {
+      citations
+        .filter(
+          (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
+            !!(c.url && c.title),
+        )
+        .forEach((c, i) => {
+          collected.push({
+            url: c.url,
+            title: c.title,
+            snippet: c.cited_text,
+            citationIndex: i + 1,
+          });
+        });
+    }
+
+    return { searchSources: collected, searchQuery: query };
+  }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
+
   return (
     <motion.div
       data-role={isUser ? 'user' : 'assistant'}
@@ -406,7 +460,12 @@ const MessageBubbleComponent = function MessageBubble({
                   if (tool) {
                     blocks.push(
                       <div key={`tool-inline-${tool.id ?? i}`} className="mb-2">
-                        <ToolTimeline tools={[tool]} compact={false} />
+                        <ToolTimeline
+                          tools={[tool]}
+                          compact={false}
+                          searchSources={searchSources}
+                          searchQuery={searchQuery}
+                        />
                       </div>,
                     );
                   }
@@ -417,7 +476,11 @@ const MessageBubbleComponent = function MessageBubble({
                   const remaining = tools.slice(segments.length);
                   blocks.push(
                     <div key="tool-remainder" className="mb-2">
-                      <ToolTimeline tools={remaining} />
+                      <ToolTimeline
+                        tools={remaining}
+                        searchSources={searchSources}
+                        searchQuery={searchQuery}
+                      />
                     </div>,
                   );
                 }
@@ -463,7 +526,11 @@ const MessageBubbleComponent = function MessageBubble({
               their own per-step tool rendering above). */}
           {!isUser && toolTimeline.length > 0 && !message.metadata?.thinkingSegments?.length && (
             <div className="mb-3">
-              <ToolTimeline tools={toolTimeline} />
+              <ToolTimeline
+                tools={toolTimeline}
+                searchSources={searchSources}
+                searchQuery={searchQuery}
+              />
             </div>
           )}
 
@@ -610,61 +677,13 @@ const MessageBubbleComponent = function MessageBubble({
               </div>
             )}
 
-          {/* Research sources · unified panel for searchResults + citations */}
-          {!isUser &&
-            (() => {
-              // Collect sources from searchResults (legacy) and citations (server-managed tools)
-              const sources: ResearchSource[] = [];
-
-              const sr = message.metadata?.searchResults;
-              if (sr) {
-                const query = Array.isArray(sr) ? undefined : sr.query;
-                const searchResults = Array.isArray(sr) ? sr : (sr.results ?? []);
-                searchResults.forEach((r, i) => {
-                  if (r.url) {
-                    sources.push({
-                      url: r.url,
-                      title: r.title || '',
-                      snippet: r.snippet,
-                      favicon: r.favicon,
-                      citationIndex: i + 1,
-                    });
-                  }
-                });
-                // Sources array from Perplexity answer
-                if (!Array.isArray(sr)) {
-                  (sr.sources ?? []).forEach((url) => {
-                    if (url && !sources.some((s) => s.url === url)) {
-                      sources.push({ url, title: '', citationIndex: sources.length + 1 });
-                    }
-                  });
-                }
-
-                if (sources.length > 0) {
-                  return <InlineSourcesList sources={sources} query={query} />;
-                }
-              }
-
-              const citations = message.metadata?.citations;
-              if (citations && citations.length > 0) {
-                const citSources = citations
-                  .filter(
-                    (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
-                      !!(c.url && c.title),
-                  )
-                  .map((c, i) => ({
-                    url: c.url,
-                    title: c.title,
-                    snippet: c.cited_text,
-                    citationIndex: i + 1,
-                  }));
-                if (citSources.length > 0) {
-                  return <InlineSourcesList sources={citSources} />;
-                }
-              }
-
-              return null;
-            })()}
+          {/* Search sources fallback · shown ONLY when there is no tool timeline to host them.
+              When a tool timeline is present, sources render inside the web-search step
+              (via the searchSources prop). For non-tool paths (e.g. Perplexity answer-only
+              responses), this fallback ensures sources are never silently lost. */}
+          {!isUser && searchSources.length > 0 && toolTimeline.length === 0 && (
+            <InlineSourcesList sources={searchSources} query={searchQuery} />
+          )}
 
           {/* Tool timeline rendered above prose (moved before message content section). */}
 
