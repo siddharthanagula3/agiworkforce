@@ -543,6 +543,13 @@ export class GoogleProvider extends BaseLLMProvider {
       const promptTokens = data.usageMetadata?.promptTokenCount || 0;
       const completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
       const totalTokens = data.usageMetadata?.totalTokenCount || promptTokens + completionTokens;
+      // Gemini implicit context caching (2.5+/3.x): cachedContentTokenCount is the
+      // number of prompt tokens served from cache (a SUBSET of promptTokenCount,
+      // billed at cached_input). Capture it so cache hits are cost-discounted; the
+      // cost tracker subtracts it from the billable input for inclusive-prompt
+      // providers (see cost-tracker.calculateCostUsd) to avoid double-billing.
+      const cachedInputTokens: number | undefined =
+        data.usageMetadata?.cachedContentTokenCount ?? undefined;
 
       return {
         content,
@@ -551,6 +558,7 @@ export class GoogleProvider extends BaseLLMProvider {
         completionTokens,
         totalTokens,
         finishReason,
+        ...(cachedInputTokens != null && { cachedInputTokens }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
       };
     } catch (error) {
