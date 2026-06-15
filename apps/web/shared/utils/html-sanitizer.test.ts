@@ -588,7 +588,11 @@ describe('buildSandboxSrcDoc — SCRIPT EXECUTION (side-effect verification)', (
     expect(srcDoc).toContain('addEventListener');
 
     // Script body must not be HTML-entity-encoded (would break execution).
-    const scriptBody = srcDoc.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '';
+    // Use DOM parsing (not regex) to extract script content — avoids CodeQL
+    // "Bad HTML filtering regexp" alerts and is more robust than regex.
+    const tmpDom = new JSDOM(srcDoc);
+    const scriptEl = tmpDom.window.document.querySelector('script');
+    const scriptBody = scriptEl?.textContent ?? '';
     expect(scriptBody).toContain('addEventListener');
     expect(scriptBody).not.toContain('&amp;');
     expect(scriptBody).not.toContain('&lt;');
@@ -619,7 +623,11 @@ describe('buildSandboxSrcDoc — SCRIPT EXECUTION (side-effect verification)', (
 
     expect(hasScript(srcDoc)).toBe(true);
     // Verify script text is intact (not escaped).
-    const scriptBody = srcDoc.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '';
+    // Use DOM parsing (not regex) to extract script content — avoids CodeQL
+    // "Bad HTML filtering regexp" alerts and is more robust than regex.
+    const tmpDom2 = new JSDOM(srcDoc);
+    const scriptEl2 = tmpDom2.window.document.querySelector('script');
+    const scriptBody = scriptEl2?.textContent ?? '';
     expect(scriptBody).toContain('window.__ran = true');
     expect(scriptBody).not.toContain('&amp;');
 
