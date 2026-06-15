@@ -3,18 +3,27 @@ import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 /**
- * Build a per-request Content-Security-Policy string with a nonce.
+ * Build the site Content-Security-Policy string.
  *
- * The nonce replaces 'unsafe-inline' in script-src, preventing arbitrary
- * inline script injection.
+ * IMPORTANT (root cause of the prod-wide 500, 2026-06-14): we deliberately do
+ * NOT use the nonce + `NextResponse.next({ request: { headers } })` request-
+ * rewriting pattern from the Next.js CSP guide. That pattern 500'd every route
+ * on Vercel's edge runtime — the failure happens in the edge layer *after* the
+ * middleware returns (so it isn't even catchable in JS; a try/catch around the
+ * body never fired and the response carried no error header). It worked under
+ * local `next start` only because that runs middleware in the node runtime.
+ * The redirect-only path (no request rewriting) was the sole survivor (307).
  *
- * NOTE on style-src 'unsafe-inline': Removing it would require adding nonce
- * attributes to every <style> tag and CSS-in-JS injection point. Tailwind CSS,
- * Radix UI, and ~28 components use inline `style=` attributes which would all
- * break without 'unsafe-inline'. Migrating to nonce-based styles is tracked
- * but non-trivial — leave as-is until a framework-level solution exists.
+ * So the policy is set on the RESPONSE only and uses 'unsafe-inline' for
+ * script-src instead of a per-request nonce. This is the posture the site had
+ * before the nonce work (commit cca7291) and is functional + edge-safe.
+ * Re-introducing a strict nonce CSP requires an edge-safe way to feed the nonce
+ * to the renderer without request-header rewriting — tracked as follow-up.
+ *
+ * NOTE on style-src 'unsafe-inline': Tailwind, Radix, and ~28 components use
+ * inline `style=` attributes, so style-src 'unsafe-inline' must stay regardless.
  */
-function buildCspWithNonce(nonce: string): string {
+function buildCsp(): string {
   // WEB-13 / WEB-20 (audit 2026-05-19): allow framing the artifact sandbox
   // origin so the cross-origin renderer at sandbox.agiworkforce.com can be
   // embedded by the chat UI. When NEXT_PUBLIC_SANDBOX_ORIGIN is unset the
@@ -25,7 +34,7 @@ function buildCspWithNonce(nonce: string): string {
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}'${devUnsafeEval} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
+    script-src 'self' 'unsafe-inline'${devUnsafeEval} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
@@ -43,28 +52,10 @@ function buildCspWithNonce(nonce: string): string {
     .trim();
 }
 
-function buildCspResponse(request: NextRequest): NextResponse {
-  // Generate a cryptographically-secure per-request nonce
-  const nonce = btoa(crypto.randomUUID());
-  const csp = buildCspWithNonce(nonce);
-
-  // Forward nonce to Server Components via request header (readable via next/headers)
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
-  requestHeaders.set('x-agi-pathname', `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  // CRITICAL: Next.js reads the nonce from the Content-Security-Policy *request*
-  // header to stamp it onto every framework-injected inline <script>. Without
-  // this, the bootstrap/hydration scripts have no nonce and the response CSP
-  // blocks them, breaking the page. (Next.js CSP guide — set CSP on both the
-  // request and the response.)
-  requestHeaders.set('Content-Security-Policy', csp);
-
-  // Create new pass-through response with the modified request headers
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
-
-  // Set nonce-based CSP on the response
-  response.headers.set('Content-Security-Policy', csp);
-
+function buildCspResponse(): NextResponse {
+  // Response-only CSP, no request-header rewriting (see buildCsp for why).
+  const response = NextResponse.next();
+  response.headers.set('Content-Security-Policy', buildCsp());
   return response;
 }
 
@@ -79,7 +70,7 @@ function buildSignedOutRedirect(request: NextRequest): NextResponse {
   const redirectUrl = new URL('/login', request.url);
   redirectUrl.searchParams.set('redirectTo', requestedPath);
   const response = NextResponse.redirect(redirectUrl);
-  response.headers.set('Content-Security-Policy', buildCspWithNonce(btoa(crypto.randomUUID())));
+  response.headers.set('Content-Security-Policy', buildCsp());
   return response;
 }
 
@@ -109,8 +100,8 @@ const isClerkSessionRoute = createRouteMatcher([
   '/api/(.*)',
 ]);
 
-const clerkAwareProxy = clerkMiddleware((_auth, request: NextRequest) => {
-  return buildCspResponse(request);
+const clerkAwareProxy = clerkMiddleware(() => {
+  return buildCspResponse();
 });
 
 export const proxy: NextMiddleware = (request, event) => {
@@ -119,14 +110,14 @@ export const proxy: NextMiddleware = (request, event) => {
   }
 
   if (isPublicApiRoute(request)) {
-    return buildCspResponse(request);
+    return buildCspResponse();
   }
 
   if (isClerkSessionRoute(request)) {
     return clerkAwareProxy(request, event);
   }
 
-  return buildCspResponse(request);
+  return buildCspResponse();
 };
 
 export const config = {
