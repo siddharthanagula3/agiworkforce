@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, MoreHorizontal, Settings2, Pin } from 'lucide-react';
 import {
   ProjectHeader,
   ModelSelector,
@@ -15,19 +15,24 @@ import {
   type ProjectRecord,
   type ProjectAccentColor,
 } from '@agiworkforce/types';
-import { KnowledgeFilesPanel } from '@/features/projects/components/KnowledgeFilesPanel';
 import { ChatComposerNew } from '@/features/chat/components/Composer/ChatComposerNew';
 import { useProjectMetaStore } from '@/features/projects/stores/project-meta-store';
 import { useChatStore } from '@/stores/chatStore';
+import { KnowledgeFilesPanel } from '@/features/projects/components/KnowledgeFilesPanel';
+import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 
 /**
- * /projects/[id] · per-project detail view, three-pane layout.
+ * /projects/[id] - per-project detail view.
  *
- * Left pane:  narrow nav rail (back, chats tab, sources tab).
- * Center pane: chat list + embedded composer. Model selector in header.
- * Right pane: knowledge panel (memory note, instructions editor, files).
+ * Layout: single centered column (ChatGPT-style).
+ * - FolderOpen icon + project name title
+ * - "New chat in <name>" composer
+ * - Chats / Sources tab bar
+ * - Chat list or empty state
  *
- * Fixes 47, 48, 50, 51 (2026-05-24).
+ * Top-right: "..." menu with "Project settings" and "Pin project".
+ * "Project settings" opens ProjectSettingsDialog (same modal the sidebar gear uses).
+ * Knowledge files live inside the settings modal under "Files".
  */
 
 type Tab = 'chats' | 'sources';
@@ -69,11 +74,9 @@ function formatChatDate(dateStr: string | undefined | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// Capacity thresholds (single definition · used by CapacityBanners +
-// CapacityFilesHeader below)
+// Capacity thresholds
 // ---------------------------------------------------------------------------
-const MAX_KNOWLEDGE_FILES = 20;
-const MAX_KNOWLEDGE_BYTES = 50 * 1024 * 1024; // 50 MiB display cap
+const MAX_CONVERSATIONS_WARN = 80;
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -81,14 +84,14 @@ export default function ProjectDetailPage() {
   const projectId = params?.id;
   const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
   const updateProject = useProjectStore((s) => s.updateProject);
+  const removeProject = useProjectStore((s) => s.removeProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const setProjects = useProjectStore((s) => s.setProjects);
+  const toggleStar = useProjectStore((s) => s.toggleStar);
 
   // Hydrate the project store from the server so a server-created project (in
   // user_projects) resolves here even when it isn't in this device's local
-  // store yet — e.g. just created, or opened from another device. Without this
-  // the page falsely shows "Project not found". Merge server rows with any
-  // local-only projects, server winning on id conflicts.
+  // store yet.
   const [hydratingProjects, setHydratingProjects] = useState(true);
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +106,6 @@ export default function ProjectDetailPage() {
             const localOnly = useProjectStore
               .getState()
               .projects.filter((p) => !serverIds.has(p.id));
-
             setProjects([...(serverProjects as any), ...localOnly]);
           }
         }
@@ -119,9 +121,6 @@ export default function ProjectDetailPage() {
   }, [setProjects]);
 
   // Per-project model selection.
-  // On mount: apply any saved per-project model to the global model store so
-  // the ModelSelector and inference layer both pick it up.
-  // On every global model change: persist back to the per-project store.
   const globalModelId = useChatModelStore((s) => s.selectedModelId);
   const setGlobalModel = useChatModelStore((s) => s.selectModel);
   const projectModelId = useProjectMetaStore((s) =>
@@ -134,7 +133,6 @@ export default function ProjectDetailPage() {
     if (projectId && projectModelId) {
       setGlobalModel(projectModelId);
     }
-    // Only run on mount (projectId/projectModelId are stable on first render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
@@ -145,12 +143,26 @@ export default function ProjectDetailPage() {
     }
   }, [projectId, globalModelId, setProjectModel]);
 
-  // Active model for this project: project-specific > global (for display only)
-  const activeModelId = projectModelId ?? globalModelId;
-
   const [tab, setTab] = useState<Tab>('chats');
-  const [editingInstructions, setEditingInstructions] = useState(false);
-  const [instructionsDraft, setInstructionsDraft] = useState('');
+
+  // "..." overflow menu
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Settings modal
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
 
   const handleProjectSend = useCallback(
     (content: string) => {
@@ -165,6 +177,14 @@ export default function ProjectDetailPage() {
       router.push(`/chat?project=${encodeURIComponent(project.id)}`);
     },
     [project, router, setActiveProject],
+  );
+
+  const handleDeleteProject = useCallback(
+    (id: string) => {
+      removeProject(id);
+      router.push('/projects');
+    },
+    [removeProject, router],
   );
 
   const headerPresentation = useMemo(() => {
@@ -190,7 +210,7 @@ export default function ProjectDetailPage() {
     return summarizeProjectHeader({ project: record });
   }, [project]);
 
-  // Web conversation store — used to look up real titles and dates for the chats list.
+  // Web conversation store
   const allConversations = useChatStore((s) => s.conversations);
   const conversationMeta = useMemo(() => {
     const map = new Map<string, { title: string; updatedAt: string }>();
@@ -200,8 +220,7 @@ export default function ProjectDetailPage() {
     return map;
   }, [allConversations]);
 
-  // While the server hydration is in flight, show a neutral loading state rather
-  // than flashing "Project not found" for a project that does exist server-side.
+  // Loading state while hydrating from server
   if (!project && hydratingProjects) {
     return (
       <main
@@ -216,7 +235,7 @@ export default function ProjectDetailPage() {
           fontSize: 14,
         }}
       >
-        Loading project…
+        Loading project...
       </main>
     );
   }
@@ -232,7 +251,7 @@ export default function ProjectDetailPage() {
           color: 'var(--agi-ink)',
         }}
       >
-        <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto' }}>
           <button
             type="button"
             onClick={() => router.push('/projects')}
@@ -275,32 +294,30 @@ export default function ProjectDetailPage() {
       data-design="agi"
       style={{ minHeight: '100vh', background: 'var(--agi-bg-2)', color: 'var(--agi-ink)' }}
     >
-      {/* Three-pane grid: nav rail | center | right knowledge panel */}
+      {/* Single centered column, ChatGPT-style */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: '52px 1fr 300px',
-          gridTemplateRows: '100vh',
-          maxWidth: 1400,
+          maxWidth: 720,
           margin: '0 auto',
+          padding: '0 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
         }}
-        className="project-detail-grid"
       >
-        {/* ------------------------------------------------------------------ */}
-        {/* LEFT: narrow nav rail                                              */}
-        {/* ------------------------------------------------------------------ */}
-        <aside
-          data-testid="project-detail-nav"
+        {/* ---------------------------------------------------------------- */}
+        {/* Top bar: back + model selector + "..." menu                      */}
+        {/* ---------------------------------------------------------------- */}
+        <div
           style={{
-            borderRight: '1px solid var(--agi-rule)',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
-            paddingTop: 16,
-            gap: 8,
+            justifyContent: 'space-between',
+            padding: '16px 0 0',
+            flexShrink: 0,
           }}
         >
-          {/* Back */}
+          {/* Back button */}
           <button
             type="button"
             onClick={() => router.push('/projects')}
@@ -324,615 +341,409 @@ export default function ProjectDetailPage() {
             &larr;
           </button>
 
-          <div style={{ width: 24, height: 1, background: 'var(--agi-rule)', margin: '4px 0' }} />
+          {/* Right side: model selector + "..." menu */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ModelSelector
+              onSettingsClick={() => router.push('/settings/general')}
+              onProPlusRequired={() => {
+                /* waitlist-gated in v1 */
+              }}
+            />
 
-          {/* Chats tab */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'chats'}
-            onClick={() => setTab('chats')}
-            data-testid="project-detail-tab-chats"
-            title="Chats"
-            style={{
-              width: 36,
-              height: 36,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 8,
-              border: 'none',
-              background: tab === 'chats' ? 'var(--agi-bg-3)' : 'transparent',
-              cursor: 'pointer',
-              color: tab === 'chats' ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
-              fontSize: 15,
-            }}
-          >
-            &#128172;
-          </button>
-
-          {/* Sources tab */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'sources'}
-            onClick={() => setTab('sources')}
-            data-testid="project-detail-tab-sources"
-            title="Sources"
-            style={{
-              width: 36,
-              height: 36,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 8,
-              border: 'none',
-              background: tab === 'sources' ? 'var(--agi-bg-3)' : 'transparent',
-              cursor: 'pointer',
-              color: tab === 'sources' ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
-              fontSize: 15,
-            }}
-          >
-            &#128196;
-          </button>
-        </aside>
-
-        {/* ------------------------------------------------------------------ */}
-        {/* CENTER: project header + chat panel + composer                     */}
-        {/* ------------------------------------------------------------------ */}
-        <section
-          data-testid="project-detail-center"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            borderRight: '1px solid var(--agi-rule)',
-          }}
-        >
-          {/* ChatGPT-style header: FolderOpen icon + project name + model selector */}
-          <div
-            style={{
-              padding: '16px 24px 12px',
-              borderBottom: '1px solid var(--agi-rule)',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-              <FolderOpen
-                style={{ width: 22, height: 22, flexShrink: 0, color: 'var(--agi-amber)' }}
-                aria-hidden="true"
-              />
-              <h1
-                style={{
-                  fontFamily: 'var(--serif)',
-                  fontSize: 20,
-                  fontWeight: 500,
-                  color: 'var(--agi-ink)',
-                  margin: 0,
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {project.name}
-              </h1>
-            </div>
-
-            {/* Model selector for this project */}
-            <div style={{ flexShrink: 0 }}>
-              <ModelSelector
-                onSettingsClick={() => router.push('/settings/general')}
-                onProPlusRequired={() => {
-                  /* waitlist-gated in v1 */
-                }}
-              />
-            </div>
-          </div>
-
-          {/* ProjectHeader provides description/instructions summary — shown below the title bar */}
-          <div style={{ padding: '8px 24px 0', flexShrink: 0 }}>
-            <ProjectHeader presentation={headerPresentation} />
-          </div>
-
-          {/* Horizontal tab bar: Chats | Sources */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0,
-              borderBottom: '1px solid var(--agi-rule)',
-              padding: '0 24px',
-              flexShrink: 0,
-            }}
-            role="tablist"
-            aria-label="Project tabs"
-          >
-            {(['chats', 'sources'] as const).map((t) => (
+            {/* "..." overflow menu */}
+            <div ref={menuRef} style={{ position: 'relative' }}>
               <button
-                key={t}
                 type="button"
-                role="tab"
-                aria-selected={tab === t}
-                onClick={() => setTab(t)}
-                data-testid={`project-detail-tab-${t}`}
+                aria-label="Project options"
+                data-testid="project-detail-menu-btn"
+                onClick={() => setMenuOpen((o) => !o)}
                 style={{
-                  padding: '10px 16px',
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: tab === t ? '2px solid var(--agi-amber)' : '2px solid transparent',
-                  color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
-                  fontSize: 13,
-                  fontWeight: tab === t ? 600 : 400,
+                  width: 36,
+                  height: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 8,
+                  border: '1px solid var(--agi-rule)',
+                  background: menuOpen ? 'var(--agi-bg-3)' : 'transparent',
                   cursor: 'pointer',
-                  textTransform: 'capitalize',
-                  marginBottom: -1,
-                  transition: 'color 0.15s, border-color 0.15s',
-                }}
-              >
-                {t === 'chats' ? 'Chats' : 'Sources'}
-              </button>
-            ))}
-          </div>
-
-          {/* Capacity / limit banners */}
-          <CapacityBanners
-            conversationCount={conversationIds.length}
-            projectModelId={activeModelId}
-          />
-
-          {/* Tab body */}
-          <div
-            style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}
-            data-testid={`project-detail-panel-${tab}`}
-          >
-            {tab === 'chats' ? (
-              conversationIds.length === 0 ? (
-                <EmptyState
-                  title="No chats in this project yet"
-                  detail="Use the composer below to start a conversation. Project instructions and files will be carried in automatically."
-                />
-              ) : (
-                <ul
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    padding: 0,
-                    margin: 0,
-                  }}
-                >
-                  {conversationIds.map((conversationId) => {
-                    const meta = conversationMeta.get(conversationId);
-                    const title =
-                      meta?.title && meta.title !== 'New Chat'
-                        ? meta.title
-                        : (meta?.title ?? 'Untitled chat');
-                    const dateLabel = formatChatDate(meta?.updatedAt);
-                    return (
-                      <li
-                        key={conversationId}
-                        style={{
-                          listStyle: 'none',
-                          border: '1px solid var(--agi-rule)',
-                          borderRadius: 10,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveProject(project.id);
-                            router.push(`/chat/${encodeURIComponent(conversationId)}`);
-                          }}
-                          title={title}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 12,
-                            width: '100%',
-                            background: 'transparent',
-                            border: 0,
-                            padding: '10px 14px',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.background =
-                              'var(--agi-bg-3)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                          }}
-                        >
-                          <span
-                            style={{
-                              color: 'var(--agi-ink)',
-                              fontSize: 13,
-                              fontWeight: 500,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              minWidth: 0,
-                              flex: 1,
-                            }}
-                          >
-                            {title}
-                          </span>
-                          {dateLabel && (
-                            <span
-                              style={{
-                                color: 'var(--agi-ink-2)',
-                                fontSize: 11,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {dateLabel}
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )
-            ) : (
-              <KnowledgeFilesPanel projectId={project.id} />
-            )}
-          </div>
-
-          {/* Composer pinned to bottom of center pane */}
-          {tab === 'chats' && (
-            <div
-              data-testid="project-detail-composer"
-              style={{
-                borderTop: '1px solid var(--agi-rule)',
-                padding: '16px 24px 20px',
-                flexShrink: 0,
-                background: 'var(--agi-bg-2)',
-              }}
-            >
-              <ChatComposerNew
-                onSend={handleProjectSend}
-                placeholder={`New chat in ${project.name}`}
-                promptCompletionEnabled={false}
-              />
-            </div>
-          )}
-        </section>
-
-        {/* ------------------------------------------------------------------ */}
-        {/* RIGHT: knowledge panel (memory, instructions, files)               */}
-        {/* ------------------------------------------------------------------ */}
-        <aside
-          data-testid="project-detail-right"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            background: 'var(--agi-bg-3)',
-          }}
-        >
-          <div
-            style={{
-              padding: '16px 20px 12px',
-              borderBottom: '1px solid var(--agi-rule)',
-              flexShrink: 0,
-            }}
-          >
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--agi-ink-2)',
-                margin: 0,
-              }}
-            >
-              Project knowledge
-            </p>
-          </div>
-
-          <div
-            style={{
-              flex: 1,
-              overflow: 'auto',
-              padding: '16px 20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 24,
-            }}
-          >
-            {/* Memory section */}
-            <section aria-label="Memory">
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 8,
-                }}
-              >
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--agi-ink)', margin: 0 }}>
-                  Memory
-                </p>
-                <span
-                  title="Only you can see this memory"
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 500,
-                    color: 'var(--agi-ink-2)',
-                    border: '1px solid var(--agi-rule)',
-                    borderRadius: 6,
-                    padding: '2px 6px',
-                  }}
-                >
-                  Only you
-                </span>
-              </div>
-              <p
-                style={{
-                  fontSize: 12,
                   color: 'var(--agi-ink-2)',
-                  lineHeight: 1.55,
-                  margin: 0,
-                  fontStyle: 'italic',
+                  transition: 'background 0.12s, color 0.12s',
+                }}
+                onMouseEnter={(e) => {
+                  if (!menuOpen)
+                    (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!menuOpen)
+                    (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                 }}
               >
-                No project memories yet. Memories will appear here when the assistant remembers
-                something about this project.
-              </p>
-            </section>
+                <MoreHorizontal style={{ width: 18, height: 18 }} aria-hidden="true" />
+              </button>
 
-            {/* Instructions section */}
-            <section aria-label="Instructions">
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 8,
-                }}
-              >
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--agi-ink)', margin: 0 }}>
-                  Instructions
-                </p>
-                {!editingInstructions ? (
+              {menuOpen && (
+                <div
+                  role="menu"
+                  data-testid="project-detail-menu"
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    minWidth: 180,
+                    background: 'var(--agi-bg)',
+                    border: '1px solid var(--agi-rule-strong)',
+                    borderRadius: 10,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+                    overflow: 'hidden',
+                    zIndex: 50,
+                  }}
+                >
                   <button
                     type="button"
+                    role="menuitem"
+                    data-testid="project-detail-menu-settings"
                     onClick={() => {
-                      setInstructionsDraft(project.instructions ?? '');
-                      setEditingInstructions(true);
+                      setMenuOpen(false);
+                      setSettingsOpen(true);
                     }}
                     style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      width: '100%',
+                      padding: '10px 14px',
                       background: 'transparent',
-                      border: '1px solid var(--agi-rule)',
-                      borderRadius: 6,
-                      padding: '2px 8px',
-                      fontSize: 11,
-                      color: 'var(--agi-ink-2)',
+                      border: 0,
+                      textAlign: 'left',
+                      fontSize: 13,
+                      color: 'var(--agi-ink)',
                       cursor: 'pointer',
                     }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    }}
                   >
-                    Edit
+                    <Settings2
+                      style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                      aria-hidden="true"
+                    />
+                    Project settings
                   </button>
-                ) : (
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        updateProject(project.id, {
-                          instructions: instructionsDraft.trim() || undefined,
-                        });
-                        setEditingInstructions(false);
-                      }}
-                      style={{
-                        background: 'var(--agi-amber)',
-                        border: 'none',
-                        borderRadius: 6,
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        color: '#fff',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingInstructions(false)}
-                      style={{
-                        background: 'transparent',
-                        border: '1px solid var(--agi-rule)',
-                        borderRadius: 6,
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        color: 'var(--agi-ink-2)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
 
-              {editingInstructions ? (
-                <textarea
-                  value={instructionsDraft}
-                  onChange={(e) => setInstructionsDraft(e.target.value)}
-                  placeholder="Tell the assistant how to behave in this project..."
-                  autoFocus
-                  style={{
-                    width: '100%',
-                    minHeight: 100,
-                    background: 'var(--agi-bg-2)',
-                    border: '1px solid var(--agi-rule-strong)',
-                    borderRadius: 8,
-                    padding: '8px 10px',
-                    fontSize: 12,
-                    color: 'var(--agi-ink)',
-                    lineHeight: 1.55,
-                    resize: 'vertical',
-                    boxSizing: 'border-box',
-                    fontFamily: 'inherit',
-                  }}
-                />
-              ) : project.instructions ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--agi-ink-2)',
-                    lineHeight: 1.55,
-                    margin: 0,
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {project.instructions}
-                </p>
-              ) : (
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--agi-ink-2)',
-                    lineHeight: 1.55,
-                    margin: 0,
-                    fontStyle: 'italic',
-                  }}
-                >
-                  No instructions. Click Edit to add instructions the assistant will follow in this
-                  project.
-                </p>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="project-detail-menu-pin"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      if (projectId) toggleStar(projectId);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      width: '100%',
+                      padding: '10px 14px',
+                      background: 'transparent',
+                      border: 0,
+                      textAlign: 'left',
+                      fontSize: 13,
+                      color: 'var(--agi-ink)',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    }}
+                  >
+                    <Pin
+                      style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                      aria-hidden="true"
+                    />
+                    {project.starred ? 'Unpin project' : 'Pin project'}
+                  </button>
+                </div>
               )}
-            </section>
-
-            {/* Files section (knowledge files) */}
-            <section aria-label="Files">
-              <CapacityFilesHeader />
-              <KnowledgeFilesPanel projectId={project.id} />
-            </section>
+            </div>
           </div>
-        </aside>
+        </div>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Hero: FolderOpen icon + project name                             */}
+        {/* ---------------------------------------------------------------- */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            padding: '48px 0 32px',
+            flexShrink: 0,
+          }}
+        >
+          {project.iconEmoji ? (
+            <span style={{ fontSize: 40, lineHeight: 1, marginBottom: 12 }} aria-hidden="true">
+              {project.iconEmoji}
+            </span>
+          ) : (
+            <FolderOpen
+              style={{
+                width: 40,
+                height: 40,
+                color: 'var(--agi-amber)',
+                marginBottom: 12,
+              }}
+              aria-hidden="true"
+            />
+          )}
+          <h1
+            style={{
+              fontFamily: 'var(--serif)',
+              fontSize: 26,
+              fontWeight: 600,
+              color: 'var(--agi-ink)',
+              margin: 0,
+            }}
+          >
+            {project.name}
+          </h1>
+
+          {/* Optional project description / instructions summary */}
+          {headerPresentation && (
+            <div style={{ marginTop: 8, maxWidth: 540 }}>
+              <ProjectHeader presentation={headerPresentation} />
+            </div>
+          )}
+        </div>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Composer                                                         */}
+        {/* ---------------------------------------------------------------- */}
+        <div data-testid="project-detail-composer" style={{ flexShrink: 0, marginBottom: 32 }}>
+          <ChatComposerNew
+            onSend={handleProjectSend}
+            placeholder={`New chat in ${project.name}`}
+            promptCompletionEnabled={false}
+          />
+        </div>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Capacity banner                                                  */}
+        {/* ---------------------------------------------------------------- */}
+        {conversationIds.length >= MAX_CONVERSATIONS_WARN && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              borderRadius: 8,
+              background: 'rgba(200,137,42,0.1)',
+              border: '1px solid rgba(200,137,42,0.3)',
+              fontSize: 12,
+              color: 'var(--agi-amber)',
+              lineHeight: 1.5,
+              flexShrink: 0,
+            }}
+          >
+            This project has {conversationIds.length} conversations. Consider archiving older ones
+            for performance.
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Chats / Sources tab bar                                          */}
+        {/* ---------------------------------------------------------------- */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            borderBottom: '1px solid var(--agi-rule)',
+            flexShrink: 0,
+            marginBottom: 0,
+          }}
+          role="tablist"
+          aria-label="Project tabs"
+        >
+          {(['chats', 'sources'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              data-testid={`project-detail-tab-${t}`}
+              style={{
+                padding: '10px 16px',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: tab === t ? '2px solid var(--agi-amber)' : '2px solid transparent',
+                color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
+                fontSize: 13,
+                fontWeight: tab === t ? 600 : 400,
+                cursor: 'pointer',
+                textTransform: 'capitalize',
+                marginBottom: -1,
+                transition: 'color 0.15s, border-color 0.15s',
+              }}
+            >
+              {t === 'chats' ? 'Chats' : 'Sources'}
+            </button>
+          ))}
+        </div>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Tab content                                                      */}
+        {/* ---------------------------------------------------------------- */}
+        <div
+          style={{ flex: 1, paddingTop: 20, paddingBottom: 40 }}
+          data-testid={`project-detail-panel-${tab}`}
+        >
+          {tab === 'chats' ? (
+            conversationIds.length === 0 ? (
+              <EmptyChatsState projectName={project.name} />
+            ) : (
+              <ul
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  padding: 0,
+                  margin: 0,
+                }}
+              >
+                {conversationIds.map((conversationId) => {
+                  const meta = conversationMeta.get(conversationId);
+                  const title =
+                    meta?.title && meta.title !== 'New Chat'
+                      ? meta.title
+                      : (meta?.title ?? 'Untitled chat');
+                  const dateLabel = formatChatDate(meta?.updatedAt);
+                  return (
+                    <li
+                      key={conversationId}
+                      style={{
+                        listStyle: 'none',
+                        border: '1px solid var(--agi-rule)',
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveProject(project.id);
+                          router.push(`/chat/${encodeURIComponent(conversationId)}`);
+                        }}
+                        title={title}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          width: '100%',
+                          background: 'transparent',
+                          border: 0,
+                          padding: '10px 14px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background =
+                            'var(--agi-bg-3)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: 'var(--agi-ink)',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                            flex: 1,
+                          }}
+                        >
+                          {title}
+                        </span>
+                        {dateLabel && (
+                          <span
+                            style={{
+                              color: 'var(--agi-ink-2)',
+                              fontSize: 11,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {dateLabel}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          ) : (
+            /* Sources tab: knowledge files inline (also accessible via settings modal) */
+            <KnowledgeFilesPanel projectId={project.id} />
+          )}
+        </div>
       </div>
 
-      {/* Responsive: on small screens collapse to single column */}
-      <style>{`
-        @media (max-width: 767px) {
-          .project-detail-grid {
-            grid-template-columns: 1fr !important;
-            grid-template-rows: auto !important;
-          }
-        }
-        @media (max-width: 1023px) {
-          .project-detail-grid {
-            grid-template-columns: 52px 1fr !important;
-          }
-          [data-testid="project-detail-right"] {
-            display: none !important;
-          }
-        }
-      `}</style>
+      {/* Project Settings Modal */}
+      {settingsOpen && (
+        <ProjectSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          project={project}
+          onUpdate={updateProject}
+          onDelete={handleDeleteProject}
+        />
+      )}
     </main>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Capacity banners (Fix 51)
+// Empty state
 // ---------------------------------------------------------------------------
 
-interface CapacityBannersProps {
-  conversationCount: number;
-  projectModelId: string;
+interface EmptyChatsStateProps {
+  projectName: string;
 }
 
-function CapacityBanners({ conversationCount, projectModelId: _modelId }: CapacityBannersProps) {
-  const warnings: string[] = [];
-
-  if (conversationCount >= MAX_KNOWLEDGE_FILES * 4) {
-    warnings.push(
-      `This project has ${conversationCount} conversations. Consider archiving older ones for performance.`,
-    );
-  }
-
-  if (warnings.length === 0) return null;
-
+function EmptyChatsState({ projectName }: EmptyChatsStateProps) {
   return (
-    <div style={{ padding: '0 24px' }}>
-      {warnings.map((w) => (
-        <div
-          key={w}
-          role="alert"
-          style={{
-            marginTop: 10,
-            padding: '8px 12px',
-            borderRadius: 8,
-            background: 'rgba(200,137,42,0.1)',
-            border: '1px solid rgba(200,137,42,0.3)',
-            fontSize: 12,
-            color: 'var(--agi-amber)',
-            lineHeight: 1.5,
-          }}
-        >
-          {w}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Files section header (shows capacity info)
-// ---------------------------------------------------------------------------
-function CapacityFilesHeader() {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-      }}
-    >
-      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--agi-ink)', margin: 0 }}>Files</p>
-      <span style={{ fontSize: 10, color: 'var(--agi-ink-2)' }}>
-        Max {MAX_KNOWLEDGE_FILES} files / {MAX_KNOWLEDGE_BYTES / (1024 * 1024)} MiB
-      </span>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-interface EmptyStateProps {
-  title: string;
-  detail: string;
-}
-
-function EmptyState({ title, detail }: EmptyStateProps) {
-  return (
-    <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--agi-ink)', margin: '0 0 6px' }}>
-        {title}
+    <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+      <p
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--agi-ink)',
+          margin: '0 0 6px',
+        }}
+      >
+        No chats yet
       </p>
       <p
         style={{
-          fontSize: 12,
+          fontSize: 13,
           color: 'var(--agi-ink-2)',
           margin: '0 auto',
-          maxWidth: 480,
+          maxWidth: 400,
           lineHeight: 1.55,
         }}
       >
-        {detail}
+        Chats in {projectName} will live here.
       </p>
     </div>
   );
