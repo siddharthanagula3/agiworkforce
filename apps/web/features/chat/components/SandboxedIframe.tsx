@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 import {
   getSandboxOrigin,
@@ -9,6 +9,9 @@ import {
   type ArtifactRenderPayload,
   type SandboxIncomingMessage,
 } from '@/lib/artifact-sandbox';
+
+/** Milliseconds to wait for a sandbox-ready or successful onLoad before falling back. */
+const SANDBOX_CONNECT_TIMEOUT_MS = 3000;
 
 /**
  * Renders an LLM artifact inside an iframe that is cross-origin to the parent
@@ -55,6 +58,30 @@ export function SandboxedIframe({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const sandboxOrigin = getSandboxOrigin();
   const [, setRenderError] = useState<string | null>(null);
+  // When the cross-origin sandbox is configured but unreachable (e.g. the
+  // subdomain server is down), we fall back to the same-origin srcDoc so the
+  // user sees the artifact content instead of a "refused to connect" page.
+  const [useFallback, setUseFallback] = useState(false);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sandboxConnectedRef = useRef(false);
+
+  // Clear any pending fallback timer when the key or origin changes.
+  useEffect(() => {
+    sandboxConnectedRef.current = false;
+    setUseFallback(false);
+    return () => {
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
+    };
+  }, [sandboxOrigin, refreshKey]);
+
+  const activateFallback = useCallback(() => {
+    if (!sandboxConnectedRef.current) {
+      setUseFallback(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!sandboxOrigin) return undefined;
@@ -63,6 +90,12 @@ export function SandboxedIframe({
       const data = event.data as SandboxIncomingMessage | undefined;
       if (!data || typeof data !== 'object') return;
       if (data.type === 'sandbox-ready' && iframeRef.current) {
+        // Sandbox is reachable; cancel the fallback timer.
+        sandboxConnectedRef.current = true;
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
         try {
           postRenderToSandbox(iframeRef.current, payload);
         } catch {
@@ -78,16 +111,42 @@ export function SandboxedIframe({
 
   // Also post on iframe load as a defensive backup against the case where
   // `sandbox-ready` was sent before our listener attached.
-  const onLoad = () => {
+  const onLoad = useCallback(() => {
     if (!sandboxOrigin || !iframeRef.current) return;
+    // Cross-origin load fired: the iframe reached the server.
+    sandboxConnectedRef.current = true;
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
     try {
       postRenderToSandbox(iframeRef.current, payload);
     } catch {
       // ignore
     }
-  };
+  }, [sandboxOrigin, payload]);
 
-  if (sandboxOrigin) {
+  // onError fires when the iframe src fails to load (e.g. network error,
+  // server down). Switch to the srcDoc fallback immediately.
+  const onError = useCallback(() => {
+    activateFallback();
+  }, [activateFallback]);
+
+  // Start the connect-timeout when we have a sandboxOrigin and are not yet
+  // falling back. If no successful load or sandbox-ready arrives within the
+  // timeout window, degrade to the srcDoc path.
+  useEffect(() => {
+    if (!sandboxOrigin || useFallback || sandboxConnectedRef.current) return undefined;
+    connectTimeoutRef.current = setTimeout(activateFallback, SANDBOX_CONNECT_TIMEOUT_MS);
+    return () => {
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
+    };
+  }, [sandboxOrigin, useFallback, activateFallback]);
+
+  if (sandboxOrigin && !useFallback) {
     return (
       <iframe
         ref={iframeRef}
@@ -98,16 +157,20 @@ export function SandboxedIframe({
         className={className}
         style={style}
         onLoad={onLoad}
+        onError={onError}
       />
     );
   }
 
-  // Fallback · no sandbox subdomain configured.
-  // allow-modals: lets window.print() and alert/confirm/prompt work inside artifacts.
+  // Fallback · no sandbox subdomain configured, OR the cross-origin sandbox
+  // was unreachable (onError or connect timeout). allow-modals lets
+  // window.print() and alert/confirm/prompt work inside artifacts.
+  // NOTE: allow-same-origin is intentionally absent; scripts in the iframe
+  // cannot access the parent's cookies or localStorage.
   return (
     <iframe
       ref={iframeRef}
-      key={refreshKey}
+      key={`fallback-${refreshKey}`}
       title={title}
       srcDoc={fallbackSrcDoc}
       sandbox="allow-scripts allow-modals"
