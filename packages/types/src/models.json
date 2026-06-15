@@ -739,7 +739,7 @@
     },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
-      "apiModelId": "gemini-3.1-flash-image-preview",
+      "apiModelId": "gemini-3.1-flash-image",
       "name": "Gemini 3.1 Flash Image",
       "provider": "google",
       "modelType": "image",
