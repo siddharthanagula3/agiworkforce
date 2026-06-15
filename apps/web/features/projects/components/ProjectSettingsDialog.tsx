@@ -1,14 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@shared/ui/dialog';
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,36 +16,25 @@ import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Label } from '@shared/ui/label';
 import { Textarea } from '@shared/ui/textarea';
-import { Save, Trash2, Upload, FileText, X as XIcon } from 'lucide-react';
+import { Smile, Trash2 } from 'lucide-react';
+import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
+import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import type { Project } from '@features/projects/stores/project-store';
-
-// ---------------------------------------------------------------------------
-// Color options
-// ---------------------------------------------------------------------------
-
-const PROJECT_COLORS = [
-  { value: '#3b82f6', label: 'Blue' },
-  { value: '#10b981', label: 'Emerald' },
-  { value: '#f59e0b', label: 'Amber' },
-  { value: '#8b5cf6', label: 'Violet' },
-  { value: '#ef4444', label: 'Red' },
-  { value: '#ec4899', label: 'Pink' },
-  { value: '#06b6d4', label: 'Cyan' },
-  { value: '#f97316', label: 'Orange' },
-];
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
-interface ProjectSettingsDialogProps {
+export interface ProjectSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: Project;
   onUpdate: (
     id: string,
-    updates: Partial<Pick<Project, 'name' | 'description' | 'instructions' | 'color'>>,
+    updates: Partial<
+      Pick<Project, 'name' | 'description' | 'instructions' | 'color' | 'iconEmoji'>
+    >,
   ) => void;
   onDelete: (id: string) => void;
 }
@@ -69,36 +51,32 @@ export function ProjectSettingsDialog({
   onDelete,
 }: ProjectSettingsDialogProps) {
   const [name, setName] = useState(project.name);
-  const [description, setDescription] = useState(project.description ?? '');
   const [instructions, setInstructions] = useState(project.instructions ?? '');
-  const [color, setColor] = useState(project.color ?? '#6366f1');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [knowledgeFiles, setKnowledgeFiles] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync local state when project changes (e.g., switching between projects)
   useEffect(() => {
     setName(project.name);
-    setDescription(project.description ?? '');
     setInstructions(project.instructions ?? '');
-    setColor(project.color ?? '#6366f1');
-  }, [project.id, project.name, project.description, project.instructions, project.color]);
+  }, [project.id, project.name, project.instructions]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       toast.error('Project name is required');
       return;
     }
-
-    onUpdate(project.id, {
-      name: name.trim(),
-      description: description.trim(),
-      instructions: instructions.trim(),
-      color,
-    });
-
-    toast.success('Project updated');
-    onOpenChange(false);
+    setIsSaving(true);
+    try {
+      onUpdate(project.id, {
+        name: name.trim(),
+        instructions: instructions.trim() || undefined,
+      });
+      toast.success('Project updated');
+      onOpenChange(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = () => {
@@ -112,175 +90,133 @@ export function ProjectSettingsDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0 sm:max-w-lg">
-          <DialogHeader className="shrink-0 px-6 pt-6">
-            <DialogTitle>Project Settings</DialogTitle>
-            <DialogDescription>
-              Configure the project name, description, and custom instructions.
-            </DialogDescription>
+          {/* Header */}
+          <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-5">
+            <DialogTitle className="text-base font-semibold">Project settings</DialogTitle>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-2">
-            {/* Name */}
-            <div className="space-y-2">
-              <Label htmlFor="project-name">Name</Label>
-              <Input
-                id="project-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="My Project"
-                maxLength={100}
-              />
-            </div>
-
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="project-description">Description</Label>
-              <Input
-                id="project-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="A brief description of this project"
-                maxLength={200}
-              />
-            </div>
-
-            {/* Color */}
-            <div className="space-y-2">
-              <Label>Color</Label>
-              <div className="flex flex-wrap gap-2">
-                {PROJECT_COLORS.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setColor(c.value)}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border-2 transition-colors"
-                    style={{
-                      backgroundColor: c.value,
-                      borderColor: color === c.value ? 'white' : 'transparent',
-                    }}
-                    aria-label={c.label}
-                    title={c.label}
-                  >
-                    {color === c.value && (
-                      <svg
-                        className="h-3.5 w-3.5 text-white"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={3}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
+          {/* Scrollable body */}
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+            {/* Project name with emoji affordance */}
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="ps-project-name"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+              >
+                Project name
+              </Label>
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="Choose emoji (coming soon)"
+                  tabIndex={-1}
+                  className={cn(
+                    'absolute left-3 top-1/2 -translate-y-1/2',
+                    'flex h-6 w-6 items-center justify-center rounded-md',
+                    'text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+                  )}
+                >
+                  {project.iconEmoji ? (
+                    <span className="text-base leading-none">{project.iconEmoji}</span>
+                  ) : (
+                    <Smile className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+                <Input
+                  id="ps-project-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Project name"
+                  autoComplete="off"
+                  maxLength={100}
+                  className="h-11 rounded-xl bg-muted/40 pl-10"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleSave();
+                  }}
+                />
               </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="ps-instructions"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+              >
+                Instructions
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Set context and customize how AGI responds in this project.
+              </p>
+              <Textarea
+                id="ps-instructions"
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder={`e.g. "Respond in Spanish. Reference the latest documentation. Keep answers short and focused."`}
+                rows={5}
+                className="resize-y rounded-xl bg-muted/40"
+              />
+            </div>
+
+            {/* Memory */}
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="ps-memory"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+              >
+                Memory
+              </Label>
+              <div className="flex items-center gap-3">
+                <select
+                  id="ps-memory"
+                  defaultValue="default"
+                  className="h-9 rounded-lg border border-border/60 bg-muted/40 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                >
+                  <option value="default">Default</option>
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Project can access memories from outside chats, and vice versa.
+              </p>
             </div>
 
             {/* Knowledge Files */}
             <div className="space-y-2">
-              <Label>Knowledge Files</Label>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Files
+              </p>
               <p className="text-xs text-muted-foreground">
                 Upload documents that provide context for all conversations in this project.
               </p>
-
-              {/* Drop zone */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border/50 bg-muted/20 px-4 py-6 text-sm transition-colors hover:border-primary/30 hover:bg-muted/40"
-              >
-                <Upload className="h-5 w-5 text-muted-foreground" />
-                <span className="text-muted-foreground">Drop files or click to upload</span>
-                <span className="text-[10px] text-muted-foreground/60">
-                  PDF, DOCX, TXT, CSV, MD · max 30MB each
-                </span>
-              </button>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".pdf,.docx,.txt,.csv,.md,.doc,.rtf,.epub"
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  const valid = files.filter((f) => f.size <= 30 * 1024 * 1024);
-                  if (valid.length < files.length) {
-                    toast.error('Some files exceeded 30MB and were skipped');
-                  }
-                  setKnowledgeFiles((prev) => [...prev, ...valid]);
-                  e.target.value = '';
-                }}
-              />
-
-              {/* File list */}
-              {knowledgeFiles.length > 0 && (
-                <div className="space-y-1.5">
-                  {knowledgeFiles.map((file, idx) => (
-                    <div
-                      key={`${file.name}-${idx}`}
-                      className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-1.5 text-sm"
-                    >
-                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate">{file.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {(file.size / 1024 / 1024).toFixed(1)}MB
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setKnowledgeFiles((prev) => prev.filter((_, i) => i !== idx))
-                        }
-                        className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        aria-label={`Remove ${file.name}`}
-                      >
-                        <XIcon className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  <p className="text-xs text-muted-foreground">
-                    {knowledgeFiles.length} file{knowledgeFiles.length !== 1 ? 's' : ''} ·{' '}
-                    {(knowledgeFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(1)}MB
-                    total
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Custom Instructions */}
-            <div className="space-y-2">
-              <Label htmlFor="project-instructions">Custom Instructions</Label>
-              <Textarea
-                id="project-instructions"
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Enter custom instructions that will be prepended to every conversation in this project..."
-                rows={5}
-                className="resize-y"
-              />
-              <p className="text-xs text-muted-foreground">
-                These instructions are automatically included as context in every chat within this
-                project.
-              </p>
+              <KnowledgeFilesPanel projectId={project.id} />
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 border-t px-6 py-4 sm:justify-between">
+          {/* Footer */}
+          <div className="flex shrink-0 items-center justify-between border-t border-border/60 px-6 py-4">
+            {/* Destructive delete */}
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => setDeleteConfirmOpen(true)}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Project
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete project
             </Button>
-            <Button onClick={handleSave}>
-              <Save className="mr-2 h-4 w-4" />
+
+            {/* Save */}
+            <Button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={isSaving || !name.trim()}
+              className="rounded-xl px-5"
+            >
               Save
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

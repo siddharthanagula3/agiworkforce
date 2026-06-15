@@ -118,11 +118,13 @@ describe('MessageBubble', () => {
 
       render(<MessageBubble message={msg} />);
 
-      expect(screen.getByText(/1 tool/)).toBeInTheDocument();
+      // web_search maps to the "Searched the web" action phrase in the compact summary
+      expect(screen.getByText(/searched the web/i)).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
 
       await waitFor(() => {
-        expect(screen.getByText('web_search')).toBeInTheDocument();
+        // web_search is humanized to "Web search" (no query args on this tool entry)
+        expect(screen.getByText('Web search')).toBeInTheDocument();
       });
     });
   });

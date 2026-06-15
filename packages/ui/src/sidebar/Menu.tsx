@@ -7,8 +7,13 @@
  * sidebar's 3-dots / project-filter menus are simple enough to own here.
  *
  * Behavior: click trigger to toggle; click outside or Escape to close; clicking
- * an item runs its handler then closes. Positioned absolutely under (or above)
- * the trigger. Styling uses the same hsl(var(--*)) tokens the surfaces resolve.
+ * an item runs its handler then closes.
+ *
+ * Positioning: the panel uses `position: fixed` with coordinates computed from
+ * the trigger's getBoundingClientRect so the menu always escapes any
+ * `overflow-hidden` or `overflow-y-auto` ancestor (e.g. the sidebar scroll
+ * container). The panel is repositioned on scroll/resize while open. Styling
+ * uses the same hsl(var(--*)) tokens the surfaces resolve.
  */
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { cn } from '../cn';
@@ -34,9 +39,33 @@ export function Menu({
 }: MenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
 
   const close = () => setOpen(false);
-  const toggle = () => setOpen((v) => !v);
+
+  const computePosition = () => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const style: CSSProperties = {};
+    if (side === 'bottom') {
+      style.top = rect.bottom + 4;
+    } else {
+      style.bottom = window.innerHeight - rect.top + 4;
+    }
+    if (align === 'start') {
+      style.left = rect.left;
+    } else {
+      style.right = window.innerWidth - rect.right;
+    }
+    setMenuStyle(style);
+  };
+
+  const toggle = () => {
+    setOpen((v) => {
+      if (!v) computePosition();
+      return !v;
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -48,18 +77,19 @@ export function Menu({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    const onScrollOrResize = () => computePosition();
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScrollOrResize, { capture: true, passive: true });
+    window.addEventListener('resize', onScrollOrResize, { passive: true });
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScrollOrResize, { capture: true });
+      window.removeEventListener('resize', onScrollOrResize);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-
-  const menuStyle: CSSProperties = {
-    [side === 'bottom' ? 'top' : 'bottom']: 'calc(100% + 4px)',
-    [align === 'start' ? 'left' : 'right']: 0,
-  };
 
   return (
     <div ref={containerRef} className={cn('relative', className)}>
@@ -69,7 +99,7 @@ export function Menu({
           role="menu"
           style={menuStyle}
           className={cn(
-            'absolute z-50 min-w-[12rem] overflow-hidden rounded-md border p-1 shadow-lg',
+            'fixed z-[9999] min-w-[12rem] overflow-hidden rounded-md border p-1 shadow-lg',
             'border-[hsl(var(--border))] bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]',
             menuClassName,
           )}

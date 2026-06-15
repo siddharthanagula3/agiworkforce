@@ -69,6 +69,16 @@ export interface MessageMetadata {
     requiredTier: string;
     reason?: string;
   };
+  /** Media tool type for inline rendering (e.g. 'image-generation'). */
+  toolType?: string;
+  /** Generated image URL; displayed inline when toolType === 'image-generation'. */
+  imageUrl?: string;
+  /** Original prompt used to generate the image (persisted for edit/re-generate). */
+  imageGenPrompt?: string;
+  /** Aspect ratio requested when the image was generated. */
+  imageGenAspect?: string;
+  /** Model id used for image generation. */
+  imageGenModel?: string;
 }
 
 export interface MessageToolEntry {

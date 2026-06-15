@@ -31,6 +31,27 @@ async function handleGetMe(request: NextRequest) {
     // Auth: supports both Clerk session (cookie) and Bearer token paths.
     const { userId, email } = await getClerkAuthUser(request);
 
+    // Resolve the real display name + email from the Clerk profile. The session
+    // claims only carry userId (and sometimes email), so without this lookup the
+    // name falls back to the email prefix or 'User'. clerkClient works in both
+    // dev and production Clerk instances.
+    let clerkName: string | undefined;
+    let resolvedEmail = email ?? undefined;
+    try {
+      const { clerkClient } = await import('@clerk/nextjs/server');
+      const client = await clerkClient();
+      const clerkUser = await client.users.getUser(userId);
+      clerkName =
+        clerkUser.fullName?.trim() ||
+        [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim() ||
+        clerkUser.firstName?.trim() ||
+        clerkUser.username?.trim() ||
+        undefined;
+      resolvedEmail = resolvedEmail ?? clerkUser.primaryEmailAddress?.emailAddress ?? undefined;
+    } catch (clerkLookupError) {
+      logger.warn({ userId, error: clerkLookupError }, 'Failed to resolve Clerk profile name');
+    }
+
     const db = getNeonDb();
 
     const [subscription, credits, routing_preferences] = await Promise.all([
@@ -81,8 +102,8 @@ async function handleGetMe(request: NextRequest) {
 
     return NextResponse.json({
       id: userId,
-      email: email ?? null,
-      name: email?.split('@')[0] || 'User',
+      email: resolvedEmail ?? null,
+      name: clerkName || resolvedEmail?.split('@')[0] || 'User',
       avatar_url: null,
       created_at: null,
       updated_at: Date.now() / 1000,

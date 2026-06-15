@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ProjectGallery, ProjectCard, useChatProjectStore } from '@agiworkforce/unified-chat';
 import type { Project } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
 import { useProjectStore } from '@features/projects/stores/project-store';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 /**
  * /projects · top-level Projects hub on web.
@@ -64,6 +65,39 @@ export default function ProjectsPage() {
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const sortedProjects = useMemo(() => sortProjects(projects, sortMode), [projects, sortMode]);
+
+  // Server-backed create: persist to Neon (user_projects) and return the saved
+  // row so ProjectGallery merges the canonical id into the store. Without this
+  // handler the gallery falls back to a device-local-only project.
+  const handleCreateProject = useCallback(async (name: string): Promise<Project> => {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'same-origin',
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to create project (${res.status})`);
+    }
+    const json = (await res.json()) as { project: Project };
+    return json.project;
+  }, []);
+
+  // Server-backed delete: remove from Neon, then from the local store.
+  const handleDeleteProjectServer = useCallback(
+    async (projectId: string) => {
+      try {
+        await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+          method: 'DELETE',
+          headers: await addCsrfHeaders(),
+          credentials: 'same-origin',
+        });
+      } finally {
+        removeProject(projectId);
+      }
+    },
+    [removeProject],
+  );
 
   // For the default mode, delegate to ProjectGallery (keeps search + create form).
   // For other modes, render our own sorted grid below the sort toolbar.
@@ -252,15 +286,16 @@ export default function ProjectsPage() {
               title={null}
               description=""
               layout="grid"
+              onCreate={handleCreateProject}
               onSelect={(project) => {
                 router.push(`/projects/${encodeURIComponent(project.id)}`);
               }}
               onEditProject={(project) => setEditProject(project)}
               onArchiveProject={() => {
-                /* store mutation handled inside gallery; no server sync in v1 */
+                /* archive stays a local store mutation handled inside the gallery */
               }}
-              onDeleteProject={() => {
-                /* store mutation handled inside gallery; no server sync in v1 */
+              onDeleteProject={(project) => {
+                void handleDeleteProjectServer(project.id);
               }}
             />
           ) : (
@@ -303,7 +338,7 @@ export default function ProjectsPage() {
                       }}
                       onEdit={(p) => setEditProject(p)}
                       onArchive={(p) => updateProject(p.id, { isArchived: true })}
-                      onDelete={(p) => removeProject(p.id)}
+                      onDelete={(p) => void handleDeleteProjectServer(p.id)}
                     />
                   ))}
                 </div>

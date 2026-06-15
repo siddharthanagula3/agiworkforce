@@ -39,4 +39,19 @@ describe('web managed compute gate', () => {
 
     expect(response).toBeNull();
   });
+
+  it('allows a free-trial request through even when the private-beta flag is disabled', () => {
+    // This is the path the free-tier/demo chat relies on: gpt-5.4-mini is a
+    // managed-compute model, the prod private-beta flag is NOT set, yet free
+    // users must still be able to chat. The route sets isFreeTrial=true for
+    // free/no-subscription users (route.ts), which must bypass the gate.
+    delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
+    const response = buildManagedComputeGateResponse(request(), {
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
+      isFreeTrial: true,
+    });
+
+    expect(response).toBeNull();
+  });
 });

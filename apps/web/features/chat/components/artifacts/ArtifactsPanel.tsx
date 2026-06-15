@@ -4,6 +4,7 @@ import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
+import { useChatStore } from '@/stores/chatStore';
 import { ArtifactPreview } from './ArtifactPreview';
 
 // ============================================================================
@@ -99,8 +100,13 @@ function ArtifactViewer({ artifact }: { artifact: Artifact }) {
 // ============================================================================
 
 export function ArtifactsPanel() {
-  const { artifacts, selectedArtifactId, panelOpen, selectArtifact, setPanelOpen } =
+  const { getConversationArtifacts, selectedArtifactId, panelOpen, selectArtifact, setPanelOpen } =
     useArtifactsStore();
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+
+  // Only show artifacts that belong to the current conversation.
+  // When there is no active conversation (new/empty chat), the list is empty.
+  const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
 
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId);
 
@@ -198,7 +204,11 @@ export function ArtifactsPanel() {
 // ============================================================================
 
 export function ArtifactsToggleButton() {
-  const { artifacts, panelOpen, togglePanel } = useArtifactsStore();
+  const { getConversationArtifacts, panelOpen, togglePanel } = useArtifactsStore();
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+
+  // Badge count is scoped to the current conversation only.
+  const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
 
   return (
     <button
