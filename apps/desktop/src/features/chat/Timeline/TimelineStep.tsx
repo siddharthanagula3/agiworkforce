@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle2, ChevronDown, Clock, Link2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock } from 'lucide-react';
+import { lucideToolIcon } from '@agiworkforce/ui';
 import { cn } from '../../../lib/utils';
 
 export type StepVariant = 'thinking' | 'tool' | 'done';
@@ -8,6 +9,12 @@ export type StepVariant = 'thinking' | 'tool' | 'done';
 export interface TimelineStepProps {
   variant: StepVariant;
   label: string;
+  /**
+   * Lucide icon NAME for the tool step (from `getToolIconName` in
+   * @agiworkforce/types). Resolved to a lucide-react component here so the same
+   * registry drives desktop/web and mobile. Ignored for thinking/done variants.
+   */
+  iconName?: string;
   result?: string;
   isError?: boolean;
   isRunning?: boolean;
@@ -18,6 +25,7 @@ export interface TimelineStepProps {
 export function TimelineStep({
   variant,
   label,
+  iconName,
   result,
   isError = false,
   isRunning = false,
@@ -38,7 +46,17 @@ export function TimelineStep({
       );
     }
     if (variant === 'tool') {
-      return <Link2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />;
+      // Per-tool icon resolved from the shared cross-surface registry, replacing
+      // the previous single generic icon used for every tool.
+      const ToolIcon = lucideToolIcon(iconName ?? 'Wrench');
+      return (
+        <ToolIcon
+          className={cn(
+            'w-3.5 h-3.5 shrink-0',
+            isRunning ? 'animate-pulse text-amber-400' : 'text-muted-foreground',
+          )}
+        />
+      );
     }
     // done
     return <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />;

@@ -137,3 +137,7 @@ export * from './on-device-models';
 
 // Cross-surface application-suite contracts
 export * from './suite-contracts';
+
+// Cross-surface tool-call display registry (icon names + categories; pure TS,
+// shared by desktop/web via lucide-react and mobile via lucide-react-native)
+export * from './tool-display';
