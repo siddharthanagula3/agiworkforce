@@ -84,7 +84,8 @@ const DEV_TOKEN_KEY = 'agi_dev_bearer_token';
  *
  * Priority:
  *   1. chrome.storage.session["agi_clerk_session_token"] — set by the sign-in flow
- *   2. chrome.storage.local["agi_dev_bearer_token"] — static dev/paste token
+ *   2. chrome.storage.local["agi_dev_bearer_token"] — static dev/paste token,
+ *      DEV BUILDS ONLY (gated by import.meta.env.DEV; absent in production)
  *   3. null — user must sign in
  *
  * Mirrors cloudAgentClient.getAuthToken() so both clients share the same
@@ -111,20 +112,40 @@ export async function getAuthToken(): Promise<string | null> {
     // unavailable in test environments — fall through
   }
 
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const local = await chrome.storage.local.get([DEV_TOKEN_KEY]);
-      const token = local[DEV_TOKEN_KEY];
-      if (typeof token === 'string' && token.length > 0) return token;
+  // DEV-ONLY: a manually pasted bearer token in chrome.storage.local. This path
+  // is gated to dev builds — `import.meta.env.DEV` is false in production Vite
+  // builds, so this branch is tree-shaken out and production never reads a
+  // persisted bearer from disk. Production tokens come only from the in-memory
+  // session store (set by the sign-in flow). (Vitest sets DEV=true, so tests
+  // exercising the dev-token path still pass.)
+  if (isDevBuild()) {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const local = await chrome.storage.local.get([DEV_TOKEN_KEY]);
+        const token = local[DEV_TOKEN_KEY];
+        if (typeof token === 'string' && token.length > 0) return token;
+      }
+    } catch {
+      // unavailable in test environments — fall through
     }
-  } catch {
-    // unavailable in test environments — fall through
   }
 
   return null;
 }
 
-/** Store a Clerk session token in chrome.storage.session (cleared on browser close). */
+/** True only in dev/test Vite builds; false in production builds (tree-shaken). */
+function isDevBuild(): boolean {
+  return Boolean((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV);
+}
+
+/**
+ * Store a Clerk session token in chrome.storage.session (in-memory, cleared on
+ * browser close).
+ *
+ * SECURITY: a bearer token is NEVER persisted to chrome.storage.local (disk).
+ * If session storage is unavailable we fail closed — the caller re-prompts for
+ * sign-in on the next request rather than leaving a credential on disk.
+ */
 export async function storeSessionToken(token: string): Promise<void> {
   try {
     if (
@@ -141,16 +162,12 @@ export async function storeSessionToken(token: string): Promise<void> {
       return;
     }
   } catch {
-    // fall through to local storage
+    // fall through to the fail-closed warning below
   }
-  // Fallback: store in local storage (persists across sessions)
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      await chrome.storage.local.set({ [DEV_TOKEN_KEY]: token });
-    }
-  } catch {
-    // swallow — caller will surface auth prompt on next request
-  }
+  // No session storage → do NOT persist the bearer to disk. Fail closed.
+  console.warn(
+    '[freeTrialClient] chrome.storage.session unavailable; session token not stored (refusing to persist a bearer credential to disk).',
+  );
 }
 
 /** Clear all stored auth tokens (sign-out). */
