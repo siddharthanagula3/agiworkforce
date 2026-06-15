@@ -39,7 +39,7 @@ import { FREE_TRIAL_MAX_INPUT_CHARS, getFreeTrialRemaining } from '../../stores/
 import { CONNECTORS } from '@features/connectors/data/connectors';
 import { useConnectors } from '@features/connectors/hooks/use-connectors';
 import { Switch } from '@shared/ui/switch';
-import { EFFORT_LABEL } from '@agiworkforce/types';
+import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
 
 interface ChatComposerProps {
   onSend: (
@@ -157,22 +157,35 @@ export interface ImageModelOption {
   provider: 'google' | 'openai' | 'stability';
 }
 
-// Image-generation models for the in-composer picker. These ids mirror the
-// `modelType: 'image'` entries in models.json; the catalog helper that would
-// supply them (getModelsForProvider) is server-only, so this client list is
-// kept in sync manually. ids here are catalog lookup keys, not inlined API ids.
-/* eslint-disable no-restricted-syntax -- catalog ids mirrored for the client-side image picker (getModelsForProvider is server-only) */
-export const IMAGE_MODELS: ImageModelOption[] = [
-  { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Flash Image', provider: 'google' },
-  { id: 'imagen-4', label: 'Imagen 4', provider: 'google' },
-  { id: 'imagen-4-fast', label: 'Imagen 4 Fast', provider: 'google' },
-  { id: 'imagen-4-ultra', label: 'Imagen 4 Ultra', provider: 'google' },
-  { id: 'gpt-image-2', label: 'GPT Image 2', provider: 'openai' },
-  { id: 'stable-diffusion-xl', label: 'Stable Diffusion XL', provider: 'stability' },
-];
-/* eslint-enable no-restricted-syntax */
+/**
+ * Map an image-model id to the provider enum the /api/media/image/generate route
+ * accepts ('google' | 'openai' | 'stability'). Returns null for image models the
+ * route has no provider path for (e.g. managed-cloud-only ideogram), which are
+ * then excluded from the picker. This is id-pattern logic, NOT a hardcoded model
+ * id — the ids themselves come from the models.json catalog below.
+ */
+function imageModelRouteProvider(id: string): ImageModelOption['provider'] | null {
+  if (id.startsWith('gpt-image')) return 'openai';
+  if (id.startsWith('stable-diffusion') || id.startsWith('sdxl')) return 'stability';
+  if (id.startsWith('gemini') || id.startsWith('imagen')) return 'google';
+  return null;
+}
 
-const IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0]!.id;
+// Image-generation models for the in-composer picker, derived from the canonical
+// models.json catalog (single source of truth) — never hardcoded. We read every
+// `modelType: 'image'` model and keep those the image route can actually serve.
+export const IMAGE_MODELS: ImageModelOption[] = getModels({ modelTypes: ['image'] })
+  .map((m) => {
+    const provider = imageModelRouteProvider(m.id);
+    return provider ? { id: m.id, label: m.name, provider } : null;
+  })
+  .filter((m): m is ImageModelOption => m !== null);
+
+// Default to the Gemini image model when present (matches the route's preferred
+// Google image model), else the first catalog image model. Pattern-based, not a
+// hardcoded id.
+const IMAGE_MODEL_DEFAULT =
+  IMAGE_MODELS.find((m) => m.id.startsWith('gemini'))?.id ?? IMAGE_MODELS[0]?.id ?? '';
 
 /** Toggle row used in the + menu for connected send options. */
 function MenuToggleRow({
@@ -1401,50 +1414,6 @@ const ChatComposerNewComponent = ({
                       </div>
                     )}
                   </div>
-
-                  {/* Image model selector */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowImageModelMenu((p) => !p);
-                        setShowImageAspectMenu(false);
-                      }}
-                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                      aria-label="Select image model"
-                    >
-                      <span className="max-w-[120px] truncate">
-                        {IMAGE_MODELS.find((m) => m.id === imageModelId)?.label ??
-                          'Gemini 3.1 Flash Image'}
-                      </span>
-                      <ChevronDown className="h-3 w-3 shrink-0" />
-                    </button>
-                    {showImageModelMenu && (
-                      <div className="absolute bottom-full left-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                        {IMAGE_MODELS.map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              setImageModelId(m.id);
-                              setShowImageModelMenu(false);
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                              imageModelId === m.id
-                                ? 'bg-primary/10 text-primary'
-                                : 'hover:bg-muted/60',
-                            )}
-                          >
-                            <span className="flex-1 text-left">{m.label}</span>
-                            {imageModelId === m.id && (
-                              <Check className="h-3 w-3 shrink-0 text-primary" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 </>
               )}
             </div>
@@ -1491,8 +1460,10 @@ const ChatComposerNewComponent = ({
             )}
           </div>
 
-          {/* Model selector — hidden in image mode (the image model dropdown lives in
-              the pills row above). In normal mode it sits inline beside the send button. */}
+          {/* Model selector. In normal mode the full ComposerFooter sits inline beside
+              the send button. In image mode the image-model picker takes its place —
+              both use `order-4 ml-auto` so they right-align and push the mic + send to
+              the right edge of the toolbar. */}
           {!imageMode && (
             <ComposerFooter
               inline
@@ -1502,6 +1473,47 @@ const ChatComposerNewComponent = ({
               showStyleSelector={!isFreeTrial}
               onUpgradeRequest={onUpgradeRequest}
             />
+          )}
+
+          {imageMode && (
+            <div className="relative order-4 ml-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImageModelMenu((p) => !p);
+                  setShowImageAspectMenu(false);
+                }}
+                className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                aria-label="Select image model"
+              >
+                <span className="max-w-[120px] truncate">
+                  {IMAGE_MODELS.find((m) => m.id === imageModelId)?.label ??
+                    'Gemini 3.1 Flash Image'}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              </button>
+              {showImageModelMenu && (
+                <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                  {IMAGE_MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setImageModelId(m.id);
+                        setShowImageModelMenu(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                        imageModelId === m.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <span className="flex-1 text-left">{m.label}</span>
+                      {imageModelId === m.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Voice Input Button */}
