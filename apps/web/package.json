@@ -2,7 +2,6 @@
   "name": "@agiworkforce/web",
   "version": "0.1.1",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "cd ../.. && NODE_OPTIONS='--max-old-space-size=8192' VITE_BUILD_TARGET=web pnpm --filter @agiworkforce/desktop exec vite build --outDir dist-web --base /chat/ && rm -rf apps/web/public/chat && cp -r apps/desktop/dist-web apps/web/public/chat && cd apps/web && next build",
