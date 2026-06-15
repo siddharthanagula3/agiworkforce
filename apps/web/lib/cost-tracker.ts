@@ -87,15 +87,26 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   const outputPerM = meta.outputCost ?? 0;
 
   // Use catalog cached_input price when available; fall back to 10% of input rate.
-  // cached_input is a sparse optional field in the catalog not in the base type.
-  const catalogCachedInput = (meta as unknown as Record<string, unknown>)['cached_input'];
-  const cacheReadPerM =
-    typeof catalogCachedInput === 'number' ? catalogCachedInput : inputPerM * 0.1;
+  // cached_input is defined on ModelMetadata as an optional sparse field sourced
+  // from models.synced.json (upstream-derived) or models.curation.json overrides.
+  // Confirmed prices (June 2026): Anthropic = 0.10× input, OpenAI = 0.10× input,
+  // DeepSeek = per catalog, Gemini 3.5 Flash = $0.15/M.
+  const cacheReadPerM = typeof meta.cached_input === 'number' ? meta.cached_input : inputPerM * 0.1;
 
-  // Cache creation is charged at 125% of input rate (Anthropic: +25% write surcharge).
-  const cacheCreationPerM = inputPerM * 1.25;
+  // Cache creation:
+  //  - Anthropic 5m TTL: 1.25× input rate (published: write costs +25%).
+  //  - Anthropic 1h TTL: 2.0× input rate (published: write costs +100%).
+  //  - OpenAI / DeepSeek: no creation counter exposed — cacheCreationInputTokens
+  //    will always be 0 for those providers so this rate is never applied.
+  // GAP: we cannot distinguish 5m-write from 1h-write tokens in the NormalizedUsage
+  // shape; cacheCreationInputTokens conflates both. The cost tracker therefore
+  // applies the 5m rate (1.25×) conservatively. If a session uses 1h TTL, the
+  // actual write cost is 2.0× — tracked gap, not a bug to fix without schema change.
+  // Use catalog cached_write when populated; fall back to 1.25× of input rate.
+  const cacheCreationPerM =
+    typeof meta.cached_write === 'number' ? meta.cached_write : inputPerM * 1.25;
 
-  const inputTokens = usage.inputTokens ?? 0;
+  const rawInputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
   // Reasoning tokens are billed at the same rate as output tokens.
   // Reference: codex-cli TokenUsage.reasoning_output_tokens · counted at output rate.
@@ -103,8 +114,24 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   const cacheRead = usage.cacheReadInputTokens ?? 0;
   const cacheCreation = usage.cacheCreationInputTokens ?? 0;
 
+  // Token-accounting convention differs by provider, which decides whether cache
+  // tokens must be SUBTRACTED from the input bucket before costing:
+  //  - Anthropic reports input_tokens DISJOINT from cache_read/cache_creation
+  //    (per Anthropic docs: cache tokens are billed separately, not part of
+  //    input_tokens). Summing input + cacheRead + cacheCreation is correct.
+  //  - OpenAI (prompt_tokens), Gemini (promptTokenCount) and DeepSeek
+  //    (prompt_tokens / prompt_cache_hit_tokens) report INCLUSIVE prompt counts:
+  //    the cached tokens are a SUBSET of the prompt total. Billing the full
+  //    prompt at input rate PLUS the cached subset at the cache-read rate would
+  //    double-charge the cached portion. Subtract cache tokens from the billable
+  //    input bucket so each token is billed exactly once.
+  const isAnthropic = meta.provider === 'anthropic';
+  const billableInput = isAnthropic
+    ? rawInputTokens
+    : Math.max(0, rawInputTokens - cacheRead - cacheCreation);
+
   return (
-    (inputTokens * inputPerM) / 1_000_000 +
+    (billableInput * inputPerM) / 1_000_000 +
     (outputTokens * outputPerM) / 1_000_000 +
     (reasoningTokens * outputPerM) / 1_000_000 +
     (cacheRead * cacheReadPerM) / 1_000_000 +

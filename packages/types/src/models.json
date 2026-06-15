@@ -427,7 +427,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "speed": "fast",
       "quality": "excellent",
@@ -456,7 +457,8 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "speed": "very-fast",
       "quality": "good",
@@ -485,7 +487,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "speed": "fast",
       "quality": "excellent",
@@ -514,7 +517,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "speed": "medium",
       "quality": "excellent",
@@ -545,7 +549,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "benchmarks": { "swebench": 84.5, "humaneval": 98, "mmlu": 92.5, "gpqa": 86, "aime": 92 },
       "speed": "medium",
@@ -578,7 +583,8 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
       "speed": "slow",
       "quality": "excellent",
@@ -600,6 +606,7 @@
       "contextWindow": 200000,
       "inputCost": 3,
       "outputCost": 15,
+      "cached_input": 0.3,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -612,7 +619,8 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
       "benchmarks": { "swebench": 78.5, "humaneval": 96.2, "mmlu": 89.5, "gpqa": 76, "aime": 88 },
       "speed": "fast",
@@ -631,6 +639,7 @@
       "contextWindow": 200000,
       "inputCost": 1,
       "outputCost": 5,
+      "cached_input": 0.1,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -643,7 +652,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
       "benchmarks": { "swebench": 45, "humaneval": 88, "mmlu": 85, "gpqa": 55, "aime": 40 },
       "speed": "very-fast",
@@ -669,6 +679,7 @@
       "contextWindow": 2000000,
       "inputCost": 2,
       "outputCost": 12,
+      "cached_input": 0.2,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -681,7 +692,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "benchmarks": { "swebench": 74.2, "humaneval": 93.5, "mmlu": 89.5, "gpqa": 91.9, "aime": 95 },
       "speed": "fast",
@@ -701,6 +713,7 @@
       "contextWindow": 1000000,
       "inputCost": 0.25,
       "outputCost": 1.5,
+      "cached_input": 0.025,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -713,7 +726,8 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "benchmarks": { "swebench": 76.2, "humaneval": 91, "mmlu": 88.6, "gpqa": 60, "aime": 88 },
       "speed": "very-fast",
@@ -744,7 +758,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "excellent",
@@ -775,7 +790,8 @@
         "videoGen": true,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "benchmarks": { "swebench": 68, "humaneval": 96.5, "mmlu": 91.5, "gpqa": 80, "aime": 82 },
       "speed": "fast",
@@ -808,7 +824,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
       "benchmarks": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
       "speed": "very-fast",
@@ -841,7 +858,8 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
       "benchmarks": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
       "speed": "fast",
@@ -879,7 +897,8 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "benchmarks": { "swebench": 58, "humaneval": 93, "mmlu": 88, "gpqa": 65, "aime": 60 },
       "speed": "medium",
@@ -911,7 +930,8 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "benchmarks": { "swebench": 70, "humaneval": 94, "mmlu": 90, "gpqa": 78, "aime": 88 },
       "speed": "fast",
@@ -948,7 +968,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "swebench": 25, "humaneval": 70, "mmlu": 75, "gpqa": 35, "aime": 25 },
       "speed": "very-fast",
@@ -979,7 +1000,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "swebench": 28, "humaneval": 72, "mmlu": 76, "gpqa": 38, "aime": 28 },
       "speed": "very-fast",
@@ -1010,7 +1032,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "benchmarks": { "swebench": 40, "humaneval": 82, "mmlu": 70, "gpqa": 35, "aime": 25 },
       "speed": "very-fast",
@@ -1041,7 +1064,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
       "benchmarks": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
       "speed": "fast",
@@ -1073,7 +1097,8 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "benchmarks": { "swebench": 80.2, "humaneval": 96, "mmlu": 89, "gpqa": 86, "aime": 99 },
       "speed": "fast",
@@ -1119,7 +1144,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "swebench": 55, "humaneval": 92, "mmlu": 88, "gpqa": 68, "aime": 62 },
       "speed": "fast",
@@ -1150,7 +1176,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "swebench": 42, "humaneval": 85, "mmlu": 84, "gpqa": 55, "aime": 45 },
       "speed": "fast",
@@ -1181,7 +1208,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "very-fast",
       "quality": "fair",
@@ -1211,7 +1239,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "swebench": 48, "humaneval": 90, "mmlu": 72 },
       "speed": "very-fast",
@@ -1242,7 +1271,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "medium",
       "quality": "excellent",
@@ -1273,7 +1303,8 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "benchmarks": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
       "speed": "medium",
@@ -1310,7 +1341,8 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "mmlu": 75 },
       "speed": "fast",
@@ -1341,7 +1373,8 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "mmlu": 82, "gpqa": 55 },
       "speed": "medium",
@@ -1372,7 +1405,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "mmlu": 85, "gpqa": 62 },
       "speed": "medium",
@@ -1403,7 +1437,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "mmlu": 88 },
       "speed": "medium",
@@ -1434,7 +1469,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "benchmarks": { "mmlu": 88 },
       "speed": "slow",
@@ -1465,7 +1501,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "medium",
       "quality": "excellent",
@@ -1496,7 +1533,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -1529,7 +1567,8 @@
         "videoGen": true,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "medium",
       "quality": "excellent",
@@ -1561,7 +1600,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "slow",
       "quality": "excellent",
@@ -1592,7 +1632,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -1622,7 +1663,8 @@
         "videoGen": true,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "slow",
       "quality": "excellent",
@@ -1652,7 +1694,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -1684,7 +1727,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
       "speed": "medium",
       "quality": "excellent",
@@ -1716,7 +1760,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -1746,7 +1791,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "medium",
       "quality": "excellent",
@@ -1776,7 +1822,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "excellent",
@@ -1806,7 +1853,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "slow",
       "quality": "excellent",
@@ -1836,7 +1884,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "excellent",
@@ -1866,7 +1915,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "very-fast",
       "quality": "good",
@@ -1896,7 +1946,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -1926,7 +1977,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "very-fast",
       "quality": "good",
@@ -1956,7 +2008,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "very-fast",
       "quality": "fair",
@@ -1986,7 +2039,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -2016,7 +2070,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -2046,7 +2101,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "fast",
       "quality": "good",
@@ -2076,7 +2132,8 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "medium",
       "quality": "excellent",
@@ -2108,7 +2165,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "speed": "fast",
       "quality": "excellent",
@@ -2140,7 +2198,8 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "benchmarks": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
       "speed": "fast",
