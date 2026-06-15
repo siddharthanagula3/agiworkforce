@@ -56,6 +56,7 @@ import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
 import { useArtifactsStore } from '../../stores/artifacts-store';
+import { useChatStore } from '@/stores/chatStore';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
@@ -245,6 +246,12 @@ const MessageBubbleComponent = function MessageBubble({
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
   const upsertArtifact = useArtifactsStore((state) => state.upsertArtifact);
+  // Stamp artifacts with the active conversation id (the SAME source the
+  // Artifacts panel filters by). message.sessionId is often unset, so relying
+  // on it left artifacts with conversationId=undefined → filtered out of every
+  // panel. Falls back to message.sessionId when there's no active conversation.
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
   const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
   const storedChoice = useComparisonStore((state) =>
     state.getComparisonChoice(message.sessionId ?? '', message.id),
@@ -298,11 +305,11 @@ const MessageBubbleComponent = function MessageBubble({
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
     extractedArtifacts.forEach((artifact) =>
-      addArtifactForMessage(message.id, artifact, message.sessionId),
+      addArtifactForMessage(message.id, artifact, artifactConversationId),
     );
   }, [
     message.id,
-    message.sessionId,
+    artifactConversationId,
     isUser,
     existingArtifacts.length,
     extractedArtifacts,
@@ -317,10 +324,10 @@ const MessageBubbleComponent = function MessageBubble({
         title: artifact.title || 'Untitled',
         language: artifact.language || artifact.type,
         messageId: message.id,
-        conversationId: message.sessionId,
+        conversationId: artifactConversationId,
       });
     }
-  }, [artifacts, isUser, message.id, message.sessionId, upsertArtifact]);
+  }, [artifacts, isUser, message.id, artifactConversationId, upsertArtifact]);
 
   const cleanedContent = useMemo(() => {
     if (artifacts.length === 0) return message.content;
