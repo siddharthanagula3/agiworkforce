@@ -499,6 +499,16 @@ const ChatComposerNewComponent = ({
     setShowStyleSubmenu(false);
   }, []);
 
+  // Stable refs so handleInputChange never captures suggestion/clearSuggestion
+  // directly in its dep array. Previously, including them caused the callback
+  // to get a new identity on every streaming token (suggestion clears when the
+  // user types), which triggered React error #185 "Maximum update depth exceeded"
+  // via the controlled-textarea onChange → setMessage → re-render loop.
+  const suggestionRef = useRef(suggestion);
+  suggestionRef.current = suggestion;
+  const clearSuggestionRef = useRef(clearSuggestion);
+  clearSuggestionRef.current = clearSuggestion;
+
   // Handle input change: detect @mention and /command; clear stale ghost-text
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -506,9 +516,9 @@ const ChatComposerNewComponent = ({
       const cursorPos = e.target.selectionStart || 0;
       setMessage(value);
 
-      // Clear ghost-text suggestion on new input
-      if (suggestion) {
-        clearSuggestion();
+      // Clear ghost-text suggestion on new input (via ref to avoid dep instability)
+      if (suggestionRef.current) {
+        clearSuggestionRef.current();
       }
 
       if (isFreeTrial && value.startsWith('/')) {
@@ -543,7 +553,7 @@ const ChatComposerNewComponent = ({
       }
       setShowMentions(false);
     },
-    [isFreeTrial, suggestion, clearSuggestion],
+    [isFreeTrial],
   );
 
   const filteredSkills = availableSkills
