@@ -141,16 +141,17 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
 // ─── Header labels ────────────────────────────────────────────────────────────
 
 describe('ToolTimeline · header metadata', () => {
-  it('displays tool count, total duration, and error count', () => {
+  it('displays an action-phrased summary and error count in the header', () => {
     const tools = [
-      { name: 'tool1', status: 'completed' as const, durationMs: 1500 },
-      { name: 'tool2', status: 'failed' as const, durationMs: 500 },
+      { name: 'Read', status: 'completed' as const, durationMs: 1500 },
+      { name: 'Bash', status: 'failed' as const, durationMs: 500 },
     ];
 
     render(<ToolTimeline tools={tools} />);
 
-    expect(screen.getByText(/2 tools/)).toBeInTheDocument();
-    expect(screen.getByText(/2\.0s total/)).toBeInTheDocument();
+    // Header shows action summary (no "N tools" count, no duration)
+    expect(screen.getByText(/read a file/i)).toBeInTheDocument();
+    // Error count still displayed alongside the summary
     expect(screen.getByText(/1 failed/)).toBeInTheDocument();
   });
 
@@ -159,8 +160,11 @@ describe('ToolTimeline · header metadata', () => {
     expect(screen.getByText('Running tools...')).toBeInTheDocument();
   });
 
-  it('omits duration when none provided', () => {
-    render(<ToolTimeline tools={[{ name: 'quick', status: 'completed' as const }]} />);
+  it('omits duration from header (duration no longer shown in Claude-style header)', () => {
+    render(
+      <ToolTimeline tools={[{ name: 'Read', status: 'completed' as const, durationMs: 2000 }]} />,
+    );
+    // Duration is no longer in the header line per Claude reference design
     expect(screen.queryByText(/total/)).not.toBeInTheDocument();
   });
 });
@@ -168,14 +172,33 @@ describe('ToolTimeline · header metadata', () => {
 // ─── ToolCallCard rendering ───────────────────────────────────────────────────
 
 describe('ToolTimeline · ToolCallCard rendering', () => {
-  it('renders ToolCallCard with tool name when expanded', async () => {
+  it('renders ToolCallCard with humanized label when expanded', async () => {
+    // WebSearch is a known web-search tool id: humanized to "Web search" (no query args)
     const tools = [{ name: 'WebSearch', status: 'completed' as const, durationMs: 300 }];
     render(<ToolTimeline tools={tools} />);
 
     fireEvent.click(screen.getByRole('button'));
 
     await waitFor(() => {
-      expect(screen.getByText('WebSearch')).toBeInTheDocument();
+      expect(screen.getByText('Web search')).toBeInTheDocument();
+    });
+  });
+
+  it('renders ToolCallCard with query as label when args provided for web search', async () => {
+    const tools = [
+      {
+        name: 'web_search',
+        status: 'completed' as const,
+        args: 'best resume templates 2025',
+        durationMs: 300,
+      },
+    ];
+    render(<ToolTimeline tools={tools} />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('best resume templates 2025')).toBeInTheDocument();
     });
   });
 

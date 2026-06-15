@@ -28,7 +28,7 @@
         "fast_completion": "gemini-3.1-flash-lite",
         "code_generation": "deepseek-v4-flash",
         "complex_reasoning": "claude-sonnet-4.6",
-        "chat": "gemini-3.1-flash-lite",
+        "chat": "gpt-5.4-mini",
         "vision": "gemini-3.1-pro-preview",
         "long_context": "gemini-3.1-pro-preview",
         "computer_use": "gpt-5.4-mini"
@@ -725,6 +725,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks"],
+      "costOverride": { "cached_input": 0.3 },
       "deprecation_date": null
     },
     "claude-haiku-4.5": {
@@ -742,6 +743,7 @@
         "High Volume",
         "Cost-Sensitive"
       ],
+      "costOverride": { "cached_input": 0.1 },
       "deprecation_date": null
     },
     "gemini-3.1-pro-preview": {
@@ -754,6 +756,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
+      "costOverride": { "cached_input": 0.2 },
       "deprecation_date": null
     },
     "gemini-3.1-flash-lite": {
@@ -766,11 +769,13 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Ultra-Fast Inference", "Speed", "Cost-Sensitive", "Long Context"],
+      "costOverride": { "cached_input": 0.025 },
       "deprecation_date": null
     },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
       "apiModelId": "gemini-3.1-flash-image",
+      "imageApi": "gemini",
       "name": "Gemini 3.1 Flash Image",
       "provider": "google",
       "modelType": "image",
@@ -1177,6 +1182,7 @@
     "imagen-4": {
       "id": "imagen-4",
       "apiModelId": "imagen-4.0-generate-001",
+      "imageApi": "imagen",
       "name": "Imagen 4",
       "provider": "google",
       "modelType": "image",
@@ -1209,6 +1215,7 @@
     "imagen-4-fast": {
       "id": "imagen-4-fast",
       "apiModelId": "imagen-4.0-fast-generate-001",
+      "imageApi": "imagen",
       "name": "Imagen 4 Fast",
       "provider": "google",
       "modelType": "image",
@@ -1277,6 +1284,7 @@
     "imagen-4-ultra": {
       "id": "imagen-4-ultra",
       "apiModelId": "imagen-4.0-ultra-generate-001",
+      "imageApi": "imagen",
       "name": "Imagen 4 Ultra",
       "provider": "google",
       "modelType": "image",
@@ -1373,6 +1381,7 @@
     "stable-diffusion-xl": {
       "id": "stable-diffusion-xl",
       "apiModelId": "stable-diffusion-xl-1024-v1-0",
+      "imageApi": "stability",
       "name": "Stable Diffusion XL",
       "provider": "managed_cloud",
       "modelType": "image",
@@ -1405,6 +1414,7 @@
     "gpt-image-2": {
       "id": "gpt-image-2",
       "apiModelId": "gpt-image-2",
+      "imageApi": "openai",
       "name": "GPT Image 2",
       "provider": "openai",
       "modelType": "image",

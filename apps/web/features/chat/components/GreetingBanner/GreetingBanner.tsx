@@ -13,7 +13,8 @@
  * All colours come from --chat-* design tokens; no hardcoded hex values.
  */
 
-import { Sparkles, Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
+import { Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
+import { AgiMark } from '@/components/agi/AgiMark';
 import { useGreeting } from './useGreeting';
 
 interface SuggestionChip {
@@ -60,15 +61,13 @@ export function GreetingBanner({ onSendMessage }: GreetingBannerProps) {
 
   return (
     <div className="flex w-full max-w-[760px] flex-col items-center gap-5 px-4 text-center">
-      {/* Sparkle icon */}
+      {/* AGI brand mark */}
       <div
         aria-hidden="true"
-        style={{ color: 'var(--chat-accent-primary)' }}
         className="flex h-10 w-10 items-center justify-center rounded-full"
-        // subtle warm tint behind the icon
         role="presentation"
       >
-        <Sparkles size={22} />
+        <AgiMark size={28} spinning />
       </div>
 
       {/* Time-aware headline */}

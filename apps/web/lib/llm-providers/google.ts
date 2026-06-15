@@ -128,38 +128,94 @@ function getGoogleToolParameters(
 }
 
 /**
- * Convert OpenAI-format tools to Google's functionDeclarations format.
- * OpenAI: { type: "function", function: { name, description, parameters } }
- * Google: { functionDeclarations: [{ name, description, parameters }] }
+ * Coerce a tool name into Google's function-name grammar:
+ * must start with a letter or underscore, then only [a-zA-Z0-9_.:-], max 128 chars.
+ * Google rejects the whole request (400 INVALID_ARGUMENT) otherwise, which
+ * previously broke web search whenever a turn routed to a Gemini model.
  */
-function transformToolsToGoogleFormat(tools: unknown[]): { functionDeclarations: unknown[] } {
-  const declarations = (tools as Record<string, unknown>[]).map((tool) => {
-    // Handle OpenAI format: { type: "function", function: { name, description, parameters } }
-    if (tool['function']) {
-      const fn = tool['function'] as Record<string, unknown>;
-      return {
-        name: fn['name'],
+function sanitizeGoogleFunctionName(raw: unknown): string {
+  let name = typeof raw === 'string' ? raw : '';
+  name = name.replace(/[^a-zA-Z0-9_.:-]/g, '_');
+  if (!/^[a-zA-Z_]/.test(name)) name = `_${name}`;
+  name = name.slice(0, 128);
+  return name || 'tool';
+}
+
+/**
+ * Google's native built-in tools are passed to the API as their own top-level
+ * tool entries (siblings of the functionDeclarations object), NOT as function
+ * declarations. Wrapping them in functionDeclarations turns grounding/code-exec
+ * into a bogus no-op function the model can't ground with, which is exactly how
+ * web search silently returned an empty turn. Keep this list in sync with the
+ * built-in tools injected by the route's request-processor.
+ */
+const GOOGLE_NATIVE_TOOL_KEYS = new Set([
+  'google_search',
+  'googleSearch',
+  'google_search_retrieval',
+  'googleSearchRetrieval',
+  'code_execution',
+  'codeExecution',
+  'url_context',
+  'urlContext',
+]);
+
+function getGoogleNativeToolKey(tool: Record<string, unknown>): string | undefined {
+  return Object.keys(tool).find((key) => GOOGLE_NATIVE_TOOL_KEYS.has(key));
+}
+
+/**
+ * Convert the request's tools into Google's `tools` array. Function-style tools
+ * (OpenAI/Anthropic/flat) are grouped into a single `functionDeclarations` entry;
+ * native built-in tools (google_search, code_execution, url_context) are emitted
+ * as their own pass-through entries. Returns the full array ready for `body.tools`.
+ */
+function transformToolsToGoogleFormat(tools: unknown[]): unknown[] {
+  const declarations: unknown[] = [];
+  const nativeTools: unknown[] = [];
+
+  for (const raw of tools as Record<string, unknown>[]) {
+    if (!raw || typeof raw !== 'object') continue;
+
+    // Native built-in tool, e.g. { google_search: {} } or { code_execution: {} }.
+    // Pass it through unchanged as its own tool entry.
+    const nativeKey = getGoogleNativeToolKey(raw);
+    if (nativeKey) {
+      nativeTools.push({ [nativeKey]: raw[nativeKey] ?? {} });
+      continue;
+    }
+
+    // OpenAI format: { type: "function", function: { name, description, parameters } }
+    if (raw['function']) {
+      const fn = raw['function'] as Record<string, unknown>;
+      declarations.push({
+        name: sanitizeGoogleFunctionName(fn['name']),
         description: fn['description'] || '',
         ...getGoogleToolParameters(fn['parameters']),
-      };
+      });
+      continue;
     }
-    // Handle Anthropic format: { name, description, input_schema }
-    if (tool['input_schema']) {
-      return {
-        name: tool['name'],
-        description: tool['description'] || '',
-        ...getGoogleToolParameters(tool['input_schema']),
-      };
+    // Anthropic format: { name, description, input_schema }
+    if (raw['input_schema']) {
+      declarations.push({
+        name: sanitizeGoogleFunctionName(raw['name']),
+        description: raw['description'] || '',
+        ...getGoogleToolParameters(raw['input_schema']),
+      });
+      continue;
     }
-    // Handle flat format (from desktop's transform): { name, description, parameters }
-    return {
-      name: tool['name'],
-      description: tool['description'] || '',
-      ...getGoogleToolParameters(tool['parameters']),
-    };
-  });
+    // Flat format (from desktop's transform): { name, description, parameters }
+    declarations.push({
+      name: sanitizeGoogleFunctionName(raw['name']),
+      description: raw['description'] || '',
+      ...getGoogleToolParameters(raw['parameters']),
+    });
+  }
 
-  return { functionDeclarations: declarations };
+  const result: unknown[] = [];
+  if (declarations.length > 0) result.push({ functionDeclarations: declarations });
+  result.push(...nativeTools);
+  return result;
 }
 
 /**
@@ -349,7 +405,8 @@ export class GoogleProvider extends BaseLLMProvider {
 
     // Add tool declarations if provided
     if (request.tools && request.tools.length > 0) {
-      body['tools'] = [transformToolsToGoogleFormat(request.tools)];
+      const googleTools = transformToolsToGoogleFormat(request.tools);
+      if (googleTools.length > 0) body['tools'] = googleTools;
     }
 
     try {
@@ -486,6 +543,13 @@ export class GoogleProvider extends BaseLLMProvider {
       const promptTokens = data.usageMetadata?.promptTokenCount || 0;
       const completionTokens = data.usageMetadata?.candidatesTokenCount || 0;
       const totalTokens = data.usageMetadata?.totalTokenCount || promptTokens + completionTokens;
+      // Gemini implicit context caching (2.5+/3.x): cachedContentTokenCount is the
+      // number of prompt tokens served from cache (a SUBSET of promptTokenCount,
+      // billed at cached_input). Capture it so cache hits are cost-discounted; the
+      // cost tracker subtracts it from the billable input for inclusive-prompt
+      // providers (see cost-tracker.calculateCostUsd) to avoid double-billing.
+      const cachedInputTokens: number | undefined =
+        data.usageMetadata?.cachedContentTokenCount ?? undefined;
 
       return {
         content,
@@ -494,6 +558,7 @@ export class GoogleProvider extends BaseLLMProvider {
         completionTokens,
         totalTokens,
         finishReason,
+        ...(cachedInputTokens != null && { cachedInputTokens }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
       };
     } catch (error) {
@@ -534,7 +599,8 @@ export class GoogleProvider extends BaseLLMProvider {
 
     // Add tool declarations if provided
     if (request.tools && request.tools.length > 0) {
-      body['tools'] = [transformToolsToGoogleFormat(request.tools)];
+      const googleTools = transformToolsToGoogleFormat(request.tools);
+      if (googleTools.length > 0) body['tools'] = googleTools;
     }
 
     const response = await this.fetchWithRetry(url, {
@@ -564,6 +630,7 @@ export class GoogleProvider extends BaseLLMProvider {
     // We need: data: {"choices":[{"delta":{"content":"..."}}]}\n\n
     let buffer = '';
     let hasTextContent = false; // Track if we've sent any text content
+    let groundingEmitted = false; // Track if we've surfaced grounding source cards
     let chunkCount = 0;
     const transformStream = new TransformStream({
       transform(chunk, controller) {
@@ -630,6 +697,38 @@ export class GoogleProvider extends BaseLLMProvider {
                 model: request.model,
               })}\n\n`;
               controller.enqueue(new TextEncoder().encode(sseEvent));
+            }
+
+            // Surface Google Search grounding sources as web-search result cards.
+            // Gemini attaches groundingMetadata.groundingChunks (web: {uri,title})
+            // on the chunk(s) where it grounded an answer. We map these to the
+            // x_search_results delta the chat client already renders as favicon
+            // source cards (InlineSearchResults). Emit once to avoid duplicates.
+            const groundingChunks = candidate.groundingMetadata?.groundingChunks;
+            if (!groundingEmitted && Array.isArray(groundingChunks) && groundingChunks.length > 0) {
+              const resultContent = groundingChunks
+                .map((gc) => gc?.web)
+                .filter((web): web is { uri: string; title?: string } => !!web?.uri)
+                .map((web, idx) => ({
+                  type: 'web_search_result',
+                  url: web.uri,
+                  title: web.title || web.uri,
+                  position: idx + 1,
+                }));
+              if (resultContent.length > 0) {
+                groundingEmitted = true;
+                hasTextContent = true; // grounded sources count as observable output
+                const searchEvent = `data: ${JSON.stringify({
+                  choices: [
+                    {
+                      delta: { x_search_results: { content: resultContent } },
+                      index: 0,
+                    },
+                  ],
+                  model: request.model,
+                })}\n\n`;
+                controller.enqueue(new TextEncoder().encode(searchEvent));
+              }
             }
 
             // Extract function calls and emit as OpenAI-format tool_calls

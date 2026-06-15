@@ -90,6 +90,40 @@ function transformTools(tools: OpenAITool[]): AnthropicTool[] {
 }
 
 /**
+ * Stamp a cache_control breakpoint on the LAST entry of the tools array.
+ *
+ * Tools + system form the most stable, highest-reuse prefix of an Anthropic
+ * prompt, and tool definitions are usually the single largest static block. The
+ * Anthropic cache prefix is contiguous (tools → system → messages), so marking
+ * the final tool caches the entire tools block. Server-managed tools are passed
+ * through untouched; we only stamp a plain custom tool to avoid mutating the
+ * exact server-tool shape Anthropic requires.
+ *
+ * Returns the same array reference (mutated in place) for ergonomic chaining;
+ * no-ops when there are no tools or no cache control. Adds at most ONE
+ * breakpoint, keeping the total within Anthropic's 4-breakpoint limit
+ * (tools + system + last message + last tool_result = 4 worst case).
+ */
+function applyToolsCacheControl(
+  tools: AnthropicTool[] | undefined,
+  cacheControl: { type: 'ephemeral'; ttl?: '5m' | '1h' } | null,
+): AnthropicTool[] | undefined {
+  if (!tools || tools.length === 0 || !cacheControl) {
+    return tools;
+  }
+  const last = tools[tools.length - 1];
+  // Don't stamp a breakpoint onto a server-managed tool whose shape is fixed.
+  if (
+    last?.type &&
+    ANTHROPIC_SERVER_TOOL_PREFIXES.some((prefix) => (last.type as string).startsWith(prefix))
+  ) {
+    return tools;
+  }
+  tools[tools.length - 1] = { ...last, cache_control: cacheControl };
+  return tools;
+}
+
+/**
  * Handle Anthropic HTTP error responses by throwing a descriptive error.
  * Status-specific messages use keywords that route.ts error matching expects.
  * @param retryAfter Optional value of the 'retry-after' response header for 429 responses.
@@ -164,15 +198,33 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     const systemMessage = request.messages.find((msg) => msg.role === 'system');
 
+    // Transform tools from OpenAI format to Anthropic format if needed
+    const anthropicTools = request.tools
+      ? transformTools(request.tools as OpenAITool[])
+      : undefined;
+
+    // Stable-prefix TTL: tools + system are the highest-reuse, most static part
+    // of the prompt. When caching is on AND tools are present (agentic / multi-turn
+    // sessions that re-send the same tool+system prefix many times), upgrade THAT
+    // prefix to a 1h cache so a single 2.0× write amortizes over many 0.10× reads
+    // instead of re-paying the 1.25× write every 5 minutes. Volatile message-level
+    // breakpoints keep the resolved (default 5m) retention. One-shot requests (no
+    // tools) keep 5m to avoid paying the 2.0× write for content unlikely to be reused.
+    // An explicit caller cacheRetention ('short'/'long'/'none') always wins over
+    // the heuristic; the 1h upgrade only applies when retention was left to default.
+    const highReusePrefix =
+      !!cacheControl && !!anthropicTools && request.cacheRetention === undefined;
+    const prefixCacheControl = highReusePrefix ? buildAnthropicCacheControl('long') : cacheControl;
+
     // Build system content with cache_control if caching is enabled
     let systemContent: unknown = undefined;
     if (systemMessage) {
-      if (cacheControl) {
+      if (prefixCacheControl) {
         systemContent = [
           {
             type: 'text',
             text: systemMessage.content,
-            cache_control: cacheControl,
+            cache_control: prefixCacheControl,
           },
         ];
       } else {
@@ -180,10 +232,8 @@ export class AnthropicProvider extends BaseLLMProvider {
       }
     }
 
-    // Transform tools from OpenAI format to Anthropic format if needed
-    const anthropicTools = request.tools
-      ? transformTools(request.tools as OpenAITool[])
-      : undefined;
+    // Cache the tools block (end of the contiguous cache prefix).
+    applyToolsCacheControl(anthropicTools, prefixCacheControl);
 
     const body: Record<string, unknown> = {
       model: request.model,
@@ -350,6 +400,17 @@ export class AnthropicProvider extends BaseLLMProvider {
       ? transformTools(request.tools as OpenAITool[])
       : undefined;
 
+    // Stable-prefix 1h TTL upgrade (same reasoning as sendRequest): tools+system
+    // get a 1h cache for high-reuse agentic sessions; message breakpoints stay 5m.
+    const highReusePrefixStream =
+      !!cacheControlStream && !!anthropicTools && request.cacheRetention === undefined;
+    const prefixCacheControlStream = highReusePrefixStream
+      ? buildAnthropicCacheControl('long')
+      : cacheControlStream;
+
+    // Cache the tools block (end of the contiguous cache prefix).
+    applyToolsCacheControl(anthropicTools, prefixCacheControlStream);
+
     const body: Record<string, unknown> = {
       model: request.model,
       max_tokens: request.max_tokens || 16384, // Increased for Claude 4.5 quality outputs
@@ -363,12 +424,12 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     // Apply prompt cache on system message (matching sendRequest behavior)
     if (systemMessage) {
-      if (cacheControlStream) {
+      if (prefixCacheControlStream) {
         body['system'] = [
           {
             type: 'text',
             text: systemMessage.content,
-            cache_control: cacheControlStream,
+            cache_control: prefixCacheControlStream,
           },
         ];
       } else {

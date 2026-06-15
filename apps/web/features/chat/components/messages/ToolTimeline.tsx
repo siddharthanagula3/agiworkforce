@@ -2,10 +2,24 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, CircleCheck, GitBranch, Wrench } from 'lucide-react';
+import {
+  ChevronRight,
+  CircleCheck,
+  GitBranch,
+  FileText,
+  FilePlus2,
+  FilePen,
+  SquareTerminal,
+  FolderOpen,
+  Globe,
+  Sparkles,
+  Search,
+  ExternalLink,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 import { FileTypeIcon } from './FileTypeIcon';
+import type { ResearchSource } from '../../stores/research-panel-store';
 
 // ─── File reference helper ──────────────────────────────────────────────────
 
@@ -20,13 +34,213 @@ function getFileName(args?: string): string | null {
   return match?.[1] ?? null;
 }
 
-/** Shared file-name pill: FileTypeIcon + truncated filename (Claude-style). */
-function FileBadge({ filename }: { filename: string }) {
+/**
+ * Return the icon component for a tool step based on its name.
+ * Matches the Claude reference: file-type-specific icon for file ops,
+ * semantic lucide glyphs for other tool types.
+ */
+type IconComponent = React.FC<{ className?: string }>;
+
+function getToolIcon(toolName: string, filename?: string | null): IconComponent {
+  const n = toolName.toLowerCase();
+
+  // File-type icon is handled separately in the step row when filename is present
+  if (filename) return FileText; // placeholder; step renders FileTypeIcon directly
+
+  if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep')) {
+    return Search;
+  }
+  if (n.includes('web') || n.includes('fetch') || n.includes('http') || n.includes('url')) {
+    return Globe;
+  }
+  if (n.includes('write') || n.includes('create')) {
+    return FilePlus2;
+  }
+  if (n.includes('edit') || n.includes('patch') || n.includes('update')) {
+    return FilePen;
+  }
+  if (
+    n.includes('bash') ||
+    n.includes('exec') ||
+    n.includes('run') ||
+    n.includes('command') ||
+    n.includes('terminal') ||
+    n.includes('script')
+  ) {
+    return SquareTerminal;
+  }
+  if (n.includes('list') || n.includes('ls') || n.includes('dir')) {
+    return FolderOpen;
+  }
+  if (n.includes('skill') || n.includes('learn')) {
+    return Sparkles;
+  }
+  // Default: file-read / view
+  return FileText;
+}
+
+// ─── Web-search tool detection + humanization ─────────────────────────────────
+
+/** Known tool IDs that represent a web/perplexity search */
+const WEB_SEARCH_TOOL_IDS = new Set([
+  'web_search',
+  'WebSearch',
+  'search_web',
+  'browser_search',
+  'perplexity_search',
+  'perplexity',
+  'WebFetch',
+  'fetch_url',
+]);
+
+/**
+ * Returns true when this tool entry represents a web search call.
+ * Used to decide whether to render inline source cards beneath the step.
+ */
+export function isWebSearchTool(name: string): boolean {
+  if (WEB_SEARCH_TOOL_IDS.has(name)) return true;
+  const n = name.toLowerCase();
   return (
-    <span className="absolute right-0 top-0.5 z-10 inline-flex max-w-[55%] items-center gap-1 rounded-md bg-muted/70 px-1.5 py-px">
-      <FileTypeIcon filename={filename} className="h-3 w-3" />
-      <span className="truncate font-mono text-[10px] text-muted-foreground">{filename}</span>
-    </span>
+    (n.includes('web') || n.includes('perplexity') || n.includes('brave') || n.includes('serp')) &&
+    (n.includes('search') || n.includes('query') || n.includes('fetch'))
+  );
+}
+
+/**
+ * Map a raw tool id to a human-readable label.
+ *
+ * Rules (in priority order):
+ *  1. If the tool is a web-search variant and `args` contains a recognizable
+ *     query string (parameters.query or the raw args string), show that query.
+ *  2. Otherwise map known raw IDs to short English labels.
+ *  3. Fall back to the original name (for human-named tools like "Read"/"Bash").
+ */
+export function humanizeToolName(
+  name: string,
+  args?: string,
+  parameters?: Record<string, unknown>,
+): string {
+  // 1. Web-search: prefer showing the actual query
+  if (isWebSearchTool(name)) {
+    const query =
+      (parameters?.['query'] as string | undefined) ||
+      (parameters?.['q'] as string | undefined) ||
+      args?.trim();
+    if (query) return query;
+    return 'Web search';
+  }
+
+  // 2. Known raw snake_case → friendly label map
+  const map: Record<string, string> = {
+    web_search: 'Web search',
+    search_web: 'Web search',
+    browser_search: 'Web search',
+    perplexity_search: 'Web search',
+    file_read: 'Read file',
+    file_write: 'Write file',
+    file_edit: 'Edit file',
+    file_create: 'Create file',
+    file_delete: 'Delete file',
+    shell_command: 'Run command',
+    terminal_execute: 'Run command',
+    terminal_run: 'Run command',
+    bash_execute: 'Run command',
+    code_execute: 'Run code',
+    code_edit: 'Edit code',
+    git_status: 'Git status',
+    git_diff: 'Git diff',
+    git_log: 'Git log',
+    git_commit: 'Git commit',
+    git_push: 'Git push',
+    db_query: 'Database query',
+    database_query: 'Database query',
+    sql_query: 'SQL query',
+    api_call: 'API call',
+    http_request: 'HTTP request',
+  };
+  if (map[name]) return map[name]!;
+
+  // 3. Return as-is (human-named tools: "Read", "Bash", "Write", etc.)
+  return name;
+}
+
+// ─── Inline source cards (rendered inside the web-search step) ────────────────
+
+interface InlineSourceCardsProps {
+  sources: ResearchSource[];
+  query?: string;
+}
+
+function InlineSourceCards({ sources, query: _query }: InlineSourceCardsProps) {
+  if (sources.length === 0) return null;
+
+  return (
+    <div className="mt-2 space-y-0.5">
+      {/* Results container matching image-381: bordered rounded box, rows inside */}
+      <div className="rounded-lg border border-border/40 bg-muted/10 overflow-hidden">
+        <div className="divide-y divide-border/20 px-3">
+          {sources.map((source, i) => (
+            <InlineSourceRow key={`${source.url}-${i}`} source={source} index={i} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InlineSourceRow({ source, index }: { source: ResearchSource; index: number }) {
+  const [imgError, setImgError] = useState(false);
+
+  // Derive a clean display hostname, handling Vertex AI redirect URIs gracefully
+  let displayHost = source.url;
+  try {
+    const parsed = new URL(source.url);
+    displayHost = parsed.hostname.replace(/^www\./, '');
+  } catch {
+    // keep raw
+  }
+
+  // Favicon: provided by source, else fall back to Google's favicon service
+  const faviconSrc =
+    source.favicon && !imgError
+      ? source.favicon
+      : (() => {
+          try {
+            const domain = new URL(source.url).hostname;
+            return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+          } catch {
+            return undefined;
+          }
+        })();
+
+  return (
+    <a
+      href={/^https?:\/\//i.test(source.url || '') ? source.url : '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 py-1.5 min-w-0 hover:opacity-80 transition-opacity"
+      aria-label={`Source ${source.citationIndex ?? index + 1}: ${source.title || displayHost}`}
+    >
+      {/* Favicon */}
+      {faviconSrc ? (
+        <img
+          src={faviconSrc}
+          alt=""
+          className="h-3.5 w-3.5 shrink-0 rounded-sm"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      )}
+      {/* Title: takes remaining space, truncated */}
+      <span className="flex-1 truncate text-xs text-foreground">{source.title || displayHost}</span>
+      {/* Domain: right-aligned, muted */}
+      <span className="shrink-0 text-[10px] text-muted-foreground/60 ml-2">{displayHost}</span>
+      <ExternalLink
+        className="h-2.5 w-2.5 shrink-0 text-muted-foreground/0 group-hover:text-muted-foreground/50"
+        aria-hidden="true"
+      />
+    </a>
   );
 }
 
@@ -58,6 +272,13 @@ interface ToolTimelineProps {
    * Pass `compact={false}` to always show the full timeline.
    */
   compact?: boolean;
+  /**
+   * Web search source cards to render INSIDE the web-search step (Claude reference).
+   * Collected from message.metadata.searchResults / citations by MessageBubble.
+   */
+  searchSources?: ResearchSource[];
+  /** The search query string corresponding to searchSources. */
+  searchQuery?: string;
 }
 
 interface EntryGroup {
@@ -111,23 +332,17 @@ function groupTools(tools: ToolEntry[]): EntryGroup[] {
   return groups;
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
 /**
- * Build a compact semantic summary from a list of tool entries.
- * Returns a human-readable description of what was accomplished, not a
- * mechanical count. For example: "Read and analyzed files", "Searched the
- * codebase", "Ran shell commands and edited code".
+ * Build a compact action-phrased summary from a list of tool entries.
+ * Uses Claude-style counted verb phrases: "Ran 5 commands, created a file, read a file".
+ * Never emits a mechanical "N tools" count.
  */
 function buildCompactSummary(tools: ToolEntry[]): string {
-  // Bucket each tool into a semantic category
   type Bucket =
     | 'shell'
     | 'file-read'
     | 'file-write'
+    | 'file-edit'
     | 'web-search'
     | 'web-fetch'
     | 'codebase-search'
@@ -135,56 +350,86 @@ function buildCompactSummary(tools: ToolEntry[]): string {
 
   function categorize(name: string): Bucket {
     const n = name.toLowerCase();
-    if (n.includes('bash') || n.includes('exec') || n.includes('run') || n.includes('command')) {
+    if (
+      n.includes('bash') ||
+      n.includes('exec') ||
+      n.includes('run') ||
+      n.includes('command') ||
+      n.includes('terminal') ||
+      n.includes('script')
+    )
       return 'shell';
-    }
-    if (n.includes('write') || n.includes('create') || n.includes('edit') || n.includes('patch')) {
-      return 'file-write';
-    }
-    if (n.includes('read') || n.includes('view') || n.includes('cat') || n.includes('open')) {
+    if (n.includes('create') || n.includes('write') || n.includes('new')) return 'file-write';
+    if (n.includes('edit') || n.includes('patch') || n.includes('update')) return 'file-edit';
+    if (
+      n.includes('read') ||
+      n.includes('view') ||
+      n.includes('cat') ||
+      n.includes('open') ||
+      n.includes('show')
+    )
       return 'file-read';
-    }
-    if (n.includes('web') && (n.includes('search') || n.includes('query'))) {
+    if (
+      (n.includes('web') || n.includes('perplexity')) &&
+      (n.includes('search') || n.includes('query'))
+    )
       return 'web-search';
-    }
-    if (n.includes('fetch') || n.includes('http') || n.includes('url') || n.includes('web')) {
+    if (n.includes('fetch') || n.includes('http') || n.includes('url') || n.includes('web'))
       return 'web-fetch';
-    }
-    if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep')) {
+    if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep'))
       return 'codebase-search';
-    }
-    if (n.includes('list') || n.includes('ls') || n.includes('dir')) {
-      return 'list';
-    }
+    if (n.includes('list') || n.includes('ls') || n.includes('dir')) return 'list';
     return 'shell';
   }
 
-  // Collect unique categories in order of first appearance
-  const seen = new Set<Bucket>();
+  // Count occurrences per bucket in order of first appearance
+  const counts = new Map<Bucket, number>();
+  const order: Bucket[] = [];
+
   for (const tool of tools) {
-    seen.add(categorize(tool.name));
+    const b = categorize(tool.name);
+    if (!counts.has(b)) {
+      counts.set(b, 0);
+      order.push(b);
+    }
+    counts.set(b, counts.get(b)! + 1);
   }
-  const categories = [...seen];
 
-  // Semantic label per bucket (no counts)
-  const semanticLabel: Record<Bucket, string> = {
-    'file-read': 'Read and analyzed files',
-    'file-write': 'Edited code',
-    shell: 'Ran shell commands',
-    'web-search': 'Searched the web',
-    'web-fetch': 'Fetched web content',
-    'codebase-search': 'Searched the codebase',
-    list: 'Listed directory contents',
-  };
+  // Phrase builder: count-aware singular/plural
+  function phrase(bucket: Bucket, count: number): string {
+    const n = count;
+    switch (bucket) {
+      case 'shell':
+        return n === 1 ? 'ran a command' : `ran ${n} commands`;
+      case 'file-write':
+        return n === 1 ? 'created a file' : `created ${n} files`;
+      case 'file-edit':
+        return n === 1 ? 'edited a file' : `edited ${n} files`;
+      case 'file-read':
+        return n === 1 ? 'read a file' : `read ${n} files`;
+      case 'web-search':
+        return n === 1 ? 'searched the web' : 'searched the web';
+      case 'web-fetch':
+        return n === 1 ? 'fetched a page' : `fetched ${n} pages`;
+      case 'codebase-search':
+        return n === 1 ? 'searched the codebase' : 'searched the codebase';
+      case 'list':
+        return n === 1 ? 'listed a directory' : `listed ${n} directories`;
+    }
+  }
 
-  if (categories.length === 0) return 'Used tools';
+  if (order.length === 0) return 'Used tools';
 
-  // Combine multiple semantic labels with commas + "and"
-  const labels = categories.map((c) => semanticLabel[c]);
-  if (labels.length === 1) return labels[0]!;
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  const last = labels.pop()!;
-  return `${labels.join(', ')}, and ${last}`;
+  const phrases = order.map((b) => phrase(b, counts.get(b)!));
+
+  // Capitalize only the first phrase
+  const [first, ...rest] = phrases;
+  const capitalized = (first ?? '').charAt(0).toUpperCase() + (first ?? '').slice(1);
+
+  if (rest.length === 0) return capitalized;
+  if (rest.length === 1) return `${capitalized}, ${rest[0]}`;
+  const last = rest.pop()!;
+  return `${capitalized}, ${rest.join(', ')}, ${last}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -192,7 +437,86 @@ function buildCompactSummary(tools: ToolEntry[]): string {
 // Threshold: auto-compact when more than this many steps
 const COMPACT_THRESHOLD = 3;
 
-function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelineProps) {
+/**
+ * A single timeline step row: tool icon + label + optional filename chip below.
+ * Matches the Claude reference layout in image 385.
+ *
+ * When `searchSources` is provided and this step is a web-search tool, the
+ * source cards render INSIDE this row (directly below the label), matching
+ * the Claude reference (image 381).
+ */
+function TimelineStepRow({
+  tool,
+  toolCall,
+  showParameters,
+  searchSources,
+  searchQuery,
+}: {
+  tool: ToolEntry;
+  toolCall: ToolCall;
+  showParameters: boolean;
+  searchSources?: ResearchSource[];
+  searchQuery?: string;
+}) {
+  const filename = getFileName(tool.args);
+  const hasFile = filename != null;
+  const StepIcon = hasFile ? null : getToolIcon(tool.name, null);
+  const isWebSearch = isWebSearchTool(tool.name);
+  const hasSources = isWebSearch && searchSources && searchSources.length > 0;
+
+  // Build the humanized label for this tool call
+  const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters);
+  const displayToolCall: ToolCall = { ...toolCall, name: humanLabel };
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {/* Row: icon + label */}
+      <div className="flex items-start gap-2.5">
+        {/* Icon column */}
+        <div className="mt-0.5 shrink-0">
+          {hasFile ? (
+            <FileTypeIcon filename={filename} className="h-4 w-4 text-muted-foreground" />
+          ) : StepIcon ? (
+            <StepIcon className="h-4 w-4 text-muted-foreground" />
+          ) : null}
+        </div>
+        {/* Tool call card (label + expand). Web-search steps have no request/
+            response payload and surface their result as source cards below, so
+            we render a plain label instead of the ToolCallCard's (empty) expand
+            box to avoid a hollow container under "Web search". */}
+        <div className="flex-1 min-w-0">
+          {isWebSearch ? (
+            <span className="text-sm text-foreground">{humanLabel}</span>
+          ) : (
+            <ToolCallCard toolCall={displayToolCall} showParameters={showParameters} />
+          )}
+        </div>
+      </div>
+      {/* Filename chip: BELOW the label row, indented to align with the label text */}
+      {hasFile && (
+        <div className="pl-7">
+          <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 max-w-full">
+            <span className="truncate font-mono text-[10px] text-muted-foreground">{filename}</span>
+          </span>
+        </div>
+      )}
+      {/* Inline source cards: rendered INSIDE the web-search step (Claude reference image 381) */}
+      {hasSources && (
+        <div className="pl-7 mt-1">
+          <InlineSourceCards sources={searchSources!} query={searchQuery} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolTimeline({
+  tools,
+  className,
+  compact: compactProp,
+  searchSources,
+  searchQuery,
+}: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
   // Compact expanded state · separate from the regular isExpanded
@@ -217,12 +541,8 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
   // Auto-expand while tools are running, but respect the user's manual close
   const isOpen = userForcedClosed ? false : hasRunning || isExpanded;
 
-  const totalDuration = useMemo(
-    () => tools.reduce((sum, t) => sum + (t.durationMs ?? 0), 0),
-    [tools],
-  );
-
   const groups = useMemo(() => groupTools(tools), [tools]);
+  const summary = useMemo(() => buildCompactSummary(tools), [tools]);
 
   const handleToggle = useCallback(() => {
     if (isOpen) {
@@ -239,79 +559,70 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
   if (tools.length === 0) return null;
 
   // ── Compact render ────────────────────────────────────────────────────────
+  // Compact = collapsed single-line summary with right-pointing chevron.
+  // No Wrench icon, no "N tools" count, no duration.
   if (isCompact && !compactExpanded) {
-    const summary = buildCompactSummary(tools);
     return (
-      <div className={cn('flex items-center gap-1.5', className)}>
+      <div className={cn('flex items-center', className)}>
         <button
           type="button"
           onClick={() => setCompactExpanded(true)}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 rounded-md py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Expand tool details"
         >
-          <Wrench className="w-3 h-3 shrink-0" aria-hidden="true" />
-          <span className="capitalize">{summary}</span>
-          {totalDuration > 0 && (
-            <span className="text-muted-foreground/60">· {formatDuration(totalDuration)}</span>
-          )}
-          {errorCount > 0 && <span className="text-rose-400">· {errorCount} failed</span>}
-          <ChevronDown className="w-3 h-3 shrink-0 -rotate-90" aria-hidden="true" />
+          <span>{summary}</span>
+          {errorCount > 0 && <span className="text-rose-400 text-xs">{errorCount} failed</span>}
+          <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
         </button>
       </div>
     );
   }
 
   // ── Full / expanded render ────────────────────────────────────────────────
+  // Header: action-phrased summary + right-aligned chevron.
+  // No Wrench icon. Chevron is right-pointing when closed, down when open.
   return (
-    <div className={cn('border border-border/30 rounded-lg overflow-hidden', className)}>
+    <div className={cn('', className)}>
       {/* Compact collapse button · shown when user has expanded from compact mode */}
       {isCompact && compactExpanded && (
-        <button
-          type="button"
-          onClick={() => setCompactExpanded(false)}
-          className="w-full flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/30 transition-colors border-b border-border/20"
-          aria-label="Collapse tool details"
-        >
-          <ChevronDown className="w-3 h-3 shrink-0 rotate-180" aria-hidden="true" />
-          <span>Collapse</span>
-        </button>
+        <div className="mb-1">
+          {/* Header row handled below — the collapse affordance is just clicking the header */}
+        </div>
       )}
+
       {/* Header · always visible */}
       <button
         type="button"
-        onClick={handleToggle}
-        aria-expanded={isOpen}
+        onClick={isCompact ? () => setCompactExpanded(false) : handleToggle}
+        aria-expanded={isCompact ? true : isOpen}
         aria-label="Toggle tool timeline"
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+        className="w-full flex items-center gap-2 py-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <motion.span
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="shrink-0"
-        >
-          <ChevronDown className="w-3 h-3" />
-        </motion.span>
-        <Wrench className="w-3 h-3 shrink-0" />
-        <span>
+        <span className="flex-1 text-left">
           {hasRunning ? (
             <span className="text-primary">Running tools...</span>
           ) : (
             <>
-              {tools.length} tool{tools.length !== 1 ? 's' : ''}
-              {totalDuration > 0 && (
-                <span className="text-muted-foreground/60 ml-1">
-                  · {formatDuration(totalDuration)} total
-                </span>
+              {summary}
+              {errorCount > 0 && (
+                <span className="text-rose-400 ml-1.5 text-xs">{errorCount} failed</span>
               )}
-              {errorCount > 0 && <span className="text-rose-400 ml-1">· {errorCount} failed</span>}
             </>
           )}
         </span>
+        {/* Chevron at the right end of the header line */}
+        <motion.span
+          animate={{ rotate: isOpen || (isCompact && compactExpanded) ? 90 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="shrink-0"
+        >
+          <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+        </motion.span>
       </button>
 
       {/* Expandable tool list with framer-motion height + opacity animation */}
       <AnimatePresence initial={false}>
-        {isOpen && (
+        {(isOpen || (isCompact && compactExpanded)) && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -322,76 +633,99 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
             }}
             className="overflow-hidden"
           >
-            {/* Vertical connector line wraps all sequential steps */}
-            <div className="border-t border-border/20">
-              <div className="relative ml-4 border-l border-border/30 pl-3 pb-3 pt-2 space-y-1.5">
-                {groups.map((group, gi) => {
-                  const isParallel = group.parallelGroup != null && group.entries.length > 1;
+            {/* Vertical timeline: thin connector line runs along the left edge of icons */}
+            <div className="relative mt-2 pl-2">
+              {/* Vertical connector line */}
+              <div
+                className="absolute left-4 top-2 bottom-6 w-px bg-border/40"
+                aria-hidden="true"
+              />
+              <div className="space-y-3">
+                {(() => {
+                  // Track whether we've attached the search sources to a step yet.
+                  // Sources render only on the FIRST web-search step to avoid duplication.
+                  let sourcesAttached = false;
 
-                  if (isParallel) {
-                    return (
-                      <div
-                        key={group.parallelGroup ?? gi}
-                        className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-1.5 mx-0"
-                      >
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                          <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
-                        </div>
-                        {group.entries.map((tool, ti) => {
-                          const id = stableId(tool, gi * 100 + ti);
-                          const toolCall: ToolCall = {
-                            id,
-                            name: tool.name,
-                            status: toToolCallStatus(tool.status),
-                            durationMs: tool.durationMs,
-                            parameters: buildParameters(tool.args, tool.parameters),
-                          };
-                          const fileName = getFileName(tool.args);
-                          return (
-                            <div key={id} className="relative">
-                              {fileName && <FileBadge filename={fileName} />}
-                              <ToolCallCard
+                  return groups.map((group, gi) => {
+                    const isParallel = group.parallelGroup != null && group.entries.length > 1;
+
+                    if (isParallel) {
+                      return (
+                        <div
+                          key={group.parallelGroup ?? gi}
+                          className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-3 ml-2"
+                        >
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
+                            <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                          </div>
+                          {group.entries.map((tool, ti) => {
+                            const id = stableId(tool, gi * 100 + ti);
+                            const toolCall: ToolCall = {
+                              id,
+                              name: tool.name,
+                              status: toToolCallStatus(tool.status),
+                              durationMs: tool.durationMs,
+                              parameters: buildParameters(tool.args, tool.parameters),
+                            };
+                            const attachSources =
+                              !sourcesAttached &&
+                              isWebSearchTool(tool.name) &&
+                              searchSources &&
+                              searchSources.length > 0;
+                            if (attachSources) sourcesAttached = true;
+                            return (
+                              <TimelineStepRow
+                                key={id}
+                                tool={tool}
                                 toolCall={toolCall}
                                 showParameters={Boolean(tool.args ?? tool.parameters)}
+                                searchSources={attachSources ? searchSources : undefined}
+                                searchQuery={attachSources ? searchQuery : undefined}
                               />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  }
+                            );
+                          })}
+                        </div>
+                      );
+                    }
 
-                  return group.entries.map((tool, ti) => {
-                    const id = stableId(tool, gi * 100 + ti);
-                    const toolCall: ToolCall = {
-                      id,
-                      name: tool.name,
-                      status: toToolCallStatus(tool.status),
-                      durationMs: tool.durationMs,
-                      parameters: buildParameters(tool.args, tool.parameters),
-                    };
-                    const fileName = getFileName(tool.args);
-                    return (
-                      <div key={id} className="relative">
-                        {fileName && <FileBadge filename={fileName} />}
-                        <ToolCallCard
+                    return group.entries.map((tool, ti) => {
+                      const id = stableId(tool, gi * 100 + ti);
+                      const toolCall: ToolCall = {
+                        id,
+                        name: tool.name,
+                        status: toToolCallStatus(tool.status),
+                        durationMs: tool.durationMs,
+                        parameters: buildParameters(tool.args, tool.parameters),
+                      };
+                      const attachSources =
+                        !sourcesAttached &&
+                        isWebSearchTool(tool.name) &&
+                        searchSources &&
+                        searchSources.length > 0;
+                      if (attachSources) sourcesAttached = true;
+                      return (
+                        <TimelineStepRow
+                          key={id}
+                          tool={tool}
                           toolCall={toolCall}
                           showParameters={Boolean(tool.args ?? tool.parameters)}
+                          searchSources={attachSources ? searchSources : undefined}
+                          searchQuery={attachSources ? searchQuery : undefined}
                         />
-                      </div>
-                    );
+                      );
+                    });
                   });
-                })}
+                })()}
 
-                {/* Done row · shown when every tool completed without error */}
+                {/* Done row: neutral outline circle-check (not green) + "Done" in normal foreground */}
                 {!hasRunning && errorCount === 0 && (
-                  <div className="flex items-center gap-1.5 pt-0.5">
+                  <div className="flex items-center gap-2 pt-1">
                     <CircleCheck
-                      className="w-3.5 h-3.5 shrink-0 text-emerald-500"
+                      className="w-4 h-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
-                    <span className="text-xs text-emerald-500 font-medium">Done</span>
+                    <span className="text-sm text-foreground">Done</span>
                   </div>
                 )}
               </div>
@@ -407,6 +741,8 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
 const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   if (prev.className !== next.className) return false;
   if (prev.compact !== next.compact) return false;
+  if (prev.searchQuery !== next.searchQuery) return false;
+  if ((prev.searchSources?.length ?? 0) !== (next.searchSources?.length ?? 0)) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
   for (let i = 0; i < prev.tools.length; i++) {

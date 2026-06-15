@@ -46,3 +46,15 @@ export {
   type SettingsNavGroup,
   type SettingsNavKey,
 } from './settings-nav';
+export {
+  SettingsModal,
+  type SettingsModalProps,
+  ConnectorLogo,
+  type ConnectorLogoProps,
+  type SettingsDataAdapter,
+  type SettingsConnector,
+  type ConnectedConnector,
+  type SettingsSkill,
+  type SettingsPlugin,
+  type SettingsSectionKey,
+} from './settings-modal';

@@ -67,6 +67,40 @@ function normalizeReasoningEffort(effort: string | undefined, model: string): st
   return undefined;
 }
 
+/**
+ * Derive a stable OpenAI `prompt_cache_key` from the request's STABLE prefix
+ * (system prompt + tool names + model). Per OpenAI's prompt-caching docs this
+ * optional key is used to route requests that share a common prefix to the same
+ * cache, maximizing hit rates across requests. We hash only the stable prefix
+ * (NOT the volatile user turn) so every request reusing the same system+tools
+ * lands on the same key. Returns undefined when there is no system prompt (no
+ * meaningful prefix to pin), letting OpenAI fall back to automatic prefix
+ * matching. Uses a fast non-cryptographic FNV-1a hash — this is a routing hint,
+ * not a security boundary.
+ */
+function derivePromptCacheKey(request: LLMProviderRequest): string | undefined {
+  const system = request.messages.find((m) => m.role === 'system')?.content;
+  if (!system) {
+    return undefined;
+  }
+  const toolNames = Array.isArray(request.tools)
+    ? request.tools
+        .map((t) => {
+          const tool = t as { function?: { name?: string }; name?: string };
+          return tool.function?.name ?? tool.name ?? '';
+        })
+        .join(',')
+    : '';
+  const seed = `${request.model} ${system} ${toolNames}`;
+  // FNV-1a 32-bit
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `agi-${(hash >>> 0).toString(16)}`;
+}
+
 export class OpenAIProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
     return 'https://api.openai.com/v1';
@@ -115,6 +149,15 @@ export class OpenAIProvider extends BaseLLMProvider {
     }
     if (request.stream !== undefined) {
       body['stream'] = request.stream;
+    }
+    // Stable prompt_cache_key maximizes automatic-cache hit rates across requests
+    // sharing the same system+tools prefix (OpenAI prompt caching is automatic;
+    // the key only improves routing). Pin only when caching is desired.
+    if (request.usePromptCache !== false) {
+      const promptCacheKey = derivePromptCacheKey(request);
+      if (promptCacheKey) {
+        body['prompt_cache_key'] = promptCacheKey;
+      }
     }
     if (request.tools) {
       // Transform tools to OpenAI format and ensure 'type' field
@@ -294,6 +337,14 @@ export class OpenAIProvider extends BaseLLMProvider {
     const reasoningEffort = normalizeReasoningEffort(request.effort, request.model);
     if (reasoningEffort) {
       body['reasoning_effort'] = reasoningEffort;
+    }
+    // Stable prompt_cache_key (same derivation as sendRequest) to improve
+    // automatic-cache hit routing across requests sharing the system+tools prefix.
+    if (request.usePromptCache !== false) {
+      const promptCacheKey = derivePromptCacheKey(request);
+      if (promptCacheKey) {
+        body['prompt_cache_key'] = promptCacheKey;
+      }
     }
     if (request.tools) {
       // Transform tools to OpenAI format and ensure 'type' field

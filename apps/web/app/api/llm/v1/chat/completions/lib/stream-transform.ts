@@ -296,10 +296,14 @@ export async function buildStreamResponse(
               // Chat Completions shape: prompt_tokens_details.cached_tokens
               // Responses API shape:   input_tokens_details.cached_tokens
               // OpenRouter (anthropic routes): cache_read_input_tokens / cache_creation_input_tokens
+              // DeepSeek native shape:  prompt_cache_hit_tokens (subset of prompt_tokens;
+              //   the streaming bypass returns DeepSeek's raw usage chunk, so this field
+              //   is the only place the ~90%-off cache discount can be captured on stream).
               const streamCacheRead =
                 event.usage.prompt_tokens_details?.cached_tokens ??
                 event.usage.input_tokens_details?.cached_tokens ??
                 event.usage.cache_read_input_tokens ??
+                event.usage.prompt_cache_hit_tokens ??
                 undefined;
               if (streamCacheRead != null) {
                 cacheReadInputTokens = streamCacheRead;
@@ -322,6 +326,11 @@ export async function buildStreamResponse(
             if (event.usageMetadata) {
               inputTokens = Math.max(inputTokens, event.usageMetadata.promptTokenCount || 0);
               outputTokens = Math.max(outputTokens, event.usageMetadata.candidatesTokenCount || 0);
+              // Gemini implicit caching: cachedContentTokenCount is a subset of
+              // promptTokenCount served from cache. Capture for cost-discounting.
+              if (event.usageMetadata.cachedContentTokenCount != null) {
+                cacheReadInputTokens = event.usageMetadata.cachedContentTokenCount;
+              }
             }
 
             processedLines.push(`data: ${JSON.stringify(transformedEvent)}`);
@@ -404,6 +413,8 @@ export async function buildStreamResponse(
             promptTokens: inputTokens,
             completionTokens: outputTokens,
             totalTokens,
+            cacheReadInputTokens: cacheReadInputTokens || undefined,
+            cacheCreationInputTokens: cacheCreationInputTokens || undefined,
           });
 
           const costDifference = actualCostCents - estimatedCostCents;

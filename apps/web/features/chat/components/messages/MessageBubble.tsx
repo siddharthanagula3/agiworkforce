@@ -11,7 +11,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, type Variants } from 'framer-motion';
-import NextImage from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -24,7 +23,6 @@ import {
   ChevronRight,
   Sparkles,
   Brain,
-  Download,
   MoreHorizontal,
   Pin,
   Pencil,
@@ -56,6 +54,7 @@ import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
 import { useArtifactsStore } from '../../stores/artifacts-store';
+import { useChatStore } from '@/stores/chatStore';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
@@ -65,7 +64,9 @@ import { ArtifactBlock } from '../ArtifactBlock';
 import { ComparisonResponse } from './ComparisonResponse';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
-import type { ResearchSource } from '../../stores/research-panel-store';
+import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
+import { ImageGenerationCard } from '../ImageGenerationCard';
+import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -166,6 +167,12 @@ interface Message {
     toolResult?: boolean;
     toolType?: string;
     imageUrl?: string;
+    /** Original prompt used for image generation (used by edit/re-generate flow). */
+    imageGenPrompt?: string;
+    /** Aspect ratio that was used when generating the image. */
+    imageGenAspect?: string;
+    /** Model id used for image generation. */
+    imageGenModel?: string;
     imageData?: MediaGenerationResult;
     videoUrl?: string;
     thumbnailUrl?: string;
@@ -215,6 +222,12 @@ interface MessageBubbleProps {
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onBranch?: (messageId: string) => void;
   hasBranches?: boolean;
+  /** Re-generates an image result in-place (edit/aspect-ratio change). */
+  onRegenerateImage?: (opts: {
+    prompt: string;
+    aspectRatio: ImageAspectRatio;
+    modelId?: string;
+  }) => Promise<string>;
   /**
    * When provided and the parent renders a motion container with
    * `messageListVariants`, this prop is unused (stagger is driven by the
@@ -234,17 +247,23 @@ const MessageBubbleComponent = function MessageBubble({
   onBranch,
   hasBranches,
   animationIndex = 0,
+  onRegenerateImage,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
-  const [imageError, setImageError] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const isUser = message.role === 'user';
 
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
   const upsertArtifact = useArtifactsStore((state) => state.upsertArtifact);
+  // Stamp artifacts with the active conversation id (the SAME source the
+  // Artifacts panel filters by). message.sessionId is often unset, so relying
+  // on it left artifacts with conversationId=undefined → filtered out of every
+  // panel. Falls back to message.sessionId when there's no active conversation.
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
   const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
   const storedChoice = useComparisonStore((state) =>
     state.getComparisonChoice(message.sessionId ?? '', message.id),
@@ -297,8 +316,17 @@ const MessageBubbleComponent = function MessageBubble({
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
-    extractedArtifacts.forEach((artifact) => addArtifactForMessage(message.id, artifact));
-  }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifactForMessage]);
+    extractedArtifacts.forEach((artifact) =>
+      addArtifactForMessage(message.id, artifact, artifactConversationId),
+    );
+  }, [
+    message.id,
+    artifactConversationId,
+    isUser,
+    existingArtifacts.length,
+    extractedArtifacts,
+    addArtifactForMessage,
+  ]);
 
   useEffect(() => {
     if (isUser || artifacts.length === 0) return;
@@ -308,9 +336,10 @@ const MessageBubbleComponent = function MessageBubble({
         title: artifact.title || 'Untitled',
         language: artifact.language || artifact.type,
         messageId: message.id,
+        conversationId: artifactConversationId,
       });
     }
-  }, [artifacts, isUser, message.id, upsertArtifact]);
+  }, [artifacts, isUser, message.id, artifactConversationId, upsertArtifact]);
 
   const cleanedContent = useMemo(() => {
     if (artifacts.length === 0) return message.content;
@@ -331,6 +360,72 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.collaborationMessages &&
     message.metadata.collaborationMessages.length > 0;
   const toolTimeline = !isUser && message.metadata?.tools ? message.metadata.tools : [];
+
+  // Collect web-search sources from metadata (searchResults and/or citations).
+  // These are passed INTO the ToolTimeline so they render inside the web-search step box
+  // (matching the Claude reference). A fallback renders them if there is no tool timeline.
+  const { searchSources, searchQuery } = useMemo(() => {
+    if (isUser) return { searchSources: [] as ResearchSource[], searchQuery: undefined };
+
+    const collected: ResearchSource[] = [];
+    let query: string | undefined;
+
+    const sr = message.metadata?.searchResults;
+    if (sr) {
+      query = Array.isArray(sr) ? undefined : sr.query;
+      const results = Array.isArray(sr) ? sr : (sr.results ?? []);
+      results.forEach((r, i) => {
+        if (r.url) {
+          collected.push({
+            url: r.url,
+            title: r.title || '',
+            snippet: r.snippet,
+            favicon: r.favicon,
+            citationIndex: i + 1,
+          });
+        }
+      });
+      // Perplexity plain-URL sources list
+      if (!Array.isArray(sr)) {
+        (sr.sources ?? []).forEach((url) => {
+          if (url && !collected.some((s) => s.url === url)) {
+            collected.push({ url, title: '', citationIndex: collected.length + 1 });
+          }
+        });
+      }
+    }
+
+    const citations = message.metadata?.citations;
+    if (citations && citations.length > 0 && collected.length === 0) {
+      citations
+        .filter(
+          (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
+            !!(c.url && c.title),
+        )
+        .forEach((c, i) => {
+          collected.push({
+            url: c.url,
+            title: c.title,
+            snippet: c.cited_text,
+            citationIndex: i + 1,
+          });
+        });
+    }
+
+    return { searchSources: collected, searchQuery: query };
+  }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
+
+  // Mirror this message's web-search sources into the right-hand Sources panel
+  // (research-panel store) so the "Sources" view showcases them, not just the
+  // inline cards inside the tool box.
+  const setResearchSources = useResearchPanelStore((s) => s.setSources);
+  useEffect(() => {
+    if (!isUser && searchSources.length > 0) {
+      // Scope the sources to this conversation so the Sources panel never shows
+      // a previous chat's sources in a chat that didn't run a web search.
+      setResearchSources(artifactConversationId ?? null, searchSources, searchQuery);
+    }
+  }, [isUser, searchSources, searchQuery, setResearchSources, artifactConversationId]);
 
   return (
     <motion.div
@@ -406,7 +501,12 @@ const MessageBubbleComponent = function MessageBubble({
                   if (tool) {
                     blocks.push(
                       <div key={`tool-inline-${tool.id ?? i}`} className="mb-2">
-                        <ToolTimeline tools={[tool]} compact={false} />
+                        <ToolTimeline
+                          tools={[tool]}
+                          compact={false}
+                          searchSources={searchSources}
+                          searchQuery={searchQuery}
+                        />
                       </div>,
                     );
                   }
@@ -417,7 +517,11 @@ const MessageBubbleComponent = function MessageBubble({
                   const remaining = tools.slice(segments.length);
                   blocks.push(
                     <div key="tool-remainder" className="mb-2">
-                      <ToolTimeline tools={remaining} />
+                      <ToolTimeline
+                        tools={remaining}
+                        searchSources={searchSources}
+                        searchQuery={searchQuery}
+                      />
                     </div>,
                   );
                 }
@@ -463,7 +567,11 @@ const MessageBubbleComponent = function MessageBubble({
               their own per-step tool rendering above). */}
           {!isUser && toolTimeline.length > 0 && !message.metadata?.thinkingSegments?.length && (
             <div className="mb-3">
-              <ToolTimeline tools={toolTimeline} />
+              <ToolTimeline
+                tools={toolTimeline}
+                searchSources={searchSources}
+                searchQuery={searchQuery}
+              />
             </div>
           )}
 
@@ -557,37 +665,18 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Inline artifact thumbnail cards · quick visual summary, click to open panel */}
           {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
 
-          {/* Image Result with Error Handling */}
-          {!isUser &&
-            message.metadata?.toolType === 'image-generation' &&
-            message.metadata?.imageUrl && (
-              <div className="mt-4">
-                <div className="overflow-hidden rounded-xl border border-border">
-                  {imageError ? (
-                    <div className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground">
-                      <span className="text-sm">Image failed to load</span>
-                    </div>
-                  ) : (
-                    <NextImage
-                      src={message.metadata.imageUrl as string}
-                      alt="Generated image"
-                      width={800}
-                      height={600}
-                      className="max-h-96 w-auto"
-                      onError={() => setImageError(true)}
-                    />
-                  )}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                    <a href={message.metadata.imageUrl} download>
-                      <Download className="mr-1.5 h-3 w-3" aria-hidden="true" />
-                      Download
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            )}
+          {/* Image generation card (states A/B/C/D) */}
+          {!isUser && message.metadata?.toolType === 'image-generation' && (
+            <div className="mt-4">
+              <ImageGenerationCard
+                imageUrl={message.metadata.imageUrl as string | undefined}
+                prompt={message.metadata.imageGenPrompt as string | undefined}
+                aspectRatio={message.metadata.imageGenAspect as ImageAspectRatio | undefined}
+                modelId={message.metadata.imageGenModel as string | undefined}
+                onRegenerate={onRegenerateImage}
+              />
+            </div>
+          )}
 
           {/* Video Result with Error Handling */}
           {!isUser &&
@@ -610,61 +699,13 @@ const MessageBubbleComponent = function MessageBubble({
               </div>
             )}
 
-          {/* Research sources · unified panel for searchResults + citations */}
-          {!isUser &&
-            (() => {
-              // Collect sources from searchResults (legacy) and citations (server-managed tools)
-              const sources: ResearchSource[] = [];
-
-              const sr = message.metadata?.searchResults;
-              if (sr) {
-                const query = Array.isArray(sr) ? undefined : sr.query;
-                const searchResults = Array.isArray(sr) ? sr : (sr.results ?? []);
-                searchResults.forEach((r, i) => {
-                  if (r.url) {
-                    sources.push({
-                      url: r.url,
-                      title: r.title || '',
-                      snippet: r.snippet,
-                      favicon: r.favicon,
-                      citationIndex: i + 1,
-                    });
-                  }
-                });
-                // Sources array from Perplexity answer
-                if (!Array.isArray(sr)) {
-                  (sr.sources ?? []).forEach((url) => {
-                    if (url && !sources.some((s) => s.url === url)) {
-                      sources.push({ url, title: '', citationIndex: sources.length + 1 });
-                    }
-                  });
-                }
-
-                if (sources.length > 0) {
-                  return <InlineSourcesList sources={sources} query={query} />;
-                }
-              }
-
-              const citations = message.metadata?.citations;
-              if (citations && citations.length > 0) {
-                const citSources = citations
-                  .filter(
-                    (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
-                      !!(c.url && c.title),
-                  )
-                  .map((c, i) => ({
-                    url: c.url,
-                    title: c.title,
-                    snippet: c.cited_text,
-                    citationIndex: i + 1,
-                  }));
-                if (citSources.length > 0) {
-                  return <InlineSourcesList sources={citSources} />;
-                }
-              }
-
-              return null;
-            })()}
+          {/* Search sources fallback · shown ONLY when there is no tool timeline to host them.
+              When a tool timeline is present, sources render inside the web-search step
+              (via the searchSources prop). For non-tool paths (e.g. Perplexity answer-only
+              responses), this fallback ensures sources are never silently lost. */}
+          {!isUser && searchSources.length > 0 && toolTimeline.length === 0 && (
+            <InlineSourcesList sources={searchSources} query={searchQuery} />
+          )}
 
           {/* Tool timeline rendered above prose (moved before message content section). */}
 

@@ -99,6 +99,14 @@ export class DeepSeekProvider extends BaseLLMProvider {
       const data = await response.json();
       const message = data.choices[0]?.message;
 
+      // DeepSeek automatic context caching: ~90% off on cache hits.
+      // Usage fields (DeepSeek Chat Completions, June 2026):
+      //   usage.prompt_cache_hit_tokens  — tokens served from cache (billed at cached_input rate)
+      //   usage.prompt_cache_miss_tokens — tokens NOT in cache (billed at full input rate)
+      // There is no separate cache_creation counter; miss tokens are billed at the
+      // standard input rate (i.e., the creation cost equals the normal input rate).
+      const deepseekCacheHit: number | undefined = data.usage?.prompt_cache_hit_tokens ?? undefined;
+
       return {
         content: message?.content || '',
         model: data.model || request.model,
@@ -106,6 +114,7 @@ export class DeepSeekProvider extends BaseLLMProvider {
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
         finishReason: data.choices[0]?.finish_reason,
+        cachedInputTokens: deepseekCacheHit,
         // Extract tool_calls from response (OpenAI format)
         ...(message?.tool_calls &&
           message.tool_calls.length > 0 && { tool_calls: message.tool_calls }),

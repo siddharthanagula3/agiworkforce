@@ -126,6 +126,11 @@ const AuthPage = lazy(() =>
 const SettingsPanel = lazy(() =>
   import('./features/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
+const DesktopCloudSettingsModal = lazy(() =>
+  import('./features/settings/DesktopCloudSettingsModal').then((m) => ({
+    default: m.DesktopCloudSettingsModal,
+  })),
+);
 const UpdateChecker = lazy(() =>
   import('./features/updates').then((m) => ({
     default: m.UpdateChecker,
@@ -1523,12 +1528,21 @@ const DesktopShell = () => {
             />
           ) : null}
         </Suspense>
+        {/* Settings: Cloud mode renders the shared SettingsModal shell; Local mode keeps SettingsPanel */}
         <Suspense fallback={null}>
-          <SettingsPanel
-            open={settingsPanelOpen}
-            onOpenChange={(v) => (v ? openSettingsDialog() : closeSettingsDialog())}
-            initialTab={settingsInitialTab}
-          />
+          {isCloudMode ? (
+            <DesktopCloudSettingsModal
+              open={settingsPanelOpen}
+              onClose={closeSettingsDialog}
+              initialTab={settingsInitialTab}
+            />
+          ) : (
+            <SettingsPanel
+              open={settingsPanelOpen}
+              onOpenChange={(v) => (v ? openSettingsDialog() : closeSettingsDialog())}
+              initialTab={settingsInitialTab}
+            />
+          )}
         </Suspense>
         {isTauri && (
           <Suspense fallback={null}>

@@ -68,6 +68,7 @@ const SYNCED_FIELDS = [
   'inputCost',
   'outputCost',
   'cached_input',
+  'cached_write',
   'capabilities',
   'benchmarks',
   'speed',
@@ -76,7 +77,7 @@ const SYNCED_FIELDS = [
 
 // Curation override keys → which synced field they replace.
 const OVERRIDE_KEYS = [
-  'costOverride', // { inputCost?, outputCost?, cached_input? }
+  'costOverride', // { inputCost?, outputCost?, cached_input?, cached_write? }
   'contextOverride', // contextWindow
   'capabilitiesOverride', // capabilities
   'benchmarkOverride', // benchmarks
@@ -97,6 +98,7 @@ const CANONICAL_ORDER = [
   'inputCost',
   'outputCost',
   'cached_input',
+  'cached_write',
   'capabilities',
   'benchmarks',
   'speed',
@@ -115,6 +117,7 @@ const CANONICAL_ORDER = [
   'tokenizer_drift_range',
   'tokenizer_drift_warning',
   'imagePerImageCost',
+  'imageApi',
   'videoPerSecondCost',
   'pricingNote',
 ];
@@ -270,7 +273,7 @@ async function extract() {
       // Not on models.dev → fold synced-type fields into curation overrides so
       // they remain hand-maintained.
       const overrides = {};
-      const cost = pick(syncedPart, ['inputCost', 'outputCost', 'cached_input']);
+      const cost = pick(syncedPart, ['inputCost', 'outputCost', 'cached_input', 'cached_write']);
       if (Object.keys(cost).length) overrides.costOverride = cost;
       if ('contextWindow' in syncedPart) overrides.contextOverride = syncedPart.contextWindow;
       if ('capabilities' in syncedPart) overrides.capabilitiesOverride = syncedPart.capabilities;
@@ -307,12 +310,26 @@ async function extract() {
 
 function resolveSyncedFields(cur, up) {
   const co = cur.costOverride ?? {};
+  // Effective cached-read price: costOverride > curation top-level > synced upstream.
+  // (Some curation entries carry cached_input as a top-level own field rather than
+  // inside costOverride; both must count toward caching eligibility.)
+  const cachedInput = co.cached_input ?? cur.cached_input ?? up.cached_input;
+  const baseCapabilities = cur.capabilitiesOverride ?? up.capabilities;
+  // Caching eligibility is catalog-driven: a model supports prompt caching iff
+  // it has a cached-read price (cached_input). This avoids string-prefix hacks
+  // and keeps the `caching` capability in lockstep with pricing data. An explicit
+  // capabilities.caching in curation always wins (allows opt-out / pre-pricing opt-in).
+  const capabilities =
+    baseCapabilities && typeof baseCapabilities === 'object'
+      ? { ...baseCapabilities, caching: baseCapabilities.caching ?? cachedInput != null }
+      : baseCapabilities;
   return defined({
     contextWindow: cur.contextOverride ?? up.contextWindow,
     inputCost: co.inputCost ?? up.inputCost,
     outputCost: co.outputCost ?? up.outputCost,
-    cached_input: co.cached_input ?? up.cached_input,
-    capabilities: cur.capabilitiesOverride ?? up.capabilities,
+    cached_input: cachedInput,
+    cached_write: co.cached_write ?? up.cached_write,
+    capabilities,
     benchmarks: cur.benchmarkOverride ?? up.benchmarks,
     speed: cur.speedOverride ?? up.speed,
     released: cur.releasedOverride ?? up.released,
@@ -382,6 +399,7 @@ function mapDevModel(devModel) {
   if (devModel.cost?.input != null) out.inputCost = devModel.cost.input;
   if (devModel.cost?.output != null) out.outputCost = devModel.cost.output;
   if (devModel.cost?.cache_read != null) out.cached_input = devModel.cost.cache_read;
+  if (devModel.cost?.cache_write != null) out.cached_write = devModel.cost.cache_write;
   // `released` is intentionally NOT synced: models.dev uses ISO dates while the
   // catalog uses human strings, and the date is informational — syncing it only
   // churns formatting. It stays curation-/seed-owned.

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import type { ArtifactData } from './ArtifactPreview';
 
@@ -115,7 +116,19 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
           <iframe
             title={artifact.title || 'Artifact preview'}
             sandbox="allow-scripts"
-            srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${artifact.content.slice(0, 800)}</body></html>`}
+            srcDoc={(() => {
+              // For html artifacts: use buildSandboxSrcDoc so the thumbnail
+              // preview is a correctly structured single document (no double-
+              // wrap). The iframe has sandbox="allow-scripts" (NO
+              // allow-same-origin), so the null-origin sandbox is the boundary.
+              // For other types: inject raw content into a minimal shell (they
+              // don't contain scripts that need execution in the thumbnail).
+              if (artifact.type === 'html') {
+                return buildSandboxSrcDoc(artifact.content.slice(0, 800));
+              }
+              const preview = artifact.content.slice(0, 800);
+              return `<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${preview}</body></html>`;
+            })()}
             className="pointer-events-none h-full w-full"
             style={{
               width: '250%',

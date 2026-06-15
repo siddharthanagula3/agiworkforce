@@ -186,7 +186,15 @@ export class OpenRouterProvider extends BaseLLMProvider {
       // OpenRouter exposes Anthropic-style cache counters when routing to anthropic/*.
       // Fields: usage.cache_read_input_tokens, usage.cache_creation_input_tokens.
       // Reference: openclaw prompt-caching.md "OpenRouter models" section.
-      const cacheReadTokens: number | undefined = data.usage?.cache_read_input_tokens ?? undefined;
+      // For NON-Anthropic routes (deepseek/*, openai/*, google/*, …) OpenRouter
+      // normalizes usage into the OpenAI shape (usage.prompt_tokens_details.cached_tokens
+      // / input_tokens_details.cached_tokens). Read both so the cache-read discount
+      // is captured regardless of which underlying model served the request.
+      const cacheReadTokens: number | undefined =
+        data.usage?.cache_read_input_tokens ??
+        data.usage?.prompt_tokens_details?.cached_tokens ??
+        data.usage?.input_tokens_details?.cached_tokens ??
+        undefined;
       const cacheCreationTokens: number | undefined =
         data.usage?.cache_creation_input_tokens ?? undefined;
 

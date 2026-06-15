@@ -180,13 +180,22 @@ export function useChatStream(): UseChatStreamReturn {
   const selectedModel = useChatStore((state) => state.selectedModel);
   const isStreaming = useChatStore((state) => state.isStreaming);
 
-  // Cleanup AbortController on unmount to prevent memory leaks
+  // On unmount, do NOT abort the in-flight stream and do NOT null the ref.
+  // The chatStore is a global singleton, so streamed tokens continue updating
+  // the message list even after the originating component unmounts (e.g.
+  // navigation from /chat to /chat/[id] on the first message).
+  //
+  // Crucially, we must preserve the AbortController reference so the in-flight
+  // fetch() call (which captured abortControllerRef, not a copy of the signal)
+  // can still read a valid signal after unmount. Nulling it here caused a
+  // TypeError ("Cannot read properties of null (reading 'signal')") on every
+  // first-message navigation, producing a silent empty assistant turn.
+  //
+  // The browser closes the HTTP connection when the tab is closed.
+  // Explicit user cancellation goes through stopGeneration() instead.
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
+      // intentionally empty: preserve controller across unmount
     };
   }, []);
 
@@ -454,7 +463,7 @@ export function useChatStream(): UseChatStreamReturn {
             effort: thinkingEnabled ? thinkingEffort : undefined,
             use_prompt_cache: true,
           }),
-          signal: abortControllerRef.current.signal,
+          signal: abortControllerRef.current?.signal,
         });
 
         useFreeTrialStore.getState().applyHeaders(response.headers);
