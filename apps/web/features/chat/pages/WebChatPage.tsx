@@ -80,7 +80,7 @@ import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
-import { useProjectStore, ProjectSettingsDialog } from '@features/projects';
+import { useProjectStore, ProjectSettingsDialog, type Project } from '@features/projects';
 
 type SendMeta = {
   agentMode?: string;
@@ -315,6 +315,32 @@ export default function WebChatPage() {
   const storeProjects = useProjectStore((s) => s.projects);
   const updateProjectInStore = useProjectStore((s) => s.updateProject);
   const removeProjectFromStore = useProjectStore((s) => s.removeProject);
+  const setStoreProjects = useProjectStore((s) => s.setProjects);
+
+  // Hydrate the project store from the server once on mount. The store is
+  // otherwise localStorage-only, so server-side projects (user_projects) never
+  // appeared in the sidebar. Merge server rows with any local-only projects,
+  // server winning on id conflicts.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/projects?limit=100', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const json = (await res.json()) as { projects?: Project[] };
+        const serverProjects = Array.isArray(json.projects) ? json.projects : [];
+        if (cancelled || serverProjects.length === 0) return;
+        const serverIds = new Set(serverProjects.map((p) => p.id));
+        const localOnly = useProjectStore.getState().projects.filter((p) => !serverIds.has(p.id));
+        setStoreProjects([...serverProjects, ...localOnly]);
+      } catch {
+        // Non-fatal: sidebar simply shows whatever is already in the store.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setStoreProjects]);
 
   // Map store Project[] -> SidebarProject[] (no starred->pinned: use starred as pinned proxy)
   const sidebarProjects = useMemo<SidebarProject[]>(
