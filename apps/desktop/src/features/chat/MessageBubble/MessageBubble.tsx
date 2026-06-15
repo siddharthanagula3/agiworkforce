@@ -554,7 +554,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             <TimelineStep
               key="thinking"
               variant="thinking"
-              label={messageThinkingContent.slice(0, 200)}
+              label={messageThinkingContent}
               isRunning={isStreaming && messageToolTimeline.length === 0}
               isLast={++stepIndex >= totalSteps}
             />
