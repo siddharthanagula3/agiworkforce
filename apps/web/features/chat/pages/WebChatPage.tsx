@@ -65,6 +65,8 @@ import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/A
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { DirectoryModal } from '../components/dialogs/DirectoryModal';
 import { CloudUpgradeWaitlistDialog } from '../components/dialogs/CloudUpgradeWaitlistDialog';
+import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
+import { UpgradePlanDialog } from '../components/dialogs/UpgradePlanDialog';
 import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
@@ -296,6 +298,8 @@ export default function WebChatPage() {
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
   const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
   const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
 
   // Dialog state — lifted from ChatSidebar so they live at the page level and
   // work with the shared <Sidebar> component (which has no dialog state).
@@ -421,6 +425,12 @@ export default function WebChatPage() {
   }, []);
 
   const handleOpenCloudWaitlist = useCallback(() => {
+    // Open the richer plan-comparison modal first; its "Join waitlist" CTA
+    // chains to the existing CloudUpgradeWaitlistDialog.
+    setUpgradePlanOpen(true);
+  }, []);
+
+  const handleOpenWaitlistDirect = useCallback(() => {
     setCloudWaitlistOpen(true);
   }, []);
 
@@ -874,11 +884,13 @@ export default function WebChatPage() {
   );
 
   /**
-   * Create project: navigate to /projects where the create form lives.
+   * Create project: open the inline CreateProjectDialog instead of navigating
+   * to /projects. The modal posts to the API, merges into the project store,
+   * then pushes the user directly to the new project page.
    */
   const handleProjectCreate = useCallback(() => {
-    router.push('/projects');
-  }, [router]);
+    setCreateProjectOpen(true);
+  }, []);
 
   /**
    * Delete project from the store after an explicit confirmation so a stray
@@ -1596,6 +1608,13 @@ export default function WebChatPage() {
       </div>
       <DirectoryModal />
       <CloudUpgradeWaitlistDialog open={cloudWaitlistOpen} onOpenChange={setCloudWaitlistOpen} />
+      <CreateProjectDialog open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
+      <UpgradePlanDialog
+        open={upgradePlanOpen}
+        onOpenChange={setUpgradePlanOpen}
+        currentTier={currentTier}
+        onOpenWaitlist={handleOpenWaitlistDirect}
+      />
       {/* Project settings dialog — opened from the sidebar project row context menu */}
       {projectForSettings && (
         <ProjectSettingsDialog
