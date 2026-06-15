@@ -5,11 +5,25 @@ vi.mock('server-only', () => ({}));
 // Mock @agiworkforce/types so we control pricing without needing the actual catalog.
 vi.mock('@agiworkforce/types', () => ({
   getModelMetadataById: vi.fn((id: string) => {
+    // `provider` is load-bearing: the cost tracker uses it to decide token
+    // accounting (Anthropic reports input DISJOINT from cache tokens; OpenAI/
+    // Gemini/DeepSeek report INCLUSIVE prompt counts where cache tokens are a
+    // subset that must be subtracted before billing input).
     const catalog: Record<string, Record<string, unknown>> = {
-      'claude-sonnet-4-6': { inputCost: 3.0, outputCost: 15.0 },
-      'claude-opus-4.8': { inputCost: 5.0, outputCost: 25.0, cached_input: 0.3 },
-      'gpt-5.5': { inputCost: 5.0, outputCost: 30.0 },
-      'deepseek-v4-flash': { inputCost: 0.14, outputCost: 0.28, cached_input: 0.0028 },
+      'claude-sonnet-4-6': { provider: 'anthropic', inputCost: 3.0, outputCost: 15.0 },
+      'claude-opus-4.8': {
+        provider: 'anthropic',
+        inputCost: 5.0,
+        outputCost: 25.0,
+        cached_input: 0.3,
+      },
+      'gpt-5.5': { provider: 'openai', inputCost: 5.0, outputCost: 30.0 },
+      'deepseek-v4-flash': {
+        provider: 'deepseek',
+        inputCost: 0.14,
+        outputCost: 0.28,
+        cached_input: 0.0028,
+      },
     };
     return catalog[id] ?? null;
   }),
@@ -113,6 +127,37 @@ describe('cost calculation', () => {
     const report = getModelUsageReport(SESSION_A);
     const cost = report.get('claude-opus-4.8')!.costUsd;
     expect(cost).toBeCloseTo(5.3, 4);
+  });
+
+  it('does not double-count cache reads for inclusive-prompt providers (deepseek)', () => {
+    // deepseek-v4-flash: input=$0.14/M, cached_input=$0.0028/M. DeepSeek reports
+    // prompt_tokens INCLUSIVE of cache hits, so a 1M prompt with 1M cache hits is
+    // entirely cached. Correct cost = 1M * $0.0028 = $0.0028, NOT
+    // 1M*$0.14 + 1M*$0.0028 (the old double-count bug = $0.1428).
+    recordModelUsage(SESSION_A, 'deepseek-v4-flash', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadInputTokens: 1_000_000,
+    });
+
+    const report = getModelUsageReport(SESSION_A);
+    const cost = report.get('deepseek-v4-flash')!.costUsd;
+    expect(cost).toBeCloseTo(0.0028, 6);
+  });
+
+  it('bills only the uncached remainder at input rate for inclusive providers (openai)', () => {
+    // gpt-5.5: input=$5/M, no catalog cached_input → cache_read falls back to 10%
+    // of input = $0.5/M. 1M prompt with 400k cache hits: 600k billed at $5/M +
+    // 400k at $0.5/M = $3.0 + $0.2 = $3.2 (NOT $5 + $0.2 = $5.2).
+    recordModelUsage(SESSION_A, 'gpt-5.5', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadInputTokens: 400_000,
+    });
+
+    const report = getModelUsageReport(SESSION_A);
+    const cost = report.get('gpt-5.5')!.costUsd;
+    expect(cost).toBeCloseTo(3.2, 4);
   });
 
   it('falls back to 10% of input rate for cache_read when cached_input absent', () => {

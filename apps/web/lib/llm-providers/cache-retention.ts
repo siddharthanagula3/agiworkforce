@@ -14,19 +14,48 @@
  *  on first evaluation and held for the session.
  */
 
+import { getModelMetadataById } from '@agiworkforce/types';
+
 export type CacheRetention = 'none' | 'short' | 'long';
 
 /**
- * Identify Google models that support prompt-caching via the provider API.
- * Only gemini-2.5 and gemini-3.x are eligible; earlier gemini families are not.
+ * Identify Google models that support implicit context caching.
+ * Gemini 2.5+ and 3.x models support automatic context caching (~90% off on
+ * cache-read hits per current Google pricing); earlier gemini families do not.
+ *
+ * Catalog-driven with a guarded prefix fallback. Eligibility is decided FIRST by
+ * the model catalog (`capabilities.caching`, derived during `pnpm sync:models`
+ * from the presence of a cached-read price; a non-null `cached_input` is also
+ * accepted directly). Every cache-supporting Gemini model in models.json now
+ * carries a cached_input price, so the catalog is authoritative for known models.
+ *
+ * The gemini-2.5/gemini-3.x STRING-PREFIX heuristic is retained ONLY as a
+ * fallback for models NOT YET in the catalog (e.g. a freshly announced Gemini
+ * priced upstream before a curation entry exists). It is no longer the primary
+ * path. This avoids both silent under-classification (a real cacheable Gemini
+ * the catalog hasn't picked up) and the prior over-reliance on string prefixes.
+ *
+ * NOTE: This function controls only whether explicit `cacheRetention` extra
+ * params are honored for Google models. The GoogleProvider itself does NOT
+ * currently send a `cache_control` request field (Gemini implicit caching is
+ * fully automatic — no client-side opt-in marker is needed). The function is
+ * therefore near-vestigial for the Google path; it gates the extraParams
+ * passthrough in resolveCacheRetention so callers that opt into explicit
+ * retention get it respected rather than silently dropped.
  */
 export function isGooglePromptCacheEligible(provider: string, modelId?: string): boolean {
-  if (provider !== 'google') {
+  if (provider !== 'google' || !modelId) {
     return false;
   }
-  const normalized = (modelId ?? '').toLowerCase();
-  // eslint-disable-next-line no-restricted-syntax
-  return normalized.startsWith('gemini-2.5') || normalized.startsWith('gemini-3');
+  // Catalog is the single source of truth — a Google model is cache-eligible iff
+  // its catalog entry declares it (capabilities.caching, set in models.curation.json)
+  // or carries a cached_input price. No id-prefix heuristics: a new Gemini model
+  // becomes eligible purely by its curation entry + `pnpm sync:models`.
+  const meta = getModelMetadataById(modelId);
+  return (
+    meta?.provider === 'google' &&
+    (meta.capabilities?.caching === true || meta.cached_input != null)
+  );
 }
 
 /**
