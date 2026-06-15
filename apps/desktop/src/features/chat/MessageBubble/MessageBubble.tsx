@@ -569,11 +569,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 key={entry.id}
                 variant="tool"
                 iconName={getToolIconName(entry.displayName)}
-                label={
-                  entry.displayArgs
-                    ? `${entry.displayName} — ${entry.displayArgs}`
-                    : entry.displayName
-                }
+                label={entry.displayName}
+                chip={entry.displayArgs || undefined}
+                request={entry.displayArgs || undefined}
                 result={entry.resultPreview}
                 isError={entry.status === 'error'}
                 isRunning={entry.status === 'running'}
