@@ -111,14 +111,18 @@ export function SandboxedIframe({
 
   // Also post on iframe load as a defensive backup against the case where
   // `sandbox-ready` was sent before our listener attached.
+  //
+  // IMPORTANT: `onLoad` firing only means the HTTP document was fetched — it
+  // does NOT mean the sandbox renderer is alive or that the postMessage
+  // handshake works. A frame can load and then crash its render process
+  // (Chrome shows the "sad document" placeholder) or be silently blocked.
+  // So we must NOT mark the sandbox "connected" or cancel the fallback timer
+  // here; only the `sandbox-ready` handshake is proof of a working sandbox.
+  // We still post the payload as a best-effort backup (a no-op against a dead
+  // frame), and leave the fallback timer running so a non-handshaking sandbox
+  // degrades to the same-origin srcDoc path instead of showing a broken frame.
   const onLoad = useCallback(() => {
     if (!sandboxOrigin || !iframeRef.current) return;
-    // Cross-origin load fired: the iframe reached the server.
-    sandboxConnectedRef.current = true;
-    if (connectTimeoutRef.current) {
-      clearTimeout(connectTimeoutRef.current);
-      connectTimeoutRef.current = null;
-    }
     try {
       postRenderToSandbox(iframeRef.current, payload);
     } catch {

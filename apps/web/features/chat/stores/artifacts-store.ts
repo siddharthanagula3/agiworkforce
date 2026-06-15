@@ -258,8 +258,22 @@ export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
             return;
           }
           const existing = state.artifacts[index]!;
-          if (!artifactsEqual(existing, normalized)) {
-            state.artifacts[index] = { ...existing, ...normalized, createdAt: existing.createdAt };
+          // Backfill/repair conversationId. artifactsEqual deliberately ignores
+          // conversationId (it is metadata, not content), so a re-stamp from
+          // MessageBubble — which runs once the active conversation has loaded —
+          // would otherwise be short-circuited and the artifact would stay
+          // orphaned (conversationId=undefined) and hidden from its own chat's
+          // panel. Adopt a newly-known id, but never clobber a good id with
+          // undefined (guards against a render that fires before load completes).
+          const nextConversationId = normalized.conversationId ?? existing.conversationId;
+          const conversationChanged = nextConversationId !== existing.conversationId;
+          if (!artifactsEqual(existing, normalized) || conversationChanged) {
+            state.artifacts[index] = {
+              ...existing,
+              ...normalized,
+              conversationId: nextConversationId,
+              createdAt: existing.createdAt,
+            };
           }
         });
       },
