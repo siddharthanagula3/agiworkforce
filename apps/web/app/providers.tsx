@@ -7,6 +7,7 @@ import i18n from './i18n';
 import { QueryProvider } from '@shared/stores/query-client';
 import { CommandPaletteProvider } from '@/components/CommandPalette/CommandPaletteProvider';
 import { WaitlistModalProvider } from '@/components/marketing/WaitlistModal';
+import { SettingsModalProvider } from '@/features/settings/components/SettingsModalProvider';
 import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { seoService } from '@core/monitoring/seo-optimizer';
@@ -33,7 +34,7 @@ export default function Providers({
       <ThemeProvider nonce={nonce}>
         <I18nextProvider i18n={i18n}>
           <WaitlistModalProvider>
-            {children}
+            <SettingsModalProvider>{children}</SettingsModalProvider>
             <CommandPaletteProvider />
             <OfflineIndicator position="bottom" />
             <Toaster position="top-center" richColors closeButton />

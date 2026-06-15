@@ -48,6 +48,8 @@ type ImageProvider = 'google' | 'openai' | 'stability';
 const ImageGenerationRequestSchema = z.object({
   prompt: z.string().min(1).max(4000),
   provider: z.enum(['google', 'openai', 'stability']).optional(),
+  /** Catalog model id (e.g. 'imagen-4-ultra'); resolved to apiModelId + imageApi server-side. */
+  model: z.string().max(200).optional(),
   size: z
     .enum([
       // Common sizes
@@ -99,16 +101,23 @@ const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> =
   stability: 8,
 };
 
-function resolveGoogleImageModel() {
+function resolveGoogleImageModel(requestedModelId?: string) {
   const googleImageModels = getModelsForProvider('google', {
     includeDeprecated: false,
     modelTypes: ['image'],
   });
 
+  // Honour the user's explicit model choice when it's a valid Google image model.
+  if (requestedModelId) {
+    const requested = googleImageModels.find((model) => model.id === requestedModelId);
+    if (requested) return requested;
+  }
+
+  // Default: prefer the Gemini backend (fast, low-cost) via the declarative
+  // `imageApi` catalog field, else the first catalog Google image model. No id
+  // pattern, no hardcoded id — selection is driven entirely by catalog data.
   return (
-    googleImageModels.find((model) => model.qualityTier === 'balanced') ??
-    googleImageModels[0] ??
-    null
+    googleImageModels.find((model) => model.imageApi === 'gemini') ?? googleImageModels[0] ?? null
   );
 }
 
@@ -239,9 +248,10 @@ async function generateWithImagen(
   _style: string | undefined,
   n: number,
   negativePrompt?: string,
+  requestedModelId?: string,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('google');
-  const catalogModel = resolveGoogleImageModel();
+  const catalogModel = resolveGoogleImageModel(requestedModelId);
   if (!catalogModel) {
     throw new Error('No active Google image model is configured in the catalog');
   }
@@ -259,6 +269,16 @@ async function generateWithImagen(
     aspectRatio = '16:9';
   } else if (height > width) {
     aspectRatio = '9:16';
+  }
+
+  // Google has two distinct image APIs with different request/response shapes:
+  //   - imageApi 'gemini' → `:generateContent` with responseModalities; bytes in
+  //     candidates[].content.parts[].inlineData.
+  //   - imageApi 'imagen' → `:predict`; bytes in predictions[].bytesBase64Encoded.
+  // Dispatch on the catalog's declarative imageApi field (no id pattern), so a new
+  // Google image model only needs its imageApi set in models.curation.json.
+  if (catalogModel.imageApi === 'gemini') {
+    return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n);
   }
 
   const response = await fetch(
@@ -309,6 +329,71 @@ async function generateWithImagen(
     images,
     model,
   };
+}
+
+/**
+ * Generate an image with a Gemini image model (e.g. gemini-3.1-flash-image-preview,
+ * gemini-2.5-flash-image) via the `:generateContent` endpoint. Gemini image models
+ * return bytes inline (candidates[].content.parts[].inlineData), not via predict.
+ * See https://ai.google.dev/gemini-api/docs/image-generation
+ */
+async function generateWithGeminiImage(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  aspectRatio: string,
+  n: number,
+): Promise<{ images: GeneratedImage[]; model: string }> {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          imageConfig: { aspectRatio },
+        },
+      }),
+      signal: AbortSignal.timeout(55_000),
+    },
+  );
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const errorObj = errorData['error'] as Record<string, unknown> | undefined;
+    const errorMessage =
+      (errorObj?.['message'] as string) ||
+      `Gemini image API error: ${response.status} ${response.statusText}`;
+    throw new Error(errorMessage);
+  }
+
+  const data = (await response.json()) as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> };
+    }>;
+  };
+
+  const images: GeneratedImage[] = [];
+  for (const candidate of data.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      const b64 = part.inlineData?.data;
+      if (b64) {
+        images.push({ b64_json: b64 });
+        if (images.length >= Math.min(n, 4)) break;
+      }
+    }
+  }
+
+  if (images.length === 0) {
+    throw new Error('Gemini image API returned no image data (response may have been text-only)');
+  }
+
+  return { images, model };
 }
 
 /**
@@ -573,6 +658,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const {
     prompt,
     provider: requestedProvider,
+    model: requestedModel,
     size,
     style,
     quality,
@@ -714,7 +800,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         result = await generateWithOpenAIImage(prompt, size, quality, n);
         break;
       case 'google':
-        result = await generateWithImagen(prompt, size, style, n, negative_prompt);
+        result = await generateWithImagen(prompt, size, style, n, negative_prompt, requestedModel);
         break;
       case 'stability':
         result = await generateWithStability(prompt, size, style, n, negative_prompt);

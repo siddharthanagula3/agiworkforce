@@ -17,21 +17,30 @@
  * Navigation is done by the surface inside the injected handlers; surface
  * chrome (account menu, notifications, incognito toggle) goes in `footerSlot`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   Calendar,
+  Check,
   ChevronDown,
   ChevronRight,
   Clock,
+  Folder,
   FolderOpen,
   Layers,
+  List,
   MessageSquare,
+  MoreHorizontal,
   PanelLeft,
+  Pencil,
   Pin,
   Plus,
   Search,
+  Settings,
   Sparkles,
+  SquarePen,
+  Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import { cn } from '../cn';
@@ -77,6 +86,24 @@ export interface SidebarProps extends SessionItemHandlers {
   onModeClick?: () => void;
   onOpenUsage?: () => void;
 
+  /* ---- ChatGPT-style project list handlers (all optional; list hidden when absent) ---- */
+  /** Open/navigate to a project's conversation list. */
+  onProjectOpen?: (projectId: string) => void;
+  /** Start a new chat scoped to the given project. */
+  onProjectNewChat?: (projectId: string) => void;
+  /** Open rename flow for the project. */
+  onProjectRename?: (projectId: string) => void;
+  /** Share the project. */
+  onProjectShare?: (projectId: string) => void;
+  /** Open project settings dialog. */
+  onProjectSettings?: (projectId: string) => void;
+  /** Toggle pinned state of the project. */
+  onProjectPin?: (projectId: string) => void;
+  /** Delete the project (destructive). */
+  onProjectDelete?: (projectId: string) => void;
+  /** Create a new project (opens the project-create flow on the surface). */
+  onProjectCreate?: () => void;
+
   /* ---- slots / render props for non-pure chrome ---- */
   /** Extra nav rows (desktop puts Projects/Skills; web puts Chats/Artifacts/…). */
   navItems?: SidebarNavItem[];
@@ -116,6 +143,14 @@ export function Sidebar(props: SidebarProps) {
     onOpenSkills,
     onModeClick,
     onOpenUsage,
+    onProjectOpen,
+    onProjectNewChat,
+    onProjectRename,
+    onProjectShare,
+    onProjectSettings,
+    onProjectPin,
+    onProjectDelete,
+    onProjectCreate,
     navItems,
     renderNavLink,
     navExtraSlot,
@@ -144,6 +179,39 @@ export function Sidebar(props: SidebarProps) {
     new Set(DEFAULT_EXPANDED),
   );
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [showAllProjects, setShowAllProjects] = useState(false);
+  /** Whether the Projects section is collapsed (header chevron toggles). */
+  const [projectsSectionCollapsed, setProjectsSectionCollapsed] = useState(false);
+  /** Set of project IDs whose conversation list is expanded in the sidebar. */
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
+  /** Per-project "show more chats" state. */
+  const [projectShowAllChats, setProjectShowAllChats] = useState<Set<string>>(new Set());
+  /**
+   * ChatGPT-style "Organize chats" preference: 'by-project' (default) groups
+   * the Chats list by project; 'one-list' shows all chats in a flat list.
+   * This is local state; surfaces may later lift it to their own store.
+   */
+  const [organizeMode, setOrganizeMode] = useState<'by-project' | 'one-list'>('by-project');
+
+  // Whether the project list section is enabled (any of the project handlers present)
+  const projectListEnabled = Boolean(
+    onProjectOpen || onProjectNewChat || onProjectRename || onProjectSettings || onProjectDelete,
+  );
+
+  const pinnedProjects = useMemo(
+    () => (projectListEnabled ? projects.filter((p) => p.pinned) : []),
+    [projects, projectListEnabled],
+  );
+
+  const unpinnedProjects = useMemo(
+    () => (projectListEnabled ? projects.filter((p) => !p.pinned) : []),
+    [projects, projectListEnabled],
+  );
+
+  const PROJECTS_SHOW_LIMIT = 5;
+  const visibleUnpinnedProjects = showAllProjects
+    ? unpinnedProjects
+    : unpinnedProjects.slice(0, PROJECTS_SHOW_LIMIT);
 
   // Surface can override the search overlay entirely (web uses GlobalSearchDialog).
   const handleOpenSearch = useCallback(() => {
@@ -174,12 +242,23 @@ export function Sidebar(props: SidebarProps) {
       : sessions.filter((s) => !s.archived);
     if (selectedProjectFilter) {
       base = base.filter((s) => s.projectId === selectedProjectFilter);
+    } else if (organizeMode === 'by-project' && projectListEnabled) {
+      // In "by-project" mode, sessions that belong to a project appear under their
+      // project folder; exclude them from the flat Chats list to avoid duplication.
+      base = base.filter((s) => !s.projectId);
     }
     if (!term) return base;
     return base.filter((s) =>
       `${s.title ?? ''} ${s.lastMessage ?? s.preview ?? ''}`.toLowerCase().includes(term),
     );
-  }, [sessions, searchQuery, showArchived, selectedProjectFilter]);
+  }, [
+    sessions,
+    searchQuery,
+    showArchived,
+    selectedProjectFilter,
+    organizeMode,
+    projectListEnabled,
+  ]);
 
   const pinned = useMemo(
     () =>
@@ -335,7 +414,7 @@ export function Sidebar(props: SidebarProps) {
       <div className="flex w-16 flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all duration-300 ease-in-out">
         <div className="flex flex-col items-center gap-4 p-3">
           <RailButton label="Expand sidebar" icon={PanelLeft} onClick={onToggleCollapse} />
-          <RailButton label="New chat" icon={Plus} onClick={onNewChat} />
+          <RailButton label="New chat" icon={SquarePen} onClick={onNewChat} />
           <RailButton label="Search" icon={Search} onClick={handleOpenSearch} />
           {onOpenProjects && (
             <RailButton label="Projects" icon={FolderOpen} onClick={onOpenProjects} />
@@ -397,7 +476,7 @@ export function Sidebar(props: SidebarProps) {
                 aria-label="New chat"
                 className="flex items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
               >
-                <Plus className="h-4 w-4" />
+                <SquarePen className="h-4 w-4" />
                 New Chat
               </button>
             </div>
@@ -531,8 +610,182 @@ export function Sidebar(props: SidebarProps) {
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-2">
+            {/* Projects section — header + pinned sub-section + unpinned list */}
+            {projectListEnabled && (pinnedProjects.length > 0 || unpinnedProjects.length > 0) && (
+              <div className="mb-4">
+                {/* Section header row: "Projects" + collapse chevron + "+" + "..." */}
+                <div className="group/projhdr mb-1 flex items-center gap-1 px-2 py-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setProjectsSectionCollapsed((v) => !v)}
+                    aria-label={projectsSectionCollapsed ? 'Expand projects' : 'Collapse projects'}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                  >
+                    <span>Projects</span>
+                    <ChevronRight
+                      className={cn(
+                        'h-3 w-3 shrink-0 transition-transform',
+                        !projectsSectionCollapsed && 'rotate-90',
+                      )}
+                    />
+                  </button>
+                  {/* Right-side actions: always visible at muted color, brighten on hover.
+                      Rendered only when the relevant handlers are present. */}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {onProjectCreate && (
+                      <button
+                        type="button"
+                        aria-label="New project"
+                        title="New project"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onProjectCreate();
+                        }}
+                        className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+                      >
+                        <Plus className="h-3 w-3" aria-hidden="true" />
+                      </button>
+                    )}
+                    {/* "..." opens the ChatGPT-style "Organize chats" menu */}
+                    <Menu
+                      align="end"
+                      trigger={({ toggle }) => (
+                        <button
+                          type="button"
+                          aria-label="Organize chats"
+                          title="Organize chats"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggle();
+                          }}
+                          className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+                        >
+                          <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
+                        </button>
+                      )}
+                      menuClassName="w-52"
+                    >
+                      {({ close }) => (
+                        <>
+                          {/* Non-interactive section label */}
+                          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                            Organize chats
+                          </div>
+                          <MenuSeparator />
+                          <MenuItem
+                            close={close}
+                            onSelect={() => setOrganizeMode('one-list')}
+                            icon={<List className="h-4 w-4" />}
+                            trailing={
+                              organizeMode === 'one-list' ? (
+                                <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
+                              ) : undefined
+                            }
+                          >
+                            In one list
+                          </MenuItem>
+                          <MenuItem
+                            close={close}
+                            onSelect={() => setOrganizeMode('by-project')}
+                            icon={<Folder className="h-4 w-4" />}
+                            trailing={
+                              organizeMode === 'by-project' ? (
+                                <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
+                              ) : undefined
+                            }
+                          >
+                            By project
+                          </MenuItem>
+                        </>
+                      )}
+                    </Menu>
+                  </div>
+                </div>
+
+                {!projectsSectionCollapsed && (
+                  <>
+                    {/* Pinned sub-section */}
+                    {pinnedProjects.length > 0 && (
+                      <div className="mb-2">
+                        <div className="mb-0.5 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]/60">
+                          Pinned
+                        </div>
+                        {pinnedProjects.map((project) => (
+                          <ProjectRow
+                            key={project.id}
+                            project={project}
+                            sessions={sessions}
+                            activeSessionId={activeSessionId}
+                            expandedProjectIds={expandedProjectIds}
+                            setExpandedProjectIds={setExpandedProjectIds}
+                            projectShowAllChats={projectShowAllChats}
+                            setProjectShowAllChats={setProjectShowAllChats}
+                            onOpen={onProjectOpen}
+                            onNewChat={onProjectNewChat}
+                            onRename={onProjectRename}
+                            onShare={onProjectShare}
+                            onSettings={onProjectSettings}
+                            onPin={onProjectPin}
+                            onDelete={onProjectDelete}
+                            onSelectSession={onSelect}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Unpinned list */}
+                    {visibleUnpinnedProjects.map((project) => (
+                      <ProjectRow
+                        key={project.id}
+                        project={project}
+                        sessions={sessions}
+                        activeSessionId={activeSessionId}
+                        expandedProjectIds={expandedProjectIds}
+                        setExpandedProjectIds={setExpandedProjectIds}
+                        projectShowAllChats={projectShowAllChats}
+                        setProjectShowAllChats={setProjectShowAllChats}
+                        onOpen={onProjectOpen}
+                        onNewChat={onProjectNewChat}
+                        onRename={onProjectRename}
+                        onShare={onProjectShare}
+                        onSettings={onProjectSettings}
+                        onPin={onProjectPin}
+                        onDelete={onProjectDelete}
+                        onSelectSession={onSelect}
+                      />
+                    ))}
+                    {!showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllProjects(true)}
+                        className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                      >
+                        Show more
+                      </button>
+                    )}
+                    {showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllProjects(false)}
+                        className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                      >
+                        Show less
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Chats section header + pinned sessions */}
+            {(pinned.length > 0 || grouped.size > 0) && (
+              <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                Chats
+              </div>
+            )}
+
             {pinned.length > 0 && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <div className="mb-2 flex items-center gap-1 px-3 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                   <Pin className="h-3 w-3" /> Pinned
                 </div>
@@ -662,5 +915,299 @@ function RailButton({
     >
       <Icon className="h-4 w-4" />
     </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ProjectRow — ChatGPT-style folder row with expand/collapse + hover compose + more-menu
+// ---------------------------------------------------------------------------
+
+const PROJECT_CHATS_SHOW_LIMIT = 5;
+
+interface ProjectRowProps {
+  project: SidebarProject;
+  sessions: SidebarSession[];
+  activeSessionId?: string;
+  expandedProjectIds: Set<string>;
+  setExpandedProjectIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  projectShowAllChats: Set<string>;
+  setProjectShowAllChats: React.Dispatch<React.SetStateAction<Set<string>>>;
+  onOpen?: (id: string) => void;
+  onNewChat?: (id: string) => void;
+  onRename?: (id: string) => void;
+  onShare?: (id: string) => void;
+  onSettings?: (id: string) => void;
+  onPin?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onSelectSession?: (id: string) => void;
+}
+
+function ProjectRow({
+  project,
+  sessions,
+  activeSessionId,
+  expandedProjectIds,
+  setExpandedProjectIds,
+  projectShowAllChats,
+  setProjectShowAllChats,
+  onOpen,
+  onNewChat,
+  onRename,
+  onShare,
+  onSettings,
+  onPin,
+  onDelete,
+  onSelectSession,
+}: ProjectRowProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [rowHovered, setRowHovered] = useState(false);
+
+  const isExpanded = expandedProjectIds.has(project.id);
+  const showAllChats = projectShowAllChats.has(project.id);
+
+  const toggleExpand = useCallback(() => {
+    setExpandedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(project.id)) next.delete(project.id);
+      else next.add(project.id);
+      return next;
+    });
+  }, [project.id, setExpandedProjectIds]);
+
+  // Sessions belonging to this project
+  const projectSessions = useMemo(
+    () =>
+      sessions
+        .filter((s) => s.projectId === project.id && !s.archived)
+        .sort((a, b) => toSafeDate(b.updatedAt).getTime() - toSafeDate(a.updatedAt).getTime()),
+    [sessions, project.id],
+  );
+  const visibleSessions = showAllChats
+    ? projectSessions
+    : projectSessions.slice(0, PROJECT_CHATS_SHOW_LIMIT);
+
+  return (
+    <div className="mb-0.5">
+      {/* Main project row */}
+      <div
+        className={cn(
+          'relative flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors',
+          'hover:bg-[hsl(var(--accent))] cursor-pointer',
+          (menuOpen || isExpanded || rowHovered) && 'bg-[hsl(var(--accent))]',
+        )}
+        onMouseEnter={() => setRowHovered(true)}
+        onMouseLeave={() => setRowHovered(false)}
+      >
+        {/* Folder icon + project name — clicking toggles expand */}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          onClick={toggleExpand}
+          aria-label={
+            isExpanded ? `Collapse project ${project.name}` : `Expand project ${project.name}`
+          }
+          aria-expanded={isExpanded}
+        >
+          {isExpanded ? (
+            <FolderOpen
+              className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]"
+              aria-hidden="true"
+            />
+          ) : (
+            <Folder
+              className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]"
+              aria-hidden="true"
+            />
+          )}
+          <span className="flex-1 truncate text-sm text-[hsl(var(--foreground))]">
+            {project.name}
+          </span>
+        </button>
+
+        {/* Hover actions: compose + more-menu (visible on hover OR while menu open / expanded) */}
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-0.5 transition-opacity',
+            menuOpen || isExpanded || rowHovered ? 'opacity-100' : 'opacity-0',
+          )}
+        >
+          {/* New chat in project (compose icon) */}
+          {onNewChat && (
+            <button
+              type="button"
+              aria-label={`New chat in ${project.name}`}
+              title="New chat in project"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNewChat(project.id);
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+            >
+              <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+
+          {/* More actions menu */}
+          <Menu
+            align="end"
+            trigger={({ toggle }) => (
+              <button
+                type="button"
+                aria-label={`More options for ${project.name}`}
+                title="More options"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(true);
+                  toggle();
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+            menuClassName="w-52"
+            className="relative"
+          >
+            {({ close }) => {
+              const handleClose = () => {
+                setMenuOpen(false);
+                close();
+              };
+              return (
+                <>
+                  {onShare && (
+                    <MenuItem
+                      close={handleClose}
+                      onSelect={() => onShare(project.id)}
+                      icon={<Upload className="h-4 w-4" />}
+                    >
+                      Share project
+                    </MenuItem>
+                  )}
+                  {onRename && (
+                    <MenuItem
+                      close={handleClose}
+                      onSelect={() => onRename(project.id)}
+                      icon={<Pencil className="h-4 w-4" />}
+                    >
+                      Rename project
+                    </MenuItem>
+                  )}
+                  {onSettings && (
+                    <MenuItem
+                      close={handleClose}
+                      onSelect={() => onSettings(project.id)}
+                      icon={<Settings className="h-4 w-4" />}
+                    >
+                      Project settings
+                    </MenuItem>
+                  )}
+                  {onOpen && (
+                    <MenuItem
+                      close={handleClose}
+                      onSelect={() => onOpen(project.id)}
+                      icon={<Folder className="h-4 w-4" />}
+                    >
+                      Project home
+                    </MenuItem>
+                  )}
+                  {(onShare || onRename || onSettings || onOpen) && onPin && <MenuSeparator />}
+                  {onPin && (
+                    <MenuItem
+                      close={handleClose}
+                      onSelect={() => onPin(project.id)}
+                      icon={<Pin className="h-4 w-4" />}
+                    >
+                      {project.pinned ? 'Unpin project' : 'Pin project'}
+                    </MenuItem>
+                  )}
+                  {onDelete && (
+                    <MenuItem
+                      close={handleClose}
+                      onSelect={() => onDelete(project.id)}
+                      icon={<Trash2 className="h-4 w-4" />}
+                      destructive
+                    >
+                      Delete project
+                    </MenuItem>
+                  )}
+                </>
+              );
+            }}
+          </Menu>
+        </div>
+      </div>
+
+      {/* Expanded: indented conversation list */}
+      {isExpanded && (
+        <div className="mt-0.5 pl-4">
+          {projectSessions.length === 0 ? (
+            <p className="px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]/60 italic">
+              No chats yet
+            </p>
+          ) : (
+            <>
+              {visibleSessions.map((session) => {
+                const isActive = session.id === activeSessionId;
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => onSelectSession?.(session.id)}
+                    className={cn(
+                      'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors',
+                      isActive
+                        ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+                        : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+                    )}
+                  >
+                    {/* Active indicator dot */}
+                    {isActive && (
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--primary))]"
+                        aria-label="Active conversation"
+                      />
+                    )}
+                    <span className="flex-1 truncate text-xs">
+                      {session.title || 'Untitled chat'}
+                    </span>
+                  </button>
+                );
+              })}
+              {!showAllChats && projectSessions.length > PROJECT_CHATS_SHOW_LIMIT && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setProjectShowAllChats((prev) => {
+                      const next = new Set(prev);
+                      next.add(project.id);
+                      return next;
+                    })
+                  }
+                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))]/70 transition-colors hover:text-[hsl(var(--muted-foreground))]"
+                >
+                  Show {projectSessions.length - PROJECT_CHATS_SHOW_LIMIT} more
+                </button>
+              )}
+              {showAllChats && projectSessions.length > PROJECT_CHATS_SHOW_LIMIT && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setProjectShowAllChats((prev) => {
+                      const next = new Set(prev);
+                      next.delete(project.id);
+                      return next;
+                    })
+                  }
+                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))]/70 transition-colors hover:text-[hsl(var(--muted-foreground))]"
+                >
+                  Show less
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -41,6 +41,13 @@ export interface ModelCapabilities {
   search: boolean;
   research: boolean;
   codeExecution: boolean;
+  /**
+   * Whether this model supports prompt caching (any form: explicit breakpoints
+   * for Anthropic, automatic prefix caching for OpenAI/DeepSeek, or implicit
+   * context caching for Gemini 2.5+/3.x). Set to true only on models where
+   * cache-read discounts are confirmed available from official provider docs.
+   */
+  caching?: boolean;
 }
 
 /** Model type categories. */
@@ -120,6 +127,17 @@ export interface ModelMetadata {
   cached_write?: number;
   /** Per-image cost (USD) for image-generation models (non-token pricing). */
   imagePerImageCost?: number;
+  /**
+   * Which upstream image API/adapter serves this image model. Lets the media
+   * route dispatch to the correct backend purely from catalog data — adding a
+   * new image model on an existing backend is a models.curation.json edit, no
+   * code change. Only `modelType: 'image'` models set this.
+   *   - 'gemini'    → Gemini `:generateContent` (responseModalities IMAGE)
+   *   - 'imagen'    → Imagen `:predict`
+   *   - 'openai'    → OpenAI Images API
+   *   - 'stability' → Stability v2beta Stable Image
+   */
+  imageApi?: 'gemini' | 'imagen' | 'openai' | 'stability';
   /** Per-second cost (USD) for video-generation models (non-token pricing). */
   videoPerSecondCost?: number;
   /** Human-readable note for non-standard pricing (per-image, tiered, etc.). */
@@ -690,9 +708,9 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'image_generation',
     label: 'Image Generation',
     description:
-      'Image generation and editing lane. GPT Image 2 is the current OpenAI GPT Image model with flexible sizes and high-fidelity inputs.',
-    modelId: 'gpt-image-2',
-    provider: 'openai',
+      'Image generation and editing lane. Gemini 3.1 Flash Image is the current Google image model — fast, low-cost, and supports image inputs for editing.',
+    modelId: 'gemini-3.1-flash-image',
+    provider: 'google',
   },
   video_generation: {
     slot: 'video_generation',

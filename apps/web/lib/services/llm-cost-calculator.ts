@@ -23,11 +23,34 @@ export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /**
+   * Tokens served from the prompt cache (cache-read hits), billed at the model's
+   * discounted cached_input rate instead of the full input rate. Optional: when
+   * omitted, the entire prompt bills at the full input rate (prior behavior).
+   *
+   * Token-accounting convention (handled in calculateCost):
+   *  - Anthropic reports input_tokens DISJOINT from cache reads, so the cached
+   *    count is ADDITIONAL to promptTokens.
+   *  - OpenAI / Gemini / DeepSeek report INCLUSIVE prompt counts where the cached
+   *    tokens are a SUBSET of promptTokens.
+   * Either way each token is billed exactly once.
+   */
+  cacheReadInputTokens?: number;
+  /**
+   * Tokens written to the cache (Anthropic cache_creation). Billed at the
+   * model's cached_write rate (falls back to 1.25× input — Anthropic 5m write).
+   * Always ADDITIONAL to promptTokens (Anthropic-only counter in practice).
+   */
+  cacheCreationInputTokens?: number;
 }
 
 export interface ModelPricing {
   inputCostPer1MTokens: number; // Cost per 1M input tokens in dollars
   outputCostPer1MTokens: number; // Cost per 1M output tokens in dollars
+  cachedInputCostPer1MTokens?: number; // Cost per 1M cache-read tokens (when cacheable)
+  cachedWriteCostPer1MTokens?: number; // Cost per 1M cache-write tokens (Anthropic)
+  /** True for Anthropic-style accounting where input_tokens excludes cache tokens. */
+  cacheTokensDisjointFromInput?: boolean;
 }
 
 // Default fallback if provider is unknown
@@ -86,13 +109,31 @@ export class LLMCostCalculator {
       // Validate token counts are non-negative
       const promptTokens = Math.max(0, usage.promptTokens);
       const completionTokens = Math.max(0, usage.completionTokens);
+      const cacheReadTokens = Math.max(0, usage.cacheReadInputTokens ?? 0);
+      const cacheCreationTokens = Math.max(0, usage.cacheCreationInputTokens ?? 0);
 
       const pricing = this.getPricing(provider, model);
 
-      const inputCost = (promptTokens / 1_000_000) * pricing.inputCostPer1MTokens;
+      // Split the prompt into billable (full-rate) input vs cached portions so each
+      // token bills exactly once at the correct rate. For inclusive-prompt providers
+      // (OpenAI/Gemini/DeepSeek) the cached count is a SUBSET of promptTokens and must
+      // be subtracted; for Anthropic the cache tokens are disjoint (additional), so
+      // promptTokens already excludes them — don't subtract.
+      const cacheReadRate =
+        pricing.cachedInputCostPer1MTokens ?? pricing.inputCostPer1MTokens * 0.1;
+      const cacheWriteRate =
+        pricing.cachedWriteCostPer1MTokens ?? pricing.inputCostPer1MTokens * 1.25;
+
+      const billableInput = pricing.cacheTokensDisjointFromInput
+        ? promptTokens
+        : Math.max(0, promptTokens - cacheReadTokens - cacheCreationTokens);
+
+      const inputCost = (billableInput / 1_000_000) * pricing.inputCostPer1MTokens;
+      const cacheReadCost = (cacheReadTokens / 1_000_000) * cacheReadRate;
+      const cacheWriteCost = (cacheCreationTokens / 1_000_000) * cacheWriteRate;
       const outputCost = (completionTokens / 1_000_000) * pricing.outputCostPer1MTokens;
 
-      const totalCostDollars = inputCost + outputCost;
+      const totalCostDollars = inputCost + cacheReadCost + cacheWriteCost + outputCost;
       // Convert to cents and round to nearest cent
       return Math.round(totalCostDollars * 100);
     } catch (error) {
@@ -130,6 +171,10 @@ export class LLMCostCalculator {
         return {
           inputCostPer1MTokens: metadata.inputCost,
           outputCostPer1MTokens: metadata.outputCost,
+          cachedInputCostPer1MTokens: metadata.cached_input,
+          cachedWriteCostPer1MTokens: metadata.cached_write,
+          // Anthropic reports input_tokens disjoint from cache_read/cache_creation.
+          cacheTokensDisjointFromInput: metadata.provider === 'anthropic',
         };
       }
 

@@ -55,6 +55,8 @@ export async function buildNonStreamResponse(
         promptTokens: llmResponse.promptTokens,
         completionTokens: llmResponse.completionTokens,
         totalTokens: llmResponse.totalTokens,
+        cacheReadInputTokens: llmResponse.cachedInputTokens,
+        cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
       });
 
   const costDifference = actualCostCents - estimatedCostCents;

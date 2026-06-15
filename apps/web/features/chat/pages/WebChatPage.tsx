@@ -11,7 +11,6 @@ import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore } from '@/stores/unified/auth';
 import { getBestAutoModeForTier } from '@/constants/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
-import { SendPreview } from '@agiworkforce/unified-chat';
 import {
   summarizeSendPreview,
   type ProviderMode,
@@ -38,7 +37,12 @@ import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';
-import { Sidebar, type SidebarSession, type SidebarNavItem } from '@agiworkforce/ui';
+import {
+  Sidebar,
+  type SidebarSession,
+  type SidebarNavItem,
+  type SidebarProject,
+} from '@agiworkforce/ui';
 import { useClerk } from '@clerk/nextjs';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import {
@@ -61,6 +65,8 @@ import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/A
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { DirectoryModal } from '../components/dialogs/DirectoryModal';
 import { CloudUpgradeWaitlistDialog } from '../components/dialogs/CloudUpgradeWaitlistDialog';
+import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
+import { UpgradePlanDialog } from '../components/dialogs/UpgradePlanDialog';
 import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
@@ -76,6 +82,13 @@ import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
+import { useProjectStore, ProjectSettingsDialog, type Project } from '@features/projects';
+import { useMediaGeneration } from '@/lib/hooks/useMediaGeneration';
+import {
+  IMAGE_ASPECT_OPTIONS,
+  IMAGE_MODELS,
+  type ImageAspectRatio,
+} from '../components/Composer/ChatComposerNew';
 
 type SendMeta = {
   agentMode?: string;
@@ -291,17 +304,69 @@ export default function WebChatPage() {
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
   const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
   const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
 
   // Dialog state — lifted from ChatSidebar so they live at the page level and
   // work with the shared <Sidebar> component (which has no dialog state).
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
 
+  // Project settings dialog state (opened from sidebar row context menu)
+  const [projectSettingsId, setProjectSettingsId] = useState<string | null>(null);
+
   // Web-specific hooks for the sidebar footer slot.
   const { signOut: clerkSignOut } = useClerk();
   const { user, logout } = useAuthStore();
   const subscription = useBillingStore((s) => s.subscription);
   const openDirectory = useDirectoryStore((s) => s.setOpen);
+
+  // Project store — same data source already used by the filter dropdown in <Sidebar>
+  const storeProjects = useProjectStore((s) => s.projects);
+  const updateProjectInStore = useProjectStore((s) => s.updateProject);
+  const removeProjectFromStore = useProjectStore((s) => s.removeProject);
+  const setStoreProjects = useProjectStore((s) => s.setProjects);
+
+  // Hydrate the project store from the server once on mount. The store is
+  // otherwise localStorage-only, so server-side projects (user_projects) never
+  // appeared in the sidebar. Merge server rows with any local-only projects,
+  // server winning on id conflicts.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/projects?limit=100', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const json = (await res.json()) as { projects?: Project[] };
+        const serverProjects = Array.isArray(json.projects) ? json.projects : [];
+        if (cancelled || serverProjects.length === 0) return;
+        const serverIds = new Set(serverProjects.map((p) => p.id));
+        const localOnly = useProjectStore.getState().projects.filter((p) => !serverIds.has(p.id));
+        setStoreProjects([...serverProjects, ...localOnly]);
+      } catch {
+        // Non-fatal: sidebar simply shows whatever is already in the store.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setStoreProjects]);
+
+  // Map store Project[] -> SidebarProject[] (no starred->pinned: use starred as pinned proxy)
+  const sidebarProjects = useMemo<SidebarProject[]>(
+    () =>
+      storeProjects.map((p) => ({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        accentColor: p.accentColor,
+        iconEmoji: p.iconEmoji,
+        description: p.description,
+        // Use starred as the pinned signal (no dedicated pinned field on Project)
+        pinned: p.starred ?? false,
+      })),
+    [storeProjects],
+  );
 
   // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
   // regardless of which component dispatches them.
@@ -366,6 +431,12 @@ export default function WebChatPage() {
   }, []);
 
   const handleOpenCloudWaitlist = useCallback(() => {
+    // Open the richer plan-comparison modal first; its "Join waitlist" CTA
+    // chains to the existing CloudUpgradeWaitlistDialog.
+    setUpgradePlanOpen(true);
+  }, []);
+
+  const handleOpenWaitlistDirect = useCallback(() => {
     setCloudWaitlistOpen(true);
   }, []);
 
@@ -515,6 +586,161 @@ export default function WebChatPage() {
       });
     },
     [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId, router],
+  );
+
+  const { generateImage } = useMediaGeneration();
+
+  // ---------------------------------------------------------------------------
+  // Shared helper: resolve size + provider from composer options
+  // ---------------------------------------------------------------------------
+  const resolveImageParams = useCallback((aspectRatio: ImageAspectRatio, modelId?: string) => {
+    const aspectOption = IMAGE_ASPECT_OPTIONS.find((o) => o.id === aspectRatio);
+    const size = aspectOption?.size ?? '1024x1024';
+    const modelEntry = IMAGE_MODELS.find((m) => m.id === modelId);
+    const provider = modelEntry?.provider ?? 'google';
+    return { size, provider };
+  }, []);
+
+  // Shared paywall/error helper
+  const applyImageError = useCallback(
+    (msgId: string, raw: string) => {
+      const isPaywall =
+        raw.includes('403') ||
+        raw.includes('plan_upgrade_required') ||
+        raw.includes('subscription_required');
+      updateMessage(msgId, {
+        isStreaming: false,
+        content: isPaywall ? '' : `Image generation failed: ${raw}`,
+        metadata: isPaywall
+          ? {
+              paywall: {
+                feature: 'image_generation',
+                requiredTier: 'pro',
+                reason:
+                  'Image generation requires a Pro or higher plan. Upgrade to generate images.',
+              },
+            }
+          : undefined,
+      });
+    },
+    [updateMessage],
+  );
+
+  // ---------------------------------------------------------------------------
+  // handleGenerateImage – called by composer; injects user + assistant messages
+  // ---------------------------------------------------------------------------
+  const handleGenerateImage = useCallback(
+    (prompt: string, options: { aspectRatio: ImageAspectRatio; modelId: string }) => {
+      void (async () => {
+        const { size, provider } = resolveImageParams(options.aspectRatio, options.modelId);
+
+        // Ensure a conversation exists (lazy-create, same pattern as sendContent).
+        let convId = displayedConversationId;
+        if (!convId) {
+          const fresh = await createConversation('Image generation', activeModelId);
+          if (fresh) {
+            convId = fresh.id;
+            if (!urlConversationId) setBareChatSessionId(fresh.id);
+            router.replace(`/chat/${fresh.id}`);
+          }
+        }
+        if (!convId) return;
+
+        // User message (prompt)
+        addMessage({
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: prompt,
+          createdAt: new Date().toISOString(),
+        });
+
+        // Placeholder assistant message while generating (isStreaming = true → state A)
+        const assistantMsgId = crypto.randomUUID();
+        addMessage({
+          id: assistantMsgId,
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          createdAt: new Date().toISOString(),
+          metadata: {
+            toolType: 'image-generation',
+            imageGenPrompt: prompt,
+            imageGenAspect: options.aspectRatio,
+            imageGenModel: options.modelId,
+          },
+        });
+
+        try {
+          const imageUrl = await generateImage(prompt, { size, provider, model: options.modelId });
+          updateMessage(assistantMsgId, {
+            content: '',
+            isStreaming: false,
+            metadata: {
+              toolType: 'image-generation',
+              imageUrl,
+              imageGenPrompt: prompt,
+              imageGenAspect: options.aspectRatio,
+              imageGenModel: options.modelId,
+            },
+          });
+        } catch (err) {
+          applyImageError(assistantMsgId, err instanceof Error ? err.message : String(err));
+        }
+      })();
+    },
+    [
+      resolveImageParams,
+      displayedConversationId,
+      urlConversationId,
+      createConversation,
+      activeModelId,
+      addMessage,
+      updateMessage,
+      generateImage,
+      applyImageError,
+      router,
+    ],
+  );
+
+  // ---------------------------------------------------------------------------
+  // handleRegenerateImageInPlace – called by ImageGenerationCard (edit panel /
+  // aspect-ratio change).  Updates the EXISTING assistant message in-place;
+  // does NOT inject new user/assistant messages.
+  // Returns a Promise<string> so the card can update its local display state.
+  // ---------------------------------------------------------------------------
+  const handleRegenerateImageInPlace = useCallback(
+    async (
+      messageId: string,
+      opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
+    ): Promise<string> => {
+      const { size, provider } = resolveImageParams(opts.aspectRatio, opts.modelId);
+
+      // Mark as regenerating (state A again)
+      updateMessage(messageId, {
+        isStreaming: true,
+        metadata: {
+          toolType: 'image-generation',
+          imageUrl: undefined,
+          imageGenPrompt: opts.prompt,
+          imageGenAspect: opts.aspectRatio,
+          imageGenModel: opts.modelId,
+        },
+      });
+
+      const imageUrl = await generateImage(opts.prompt, { size, provider, model: opts.modelId });
+      updateMessage(messageId, {
+        isStreaming: false,
+        metadata: {
+          toolType: 'image-generation',
+          imageUrl,
+          imageGenPrompt: opts.prompt,
+          imageGenAspect: opts.aspectRatio,
+          imageGenModel: opts.modelId,
+        },
+      });
+      return imageUrl;
+    },
+    [resolveImageParams, updateMessage, generateImage],
   );
 
   const handleSend = useCallback(
@@ -754,6 +980,102 @@ export default function WebChatPage() {
       void updateConversation(sessionId, { projectId });
     },
     [updateConversation],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Project sidebar row handlers
+  // ---------------------------------------------------------------------------
+
+  /** Navigate to the project page (shows project conversations + settings). */
+  const handleProjectOpen = useCallback(
+    (projectId: string) => {
+      router.push(`/projects/${projectId}`);
+    },
+    [router],
+  );
+
+  /**
+   * Start a new chat scoped to the project. We navigate to /chat (new session)
+   * with the projectId in the query so the composer can pick it up. Threading the
+   * projectId straight into createConversation is a follow-up once the API takes it.
+   */
+  const handleProjectNewChat = useCallback(
+    (projectId: string) => {
+      router.push(`/chat?projectId=${projectId}`);
+    },
+    [router],
+  );
+
+  /**
+   * Rename: opens the project settings dialog with that project selected,
+   * which contains the rename input field.
+   */
+  const handleProjectRename = useCallback((projectId: string) => {
+    setProjectSettingsId(projectId);
+  }, []);
+
+  /**
+   * Project settings: open the settings dialog.
+   */
+  const handleProjectSettings = useCallback((projectId: string) => {
+    setProjectSettingsId(projectId);
+  }, []);
+
+  /**
+   * Share project: there is no dedicated project-share API yet, so route to the
+   * project page where the share affordance lives. Tracked as a follow-up gap.
+   */
+  const handleProjectShare = useCallback(
+    (projectId: string) => {
+      router.push(`/projects/${projectId}`);
+    },
+    [router],
+  );
+
+  /**
+   * Pin/unpin: toggle the starred field on the project (starred is the pinned proxy).
+   */
+  const handleProjectPin = useCallback(
+    (projectId: string) => {
+      const project = storeProjects.find((p) => p.id === projectId);
+      if (!project) return;
+      updateProjectInStore(projectId, { starred: !project.starred });
+    },
+    [storeProjects, updateProjectInStore],
+  );
+
+  /**
+   * Create project: open the inline CreateProjectDialog instead of navigating
+   * to /projects. The modal posts to the API, merges into the project store,
+   * then pushes the user directly to the new project page.
+   */
+  const handleProjectCreate = useCallback(() => {
+    setCreateProjectOpen(true);
+  }, []);
+
+  /**
+   * Delete project from the store after an explicit confirmation so a stray
+   * click in the ... menu can never silently drop a project.
+   */
+  const handleProjectDelete = useCallback(
+    (projectId: string) => {
+      const project = storeProjects.find((p) => p.id === projectId);
+      const label = project?.name ? `"${project.name}"` : 'this project';
+      if (
+        typeof window !== 'undefined' &&
+        !window.confirm(`Delete ${label}? This can't be undone.`)
+      ) {
+        return;
+      }
+      removeProjectFromStore(projectId);
+    },
+    [storeProjects, removeProjectFromStore],
+  );
+
+  // Project settings dialog derived data
+  const projectForSettings = useMemo(
+    () => (projectSettingsId ? storeProjects.find((p) => p.id === projectSettingsId) : null),
+    [projectSettingsId, storeProjects],
   );
 
   // Auto-title: when the second message arrives (first assistant reply), derive title
@@ -1248,6 +1570,7 @@ export default function WebChatPage() {
       {/* Sidebar — @agiworkforce/ui shared component */}
       <Sidebar
         sessions={sidebarSessions}
+        projects={sidebarProjects}
         activeSessionId={displayedConversationId ?? undefined}
         collapsed={sidebarCollapsed}
         mode="cloud"
@@ -1264,6 +1587,14 @@ export default function WebChatPage() {
         onArchive={handleArchiveSession}
         onShare={handleShareSession}
         onMoveToProject={handleMoveToProjectSession}
+        onProjectOpen={handleProjectOpen}
+        onProjectNewChat={handleProjectNewChat}
+        onProjectRename={handleProjectRename}
+        onProjectSettings={handleProjectSettings}
+        onProjectShare={handleProjectShare}
+        onProjectPin={handleProjectPin}
+        onProjectDelete={handleProjectDelete}
+        onProjectCreate={handleProjectCreate}
         className="bg-[var(--chat-sidebar-bg)] border-[var(--chat-border-strong)]"
       />
 
@@ -1374,6 +1705,7 @@ export default function WebChatPage() {
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     onUpgradeRequest={handleOpenCloudWaitlist}
+                    onGenerateImage={handleGenerateImage}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
                       promptsUsed: trialPromptsUsed,
@@ -1394,6 +1726,7 @@ export default function WebChatPage() {
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
                   onReact={handleReactMessage}
+                  onRegenerateImage={handleRegenerateImageInPlace}
                   onSendMessage={setComposerPrefill}
                   onPaywallUpgrade={handleOpenCloudWaitlist}
                   onPaywallDismiss={handlePaywallDismiss}
@@ -1410,9 +1743,6 @@ export default function WebChatPage() {
                     sidebarCollapsed ? 'max-w-4xl' : '',
                   )}
                 >
-                  <div className="mb-2">
-                    <SendPreview presentation={sendPreviewPresentation} />
-                  </div>
                   <ChatComposerNew
                     onSend={handleSend}
                     onStop={stopGeneration}
@@ -1425,6 +1755,7 @@ export default function WebChatPage() {
                     clearSignal={composerClearSignal}
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     onUpgradeRequest={handleOpenCloudWaitlist}
+                    onGenerateImage={handleGenerateImage}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
                       promptsUsed: trialPromptsUsed,
@@ -1441,6 +1772,28 @@ export default function WebChatPage() {
       </div>
       <DirectoryModal />
       <CloudUpgradeWaitlistDialog open={cloudWaitlistOpen} onOpenChange={setCloudWaitlistOpen} />
+      <CreateProjectDialog open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
+      <UpgradePlanDialog
+        open={upgradePlanOpen}
+        onOpenChange={setUpgradePlanOpen}
+        currentTier={currentTier}
+        onOpenWaitlist={handleOpenWaitlistDirect}
+      />
+      {/* Project settings dialog — opened from the sidebar project row context menu */}
+      {projectForSettings && (
+        <ProjectSettingsDialog
+          open={Boolean(projectSettingsId)}
+          onOpenChange={(open) => {
+            if (!open) setProjectSettingsId(null);
+          }}
+          project={projectForSettings}
+          onUpdate={(id, updates) => updateProjectInStore(id, updates)}
+          onDelete={(id) => {
+            removeProjectFromStore(id);
+            setProjectSettingsId(null);
+          }}
+        />
+      )}
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
           open={Boolean(pendingByokHandoff)}
