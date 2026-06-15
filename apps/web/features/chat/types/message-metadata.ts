@@ -152,6 +152,12 @@ export interface WebChatMessageMetadata {
 
   // Media
   imageUrl?: string;
+  /** Original prompt used for image generation (used by edit/re-generate flow). */
+  imageGenPrompt?: string;
+  /** Aspect ratio that was used when generating the image. */
+  imageGenAspect?: string;
+  /** Model id used for image generation. */
+  imageGenModel?: string;
   imageData?: unknown;
   videoUrl?: string;
   thumbnailUrl?: string;
