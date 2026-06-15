@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle2, ChevronDown, Clock, Link2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock } from 'lucide-react';
+import { lucideToolIcon } from '@agiworkforce/ui';
 import { cn } from '../../../lib/utils';
 
 export type StepVariant = 'thinking' | 'tool' | 'done';
@@ -8,6 +9,25 @@ export type StepVariant = 'thinking' | 'tool' | 'done';
 export interface TimelineStepProps {
   variant: StepVariant;
   label: string;
+  /**
+   * Lucide icon NAME for the tool step (from `getToolIconName` in
+   * @agiworkforce/types). Resolved to a lucide-react component here so the same
+   * registry drives desktop/web and mobile. Ignored for thinking/done variants.
+   */
+  iconName?: string;
+  /**
+   * One-letter integration source badge (Claude-style "F" mark) for MCP/connector
+   * tools, from `getToolSourceBadge`. Rendered before the label; omit for native
+   * tools.
+   */
+  sourceBadge?: string | null;
+  /**
+   * Short type/arg chip rendered on its own line under the label (Claude inline
+   * tool-call style — e.g. a filename `build_resume.js`, a query, or `Script`).
+   */
+  chip?: string;
+  /** Tool request/args, shown as a labelled "Request" block in the expand. */
+  request?: string;
   result?: string;
   isError?: boolean;
   isRunning?: boolean;
@@ -18,6 +38,10 @@ export interface TimelineStepProps {
 export function TimelineStep({
   variant,
   label,
+  iconName,
+  sourceBadge,
+  chip,
+  request,
   result,
   isError = false,
   isRunning = false,
@@ -25,6 +49,13 @@ export function TimelineStep({
   duration,
 }: TimelineStepProps) {
   const [resultOpen, setResultOpen] = useState(false);
+  const [textExpanded, setTextExpanded] = useState(false);
+
+  // "Show more" for long thinking blocks (Claude inline reasoning style, ref 386).
+  const THINKING_TRUNCATE = 240;
+  const isLongThinking = variant === 'thinking' && label.length > THINKING_TRUNCATE;
+  const shownLabel =
+    isLongThinking && !textExpanded ? `${label.slice(0, THINKING_TRUNCATE).trimEnd()}…` : label;
 
   const icon = (() => {
     if (variant === 'thinking') {
@@ -38,13 +69,25 @@ export function TimelineStep({
       );
     }
     if (variant === 'tool') {
-      return <Link2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />;
+      // Per-tool icon resolved from the shared cross-surface registry, replacing
+      // the previous single generic icon used for every tool.
+      const ToolIcon = lucideToolIcon(iconName ?? 'Wrench');
+      return (
+        <ToolIcon
+          className={cn(
+            'w-3.5 h-3.5 shrink-0',
+            isRunning ? 'animate-pulse text-amber-400' : 'text-muted-foreground',
+          )}
+        />
+      );
     }
     // done
     return <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />;
   })();
 
-  const hasResult = variant === 'tool' && result !== undefined && result !== null;
+  const hasResult =
+    variant === 'tool' &&
+    ((result !== undefined && result !== null) || (request !== undefined && request !== null));
 
   return (
     <div className="relative flex gap-3">
@@ -59,6 +102,14 @@ export function TimelineStep({
       {/* Content column */}
       <div className="flex-1 min-w-0 pb-3">
         <div className="flex items-center gap-2 flex-wrap">
+          {variant === 'tool' && sourceBadge && (
+            <span
+              title="Integration"
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded bg-muted text-[9px] font-bold text-muted-foreground"
+            >
+              {sourceBadge}
+            </span>
+          )}
           <span
             className={cn(
               'text-xs',
@@ -69,7 +120,16 @@ export function TimelineStep({
                   : 'text-foreground/80',
             )}
           >
-            {label}
+            {shownLabel}
+            {isLongThinking && (
+              <button
+                type="button"
+                onClick={() => setTextExpanded((o) => !o)}
+                className="ml-1 not-italic font-medium text-muted-foreground/80 hover:text-foreground"
+              >
+                {textExpanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
           </span>
 
           {/* Duration badge */}
@@ -103,6 +163,15 @@ export function TimelineStep({
           )}
         </div>
 
+        {/* Type / arg chip on its own line (Claude inline tool-call style) */}
+        {variant === 'tool' && chip && (
+          <div className="mt-1">
+            <span className="inline-flex max-w-full items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/90">
+              {chip}
+            </span>
+          </div>
+        )}
+
         {/* Result content */}
         <AnimatePresence initial={false}>
           {hasResult && resultOpen && (
@@ -113,14 +182,38 @@ export function TimelineStep({
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <pre
-                className={cn(
-                  'mt-1.5 max-h-64 overflow-y-auto rounded p-2 text-[11px] font-mono leading-relaxed whitespace-pre-wrap break-words',
-                  isError ? 'bg-red-950/40 text-red-300' : 'bg-card/60 text-foreground',
-                )}
-              >
-                {result}
-              </pre>
+              {/* Request block (tool args) — Claude inline expanded-detail style */}
+              {request != null && request !== '' && (
+                <>
+                  <div className="mt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                    Request
+                  </div>
+                  <pre className="mt-1 max-h-48 overflow-y-auto rounded bg-card/60 p-2 font-mono text-[11px] leading-relaxed break-words whitespace-pre-wrap text-foreground">
+                    {request}
+                  </pre>
+                </>
+              )}
+              {/* Response block (tool result) */}
+              {result != null && result !== '' && (
+                <>
+                  <div
+                    className={cn(
+                      'mt-1.5 text-[10px] font-medium uppercase tracking-wide',
+                      isError ? 'text-red-400/80' : 'text-muted-foreground/70',
+                    )}
+                  >
+                    {isError ? 'Error' : 'Response'}
+                  </div>
+                  <pre
+                    className={cn(
+                      'mt-1 max-h-64 overflow-y-auto rounded p-2 font-mono text-[11px] leading-relaxed break-words whitespace-pre-wrap',
+                      isError ? 'bg-red-950/40 text-red-300' : 'bg-card/60 text-foreground',
+                    )}
+                  >
+                    {result}
+                  </pre>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
