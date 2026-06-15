@@ -12,7 +12,8 @@
  * Positioning: the panel uses `position: fixed` with coordinates computed from
  * the trigger's getBoundingClientRect so the menu always escapes any
  * `overflow-hidden` or `overflow-y-auto` ancestor (e.g. the sidebar scroll
- * container). The panel is repositioned on scroll/resize while open.
+ * container). The panel is repositioned on scroll/resize while open. Styling
+ * uses the same hsl(var(--*)) tokens the surfaces resolve.
  */
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { cn } from '../cn';
