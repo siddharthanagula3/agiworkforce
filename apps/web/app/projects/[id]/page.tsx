@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { FolderOpen } from 'lucide-react';
 import {
   ProjectHeader,
   ModelSelector,
@@ -17,6 +18,7 @@ import {
 import { KnowledgeFilesPanel } from '@/features/projects/components/KnowledgeFilesPanel';
 import { ChatComposerNew } from '@/features/chat/components/Composer/ChatComposerNew';
 import { useProjectMetaStore } from '@/features/projects/stores/project-meta-store';
+import { useChatStore } from '@/stores/chatStore';
 
 /**
  * /projects/[id] · per-project detail view, three-pane layout.
@@ -46,11 +48,24 @@ function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
     : null;
 }
 
-function conversationLabel(conversationId: string): string {
-  const trimmed = conversationId.trim();
-  if (!trimmed) return 'Untitled conversation';
-  const head = trimmed.slice(0, 8);
-  return `Conversation ${head}${trimmed.length > 8 ? '...' : ''}`;
+/** Format a date string into a short human-readable label. */
+function formatChatDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +154,16 @@ export default function ProjectDetailPage() {
     };
     return summarizeProjectHeader({ project: record });
   }, [project]);
+
+  // Web conversation store — used to look up real titles and dates for the chats list.
+  const allConversations = useChatStore((s) => s.conversations);
+  const conversationMeta = useMemo(() => {
+    const map = new Map<string, { title: string; updatedAt: string }>();
+    allConversations.forEach((c) => {
+      map.set(c.id, { title: c.title, updatedAt: c.updatedAt });
+    });
+    return map;
+  }, [allConversations]);
 
   if (!project || !headerPresentation) {
     return (
@@ -308,7 +333,7 @@ export default function ProjectDetailPage() {
             borderRight: '1px solid var(--agi-rule)',
           }}
         >
-          {/* Header strip with model selector */}
+          {/* ChatGPT-style header: FolderOpen icon + project name + model selector */}
           <div
             style={{
               padding: '16px 24px 12px',
@@ -320,8 +345,26 @@ export default function ProjectDetailPage() {
               gap: 12,
             }}
           >
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <ProjectHeader presentation={headerPresentation} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+              <FolderOpen
+                style={{ width: 22, height: 22, flexShrink: 0, color: 'var(--agi-amber)' }}
+                aria-hidden="true"
+              />
+              <h1
+                style={{
+                  fontFamily: 'var(--serif)',
+                  fontSize: 20,
+                  fontWeight: 500,
+                  color: 'var(--agi-ink)',
+                  margin: 0,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {project.name}
+              </h1>
             </div>
 
             {/* Model selector for this project */}
@@ -333,6 +376,51 @@ export default function ProjectDetailPage() {
                 }}
               />
             </div>
+          </div>
+
+          {/* ProjectHeader provides description/instructions summary — shown below the title bar */}
+          <div style={{ padding: '8px 24px 0', flexShrink: 0 }}>
+            <ProjectHeader presentation={headerPresentation} />
+          </div>
+
+          {/* Horizontal tab bar: Chats | Sources */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0,
+              borderBottom: '1px solid var(--agi-rule)',
+              padding: '0 24px',
+              flexShrink: 0,
+            }}
+            role="tablist"
+            aria-label="Project tabs"
+          >
+            {(['chats', 'sources'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                data-testid={`project-detail-tab-${t}`}
+                style={{
+                  padding: '10px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: tab === t ? '2px solid var(--agi-amber)' : '2px solid transparent',
+                  color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
+                  fontSize: 13,
+                  fontWeight: tab === t ? 600 : 400,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                  marginBottom: -1,
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+              >
+                {t === 'chats' ? 'Chats' : 'Sources'}
+              </button>
+            ))}
           </div>
 
           {/* Capacity / limit banners */}
@@ -357,43 +445,84 @@ export default function ProjectDetailPage() {
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 8,
+                    gap: 6,
                     padding: 0,
                     margin: 0,
                   }}
                 >
-                  {conversationIds.map((conversationId) => (
-                    <li
-                      key={conversationId}
-                      style={{
-                        listStyle: 'none',
-                        border: '1px solid var(--agi-rule)',
-                        borderRadius: 12,
-                        padding: '10px 14px',
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveProject(project.id);
-                          router.push(
-                            `/chat?project=${encodeURIComponent(project.id)}&conversation=${encodeURIComponent(conversationId)}`,
-                          );
-                        }}
-                        title={conversationId}
+                  {conversationIds.map((conversationId) => {
+                    const meta = conversationMeta.get(conversationId);
+                    const title =
+                      meta?.title && meta.title !== 'New Chat'
+                        ? meta.title
+                        : (meta?.title ?? 'Untitled chat');
+                    const dateLabel = formatChatDate(meta?.updatedAt);
+                    return (
+                      <li
+                        key={conversationId}
                         style={{
-                          background: 'transparent',
-                          border: 0,
-                          padding: 0,
-                          color: 'var(--agi-ink)',
-                          fontSize: 13,
-                          cursor: 'pointer',
+                          listStyle: 'none',
+                          border: '1px solid var(--agi-rule)',
+                          borderRadius: 10,
+                          overflow: 'hidden',
                         }}
                       >
-                        {conversationLabel(conversationId)}
-                      </button>
-                    </li>
-                  ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveProject(project.id);
+                            router.push(`/chat/${encodeURIComponent(conversationId)}`);
+                          }}
+                          title={title}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            width: '100%',
+                            background: 'transparent',
+                            border: 0,
+                            padding: '10px 14px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background =
+                              'var(--agi-bg-3)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: 'var(--agi-ink)',
+                              fontSize: 13,
+                              fontWeight: 500,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              minWidth: 0,
+                              flex: 1,
+                            }}
+                          >
+                            {title}
+                          </span>
+                          {dateLabel && (
+                            <span
+                              style={{
+                                color: 'var(--agi-ink-2)',
+                                fontSize: 11,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {dateLabel}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )
             ) : (
@@ -407,26 +536,14 @@ export default function ProjectDetailPage() {
               data-testid="project-detail-composer"
               style={{
                 borderTop: '1px solid var(--agi-rule)',
-                padding: '12px 24px 16px',
+                padding: '16px 24px 20px',
                 flexShrink: 0,
                 background: 'var(--agi-bg-2)',
               }}
             >
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--agi-ink-2)',
-                  margin: '0 0 8px',
-                }}
-              >
-                Start a new chat in this project
-              </p>
               <ChatComposerNew
                 onSend={handleProjectSend}
-                placeholder="Message this project..."
+                placeholder={`New chat in ${project.name}`}
                 promptCompletionEnabled={false}
               />
             </div>

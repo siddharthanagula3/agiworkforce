@@ -874,6 +874,13 @@ export default function WebChatPage() {
   );
 
   /**
+   * Create project: navigate to /projects where the create form lives.
+   */
+  const handleProjectCreate = useCallback(() => {
+    router.push('/projects');
+  }, [router]);
+
+  /**
    * Delete project from the store after an explicit confirmation so a stray
    * click in the ... menu can never silently drop a project.
    */
@@ -1414,6 +1421,7 @@ export default function WebChatPage() {
         onProjectShare={handleProjectShare}
         onProjectPin={handleProjectPin}
         onProjectDelete={handleProjectDelete}
+        onProjectCreate={handleProjectCreate}
         className="bg-[var(--chat-sidebar-bg)] border-[var(--chat-border-strong)]"
       />
 
