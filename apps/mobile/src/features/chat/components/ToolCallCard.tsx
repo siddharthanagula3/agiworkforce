@@ -16,13 +16,8 @@ import {
   ChevronRight,
   FileCode,
   Clock,
-  Terminal,
-  FileText,
-  Edit3,
-  Globe,
-  Code,
-  Wrench,
 } from 'lucide-react-native';
+import { lucideRNToolIcon } from './toolIconRN';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type { ToolCall } from '@/types/chat';
@@ -33,32 +28,6 @@ interface ToolCallCardProps {
   showRailAbove?: boolean;
   /** When true, draw the connecting rail line below this card. */
   showRailBelow?: boolean;
-}
-
-/** Map tool name patterns to a representative lucide icon. */
-function getToolIcon(toolName: string): typeof Terminal {
-  const name = toolName.toLowerCase();
-  if (name.includes('bash') || name.includes('shell') || name.includes('terminal')) {
-    return Terminal;
-  }
-  if (name.includes('read_file') || name.includes('read') || name.includes('file_text')) {
-    return FileText;
-  }
-  if (name.includes('write_file') || name.includes('edit') || name.includes('create_file')) {
-    return Edit3;
-  }
-  if (
-    name.includes('web_search') ||
-    name.includes('browse') ||
-    name.includes('url') ||
-    name.includes('http')
-  ) {
-    return Globe;
-  }
-  if (name.includes('code') || name.includes('exec') || name.includes('python')) {
-    return Code;
-  }
-  return Wrench;
 }
 
 /** Pulsing dot for the running state — mirrors StatusStep.tsx PulsingIndicator. */
@@ -200,7 +169,7 @@ export function ToolCallCard({
   const [expanded, setExpanded] = useState(false);
 
   const hasIO = Boolean(toolCall.input || toolCall.output);
-  const ToolIcon = getToolIcon(toolCall.name);
+  const ToolIcon = lucideRNToolIcon(toolCall.name);
 
   const toggleExpanded = useCallback(() => {
     if (hasIO) setExpanded((prev) => !prev);
