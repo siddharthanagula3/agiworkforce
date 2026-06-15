@@ -14,7 +14,7 @@
  */
 
 import { Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
-import { AgiSpark } from '@/components/agi/AgiSpark';
+import { AgiMark } from '@/components/agi/AgiMark';
 import { useGreeting } from './useGreeting';
 
 interface SuggestionChip {
@@ -67,7 +67,7 @@ export function GreetingBanner({ onSendMessage }: GreetingBannerProps) {
         className="flex h-10 w-10 items-center justify-center rounded-full"
         role="presentation"
       >
-        <AgiSpark size={30} />
+        <AgiMark size={28} />
       </div>
 
       {/* Time-aware headline */}
