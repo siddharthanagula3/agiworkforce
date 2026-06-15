@@ -115,6 +115,7 @@ const CANONICAL_ORDER = [
   'tokenizer_drift_range',
   'tokenizer_drift_warning',
   'imagePerImageCost',
+  'imageApi',
   'videoPerSecondCost',
   'pricingNote',
 ];

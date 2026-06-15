@@ -48,6 +48,8 @@ type ImageProvider = 'google' | 'openai' | 'stability';
 const ImageGenerationRequestSchema = z.object({
   prompt: z.string().min(1).max(4000),
   provider: z.enum(['google', 'openai', 'stability']).optional(),
+  /** Catalog model id (e.g. 'imagen-4-ultra'); resolved to apiModelId + imageApi server-side. */
+  model: z.string().max(200).optional(),
   size: z
     .enum([
       // Common sizes
@@ -99,21 +101,23 @@ const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> =
   stability: 8,
 };
 
-function resolveGoogleImageModel() {
+function resolveGoogleImageModel(requestedModelId?: string) {
   const googleImageModels = getModelsForProvider('google', {
     includeDeprecated: false,
     modelTypes: ['image'],
   });
 
-  // Prefer the Gemini image model (fast, low-cost) over Imagen. Both share the
-  // "balanced" qualityTier, so a bare find(balanced) is order-dependent; select
-  // by the gemini id prefix instead. This is id-pattern logic, not a hardcoded
-  // model id — every id and the real API id come from the models.json catalog.
+  // Honour the user's explicit model choice when it's a valid Google image model.
+  if (requestedModelId) {
+    const requested = googleImageModels.find((model) => model.id === requestedModelId);
+    if (requested) return requested;
+  }
+
+  // Default: prefer the Gemini backend (fast, low-cost) via the declarative
+  // `imageApi` catalog field, else the first catalog Google image model. No id
+  // pattern, no hardcoded id — selection is driven entirely by catalog data.
   return (
-    googleImageModels.find((model) => model.id.startsWith('gemini')) ??
-    googleImageModels.find((model) => model.qualityTier === 'balanced') ??
-    googleImageModels[0] ??
-    null
+    googleImageModels.find((model) => model.imageApi === 'gemini') ?? googleImageModels[0] ?? null
   );
 }
 
@@ -244,9 +248,10 @@ async function generateWithImagen(
   _style: string | undefined,
   n: number,
   negativePrompt?: string,
+  requestedModelId?: string,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('google');
-  const catalogModel = resolveGoogleImageModel();
+  const catalogModel = resolveGoogleImageModel(requestedModelId);
   if (!catalogModel) {
     throw new Error('No active Google image model is configured in the catalog');
   }
@@ -267,11 +272,12 @@ async function generateWithImagen(
   }
 
   // Google has two distinct image APIs with different request/response shapes:
-  //   - Gemini image models (gemini-*-flash-image*) use `:generateContent` with
-  //     responseModalities and return image bytes in candidates[].content.parts[].inlineData.
-  //   - Imagen models (imagen-*) use `:predict` and return predictions[].bytesBase64Encoded.
-  // Branch on the resolved API model id so the correct endpoint is used.
-  if (model.startsWith('gemini')) {
+  //   - imageApi 'gemini' → `:generateContent` with responseModalities; bytes in
+  //     candidates[].content.parts[].inlineData.
+  //   - imageApi 'imagen' → `:predict`; bytes in predictions[].bytesBase64Encoded.
+  // Dispatch on the catalog's declarative imageApi field (no id pattern), so a new
+  // Google image model only needs its imageApi set in models.curation.json.
+  if (catalogModel.imageApi === 'gemini') {
     return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n);
   }
 
@@ -652,6 +658,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const {
     prompt,
     provider: requestedProvider,
+    model: requestedModel,
     size,
     style,
     quality,
@@ -793,7 +800,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         result = await generateWithOpenAIImage(prompt, size, quality, n);
         break;
       case 'google':
-        result = await generateWithImagen(prompt, size, style, n, negative_prompt);
+        result = await generateWithImagen(prompt, size, style, n, negative_prompt, requestedModel);
         break;
       case 'stability':
         result = await generateWithStability(prompt, size, style, n, negative_prompt);

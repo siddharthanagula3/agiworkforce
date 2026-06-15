@@ -120,6 +120,17 @@ export interface ModelMetadata {
   cached_write?: number;
   /** Per-image cost (USD) for image-generation models (non-token pricing). */
   imagePerImageCost?: number;
+  /**
+   * Which upstream image API/adapter serves this image model. Lets the media
+   * route dispatch to the correct backend purely from catalog data — adding a
+   * new image model on an existing backend is a models.curation.json edit, no
+   * code change. Only `modelType: 'image'` models set this.
+   *   - 'gemini'    → Gemini `:generateContent` (responseModalities IMAGE)
+   *   - 'imagen'    → Imagen `:predict`
+   *   - 'openai'    → OpenAI Images API
+   *   - 'stability' → Stability v2beta Stable Image
+   */
+  imageApi?: 'gemini' | 'imagen' | 'openai' | 'stability';
   /** Per-second cost (USD) for video-generation models (non-token pricing). */
   videoPerSecondCost?: number;
   /** Human-readable note for non-standard pricing (per-image, tiered, etc.). */
