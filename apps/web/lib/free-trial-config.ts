@@ -6,10 +6,13 @@ import { getAllowedModelsForTier, getRoutingSlotModel } from '@agiworkforce/type
 // the live curation in packages/types/src/models.json.
 
 /**
- * Default selection for a free trial: the cheapest fast model AGI routes to.
- * Resolved from the `general_fast` routing slot rather than a literal ID.
+ * Default selection for a free trial: GPT-5.4 Mini — the demo/free-tier hero
+ * (vision + function-calling capable, so the inline tool-call experience works
+ * out of the box). Resolved from the `general_balanced` routing slot rather than
+ * a literal ID. Still bounded by the 3-prompt cap + per-prompt token budget
+ * below (~$0.05 worst case across all 3 prompts).
  */
-export const FREE_TRIAL_MODEL = getRoutingSlotModel('general_fast');
+export const FREE_TRIAL_MODEL = getRoutingSlotModel('general_balanced');
 export const FREE_TRIAL_PROMPT_LIMIT = 3;
 
 // Per-prompt token budget. Caps a single free prompt so the 3 prompts can't be

@@ -28,7 +28,7 @@
         "fast_completion": "gemini-3.1-flash-lite",
         "code_generation": "deepseek-v4-flash",
         "complex_reasoning": "claude-sonnet-4.6",
-        "chat": "gemini-3.1-flash-lite",
+        "chat": "gpt-5.4-mini",
         "vision": "gemini-3.1-pro-preview",
         "long_context": "gemini-3.1-pro-preview",
         "computer_use": "gpt-5.4-mini"
