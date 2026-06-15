@@ -731,17 +731,6 @@ const ChatComposerNewComponent = ({
    */
   const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
 
-  // Trial usage is surfaced once, in the banner above the composer (with its
-  // Upgrade CTA). The footer hint stays purely about input affordances so the
-  // count is not repeated three times.
-  const footerHint = trialExhausted
-    ? 'Free web prompts used · Upgrade for more hosted usage'
-    : showSlashMenu
-      ? 'Tab to accept · Esc to dismiss'
-      : suggestion
-        ? 'Tab to accept suggestion · Cmd+Enter to send'
-        : 'Cmd+Enter to send · Enter for newline';
-
   const handleFileDrop = useCallback(
     (files: File[]) => {
       if (!modelSupportsVision) {
@@ -1290,23 +1279,16 @@ const ChatComposerNewComponent = ({
             )}
           </div>
 
-          {/* Model selector (empty state) — rendered inside the control row so it
-              shares the bottom row with + and send, like ChatGPT/Claude/Comet. */}
-          {emptyState && (
-            <ComposerFooter
-              inline
-              className="order-4 ml-auto"
-              showModelSelector
-              lockModelSelector={false}
-              showStyleSelector={false}
-              onUpgradeRequest={onUpgradeRequest}
-            />
-          )}
-
-          {/* Spacer · pushes the voice/send cluster to the right of the controls
-              row in the docked (non-empty) layout. In the empty state the inline
-              model selector (order-4, ml-auto) already does this. */}
-          {!emptyState && <div className="order-4 ml-auto" aria-hidden="true" />}
+          {/* Model selector — inline in the control row for BOTH the empty and
+              docked states so it always sits beside the send button, ChatGPT-style. */}
+          <ComposerFooter
+            inline
+            className="order-4 ml-auto"
+            showModelSelector
+            lockModelSelector={false}
+            showStyleSelector={!isFreeTrial}
+            onUpgradeRequest={onUpgradeRequest}
+          />
 
           {/* Voice Input Button */}
           {!isFreeTrial && (
@@ -1333,21 +1315,6 @@ const ChatComposerNewComponent = ({
           />
         </div>
 
-        {/* Composer footer (docked / with-messages): hint + model selector inside
-            the pill. In the empty state the selector is rendered inline in the
-            control row above instead, so the bar stays a single compact row. */}
-        {!emptyState && (
-          <div className="px-1">
-            <ComposerFooter
-              hint={footerHint}
-              showModelSelector
-              lockModelSelector={false}
-              showStyleSelector={!isFreeTrial}
-              onUpgradeRequest={onUpgradeRequest}
-            />
-          </div>
-        )}
-
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -1364,6 +1331,12 @@ const ChatComposerNewComponent = ({
           aria-label="Image upload"
         />
       </div>
+
+      {/* Disclaimer · sits below the composer (outside the pill), ChatGPT/Claude-
+          style. Replaces the in-pill 'Cmd+Enter to send' keyboard hint. */}
+      <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        AGI can make mistakes. Check important info.
+      </p>
     </div>
   );
 };
