@@ -7,6 +7,7 @@
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { getToolIconName, getToolSourceBadge } from '@agiworkforce/types';
 import { toast } from 'sonner';
 
 // Stable empty array reference to avoid infinite re-render in Zustand selectors.
@@ -553,7 +554,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             <TimelineStep
               key="thinking"
               variant="thinking"
-              label={messageThinkingContent.slice(0, 200)}
+              label={messageThinkingContent}
               isRunning={isStreaming && messageToolTimeline.length === 0}
               isLast={++stepIndex >= totalSteps}
             />
@@ -567,11 +568,11 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               <TimelineStep
                 key={entry.id}
                 variant="tool"
-                label={
-                  entry.displayArgs
-                    ? `${entry.displayName} — ${entry.displayArgs}`
-                    : entry.displayName
-                }
+                iconName={getToolIconName(entry.rawName ?? entry.displayName)}
+                sourceBadge={getToolSourceBadge(entry.rawName)}
+                label={entry.displayName}
+                chip={entry.displayArgs || undefined}
+                request={entry.displayArgs || undefined}
                 result={entry.resultPreview}
                 isError={entry.status === 'error'}
                 isRunning={entry.status === 'running'}

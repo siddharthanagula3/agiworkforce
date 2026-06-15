@@ -10,6 +10,7 @@
 export { ProviderMark, hasProviderMark } from './ProviderMark';
 export { AgiMark } from './AgiMark';
 export { cn } from './cn';
+export { lucideToolIcon } from './toolIcon';
 export {
   Sidebar,
   type SidebarProps,

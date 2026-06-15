@@ -378,4 +378,12 @@ export interface ToolLabelEntry {
    * Absent for all other tool types.
    */
   checkpointId?: string;
+
+  /**
+   * Raw (un-prettified) tool name, e.g. `"mcp__filesystem__list_directory"`.
+   * Preserved alongside `displayName` so the inline timeline can derive the
+   * integration "source" badge (Claude-style "F"-mark) via
+   * `getToolSourceBadge`. Absent for native tools dispatched without a raw name.
+   */
+  rawName?: string;
 }
