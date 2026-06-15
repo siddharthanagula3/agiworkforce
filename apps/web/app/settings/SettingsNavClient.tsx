@@ -19,7 +19,10 @@ import {
   Mic,
   type LucideIcon,
 } from 'lucide-react';
-import type { NavItem } from './layout';
+interface NavItem {
+  href: string;
+  label: string;
+}
 
 interface NavEntry {
   href: string;
