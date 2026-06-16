@@ -8,14 +8,13 @@ import {
   googleVeoService,
   type VeoGenerationRequest as GoogleVeoRequest,
 } from './google-veo-service';
-import { openAIImageService, type OpenAIImageGenerationRequest } from './openai-image-service';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 
 const VIDEO_GENERATION_MODEL_ID = getRoutingSlotModel('video_generation');
 const IMAGE_GENERATION_MODEL_ID = getRoutingSlotModel('image_generation');
 const VEO_API_MODEL_ID =
   getModelMetadataById(VIDEO_GENERATION_MODEL_ID)?.apiModelId ?? VIDEO_GENERATION_MODEL_ID;
-const GPT_IMAGE_API_MODEL_ID =
+const IMAGE_API_MODEL_ID =
   getModelMetadataById(IMAGE_GENERATION_MODEL_ID)?.apiModelId ?? IMAGE_GENERATION_MODEL_ID;
 
 export interface ImageGenerationRequest {
@@ -98,46 +97,65 @@ export class MediaGenerationService {
     return MediaGenerationService.instance;
   }
 
-  /** Generate images through the secure OpenAI image proxy. */
+  /** Generate images through the unified Next.js API. */
   async generateImage(request: ImageGenerationRequest): Promise<MediaGenerationResult> {
     try {
-      const openAIImageRequest: OpenAIImageGenerationRequest = {
-        prompt: request.prompt,
-        size: request.size || '1024x1024',
-        quality: request.quality || 'standard',
-        style:
-          request.style === 'realistic' || request.style === 'photographic' ? 'natural' : 'vivid',
-        n: request.numberOfImages ?? 1,
-        model: GPT_IMAGE_API_MODEL_ID,
+      const response = await fetch('/api/media/image/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: request.prompt,
+          provider: 'openai',
+          model: IMAGE_API_MODEL_ID,
+          size: request.size || '1024x1024',
+          style: request.style,
+          n: request.numberOfImages ?? 1,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(
+          err.error?.message || `Image generation failed with status ${response.status}`,
+        );
+      }
+
+      const data = (await response.json()) as {
+        success: boolean;
+        images?: Array<{ url?: string; b64_json?: string }>;
+        cost_estimate?: number;
       };
 
-      const openAIImageResults = await openAIImageService.generateImage(openAIImageRequest);
-      const openAIImageResult = openAIImageResults[0];
-      if (!openAIImageResult) {
+      if (!data.success || !data.images || data.images.length === 0) {
         throw new Error('Image generation returned no results');
       }
 
-      // Estimate cost
-      const cost = openAIImageService.estimateCost(openAIImageRequest);
+      const firstImage = data.images[0];
+      const imageUrl =
+        firstImage?.url ||
+        (firstImage?.b64_json ? `data:image/png;base64,${firstImage.b64_json}` : '');
+      if (!imageUrl) {
+        throw new Error('Image generation returned empty image data');
+      }
 
       // Convert to MediaGenerationResult
       const result: MediaGenerationResult = {
-        id: openAIImageResult.id,
+        id: crypto.randomUUID(),
         type: 'image',
-        url: openAIImageResult.url,
-        prompt: openAIImageResult.prompt,
+        url: imageUrl,
+        prompt: request.prompt,
         metadata: {
-          size: openAIImageResult.size,
-          model: openAIImageResult.model,
-          style: openAIImageResult.style,
+          size: request.size || '1024x1024',
+          model: IMAGE_API_MODEL_ID,
+          style: request.style,
         },
-        cost,
+        cost: data.cost_estimate || 0,
         tokensUsed: 0,
-        createdAt: openAIImageResult.createdAt,
+        createdAt: new Date(),
         status: 'completed',
         images: [
           {
-            url: openAIImageResult.url,
+            url: imageUrl,
             mimeType: 'image/png',
           },
         ],
