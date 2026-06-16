@@ -7,6 +7,45 @@ import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 
 // ---------------------------------------------------------------------------
+// Mock: @agiworkforce/types
+// ---------------------------------------------------------------------------
+vi.mock('@agiworkforce/types', async () => {
+  const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  return {
+    ...actual,
+    getRoutingSlotModel: vi.fn((slot: string) => {
+      if (slot === 'image_generation') return 'gpt-image-2';
+      return actual.getRoutingSlotModel(slot);
+    }),
+    getModelsForProvider: vi.fn((provider: string, options?: any) => {
+      if (provider === 'google') {
+        return [
+          {
+            id: 'imagen-4',
+            apiModelId: 'imagen-4.0-generate-001',
+            imageApi: 'imagen',
+            name: 'Imagen 4',
+            provider: 'google',
+            modelType: 'image',
+            imagePerImageCost: 0.04,
+          },
+        ];
+      }
+      return actual.getModelsForProvider(provider, options);
+    }),
+    getModelMetadataById: vi.fn((id: string) => {
+      if (id === 'gpt-image-2') {
+        return {
+          id: 'gpt-image-2',
+          apiModelId: 'gpt-image-2',
+        };
+      }
+      return actual.getModelMetadataById(id);
+    }),
+  };
+});
+
+// ---------------------------------------------------------------------------
 // Mock: rate-limit — allow by default
 // ---------------------------------------------------------------------------
 vi.mock('@/lib/rate-limit', () => ({
