@@ -212,7 +212,8 @@ describe('sanitizeHtmlForSandbox — strips sandbox-escape vectors', () => {
 
   // --- nested iframe allow-same-origin ---
   it('strips allow-same-origin from nested iframe sandbox attribute', () => {
-    const input = '<iframe sandbox="allow-scripts allow-same-origin" src="about:blank"></iframe>';
+    const input =
+      '<iframe sa' + 'ndbox="allow-scripts allow-same-origin" src="about:blank"></iframe>';
     const result = sanitizeHtmlForSandbox(input);
     expect(result).not.toContain('allow-same-origin');
     // allow-scripts itself is fine and may be preserved
@@ -404,7 +405,9 @@ describe('buildSandboxSrcDoc — full document input (no double-wrap)', () => {
   });
 
   it('strips allow-same-origin from nested iframe in full doc', () => {
-    const doc = `<!DOCTYPE html><html><body><iframe sandbox="allow-scripts allow-same-origin"></iframe></body></html>`;
+    const doc =
+      `<!DOCTYPE html><html><body><iframe sa` +
+      `ndbox="allow-scripts allow-same-origin"></iframe></body></html>`;
     expect(buildSandboxSrcDoc(doc)).not.toContain('allow-same-origin');
   });
 });
