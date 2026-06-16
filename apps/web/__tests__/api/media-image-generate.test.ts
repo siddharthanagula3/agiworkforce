@@ -13,11 +13,11 @@ vi.mock('@agiworkforce/types', async () => {
   const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
   return {
     ...actual,
-    getRoutingSlotModel: vi.fn((slot: string) => {
+    getRoutingSlotModel: vi.fn((slot: any) => {
       if (slot === 'image_generation') return 'gpt-image-2';
       return actual.getRoutingSlotModel(slot);
     }),
-    getModelsForProvider: vi.fn((provider: string, options?: any) => {
+    getModelsForProvider: vi.fn((provider: any, options?: any) => {
       if (provider === 'google') {
         return [
           {
