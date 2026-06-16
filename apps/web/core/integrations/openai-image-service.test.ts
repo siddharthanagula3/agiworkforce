@@ -4,6 +4,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('@agiworkforce/types', () => ({
+  getRoutingSlotModel: vi.fn((slot: string) => {
+    if (slot === 'image_generation') return 'gpt-image-2';
+    return `mock-model-for-${slot}`;
+  }),
+  getModelMetadataById: vi.fn((modelId: string) => ({
+    apiModelId: modelId,
+  })),
+}));
+
 import {
   OpenAIImageService,
   openAIImageService,
