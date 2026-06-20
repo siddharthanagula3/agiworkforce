@@ -157,13 +157,14 @@ async function enforcePlanTier(userId: string, model: string): Promise<string> {
     .from('subscriptions')
     .select('plan_tier')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     logger.error({ error, userId }, 'LLM proxy: failed to fetch subscription');
     throw new AppError('Service temporarily unavailable', 503);
   }
 
+  // null data means no subscription row — treat as free tier (throws 403 below)
   const tier: string = subscription?.plan_tier ?? 'free';
 
   if (tier === 'free') {
