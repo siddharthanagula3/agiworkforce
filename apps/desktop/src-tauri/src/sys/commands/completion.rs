@@ -367,7 +367,7 @@ Rules:
             0,
             RouteCandidate {
                 provider: Provider::ManagedCloud,
-                model: "glm-5.1".to_string(),
+                model: "glm-5.2".to_string(),
                 reason: "prompt-completion-managed-cloud-glm-current",
                 strategy: None,
             },
@@ -379,7 +379,7 @@ Rules:
             usize::from(has_managed_cloud),
             RouteCandidate {
                 provider: Provider::Zhipu,
-                model: "glm-5.1".to_string(),
+                model: "glm-5.2".to_string(),
                 reason: "prompt-completion-zhipu-current",
                 strategy: None,
             },

@@ -485,7 +485,7 @@ mod tests {
         assert!(ids.contains(&"mistral-medium-2508"));
         assert!(ids.contains(&"deepseek-v4-flash"));
         assert!(ids.contains(&"deepseek-v4-pro"));
-        assert!(ids.contains(&"glm-5.1"));
+        assert!(ids.contains(&"glm-5.2"));
     }
 
     #[test]
@@ -664,7 +664,7 @@ mod tests {
         // xAI flagship is sourced from models.json.
         assert!(find_model("grok-4.3").is_some());
         assert!(find_model("mistral-large-2512").is_some());
-        assert!(find_model("glm-5.1").is_some());
+        assert!(find_model("glm-5.2").is_some());
     }
 
     // ── models_for_provider ────────────────────────────────────
@@ -963,7 +963,7 @@ mod tests {
         // xAI flagship is sourced from models.json.
         assert!(list.contains("grok-4.3"));
         assert!(list.contains("mistral-large-2512"));
-        assert!(list.contains("glm-5.1"));
+        assert!(list.contains("glm-5.2"));
     }
 
     #[test]

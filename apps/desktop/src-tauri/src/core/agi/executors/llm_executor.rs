@@ -585,7 +585,7 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("glm-5.1"),
+            executor.infer_provider_from_model("glm-5.2"),
             Provider::ManagedCloud
         );
         assert_eq!(
