@@ -143,8 +143,6 @@ function isFlagshipSlot(slot: RoutingSlot | undefined): boolean {
 function nextTierUp(tier: ProductTier | string): string {
   switch ((tier ?? '').toLowerCase()) {
     case 'free':
-      return 'hobby';
-    case 'hobby':
       return 'pro';
     case 'pro':
       return 'max';

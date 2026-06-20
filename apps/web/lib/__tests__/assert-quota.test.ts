@@ -302,7 +302,7 @@ describe('assertQuota · Free tier (tokenCapPerMonth = 100_000)', () => {
     expect(result.kind).toBe('paywall');
     if (result.kind === 'paywall') {
       expect(result.feature).toBe('token_cap');
-      expect(result.requiredTier).toBe('hobby');
+      expect(result.requiredTier).toBe('pro');
     }
   });
 
@@ -356,7 +356,7 @@ describe('assertQuota · Hobby tier (tokenCapPerMonth = 2_000_000)', () => {
     const result = await assertQuota({ ...BASE_OPTS, tier: 'hobby', requestedTokens: 10_000 });
     expect(result.kind).toBe('paywall');
     if (result.kind === 'paywall') {
-      expect(result.requiredTier).toBe('pro');
+      expect(result.requiredTier).toBe('enterprise');
     }
   });
 

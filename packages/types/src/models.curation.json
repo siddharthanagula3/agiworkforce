@@ -732,7 +732,7 @@
     },
     "claude-haiku-4.5": {
       "id": "claude-haiku-4.5",
-      "apiModelId": "claude-haiku-4-5-20251001",
+      "apiModelId": "claude-haiku-4-5",
       "name": "Claude 4.5 Haiku",
       "provider": "anthropic",
       "modelType": "chat",
