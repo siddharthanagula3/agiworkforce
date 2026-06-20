@@ -58,17 +58,15 @@ describe('model catalog helpers', () => {
   });
 
   it('builds context limit and cost maps from canonical ids', () => {
+    // claude-sonnet-4-6 (dash format) resolves to claude-sonnet-4.6 via apiModelId lookup.
     const aliasId = normalizeModelId('claude-sonnet-4-6');
-    const codexId = normalizeModelId('gpt-5.4-codex-medium');
     const openaiModel = requireProviderDefaultModel('openai');
     const contextLimits = getModelContextLimits([openaiModel, 'claude-sonnet-4-6']);
     const costRates = getModelCostRates([openaiModel, 'claude-sonnet-4-6']);
 
     expect(aliasId).toBe('claude-sonnet-4.6');
-    // Legacy phantom Codex selections are non-selectable, but saved chats/config
-    // migrate forward to the current OpenAI flagship.
-    expect(codexId).toBe(requireProviderDefaultModel('openai'));
-    expect(getModelMetadataById(codexId)).toMatchObject({ provider: 'openai' });
+    // Canonicalization removed: unknown IDs pass through as-is (no legacy redirect).
+    expect(normalizeModelId('gpt-5.4-codex-medium')).toBe('gpt-5.4-codex-medium');
     expect(contextLimits[openaiModel]).toBeGreaterThan(0);
     expect(contextLimits['claude-sonnet-4.6']).toBeGreaterThan(0);
     expect(costRates[openaiModel]).toMatchObject({ provider: 'openai' });
@@ -119,10 +117,12 @@ describe('model catalog helpers', () => {
     expect(coreOptions.some((entry) => entry.id === 'sonar-pro')).toBe(false);
   });
 
-  it('migrates legacy removed aliases without making them selectable', () => {
+  it('legacy removed aliases are not in catalog (canonicalization removed for fresh start)', () => {
+    // Canonicalization was removed — starting fresh with no legacy users.
+    // Unknown aliases return null from getModelMetadataById.
     expect(getModelMetadataById('gpt-5-nano')).toBeNull();
-    expect(getModelMetadataById('gpt-5.4-nano')).toMatchObject({ id: 'gpt-5.4-mini' });
-    expect(normalizeModelId('gpt-5.4-codex-high')).toBe(requireProviderDefaultModel('openai'));
+    expect(getModelMetadataById('gpt-5.4-nano')).toBeNull();
+    expect(normalizeModelId('gpt-5.4-codex-high')).toBe('gpt-5.4-codex-high');
   });
 
   it('classifies provider surfaces and managed cloud provider visibility', () => {
@@ -258,7 +258,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   describe('Hobby tier task-aware routing (separate from Pro map)', () => {
     it('coding → escalation_coding slot (GLM-5.1), NOT coding_premium_pro', () => {
       const result = resolveAutoModeModel('auto-balanced', 'hobby', 'coding');
-      expect(result).toBe('glm-5.1');
+      expect(result).toBe('glm-5.2');
       expect(result).not.toBe('claude-sonnet-4.6');
     });
     it('reasoning → reasoning_premium slot (DeepSeek V4 Flash), NOT reasoning_premium_pro', () => {

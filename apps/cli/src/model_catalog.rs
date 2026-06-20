@@ -1681,7 +1681,7 @@ mod tests {
             "\"grok-4.3\"",
             "\"deepseek-chat\"",
             "\"kimi-k2.5\"",
-            "\"glm-5.1\"",
+            "\"glm-5.2\"",
             "\"sonar-reasoning-pro\"",
             "\"qwen-max\"",
         ];
