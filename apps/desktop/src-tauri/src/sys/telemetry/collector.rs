@@ -37,6 +37,11 @@ pub struct CollectorConfig {
     /// events to `analytics_events.json` inside this directory (the Tauri
     /// app-data directory). When `None` the local-file fallback is skipped.
     pub app_data_dir: Option<PathBuf>,
+    /// TRUST-BOUNDARY: when `Some("local")` the collector silently drops all
+    /// events and flushes — mirroring the TS analytics.ts gate. Other values
+    /// (including `None`) allow normal operation. Never promote "local" events
+    /// to the HTTP endpoint or the local file regardless of `enabled`.
+    pub privacy_mode: Option<String>,
 }
 
 impl Default for CollectorConfig {
@@ -46,6 +51,7 @@ impl Default for CollectorConfig {
             batch_size: 50,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         }
     }
 }
@@ -70,6 +76,9 @@ impl TelemetryCollector {
     }
 
     pub async fn track(&self, event: TelemetryEvent) -> Result<()> {
+        if self.config.privacy_mode.as_deref() == Some("local") {
+            return Ok(());
+        }
         if !self.config.enabled {
             return Ok(());
         }
@@ -86,6 +95,9 @@ impl TelemetryCollector {
     }
 
     pub async fn flush(&self) -> Result<()> {
+        if self.config.privacy_mode.as_deref() == Some("local") {
+            return Ok(());
+        }
         if !self.config.enabled {
             return Ok(());
         }
@@ -250,6 +262,10 @@ impl TelemetryCollector {
         self.config = config;
     }
 
+    pub fn set_privacy_mode(&mut self, mode: Option<String>) {
+        self.config.privacy_mode = mode;
+    }
+
     pub fn is_enabled(&self) -> bool {
         self.config.enabled
     }
@@ -282,6 +298,7 @@ mod tests {
             batch_size: 3,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -305,6 +322,7 @@ mod tests {
             batch_size: 2,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -329,6 +347,7 @@ mod tests {
             batch_size: 10,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -367,6 +386,7 @@ mod tests {
             batch_size: 10,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -390,6 +410,7 @@ mod tests {
             batch_size: 10,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -417,6 +438,7 @@ mod tests {
             batch_size: 10,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         };
         let collector = TelemetryCollector::new(config);
 
@@ -435,5 +457,97 @@ mod tests {
 
         assert_eq!(collector.get_event_count().await, 0);
         assert_eq!(collector.get_user_id().await, None);
+    }
+
+    // TRUST-BOUNDARY tests -------------------------------------------------------
+
+    #[tokio::test]
+    async fn local_mode_blocks_track_even_when_enabled() {
+        let config = CollectorConfig {
+            enabled: true,
+            batch_size: 100,
+            flush_interval_secs: 30,
+            app_data_dir: None,
+            privacy_mode: Some("local".to_string()),
+        };
+        let collector = TelemetryCollector::new(config);
+
+        for i in 0..10 {
+            let event = TelemetryEvent {
+                name: format!("event_{}", i),
+                properties: HashMap::new(),
+                timestamp: 0,
+                session_id: collector.get_session_id(),
+                user_id: None,
+            };
+            collector.track(event).await.unwrap();
+        }
+
+        assert_eq!(
+            collector.get_event_count().await,
+            0,
+            "TRUST-BOUNDARY: local mode must produce zero buffered events"
+        );
+    }
+
+    #[tokio::test]
+    async fn cloud_mode_allows_track_when_enabled() {
+        let config = CollectorConfig {
+            enabled: true,
+            batch_size: 100,
+            flush_interval_secs: 30,
+            app_data_dir: None,
+            privacy_mode: Some("cloud".to_string()),
+        };
+        let collector = TelemetryCollector::new(config);
+
+        let event = TelemetryEvent {
+            name: "test_event".to_string(),
+            properties: HashMap::new(),
+            timestamp: 0,
+            session_id: collector.get_session_id(),
+            user_id: None,
+        };
+        collector.track(event).await.unwrap();
+
+        assert_eq!(collector.get_event_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn none_mode_allows_track_when_enabled() {
+        let config = CollectorConfig {
+            enabled: true,
+            batch_size: 100,
+            flush_interval_secs: 30,
+            app_data_dir: None,
+            privacy_mode: None,
+        };
+        let collector = TelemetryCollector::new(config);
+
+        let event = TelemetryEvent {
+            name: "test_event".to_string(),
+            properties: HashMap::new(),
+            timestamp: 0,
+            session_id: collector.get_session_id(),
+            user_id: None,
+        };
+        collector.track(event).await.unwrap();
+
+        assert_eq!(collector.get_event_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn local_mode_flush_is_noop() {
+        let config = CollectorConfig {
+            enabled: true,
+            batch_size: 100,
+            flush_interval_secs: 30,
+            app_data_dir: None,
+            privacy_mode: Some("local".to_string()),
+        };
+        let collector = TelemetryCollector::new(config);
+        // flush() on a local-mode collector must return Ok(()) without panicking
+        collector.flush().await.unwrap();
+        assert_eq!(collector.get_event_count().await, 0);
     }
 }

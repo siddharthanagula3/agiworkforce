@@ -376,6 +376,7 @@ pub fn run() {
                 batch_size: 50,
                 flush_interval_secs: 30,
                 app_data_dir: telemetry_data_dir,
+                privacy_mode: None,
             };
             let telemetry_collector = TelemetryCollector::new(telemetry_config);
             let analytics_metrics = AnalyticsMetricsCollector::new();
@@ -2096,6 +2097,7 @@ pub fn run() {
             crate::sys::commands::get_template_categories,
 
             crate::sys::commands::analytics_track_event,
+            crate::sys::commands::analytics_set_privacy_mode,
             crate::sys::commands::analytics_flush_events,
             crate::sys::commands::analytics_get_session_id,
             crate::sys::commands::analytics_set_user_property,

@@ -5,6 +5,7 @@ import {
   analyticsGetSessionId,
   analyticsSetUserProperty,
   analyticsDeleteAllData,
+  analyticsSetPrivacyMode,
 } from '../api/analytics';
 import { useAppModeStore } from '../stores/appModeStore';
 import {
@@ -34,6 +35,7 @@ class AnalyticsService {
   private isOnline: boolean = true;
   private privacyConsent?: PrivacyConsent;
   private initialized: boolean = false;
+  private unsubscribeModeChange?: () => void;
 
   constructor() {
     this.sessionId = uuidv4();
@@ -58,6 +60,7 @@ class AnalyticsService {
    */
   public cleanup(): void {
     this.stopFlushTimer();
+    this.unsubscribeModeChange?.();
     window.removeEventListener('online', this._handleOnline);
     window.removeEventListener('offline', this._handleOffline);
     window.removeEventListener('beforeunload', this._handleBeforeUnload);
@@ -91,6 +94,15 @@ class AnalyticsService {
       if (backendSessionId) {
         this.sessionId = backendSessionId;
       }
+
+      // TRUST-BOUNDARY: push current mode to Rust collector on startup, then
+      // keep it in sync whenever the user switches modes.
+      const syncMode = (mode: string) => analyticsSetPrivacyMode(mode);
+      void syncMode(useAppModeStore.getState().mode);
+      this.unsubscribeModeChange = useAppModeStore.subscribe(
+        (state) => state.mode,
+        (mode) => void syncMode(mode),
+      );
 
       window.addEventListener('online', this._handleOnline);
 

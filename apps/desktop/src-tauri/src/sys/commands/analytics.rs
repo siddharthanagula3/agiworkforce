@@ -122,6 +122,19 @@ pub async fn get_all_feature_flags(
     Ok(settings.feature_flags.clone())
 }
 
+/// TRUST-BOUNDARY: Called by the TS analytics service whenever AppMode changes.
+/// Mirrors the local-mode gate already enforced in analytics.ts so that no
+/// future Rust call-site can bypass the TS layer check.
+#[tauri::command]
+pub async fn analytics_set_privacy_mode(
+    mode: String,
+    state: State<'_, TelemetryState>,
+) -> Result<(), String> {
+    let mut collector = state.collector.write().await;
+    collector.set_privacy_mode(Some(mode));
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn analytics_delete_all_data(state: State<'_, TelemetryState>) -> Result<(), String> {
     let collector = state.collector.read().await;
@@ -606,6 +619,7 @@ mod tests {
             batch_size: 10,
             flush_interval_secs: 30,
             app_data_dir: None,
+            privacy_mode: None,
         };
         let collector = TelemetryCollector::new(config);
         let metrics_collector = AnalyticsMetricsCollector::new();
