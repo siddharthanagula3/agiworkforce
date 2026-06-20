@@ -229,3 +229,8 @@ Cross.toml
 
 # Transient gate battery logs
 reports/audit/gate-baseline/
+
+# Workspace-generated audit artifacts (authoritative findings in AUDIT_FINDINGS.md)
+AUDIT_PARTS/
+AUDIT_BATCHES/
+AUDIT_MANIFEST.txt
