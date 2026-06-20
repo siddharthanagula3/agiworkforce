@@ -27,7 +27,7 @@ import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useUnifiedAuthStore } from '../stores/auth';
-import { useAppModeStore } from '../stores/appModeStore';
+import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
 import { useChatStore as useDesktopChatStore, uuidToDbId } from '../stores/chat/chatStore';
 
 // ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@ export class TauriRuntime implements ChatRuntime {
   private getCurrentUserId(): string {
     const authenticatedUserId = useUnifiedAuthStore.getState().user?.id;
     if (authenticatedUserId) return authenticatedUserId;
-    return useAppModeStore.getState().mode === 'local' ? LOCAL_DESKTOP_USER_ID : '';
+    return selectPrivacyMode(useAppModeStore.getState()) === 'local' ? LOCAL_DESKTOP_USER_ID : '';
   }
 
   private async ensureBackendConversation(

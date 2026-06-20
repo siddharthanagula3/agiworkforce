@@ -144,11 +144,27 @@ export const selectHasOnboarded = (state: AppModeState): boolean => state.hasOnb
  * full trust boundary (local / byok / managed) rather than the simplified
  * local/cloud binary.
  *
- * Current mapping:
- *   'local'  → 'local'    (device-only; no egress)
- *   'cloud'  → 'managed'  (AGI-managed compute; BYOK detection is a tracked gap
- *                          — add BYOK key-presence check here once the model
- *                          store exposes isByokConfigured())
+ * Mapping:
+ *   'local'  → 'local'    (device-only; no egress at any layer)
+ *   'cloud'  + BYOK keys configured → 'byok'   (user-supplied keys, no AGI compute)
+ *   'cloud'  + no BYOK keys         → 'managed' (AGI-managed compute — waitlist-gated)
+ *
+ * BYOK detection: reads llmConfig.providerMode from settingsStore. When the
+ * user has selected external provider keys ('cloud' providerMode in settings),
+ * that is BYOK. Managed-cloud will add an explicit auth signal when it launches.
  */
-export const selectPrivacyMode = (state: AppModeState): PrivacyMode =>
-  state.mode === 'local' ? 'local' : 'managed';
+export const selectPrivacyMode = (state: AppModeState): PrivacyMode => {
+  if (state.mode === 'local') return 'local';
+  // Lazy import avoids circular dependency; getState() is safe in selectors.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useSettingsStore } = require('./settingsStore') as {
+      useSettingsStore: { getState: () => { llmConfig: { providerMode: string } } };
+    };
+    const providerMode = useSettingsStore.getState().llmConfig.providerMode;
+    if (providerMode === 'cloud') return 'byok';
+  } catch {
+    // settingsStore unavailable (SSR, test env); fall through to managed.
+  }
+  return 'managed';
+};

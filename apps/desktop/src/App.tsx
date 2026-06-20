@@ -66,7 +66,7 @@ import {
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
 import useErrorStore from './stores/ui';
-import { useAppModeStore } from './stores/appModeStore';
+import { useAppModeStore, selectPrivacyMode } from './stores/appModeStore';
 import { useSettingsDialogStore } from './stores/settingsStore';
 import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
 import { useVoiceInputStore } from './stores/settingsStore';
@@ -246,7 +246,7 @@ const DesktopShell = () => {
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
   const accessToken = useAuthStore((state) => state.accessToken);
   const appMode = useAppModeStore((s) => s.mode);
-  const isCloudMode = appMode === 'cloud';
+  const isCloudMode = useAppModeStore((s) => selectPrivacyMode(s) !== 'local');
   const hasCloudSession = isAuthenticated && !!accessToken;
 
   // Hard 8 s boot timeout: if sessionValidated is still false (for example,
@@ -531,7 +531,7 @@ const DesktopShell = () => {
 
               // Forward cloud credentials only in Managed Cloud mode. Local and
               // BYOK chat must not wait on or hydrate managed auth.
-              if (useAppModeStore.getState().mode !== 'cloud') {
+              if (selectPrivacyMode(useAppModeStore.getState()) !== 'managed') {
                 return;
               }
 
@@ -602,8 +602,9 @@ const DesktopShell = () => {
     async function initModels() {
       const currentMode = appMode;
       try {
-        // Enable ManagedCloud provider if user is authenticated (subscription-based models)
-        if (currentMode === 'cloud') {
+        // Enable ManagedCloud provider only for managed-cloud tier (subscription-based models).
+        // BYOK users supply their own keys — managed cloud must never be enabled for them.
+        if (selectPrivacyMode(useAppModeStore.getState()) === 'managed') {
           await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
         }
 
@@ -992,7 +993,7 @@ const DesktopShell = () => {
       useAppModeStore.getState().setOnline(false);
 
       // Show toast warning if user is in Cloud Mode
-      const isCloudMode = useAppModeStore.getState().mode === 'cloud';
+      const isCloudMode = selectPrivacyMode(useAppModeStore.getState()) !== 'local';
       if (isCloudMode) {
         toast.error("You're offline. Switch to Local Mode or reconnect.");
       }
@@ -1120,7 +1121,7 @@ const DesktopShell = () => {
         try {
           const { selectedModel, selectedProvider, selectModel } = useModelStore.getState();
           if (
-            useAppModeStore.getState().mode === 'cloud' &&
+            selectPrivacyMode(useAppModeStore.getState()) !== 'local' &&
             model &&
             (selectedModel !== model || selectedProvider !== 'managed_cloud')
           ) {
@@ -1635,7 +1636,7 @@ const App = () => {
           await useAccountStore.getState().syncWithBackend();
         } else if (
           isTauri &&
-          useAppModeStore.getState().mode === 'local' &&
+          selectPrivacyMode(useAppModeStore.getState()) === 'local' &&
           !useAuthStore.getState().accessToken
         ) {
           // W2a-PRO-00A: local-only users have no cloud session — synthesize a
