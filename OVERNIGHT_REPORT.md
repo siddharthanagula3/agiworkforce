@@ -223,6 +223,37 @@ These items were audited, verified, and are ready to implement, but each has irr
 
 ---
 
+---
+
+## Session Update — 2026-06-20 (follow-on session)
+
+### Full Test Suite — Verified Clean
+
+| Gate                                | Result                                   |
+| ----------------------------------- | ---------------------------------------- |
+| `pnpm check:agent-context`          | ✅ PASS                                  |
+| `pnpm typecheck:all` (all packages) | ✅ PASS (0 errors, after 2 mobile fixes) |
+| `cargo check --workspace`           | ✅ PASS                                  |
+| Desktop vitest (155 files)          | ✅ 1803 passed, 1 skipped                |
+| Web vitest (226 files)              | ✅ 3867 passed                           |
+
+### Fixes Applied
+
+- **`apps/mobile/app/(app)/billing/index.tsx`**: removed stale `'hobby'` and `'pro_plus'` tier configs (not in `BillingPlanTier`); updated features to reflect mobile privacy model (Local = on-device only ≤5B models, no sync; Pro/Max = cloud + sync of chats/projects/memory)
+- **`apps/mobile/src/features/model-picker/tierGuard.ts`**: removed dead `case 'hobby'` and `case 'pro_plus'` branches; added `case 'team': return 'pro'` for exhaustiveness; lowered `PROVIDER_SWITCH_MIN_TIER` from `'pro_plus'` to `'pro'`
+
+### Product Clarification Applied
+
+Mobile privacy model confirmed: Local/free = privacy mode, local models ≤5B params, local storage only. Pro/Max subscription adds cloud model access + sync across devices (chats, projects, memory). Desktop/CLI/VS Code support Local + BYOK + Subscription.
+
+### Infrastructure Completed
+
+- Stripe webhook: end-to-end verified (POST /api/stripe-webhook 200 OK)
+- 11 stale Vercel env vars removed (STRIPE*PRICE_PRO_PLUS*\_, HOBBY\_\_, VITE*\*, SUPABASE*\*, VERCEL_OIDC_TOKEN)
+- DATABASE_URL added to apps/web/.env.local
+
+---
+
 ## How to Resume
 
 ```bash
