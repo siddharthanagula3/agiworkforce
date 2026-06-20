@@ -9,6 +9,7 @@ import {
   upgradeToHobbyPlan,
   upgradeToProPlan,
   upgradeToMaxPlan,
+  upgradePlanMidCycle,
   contactEnterpriseSales,
   openBillingPortal,
   isStripeConfigured,
@@ -170,6 +171,10 @@ const BillingPage: React.FC = () => {
     };
   }, [searchParams, user, invalidateBillingQueries]);
 
+  const currentPlan = normalizePlan(billing?.plan);
+  const hasActivePaidPlan =
+    !!billing && currentPlan !== 'free' && ['active', 'trialing'].includes(billing.status ?? '');
+
   const handleUpgrade = async (
     plan: 'hobby' | 'pro' | 'max' | 'enterprise',
     period: 'monthly' | 'yearly' = 'monthly',
@@ -188,6 +193,36 @@ const BillingPage: React.FC = () => {
     }
 
     try {
+      if (plan === 'enterprise') {
+        await contactEnterpriseSales({
+          userId: user.id,
+          userEmail: user.email || '',
+          userName: (user.user_metadata?.['full_name'] as string) || user.email || '',
+        });
+        return;
+      }
+
+      // Mid-cycle upgrade: active subscriber upgrading to a higher tier.
+      // Uses credit-based proration — unused platform credits offset the next invoice.
+      if (hasActivePaidPlan) {
+        const toastId = toast.loading('Upgrading your plan...');
+        try {
+          const result = await upgradePlanMidCycle({ plan, billingInterval: period });
+          toast.dismiss(toastId);
+          const creditMsg =
+            parseFloat(result.creditAppliedUsd) > 0
+              ? ` $${result.creditAppliedUsd} credit applied to your next invoice.`
+              : '';
+          toast.success(`Upgraded to ${plan.charAt(0).toUpperCase() + plan.slice(1)}!${creditMsg}`);
+          invalidateBillingQueries();
+        } catch (err) {
+          toast.dismiss(toastId);
+          throw err;
+        }
+        return;
+      }
+
+      // New subscriber: route through Stripe Checkout.
       if (plan === 'hobby') {
         toast.loading('Redirecting to checkout...');
         await upgradeToHobbyPlan({
@@ -208,12 +243,6 @@ const BillingPage: React.FC = () => {
           userId: user.id,
           userEmail: user.email || '',
           billingPeriod: period,
-        });
-      } else if (plan === 'enterprise') {
-        await contactEnterpriseSales({
-          userId: user.id,
-          userEmail: user.email || '',
-          userName: (user.user_metadata?.['full_name'] as string) || user.email || '',
         });
       }
     } catch (err) {

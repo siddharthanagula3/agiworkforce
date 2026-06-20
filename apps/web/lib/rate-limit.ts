@@ -107,6 +107,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 10 portal requests per minute
     failClosed: false,
   },
+  upgrade: {
+    limit: 5,
+    window: '1 m', // 5 mid-cycle upgrade requests per minute
+    failClosed: false,
+  },
   'health-check': {
     limit: 30,
     window: '1 m', // 30 requests per minute to prevent enumeration

@@ -8,7 +8,7 @@ import {
   getProviderDefaultModel,
   getModelMetadataById,
 } from '@agiworkforce/types';
-import { useAppModeStore } from '../../stores/appModeStore';
+import { useAppModeStore, selectPrivacyMode } from '../../stores/appModeStore';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 
 // ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
   const thinkingEnabled = useChatModelStore((s) => s.thinkingEnabled);
   const toggleThinking = useChatModelStore((s) => s.toggleThinking);
   const storeModels = useChatModelStore((s) => s.models);
-  const appMode = useAppModeStore((s) => s.mode);
+  const isLocalOrByok = useAppModeStore((s) => selectPrivacyMode(s) !== 'managed');
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
   const [moreOpen, setMoreOpen] = useState(false);
@@ -153,7 +153,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
     );
   });
 
-  if (appMode === 'local') {
+  if (isLocalOrByok) {
     return (
       <div
         ref={ref}

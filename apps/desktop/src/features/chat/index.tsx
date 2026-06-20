@@ -123,7 +123,7 @@ import { RiskConfirmationDialog, useRiskConfirmation } from './RiskConfirmationD
 import { BackgroundTaskIndicator } from '@/features/background-tasks';
 import { PlanPreview } from '@/features/planning/PlanPreview';
 import { usePlanningStore, selectPlanningOpen } from '../../stores/planningStore';
-import { useAppModeStore } from '../../stores/appModeStore';
+import { useAppModeStore, selectPrivacyMode } from '../../stores/appModeStore';
 import { useTauriStreamListeners } from './useTauriStreamListeners';
 import { PromptSuggestionsDropdown } from './PromptSuggestionsDropdown';
 import { PromptSuggestions } from './PromptSuggestions';
@@ -1217,7 +1217,7 @@ export const UnifiedAgenticChat: React.FC<{
             content,
             userId,
             conversationId:
-              useAppModeStore.getState().mode === 'cloud'
+              selectPrivacyMode(useAppModeStore.getState()) !== 'local'
                 ? (useUnifiedChatStore.getState().activeConversationId ?? undefined)
                 : conversationDbId,
             attachments: enrichedOptions.attachments?.map((att) => ({
@@ -1246,7 +1246,7 @@ export const UnifiedAgenticChat: React.FC<{
             temperature: useSettingsStore.getState().llmConfig?.temperature,
             maxOutputTokens: useSettingsStore.getState().llmConfig?.maxTokens,
             isExplicitModelSelection,
-            preferCloudCredits: useAppModeStore.getState().mode === 'cloud',
+            preferCloudCredits: selectPrivacyMode(useAppModeStore.getState()) === 'managed',
             frontendMessageId: assistantMessageId, // Pass frontend message ID for event coordination
             customInstructions: mergedCustomInstructions || undefined, // Include merged custom instructions
             autoInjectSkills: useSettingsStore.getState().chatPreferences.autoInjectSkills ?? true,

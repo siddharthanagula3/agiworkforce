@@ -11,7 +11,7 @@ import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
 import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
-import { useAppModeStore } from '../appModeStore';
+import { useAppModeStore, selectPrivacyMode } from '../appModeStore';
 import { useUnifiedAuthStore } from '../auth';
 import { useModelStore } from '../modelStore';
 import { registerChatStoreStateReader } from './chatStoreRef';
@@ -64,7 +64,7 @@ export type {
 } from './types';
 
 function isCloudMode(): boolean {
-  return useAppModeStore.getState().mode === 'cloud';
+  return selectPrivacyMode(useAppModeStore.getState()) !== 'local';
 }
 
 interface BackendConversation {

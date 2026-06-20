@@ -7,7 +7,7 @@ import {
   analyticsDeleteAllData,
   analyticsSetPrivacyMode,
 } from '../api/analytics';
-import { useAppModeStore } from '../stores/appModeStore';
+import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
 import {
   AnalyticsConfig,
   AnalyticsEvent,
@@ -151,7 +151,7 @@ class AnalyticsService {
   public track(eventName: EventName, properties: Record<string, unknown> = {}) {
     // TRUST-BOUNDARY: never emit telemetry in local mode regardless of consent
     // toggle. Consent controls cloud-mode opt-in; local mode is always silent.
-    if (useAppModeStore.getState().mode === 'local') {
+    if (selectPrivacyMode(useAppModeStore.getState()) === 'local') {
       return;
     }
     if (!this.config.enabled) {
