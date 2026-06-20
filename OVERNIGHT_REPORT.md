@@ -2,7 +2,80 @@
 
 **Branch:** `chore/monorepo-cleanup`
 **Session start:** Baseline captures, then targeted safe fixes.
-**Session end:** 2 fixes committed, 6 hard-stop items queued for user sign-off.
+**Session end (original):** 2 fixes committed, 6 hard-stop items queued for user sign-off.
+
+---
+
+## Phase 1–4 Execution Summary — 2026-06-20 (continuation)
+
+### Phase 1: AppMode → PrivacyMode Migration (COMPLETE)
+
+All binary `mode === 'cloud'/'local'` consumers across the desktop surface replaced with `selectPrivacyMode`-based checks. Zero binary mode comparisons remain outside `appModeStore.ts`.
+
+**Files migrated:**
+
+- `App.tsx` — 4 call sites (offline toast, managed-cloud auth forward, model selector sync, local user synthesis, `llm_ensure_managed_cloud` init)
+- `features/chat/index.tsx` — `preferCloudCredits` (now `=== 'managed'`), conversation ID routing (now `!== 'local'`)
+- `features/settings/ModelSelector.tsx` — managed models shown only for `=== 'managed'`
+- `features/v3/ModelPopover.tsx` — local/byok section shown for `!== 'managed'` (BYOK users now see their models)
+- `runtime/TauriRuntime.ts` — synthetic local user ID check
+- `services/analytics.ts` — telemetry gate
+- `stores/chat/chatStore.ts` — `isCloudMode()` helper
+- `stores/appModeStore.ts` — `selectPrivacyMode` selector added
+
+**Web billing (shipped alongside Phase 1):**
+
+- `apps/web/app/api/upgrade/route.ts` — credit-based proration upgrade endpoint
+- `apps/web/features/billing/services/stripe-payments.ts` — `upgradePlanMidCycle()`
+- `apps/web/features/billing/pages/BillingDashboard.tsx` — mid-cycle routing
+- `apps/web/lib/rate-limit.ts` — `upgrade` rate-limit key
+
+**Gate results:** `pnpm check:agent-context` ✅ · `pnpm typecheck:all` ✅ · `cargo check --workspace` ✅
+
+---
+
+### Phase 2: Trust-Boundary Stress Tests (COMPLETE)
+
+24 invariant tests in `src/__tests__/stores/privacyBoundary.test.ts` covering:
+
+- `selectPrivacyMode` local short-circuit
+- BYOK detection logic (`providerMode === 'cloud'`)
+- All 8 gate functions (preferCloudCredits, llm_ensure_managed_cloud, credential forward, telemetry, auth gate, managed model selector, local/byok popover, conversation routing)
+- Store state transitions
+- Privacy mode completeness (exhaustive tier coverage)
+
+Analytics test mock updated to include `selectPrivacyMode` and `useAppModeStore.subscribe`.
+
+**Desktop test suite:** 155/155 files · 1803/1804 tests · 1 intentional skip
+
+---
+
+### Phase 3: Egress Isolation Verification (DOCUMENTED)
+
+Physical network egress testing (injecting a blocking proxy into Rust and verifying zero bytes reach Neon/Vercel from local mode) requires a running Tauri binary with a proxy harness — not automatable headlessly. The trust boundary is enforced at the code level: `selectPrivacyMode === 'local'` gates every cloud call before any network request can be initiated. The invariant tests in Phase 2 cover this contractually.
+
+---
+
+### Phase 4: Full Suite Gates (PASSED)
+
+| Gate                                       | Result |
+| ------------------------------------------ | ------ |
+| `pnpm check:agent-context`                 | ✅     |
+| `pnpm typecheck:all`                       | ✅     |
+| `cargo check --workspace`                  | ✅     |
+| Desktop test suite (155 files, 1803 tests) | ✅     |
+| Privacy boundary stress tests (24 tests)   | ✅     |
+
+---
+
+### Stripe Test Mode (User Action Pending)
+
+User requested switching billing to Stripe test mode. No code changes required — all keys are environment variables. Update in `.env.local` and Vercel:
+
+- `STRIPE_SECRET_KEY` → `sk_test_...`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` → `pk_test_...`
+- `STRIPE_WEBHOOK_SECRET` → local signing secret from `stripe listen --forward-to localhost:3000/api/stripe-webhook`
+- All `STRIPE_PRICE_*` vars → test mode price IDs from `stripe prices list`
 
 ---
 
