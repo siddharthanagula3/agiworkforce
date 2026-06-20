@@ -16,7 +16,11 @@ vi.mock('uuid', () => ({
 vi.mock('../../stores/appModeStore', () => ({
   useAppModeStore: {
     getState: vi.fn(() => ({ mode: 'cloud' as const })),
+    subscribe: vi.fn(() => () => {}),
   },
+  selectPrivacyMode: vi.fn((state: { mode: string }) =>
+    state.mode === 'local' ? 'local' : 'managed',
+  ),
 }));
 
 describe('AnalyticsService', () => {
