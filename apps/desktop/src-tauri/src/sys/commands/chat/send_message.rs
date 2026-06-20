@@ -25,13 +25,22 @@ pub async fn chat_send_message(
 ) -> Result<ChatSendMessageResponse, String> {
     let correlation_id = uuid::Uuid::new_v4().to_string();
 
+    // TRUST-BOUNDARY: active_mode="local" must prevent cloud sync regardless of
+    // chat_storage_mode. A user with storage_mode="cloud" but active_mode="local"
+    // must not have their local chats synced to Neon (mirrors the is_local_mode
+    // invariant enforced in send_message_setup.rs:745).
     let cloud_sync_enabled = {
-        let settings = settings_state.settings.lock().await;
-        settings
-            .chat_preferences
-            .as_ref()
-            .map(|prefs| prefs.chat_storage_mode.as_str() == "cloud")
-            .unwrap_or(false)
+        let active_mode_is_local = request.active_mode.as_deref() == Some("local");
+        if active_mode_is_local {
+            false
+        } else {
+            let settings = settings_state.settings.lock().await;
+            settings
+                .chat_preferences
+                .as_ref()
+                .map(|prefs| prefs.chat_storage_mode.as_str() == "cloud")
+                .unwrap_or(false)
+        }
     };
     let auto_save_memories = {
         let settings = settings_state.settings.lock().await;
