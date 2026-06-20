@@ -4,28 +4,34 @@
  * Mobile's authorization surface for chat is the tier gate that governs
  * mid-thread provider switching (features/model-picker/tierGuard). It maps the
  * persisted BillingPlanTier to the canonical UIPlanTier and enforces a
- * Pro+ minimum for cross-provider switches. These tests exercise the REAL
+ * Pro minimum for cross-provider switches (gate lowered from pro_plus when
+ * pro_plus tier was removed, 2026-06-20). These tests exercise the REAL
  * guard so an authz regression (e.g. a free user gaining cross-provider
  * switching) fails the build.
  */
 import { guardProviderSwitch, mapBillingPlanToUIPlan } from '@/src/features/model-picker/tierGuard';
 
 describe('L1 Security - Auth & Authorization', () => {
-  test('SECURITY: free/local tier cannot switch providers mid-thread', () => {
+  test('SECURITY: free/local/byok tiers cannot switch providers mid-thread', () => {
     expect(guardProviderSwitch('openai', 'anthropic', 'free')).toBe('upgrade-required');
     expect(guardProviderSwitch('openai', 'anthropic', 'local-only')).toBe('upgrade-required');
-    expect(guardProviderSwitch('openai', 'anthropic', 'hobby')).toBe('upgrade-required');
+    expect(guardProviderSwitch('openai', 'anthropic', 'byok')).toBe('upgrade-required');
   });
 
-  test('SECURITY: Pro+ and above are authorized for cross-provider switch', () => {
-    expect(guardProviderSwitch('openai', 'anthropic', 'pro_plus')).toBe('allow');
+  test('SECURITY: Pro and above are authorized for cross-provider switch', () => {
+    expect(guardProviderSwitch('openai', 'anthropic', 'pro')).toBe('allow');
+    expect(guardProviderSwitch('openai', 'anthropic', 'team')).toBe('allow');
     expect(guardProviderSwitch('openai', 'anthropic', 'max')).toBe('allow');
     expect(guardProviderSwitch('openai', 'anthropic', 'enterprise')).toBe('allow');
   });
 
-  test('SECURITY: pro tier is still below the cross-provider gate', () => {
-    // Pro maps to pro, which is below pro_plus minimum.
-    expect(guardProviderSwitch('openai', 'anthropic', 'pro')).toBe('upgrade-required');
+  test('SECURITY: no privilege escalation from removed tiers (hobby/pro_plus map to local)', () => {
+    // Stale persisted values from old installs must not grant elevated access.
+    // mapBillingPlanToUIPlan falls through to default → local for unknown values.
+    const staleTiers = ['hobby', 'pro_plus'] as Parameters<typeof guardProviderSwitch>[2][];
+    for (const t of staleTiers) {
+      expect(guardProviderSwitch('openai', 'anthropic', t)).toBe('upgrade-required');
+    }
   });
 
   test('SECURITY: legacy byok tier is treated as local for authz (no privilege escalation)', () => {
