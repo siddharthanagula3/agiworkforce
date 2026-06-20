@@ -119,10 +119,8 @@ export function MessageList({
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
   const typingFooter = useCallback(() => {
-    const lastMsg = messages[messages.length - 1];
-    if (!lastMsg?.isStreaming || lastMsg.content.trim()) return null;
-    return <TypingIndicator />;
-  }, [messages]);
+    return null;
+  }, []);
 
   if (messages.length === 0) {
     return <ChatEmptyState onPairDesktop={onPairDesktop} />;
