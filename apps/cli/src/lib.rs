@@ -1617,18 +1617,20 @@ pub async fn run_main() -> Result<()> {
                 allowed_origin,
                 allow_query_token,
             } => {
-                const DEFAULT_APP_SERVER_ADDR: &str = "127.0.0.1:8787";
+                // CLI app-server binds 8788 by default; Desktop occupies 8787.
+                // Override at runtime via AGI_CLI_SERVER_ADDR env var.
+                let cli_server_addr = std::env::var("AGI_CLI_SERVER_ADDR")
+                    .unwrap_or_else(|_| "127.0.0.1:8788".to_string());
                 let cfg = if listen == "stdio" {
                     app_server::AppServerConfig::default()
                 } else {
                     let addr: std::net::SocketAddr = listen
                         .trim_start_matches("ws://")
                         .parse()
-                        // SAFETY: DEFAULT_APP_SERVER_ADDR is a valid const SocketAddr
                         .unwrap_or_else(|_| {
-                            DEFAULT_APP_SERVER_ADDR
+                            cli_server_addr
                                 .parse()
-                                .expect("const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr")
+                                .expect("AGI_CLI_SERVER_ADDR (or default 127.0.0.1:8788) must be a valid SocketAddr")
                         });
                     if !allow_public_listen && !addr.ip().is_loopback() {
                         anyhow::bail!(
