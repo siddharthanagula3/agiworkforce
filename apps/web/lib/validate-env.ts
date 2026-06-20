@@ -62,13 +62,13 @@ export function validateRequiredEnvVars(): ValidationResult {
   ];
 
   // Stripe price IDs (required for checkout to work)
+  // Note: STRIPE_PRICE_MAX_YEARLY is intentionally omitted — Max is monthly-only
   const priceIdVars = [
     'STRIPE_PRICE_HOBBY_MONTHLY',
     'STRIPE_PRICE_HOBBY_YEARLY',
     'STRIPE_PRICE_PRO_MONTHLY',
     'STRIPE_PRICE_PRO_YEARLY',
     'STRIPE_PRICE_MAX_MONTHLY',
-    'STRIPE_PRICE_MAX_YEARLY',
   ];
 
   // Optional enterprise tier (warn if missing, don't error)
@@ -165,7 +165,7 @@ export function validatePriceIdConsistency(): ValidationResult {
       pro_monthly: process.env['STRIPE_PRICE_PRO_MONTHLY'],
       pro_yearly: process.env['STRIPE_PRICE_PRO_YEARLY'],
       max_monthly: process.env['STRIPE_PRICE_MAX_MONTHLY'],
-      max_yearly: process.env['STRIPE_PRICE_MAX_YEARLY'],
+      max_yearly: undefined, // Max is monthly-only
     };
 
     // Log the mappings for debugging

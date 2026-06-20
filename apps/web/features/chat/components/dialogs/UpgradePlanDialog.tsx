@@ -96,7 +96,7 @@ const PLAN_CARDS: PlanCard[] = [
     id: 'max',
     name: BILLING_PLAN_PRICING.max.label,
     monthlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd,
-    yearlyPrice: BILLING_PLAN_PRICING.max.yearlyPriceUsd,
+    yearlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd * 12, // monthly-only plan; no annual discount
     tagline: 'Highest capacity for intensive multi-agent workloads.',
     waitlist: true,
     features: [

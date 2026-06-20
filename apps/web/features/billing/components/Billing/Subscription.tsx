@@ -367,7 +367,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                 </Card>
               )}
 
-              {/* Max Plan */}
+              {/* Max Plan — monthly billing only */}
               <Card className="border-2 border-secondary">
                 <CardHeader>
                   <div className="flex items-center space-x-2">
@@ -375,29 +375,16 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                     <CardTitle>Max</CardTitle>
                   </div>
                   <div className="text-2xl font-bold">
-                    {billingPeriod === 'yearly' ? (
-                      <>
-                        <div className="text-3xl font-bold">
-                          {formatPlanPrice('max', 'yearly')}
-                          <span className="text-lg text-muted-foreground">/month</span>
-                        </div>
-                        <div className="mt-1 text-sm text-muted-foreground">
-                          Billed yearly as {formatPlanBilledAmount('max', 'yearly')}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {formatPlanPrice('max', 'monthly')}
-                        <span className="text-sm text-muted-foreground">/month</span>
-                      </>
-                    )}
+                    {formatPlanPrice('max', 'monthly')}
+                    <span className="text-sm text-muted-foreground">/month</span>
                   </div>
+                  <div className="mt-1 text-xs text-muted-foreground">Billed monthly</div>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-center space-x-2">
                       <CheckCircle className="h-4 w-4 text-success" />
-                      <span>{formatUsageBudgetLine('max', billingPeriod)}</span>
+                      <span>{formatUsageBudgetLine('max', 'monthly')}</span>
                     </li>
                     <li className="flex items-center space-x-2">
                       <CheckCircle className="h-4 w-4 text-success" />
@@ -419,7 +406,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                   <Button
                     className="mt-4 w-full"
                     variant="outline"
-                    onClick={() => onUpgrade('max', billingPeriod)}
+                    onClick={() => onUpgrade('max', 'monthly')}
                   >
                     Upgrade to Max
                     <ArrowRight className="ml-2 h-4 w-4" />
