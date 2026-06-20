@@ -296,7 +296,7 @@ export interface ModelQueryOptions {
 }
 
 export type AutoModeModelId = 'auto' | 'auto-economy' | 'auto-balanced' | 'auto-premium';
-export type ProductTier = 'free' | 'hobby' | 'pro' | 'pro_plus' | 'max' | 'enterprise';
+export type ProductTier = 'free' | 'pro' | 'max' | 'enterprise';
 export type ProviderSurface = 'managed_cloud' | 'byok' | 'local' | 'hidden';
 export type TierSurfaceMode = 'auto_only' | 'auto_plus_manual';
 export type RoutingSlot =
@@ -885,42 +885,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     messagesPerDayCap: 5,
     capBehavior: STANDARD_CAP_BEHAVIOR,
   },
-  hobby: {
-    tier: 'hobby',
-    surfacedUx: 'auto_only',
-    // Pool B: workhorse_general 80% + escalation_coding 12% + reasoning_premium 8%
-    // + image_generation (10/mo cap, 50K-token synthetic charge per image).
-    allowedSlots: [
-      'workhorse_general',
-      'escalation_coding',
-      'reasoning_premium',
-      'image_generation',
-      // Round 15-launch (2026-05-15) — voice slots reopened for Wispr-Flow
-      // style system-wide dictation. Hobby+ at v1.
-      'voice_transcription',
-      'voice_rewrite',
-    ],
-    allowedProviderSurfaces: ['managed_cloud'],
-    manualModelSelection: false,
-    allowManualSelection: false,
-    allowBrowserDom: false,
-    allowComputerUse: false,
-    allowSearch: true,
-    allowMediaGeneration: true,
-    allowImageGeneration: true,
-    allowVideoGeneration: false,
-    imageQuotaPerMonth: 10,
-    imageSyntheticTokenCost: 50_000,
-    // Hobby voice budget: 60 min/mo (Wispr-Flow positioning).
-    allowVoice: true,
-    voiceMinutesPerMonth: 60,
-    // Round 16 tool-tier ladder — Hobby gets web search + basic MCP with
-    // burn-warning UX (in-stream metadata) so users notice quota burn.
-    allowToolUse: 'web_search_with_burn_warning',
-    allowMCP: 'basic_with_burn_warning',
-    tokenCapPerMonth: 2_000_000,
-    capBehavior: STANDARD_CAP_BEHAVIOR,
-  },
   pro: {
     tier: 'pro',
     // Pro surfaces both Auto and the Advanced-mode manual picker per
@@ -969,61 +933,10 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     // Round 16 — Pro elevates tools + MCP to unlimited.
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
-    tokenCapPerMonth: 10_000_000,
-    capBehavior: STANDARD_CAP_BEHAVIOR,
-  },
-  pro_plus: {
-    tier: 'pro_plus',
-    // Pro+ surfaces both Auto and the Advanced-mode manual picker (same as Pro).
-    surfacedUx: 'auto_plus_manual',
-    // Pro+ pool = Pro pool + flagship_coding_pro_plus (Opus 4.8) +
-    // flagship_general_pro_plus (GPT-5.5) + video_generation_pro_plus (Veo 3.1).
-    // The flagship slots are gated by per-day token caps (15K/day each)
-    // enforced by assertQuota; above-cap requests fall through to Pro slots.
-    allowedSlots: [
-      'workhorse_general',
-      'general_balanced_pro',
-      'coding_premium_pro',
-      'reasoning_premium_pro',
-      'multimodal_pro',
-      'long_context_pro',
-      'flagship_coding_pro_plus',
-      'flagship_general_pro_plus',
-      'video_generation_pro_plus',
-      'image_generation',
-      'browser_dom',
-      'computer_use',
-      'computer_use_premium',
-      'search_fast',
-      'search_premium',
-      // Round 15-launch voice unlock (Pro+: 1500 min/mo).
-      'voice_transcription',
-      'voice_rewrite',
-    ],
-    allowedProviderSurfaces: ['managed_cloud', 'byok'],
-    manualModelSelection: true,
-    allowManualSelection: true,
-    allowBrowserDom: true,
-    allowComputerUse: true,
-    allowSearch: true,
-    allowMediaGeneration: true,
-    allowImageGeneration: true,
-    // Pro+ unlocks video gen (60 sec/mo cap; current video route).
-    allowVideoGeneration: true,
-    imageQuotaPerMonth: null,
-    imageSyntheticTokenCost: 50_000,
-    // Pro+ voice budget: 1500 min/mo (25 hours).
-    allowVoice: true,
-    voiceMinutesPerMonth: 1500,
-    // Pro+ unlocks Opus 4.8 + GPT-5.5 with daily-token caps. The numbers
-    // here are the canonical caps from auto-routing-spec §3 + §6.
+    tokenCapPerMonth: 20_000_000,
+    // Daily cap on manual gpt-5.5 usage — Pro gets picker access but not
+    // unlimited flagship burns (ChatGPT Plus parity: 160 msgs/3hr cap).
     flagshipDailyTokenCap: 15_000,
-    videoSecondsPerMonth: 60,
-    // Pro+ surfaces the US-only routing settings toggle (Round 14 / 15).
-    usOnlyRoutingAvailable: true,
-    allowToolUse: 'unlimited',
-    allowMCP: 'unlimited',
-    tokenCapPerMonth: 10_000_000,
     capBehavior: STANDARD_CAP_BEHAVIOR,
   },
   max: {
@@ -1083,7 +996,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowDeepResearch: true,
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
-    tokenCapPerMonth: 50_000_000,
+    tokenCapPerMonth: 100_000_000,
     capBehavior: STANDARD_CAP_BEHAVIOR,
   },
   enterprise: {
@@ -1290,13 +1203,9 @@ export function requireProviderDefaultModel(provider: Provider | string): string
 
 function normalizeProductTier(tier: string | null | undefined): ProductTier {
   switch ((tier ?? '').toLowerCase()) {
-    case 'hobby':
-      return 'hobby';
     case 'pro':
+    case 'team':
       return 'pro';
-    case 'pro_plus':
-    case 'pro+':
-      return 'pro_plus';
     case 'max':
       return 'max';
     case 'enterprise':
@@ -1642,12 +1551,12 @@ const TASK_TYPE_TO_SLOT_PRO_PLUS: ReadonlyMap<RoutingTaskType, RoutingSlot> = Ob
   ]),
 );
 
-// Selects the right task-type-to-slot map per tier. Free + Hobby use the
-// Hobby pool; Pro shares the Pro map; Pro+ uses Pro+ map with flagship
-// routing for coding/general/agentic/research; Max/Enterprise share the
-// Pro+ map (they get flagship access too, just with bigger monthly caps).
+// Selects the right task-type-to-slot map per tier. Free uses the base pool;
+// Pro shares the Pro map; Max/Enterprise use the flagship map with Opus 4.8
+// and Grok 4.3 routing; Pro gets manual picker access to gpt-5.5 but its
+// auto-routing stays on the Pro map.
 function pickTaskTypeMapForTier(tier: ProductTier): ReadonlyMap<RoutingTaskType, RoutingSlot> {
-  if (tier === 'pro_plus' || tier === 'max' || tier === 'enterprise') {
+  if (tier === 'max' || tier === 'enterprise') {
     return TASK_TYPE_TO_SLOT_PRO_PLUS;
   }
   if (tier === 'pro') {
@@ -1732,7 +1641,7 @@ export function resolveAutoModeModel(
   }
 
   if (
-    (normalizedTier === 'free' || normalizedTier === 'hobby') &&
+    normalizedTier === 'free' &&
     (normalizedMode === 'auto-balanced' || normalizedMode === 'auto-premium')
   ) {
     return resolveAutoModeModel('auto-economy', subscriptionTier);

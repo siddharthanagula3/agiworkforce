@@ -56,67 +56,11 @@ describe('TIER_POLICIES — Free tier (auto-routing-spec §1)', () => {
   });
 });
 
-describe('TIER_POLICIES — Hobby tier (auto-routing-spec §1)', () => {
-  const policy = getTierPolicy('hobby');
-
-  it('caps monthly text tokens at 2M', () => {
-    expect(policy.tokenCapPerMonth).toBe(2_000_000);
-  });
-
-  it('exposes workhorse + escalation_coding + reasoning_premium + image_generation + voice (Round 15-launch)', () => {
-    expect(policy.allowedSlots).toEqual([
-      'workhorse_general',
-      'escalation_coding',
-      'reasoning_premium',
-      'image_generation',
-      'voice_transcription',
-      'voice_rewrite',
-    ]);
-  });
-
-  it('permits image generation (10/mo) but not video', () => {
-    expect(policy.allowMediaGeneration).toBe(true);
-    expect(policy.allowImageGeneration).toBe(true);
-    expect(policy.allowVideoGeneration).toBe(false);
-    expect(policy.imageQuotaPerMonth).toBe(10);
-  });
-
-  it('charges 50K synthetic tokens per generated image', () => {
-    expect(policy.imageSyntheticTokenCost).toBe(50_000);
-  });
-
-  it('permits web search and basic MCP with burn warnings', () => {
-    expect(policy.allowToolUse).toBe('web_search_with_burn_warning');
-    expect(policy.allowMCP).toBe('basic_with_burn_warning');
-  });
-
-  it('blocks computer use and manual model selection (Auto-only tier)', () => {
-    expect(policy.allowComputerUse).toBe(false);
-    expect(policy.allowManualSelection).toBe(false);
-    expect(policy.manualModelSelection).toBe(false);
-    expect(policy.surfacedUx).toBe('auto_only');
-  });
-
-  it('unlocks Wispr-Flow-style voice (Round 15-launch 2026-05-15) — 60 min/mo cap', () => {
-    expect(policy.allowVoice).toBe(true);
-    expect(policy.voiceMinutesPerMonth).toBe(60);
-    expect(policy.allowedSlots).toContain('voice_transcription');
-    expect(policy.allowedSlots).toContain('voice_rewrite');
-  });
-
-  it('warns at 80%, downgrades at 100%, hard-caps at 150%', () => {
-    const cap = policy.capBehavior as TierCapBehavior;
-    expect(cap.warnAt).toBe(0.8);
-    expect(cap.downgradeAt).toBe(1.0);
-    expect(cap.hardCapAt).toBe(1.5);
-  });
-});
-
 describe('TIER_POLICIES — Pro tier (parallel-spinning-hedgehog §3, §4, §6)', () => {
   const policy = getTierPolicy('pro');
 
-  it('caps monthly text tokens at 10M', () => {
-    expect(policy.tokenCapPerMonth).toBe(10_000_000);
+  it('caps monthly text tokens at 20M', () => {
+    expect(policy.tokenCapPerMonth).toBe(20_000_000);
   });
 
   it('exposes Auto + manual via Advanced-mode toggle (auto_plus_manual)', () => {
@@ -234,9 +178,9 @@ describe('TIER_POLICIES — freeze guarantees (Vercel server-no-shared-module-st
 
   it('freezes each tier capBehavior object', () => {
     const free = TIER_POLICIES.free;
-    const hobby = TIER_POLICIES.hobby;
+    const pro = TIER_POLICIES.pro;
     expect(Object.isFrozen(free.capBehavior)).toBe(true);
-    expect(Object.isFrozen(hobby.capBehavior)).toBe(true);
+    expect(Object.isFrozen(pro.capBehavior)).toBe(true);
   });
 
   it('freezes the allowedSlots array on every tier so concurrent renders cannot mutate it', () => {
@@ -257,9 +201,9 @@ describe('TIER_POLICIES — freeze guarantees (Vercel server-no-shared-module-st
 
   it('throws when a caller tries to mutate the allowedSlots array', () => {
     'use strict';
-    const hobby = TIER_POLICIES.hobby;
+    const pro = TIER_POLICIES.pro;
     expect(() => {
-      (hobby.allowedSlots as string[]).push('rogue_slot');
+      (pro.allowedSlots as string[]).push('rogue_slot');
     }).toThrow();
   });
 });
@@ -270,8 +214,8 @@ describe('getTierPolicy — public getter', () => {
     expect(getTierPolicy('free')).toBe(getTierPolicy('free'));
   });
 
-  it('returns the same Hobby policy reference on repeated calls', () => {
-    expect(getTierPolicy('hobby')).toBe(TIER_POLICIES.hobby);
+  it('returns the same Pro policy reference on repeated calls', () => {
+    expect(getTierPolicy('pro')).toBe(TIER_POLICIES.pro);
   });
 
   it('falls back to Free when the tier is unknown', () => {
@@ -300,33 +244,15 @@ describe('getTierPolicy — public getter', () => {
     });
   });
 
-  it('matches the documented Hobby tier shape', () => {
+  it('unknown tier falls back to Free tier shape', () => {
     expect(getTierPolicy('hobby')).toMatchObject<Partial<TierPolicy>>({
-      tier: 'hobby',
-      tokenCapPerMonth: 2_000_000,
-      allowedSlots: [
-        'workhorse_general',
-        'escalation_coding',
-        'reasoning_premium',
-        'image_generation',
-        'voice_transcription',
-        'voice_rewrite',
-      ],
-      allowMediaGeneration: true,
-      allowImageGeneration: true,
-      allowVideoGeneration: false,
-      imageQuotaPerMonth: 10,
-      imageSyntheticTokenCost: 50_000,
-      // Round 15-launch (2026-05-15) voice unlock.
-      allowVoice: true,
-      voiceMinutesPerMonth: 60,
-      allowToolUse: 'web_search_with_burn_warning',
-      allowMCP: 'basic_with_burn_warning',
-      allowComputerUse: false,
+      tier: 'free',
+      tokenCapPerMonth: 100_000,
+      allowedSlots: ['workhorse_general'],
+      allowMediaGeneration: false,
       allowManualSelection: false,
       manualModelSelection: false,
       surfacedUx: 'auto_only',
-      capBehavior: { warnAt: 0.8, downgradeAt: 1.0, hardCapAt: 1.5 },
     });
   });
 });

@@ -47,32 +47,18 @@ const TIER_DEFS: TierDef[] = [
     caps: { opus: 0, sonnet: 0, voice: 0, image: 0, video: 0, computer: 0 },
   },
   {
-    id: 'hobby',
-    tagline: 'Managed cloud for everyday AI workflows.',
-    cta: 'Start 14-day trial',
-    ctaVariant: 'teal',
-    caps: { opus: 5, sonnet: 100, voice: 60, image: 10, video: 0, computer: 0 },
-  },
-  {
     id: 'pro',
-    tagline: 'Serious work across every modality.',
+    tagline: 'Professionals: GPT-5.5 access, 300 voice min/mo.',
     cta: 'Upgrade to Pro',
     ctaVariant: 'teal',
-    caps: { opus: 45, sonnet: -1, voice: 300, image: 50, video: 30, computer: 200 },
-  },
-  {
-    id: 'pro_plus',
-    tagline: 'Power users who push every surface.',
-    cta: 'Upgrade to Pro+',
-    ctaVariant: 'primary',
     popular: true,
-    caps: { opus: 145, sonnet: -1, voice: 1500, image: -1, video: 60, computer: 1000 },
+    caps: { opus: 0, sonnet: -1, voice: 300, image: -1, video: 0, computer: 200 },
   },
   {
     id: 'max',
-    tagline: 'No ceilings. Maximum everything.',
+    tagline: 'No ceilings. Opus 4.8 + Grok 4.3 auto-routing.',
     cta: 'Upgrade to Max',
-    ctaVariant: 'ghost',
+    ctaVariant: 'primary',
     caps: { opus: -1, sonnet: -1, voice: -1, image: -1, video: 300, computer: 2500 },
   },
 ];
@@ -270,7 +256,7 @@ export function Pricing({ currentTier = 'free', onUpgrade, onBYOK, onError }: Pr
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
+            gridTemplateColumns: 'repeat(3, 1fr)',
             gap: 12,
             marginBottom: 40,
           }}
