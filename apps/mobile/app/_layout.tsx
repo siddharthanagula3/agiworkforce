@@ -69,6 +69,7 @@ LogBox.ignoreLogs([
 function ClerkTokenBridge() {
   const { getToken, userId, isSignedIn } = useAuth();
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
+
   useEffect(() => {
     if (isSignedIn) {
       setClerkTokenGetter(
@@ -80,17 +81,25 @@ function ClerkTokenBridge() {
       setClerkTokenGetter(null, null);
       setClerkSignedIn(false);
     }
+  }, [getToken, userId, isSignedIn, setClerkSignedIn]);
+
+  useEffect(() => {
     return () => {
       setClerkTokenGetter(null, null);
-      setClerkSignedIn(false);
+      useAuthStore.getState().setClerkSignedIn(false);
     };
-  }, [getToken, userId, isSignedIn, setClerkSignedIn]);
+  }, []);
+
   return null;
 }
 
 export default function RootLayout() {
   const [isMmkvReady, setIsMmkvReady] = useState(false);
-  const { session, isLoading, isInitialized, initialize, isClerkSignedIn } = useAuthStore();
+  const session = useAuthStore((s) => s.session);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const isInitialized = useAuthStore((s) => s.isInitialized);
+  const initialize = useAuthStore((s) => s.initialize);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const authEnabled = FEATURES.auth;
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
@@ -206,8 +215,12 @@ export default function RootLayout() {
   // with no Authorization header, registering an unauthenticated
   // device record on the user's account.
   // #386: gated on isClerkSignedIn instead of the legacy session (always null).
+  // TRUST-BOUNDARY: push token registration is a cloud-account feature.
+  // Users in local-model-only mode (cloudChat disabled) should not have a
+  // device record created on the backend — push tokens carry account identity
+  // and route through Vercel/cloud infrastructure.
   useEffect(() => {
-    if (!FEATURES.auth || !isClerkSignedIn || !isInitialized) return;
+    if (!FEATURES.auth || !FEATURES.cloudChat || !isClerkSignedIn || !isInitialized) return;
 
     registerForPushNotifications();
     const removeListeners = setupNotificationListeners();
