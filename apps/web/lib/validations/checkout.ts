@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const PlanTierSchema = z.enum(['free', 'pro', 'max', 'enterprise']);
+export const PlanTierSchema = z.enum(['pro', 'max', 'team']);
 
 export const BillingIntervalSchema = z.enum(['monthly', 'yearly']);
 
