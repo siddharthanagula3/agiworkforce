@@ -449,7 +449,18 @@ function handleControlMessageInner(payload: unknown): void {
         : undefined;
       const patch = isObject(normalizedPayload['patch']) ? normalizedPayload['patch'] : undefined;
       if (agentId && patch) {
-        useAgentStore.getState().updateAgent(agentId, patch as Partial<Omit<Agent, 'id'>>);
+        // Validate the patch through parseAgent (same per-field length caps and
+        // coercion as the agents_update path) by merging it onto the existing
+        // agent. Drops updates for unknown agents or patches that fail validation,
+        // so a remote peer can't inject oversized/malformed fields via a patch.
+        const existing = useAgentStore.getState().agents.find((a) => a.id === agentId);
+        if (existing) {
+          const candidate = parseAgent({ ...existing, ...patch, id: agentId });
+          if (candidate) {
+            const { id: _id, ...validatedPatch } = candidate;
+            useAgentStore.getState().updateAgent(agentId, validatedPatch);
+          }
+        }
       }
       break;
     }

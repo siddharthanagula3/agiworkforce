@@ -68,8 +68,12 @@ export async function getDocChunksByIds(ids: string[]): Promise<DocChunk[]> {
   const db = await getDb();
   const placeholders = ids.map(() => '?').join(',');
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM doc_chunks WHERE id IN (${placeholders}) ORDER BY chunk_index ASC;`,
+    `SELECT * FROM doc_chunks WHERE id IN (${placeholders});`,
     ids,
   );
-  return rows.map(row2chunk);
+  const chunks = rows.map(row2chunk);
+  // Preserve the caller's ordering (vector-search relevance). SQLite's IN (...)
+  // does not guarantee row order, and ORDER BY chunk_index discarded the ranking.
+  const byId = new Map(chunks.map((c) => [c.id, c]));
+  return ids.map((id) => byId.get(id)).filter((c): c is DocChunk => c != null);
 }

@@ -80,9 +80,20 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         created_at: Date.now(),
       };
       await insertMemoryFact(newFact);
-      set((state) => ({
-        entries: [{ ...newFact, pinned: false }, ...state.entries],
-      }));
+      set((state) => {
+        const entry = { ...newFact, pinned: false };
+        // #28: also surface the new memory in the filtered view when a search is
+        // active and it matches — otherwise it stays invisible until the query is
+        // cleared (the screen renders filteredEntries while searching).
+        const q = state.searchQuery.trim().toLowerCase();
+        const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
+        return {
+          entries: [entry, ...state.entries],
+          filteredEntries: matchesSearch
+            ? [entry, ...state.filteredEntries]
+            : state.filteredEntries,
+        };
+      });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to add memory' });
     }

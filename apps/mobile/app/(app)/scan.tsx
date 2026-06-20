@@ -151,18 +151,20 @@ export default function ScanScreen() {
   const handleSend = useCallback(async () => {
     if (!capturedUri || isSending) return;
 
+    // Guard BEFORE creating a conversation so an empty/failed scan does not leave
+    // an orphan "Scan" conversation behind.
+    const content = promptText.trim();
+    if (!content) {
+      Alert.alert(
+        'No text to send',
+        'AGI could not extract text from this image. Retake the scan or type the text you want to use.',
+      );
+      return;
+    }
+
     setIsSending(true);
     try {
       const conversationId = await createConversation('Scan');
-      const content = promptText.trim();
-      if (!content) {
-        Alert.alert(
-          'No text to send',
-          'AGI could not extract text from this image. Retake the scan or type the text you want to use.',
-        );
-        setIsSending(false);
-        return;
-      }
 
       const now = Date.now();
       const attachment: Attachment = {

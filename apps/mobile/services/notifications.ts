@@ -15,9 +15,21 @@ import { getDeviceId } from '@/lib/deviceId';
 // the layout to push the current session into this module before any
 // notification can navigate. Notifications that fire while no session is
 // known route to /(auth)/login.
-let _currentSession: MobileAuthSession | null = null;
+// The real v1 sign-in signal is a boolean bridged from Clerk (isClerkSignedIn);
+// the legacy `useAuthStore.session` is always null in v1, so gating navigation on
+// a session object permanently routes every notification tap to /(auth)/login
+// (#386 migration miss). We track a boolean instead.
+let _isSignedIn = false;
+/** Preferred: feed the real Clerk sign-in boolean from _layout.tsx. */
+export function setSignedIn(value: boolean): void {
+  _isSignedIn = value;
+}
+/**
+ * Back-compat shim: a non-null session means signed-in. Retained so existing
+ * call sites/tests that pass a session object keep working.
+ */
 export function setCurrentSession(session: MobileAuthSession | null): void {
-  _currentSession = session;
+  _isSignedIn = session != null;
 }
 
 // --- Notification event types ---
@@ -335,7 +347,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   // Store the notification in the in-app notification center
   notificationCenterStore.add(response.notification);
 
-  if (!_currentSession) {
+  if (!_isSignedIn) {
     // No active session — defer to login screen. We do not pass arbitrary
     // notification data through to the login screen as a redirect target;
     // the user will land on the default post-login route.
@@ -409,6 +421,10 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
           console.warn('[notifications] Blocked navigation to disallowed route:', data.route);
           safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
         }
+      } else {
+        // No route provided — fall back to the chat tab. Every other type has a
+        // default destination; a routeless chat_message tap must not be a dead tap.
+        safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
       }
       break;
 
