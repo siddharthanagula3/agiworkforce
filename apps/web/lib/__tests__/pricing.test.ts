@@ -157,10 +157,10 @@ describe('PRICING_CONFIG.plans', () => {
     expect(ids).not.toContain('pro_plus');
   });
 
-  it('max plan is flagged as waitlist', async () => {
+  it('max plan is not waitlisted (enabled for checkout)', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv();
     const max = PRICING_CONFIG.plans.find((p) => p.id === 'max');
-    expect(max?.waitlist).toBe(true);
+    expect(max?.waitlist).toBeFalsy();
   });
 
   it('plans are ordered pro, max', async () => {
