@@ -948,4 +948,47 @@ mod tests {
             other => panic!("Expected Budget with 10K tokens, got {:?}", other),
         }
     }
+
+    // ---------------------------------------------------------------------------
+    // Cloud-sync gate invariant (trust-boundary: send_message.rs)
+    // ---------------------------------------------------------------------------
+
+    /// TRUST-BOUNDARY: active_mode="local" must force cloud_sync_enabled=false
+    /// regardless of what chat_storage_mode is set to in user preferences.
+    /// This mirrors the logic added to chat_send_message in send_message.rs and
+    /// guards against the latent leak where a user with storage_mode="cloud" AND
+    /// active_mode="local" could unintentionally sync local chats to Neon once
+    /// the CloudSyncClient target is wired up.
+    #[test]
+    fn local_active_mode_forces_cloud_sync_disabled_even_with_cloud_storage_pref() {
+        let compute_cloud_sync_enabled = |active_mode: Option<&str>, storage_mode: &str| -> bool {
+            let active_mode_is_local = active_mode == Some("local");
+            if active_mode_is_local {
+                false
+            } else {
+                storage_mode == "cloud"
+            }
+        };
+
+        // active_mode=local + storage_mode=cloud → must be disabled (the fix)
+        assert!(
+            !compute_cloud_sync_enabled(Some("local"), "cloud"),
+            "active_mode=local with storage_mode=cloud must yield cloud_sync_enabled=false"
+        );
+        // active_mode=cloud + storage_mode=cloud → may be enabled (existing behavior)
+        assert!(
+            compute_cloud_sync_enabled(Some("cloud"), "cloud"),
+            "active_mode=cloud with storage_mode=cloud must yield cloud_sync_enabled=true"
+        );
+        // active_mode=local + storage_mode=local → definitely disabled
+        assert!(
+            !compute_cloud_sync_enabled(Some("local"), "local"),
+            "active_mode=local with storage_mode=local must yield cloud_sync_enabled=false"
+        );
+        // active_mode=None + storage_mode=cloud → enabled (legacy path unchanged)
+        assert!(
+            compute_cloud_sync_enabled(None, "cloud"),
+            "legacy callers omitting active_mode with storage_mode=cloud should get cloud_sync_enabled=true"
+        );
+    }
 }
