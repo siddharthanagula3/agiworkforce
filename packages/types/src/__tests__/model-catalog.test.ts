@@ -100,8 +100,8 @@ describe('model catalog helpers', () => {
     expect(getProviderProbeModel('anthropic')).toBe('claude-haiku-4.5');
 
     const fallbackIds = getEconomyFallbackModels().map((entry) => entry.model);
-    expect(fallbackIds.indexOf('qwen-3.6-plus')).toBeGreaterThanOrEqual(0);
-    expect(fallbackIds.indexOf('qwen-3.6-plus')).toBeLessThan(fallbackIds.indexOf('gpt-5.4-mini'));
+    expect(fallbackIds.indexOf('qwen-3.5-plus')).toBeGreaterThanOrEqual(0);
+    expect(fallbackIds.indexOf('qwen-3.5-plus')).toBeLessThan(fallbackIds.indexOf('gpt-5.4-mini'));
     expect(fallbackIds).toContain('gpt-5.4-mini');
     expect(fallbackIds).not.toContain('gpt-5.4-nano');
 

@@ -486,14 +486,14 @@
       },
       "modelPrefixes": ["nvidia/", "meta/", "mistralai/"],
       "aliases": ["nvidia_nim", "nvidia-nim", "nim"],
-      "defaultModel": "nvidia/llama-3.3-nemotron-super-49b-v1",
+      "defaultModel": "nvidia/nemotron-3-super-120b-a12b",
       "taskRouting": {
-        "fast_completion": "nvidia/llama-3.1-nemotron-nano-8b-v1",
-        "code_generation": "nvidia/llama-3.3-nemotron-super-49b-v1",
-        "complex_reasoning": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-        "chat": "nvidia/llama-3.3-nemotron-super-49b-v1",
-        "vision": "nvidia/llama-3.3-nemotron-super-49b-v1",
-        "long_context": "nvidia/llama-3.1-nemotron-ultra-253b-v1"
+        "fast_completion": "nvidia/nemotron-3-nano-30b-a3b",
+        "code_generation": "nvidia/nemotron-3-super-120b-a12b",
+        "complex_reasoning": "nvidia/nemotron-3-ultra-550b-a55b",
+        "chat": "nvidia/nemotron-3-super-120b-a12b",
+        "vision": "nvidia/nemotron-3-super-120b-a12b",
+        "long_context": "nvidia/nemotron-3-ultra-550b-a55b"
       },
       "canonicalization": {}
     },
@@ -725,7 +725,9 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks"],
-      "costOverride": { "cached_input": 0.3 },
+      "costOverride": {
+        "cached_input": 0.3
+      },
       "deprecation_date": null
     },
     "claude-haiku-4.5": {
@@ -743,7 +745,9 @@
         "High Volume",
         "Cost-Sensitive"
       ],
-      "costOverride": { "cached_input": 0.1 },
+      "costOverride": {
+        "cached_input": 0.1
+      },
       "deprecation_date": null
     },
     "gemini-3.1-pro-preview": {
@@ -756,7 +760,9 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
-      "costOverride": { "cached_input": 0.2 },
+      "costOverride": {
+        "cached_input": 0.2
+      },
       "deprecation_date": null
     },
     "gemini-3.1-flash-lite": {
@@ -769,7 +775,9 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Ultra-Fast Inference", "Speed", "Cost-Sensitive", "Long Context"],
-      "costOverride": { "cached_input": 0.025 },
+      "costOverride": {
+        "cached_input": 0.025
+      },
       "deprecation_date": null
     },
     "gemini-3.1-flash-image": {
@@ -849,57 +857,47 @@
     },
     "qwen-max": {
       "id": "qwen-max",
-      "apiModelId": "qwen-max",
+      "apiModelId": "qwen3-max",
       "name": "Qwen Max",
       "provider": "qwen",
       "modelType": "reasoning",
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Complex Reasoning", "Multilingual", "Research"],
-      "deprecation_date": null
-    },
-    "qwen-3.6-plus": {
-      "id": "qwen-3.6-plus",
-      "apiModelId": "qwen3.6-plus",
-      "name": "Qwen 3.6 Plus",
-      "provider": "qwen",
-      "modelType": "multimodal",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": [
-        "Multilingual",
-        "Multimodal",
-        "Long Context (1M)",
-        "Cost-Effective",
-        "Agent Tasks"
-      ],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "inputCost": 1.2,
+      "outputCost": 6.0,
+      "contextWindow": 1000000
     },
     "qwen-flash": {
       "id": "qwen-flash",
-      "apiModelId": "qwen-flash",
+      "apiModelId": "qwen3.5-flash",
       "name": "Qwen Flash",
       "provider": "qwen",
       "modelType": "chat",
       "quality": "fair",
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual", "Long Context"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "inputCost": 0.1,
+      "outputCost": 0.4
     },
     "qwen-turbo": {
       "id": "qwen-turbo",
-      "apiModelId": "qwen-turbo",
+      "apiModelId": "qwen3.5-flash",
       "name": "Qwen Turbo",
       "provider": "qwen",
       "modelType": "chat",
       "quality": "fair",
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual", "Long Context"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "status": "deprecated",
+      "deprecated": true
     },
     "qwen-coder-flash": {
       "id": "qwen-coder-flash",
-      "apiModelId": "qwen-coder-flash",
+      "apiModelId": "qwen3-coder-flash",
       "name": "Qwen Coder Flash",
       "provider": "qwen",
       "modelType": "code",
@@ -938,7 +936,7 @@
     },
     "qwen-coder-plus": {
       "id": "qwen-coder-plus",
-      "apiModelId": "qwen-coder-plus",
+      "apiModelId": "qwen3-coder-plus",
       "name": "Qwen Coder Plus",
       "provider": "qwen",
       "modelType": "code",
@@ -1097,7 +1095,8 @@
         "Open-Weight Alternative",
         "Chinese Language"
       ],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "contextWindow": 1000000
     },
     "sonar": {
       "id": "sonar",
@@ -1224,7 +1223,7 @@
       "bestFor": ["Quick Images", "High Volume"],
       "deprecation_date": null,
       "imagePerImageCost": 0.02,
-      "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot.",
+      "pricingNote": "Fast variant of Imagen 4 \u2014 $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md \u00a74 Pool B image slot.",
       "costOverride": {
         "inputCost": 0,
         "outputCost": 20
@@ -1543,102 +1542,6 @@
       "speedOverride": "fast",
       "releasedOverride": "September 2022"
     },
-    "nvidia/llama-3.1-nemotron-ultra-253b-v1": {
-      "id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-      "apiModelId": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
-      "name": "Llama Nemotron Ultra 253B",
-      "provider": "nvidia_nim",
-      "modelType": "chat",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Complex Reasoning", "Agentic Tasks", "Research"],
-      "deprecation_date": null,
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 0
-      },
-      "contextOverride": 131072,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speedOverride": "slow",
-      "releasedOverride": "2025"
-    },
-    "nvidia/llama-3.3-nemotron-super-49b-v1": {
-      "id": "nvidia/llama-3.3-nemotron-super-49b-v1",
-      "apiModelId": "nvidia/llama-3.3-nemotron-super-49b-v1",
-      "name": "Llama Nemotron Super 49B",
-      "provider": "nvidia_nim",
-      "modelType": "chat",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Agentic Tasks", "Tool Use", "Coding"],
-      "deprecation_date": null,
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 0
-      },
-      "contextOverride": 131072,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "2025"
-    },
-    "nvidia/llama-3.1-nemotron-nano-8b-v1": {
-      "id": "nvidia/llama-3.1-nemotron-nano-8b-v1",
-      "apiModelId": "nvidia/llama-3.1-nemotron-nano-8b-v1",
-      "name": "Llama Nemotron Nano 8B",
-      "provider": "nvidia_nim",
-      "modelType": "chat",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Fast Responses", "Tool Use", "Cost-Effective"],
-      "deprecation_date": null,
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 0
-      },
-      "contextOverride": 131072,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speedOverride": "very-fast",
-      "releasedOverride": "2025"
-    },
     "nvidia/llama-3.3-70b-instruct": {
       "id": "nvidia/llama-3.3-70b-instruct",
       "apiModelId": "nvidia/llama-3.3-70b-instruct",
@@ -1680,7 +1583,9 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Fast Chat", "Tool Use", "Low Latency"],
-      "deprecation_date": null
+      "deprecation_date": "2026-08-16",
+      "status": "deprecated",
+      "deprecated": true
     },
     "groq-llama-3.1-8b": {
       "id": "groq-llama-3.1-8b",
@@ -1691,7 +1596,9 @@
       "quality": "fair",
       "qualityTier": "fast",
       "bestFor": ["Ultra-Fast Inference", "Simple Tasks", "Budget Usage"],
-      "deprecation_date": null
+      "deprecation_date": "2026-08-16",
+      "status": "deprecated",
+      "deprecated": true
     },
     "meta-llama/llama-3.3-70b-instruct:free": {
       "id": "meta-llama/llama-3.3-70b-instruct:free",
@@ -1855,6 +1762,131 @@
         "Long Context"
       ],
       "deprecation_date": null
+    },
+    "qwen-3.5-plus": {
+      "id": "qwen-3.5-plus",
+      "apiModelId": "qwen3.5-plus",
+      "name": "Qwen 3.5 Plus",
+      "provider": "qwen",
+      "modelType": "multimodal",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": [
+        "Multilingual",
+        "Multimodal",
+        "Long Context (1M)",
+        "Cost-Effective",
+        "Agent Tasks"
+      ],
+      "deprecation_date": null,
+      "inputCost": 0.4,
+      "outputCost": 2.4,
+      "contextWindow": 1000000
+    },
+    "nvidia/nemotron-3-ultra-550b-a55b": {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b",
+      "apiModelId": "nvidia/nemotron-3-ultra-550b-a55b",
+      "name": "NVIDIA Nemotron 3 Ultra 550B",
+      "provider": "nvidia_nim",
+      "modelType": "chat",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Complex Reasoning", "Agentic Tasks", "Research"],
+      "deprecation_date": null,
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speedOverride": "slow",
+      "releasedOverride": "2025",
+      "contextWindow": 1000000,
+      "supersedes": ["nvidia/llama-3.1-nemotron-ultra-253b-v1"],
+      "released": "June 2026"
+    },
+    "nvidia/nemotron-3-super-120b-a12b": {
+      "id": "nvidia/nemotron-3-super-120b-a12b",
+      "apiModelId": "nvidia/nemotron-3-super-120b-a12b",
+      "name": "NVIDIA Nemotron 3 Super 120B",
+      "provider": "nvidia_nim",
+      "modelType": "chat",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Agentic Tasks", "Tool Use", "Coding"],
+      "deprecation_date": null,
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "2025",
+      "contextWindow": 131072,
+      "supersedes": ["nvidia/llama-3.3-nemotron-super-49b-v1"],
+      "released": "June 2026"
+    },
+    "nvidia/nemotron-3-nano-30b-a3b": {
+      "id": "nvidia/nemotron-3-nano-30b-a3b",
+      "apiModelId": "nvidia/nemotron-3-nano-30b-a3b",
+      "name": "NVIDIA Nemotron 3 Nano 30B",
+      "provider": "nvidia_nim",
+      "modelType": "chat",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Fast Responses", "Tool Use", "Cost-Effective"],
+      "deprecation_date": null,
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speedOverride": "very-fast",
+      "releasedOverride": "2025",
+      "contextWindow": 1000000,
+      "supersedes": ["nvidia/llama-3.1-nemotron-nano-8b-v1"],
+      "released": "June 2026"
     }
   },
   "tierAllowedModels": {
@@ -1863,7 +1895,7 @@
       "gpt-5.4-mini",
       "deepseek-v4-flash",
       "claude-haiku-4.5",
-      "qwen-3.6-plus",
+      "qwen-3.5-plus",
       "kimi-k2.6",
       "glm-5.2",
       "sonar"
@@ -1946,8 +1978,8 @@
     ],
     "qwen": [
       {
-        "value": "qwen-3.6-plus",
-        "label": "Qwen 3.6 Plus"
+        "value": "qwen-3.5-plus",
+        "label": "Qwen 3.5 Plus"
       },
       {
         "value": "qwen-max",
