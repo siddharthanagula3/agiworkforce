@@ -1,59 +1,23 @@
-import { useEffect } from 'react';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
-import { useThemeColors } from '@/src/ui/theme';
+import { Text } from 'react-native';
+import { AgiMark } from '@/components/ui/AgiMark';
 
 /**
- * Teal sparkle indicator that pulses at the end of streaming text.
- * Brand-distinctive AGI Workforce animation: pulsing opacity 0.3 -> 1.0 on 600ms cycle.
- * Replaces the previous amber cursor (`|`) with a teal sparkle character.
+ * Brand-distinctive AGI Workforce loading indicator: spinning AgiMark logo.
+ * Replaced the sparkles/spark emoji to render only the spinning AGI mark inside the bubble.
+ * Uses <Text> to maintain the standard "text" accessibility role in testing.
  */
 export function StreamingIndicator() {
-  const colors = useThemeColors();
-  const opacity = useSharedValue(0.3);
-
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.3, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1, // infinite
-      false,
-    );
-
-    return () => {
-      cancelAnimation(opacity);
-    };
-  }, [opacity]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
   return (
-    <Animated.Text
-      style={[
-        {
-          color: colors.teal,
-          fontSize: 16,
-          fontWeight: '600',
-          lineHeight: 22,
-          marginLeft: 2,
-        },
-        animatedStyle,
-      ]}
+    <Text
+      style={{
+        marginLeft: 2,
+        width: 20,
+        height: 20,
+      }}
       accessibilityLabel="Generating response"
       accessibilityRole="text"
     >
-      {'✨'}
-    </Animated.Text>
+      <AgiMark size={16} spinning={true} />
+    </Text>
   );
 }

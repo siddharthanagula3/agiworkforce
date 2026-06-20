@@ -245,13 +245,6 @@ describe('ThinkingBottomSheet', () => {
 // ---------------------------------------------------------------------------
 
 describe('StreamingIndicator', () => {
-  it('renders the sparkle character', () => {
-    const { getByText } = render(<StreamingIndicator />);
-
-    // U+2728 is the sparkle emoji
-    expect(getByText('\u2728')).toBeTruthy();
-  });
-
   it('has "Generating response" accessibility label', () => {
     const { getByLabelText } = render(<StreamingIndicator />);
 
