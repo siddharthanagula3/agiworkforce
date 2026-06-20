@@ -3,20 +3,12 @@ import { ArrowDown, Check } from 'lucide-react';
 import { BILLING_PLAN_PRICING, type BillingPlanTier } from '@agiworkforce/types';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 
-type DowngradeTier = Extract<BillingPlanTier, 'hobby' | 'pro' | 'pro_plus'>;
+type DowngradeTier = Extract<BillingPlanTier, 'pro'>;
 
 const DOWNGRADE_OPTIONS: { id: DowngradeTier; loses: string[] }[] = [
   {
-    id: 'pro_plus',
-    loses: ['Max-tier unlimited usage', 'Priority queue'],
-  },
-  {
     id: 'pro',
-    loses: ['Unlimited image gen', '1,500 voice min/mo', '1,000 computer-use actions/mo'],
-  },
-  {
-    id: 'hobby',
-    loses: ['Sonnet unlimited', '300 voice min/mo', 'Video gen', 'Computer use'],
+    loses: ['Highest capacity', 'Opus 4.8 + Grok 4.3 auto-routing', 'Unlimited voice'],
   },
 ];
 

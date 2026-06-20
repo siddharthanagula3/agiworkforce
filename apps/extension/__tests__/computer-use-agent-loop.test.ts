@@ -384,12 +384,10 @@ describe('COMPUTER_USE_MODEL — sourced from models.json catalog', () => {
     expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);
   });
 
-  it('matches the managed_cloud computer_use routing entry', async () => {
-    // Path: __tests__/ → apps/extension/ → apps/ → repo root → packages/types/src/
-    const catalog = await import('../../../packages/types/src/models.json');
-    const expected = (catalog.providers.managed_cloud.taskRouting as Record<string, string>)[
-      'computer_use'
-    ];
-    expect(COMPUTER_USE_MODEL).toBe(expected);
+  it('resolves to the default computer_use model (managed_cloud.taskRouting superseded by SLOT_REGISTRY)', () => {
+    // managed_cloud.taskRouting was cleared in favour of SLOT_REGISTRY; the constant
+    // now carries the byok fallback value ('gpt-5.4-mini') until the extension
+    // is updated to read from getRoutingSlotModel('computer_use').
+    expect(COMPUTER_USE_MODEL).toBe('gpt-5.4-mini');
   });
 });
