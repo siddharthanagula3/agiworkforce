@@ -184,6 +184,19 @@ export async function analyticsSetUserProperty(key: string, value: unknown): Pro
   }
 }
 
+/**
+ * TRUST-BOUNDARY: Push the current AppMode to the Rust telemetry collector so
+ * that local-mode sessions are silenced at the Rust layer as well as the TS
+ * layer. Call this on startup and whenever the mode changes.
+ */
+export async function analyticsSetPrivacyMode(mode: string): Promise<void> {
+  try {
+    await invoke('analytics_set_privacy_mode', { mode });
+  } catch (error) {
+    console.error('[analytics] failed to set privacy mode:', error);
+  }
+}
+
 /** Delete all locally stored analytics data (GDPR). */
 export async function analyticsDeleteAllData(): Promise<void> {
   try {
