@@ -32,20 +32,17 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
 }
 
 export const STRIPE_PRICE_IDS = {
-  hobby: {
-    monthly: validatePriceId(
-      process.env['STRIPE_PRICE_HOBBY_MONTHLY'],
-      'STRIPE_PRICE_HOBBY_MONTHLY',
-    ),
-    yearly: validatePriceId(process.env['STRIPE_PRICE_HOBBY_YEARLY'], 'STRIPE_PRICE_HOBBY_YEARLY'),
-  },
   pro: {
     monthly: validatePriceId(process.env['STRIPE_PRICE_PRO_MONTHLY'], 'STRIPE_PRICE_PRO_MONTHLY'),
     yearly: validatePriceId(process.env['STRIPE_PRICE_PRO_YEARLY'], 'STRIPE_PRICE_PRO_YEARLY'),
   },
   max: {
     monthly: validatePriceId(process.env['STRIPE_PRICE_MAX_MONTHLY'], 'STRIPE_PRICE_MAX_MONTHLY'),
-    yearly: undefined, // Max plan is monthly-only; no yearly price configured
+    yearly: undefined, // Max plan is monthly-only
+  },
+  team: {
+    monthly: validatePriceId(process.env['STRIPE_PRICE_TEAM_MONTHLY'], 'STRIPE_PRICE_TEAM_MONTHLY'),
+    yearly: validatePriceId(process.env['STRIPE_PRICE_TEAM_YEARLY'], 'STRIPE_PRICE_TEAM_YEARLY'),
   },
 };
 
@@ -54,7 +51,7 @@ export const STRIPE_PRICE_IDS = {
  * Returns true if at least one plan has both monthly and annual prices configured
  */
 export function arePriceIdsConfigured(): boolean {
-  const plans = ['hobby', 'pro', 'max'] as const;
+  const plans = ['pro', 'max', 'team'] as const;
   return plans.some(
     (plan) =>
       STRIPE_PRICE_IDS[plan].monthly !== undefined || STRIPE_PRICE_IDS[plan].yearly !== undefined,
@@ -63,15 +60,6 @@ export function arePriceIdsConfigured(): boolean {
 
 export const PRICING_CONFIG = {
   plans: [
-    {
-      id: 'hobby',
-      name: 'Hobby',
-      price: {
-        monthly: getPlanPriceUsd('hobby', 'monthly'),
-        yearly: getPlanPriceUsd('hobby', 'yearly'),
-      },
-      stripe_price_ids: STRIPE_PRICE_IDS.hobby,
-    },
     {
       id: 'pro',
       name: 'Pro',
@@ -86,14 +74,23 @@ export const PRICING_CONFIG = {
       name: 'Max',
       price: {
         monthly: getPlanPriceUsd('max', 'monthly'),
-        yearly: getPlanPriceUsd('max', 'yearly'),
+        yearly: undefined, // Max is monthly-only
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max,
     },
+    {
+      id: 'team',
+      name: 'Team',
+      price: {
+        monthly: getPlanPriceUsd('team', 'monthly'),
+        yearly: getPlanPriceUsd('team', 'yearly'),
+      },
+      stripe_price_ids: STRIPE_PRICE_IDS.team,
+      waitlist: true,
+    },
   ],
   getPlanFromPriceId: (priceId: string): string | null => {
-    // Check all plans
-    const allPlans = ['hobby', 'pro', 'max'] as const;
+    const allPlans = ['pro', 'max', 'team'] as const;
     for (const plan of allPlans) {
       const prices = STRIPE_PRICE_IDS[plan];
       if (prices.monthly === priceId || prices.yearly === priceId) {

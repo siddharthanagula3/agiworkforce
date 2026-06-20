@@ -30,7 +30,7 @@ interface UpgradePlanDialogProps {
 // Plan definitions (sourced from BILLING_PLAN_PRICING canonical catalog)
 // ---------------------------------------------------------------------------
 
-type PlanCardId = 'free' | 'hobby' | 'pro' | 'max';
+type PlanCardId = 'free' | 'pro' | 'max';
 
 interface PlanCard {
   id: PlanCardId;
@@ -60,31 +60,15 @@ const PLAN_CARDS: PlanCard[] = [
     ],
   },
   {
-    id: 'hobby',
-    name: BILLING_PLAN_PRICING.hobby.label,
-    monthlyPrice: BILLING_PLAN_PRICING.hobby.monthlyPriceUsd,
-    yearlyPrice: BILLING_PLAN_PRICING.hobby.yearlyPriceUsd,
-    tagline: 'Hosted compute for everyday use, web search, and file uploads.',
-    popular: true,
-    waitlist: true,
-    features: [
-      'Everything in Free',
-      'Higher hosted prompt cap',
-      'Web search (lower token cap)',
-      'File uploads and analysis',
-      '10+ provider routing',
-      'Priority queue on Auto Economy',
-    ],
-  },
-  {
     id: 'pro',
     name: BILLING_PLAN_PRICING.pro.label,
     monthlyPrice: BILLING_PLAN_PRICING.pro.monthlyPriceUsd,
     yearlyPrice: BILLING_PLAN_PRICING.pro.yearlyPriceUsd,
     tagline: 'Higher capacity and advanced routing for professionals.',
-    waitlist: true,
+    popular: true,
+    waitlist: false,
     features: [
-      'Everything in Hobby',
+      'Everything in Free',
       'Larger hosted capacity per month',
       'Full web search token cap',
       'Computer-use tasks',
@@ -96,9 +80,9 @@ const PLAN_CARDS: PlanCard[] = [
     id: 'max',
     name: BILLING_PLAN_PRICING.max.label,
     monthlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd,
-    yearlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd * 12, // monthly-only plan; no annual discount
+    yearlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd, // monthly-only
     tagline: 'Highest capacity for intensive multi-agent workloads.',
-    waitlist: true,
+    waitlist: false,
     features: [
       'Everything in Pro',
       'Highest hosted capacity',
@@ -129,7 +113,7 @@ function annualSavingsPct(monthly: number, yearly: number): number {
 }
 
 function isTierUpgrade(current: string, target: PlanCardId): boolean {
-  const order: PlanCardId[] = ['free', 'hobby', 'pro', 'max'];
+  const order: PlanCardId[] = ['free', 'pro', 'max'];
   return order.indexOf(target) > order.indexOf(current as PlanCardId);
 }
 
@@ -259,7 +243,7 @@ export function UpgradePlanDialog({
 
   // Default view: show the current plan card + the next recommended tier.
   // Expanded: show all 4 tiers.
-  const tierOrder: PlanCardId[] = ['free', 'hobby', 'pro', 'max'];
+  const tierOrder: PlanCardId[] = ['free', 'pro', 'max'];
   const currentIdx = tierOrder.indexOf(currentTier as PlanCardId);
   const safeIdx = currentIdx >= 0 ? currentIdx : 0;
 
@@ -332,7 +316,7 @@ export function UpgradePlanDialog({
             className={cn(
               'grid gap-4',
               expanded
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+                ? 'grid-cols-1 sm:grid-cols-3'
                 : compactPlans.length === 1
                   ? 'grid-cols-1'
                   : 'grid-cols-1 sm:grid-cols-2',

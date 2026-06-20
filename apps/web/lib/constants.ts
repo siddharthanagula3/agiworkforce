@@ -88,9 +88,9 @@ export const CODE_GENERATION_MAX_ATTEMPTS = 10;
 
 export const PLAN_HIERARCHY: Record<string, number> = {
   free: 0,
-  hobby: 1,
-  pro: 2,
-  max: 3,
+  pro: 1,
+  max: 2,
+  team: 3,
   enterprise: 4,
 } as const;
 
@@ -108,20 +108,15 @@ export function getPlanLevel(plan: string): number {
 // =============================================================================
 
 export const PRICING = {
-  hobby: {
-    monthly: 10,
-    yearly: 4.99,
-    yearlyTotal: 59.88,
-  },
   pro: {
-    monthly: 29.99,
-    yearly: 24.99,
-    yearlyTotal: 299.88,
+    monthly: 20,
+    yearly: 17,
+    yearlyTotal: 204,
   },
   max: {
-    monthly: 299.99,
-    yearly: 249.99,
-    yearlyTotal: 2999.88,
+    monthly: 100,
+    yearly: 100,
+    yearlyTotal: 1200,
   },
 } as const;
 
