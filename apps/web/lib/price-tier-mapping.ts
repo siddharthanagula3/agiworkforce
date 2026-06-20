@@ -40,11 +40,9 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   if (proMonthly) mapping[proMonthly.toLowerCase()] = { tier: 'pro', interval: 'monthly' };
   if (proYearly) mapping[proYearly.toLowerCase()] = { tier: 'pro', interval: 'yearly' };
 
-  // Max tier
+  // Max tier — monthly only; no yearly price
   const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
-  const maxYearly = process.env['STRIPE_PRICE_MAX_YEARLY'];
   if (maxMonthly) mapping[maxMonthly.toLowerCase()] = { tier: 'max', interval: 'monthly' };
-  if (maxYearly) mapping[maxYearly.toLowerCase()] = { tier: 'max', interval: 'yearly' };
 
   // Enterprise tier (if configured)
   const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
