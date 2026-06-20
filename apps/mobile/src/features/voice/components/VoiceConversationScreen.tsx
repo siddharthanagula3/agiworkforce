@@ -229,6 +229,15 @@ export function VoiceConversationScreen({
     }
   }, [visible, cleanup]);
 
+  // #19: release mic/recognizer/TTS if the screen unmounts while still visible.
+  // The visibility effect above only cleans up in its else-branch (visible→false),
+  // so an unmount mid-recording would otherwise leak the recorder.
+  useEffect(() => {
+    return () => {
+      void cleanup();
+    };
+  }, [cleanup]);
+
   const startListening = useCallback(async () => {
     if (!activeRef.current || muted) return;
 

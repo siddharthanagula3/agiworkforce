@@ -155,9 +155,11 @@ export function getAgeThreshold(): number {
 // ---------------------------------------------------------------------------
 
 function readRecord(): AgeGateRecord | null {
-  const raw = storage.getString(MMKV_KEY);
-  if (!raw) return null;
   try {
+    // `storage` may be unavailable before MMKV init (returns no-op) — guard so
+    // age-gate reads never throw and callers safely treat it as "not confirmed".
+    const raw = storage?.getString(MMKV_KEY);
+    if (!raw) return null;
     return JSON.parse(raw) as AgeGateRecord;
   } catch {
     return null;

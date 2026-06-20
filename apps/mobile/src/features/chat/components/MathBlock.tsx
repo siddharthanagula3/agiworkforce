@@ -29,15 +29,28 @@ interface MathBlockProps {
   display: boolean;
 }
 
+/** Escapes a string for safe inclusion as HTML text content (not attributes). */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** Builds a self-contained HTML page that renders latex with KaTeX. */
 function buildHtml(latex: string, display: boolean, isDark: boolean): string {
   const bg = isDark ? agiPalette.dark.surface.base : agiPalette.light.surface.base;
   const fg = isDark ? agiPalette.dark.text.primary : agiPalette.light.text.primary;
   const accentColor = isDark ? agiPalette.dark.accent.primary : agiPalette.light.accent.primary;
 
-  // Safely pass latex via JSON.stringify, which properly escapes all special characters
-  // including backslashes, quotes, and </script> sequences.
-  const latexJson = JSON.stringify(latex);
+  // SECURITY: pass latex as HTML-escaped TEXT content, then read it back via
+  // textContent — do NOT interpolate it into the inline <script>. JSON.stringify
+  // does not neutralise a literal "</script>" sequence (the HTML parser ends the
+  // script element regardless of JS string context), so chat-supplied LaTeX
+  // could inject arbitrary markup/script into this WebView.
+  const latexEscaped = escapeHtml(latex);
 
   // postMessage height after render so the RN side can size the View.
   const postMessageScript = `
@@ -83,11 +96,13 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
 </style>
 </head>
 <body>
+<div id="latex-src" style="display:none">${latexEscaped}</div>
 <div id="math-root"></div>
 <script src="${KATEX_JS}"></script>
 <script>
 (function() {
-  var latex = ${latexJson};
+  var srcEl = document.getElementById('latex-src');
+  var latex = srcEl ? srcEl.textContent : '';
   try {
     katex.render(latex, document.getElementById('math-root'), {
       displayMode: ${display ? 'true' : 'false'},

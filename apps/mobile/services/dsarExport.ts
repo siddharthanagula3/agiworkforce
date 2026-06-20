@@ -550,6 +550,11 @@ export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): P
   // Delete downloaded model files
   await deleteAsync(`${documentDirectory}models/`, { idempotent: true });
 
-  // Delete any cached exports
+  // Delete any cached DSAR exports
   await deleteAsync(EXPORT_DIR, { idempotent: true });
+
+  // Delete user-initiated chat exports (PDF/TXT/MD) — "Delete everything" must
+  // not leave exported conversation content on disk.
+  const { EXPORTS_DIR } = await import('@/services/fileCreation');
+  await deleteAsync(EXPORTS_DIR, { idempotent: true });
 }

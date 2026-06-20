@@ -14,10 +14,24 @@ import {
   deleteAsync,
   moveAsync,
   writeAsStringAsync,
+  makeDirectoryAsync,
   EncodingType,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+
+/**
+ * All user-initiated chat exports are written here (not the documentDirectory
+ * root) so "Delete everything" (wipeAllLocalData) can remove them in one shot.
+ */
+export const EXPORTS_DIR = `${documentDirectory}exports/`;
+
+async function ensureExportsDir(): Promise<void> {
+  const info = await getInfoAsync(EXPORTS_DIR);
+  if (!info.exists) {
+    await makeDirectoryAsync(EXPORTS_DIR, { intermediates: true });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -206,9 +220,10 @@ export async function exportToPDF(content: string, title: string): Promise<Expor
   const html = markdownToHtml(content, title);
   const { uri } = await Print.printToFileAsync({ html });
 
-  // Move from tmp to documentDirectory with a meaningful name
+  // Move from tmp to the exports dir with a meaningful name
+  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.pdf`;
-  const destUri = `${documentDirectory}${fileName}`;
+  const destUri = `${EXPORTS_DIR}${fileName}`;
 
   // Remove existing file if present (overwrite)
   const info = await getInfoAsync(destUri);
@@ -238,8 +253,9 @@ export async function exportToText(content: string, title: string): Promise<Expo
   const header = `${title}\nExported: ${timestamp}\n${'─'.repeat(40)}\n\n`;
   const fullContent = header + content;
 
+  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.txt`;
-  const destUri = `${documentDirectory}${fileName}`;
+  const destUri = `${EXPORTS_DIR}${fileName}`;
 
   await writeAsStringAsync(destUri, fullContent, {
     encoding: EncodingType.UTF8,
@@ -283,8 +299,9 @@ export async function shareFile(uri: string): Promise<void> {
 export async function exportToMarkdown(content: string, title: string): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
   const header = `# ${title}\n\n_Exported: ${new Date().toISOString()}_\n\n---\n\n`;
+  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.md`;
-  const destUri = `${documentDirectory}${fileName}`;
+  const destUri = `${EXPORTS_DIR}${fileName}`;
   await writeAsStringAsync(destUri, header + content, { encoding: EncodingType.UTF8 });
   return { uri: destUri, format: 'markdown', fileName };
 }

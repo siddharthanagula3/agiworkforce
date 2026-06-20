@@ -39,7 +39,7 @@ import {
   setupNotificationListeners,
   handleInitialNotification,
   setNavigatorReady,
-  setCurrentSession,
+  setSignedIn,
 } from '@/services/notifications';
 import { getMobileSyncService } from '@/services/conversationSync';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
@@ -159,9 +159,12 @@ export default function RootLayout() {
   // is signed in. Runs eagerly (not gated by isInitialized) because the
   // notification handler may fire from a cold-start tap before any other
   // effect has run.
+  // #386: feed the REAL sign-in signal (isClerkSignedIn) — the legacy
+  // `session` field is always null in v1, so gating on it routed every
+  // notification tap to /(auth)/login and made the deep-link switch unreachable.
   useEffect(() => {
-    setCurrentSession(session ?? null);
-  }, [session]);
+    setSignedIn(isClerkSignedIn);
+  }, [isClerkSignedIn]);
 
   // Tier refresh — fetch /api/auth/me once after the Clerk session is available
   // and persist the result to MMKV-backed tierStore. The persisted value is used
@@ -474,8 +477,11 @@ export default function RootLayout() {
   // LLM. We navigate to the share-preview screen where the user reviews and
   // explicitly taps "Send to Chat". The preview screen sanitises the content
   // and enforces the 100 KB length cap.
+  // #386: share-to-chat is a LOCAL-first feature and must not depend on the
+  // always-null `session` (that gate made external shares silently no-op).
+  // Gate only on app readiness.
   useEffect(() => {
-    if (!session || !isInitialized) return;
+    if (!isInitialized) return;
 
     const handleShare = async () => {
       const initialUrl = await Linking.getInitialURL();
@@ -499,7 +505,7 @@ export default function RootLayout() {
     };
 
     handleShare();
-  }, [session, isInitialized, router]);
+  }, [isInitialized, router]);
 
   // C2: Android hardware back button — navigate back or double-press to exit
   useEffect(() => {

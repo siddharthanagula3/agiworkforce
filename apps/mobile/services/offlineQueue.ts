@@ -257,7 +257,10 @@ class OfflineMessageQueue {
           continue;
         }
 
-        // Under limit: apply backoff then stop — wait for next reconnect
+        // Under limit: persist the incremented retryCount so the retry budget
+        // survives an app kill (otherwise it reset to 0 on every relaunch), then
+        // apply backoff and stop — wait for next reconnect.
+        this.persistToStorage();
         const delay = backoffDelay(entry.retryCount - 1);
         await sleep(delay);
         break;
