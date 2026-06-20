@@ -76,10 +76,17 @@ async function runMigrations(db: DbHandle): Promise<void> {
 
   for (const migration of MIGRATION_SQL) {
     if (migration.version <= currentVersion) continue;
-    await db.execAsync(migration.sql);
     const ver = Math.floor(Number(migration.version));
-    if (!Number.isFinite(ver) || ver < 0) throw new Error(`Invalid migration version: ${migration.version}`);
-    await db.execAsync(`PRAGMA user_version = ${ver};`);
+    if (!Number.isFinite(ver) || ver < 0)
+      throw new Error(`Invalid migration version: ${migration.version}`);
+    // Apply the migration body and bump user_version atomically. expo-sqlite's
+    // execAsync is non-transactional, so without this an interrupted/failed
+    // migration could leave a half-applied schema while user_version stayed
+    // stale — permanently corrupting the encrypted DB on the next open.
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(migration.sql);
+      await db.execAsync(`PRAGMA user_version = ${ver};`);
+    });
   }
 }
 
@@ -117,8 +124,22 @@ export async function rekeyDb(newKey: string): Promise<void> {
     throw new Error('SQLCipher key must be a 64-character lowercase hex string.');
   }
   const db = await getDb();
-  await db.execAsync(`PRAGMA rekey = "x'${newKey}'";`);
+  // Persist the new key BEFORE re-encrypting the database. If we rekeyed first
+  // and the SecureStore write then failed, the on-disk DB would be encrypted with
+  // a key that was never stored — bricking it on the next open. On rekey failure
+  // we roll the stored key back so it still matches the (un-rekeyed) DB.
+  const oldKey = await SecureStore.getItemAsync(DB_KEY_STORAGE_ID);
   await SecureStore.setItemAsync(DB_KEY_STORAGE_ID, newKey, {
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
+  try {
+    await db.execAsync(`PRAGMA rekey = "x'${newKey}'";`);
+  } catch (err) {
+    if (oldKey != null) {
+      await SecureStore.setItemAsync(DB_KEY_STORAGE_ID, oldKey, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+    }
+    throw err;
+  }
 }

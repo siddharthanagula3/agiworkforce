@@ -7,6 +7,8 @@ import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
+import { checkContentFilter } from '@/lib/contentFilter';
+import { isMinorMode } from '@/src/features/auth/services/ageGate';
 import {
   markLocalModelRefUsed,
   resolveLocalModelRef,
@@ -346,6 +348,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   clearPaywallError: () => set({ paywallError: null }),
 
   sendMessage: async (conversationId, content, model, attachments, options) => {
+    // #2: enforce minor-safe content filtering before the prompt reaches ANY LLM
+    // (local or cloud). The age-gate promises minors "age-appropriate content
+    // filtering"; this is the only enforcement point and was previously dead code.
+    if (isMinorMode()) {
+      const verdict = checkContentFilter(content, true);
+      if (!verdict.allowed) {
+        Alert.alert('Content not available', verdict.refusal);
+        return;
+      }
+    }
+
     const queue = getMobileSendQueue();
     try {
       queue.enqueue({ value: content, mode: 'prompt' });
@@ -1025,10 +1038,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const msgState = currentMsgStore.getState();
     const currentId = msgState.currentConversationId;
 
-    const targetId =
-      currentId && streamingConversations.has(currentId)
-        ? currentId
-        : (streamingConversations.values().next().value ?? null);
+    // #16: only the CURRENT conversation may be stopped. Do NOT fall back to an
+    // arbitrary streaming conversation — the global isStreaming flag can surface
+    // the Stop button while the user views a non-streaming screen, and aborting a
+    // random background stream is wrong.
+    const targetId = currentId && streamingConversations.has(currentId) ? currentId : null;
 
     if (!targetId) {
       const cid = msgState.currentConversationId;
@@ -1046,11 +1060,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               [cid]: msgs.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
             },
           }));
-          set({ isStreaming: false, streamingContent: '', streamingReasoning: '' });
-          return;
         }
       }
-      set({ isStreaming: false, streamingContent: '', streamingReasoning: '' });
+      // Reflect whatever is still actually streaming — background conversations
+      // must keep running and keep the global flag accurate.
+      set({
+        isStreaming: streamingConversations.size > 0,
+        streamingContent: '',
+        streamingReasoning: '',
+      });
       return;
     }
 
@@ -1088,10 +1106,26 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
     if (msgIndex < 0) return;
 
-    const assistantMsg = msgs[msgIndex];
-    if (!assistantMsg || assistantMsg.role !== 'assistant') return;
-
-    const userMsg = msgIndex > 0 ? msgs[msgIndex - 1] : null;
+    // Resolve the (user, optional assistant) pair from EITHER id. The message
+    // action sheet passes the ASSISTANT id; the send-failure banner passes the
+    // last USER id (a pre-stream failure may never create an assistant message).
+    const target = msgs[msgIndex];
+    if (!target) return;
+    let userMsg: (typeof msgs)[number] | null = null;
+    let assistantMsg: (typeof msgs)[number] | undefined;
+    let userIndex: number;
+    if (target.role === 'assistant') {
+      assistantMsg = target;
+      userIndex = msgIndex - 1;
+      userMsg = userIndex >= 0 ? msgs[userIndex] : null;
+    } else if (target.role === 'user') {
+      userMsg = target;
+      userIndex = msgIndex;
+      const next = msgs[msgIndex + 1];
+      assistantMsg = next && next.role === 'assistant' ? next : undefined;
+    } else {
+      return;
+    }
     if (!userMsg || userMsg.role !== 'user') return;
 
     const currentAttempts = state.retryAttempts[messageId] ?? 0;
@@ -1108,13 +1142,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const backoffMs = nextAttempt > 1 ? 1000 * Math.pow(2, nextAttempt - 2) : 0;
     const userContent = userMsg.content;
-    const userModel = userMsg.model ?? assistantMsg.model ?? 'auto-balanced';
+    const userModel = userMsg.model ?? assistantMsg?.model ?? 'auto-balanced';
 
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
-    const trimmedMsgs = msgs.slice(0, msgIndex - 1);
+    const removedCount = msgs.length - userIndex;
+    // #23: only the finalize/success path increments messageCount (+2). An
+    // assistant-targeted regenerate replaces a counted exchange (subtract the
+    // removed messages); a banner retry of a FAILED send was never counted
+    // (subtract 0). sendMessage re-adds +2 on success, keeping the count accurate.
+    const countedRemoved = target.role === 'assistant' ? removedCount : 0;
+    const trimmedMsgs = msgs.slice(0, userIndex);
     msgStore.setState((s) => ({
       messages: { ...s.messages, [conversationId]: trimmedMsgs },
+      conversations: s.conversations.map((c) =>
+        c.id === conversationId
+          ? { ...c, messageCount: Math.max(0, (c.messageCount ?? 0) - countedRemoved) }
+          : c,
+      ),
     }));
 
     if (backoffMs > 0) {

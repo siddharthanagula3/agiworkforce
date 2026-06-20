@@ -303,11 +303,14 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   try {
     result = await downloadResumable.downloadAsync();
   } catch (err) {
-    // Save resume state for next attempt
+    // Save resume state for next attempt. createDownloadResumable expects the
+    // OPAQUE resumeData token string (used to set the HTTP Range header), not the
+    // whole serialized DownloadPauseState object — storing the full JSON broke
+    // HTTP Range resume (download restarted from 0).
     try {
       const snapshot = await downloadResumable.savable();
-      if (snapshot) {
-        await writeAsStringAsync(resumePath, JSON.stringify(snapshot), {
+      if (snapshot && snapshot.resumeData) {
+        await writeAsStringAsync(resumePath, snapshot.resumeData, {
           encoding: EncodingType.UTF8,
         });
       }

@@ -74,20 +74,28 @@ export const usePermissionsStore = create<PermissionsStoreState>()(
       permissions: makeDefaults(),
 
       setObservedStatus: (kind, status) => {
-        set((state) => ({
-          permissions: {
-            ...state.permissions,
-            [kind]: {
-              ...state.permissions[kind],
-              lastObservedStatus: status,
-              // Sync user intent to match what the OS actually reports on first observe
-              userIntent:
-                state.permissions[kind]?.lastObservedStatus === 'undetermined'
-                  ? osStatusToLevel(status, kind)
-                  : (state.permissions[kind]?.userIntent ?? osStatusToLevel(status, kind)),
+        set((state) => {
+          const prev = state.permissions[kind];
+          const wasUndetermined = prev?.lastObservedStatus === 'undetermined';
+          // Sync userIntent to the OS truth when (a) this is the first observe, or
+          // (b) the OS no longer reports a grant — i.e. the permission was revoked
+          // externally (Settings). Without (b) the radio kept highlighting a
+          // granted level while the card showed "Access Denied".
+          const userIntent =
+            wasUndetermined || status !== 'granted'
+              ? osStatusToLevel(status, kind)
+              : (prev?.userIntent ?? osStatusToLevel(status, kind));
+          return {
+            permissions: {
+              ...state.permissions,
+              [kind]: {
+                ...prev,
+                lastObservedStatus: status,
+                userIntent,
+              },
             },
-          },
-        }));
+          };
+        });
       },
 
       setUserIntent: (kind, level) => {

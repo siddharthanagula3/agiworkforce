@@ -343,10 +343,19 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  assertRemoteChatAllowed(undefined, {
-    cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
-  });
-  ensureLlmGateOpen(resolveProviderFromModel(body.model));
+  try {
+    assertRemoteChatAllowed(undefined, {
+      cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
+    });
+    ensureLlmGateOpen(resolveProviderFromModel(body.model));
+  } catch (err) {
+    // Deliver fatal pre-flight errors through the callbacks contract (like every
+    // other terminal failure in this function) rather than rejecting the promise —
+    // callers such as the Compare screen only listen via onError and would
+    // otherwise hang forever waiting for a result.
+    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+    return;
+  }
 
   // Per-attempt timeout — each stream attempt gets a fresh timeout so backoff
   // waits don't eat into the next attempt's time budget.
