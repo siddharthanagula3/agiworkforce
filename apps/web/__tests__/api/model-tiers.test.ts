@@ -49,31 +49,29 @@ describe('canAccessModel — free tier', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — hobby tier (economy only)', () => {
-  it('allows economy models for hobby users', () => {
+describe('canAccessModel — free tier (no model access)', () => {
+  it('denies all economy models for free/unknown tier users', () => {
     for (const model of ECONOMY_SAMPLE) {
-      expect(canAccessModel(model, 'hobby')).toBe(true);
+      expect(canAccessModel(model, 'free')).toBe(false);
     }
   });
 
-  it('denies pro-tier models for hobby users', () => {
+  it('denies all economy models for unrecognized tier (maps to free)', () => {
+    for (const model of ECONOMY_SAMPLE) {
+      expect(canAccessModel(model, 'hobby')).toBe(false);
+    }
+  });
+
+  it('denies pro-tier models for free users', () => {
     for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'hobby')).toBe(false);
+      expect(canAccessModel(model, 'free')).toBe(false);
     }
   });
 
-  it('denies max-only models for hobby users', () => {
+  it('denies max-only models for free users', () => {
     for (const model of MAX_ONLY_MODELS) {
-      expect(canAccessModel(model, 'hobby')).toBe(false);
+      expect(canAccessModel(model, 'free')).toBe(false);
     }
-  });
-
-  it('denies claude-opus-4.5 (max/enterprise model) for hobby users', () => {
-    expect(canAccessModel('claude-opus-4.5', 'hobby')).toBe(false);
-  });
-
-  it('denies o3 (max/enterprise model) for hobby users', () => {
-    expect(canAccessModel('o3', 'hobby')).toBe(false);
   });
 });
 
@@ -162,14 +160,14 @@ describe('canAccessModel — enterprise tier', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('canAccessModel — auto-model placeholders', () => {
   it('allows auto-economy for any paid tier', () => {
-    expect(canAccessModel('auto-economy', 'hobby')).toBe(true);
     expect(canAccessModel('auto-economy', 'pro')).toBe(true);
     expect(canAccessModel('auto-economy', 'max')).toBe(true);
+    expect(canAccessModel('auto-economy', 'enterprise')).toBe(true);
   });
 
   it('allows auto-balanced for any paid tier', () => {
-    expect(canAccessModel('auto-balanced', 'hobby')).toBe(true);
     expect(canAccessModel('auto-balanced', 'pro')).toBe(true);
+    expect(canAccessModel('auto-balanced', 'max')).toBe(true);
   });
 
   it('allows auto-premium for any paid tier', () => {
@@ -194,12 +192,12 @@ describe('canAccessModel — unknown models', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('canAccessModel — case insensitivity', () => {
   it('handles uppercase model names correctly', () => {
-    expect(canAccessModel('GPT-5.4-MINI', 'hobby')).toBe(true);
+    expect(canAccessModel('GPT-5.4-MINI', 'pro')).toBe(true);
     expect(canAccessModel('CLAUDE-SONNET-4.6', 'pro')).toBe(true);
   });
 
   it('handles uppercase tier names correctly', () => {
-    expect(canAccessModel('gpt-5.4-mini', 'HOBBY')).toBe(true);
+    expect(canAccessModel('gpt-5.4-mini', 'PRO')).toBe(true);
     expect(canAccessModel('claude-sonnet-4.6', 'PRO')).toBe(true);
     // Use the current flagship; claude-opus-4.8/4.7 are retired; 4.8 is canonical.
     expect(canAccessModel('claude-opus-4.8', 'MAX')).toBe(true);

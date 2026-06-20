@@ -28,12 +28,6 @@ interface PriceMappingEntry {
 function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   const mapping: Record<string, PriceMappingEntry> = {};
 
-  // Hobby tier
-  const hobbyMonthly = process.env['STRIPE_PRICE_HOBBY_MONTHLY'];
-  const hobbyYearly = process.env['STRIPE_PRICE_HOBBY_YEARLY'];
-  if (hobbyMonthly) mapping[hobbyMonthly.toLowerCase()] = { tier: 'hobby', interval: 'monthly' };
-  if (hobbyYearly) mapping[hobbyYearly.toLowerCase()] = { tier: 'hobby', interval: 'yearly' };
-
   // Pro tier
   const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
   const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
@@ -43,6 +37,12 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   // Max tier — monthly only; no yearly price
   const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
   if (maxMonthly) mapping[maxMonthly.toLowerCase()] = { tier: 'max', interval: 'monthly' };
+
+  // Team tier
+  const teamMonthly = process.env['STRIPE_PRICE_TEAM_MONTHLY'];
+  const teamYearly = process.env['STRIPE_PRICE_TEAM_YEARLY'];
+  if (teamMonthly) mapping[teamMonthly.toLowerCase()] = { tier: 'team', interval: 'monthly' };
+  if (teamYearly) mapping[teamYearly.toLowerCase()] = { tier: 'team', interval: 'yearly' };
 
   // Enterprise tier (if configured)
   const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
@@ -152,8 +152,7 @@ export function resolvePlanTier(
  */
 export function isValidPlanTier(tier: string | null | undefined): tier is string {
   if (!tier) return false;
-  // pro_plus removed: locked tiers are free, hobby, pro, max, team, enterprise.
-  return ['free', 'hobby', 'pro', 'max', 'enterprise'].includes(tier.toLowerCase());
+  return ['free', 'pro', 'max', 'team', 'enterprise'].includes(tier.toLowerCase());
 }
 
 export function getBillingDetailsFromPriceId(priceId: string | null | undefined): {
@@ -203,9 +202,9 @@ export function getMappingStatus(): {
 } {
   const mapping = getTierMapping();
   const tiers: Record<string, string[]> = {
-    hobby: [],
     pro: [],
     max: [],
+    team: [],
     enterprise: [],
   };
 

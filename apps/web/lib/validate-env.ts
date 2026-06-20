@@ -62,17 +62,16 @@ export function validateRequiredEnvVars(): ValidationResult {
   ];
 
   // Stripe price IDs (required for checkout to work)
-  // Note: STRIPE_PRICE_MAX_YEARLY is intentionally omitted — Max is monthly-only
-  const priceIdVars = [
-    'STRIPE_PRICE_HOBBY_MONTHLY',
-    'STRIPE_PRICE_HOBBY_YEARLY',
-    'STRIPE_PRICE_PRO_MONTHLY',
-    'STRIPE_PRICE_PRO_YEARLY',
-    'STRIPE_PRICE_MAX_MONTHLY',
-  ];
+  const priceIdVars = ['STRIPE_PRICE_PRO_MONTHLY', 'STRIPE_PRICE_PRO_YEARLY'];
 
-  // Optional enterprise tier (warn if missing, don't error)
-  const optionalPriceVars = ['STRIPE_PRICE_ENTERPRISE_MONTHLY', 'STRIPE_PRICE_ENTERPRISE_YEARLY'];
+  // Optional tiers (waitlist or not yet launched)
+  const optionalPriceVars = [
+    'STRIPE_PRICE_MAX_MONTHLY',
+    'STRIPE_PRICE_TEAM_MONTHLY',
+    'STRIPE_PRICE_TEAM_YEARLY',
+    'STRIPE_PRICE_ENTERPRISE_MONTHLY',
+    'STRIPE_PRICE_ENTERPRISE_YEARLY',
+  ];
 
   // Check critical variables
   for (const varName of criticalVars) {
@@ -158,10 +157,7 @@ export function validatePriceIdConsistency(): ValidationResult {
       warnings.push('These may be old price IDs that should be removed from price-tier-mapping.ts');
     }
 
-    // Verify exact matches for each plan tier
     const expectedMappings = {
-      hobby_monthly: process.env['STRIPE_PRICE_HOBBY_MONTHLY'],
-      hobby_yearly: process.env['STRIPE_PRICE_HOBBY_YEARLY'],
       pro_monthly: process.env['STRIPE_PRICE_PRO_MONTHLY'],
       pro_yearly: process.env['STRIPE_PRICE_PRO_YEARLY'],
       max_monthly: process.env['STRIPE_PRICE_MAX_MONTHLY'],

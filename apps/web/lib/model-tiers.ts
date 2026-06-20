@@ -14,7 +14,7 @@ import {
 
 type PaidTier = 'pro' | 'max' | 'enterprise';
 
-function normalizeTier(tier: string): 'free' | 'hobby' | PaidTier {
+function normalizeTier(tier: string): 'free' | PaidTier {
   switch (tier.toLowerCase()) {
     case 'pro':
       return 'pro';
@@ -22,8 +22,6 @@ function normalizeTier(tier: string): 'free' | 'hobby' | PaidTier {
       return 'max';
     case 'enterprise':
       return 'enterprise';
-    case 'hobby':
-      return 'hobby';
     default:
       return 'free';
   }

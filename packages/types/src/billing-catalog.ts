@@ -2,10 +2,9 @@ export type BillingPlanTier =
   | 'local-only'
   | 'byok'
   | 'free'
-  | 'hobby'
   | 'pro'
-  | 'pro_plus'
   | 'max'
+  | 'team'
   | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
 
@@ -37,29 +36,23 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
     monthlyPriceUsd: 0,
     yearlyPriceUsd: 0,
   },
-  hobby: {
-    id: 'hobby',
-    label: 'Hobby',
-    monthlyPriceUsd: 10,
-    yearlyPriceUsd: 59.88,
-  },
   pro: {
     id: 'pro',
     label: 'Pro',
-    monthlyPriceUsd: 29.99,
-    yearlyPriceUsd: 299.88,
-  },
-  pro_plus: {
-    id: 'pro_plus',
-    label: 'Pro+',
-    monthlyPriceUsd: 49.99,
-    yearlyPriceUsd: 499.88,
+    monthlyPriceUsd: 20,
+    yearlyPriceUsd: 204,
   },
   max: {
     id: 'max',
     label: 'Max',
-    monthlyPriceUsd: 299.99,
-    yearlyPriceUsd: 2999.88,
+    monthlyPriceUsd: 100,
+    yearlyPriceUsd: 0,
+  },
+  team: {
+    id: 'team',
+    label: 'Team',
+    monthlyPriceUsd: 25,
+    yearlyPriceUsd: 240,
   },
   enterprise: {
     id: 'enterprise',

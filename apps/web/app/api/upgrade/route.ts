@@ -17,7 +17,7 @@ import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { CreditService } from '@/lib/services/credit-service';
 import { getPlanPriceCents, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
-const TIER_ORDER: Record<string, number> = { free: 0, hobby: 1, pro: 2, max: 3, enterprise: 4 };
+const TIER_ORDER: Record<string, number> = { free: 0, pro: 1, max: 2, team: 3, enterprise: 4 };
 
 function isUpgrade(from: string, to: string): boolean {
   return (TIER_ORDER[to] ?? -1) > (TIER_ORDER[from] ?? -1);
