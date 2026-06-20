@@ -246,6 +246,61 @@ These items were audited, verified, and are ready to implement, but each has irr
 
 Mobile privacy model confirmed: Local/free = privacy mode, local models ≤5B params, local storage only. Pro/Max subscription adds cloud model access + sync across devices (chats, projects, memory). Desktop/CLI/VS Code support Local + BYOK + Subscription.
 
+### Phase 2 — Web ↔ Desktop UI Parity (Computer Use verified)
+
+Screenshots captured via Playwright + macOS Computer Use:
+
+- `reports/generated/phase2-web-login.png` — Web sign-in page (dark, Clerk, GitHub/Google)
+- `reports/generated/phase2-web-home.png` — Web home with Cloud waitlist modal
+- Desktop: AGI app screenshot via Computer Use showing full chat interface
+
+**Parity findings:**
+
+| Feature            | Desktop   | Web        | Status                             |
+| ------------------ | --------- | ---------- | ---------------------------------- |
+| Dark mode theme    | ✅        | ✅         | Parity                             |
+| AGI branding       | ✅        | ✅         | Parity                             |
+| New chat           | ✅        | ✅         | Parity                             |
+| Search             | ✅        | ✅         | Parity                             |
+| Projects nav       | ✅        | ✅         | Parity                             |
+| Artifacts nav      | ✅        | ✅         | Parity                             |
+| Model selector     | ✅        | ✅         | Parity                             |
+| Voice/mic input    | ✅        | ✅         | Parity                             |
+| Scheduled          | ✅        | ❌ missing | Surface gap (Desktop-only feature) |
+| Live artifacts     | ✅        | ❌ missing | Surface gap (Desktop-only feature) |
+| Dispatch           | ✅ (Beta) | ❌ missing | Surface gap (Desktop-only feature) |
+| Web Search toggle  | ❌ N/A    | ✅         | Web-only feature                   |
+| Edit automatically | ✅        | ❌ N/A     | Desktop-only auto-edit             |
+| Temp slider        | ✅        | ❌ N/A     | Desktop-only temperature           |
+
+**Conclusion:** Core chat parity ~85%. Scheduled/Dispatch/Live artifacts are intentionally Desktop-only (agent orchestration and cron scheduling require persistent local process). Web Search is web-only. No unintentional drift found.
+
+### Phase 3 — Local/BYOK Egress Prevention (Code-level audit)
+
+Verified via grep across all client surfaces:
+
+- Desktop (React): zero direct Neon/database URL references in `apps/desktop/src` ✅
+- Desktop (Rust): `active_mode == "local"` short-circuits `cloud_sync_enabled` in `send_message.rs` ✅
+- Mobile: zero direct cloud DB calls in `apps/mobile/src` ✅
+- CLI/crates: DATABASE_URL only appears in security scanner pattern list ✅
+
+**Known gap (documented):** `llm_send_message` Rust command has no `active_mode` check — the gate relies on FE setting `prefer_cloud_credits=false` in local mode. Defense-in-depth fix requires adding `active_mode` to the IPC struct; deferred (medium risk, FE gate is correct).
+
+### Phase 4 — New Edge-Case Stress Tests
+
+Added 30 new tests in `apps/mobile/__tests__/tier-guard.test.ts`:
+
+- `mapBillingPlanToUIPlan` exhaustive coverage (all 7 `BillingPlanTier` values)
+- `team→pro` equivalence verified
+- Stale tier values (`hobby`, `pro_plus`) default to `local` (most restrictive)
+- `null currentProvider` always allows at any tier
+- Same provider always allows at any tier
+- Unknown tier strings treated as `local` (no privilege escalation)
+
+Updated L1 security test (`auth-and-authz.test.ts`): added explicit test that stale persisted values from old installs cannot escalate privileges.
+
+Mobile suite: 124 suites, 1381 tests, 9 skipped — all passing.
+
 ### Infrastructure Completed
 
 - Stripe webhook: end-to-end verified (POST /api/stripe-webhook 200 OK)
