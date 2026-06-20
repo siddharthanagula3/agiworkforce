@@ -17,3 +17,4 @@ apps/mobile/ios/Pods
 apps/web/next-env.d.ts
 
 exhaustive_inventory.md
+AUDIT_FINDINGS.md
