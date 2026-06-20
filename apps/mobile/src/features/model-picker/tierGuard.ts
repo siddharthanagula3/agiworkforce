@@ -52,12 +52,10 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
       return 'local';
     case 'free':
       return 'local';
-    case 'hobby':
-      return 'hobby';
     case 'pro':
       return 'pro';
-    case 'pro_plus':
-      return 'pro_plus';
+    case 'team':
+      return 'pro';
     case 'max':
       return 'max';
     case 'enterprise':
@@ -79,7 +77,7 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
 // ---------------------------------------------------------------------------
 
 /** The minimum UIPlanTier required to switch providers mid-thread. */
-const PROVIDER_SWITCH_MIN_TIER: UIPlanTier = 'pro_plus';
+const PROVIDER_SWITCH_MIN_TIER: UIPlanTier = 'pro';
 
 /**
  * Determine whether a user may switch providers mid-thread.
