@@ -150,6 +150,37 @@ async function upgradeToPlan(data: {
 }
 
 /**
+ * Upgrade an existing active subscription mid-cycle with credit-based proration.
+ * The server calculates unused platform credits and applies them as a Stripe
+ * customer balance credit that offsets the next invoice.
+ */
+export async function upgradePlanMidCycle(data: {
+  plan: 'hobby' | 'pro' | 'max';
+  billingInterval?: 'monthly' | 'yearly';
+}): Promise<{ creditAppliedUsd: string }> {
+  const authToken = await getAuthToken();
+  if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
+
+  const billingInterval = data.billingInterval ?? 'monthly';
+  const response = await fetch('/api/upgrade', {
+    method: 'POST',
+    headers: await addCsrfHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    }),
+    body: JSON.stringify({ plan: data.plan, billingInterval }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? `Failed to upgrade to ${data.plan}`);
+  }
+
+  const result = await response.json();
+  return { creditAppliedUsd: result.creditAppliedUsd ?? '0.00' };
+}
+
+/**
  * Create Enterprise plan inquiry (Contact sales)
  */
 export async function contactEnterpriseSales(data: {

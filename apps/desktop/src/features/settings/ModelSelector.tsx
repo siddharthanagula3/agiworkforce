@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Search, X, Filter, Star, Clock, Grid, List } from 'lucide-react';
 import { useModelStore } from '../../stores/modelStore';
 import { useAccountStore } from '../../stores/auth';
-import { useAppModeStore } from '../../stores/appModeStore';
+import { useAppModeStore, selectPrivacyMode } from '../../stores/appModeStore';
 import { ModelCard } from './ModelCard';
 import {
   getAllModels,
@@ -48,8 +48,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       })),
     );
   const account = useAccountStore((state) => state.account);
-  const appMode = useAppModeStore((state) => state.mode);
-  const isCloudMode = appMode === 'cloud';
+  const isCloudMode = useAppModeStore((state) => selectPrivacyMode(state) === 'managed');
   const planTier = normalizeSubscriptionTier(account.plan);
   const allowedAutoModes = useMemo(() => new Set(getAllowedAutoModesForTier(planTier)), [planTier]);
 
