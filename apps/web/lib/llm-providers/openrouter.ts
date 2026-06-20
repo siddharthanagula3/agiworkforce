@@ -65,7 +65,7 @@ function mapMessages(
  *   meta-llama/llama-3.3-70b-instruct:free
  *   mistralai/mistral-small-3.1-24b-instruct:free
  *   qwen/qwen3-coder:free
- *   nvidia/llama-3.3-nemotron-super-49b-v1:free
+ *   nvidia/llama-3.3-nemotron-super-49b-v1:free (OpenRouter free tier — distinct from NIM Nemotron 3)
  *
  * Tool calling and vision capabilities depend on the underlying routed model.
  * Streaming uses OpenAI SSE format.

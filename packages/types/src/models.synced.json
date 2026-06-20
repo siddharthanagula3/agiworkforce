@@ -250,9 +250,9 @@
       "released": "April 2026"
     },
     "qwen-max": {
-      "contextWindow": 128000,
-      "inputCost": 1.6,
-      "outputCost": 6.4,
+      "contextWindow": 1000000,
+      "inputCost": 1.2,
+      "outputCost": 6.0,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -275,40 +275,12 @@
         "aime": 60
       },
       "speed": "medium",
-      "released": "January 2026"
-    },
-    "qwen-3.6-plus": {
-      "contextWindow": 1000000,
-      "inputCost": 0.5,
-      "outputCost": 3,
-      "cached_input": 0.05,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true
-      },
-      "benchmarks": {
-        "swebench": 70,
-        "humaneval": 94,
-        "mmlu": 90,
-        "gpqa": 78,
-        "aime": 88
-      },
-      "speed": "fast",
-      "released": "April 2026"
+      "released": "January 2026",
+      "apiModelId": "qwen3-max"
     },
     "qwen-flash": {
       "contextWindow": 1000000,
-      "inputCost": 0.05,
+      "inputCost": 0.1,
       "outputCost": 0.4,
       "capabilities": {
         "streaming": true,
@@ -332,7 +304,8 @@
         "aime": 25
       },
       "speed": "very-fast",
-      "released": "November 2025"
+      "released": "November 2025",
+      "apiModelId": "qwen3.5-flash"
     },
     "qwen-turbo": {
       "contextWindow": 1000000,
@@ -360,7 +333,10 @@
         "aime": 28
       },
       "speed": "very-fast",
-      "released": "January 2026"
+      "released": "January 2026",
+      "apiModelId": "qwen3.5-flash",
+      "status": "deprecated",
+      "deprecated": true
     },
     "kimi-k2.6": {
       "contextWindow": 262144,
@@ -634,7 +610,10 @@
         "codeExecution": false
       },
       "speed": "very-fast",
-      "released": "2024"
+      "released": "2024",
+      "status": "deprecated",
+      "deprecated": true,
+      "deprecation_date": "2026-08-16"
     },
     "groq-llama-3.1-8b": {
       "contextWindow": 131072,
@@ -655,7 +634,10 @@
         "codeExecution": false
       },
       "speed": "very-fast",
-      "released": "2024"
+      "released": "2024",
+      "status": "deprecated",
+      "deprecated": true,
+      "deprecation_date": "2026-08-16"
     },
     "anthropic/claude-opus-4": {
       "contextWindow": 200000,
@@ -790,7 +772,7 @@
       "released": "May 2026"
     },
     "glm-5.2": {
-      "contextWindow": 200000,
+      "contextWindow": 1000000,
       "inputCost": 1.4,
       "outputCost": 4.4,
       "cached_input": 0.26,
@@ -820,6 +802,38 @@
       "id": "glm-5.2",
       "apiModelId": "glm-5.2",
       "name": "GLM-5.2"
+    },
+    "qwen-3.5-plus": {
+      "contextWindow": 1000000,
+      "inputCost": 0.4,
+      "outputCost": 2.4,
+      "cached_input": 0.05,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true
+      },
+      "benchmarks": {
+        "swebench": 70,
+        "humaneval": 94,
+        "mmlu": 90,
+        "gpqa": 78,
+        "aime": 88
+      },
+      "speed": "fast",
+      "released": "April 2026",
+      "id": "qwen-3.5-plus",
+      "apiModelId": "qwen3.5-plus",
+      "name": "Qwen 3.5 Plus"
     }
   }
 }
