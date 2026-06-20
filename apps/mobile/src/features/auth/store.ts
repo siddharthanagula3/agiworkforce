@@ -45,7 +45,10 @@ export const useAuthStore = create<AuthState>()(
       isClerkSignedIn: false,
 
       setClerkSignedIn: (value: boolean) => {
-        set({ isClerkSignedIn: value });
+        set((state) => {
+          if (state.isClerkSignedIn === value) return state;
+          return { isClerkSignedIn: value };
+        });
       },
 
       initialize: async () => {

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../stores/auth';
+import { AgiMark } from '@agiworkforce/ui';
 
 interface TitleBarProps {
   state: {
@@ -81,6 +82,7 @@ const TitleBar = ({
         >
           <PanelLeft className="h-4 w-4" />
         </button>
+        <AgiMark size={18} className="shrink-0 text-foreground" />
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
           <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
           <div className="text-[11px] text-muted-foreground leading-none mt-0.5 flex items-center gap-1.5">

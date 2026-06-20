@@ -63,6 +63,22 @@ const createImmediateAnimation = () => ({
 Animated.spring = () => createImmediateAnimation();
 Animated.timing = () => createImmediateAnimation();
 
+jest.mock('react-native-worklets', () => {
+  const createMockProxy = () => {
+    const dummy = () => {};
+    return new Proxy(dummy, {
+      get(target, prop) {
+        if (prop === '__esModule') return true;
+        return createMockProxy();
+      },
+      apply() {
+        return createMockProxy();
+      },
+    });
+  };
+  return createMockProxy();
+});
+
 jest.mock('react-native-reanimated', () => {
   const Reanimated = require('react-native-reanimated/mock');
   Reanimated.useReducedMotion = () => false;

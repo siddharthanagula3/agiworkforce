@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { View } from 'react-native';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
-import { TaskChips, type TaskChipType } from '@/src/features/chat/components/TaskChips';
+import { type TaskChipType } from '@/src/features/chat/components/TaskChips';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 interface ComposerProps {
@@ -61,11 +61,6 @@ export function Composer({
 
   return (
     <View style={{ gap: 8 }}>
-      {showChips && !isStreaming && (
-        <View style={{ paddingHorizontal: 16 }}>
-          <TaskChips activeChip={activeChip} onChipPress={handleChipPress} />
-        </View>
-      )}
       <ChatInput
         onSend={handleSend}
         isStreaming={isStreaming}

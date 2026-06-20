@@ -8,8 +8,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { summarizeSendPreview, type ProviderMode } from '@agiworkforce/types';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
-import { ConversationStarters } from '@/src/features/chat/components/ConversationStarters';
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
+import { AgiMark } from '@/components/ui/AgiMark';
 import {
   TASK_CHIP_SEND_CONTEXT,
   type TaskChipType,
@@ -358,6 +358,7 @@ export default function ChatTabScreen() {
           >
             <Menu size={18} color={c.textSecondary} />
           </Pressable>
+          <AgiMark size={20} />
           <Text variant="subheading" style={{ color: c.textPrimary }}>
             AGI
           </Text>
@@ -426,7 +427,6 @@ export default function ChatTabScreen() {
                 onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
               />
             )}
-            <ConversationStarters />
           </View>
         )}
       </ScrollView>
