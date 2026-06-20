@@ -144,3 +144,67 @@ describe('llm route — every named provider has a representative Hobby model', 
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Edge-case / stress invariants for subscription enforcement (Phase 4)
+// These tests pin the behavior of the catalog-derived allow-list and the
+// resolveProvider lookup under adversarial inputs.
+// ---------------------------------------------------------------------------
+
+describe('llm route — edge-case stress (Phase 4 hardening)', () => {
+  it('resolveProvider throws for empty string model id', () => {
+    expect(() => resolveProvider('')).toThrow();
+  });
+
+  it('resolveProvider throws for null-ish model id (whitespace)', () => {
+    expect(() => resolveProvider('   ')).toThrow();
+  });
+
+  it('resolveProvider throws for SQL injection attempt in model id', () => {
+    expect(() => resolveProvider("' OR '1'='1")).toThrow();
+  });
+
+  it('resolveProvider throws for model id with path traversal attempt', () => {
+    expect(() => resolveProvider('../../etc/passwd')).toThrow();
+  });
+
+  it('HOBBY_ALLOWED_MODELS is non-empty and every entry is a non-empty string', () => {
+    expect(HOBBY_ALLOWED_MODELS.size).toBeGreaterThan(0);
+    for (const id of HOBBY_ALLOWED_MODELS) {
+      expect(typeof id).toBe('string');
+      expect(id.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('concurrent resolveProvider calls for all Hobby models are consistent', async () => {
+    // Stress: 50 concurrent lookups must all return the same result as serial.
+    const hobbyModels = [...HOBBY_ALLOWED_MODELS];
+    const serial = hobbyModels.map((id) => {
+      try {
+        return resolveProvider(id);
+      } catch {
+        return null;
+      }
+    });
+    const concurrent = await Promise.all(
+      hobbyModels.map((id) =>
+        Promise.resolve().then(() => {
+          try {
+            return resolveProvider(id);
+          } catch {
+            return null;
+          }
+        }),
+      ),
+    );
+    expect(concurrent).toEqual(serial);
+  });
+
+  it('resolveProvider is deterministic under 1000 rapid calls for the same model', () => {
+    const model = 'claude-haiku-4.5';
+    const expected = resolveProvider(model);
+    for (let i = 0; i < 1000; i++) {
+      expect(resolveProvider(model)).toBe(expected);
+    }
+  });
+});
