@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { toast } from 'sonner';
 import { formatChatExecutionModeLabel } from '@agiworkforce/types';
+import type { PrivacyMode } from '@agiworkforce/types';
 import { storageFallback } from '../lib/storageFallback';
 import { supportsLocalAppMode } from '../lib/tauri-mock';
 import { useAuthStore } from './auth';
@@ -136,3 +137,18 @@ export const selectIsCloud = (state: AppModeState): boolean => state.mode === 'c
 export const selectIsLocal = (state: AppModeState): boolean => state.mode === 'local';
 export const selectPlanTier = (state: AppModeState): PlanTier => state.planTier;
 export const selectHasOnboarded = (state: AppModeState): boolean => state.hasOnboarded;
+
+/**
+ * Maps the binary AppMode to the canonical 3-tier PrivacyMode from
+ * @agiworkforce/types. Use this selector wherever code needs to branch on the
+ * full trust boundary (local / byok / managed) rather than the simplified
+ * local/cloud binary.
+ *
+ * Current mapping:
+ *   'local'  → 'local'    (device-only; no egress)
+ *   'cloud'  → 'managed'  (AGI-managed compute; BYOK detection is a tracked gap
+ *                          — add BYOK key-presence check here once the model
+ *                          store exposes isByokConfigured())
+ */
+export const selectPrivacyMode = (state: AppModeState): PrivacyMode =>
+  state.mode === 'local' ? 'local' : 'managed';
