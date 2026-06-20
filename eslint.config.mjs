@@ -61,6 +61,8 @@ export default [
       'apps/extension-vscode/scripts/**',
       // Workspace stub for react-native-worklets (CJS, no linting needed)
       'packages/react-native-worklets/**',
+      // Archived dead code — do not lint
+      'docs/archive/**',
       // AI coding tool config directories (not app source)
       '.opencode/**',
       '.codex/**',
