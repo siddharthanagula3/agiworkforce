@@ -17,6 +17,7 @@ type PaidTier = 'pro' | 'max' | 'enterprise';
 function normalizeTier(tier: string): 'free' | PaidTier {
   switch (tier.toLowerCase()) {
     case 'pro':
+    case 'team':
       return 'pro';
     case 'max':
       return 'max';

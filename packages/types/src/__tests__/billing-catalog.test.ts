@@ -8,22 +8,16 @@ import {
 
 describe('billing catalog', () => {
   it('derives monthly included usage budget at 35% of plan price', () => {
-    expect(getPlanPriceCents('hobby')).toBe(1000);
-    expect(getPlanUsageBudgetCents('hobby')).toBe(350);
+    expect(getPlanPriceCents('pro')).toBe(2000);
+    expect(getPlanUsageBudgetCents('pro')).toBe(700);
 
-    expect(getPlanPriceCents('pro')).toBe(2999);
-    expect(getPlanUsageBudgetCents('pro')).toBe(1050);
-
-    expect(getPlanPriceCents('max')).toBe(29999);
-    expect(getPlanUsageBudgetCents('max')).toBe(10500);
+    expect(getPlanPriceCents('max')).toBe(10000);
+    expect(getPlanUsageBudgetCents('max')).toBe(3500);
   });
 
   it('derives yearly included usage budget from yearly billed amount', () => {
-    expect(getPlanPriceCents('hobby', 'yearly')).toBe(5988);
-    expect(getPlanUsageBudgetCents('hobby', 'yearly')).toBe(2096);
-
-    expect(getPlanPriceCents('pro', 'yearly')).toBe(29988);
-    expect(getPlanUsageBudgetCents('pro', 'yearly')).toBe(10496);
+    expect(getPlanPriceCents('pro', 'yearly')).toBe(20400);
+    expect(getPlanUsageBudgetCents('pro', 'yearly')).toBe(7140);
   });
 
   it('returns zero for free and invalid plans', () => {

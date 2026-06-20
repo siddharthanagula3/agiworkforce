@@ -24,9 +24,8 @@ const SPEND_OPTIONS: SpendOption[] = [
 ];
 
 function bestTierForSavings(monthlySpend: number): BillingPlanTier {
-  if (monthlySpend >= BILLING_PLAN_PRICING.pro_plus.monthlyPriceUsd) return 'pro_plus';
-  if (monthlySpend >= BILLING_PLAN_PRICING.pro.monthlyPriceUsd) return 'pro';
-  return 'hobby';
+  if (monthlySpend >= BILLING_PLAN_PRICING.max.monthlyPriceUsd) return 'max';
+  return 'pro';
 }
 
 export interface SpendStackImporterProps {

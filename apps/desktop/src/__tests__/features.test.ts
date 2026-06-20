@@ -121,11 +121,11 @@ describe('modelStore', () => {
   });
 
   describe('tier restrictions', () => {
-    it('should allow the current OpenAI flagship only on max and enterprise tiers', async () => {
+    it('should allow gpt-5.5 on pro, max, and enterprise tiers (moved to pro_additions)', async () => {
       const { isModelAllowedForTier } = await import('../constants/llm');
 
-      expect(isModelAllowedForTier('gpt-5.5', 'hobby')).toBe(false);
-      expect(isModelAllowedForTier('gpt-5.5', 'pro')).toBe(false);
+      expect(isModelAllowedForTier('gpt-5.5', 'free')).toBe(false);
+      expect(isModelAllowedForTier('gpt-5.5', 'pro')).toBe(true);
       expect(isModelAllowedForTier('gpt-5.5', 'max')).toBe(true);
       expect(isModelAllowedForTier('gpt-5.5', 'enterprise')).toBe(true);
     });
