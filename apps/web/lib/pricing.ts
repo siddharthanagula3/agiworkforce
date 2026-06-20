@@ -45,7 +45,7 @@ export const STRIPE_PRICE_IDS = {
   },
   max: {
     monthly: validatePriceId(process.env['STRIPE_PRICE_MAX_MONTHLY'], 'STRIPE_PRICE_MAX_MONTHLY'),
-    yearly: validatePriceId(process.env['STRIPE_PRICE_MAX_YEARLY'], 'STRIPE_PRICE_MAX_YEARLY'),
+    yearly: undefined, // Max plan is monthly-only; no yearly price configured
   },
 };
 
