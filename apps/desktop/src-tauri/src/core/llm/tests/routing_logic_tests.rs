@@ -748,7 +748,7 @@ mod tests {
     #[test]
     fn test_infer_provider_zhipu_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("glm-5.1"), Provider::Zhipu);
+        assert_eq!(router.infer_provider_from_model("glm-5.2"), Provider::Zhipu);
     }
 
     #[test]

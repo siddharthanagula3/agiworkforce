@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
  * API Documentation: https://docs.bigmodel.cn/cn/guide/develop/http/introduction
  *
  * Models:
- * - glm-5.1: Current GLM default in the shared catalog
+ * - glm-5.2: Current GLM default in the shared catalog
  * - glm-4.6v: Vision-capable model
  * - glm-4-plus: Enhanced model
  * - glm-4-flash: Fast, cost-effective model

@@ -759,7 +759,7 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     label: 'Escalation Coding',
     description:
       'Pool B escalation lane (12% — coding + complex). GLM-5.1 is the current GLM route in the shared catalog.',
-    modelId: 'glm-5.1',
+    modelId: 'glm-5.2',
     provider: 'zhipu',
   },
 
