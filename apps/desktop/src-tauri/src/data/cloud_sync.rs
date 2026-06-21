@@ -1895,6 +1895,72 @@ mod tests {
         );
     }
 
+    /// WIRE FORMAT: the push body must serialize to the server's camelCase zod schema
+    /// (PushConversationSchema/PushMessageSchema). A missing rename here would emit
+    /// snake_case keys, the server would see required camelCase fields missing, and
+    /// EVERY push would 400 — silently degrading desktop to pull-only. Also asserts
+    /// user_id never leaves in the body (server derives it; RLS enforces it).
+    #[test]
+    fn push_body_serializes_to_server_camelcase_schema() {
+        let body = PushBody {
+            conversations: vec![PushConversation {
+                id: "c1".into(),
+                title: "T".into(),
+                model: None,
+                project_id: Some("p1".into()),
+                pinned: false,
+                created_at: Some("2026-06-20T00:00:00Z".into()),
+                updated_at: "2026-06-20T00:00:01Z".into(),
+                deleted_at: None,
+            }],
+            messages: vec![PushMessage {
+                id: "m1".into(),
+                conversation_id: "c1".into(),
+                role: "user".into(),
+                content: "hi".into(),
+                model: None,
+                provider: None,
+                created_at: Some("2026-06-20T00:00:00Z".into()),
+                deleted_at: None,
+            }],
+        };
+        let v = serde_json::to_value(&body).unwrap();
+
+        let conv = &v["conversations"][0];
+        assert_eq!(conv["projectId"], "p1", "project_id must serialize as projectId");
+        assert!(conv.get("createdAt").is_some(), "created_at → createdAt");
+        assert!(conv.get("updatedAt").is_some(), "updated_at → updatedAt");
+        assert!(conv.get("project_id").is_none(), "must not emit snake_case project_id");
+        assert!(conv.get("deletedAt").is_some(), "deleted_at key present (null) → deletedAt");
+
+        let msg = &v["messages"][0];
+        assert_eq!(msg["conversationId"], "c1", "conversation_id must serialize as conversationId");
+        assert!(msg.get("createdAt").is_some(), "created_at → createdAt");
+        assert!(msg.get("conversation_id").is_none(), "must not emit snake_case conversation_id");
+
+        // Trust boundary: no user_id anywhere in the push body.
+        for obj in [conv, msg] {
+            assert!(obj.get("userId").is_none() && obj.get("user_id").is_none());
+        }
+    }
+
+    /// The push ACK response is snake_case (`server_version` from the SQL RETURNING).
+    /// A camelCase rename on AckedRow would silently break ack-clear → infinite re-push.
+    #[test]
+    fn push_response_deserializes_snake_case_server_version() {
+        let resp: PushResponse = serde_json::from_value(serde_json::json!({
+            "applied": {
+                "conversations": [{ "id": "c1", "server_version": "42" }],
+                "messages": [{ "id": "m1", "server_version": "43" }]
+            },
+            "cursor": "43"
+        }))
+        .unwrap();
+        assert_eq!(resp.applied.conversations[0].id, "c1");
+        assert_eq!(resp.applied.conversations[0].server_version, "42");
+        assert_eq!(resp.applied.messages[0].server_version, "43");
+    }
+
     /// TRUST BOUNDARY (CLAUDE.md locked rule): the engine must perform ZERO network
     /// I/O without a bearer token. An empty token returns an empty outcome and leaves
     /// dirty rows untouched — no push, no clear. (An unreachable base_url also proves
