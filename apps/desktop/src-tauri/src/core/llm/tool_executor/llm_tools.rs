@@ -41,6 +41,7 @@ impl ToolExecutor {
                 strategy: crate::core::llm::RoutingStrategy::Auto,
                 context: None,
                 prefer_cloud_credits: false,
+                local_only: false,
             });
 
             let router = llm_state.router.read().await;

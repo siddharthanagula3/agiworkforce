@@ -120,6 +120,7 @@ mod tests {
             strategy: RoutingStrategy::LocalFirst,
             context: None,
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         assert_eq!(prefs.provider, Some(Provider::Ollama));

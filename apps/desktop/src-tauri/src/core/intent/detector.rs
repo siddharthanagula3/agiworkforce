@@ -256,6 +256,7 @@ Only respond with the JSON object, no other text."#,
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         let request = LLMRequest {

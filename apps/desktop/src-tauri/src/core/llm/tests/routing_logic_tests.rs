@@ -23,6 +23,7 @@ mod tests {
         CostPriority, LLMProvider, LLMRequest, LLMResponse, LLMRouter, Provider, RouterContext,
         RoutingStrategy, TaskType,
     };
+    use crate::core::llm::llm_router::RouterPreferences;
 
     // ------------------------------------------------------------------
     // MockProvider -- a zero-cost stub that satisfies `has_provider` checks
@@ -93,6 +94,45 @@ mod tests {
             );
         }
         router
+    }
+
+    // ------------------------------------------------------------------
+    // TRUST BOUNDARY: pure Local mode must never yield a ManagedCloud candidate.
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn local_only_excludes_managed_cloud_candidate() {
+        let router = router_with_all_providers();
+        let request = LLMRequest::default();
+
+        // local_only=true must exclude ManagedCloud even though it is registered
+        // AND prefer_cloud_credits is set (i.e. every path that could add it).
+        let local_prefs = RouterPreferences {
+            prefer_cloud_credits: true,
+            local_only: true,
+            ..Default::default()
+        };
+        let local_candidates = router.candidates(&request, &local_prefs);
+        assert!(
+            !local_candidates
+                .iter()
+                .any(|c| c.provider == Provider::ManagedCloud),
+            "Local mode must never produce a ManagedCloud candidate"
+        );
+
+        // Sanity: with local_only=false, ManagedCloud is allowed to appear.
+        let cloud_prefs = RouterPreferences {
+            prefer_cloud_credits: true,
+            local_only: false,
+            ..Default::default()
+        };
+        let cloud_candidates = router.candidates(&request, &cloud_prefs);
+        assert!(
+            cloud_candidates
+                .iter()
+                .any(|c| c.provider == Provider::ManagedCloud),
+            "Non-local mode should still allow a ManagedCloud candidate"
+        );
     }
 
     // ------------------------------------------------------------------

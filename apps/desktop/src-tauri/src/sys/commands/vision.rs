@@ -164,6 +164,7 @@ pub async fn vision_send_message(
         strategy: crate::core::llm::llm_router::RoutingStrategy::Auto,
         context: None,
         prefer_cloud_credits: false,
+        local_only: false,
     };
 
     let candidates = {

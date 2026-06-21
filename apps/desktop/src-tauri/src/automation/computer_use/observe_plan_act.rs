@@ -602,6 +602,7 @@ Only include actions you're confident will make progress."#,
                 ..Default::default()
             }),
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         let candidates = router.candidates(&request, &preferences);

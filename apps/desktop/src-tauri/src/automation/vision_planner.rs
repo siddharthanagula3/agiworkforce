@@ -163,6 +163,7 @@ impl ActionPlanner {
                 ..Default::default()
             }),
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         let candidates = router.candidates(&request, &preferences);
