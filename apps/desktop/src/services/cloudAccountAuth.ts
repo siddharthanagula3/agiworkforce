@@ -8,6 +8,9 @@ import {
 } from '../lib/cloudAccountTypes';
 import { API_BASE_URL, WEB_APP_URL } from '../api/config';
 import { invoke, isTauri } from '../lib/tauri-mock';
+// NOTE: egressGuard is required LAZILY at its call site (fetchAccountSnapshot)
+// to break the load-time cycle egressGuard → appModeStore → auth →
+// cloudAccountAuth → egressGuard. A static import here re-introduces it.
 
 export class AuthError extends Error {
   constructor(
@@ -514,7 +517,11 @@ class CloudAccountAuthService {
   }
 
   private async fetchAccountSnapshot(accessToken: string): Promise<AccountSnapshot> {
-    const response = await fetch(`${WEB_APP_URL}/api/me`, {
+    // Dynamic import breaks the egressGuard ↔ appModeStore load-time cycle while
+    // working under ESM (a relative `require()` does not resolve here). By the
+    // time this async method runs, the module graph is fully loaded.
+    const { guardedFetch } = await import('../lib/egressGuard');
+    const response = await guardedFetch(`${WEB_APP_URL}/api/me`, {
       method: 'GET',
       credentials: 'include',
       headers: {

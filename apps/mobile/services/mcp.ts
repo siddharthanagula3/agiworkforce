@@ -24,7 +24,10 @@ import type {
 } from '@agiworkforce/mcp';
 
 import { API_URL } from '@/lib/constants';
-import { secureFetch } from './secureFetch';
+// Zero-leak: every call here targets OUR api-gateway (`${API_URL}/api/mcp/...`).
+// Route through guardedFetch so Local mode refuses before any network I/O
+// (fail-closed); guardedFetch delegates to secureFetch (TLS pinning) when allowed.
+import { guardedFetch } from '@/lib/egressGuard';
 import { getAuthToken } from './authSession';
 
 export type { McpCallToolResult, McpServerCatalog, McpServerConfig, McpToolCatalog };
@@ -40,7 +43,7 @@ async function getAuthHeader(): Promise<string | null> {
  */
 export async function listMcpServers(): Promise<{ servers: string[] }> {
   const auth = await getAuthHeader();
-  const res = await secureFetch(`${API_URL}/api/mcp/servers`, {
+  const res = await guardedFetch(`${API_URL}/api/mcp/servers`, {
     headers: auth ? { Authorization: auth } : {},
   });
   if (!res.ok) {
@@ -55,7 +58,7 @@ export async function listMcpServers(): Promise<{ servers: string[] }> {
  */
 export async function listMcpTools(serverId: string): Promise<McpServerCatalog> {
   const auth = await getAuthHeader();
-  const res = await secureFetch(
+  const res = await guardedFetch(
     `${API_URL}/api/mcp/servers/${encodeURIComponent(serverId)}/tools`,
     { headers: auth ? { Authorization: auth } : {} },
   );
@@ -74,7 +77,7 @@ export async function callMcpTool(
   args: Record<string, unknown> = {},
 ): Promise<McpCallToolResult> {
   const auth = await getAuthHeader();
-  const res = await secureFetch(
+  const res = await guardedFetch(
     `${API_URL}/api/mcp/servers/${encodeURIComponent(serverId)}/tools/${encodeURIComponent(toolName)}/call`,
     {
       method: 'POST',

@@ -155,16 +155,31 @@ export const selectHasOnboarded = (state: AppModeState): boolean => state.hasOnb
  */
 export const selectPrivacyMode = (state: AppModeState): PrivacyMode => {
   if (state.mode === 'local') return 'local';
-  // Lazy import avoids circular dependency; getState() is safe in selectors.
+  // mode === 'cloud': distinguish BYOK (user-supplied keys, client-direct) from
+  // managed (AGI compute) by the persisted llmConfig.providerMode.
+  //
+  // We read it from the PERSISTED settings (localStorage key
+  // 'agiworkforce-settings') rather than importing settingsStore. A static
+  // import creates a load-time cycle (appModeStore ↔ settings → auth chain), and
+  // the previous lazy `require('./settingsStore')` silently throws under
+  // ESM/Vite/Tauri and fell through to 'managed' — which made the egress guard
+  // fail OPEN for BYOK (the exact population it must protect). A persisted-storage
+  // read is cycle-free and resolves in every runtime. BYOK is only reachable once
+  // the user has configured provider keys, so settings are always persisted then.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useSettingsStore } = require('./settingsStore') as {
-      useSettingsStore: { getState: () => { llmConfig: { providerMode: string } } };
-    };
-    const providerMode = useSettingsStore.getState().llmConfig.providerMode;
-    if (providerMode === 'cloud') return 'byok';
+    const raw =
+      typeof globalThis !== 'undefined' && globalThis.localStorage
+        ? globalThis.localStorage.getItem('agiworkforce-settings')
+        : null;
+    if (raw) {
+      const providerMode = (
+        JSON.parse(raw) as { state?: { llmConfig?: { providerMode?: string } } }
+      )?.state?.llmConfig?.providerMode;
+      if (providerMode === 'cloud') return 'byok';
+    }
   } catch {
-    // settingsStore unavailable (SSR, test env); fall through to managed.
+    // Unparseable/unavailable storage: fall through to managed for non-egress
+    // consumers. (Egress callers must additionally fail closed on any error.)
   }
   return 'managed';
 };

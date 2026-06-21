@@ -7,7 +7,12 @@ import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } fr
 // chokepoint that the TLS-pinning gate hooks into. Today it's a
 // passthrough; flipping `PINNING_ENFORCED` in lib/pinning.ts (after ops
 // drops SPKI hashes) makes it enforce pin coverage at the JS layer.
-import { secureFetch } from './secureFetch';
+//
+// Zero-leak: every request here targets OUR managed cloud (`${API_URL}/api/...`,
+// `${API_URL}/api/upload`). Route through guardedFetch so Local mode refuses the
+// call before any network I/O (fail-closed); guardedFetch delegates to
+// secureFetch (TLS pinning) when the request is allowed.
+import { guardedFetch } from '@/lib/egressGuard';
 
 // ---------------------------------------------------------------------------
 // Paywall error type
@@ -144,7 +149,7 @@ async function request<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await secureFetch(`${API_URL}${path}`, {
+    const response = await guardedFetch(`${API_URL}${path}`, {
       ...init,
       headers: {
         ...headers,
@@ -278,7 +283,7 @@ export const api = {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await secureFetch(`${API_URL}/api/upload`, {
+      const response = await guardedFetch(`${API_URL}/api/upload`, {
         method: 'POST',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

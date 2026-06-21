@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../api/client';
 import { voiceCheckLocalWhisper, voiceConfigure, voiceGetSettings } from '../api/voice';
+import { guardedFetch } from '../lib/egressGuard';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
 /**
@@ -650,7 +651,7 @@ export function useVoiceTranscription(
           }
 
           const response = await withTimeout(
-            fetch(`${API_BASE_URL}/api/voice/transcribe`, {
+            guardedFetch(`${API_BASE_URL}/api/voice/transcribe`, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${accessToken}`,
