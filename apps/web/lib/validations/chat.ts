@@ -46,6 +46,10 @@ export type UpdateConversationInput = z.infer<typeof UpdateConversationSchema>;
 
 // AUDIT-008-003: Validation schema for conversation creation
 export const CreateConversationSchema = z.object({
+  // Offline-first clients (mobile/desktop) generate a UUIDv7 id locally so the
+  // conversation has a stable cloud identity before the round-trip. Optional:
+  // web omits it and the DB default (gen_random_uuid) applies.
+  id: z.string().uuid().optional(),
   title: z
     .string()
     .max(500, 'Title must be 500 characters or less')
