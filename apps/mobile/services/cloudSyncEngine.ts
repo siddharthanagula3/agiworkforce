@@ -1,0 +1,285 @@
+/**
+ * Mobile cloud sync engine (P2 Phase 1).
+ *
+ * Delta-syncs the CLOUD chat store (`chatCloudMessageStore`) with the managed-cloud
+ * `/api/chat/sync` endpoint: push locally-changed rows, then pull everything with a
+ * `server_version` greater than our cursor, advancing the cursor as we go.
+ *
+ * MANAGED-ONLY: every entry point is gated on `isManagedSyncEnabled()` and the `api`
+ * client routes through `guardedFetch`, which independently refuses any network I/O
+ * in Local mode. Local-mode conversations live in a separate store and are never
+ * touched here. IDs are UUIDv7 (client-generated, collision-free, time-ordered).
+ */
+import { api } from './api';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
+import type { ChatMessage, ConversationSummary } from '@/types/chat';
+
+const SYNC_PATH = '/api/chat/sync';
+/** Safety bound on the pull pagination loop (each page is up to 500 rows). */
+const PULL_PAGE_GUARD = 50;
+
+// ── Delta wire shapes (snake_case from /api/chat/sync) ──────────────────────────
+
+interface ConversationDelta {
+  id: string;
+  title: string;
+  model: string | null;
+  project_id: string | null;
+  pinned: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  server_version: string;
+}
+
+interface MessageDelta {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  model: string | null;
+  provider: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  server_version: string;
+}
+
+interface PullResponse {
+  conversations: ConversationDelta[];
+  messages: MessageDelta[];
+  cursor: string;
+  hasMore: boolean;
+}
+
+/**
+ * Managed-only gate: the cloud-chat feature is on AND the app is in cloud mode.
+ * The `api` client's guardedFetch is an independent fail-closed backstop that
+ * refuses egress in Local mode regardless of this check.
+ */
+export function isManagedSyncEnabled(): boolean {
+  try {
+    return FEATURES.cloudChat === true && useChatAppModeStore.getState().appMode === 'cloud';
+  } catch {
+    return false;
+  }
+}
+
+/** Compare two non-negative integer strings (bigint server_version) without precision loss. */
+function bigintGreater(a: string, b: string): boolean {
+  const na = a.replace(/^0+/, '') || '0';
+  const nb = b.replace(/^0+/, '') || '0';
+  if (na.length !== nb.length) return na.length > nb.length;
+  return na > nb;
+}
+
+function maxCursor(base: string, ...versions: string[]): string {
+  let max = base;
+  for (const v of versions) if (v && bigintGreater(v, max)) max = v;
+  return max;
+}
+
+// ── Apply pulled deltas into the cloud store ────────────────────────────────────
+
+function applyConversationDeltas(deltas: ConversationDelta[]): void {
+  const store = useChatCloudMessageStore.getState();
+  const existing = new Map(store.conversations.map((c) => [c.id, c]));
+  for (const d of deltas) {
+    if (d.deleted_at) {
+      store.removeCloudConversation(d.id);
+      existing.delete(d.id);
+      continue;
+    }
+    const summary: ConversationSummary = {
+      id: d.id,
+      title: d.title,
+      createdAt: d.created_at,
+      updatedAt: d.updated_at,
+      messageCount: existing.get(d.id)?.messageCount ?? 0,
+      pinned: d.pinned,
+      model: d.model ?? undefined,
+      projectId: d.project_id ?? undefined,
+      executionMode: 'cloud',
+    };
+    if (existing.has(d.id)) {
+      store.patchCloudConversation(d.id, summary);
+    } else {
+      store.addCloudConversation(summary);
+    }
+    existing.set(d.id, summary);
+  }
+}
+
+function applyMessageDeltas(deltas: MessageDelta[]): void {
+  const store = useChatCloudMessageStore.getState();
+  const byConv = new Map<string, MessageDelta[]>();
+  for (const d of deltas) {
+    const list = byConv.get(d.conversation_id) ?? [];
+    list.push(d);
+    byConv.set(d.conversation_id, list);
+  }
+  for (const [conversationId, convDeltas] of byConv) {
+    const current = useChatCloudMessageStore.getState().messages[conversationId] ?? [];
+    const merged = new Map(current.map((m) => [m.id, m]));
+    for (const d of convDeltas) {
+      if (d.deleted_at) {
+        merged.delete(d.id);
+        continue;
+      }
+      const existing = merged.get(d.id);
+      merged.set(d.id, {
+        ...(existing ?? {}),
+        id: d.id,
+        role: d.role,
+        content: d.content,
+        ...(d.model ? { model: d.model } : {}),
+        ...(d.provider ? { provider: d.provider } : {}),
+        createdAt: d.created_at,
+      } as ChatMessage);
+    }
+    const ordered = Array.from(merged.values()).sort((a, b) => {
+      const at = (a as { createdAt?: string }).createdAt ?? '';
+      const bt = (b as { createdAt?: string }).createdAt ?? '';
+      return at === bt ? a.id.localeCompare(b.id) : at.localeCompare(bt);
+    });
+    store.setCloudMessages(conversationId, ordered);
+  }
+}
+
+// ── Pull ────────────────────────────────────────────────────────────────────────
+
+async function pull(): Promise<void> {
+  let cursor = useCloudSyncStateStore.getState().cursor;
+  for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
+    const res = await api.get<PullResponse>(`${SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
+    applyConversationDeltas(res.conversations ?? []);
+    applyMessageDeltas(res.messages ?? []);
+    cursor = maxCursor(
+      cursor,
+      ...(res.conversations ?? []).map((c) => c.server_version),
+      ...(res.messages ?? []).map((m) => m.server_version),
+      res.cursor ?? '0',
+    );
+    useCloudSyncStateStore.getState().setCursor(cursor);
+    if (!res.hasMore) break;
+  }
+}
+
+// ── Push ────────────────────────────────────────────────────────────────────────
+
+interface PushMessage {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  model: string | null;
+  provider: string | null;
+  createdAt?: string;
+}
+
+async function push(): Promise<void> {
+  const { dirtyConversationIds, dirtyMessages } = useCloudSyncStateStore.getState();
+  if (dirtyConversationIds.length === 0 && dirtyMessages.length === 0) return;
+
+  const cloud = useChatCloudMessageStore.getState();
+  const convById = new Map(cloud.conversations.map((c) => [c.id, c]));
+
+  // Conversations are sent first (the server upserts them before messages, so a
+  // new conversation's messages pass the ownership EXISTS check in one round-trip).
+  const conversations = dirtyConversationIds
+    .map((id) => convById.get(id))
+    .filter((c): c is ConversationSummary => Boolean(c))
+    .map((c) => ({
+      id: c.id,
+      title: c.title,
+      model: c.model ?? null,
+      projectId: c.projectId ?? null,
+      pinned: c.pinned ?? false,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    }));
+
+  const messages = dirtyMessages
+    .map(({ conversationId, messageId }): PushMessage | null => {
+      const msg = (cloud.messages[conversationId] ?? []).find((m) => m.id === messageId);
+      if (!msg) return null;
+      // The cloud schema is a user/assistant/system transcript; 'tool' records are
+      // transient tool-call state and are not synced.
+      if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system') return null;
+      return {
+        id: msg.id,
+        conversationId,
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        model: (msg as { model?: string }).model ?? null,
+        provider: (msg as { provider?: string }).provider ?? null,
+        createdAt: (msg as { createdAt?: string }).createdAt,
+      };
+    })
+    .filter((m): m is PushMessage => m !== null);
+
+  // Clear the dirty refs we attempted regardless — a row that vanished locally
+  // (e.g. deleted) has nothing to push, and a successful POST persisted the rest.
+  if (conversations.length > 0 || messages.length > 0) {
+    await api.post(SYNC_PATH, { conversations, messages });
+  }
+  useCloudSyncStateStore.getState().clearDirty(dirtyConversationIds, dirtyMessages);
+}
+
+// ── Public API ──────────────────────────────────────────────────────────────────
+
+let syncing = false;
+
+/**
+ * Push local changes, then pull deltas. No-op (and zero network I/O) unless managed
+ * mode is active. Single-flight: a concurrent call is dropped while one is in flight.
+ */
+export async function syncNow(): Promise<void> {
+  if (!isManagedSyncEnabled()) return;
+  if (syncing) return;
+  syncing = true;
+  useCloudSyncStateStore.getState().setStatus('syncing');
+  try {
+    await push();
+    await pull();
+    useCloudSyncStateStore.getState().setStatus('idle');
+    useCloudSyncStateStore.setState({ lastSyncAt: Date.now() });
+  } catch (err) {
+    useCloudSyncStateStore
+      .getState()
+      .setStatus('error', err instanceof Error ? err.message : String(err));
+  } finally {
+    syncing = false;
+  }
+}
+
+let loopHandle: ReturnType<typeof setInterval> | null = null;
+
+/** Start periodic background sync. Idempotent; runs one sync immediately. */
+export function startCloudSyncLoop(intervalMs = 30_000): void {
+  if (loopHandle) return;
+  loopHandle = setInterval(() => {
+    void syncNow();
+  }, intervalMs);
+  void syncNow();
+}
+
+export function stopCloudSyncLoop(): void {
+  if (loopHandle) {
+    clearInterval(loopHandle);
+    loopHandle = null;
+  }
+}
+
+/** Mark a locally-created/edited cloud conversation for the next push. */
+export function markConversationForSync(id: string): void {
+  useCloudSyncStateStore.getState().markConversationDirty(id);
+}
+
+/** Mark a locally-created/edited cloud message for the next push. */
+export function markMessageForSync(conversationId: string, messageId: string): void {
+  useCloudSyncStateStore.getState().markMessageDirty(conversationId, messageId);
+}
