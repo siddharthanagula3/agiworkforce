@@ -28,7 +28,9 @@ import {
   executionModeForModel,
   providerForExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
-import type { ChatMessage, MessageAttachment } from '@/types/chat';
+import type { ChatMessage, MessageAttachment, ConversationSummary } from '@/types/chat';
+import { uuidv7 } from '@agiworkforce/utils';
+import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
@@ -290,6 +292,51 @@ function getMsgStore() {
   return useChatMessageStore;
 }
 
+function getCloudStore() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { useChatCloudMessageStore } =
+    require('@/stores/chat/chatCloudMessageStore') as typeof import('@/stores/chat/chatCloudMessageStore');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return useChatCloudMessageStore;
+}
+
+/**
+ * Additive write-through for CLOUD conversations (P2 sync).
+ *
+ * The live send/stream path writes messages to the LOCAL message store (which feeds
+ * LLM history-building). This mirrors a COMPLETED turn's messages into the cloud
+ * store and queues them for the next sync push, so that: (a) the engine can push
+ * them server-side (the first durable persistence path for mobile cloud chat), (b) a
+ * conversation reopen's empty-GET guard sees existing messages and won't clobber
+ * them, and (c) cross-device pulls merge against the same store. No-op for local
+ * conversations — gated on the cloud store actually owning the conversation.
+ */
+function mirrorCloudTurn(
+  conversationId: string,
+  messages: ChatMessage[],
+  convPatch: Partial<ConversationSummary>,
+): void {
+  const cloud = getCloudStore().getState();
+  if (!cloud.conversations.some((c) => c.id === conversationId)) return;
+
+  const current = cloud.messages[conversationId] ?? [];
+  const byId = new Map(current.map((m) => [m.id, m]));
+  for (const m of messages) byId.set(m.id, { ...byId.get(m.id), ...m });
+  const ordered = Array.from(byId.values()).sort((a, b) =>
+    (a.createdAt ?? '').localeCompare(b.createdAt ?? ''),
+  );
+  cloud.setCloudMessages(conversationId, ordered);
+  cloud.patchCloudConversation(conversationId, { ...convPatch, messageCount: ordered.length });
+
+  markConversationForSync(conversationId);
+  for (const m of messages) {
+    // Only user/assistant/system rows are part of the synced transcript.
+    if (m.role === 'user' || m.role === 'assistant' || m.role === 'system') {
+      markMessageForSync(conversationId, m.id);
+    }
+  }
+}
+
 /**
  * Dark-mode accent palette used when persisting artifacts to the store.
  * Sourced from the shared design-token package so no hex values are hardcoded.
@@ -477,8 +524,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
+    // Cloud conversations need globally-unique, time-ordered ids (UUIDv7) so messages
+    // can be pushed/merged across devices; local chats keep the lightweight local id.
+    const newMessageId = () => (executionMode === 'cloud' ? uuidv7() : generateId());
+
     const userMessage: ChatMessage = {
-      id: generateId(),
+      id: newMessageId(),
       conversationId,
       role: 'user',
       content,
@@ -487,7 +538,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       attachments: uploadedAttachments,
     };
 
-    const assistantMessageId = generateId();
+    const assistantMessageId = newMessageId();
     const assistantMessage: ChatMessage = {
       id: assistantMessageId,
       conversationId,
@@ -628,6 +679,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           : c,
       ),
     }));
+
+    // Cloud write-through: persist+queue the user message now so an aborted or failed
+    // turn still syncs it (the assistant reply is mirrored on stream completion).
+    if (executionMode === 'cloud') {
+      mirrorCloudTurn(conversationId, [userMessage], { lastMessage: content });
+    }
 
     // Guard: if stopStreaming was called before we reached this point, bail out.
     if (cancelledBeforeStream.has(conversationId)) {
@@ -883,6 +940,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   : c,
               ),
             }));
+
+            // Cloud write-through: mirror the finalized assistant reply into the cloud
+            // store, queue it, and push immediately (don't wait for the sync interval).
+            if (executionMode === 'cloud') {
+              const finalAssistant = updatedMsgs.find((m) => m.id === assistantMessageId);
+              if (finalAssistant) {
+                mirrorCloudTurn(conversationId, [finalAssistant], {
+                  lastMessage: preview,
+                  updatedAt: new Date().toISOString(),
+                });
+              }
+              void syncNow();
+            }
 
             set({
               isStreaming: streamingConversations.size > 0,

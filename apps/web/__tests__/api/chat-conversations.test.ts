@@ -282,6 +282,46 @@ describe('Chat Conversations API', () => {
         );
       });
 
+      it('should accept a client-supplied UUID id (offline-first sync)', async () => {
+        const clientId = '0190a000-0000-7000-8000-0000000000aa';
+        const newConv = { id: clientId, title: 'New conversation', model: 'auto' };
+        mockQuery.mockResolvedValueOnce([newConv]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id: clientId, title: 'New conversation' }),
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(201);
+        const data = await response.json();
+        expect(data.conversation.id).toBe(clientId);
+        // The client id is forwarded into the insert (coalesced over the DB default),
+        // and the create is idempotent/owner-guarded via ON CONFLICT.
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('on conflict (id)'),
+          expect.arrayContaining([clientId]),
+        );
+      });
+
+      it('should reject a non-UUID client id', async () => {
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id: 'not-a-uuid' }),
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(400);
+      });
+
       it('should associate conversation with authenticated user', async () => {
         const newConv = { id: 'new-conv' };
         mockQuery.mockResolvedValueOnce([newConv]);

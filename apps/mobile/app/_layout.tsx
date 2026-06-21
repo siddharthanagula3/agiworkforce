@@ -34,6 +34,14 @@ import {
   getClerkUserId,
 } from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import * as Crypto from 'expo-crypto';
+import { setUuidV7RandomSource } from '@agiworkforce/utils';
+import { startCloudSyncLoop, stopCloudSyncLoop } from '@/services/cloudSyncEngine';
+
+// Inject a CSPRNG for UUIDv7 once at module load. React Native has no global Web
+// Crypto, and the cloud sync engine's client-generated ids must never fall back to
+// Math.random (a weak RNG would risk cross-device id collisions → silent corruption).
+setUuidV7RandomSource((byteCount) => Crypto.getRandomBytes(byteCount));
 import {
   registerForPushNotifications,
   setupNotificationListeners,
@@ -165,6 +173,15 @@ export default function RootLayout() {
   useEffect(() => {
     setSignedIn(isClerkSignedIn);
   }, [isClerkSignedIn]);
+
+  // P2 cloud sync: run the managed-only delta-sync loop while signed in. syncNow()
+  // self-gates on cloud mode (no network I/O in Local), so this is safe to keep
+  // running; it stops on sign-out / unmount. The sidecar is reset by signOut().
+  useEffect(() => {
+    if (!isMmkvReady || !isClerkSignedIn) return;
+    startCloudSyncLoop();
+    return () => stopCloudSyncLoop();
+  }, [isMmkvReady, isClerkSignedIn]);
 
   // Tier refresh — fetch /api/auth/me once after the Clerk session is available
   // and persist the result to MMKV-backed tierStore. The persisted value is used

@@ -85,14 +85,27 @@ async function handleCreateConversation(request: NextRequest) {
   const body = validationResult.data;
 
   try {
+    // Accept a client-supplied UUID (offline-first id); fall back to the DB default.
+    // ON CONFLICT makes a retried create idempotent, and the owner-guarded WHERE
+    // ensures a client can never overwrite another user's conversation by id.
     const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
       `
-        insert into web_conversations (user_id, title, model, project_id)
-        values ($1, $2, $3, $4)
+        insert into web_conversations (id, user_id, title, model, project_id)
+        values (coalesce($5::uuid, gen_random_uuid()), $1, $2, $3, $4)
+        on conflict (id) do update set
+          title = excluded.title,
+          model = excluded.model,
+          project_id = excluded.project_id,
+          updated_at = now()
+        where web_conversations.user_id = $1
         returning id, title, model, project_id, created_at, updated_at
       `,
-      [userId, body.title, body.model ?? null, body.projectId ?? null],
+      [userId, body.title, body.model ?? null, body.projectId ?? null, body.id ?? null],
     );
+    if (!conversation) {
+      // The id exists but is owned by another user — never leak or hijack it.
+      throw createError.conflict('Conversation id already exists');
+    }
     return NextResponse.json({ conversation }, { status: 201 });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to create conversation');

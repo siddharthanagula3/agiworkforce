@@ -13,6 +13,8 @@ import {
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import { uuidv7 } from '@agiworkforce/utils';
+import { markConversationForSync } from '@/services/cloudSyncEngine';
 // SEPARATION-FIX: cloud conversations are physically separated into their own store.
 // Lazy import to avoid circular dependency at module initialisation time.
 function getCloudStore() {
@@ -609,12 +611,18 @@ async function createConversationForMode(
   }
 
   try {
+    // Offline-first: generate the cloud identity (UUIDv7) client-side so the
+    // conversation has a stable id the sync engine can push, independent of the
+    // server round-trip. The create endpoint accepts and echoes this id.
+    const id = uuidv7();
     const data = await api.post<{ conversation: ConversationSummary }>('/api/chat/conversations', {
+      id,
       title: title ?? 'New Chat',
       projectId,
     });
     const conversation: ConversationSummary = {
       ...data.conversation,
+      id: data.conversation?.id ?? id,
       projectId,
       model: data.conversation.model ?? model,
       provider: data.conversation.provider ?? providerForExecutionMode('cloud'),
@@ -623,6 +631,8 @@ async function createConversationForMode(
     // SEPARATION-FIX: cloud conversation goes to the cloud store, NOT the local store.
     // The local store `set` function is intentionally not called here.
     getCloudStore().getState().addCloudConversation(conversation);
+    // Queue the conversation for the next sync push (metadata LWW-reconciles cross-device).
+    markConversationForSync(conversation.id);
     // currentConversationId is shared UI state, not conversation data — safe to set here.
     set(() => ({ currentConversationId: conversation.id }));
     return conversation.id;
