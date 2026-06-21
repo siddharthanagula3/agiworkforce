@@ -655,7 +655,20 @@ async fn zoom_region_inner(
     .with_interpolation(interpolation);
 
     if let Some(path) = request.save_path.clone() {
-        action = action.with_save_path(path);
+        // SECURITY: confine the screenshot to an app-controlled screenshots dir.
+        // Treat save_path as a FILENAME only (strip any directory/traversal
+        // components) so a model can't write a PNG to an arbitrary location.
+        let file_name = std::path::Path::new(&path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "zoom.png".to_string());
+        let screenshots_dir = crate::sys::utils::app_data_dir()
+            .map_err(|e| format!("Failed to resolve app data dir: {}", e))?
+            .join("screenshots");
+        std::fs::create_dir_all(&screenshots_dir)
+            .map_err(|e| format!("Failed to create screenshots dir: {}", e))?;
+        let confined = screenshots_dir.join(file_name);
+        action = action.with_save_path(confined.to_string_lossy().to_string());
     }
 
     // Perform zoom

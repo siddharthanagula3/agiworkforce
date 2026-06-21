@@ -387,6 +387,21 @@ fn resolve_output_path(output_path: &str) -> Result<String> {
         }
     }
 
+    // SECURITY: document_create_* writes a file at this resolved path. Reject
+    // directory traversal and protected system paths so a model-driven create can't
+    // escape to ~/.ssh, shell rc files, LaunchAgents, etc. (legitimate absolute
+    // paths are still allowed; only `..` and denylisted paths are blocked).
+    if resolved.components().any(|c| matches!(c, Component::ParentDir)) {
+        return Err(Error::InvalidPath(
+            "output_path must not contain '..' (directory traversal)".to_string(),
+        ));
+    }
+    if crate::sys::security::blocked_paths::is_blocked(&resolved) {
+        return Err(Error::InvalidPath(
+            "output_path resolves to a protected system path".to_string(),
+        ));
+    }
+
     Ok(resolved.to_string_lossy().to_string())
 }
 

@@ -1393,9 +1393,13 @@ impl RealtimeServer {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                // JSON-encode the selector into a JS string literal (quotes + full
+                // escaping included). Single-quote-only escaping was insufficient —
+                // backslashes/newlines could break out of the literal and inject JS.
+                let selector_js = serde_json::to_string(&selector).map_err(|e| e.to_string())?;
                 let script = format!(
                     r#"(function() {{
-                        const el = document.querySelector('{}');
+                        const el = document.querySelector({});
                         if (!el) return null;
                         return {{
                             tag_name: el.tagName.toLowerCase(),
@@ -1406,7 +1410,7 @@ impl RealtimeServer {
                             outer_html: el.outerHTML || ''
                         }};
                     }})()"#,
-                    selector.replace('\'', "\\'")
+                    selector_js
                 );
                 let element = client.evaluate(&script).await.map_err(|e| e.to_string())?;
 
@@ -1621,10 +1625,8 @@ impl RealtimeServer {
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client(app, tab_id, false, None).await?;
                 let data = if let Some(storage_key) = key {
-                    let script = format!(
-                        "window.localStorage.getItem('{}')",
-                        storage_key.replace('\'', "\\'")
-                    );
+                    let key_js = serde_json::to_string(&storage_key).map_err(|e| e.to_string())?;
+                    let script = format!("window.localStorage.getItem({})", key_js);
                     client.evaluate(&script).await.map_err(|e| e.to_string())?
                 } else {
                     client
@@ -1654,10 +1656,11 @@ impl RealtimeServer {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                let key_js = serde_json::to_string(&key).map_err(|e| e.to_string())?;
+                let value_js = serde_json::to_string(&value).map_err(|e| e.to_string())?;
                 let script = format!(
-                    "window.localStorage.setItem('{}', '{}'); true;",
-                    key.replace('\'', "\\'"),
-                    value.replace('\'', "\\'")
+                    "window.localStorage.setItem({}, {}); true;",
+                    key_js, value_js
                 );
                 client.evaluate(&script).await.map_err(|e| e.to_string())?;
 
