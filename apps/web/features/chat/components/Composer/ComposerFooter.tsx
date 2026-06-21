@@ -14,6 +14,9 @@ import {
   type Effort,
   type ProviderId,
   getPickerModelTier,
+  evaluateModelEnvironment,
+  type ModelEnvironment,
+  type EnvironmentAvailability,
 } from '@agiworkforce/types';
 import { useBillingStore } from '@/stores/unified/auth';
 import {
@@ -106,6 +109,62 @@ function isModelSelectableForTier(model: AIModel, tier: string): boolean {
   return isModelAllowedForTier(model.id, tier);
 }
 
+// ---------------------------------------------------------------------------
+// Environment gating (Phase A — Phase B replaces environmentAvailability with
+// the real managed-compute-beta signal once the E2B client is wired in).
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the current availability of a model's required execution environment.
+ *
+ * PHASE A: returns { configured: false } for every environment, locking all
+ * env-gated models until Phase B wires the real managed-compute-beta signal.
+ * No current model sets requiresEnvironment, so this never triggers today.
+ *
+ * PHASE B: replace the body with a hook/context read that checks whether the
+ * managed-compute beta is enabled for the current user and whether E2B is
+ * currently reachable, then return { configured: true, available: <ping> }.
+ */
+function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
+  // Phase A: all environments are unconfigured — env-gated models stay locked.
+  return { configured: false };
+}
+
+/**
+ * Combined lock decision: tier gate first, then environment gate.
+ *
+ * Keeping these two separate signals in one function means every call-site
+ * (search branch, partition, "More models" inline, reset effect) routes through
+ * the same logic — no gating leak is possible from a partial update.
+ *
+ * Returns:
+ *   locked:  true  → row is grayed/disabled
+ *   reason:  string → shown in aria-label / tooltip (env-lock only; tier-lock
+ *                      keeps existing "requires upgrade" wording)
+ *   kind:    'tier' | 'env' → determines click behaviour and badge copy
+ *
+ * CRITICAL SAFETY: a model WITHOUT requiresEnvironment returns the same result
+ * as the old isModelSelectableForTier call, so no current model is affected.
+ */
+function modelLock(
+  model: AIModel,
+  tier: string,
+): { locked: boolean; reason?: string; kind: 'tier' | 'env' } {
+  // Tier check first (existing pure logic).
+  if (!isModelSelectableForTier(model, tier)) {
+    return { locked: true, kind: 'tier' };
+  }
+  // Environment check (new; no-op when requiresEnvironment is absent).
+  const envResult = evaluateModelEnvironment(
+    model.requiresEnvironment,
+    model.requiresEnvironment ? environmentAvailability(model.requiresEnvironment) : undefined,
+  );
+  if (!envResult.selectable) {
+    return { locked: true, reason: envResult.reason, kind: 'env' };
+  }
+  return { locked: false, kind: 'tier' };
+}
+
 /** True when the model name contains "Opus" · used to show usage-rate tooltip. */
 function isOpusModel(model: AIModel): boolean {
   return model.name.toLowerCase().includes('opus');
@@ -142,12 +201,19 @@ function effortDisabledReason(model: AIModel, effort: Effort): string | null {
  *
  * When a search query is present we skip partitioning so the user sees all
  * matching results in a flat list.
+ *
+ * Uses modelLock() for all lock decisions so tier gating and env gating are
+ * always applied together — no partial-update leak.
  */
 function partitionModels(
   models: AIModel[],
   tier: string,
   searchQuery: string,
-): { recommended: (AIModel & { isLocked: boolean })[]; more: AIModel[]; isSearching: boolean } {
+): {
+  recommended: (AIModel & { isLocked: boolean; lockKind: 'tier' | 'env'; lockReason?: string })[];
+  more: AIModel[];
+  isSearching: boolean;
+} {
   if (searchQuery.trim()) {
     const q = searchQuery.toLowerCase();
     const matches = models.filter(
@@ -157,10 +223,10 @@ function partitionModels(
         m.description.toLowerCase().includes(q),
     );
     return {
-      recommended: matches.map((m) => ({
-        ...m,
-        isLocked: !isModelSelectableForTier(m, tier),
-      })),
+      recommended: matches.map((m) => {
+        const lock = modelLock(m, tier);
+        return { ...m, isLocked: lock.locked, lockKind: lock.kind, lockReason: lock.reason };
+      }),
       more: [],
       isSearching: true,
     };
@@ -171,15 +237,19 @@ function partitionModels(
   // Auto modes first there too. So free users see Auto (Economy) + their Hobby
   // models up top, and Auto Balanced/Best + flagships below with an Upgrade link.
   const isAuto = (m: AIModel) => m.providerKey === 'managed_cloud';
-  const available = models.filter((m) => isModelSelectableForTier(m, tier));
-  const locked = models.filter((m) => !isModelSelectableForTier(m, tier));
+  const available = models.filter((m) => !modelLock(m, tier).locked);
+  const locked = models.filter((m) => modelLock(m, tier).locked);
 
   const orderAutoFirst = (list: AIModel[]) => [
     ...list.filter(isAuto),
     ...list.filter((m) => !isAuto(m)),
   ];
 
-  const recommended = orderAutoFirst(available).map((m) => ({ ...m, isLocked: false }));
+  const recommended = orderAutoFirst(available).map((m) => ({
+    ...m,
+    isLocked: false,
+    lockKind: 'tier' as const,
+  }));
   const more = orderAutoFirst(locked);
 
   return { recommended, more, isSearching: false };
@@ -241,46 +311,65 @@ function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string; size?:
 
 /**
  * Renders a single model row.
- * Locked rows are fully clickable and open the upgrade dialog; they show a
- * styled "Upgrade" badge so the affordance is obvious. Economy (free) rows
- * behave normally.
+ * Tier-locked rows are fully clickable and open the upgrade dialog.
+ * Env-locked rows are truly disabled (not clickable, no upgrade CTA) because
+ * upgrading a subscription cannot satisfy an environment requirement.
  */
 function ModelRow({
   model,
   isSelected,
   isLocked,
+  lockKind = 'tier',
+  lockReason,
   onSelect,
   onUpgradeRequest,
 }: {
   model: AIModel;
   isSelected: boolean;
   isLocked: boolean;
+  /** Whether the lock is a tier restriction or an environment requirement. */
+  lockKind?: 'tier' | 'env';
+  /** Human-readable reason for env-locked models (from evaluateModelEnvironment). */
+  lockReason?: string;
   onSelect?: () => void;
   onUpgradeRequest?: () => void;
 }) {
   // Derive which picker tier this model belongs to so we can label the badge
   // accurately (Balanced vs Premium) without hard-coding model IDs.
-  const pickerTier = isLocked ? getPickerModelTier(model.id) : 'economy';
+  const pickerTier = isLocked && lockKind === 'tier' ? getPickerModelTier(model.id) : 'economy';
+
+  const isEnvLocked = isLocked && lockKind === 'env';
 
   const handleLockedClick = () => {
+    if (isEnvLocked) return; // env-lock: clicking does nothing (not an upgrade path)
     onUpgradeRequest?.();
   };
+
+  const ariaLabel = isEnvLocked
+    ? `${model.name} - ${lockReason ?? 'environment not available'}`
+    : isLocked
+      ? `${model.name} - requires upgrade`
+      : model.name;
 
   const rowContent = (
     <div
       className={[
         'flex items-center gap-2 rounded px-3 py-1.5 transition-colors',
-        isLocked
-          ? 'cursor-pointer hover:bg-muted/40 opacity-80 hover:opacity-100'
-          : 'cursor-pointer hover:bg-muted/60',
+        isEnvLocked
+          ? 'cursor-not-allowed opacity-80'
+          : isLocked
+            ? 'cursor-pointer hover:bg-muted/40 opacity-80 hover:opacity-100'
+            : 'cursor-pointer hover:bg-muted/60',
         isSelected ? 'bg-muted/40' : '',
       ].join(' ')}
       onClick={isLocked ? handleLockedClick : onSelect}
       role="button"
-      tabIndex={0}
+      tabIndex={isEnvLocked ? -1 : 0}
+      aria-disabled={isEnvLocked ? true : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
+          if (isEnvLocked) return;
           if (isLocked) {
             handleLockedClick();
           } else {
@@ -288,7 +377,7 @@ function ModelRow({
           }
         }
       }}
-      aria-label={isLocked ? `${model.name} - requires upgrade` : model.name}
+      aria-label={ariaLabel}
     >
       <ProviderLogo providerKey={model.providerKey} size={14} />
       <span className="min-w-0 flex-1">
@@ -308,7 +397,16 @@ function ModelRow({
           <span className="block truncate text-xs text-muted-foreground">{model.description}</span>
         )}
       </span>
-      {isLocked && (
+      {isEnvLocked && (
+        <span
+          className="ml-auto shrink-0 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          aria-label={lockReason ?? 'environment not available'}
+          title={lockReason}
+        >
+          Beta
+        </span>
+      )}
+      {!isEnvLocked && isLocked && (
         <span
           className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
           aria-label="Requires upgrade"
@@ -404,7 +502,9 @@ export function ComposerFooter({
   const currentEffortDisabledReason = effortDisabledReason(selectedModel, thinkingEffort);
 
   useEffect(() => {
-    if (!isModelSelectableForTier(selectedModel, tier)) {
+    // modelLock covers both tier and env gates — closing the selection-reset leak
+    // where an env-gated model could remain selected after the user's tier changed.
+    if (modelLock(selectedModel, tier).locked) {
       setSelectedModelId(getBestAutoModeForTier(tier));
     }
   }, [selectedModel, setSelectedModelId, tier]);
@@ -546,7 +646,9 @@ export function ComposerFooter({
                         model={model}
                         isSelected={isSelected}
                         isLocked={model.isLocked}
-                        onUpgradeRequest={onUpgradeRequest}
+                        lockKind={model.lockKind}
+                        lockReason={model.lockReason}
+                        onUpgradeRequest={model.lockKind === 'tier' ? onUpgradeRequest : undefined}
                         onSelect={
                           model.isLocked
                             ? undefined
@@ -650,17 +752,19 @@ export function ComposerFooter({
                       </button>
                       {showMore &&
                         more.map((model) => {
-                          const locked = !isModelSelectableForTier(model, tier);
+                          const lock = modelLock(model, tier);
                           const isSelected = model.id === selectedModelId;
                           return (
                             <ModelRow
                               key={model.id}
                               model={model}
                               isSelected={isSelected}
-                              isLocked={locked}
-                              onUpgradeRequest={onUpgradeRequest}
+                              isLocked={lock.locked}
+                              lockKind={lock.kind}
+                              lockReason={lock.reason}
+                              onUpgradeRequest={lock.kind === 'tier' ? onUpgradeRequest : undefined}
                               onSelect={
-                                locked
+                                lock.locked
                                   ? undefined
                                   : () => {
                                       setSelectedModelId(model.id);
