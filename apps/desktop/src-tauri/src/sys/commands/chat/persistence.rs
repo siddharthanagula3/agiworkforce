@@ -69,7 +69,11 @@ pub(super) fn save_assistant_message(
         // Mint cloud_id and mark assistant message for push.
         // Reuse the already-held connection guard — acquiring a second lock on the same
         // non-reentrant std::sync::Mutex would deadlock.
-        let _ = cloud_sync::mark_message_for_push(&conn, id);
+        if let Err(e) = cloud_sync::mark_message_for_push(&conn, id) {
+            // Non-fatal: a chat save must never fail because cloud-marking failed.
+            // But log it — silently swallowing this previously hid a broken UPDATE.
+            tracing::warn!(error = %e, message_id = id, "failed to mark message for cloud push");
+        }
     }
     Ok(saved)
 }
@@ -141,7 +145,6 @@ pub(super) fn compute_or_skip_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::cloud_sync::test_take_spawn_count;
     use crate::data::db::{repository, Database};
     use std::sync::Arc;
 
@@ -153,74 +156,84 @@ mod tests {
         (db_inner, app_db)
     }
 
-    /// R25-V5: This test exists to enforce v1-LOCAL-ONLY sync gating.
-    /// Default ChatPreferences must have chatStorageMode=local, meaning
-    /// cloud_sync_enabled=false, meaning cloud sync functions must
-    /// never be called on a normal message save.
+    /// (needs_push, cloud_id) of the most recent message in a conversation — the
+    /// real sync state a save leaves behind (replaces the old dead spawn counter).
+    fn latest_message_sync_state(db: &AppDatabase, conv_id: i64) -> (i64, Option<String>) {
+        let conn = db.connection().expect("connection");
+        conn.query_row(
+            "SELECT needs_push, cloud_id FROM messages WHERE conversation_id = ?1 \
+             ORDER BY id DESC LIMIT 1",
+            rusqlite::params![conv_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .expect("message row")
+    }
+
+    /// TRUST-BOUNDARY: with cloud_sync_enabled=false the saved message must NOT be
+    /// marked for push (needs_push stays 0, no cloud_id) — fail-closed local boundary.
     #[test]
-    fn cloud_sync_never_fires_with_cloud_sync_disabled() {
+    fn message_not_marked_for_push_when_cloud_sync_disabled() {
         let (_db_inner, db) = make_test_db();
         let conn = db.connection().expect("connection");
         let conv_id =
-            repository::create_conversation(&conn, "test-conv".to_string(), "user1".to_string())
+            repository::create_conversation(&conn, "c".to_string(), "u1".to_string())
                 .expect("create conversation");
         drop(conn);
 
-        let _ = test_take_spawn_count(); // reset counter
-
         save_assistant_message(
-            &db,
-            conv_id,
-            "user1",
-            "hello world",
-            Some(10),
-            Some(0.001),
-            Some("openai"),
-            "gpt-4",
-            false, // cloud_sync_enabled = false (default ChatPreferences)
+            &db, conv_id, "u1", "hello", Some(10), Some(0.001), Some("openai"), "gpt-4",
+            false, // cloud_sync_enabled = false
         )
         .expect("save should succeed");
 
-        assert_eq!(
-            test_take_spawn_count(),
-            0,
-            "cloud sync must not fire when cloud_sync_enabled=false (default ChatPreferences)"
-        );
+        let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
+        assert_eq!(needs_push, 0, "needs_push must stay 0 when cloud sync is disabled");
+        assert!(cloud_id.is_none(), "no cloud_id when cloud sync is disabled");
     }
 
-    /// Desktop v1 keeps cloud sync as an explicit fail-closed boundary; even
-    /// a direct call with cloud_sync=true must not enqueue a background upload.
-    #[tokio::test]
-    async fn cloud_sync_noops_when_cloud_sync_enabled() {
+    /// Even with cloud_sync_enabled=true, a message on a LOCAL conversation is never
+    /// marked for push — the mint guard requires app_mode='cloud'. This is the
+    /// fail-closed boundary that keeps Local chats off the cloud.
+    #[test]
+    fn local_conversation_message_not_marked_even_when_cloud_sync_enabled() {
         let (_db_inner, db) = make_test_db();
         let conn = db.connection().expect("connection");
-        let conv_id = repository::create_conversation(
-            &conn,
-            "test-conv-cloud".to_string(),
-            "user2".to_string(),
-        )
-        .expect("create conversation");
+        let conv_id =
+            repository::create_conversation(&conn, "local".to_string(), "u2".to_string())
+                .expect("create conversation"); // app_mode defaults to 'local'
         drop(conn);
 
-        let _ = test_take_spawn_count();
-
         save_assistant_message(
-            &db,
-            conv_id,
-            "user2",
-            "cloud test",
-            None,
-            None,
-            None,
-            "gpt-4",
+            &db, conv_id, "u2", "cloud test", None, None, None, "gpt-4",
             true, // cloud_sync_enabled = true
         )
         .expect("save should succeed");
 
-        assert_eq!(
-            test_take_spawn_count(),
-            0,
-            "cloud sync must fail closed without enqueuing a background upload"
-        );
+        let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
+        assert_eq!(needs_push, 0, "local-conversation message must not be marked for push");
+        assert!(cloud_id.is_none(), "local-conversation message must not get a cloud_id");
+    }
+
+    /// Happy path: a CLOUD conversation + cloud_sync_enabled=true → the message IS
+    /// minted (cloud_id set, needs_push=1) so the sync engine will push it.
+    #[test]
+    fn cloud_conversation_message_marked_for_push_when_enabled() {
+        let (_db_inner, db) = make_test_db();
+        let conn = db.connection().expect("connection");
+        let conv_id = repository::create_conversation_with_mode(
+            &conn, "cloud".to_string(), "u3".to_string(), "cloud",
+        )
+        .expect("create cloud conversation");
+        drop(conn);
+
+        save_assistant_message(
+            &db, conv_id, "u3", "synced", None, None, None, "gpt-4",
+            true, // cloud_sync_enabled = true
+        )
+        .expect("save should succeed");
+
+        let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
+        assert_eq!(needs_push, 1, "cloud-conversation message must be marked for push");
+        assert!(cloud_id.is_some(), "cloud-conversation message must get a cloud_id");
     }
 }

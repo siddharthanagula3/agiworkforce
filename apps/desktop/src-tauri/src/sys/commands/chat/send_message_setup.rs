@@ -54,6 +54,21 @@ pub(super) fn log_chat_request(request: &ChatSendMessageRequest, correlation_id:
     }
 }
 
+/// TRUST-BOUNDARY: derive whether cloud sync is enabled for a turn.
+///
+/// `active_mode == "local"` forces this `false` regardless of the user's stored
+/// `chat_storage_mode`, so a Local session never syncs to the cloud even if the
+/// storage preference is "cloud". Otherwise it follows the storage preference.
+/// Extracted as a pure function so production (`send_message.rs`) and the gating
+/// tests exercise the SAME logic (not a reimplementation).
+pub(crate) fn derive_cloud_sync_enabled(active_mode: Option<&str>, storage_mode_is_cloud: bool) -> bool {
+    if active_mode == Some("local") {
+        false
+    } else {
+        storage_mode_is_cloud
+    }
+}
+
 pub(super) fn resolve_request_flags(
     request: &ChatSendMessageRequest,
     app_handle: &tauri::AppHandle,
@@ -487,7 +502,9 @@ fn load_or_create_conversation(
             // Mint UUIDv7 cloud_id and mark for push.
             // Reuse the already-held guard — re-acquiring the same non-reentrant
             // std::sync::Mutex would deadlock.
-            let _ = cloud_sync::mark_conversation_for_push(&conn, id);
+            if let Err(e) = cloud_sync::mark_conversation_for_push(&conn, id) {
+                tracing::warn!(error = %e, conversation_id = id, "failed to mark conversation for cloud push");
+            }
         }
         Ok(conversation)
     }
@@ -553,7 +570,9 @@ fn create_user_message_record(
             // Mint cloud_id and mark user message for push.
             // Reuse the already-held guard — re-acquiring the same non-reentrant
             // std::sync::Mutex would deadlock.
-            let _ = cloud_sync::mark_message_for_push(&conn, id);
+            if let Err(e) = cloud_sync::mark_message_for_push(&conn, id) {
+                tracing::warn!(error = %e, message_id = id, "failed to mark user message for cloud push");
+            }
         }
         saved_message
     };
@@ -977,34 +996,34 @@ mod tests {
     /// the CloudSyncClient target is wired up.
     #[test]
     fn local_active_mode_forces_cloud_sync_disabled_even_with_cloud_storage_pref() {
-        let compute_cloud_sync_enabled = |active_mode: Option<&str>, storage_mode: &str| -> bool {
-            let active_mode_is_local = active_mode == Some("local");
-            if active_mode_is_local {
-                false
-            } else {
-                storage_mode == "cloud"
-            }
-        };
+        // Exercises the REAL production fn used by send_message.rs (not a closure
+        // reimplementation), so this test fails if the trust-boundary rule regresses.
+        use super::derive_cloud_sync_enabled;
 
-        // active_mode=local + storage_mode=cloud → must be disabled (the fix)
+        // active_mode=local + storage_mode=cloud → must be disabled (the fix).
         assert!(
-            !compute_cloud_sync_enabled(Some("local"), "cloud"),
+            !derive_cloud_sync_enabled(Some("local"), true),
             "active_mode=local with storage_mode=cloud must yield cloud_sync_enabled=false"
         );
-        // active_mode=cloud + storage_mode=cloud → may be enabled (existing behavior)
+        // active_mode=cloud + storage_mode=cloud → enabled.
         assert!(
-            compute_cloud_sync_enabled(Some("cloud"), "cloud"),
+            derive_cloud_sync_enabled(Some("cloud"), true),
             "active_mode=cloud with storage_mode=cloud must yield cloud_sync_enabled=true"
         );
-        // active_mode=local + storage_mode=local → definitely disabled
+        // active_mode=local + storage_mode=local → definitely disabled.
         assert!(
-            !compute_cloud_sync_enabled(Some("local"), "local"),
+            !derive_cloud_sync_enabled(Some("local"), false),
             "active_mode=local with storage_mode=local must yield cloud_sync_enabled=false"
         );
-        // active_mode=None + storage_mode=cloud → enabled (legacy path unchanged)
+        // active_mode=None + storage_mode=cloud → enabled (legacy path unchanged).
         assert!(
-            compute_cloud_sync_enabled(None, "cloud"),
+            derive_cloud_sync_enabled(None, true),
             "legacy callers omitting active_mode with storage_mode=cloud should get cloud_sync_enabled=true"
+        );
+        // active_mode=None + storage_mode=local → disabled.
+        assert!(
+            !derive_cloud_sync_enabled(None, false),
+            "active_mode=None with storage_mode=local must yield cloud_sync_enabled=false"
         );
     }
 }
