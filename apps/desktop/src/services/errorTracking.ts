@@ -1,6 +1,7 @@
 import { ErrorEventProperties } from '../types/analytics';
 import { analytics } from './analytics';
 import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
+import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
 
 import * as Sentry from '@sentry/react';
 
@@ -107,6 +108,19 @@ class ErrorTrackingService {
     }
   }
 
+  /**
+   * TRUST-BOUNDARY: in local privacy mode the desktop must stay silent — never
+   * send crash/error reports regardless of the consent toggle (mirrors
+   * analytics.track). Fails open to false if the mode can't be read.
+   */
+  private isLocalMode(): boolean {
+    try {
+      return selectPrivacyMode(useAppModeStore.getState()) === 'local';
+    } catch {
+      return false;
+    }
+  }
+
   public updateConfig(config: Partial<ErrorTrackingConfig>) {
     this.config = { ...this.config, ...config };
     safeSetJSON('error_tracking_config', this.config);
@@ -114,6 +128,14 @@ class ErrorTrackingService {
     if (config.enabled !== undefined) {
       if (config.enabled) {
         this.initialize();
+      } else {
+        // Actively tear down so already-installed Sentry integrations stop
+        // auto-capturing errors the moment the user turns reporting off.
+        try {
+          void Sentry.close();
+        } catch {
+          // ignore teardown errors
+        }
       }
     }
   }
@@ -127,6 +149,9 @@ class ErrorTrackingService {
       extra?: Record<string, unknown>;
     },
   ) {
+    if (this.isLocalMode()) {
+      return;
+    }
     if (!this.config.enabled) {
       return;
     }
@@ -159,6 +184,9 @@ class ErrorTrackingService {
   }
 
   public captureMessage(message: string, severity: ErrorSeverity = ErrorSeverity.LOW) {
+    if (this.isLocalMode()) {
+      return;
+    }
     if (!this.config.enabled) {
       return;
     }
