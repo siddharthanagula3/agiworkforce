@@ -205,12 +205,23 @@ export function HtmlArtifact({ artifact }: { artifact: Artifact }) {
 
     if (isFullDocument) {
       let modifiedContent = content;
+      const hasCsp = /<meta[^>]*content-security-policy/i.test(content);
+      const headOpen = /<head([^>]*)>/i;
 
-      if (!/<meta[^>]*content-security-policy/i.test(content)) {
-        modifiedContent = modifiedContent.replace(/<head([^>]*)>/i, `<head$1>\n${cspMeta}`);
+      if (headOpen.test(modifiedContent)) {
+        if (!hasCsp) {
+          modifiedContent = modifiedContent.replace(headOpen, `<head$1>\n${cspMeta}`);
+        }
+        modifiedContent = modifiedContent.replace(headOpen, `<head$1>\n${consoleCapture}`);
+      } else {
+        // Full document (has <html> or a doctype) but NO <head>: the .replace above
+        // would silently no-op and leave the document with NO CSP. Synthesize a
+        // <head> so the CSP + console-capture are actually applied.
+        const headBlock = `<head>\n${hasCsp ? '' : cspMeta}\n${consoleCapture}\n</head>`;
+        modifiedContent = /<html[^>]*>/i.test(modifiedContent)
+          ? modifiedContent.replace(/(<html[^>]*>)/i, `$1\n${headBlock}`)
+          : `${headBlock}\n${modifiedContent}`;
       }
-
-      modifiedContent = modifiedContent.replace(/<head([^>]*)>/i, `<head$1>\n${consoleCapture}`);
 
       return modifiedContent;
     } else {
