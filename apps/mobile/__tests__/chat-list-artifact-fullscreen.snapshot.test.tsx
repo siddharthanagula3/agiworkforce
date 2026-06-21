@@ -63,6 +63,10 @@ jest.mock('lucide-react-native', () => {
     Image: factory('image'),
     FileText: factory('file-text'),
     BarChart3: factory('bar-chart'),
+    // new icons added for parity work (preview/source toggle + download)
+    Eye: factory('eye'),
+    Code: factory('code'),
+    Download: factory('download'),
   };
 });
 
@@ -143,6 +147,8 @@ jest.mock('@/lib/clipboard', () => ({
 
 jest.mock('@/services/fileCreation', () => ({
   shareFile: jest.fn(),
+  exportToText: jest.fn().mockResolvedValue({ uri: 'file:///tmp/export.txt' }),
+  exportToMarkdown: jest.fn().mockResolvedValue({ uri: 'file:///tmp/export.md' }),
 }));
 
 jest.mock('@/components/ui/badge', () => ({
