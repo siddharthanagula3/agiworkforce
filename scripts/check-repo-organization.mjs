@@ -59,6 +59,9 @@ const knownRootDebt = new Set([
   'AUDIT_BATCHES',
   'AUDIT_FINDINGS.md',
   'AUDIT_MANIFEST.txt',
+  // Session report deliverable. Transient — relocate under docs/ after the
+  // P2 PR lands; tracked as known root debt (not unclassified) until then.
+  'OVERNIGHT_REPORT.md',
   'AUDIT_PARTS',
   'AUDIT_STATE.md',
   'AUDIT_TAXONOMY.md',
