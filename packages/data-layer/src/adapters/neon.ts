@@ -277,7 +277,13 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       // SET LOCAL is transaction-scoped, so we wrap in a one-shot
       // transaction. This makes the GUC binding cheap and isolated.
       await client.query('BEGIN');
-      await client.query('SET LOCAL request.jwt.claim.sub = $1', [this.boundSub]);
+      // Privilege restriction: run per-user queries as the NON-BYPASSRLS
+      // `app_rls` role so RLS policies actually apply. The owner role Neon
+      // connects as has BYPASSRLS and would otherwise ignore every policy.
+      await client.query('SET LOCAL ROLE app_rls');
+      // Bind the RLS subject. set_config(..., true) is the transaction-local
+      // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
+      await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query('COMMIT');
       return result.rows as T[];
@@ -307,7 +313,13 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('SET LOCAL request.jwt.claim.sub = $1', [this.boundSub]);
+      // Privilege restriction: run per-user queries as the NON-BYPASSRLS
+      // `app_rls` role so RLS policies actually apply. The owner role Neon
+      // connects as has BYPASSRLS and would otherwise ignore every policy.
+      await client.query('SET LOCAL ROLE app_rls');
+      // Bind the RLS subject. set_config(..., true) is the transaction-local
+      // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
+      await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query('COMMIT');
       return result.rowCount ?? 0;
@@ -338,7 +350,13 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     try {
       await client.query('BEGIN');
       if (this.boundSub !== null) {
-        await client.query('SET LOCAL request.jwt.claim.sub = $1', [this.boundSub]);
+        // Privilege restriction: run per-user queries as the NON-BYPASSRLS
+        // `app_rls` role so RLS policies actually apply. The owner role Neon
+        // connects as has BYPASSRLS and would otherwise ignore every policy.
+        await client.query('SET LOCAL ROLE app_rls');
+        // Bind the RLS subject. set_config(..., true) is the transaction-local
+        // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
+        await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
       }
       const tx = new NeonTransactionAdapter(client);
       const result = await fn(tx);
