@@ -162,14 +162,21 @@ export interface ModelMetadata {
   supersedes_effective_date?: string;
   supersedes_note?: string;
   /**
-   * Hosted execution environment this model REQUIRES to run. Absent/undefined =
-   * no environment requirement (the default — all current models). When set, the
-   * model is only selectable when that environment is configured + reachable, and
-   * pickers gray it out otherwise. Like `imageApi`, this is catalog-driven: marking
-   * a model as env-gated is a models.curation.json edit, no code change.
-   *   - 'e2b'           → managed-cloud E2B execution sandbox (agentic code/tools).
-   *                       MANAGED-CLOUD ONLY: such models are hard-gated behind the
-   *                       managed-compute gate, never auto-routed from Local/BYOK.
+   * UNIFIED EXECUTION ARCHITECTURE: every model is an intelligence engine that emits
+   * JSON tool calls — none has a native cloud execution environment via its standard
+   * API. E2B is the UNIVERSAL, centralized secure execution layer: whenever ANY model
+   * emits a tool call that runs code or creates files/folders, that execution is
+   * routed through the SAME E2B sandbox. E2B is NOT a fallback for "weaker" models.
+   *
+   * `requiresEnvironment` is therefore a GATING signal, NOT a per-model executor
+   * selector: it flags a model whose agentic value DEPENDS on that universal
+   * environment being live, so pickers gray it out until the environment is
+   * configured + reachable. Absent/undefined = no gating (the default — every current
+   * model). Like `imageApi`, it is catalog-driven: a models.curation.json edit, no
+   * code change.
+   *   - 'e2b'           → depends on the managed-cloud E2B execution layer being live.
+   *                       MANAGED-CLOUD ONLY: hard-gated behind the managed-compute
+   *                       gate, never auto-routed from Local/BYOK.
    *   - 'local-runtime' → an on-device local model runtime must be installed.
    */
   requiresEnvironment?: 'e2b' | 'local-runtime';
@@ -211,7 +218,7 @@ export function evaluateModelEnvironment(
   if (configured && available) return { selectable: true };
   const reason =
     requiresEnvironment === 'e2b'
-      ? 'Requires managed compute — currently in private beta'
+      ? 'Requires managed compute (currently in private beta)'
       : 'Requires a local model runtime to be installed';
   return { selectable: false, reason };
 }
