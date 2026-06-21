@@ -41,6 +41,7 @@ fn fixture_models() -> Vec<Model> {
             release_date: "2025-01-01".into(),
             status: "active".into(),
             cloud_eligible: false,
+            requires_environment: None,
         },
         Model {
             id: "fixture-balanced".into(),
@@ -61,6 +62,7 @@ fn fixture_models() -> Vec<Model> {
             release_date: "2025-01-01".into(),
             status: "active".into(),
             cloud_eligible: false,
+            requires_environment: None,
         },
         Model {
             id: "fixture-fast".into(),
@@ -81,6 +83,7 @@ fn fixture_models() -> Vec<Model> {
             release_date: "2025-01-01".into(),
             status: "active".into(),
             cloud_eligible: false,
+            requires_environment: None,
         },
     ]
 }
