@@ -2422,6 +2422,20 @@ impl ToolExecutionGuard {
     fn validate_terminal_command(&self, command: &str) -> std::result::Result<(), SecurityError> {
         debug!("Validating terminal command");
 
+        // Primary guard: delegate to the centralized command validator — the same
+        // strong guard the LLM terminal tool uses (command_validator::validate_command).
+        // It catches metacharacter-enabled chaining and variable/relative destructive
+        // forms (e.g. `rm -rf $HOME`, `rm -rf ./`, device redirects, fork bombs) that a
+        // flat substring blocklist misses.
+        {
+            use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+            if let Err(e) = validate_command(command, &ValidationConfig::oneshot()) {
+                warn!("Terminal command rejected by command_validator: {}", e);
+                return Err(SecurityError::CommandInjection(e.to_string()));
+            }
+        }
+
+        // Secondary defense-in-depth: explicit catastrophic substring patterns.
         let dangerous_patterns = [
             "rm -rf /",
             "rm -rf ~",

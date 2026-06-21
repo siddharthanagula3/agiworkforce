@@ -315,6 +315,25 @@ impl TerminalExecutor {
     ///
     /// `Ok(())` if the command is safe, or an error if blocked.
     fn validate_command(&self, command: &str, security_mode: &SecurityMode) -> Result<()> {
+        // Defense-in-depth: run the centralized command validator first (the same
+        // strong guard the LLM terminal tool uses) for NON-EMPTY commands. It catches
+        // metacharacter-enabled chaining and variable/relative destructive forms
+        // (`rm -rf $HOME`, device redirects, fork bombs) that this executor's substring
+        // blocklist can miss. Empty/whitespace commands are a no-op handled at the
+        // execute layer, so we preserve validate_command's "empty passes" contract.
+        if !command.trim().is_empty() {
+            if let Err(e) = crate::sys::security::command_validator::validate_command(
+                command,
+                &crate::sys::security::command_validator::ValidationConfig::oneshot(),
+            ) {
+                tracing::error!(
+                    "[TerminalExecutor] SECURITY: command_validator rejected command: {}",
+                    e
+                );
+                return Err(anyhow!("Command blocked for security: {}", e));
+            }
+        }
+
         let cmd_lower = command.to_lowercase();
         let cmd_normalized = cmd_lower.replace(['\t', '\n', '\r'], " ");
 
