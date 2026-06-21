@@ -137,7 +137,11 @@ fn split_segments(command: &str) -> Vec<String> {
         // Only split on operators when outside quotes
         if !in_single_quote && !in_double_quote {
             match ch {
-                '|' | ';' => {
+                // Newlines and `\r` are real command separators that `sh -c`
+                // honors — without splitting on them, "ls\nrm -rf /" classifies as
+                // the single safe base command "ls" and the destructive tail runs
+                // unapproved.
+                '|' | ';' | '\n' | '\r' => {
                     let seg = current.trim().to_string();
                     if !seg.is_empty() {
                         segments.push(seg);
@@ -146,16 +150,18 @@ fn split_segments(command: &str) -> Vec<String> {
                     continue;
                 }
                 '&' => {
+                    // Split on both `&&` (logical AND) AND a lone `&` (background
+                    // operator). A backgrounded command (`echo ok & rm -rf x`) is a
+                    // separate command and must be classified on its own — folding
+                    // it into the prefix let it inherit the prefix's Safe rating.
                     if chars.peek() == Some(&'&') {
                         chars.next(); // consume second '&'
-                        let seg = current.trim().to_string();
-                        if !seg.is_empty() {
-                            segments.push(seg);
-                        }
-                        current.clear();
-                    } else {
-                        current.push(ch);
                     }
+                    let seg = current.trim().to_string();
+                    if !seg.is_empty() {
+                        segments.push(seg);
+                    }
+                    current.clear();
                     continue;
                 }
                 _ => {}
@@ -1302,9 +1308,21 @@ mod tests {
     }
 
     #[test]
-    fn single_ampersand_kept_in_segment() {
+    fn single_ampersand_splits_background_command() {
+        // A lone `&` is the background operator and MUST split — otherwise a
+        // backgrounded destructive command inherits the prefix's safety rating.
         let segs = split_segments("my-server &");
-        assert_eq!(segs, vec!["my-server &"]);
+        assert_eq!(segs, vec!["my-server"]);
+        let segs2 = split_segments("echo ok & rm -rf /tmp/x");
+        assert_eq!(segs2, vec!["echo ok", "rm -rf /tmp/x"]);
+    }
+
+    #[test]
+    fn newline_splits_commands() {
+        // Newlines are command separators (sh -c honors them) — a safe prefix must
+        // not hide a destructive command on the next line.
+        let segs = split_segments("ls\nrm -rf /tmp/x");
+        assert_eq!(segs, vec!["ls", "rm -rf /tmp/x"]);
     }
 
     // -- classify_mv --
