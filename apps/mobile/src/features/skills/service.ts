@@ -18,7 +18,10 @@
 import type { Skill } from '@agiworkforce/skills';
 
 import { API_URL } from '@/lib/constants';
-import { secureFetch } from '@/services/secureFetch';
+// Zero-leak: the catalog calls below target OUR api-gateway (`${API_URL}/api/skills`).
+// Route through guardedFetch so Local mode refuses before any network I/O
+// (fail-closed); guardedFetch delegates to secureFetch (TLS pinning) when allowed.
+import { guardedFetch } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
 
 export type SkillSummary = Pick<Skill, 'name' | 'description' | 'filePath' | 'source'>;
@@ -59,7 +62,7 @@ async function authHeader(): Promise<Record<string, string>> {
 
 export async function listSkills(): Promise<SkillSummary[]> {
   const headers = await authHeader();
-  const res = await secureFetch(`${API_URL}/api/skills`, { headers });
+  const res = await guardedFetch(`${API_URL}/api/skills`, { headers });
   if (!res.ok) throw new Error(`skills.list failed: HTTP ${res.status}`);
   const json = (await res.json()) as { skills: SkillSummary[] };
   return json.skills;
@@ -67,7 +70,7 @@ export async function listSkills(): Promise<SkillSummary[]> {
 
 export async function getSkillBody(name: string): Promise<string> {
   const headers = await authHeader();
-  const res = await secureFetch(`${API_URL}/api/skills/${encodeURIComponent(name)}`, {
+  const res = await guardedFetch(`${API_URL}/api/skills/${encodeURIComponent(name)}`, {
     headers,
   });
   if (!res.ok) throw new Error(`skills.body failed: HTTP ${res.status}`);

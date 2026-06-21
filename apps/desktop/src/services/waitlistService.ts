@@ -1,4 +1,5 @@
 import { WEB_APP_URL } from '../api/config';
+import { guardedFetch } from '../lib/egressGuard';
 import type { InviteCodeError } from '../features/cloud-bridge/types';
 
 export interface WaitlistEntry {
@@ -71,7 +72,7 @@ function getWebApiBaseUrl(): string {
 }
 
 async function fetchCsrfHeaders(baseUrl: string): Promise<Record<string, string>> {
-  const response = await fetch(`${baseUrl}/api/csrf`, {
+  const response = await guardedFetch(`${baseUrl}/api/csrf`, {
     method: 'GET',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
@@ -136,7 +137,7 @@ class WaitlistService {
     try {
       const baseUrl = getWebApiBaseUrl();
       const headers = await fetchCsrfHeaders(baseUrl);
-      const response = await fetch(`${baseUrl}/api/waitlist/cloud-managed`, {
+      const response = await guardedFetch(`${baseUrl}/api/waitlist/cloud-managed`, {
         method: 'POST',
         credentials: 'include',
         headers,
@@ -179,7 +180,7 @@ class WaitlistService {
     try {
       const baseUrl = getWebApiBaseUrl();
       const headers = await fetchCsrfHeaders(baseUrl);
-      const response = await fetch(`${baseUrl}/api/claim-offer`, {
+      const response = await guardedFetch(`${baseUrl}/api/claim-offer`, {
         method: 'POST',
         credentials: 'include',
         headers,

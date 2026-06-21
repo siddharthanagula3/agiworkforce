@@ -10,7 +10,15 @@ vi.mock('../lib/tauri-mock', () => ({
 vi.mock('../services/cloudAccountAuth', () => ({
   cloudAccountAuth: {
     getSession: () => ({ access_token: 'test-token' }),
+    onAuthStateChange: vi.fn(() => () => {}),
   },
+}));
+
+// The voice hook routes its upload through the egress guard. This suite tests
+// transcription behaviour, not the guard (which has its own test), so stub the
+// guard to a passthrough — this also avoids pulling the appModeStore→auth chain.
+vi.mock('../lib/egressGuard', () => ({
+  guardedFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
 }));
 
 import { useVoiceTranscription } from '../hooks/useVoiceTranscription';

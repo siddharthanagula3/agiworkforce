@@ -5,6 +5,7 @@
  * Handles conversation CRUD and LLM message sending via SSE streaming.
  */
 
+import { guardedFetch } from '../lib/egressGuard';
 import { isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { API_BASE_URL } from './config';
@@ -98,7 +99,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   // Fetch a CSRF token for state-changing requests.
   if (!session?.access_token && typeof document !== 'undefined') {
     try {
-      const csrfResp = await fetch(`${CLOUD_API_BASE_URL}/api/csrf`, {
+      const csrfResp = await guardedFetch(`${CLOUD_API_BASE_URL}/api/csrf`, {
         credentials: 'include',
       });
       if (csrfResp.ok) {
@@ -126,7 +127,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 export async function listCloudConversations(): Promise<CloudConversation[]> {
   const headers = await getAuthHeaders();
 
-  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
+  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
     method: 'GET',
     headers,
   });
@@ -150,7 +151,7 @@ export async function createCloudConversation(
 
   const body: CreateConversationRequest = { title, model };
 
-  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
+  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -170,7 +171,7 @@ export async function createCloudConversation(
 export async function getCloudConversation(id: string): Promise<CloudConversation> {
   const headers = await getAuthHeaders();
 
-  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
+  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
     method: 'GET',
     headers,
   });
@@ -192,7 +193,7 @@ export async function getCloudConversation(id: string): Promise<CloudConversatio
 export async function deleteCloudConversation(id: string): Promise<void> {
   const headers = await getAuthHeaders();
 
-  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
+  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
     method: 'DELETE',
     headers,
   });
@@ -208,7 +209,7 @@ export async function updateCloudConversationTitle(
 ): Promise<CloudConversation> {
   const headers = await getAuthHeaders();
 
-  const res = await fetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
+  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
     method: 'PATCH',
     headers,
     body: JSON.stringify({ title }),
@@ -232,7 +233,7 @@ export async function updateCloudConversationTitle(
 export async function getCloudUsage(): Promise<CloudUsage> {
   const headers = await getAuthHeaders();
 
-  const res = await fetch(`${CLOUD_API_BASE_URL}/api/v1/usage`, {
+  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/v1/usage`, {
     method: 'GET',
     headers,
   });
@@ -297,7 +298,7 @@ export async function getCloudModels(planTier?: 'pro' | 'max'): Promise<CloudMod
   }
 
   try {
-    const res = await fetch(url.toString(), {
+    const res = await guardedFetch(url.toString(), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -373,7 +374,7 @@ export async function sendCloudMessage(
   let res: Response;
 
   try {
-    res = await fetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`, {
+    res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify(openAiBody),

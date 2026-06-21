@@ -6,6 +6,7 @@ import {
 } from '../lib/cloudAccountTypes';
 import { cloudAccountAuth } from './cloudAccountAuth';
 import { WEB_APP_URL } from '../api/config';
+import { guardedFetch } from '../lib/egressGuard';
 
 export interface PlanFeatures {
   automationsPerDay: number | 'unlimited';
@@ -237,7 +238,7 @@ class SubscriptionService {
       const headers = await this.csrfHeaders();
       const amountCents =
         typeof metadata['amount_cents'] === 'number' ? (metadata['amount_cents'] as number) : 0;
-      await fetch(`${WEB_APP_URL}/api/usage/deduct`, {
+      await guardedFetch(`${WEB_APP_URL}/api/usage/deduct`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -256,7 +257,7 @@ class SubscriptionService {
   }
 
   private async csrfHeaders(): Promise<Record<string, string>> {
-    const response = await fetch(`${WEB_APP_URL}/api/csrf`, {
+    const response = await guardedFetch(`${WEB_APP_URL}/api/csrf`, {
       method: 'GET',
       credentials: 'include',
     });
