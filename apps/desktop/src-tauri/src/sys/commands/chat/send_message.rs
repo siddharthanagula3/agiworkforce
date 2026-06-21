@@ -30,17 +30,18 @@ pub async fn chat_send_message(
     // must not have their local chats synced to Neon (mirrors the is_local_mode
     // invariant enforced in send_message_setup.rs:745).
     let cloud_sync_enabled = {
-        let active_mode_is_local = request.active_mode.as_deref() == Some("local");
-        if active_mode_is_local {
-            false
-        } else {
+        let storage_mode_is_cloud = {
             let settings = settings_state.settings.lock().await;
             settings
                 .chat_preferences
                 .as_ref()
                 .map(|prefs| prefs.chat_storage_mode.as_str() == "cloud")
                 .unwrap_or(false)
-        }
+        };
+        super::send_message_setup::derive_cloud_sync_enabled(
+            request.active_mode.as_deref(),
+            storage_mode_is_cloud,
+        )
     };
     let auto_save_memories = {
         let settings = settings_state.settings.lock().await;

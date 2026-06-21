@@ -317,17 +317,20 @@ pub fn mark_message_for_push(conn: &Connection, msg_id: i64) -> SqlResult<()> {
     let cloud_id = Uuid::now_v7().to_string();
     let now = now_z();
     conn.execute(
-        "UPDATE messages m \
+        // NOTE: SQLite does NOT allow a table alias on an UPDATE target
+        // (`UPDATE messages m` is a syntax error), so reference the target row's
+        // columns via the table name `messages` in the correlated subqueries.
+        "UPDATE messages \
          SET cloud_id = COALESCE(cloud_id, ?1), \
              conversation_cloud_id = ( \
-                 SELECT c.cloud_id FROM conversations c WHERE c.id = m.conversation_id \
+                 SELECT c.cloud_id FROM conversations c WHERE c.id = messages.conversation_id \
              ), \
              created_at_utc = COALESCE(created_at_utc, ?2), \
              needs_push = 1 \
          WHERE id = ?3 \
            AND EXISTS ( \
                SELECT 1 FROM conversations c \
-               WHERE c.id = m.conversation_id AND c.app_mode = 'cloud' \
+               WHERE c.id = messages.conversation_id AND c.app_mode = 'cloud' \
            )",
         params![cloud_id, now, msg_id],
     )?;
@@ -565,12 +568,11 @@ fn apply_message_deltas(
         let local_conv_id = match local_conv_id {
             Some(id) => id,
             None => {
-                // Parent not yet present — skip without inserting orphan.
-                warn!(
-                    msg_cloud_id = %d.id,
-                    conv_cloud_id = %d.conversation_id,
-                    "Skipping pulled message: parent conversation not in local DB"
-                );
+                // Parent not present yet — BUFFER for replay once it lands, never drop.
+                // The parent conversation is re-versioned on every update, so it can
+                // sit above this message and arrive in a later pull page. Dropping it
+                // here (with the cursor advancing past it) would lose it permanently.
+                buffer_pending_message(conn, user_id, d);
                 continue;
             }
         };
@@ -641,6 +643,134 @@ fn apply_message_deltas(
 }
 
 // ---------------------------------------------------------------------------
+// Orphan buffer: pulled messages whose parent conversation has not landed yet.
+// ---------------------------------------------------------------------------
+
+/// Persist a pulled message whose parent conversation is not yet present locally,
+/// so it can be replayed once the parent lands (instead of being lost). Idempotent
+/// on cloud_id.
+fn buffer_pending_message(conn: &Connection, user_id: &str, d: &MessageDelta) {
+    let _ = conn.execute(
+        "INSERT INTO cloud_sync_pending_messages \
+         (cloud_id, conversation_cloud_id, user_id, role, content, model, provider, \
+          created_at, deleted_at, server_version) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
+         ON CONFLICT(cloud_id) DO UPDATE SET \
+            conversation_cloud_id = excluded.conversation_cloud_id, \
+            role = excluded.role, content = excluded.content, model = excluded.model, \
+            provider = excluded.provider, created_at = excluded.created_at, \
+            deleted_at = excluded.deleted_at, server_version = excluded.server_version",
+        params![
+            d.id,
+            d.conversation_id,
+            user_id,
+            d.role.as_deref(),
+            d.content.as_deref(),
+            d.model.as_deref(),
+            d.provider.as_deref(),
+            d.created_at.as_deref(),
+            d.deleted_at.as_deref(),
+            d.server_version,
+        ],
+    );
+}
+
+struct PendingMsg {
+    cloud_id: String,
+    conversation_cloud_id: String,
+    role: Option<String>,
+    content: Option<String>,
+    model: Option<String>,
+    provider: Option<String>,
+    created_at: Option<String>,
+    deleted_at: Option<String>,
+    server_version: String,
+}
+
+/// Replay buffered messages whose parent conversation now exists locally: insert the
+/// message (FK-mapped, deduped by cloud_id) and remove it from the buffer. A buffered
+/// tombstone for a never-seen message is simply dropped. Returns the count inserted.
+fn drain_pending_messages(conn: &Connection, user_id: &str) -> usize {
+    // Collect resolvable rows first (parent conversation present), then mutate.
+    let mut resolved: Vec<(i64, PendingMsg)> = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        "SELECT p.cloud_id, p.conversation_cloud_id, p.role, p.content, p.model, \
+                p.provider, p.created_at, p.deleted_at, p.server_version, c.id \
+         FROM cloud_sync_pending_messages p \
+         JOIN conversations c ON c.cloud_id = p.conversation_cloud_id \
+         WHERE p.user_id = ?1",
+    ) {
+        if let Ok(iter) = stmt.query_map(params![user_id], |row| {
+            Ok((
+                row.get::<_, i64>(9)?,
+                PendingMsg {
+                    cloud_id: row.get(0)?,
+                    conversation_cloud_id: row.get(1)?,
+                    role: row.get(2)?,
+                    content: row.get(3)?,
+                    model: row.get(4)?,
+                    provider: row.get(5)?,
+                    created_at: row.get(6)?,
+                    deleted_at: row.get(7)?,
+                    server_version: row.get(8)?,
+                },
+            ))
+        }) {
+            for r in iter.flatten() {
+                resolved.push(r);
+            }
+        }
+    }
+
+    let mut applied = 0usize;
+    for (local_conv_id, p) in resolved {
+        let exists: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM messages WHERE cloud_id = ?1",
+                params![p.cloud_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if exists.is_none() && p.deleted_at.is_none() {
+            let role = p.role.clone().unwrap_or_else(|| "user".to_string());
+            if matches!(role.as_str(), "user" | "assistant" | "system") {
+                let now = now_z();
+                let created_at = p.created_at.clone().unwrap_or(now);
+                let r = conn.execute(
+                    "INSERT INTO messages \
+                     (cloud_id, conversation_id, conversation_cloud_id, user_id, role, content, \
+                      model, provider, created_at, created_at_utc, server_version, needs_push) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0)",
+                    params![
+                        p.cloud_id,
+                        local_conv_id,
+                        p.conversation_cloud_id,
+                        user_id,
+                        role,
+                        p.content.clone().unwrap_or_default(),
+                        p.model.as_deref(),
+                        p.provider.as_deref(),
+                        created_at,
+                        p.created_at.as_deref(),
+                        p.server_version,
+                    ],
+                );
+                if r.is_ok() {
+                    applied += 1;
+                }
+            }
+        }
+        // Remove from the buffer whether we inserted, deduped, or dropped a tombstone.
+        let _ = conn.execute(
+            "DELETE FROM cloud_sync_pending_messages WHERE cloud_id = ?1",
+            params![p.cloud_id],
+        );
+    }
+    applied
+}
+
+// ---------------------------------------------------------------------------
 // Public async engine: sync_now.
 // ---------------------------------------------------------------------------
 
@@ -683,6 +813,18 @@ async fn sync_now_inner(
     token: &str,
     base_url: &str,
 ) -> Result<SyncOutcome, String> {
+    // Fail-closed backstop: never touch the network without a bearer token. The caller
+    // gates on managed-cloud mode and supplies the token; this is the engine's own
+    // independent re-check so a mis-call can't egress in a Local/unauthenticated state.
+    if token.trim().is_empty() {
+        return Ok(SyncOutcome {
+            conversations_pushed: 0,
+            messages_pushed: 0,
+            conversations_pulled: 0,
+            messages_pulled: 0,
+        });
+    }
+
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
@@ -783,23 +925,26 @@ async fn sync_now_inner(
             .map_err(|e| format!("Failed to parse pull response: {e}"))?;
 
         let has_more = pull_resp.has_more;
-        let new_cursor_candidates: Vec<String> = pull_resp
-            .conversations
-            .iter()
-            .map(|c| c.server_version.clone())
-            .chain(pull_resp.messages.iter().map(|m| m.server_version.clone()))
-            .chain(pull_resp.cursor.clone().into_iter())
-            .collect();
-        let new_cursor = max_cursor(&cursor, &new_cursor_candidates);
+        // Trust the server's SAFE cursor. The two tables paginate independently and
+        // share one version sequence, so taking the max of per-row server_versions
+        // overshoots the lagging table's frontier and skips its in-gap rows (the
+        // server now bounds the cursor to that frontier). Never move backwards.
+        let new_cursor = match &pull_resp.cursor {
+            Some(c) => max_cursor(&cursor, std::slice::from_ref(c)),
+            None => cursor.clone(),
+        };
 
         // Apply page (acquire conn, apply, advance cursor, drop conn).
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            // Conversations first (so message FK-map finds them).
+            // Conversations first (so message FK-map + orphan drain find them).
             total_convs_pulled +=
                 apply_conversation_deltas(&conn, user_id, &pull_resp.conversations);
-            total_msgs_pulled +=
-                apply_message_deltas(&conn, user_id, &pull_resp.messages);
+            // Resolve any messages buffered on a prior page whose parent just landed.
+            total_msgs_pulled += drain_pending_messages(&conn, user_id);
+            // Apply this page's messages (orphans whose parent is not yet present are
+            // buffered, never dropped — see apply_message_deltas).
+            total_msgs_pulled += apply_message_deltas(&conn, user_id, &pull_resp.messages);
             write_cursor(&conn, user_id, &new_cursor);
         }
 
@@ -817,35 +962,6 @@ async fn sync_now_inner(
     })
 }
 
-// ---------------------------------------------------------------------------
-// Backward-compat stubs for the replaced send_message_setup.rs /
-// persistence.rs call sites. These are left here ONLY so compile-time
-// dead_code lint suppressions work; the call sites no longer call them.
-// ---------------------------------------------------------------------------
-
-/// REMOVED: replaced by mark_conversation_for_push. Stub kept for any
-/// transitional references that may still exist in non-production paths.
-#[allow(dead_code)]
-fn _spawn_sync_conversation_stub() {}
-
-/// REMOVED: replaced by mark_message_for_push.
-#[allow(dead_code)]
-fn _spawn_sync_message_stub() {}
-
-// ---------------------------------------------------------------------------
-// test_take_spawn_count: retained for backward compat with tests in
-// persistence.rs that assert the old spawn counter. The function now always
-// returns 0, which is still the correct value because mark_message_for_push
-// is a synchronous DB write (no spawn). The test
-// `cloud_sync_never_fires_with_cloud_sync_disabled` remains meaningful
-// because it exercises the gating logic (cloud_sync_enabled=false → function
-// not called at all).
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-pub(crate) fn test_take_spawn_count() -> usize {
-    0
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -1075,7 +1191,7 @@ mod tests {
     }
 
     #[test]
-    fn push_gather_skips_tool_role_messages() {
+    fn push_gather_includes_only_supported_transcript_roles() {
         let conn = fresh_db();
         conn.execute(
             "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
@@ -1089,26 +1205,34 @@ mod tests {
             .query_row("SELECT cloud_id FROM conversations WHERE id = ?1", params![conv_id], |r| r.get(0))
             .unwrap();
 
-        // Insert a 'tool' role message (role CHECK now allows it in newer schemas
-        // but the push filter only accepts user/assistant/system).
-        conn.execute(
-            "INSERT INTO messages (conversation_id, user_id, role, content, created_at) \
-             VALUES (?1, 'u1', 'user', 'legit', CURRENT_TIMESTAMP)",
-            params![conv_id],
-        )
-        .unwrap();
-        let msg_id: i64 = conn.last_insert_rowid();
-        conn.execute(
-            "UPDATE messages SET cloud_id = 'uuid-1', conversation_cloud_id = ?1, \
-             needs_push = 1, created_at_utc = CURRENT_TIMESTAMP WHERE id = ?2",
-            params![conv_cloud_id, msg_id],
-        )
-        .unwrap();
+        // All three transcript roles are part of the synced set. (The messages table's
+        // CHECK(role IN ('user','assistant','system')) makes a 'tool' row impossible to
+        // insert, so the gather role filter is a structural backstop, not exercisable
+        // here — this test asserts the supported roles are gathered, not a false claim
+        // that an un-insertable role is skipped.)
+        for (i, role) in ["user", "assistant", "system"].iter().enumerate() {
+            conn.execute(
+                "INSERT INTO messages (conversation_id, user_id, role, content, created_at) \
+                 VALUES (?1, 'u1', ?2, 'c', CURRENT_TIMESTAMP)",
+                params![conv_id, role],
+            )
+            .unwrap();
+            let mid = conn.last_insert_rowid();
+            conn.execute(
+                "UPDATE messages SET cloud_id = ?1, conversation_cloud_id = ?2, \
+                 needs_push = 1, created_at_utc = CURRENT_TIMESTAMP WHERE id = ?3",
+                params![format!("uuid-{i}"), conv_cloud_id, mid],
+            )
+            .unwrap();
+        }
 
-        let push_msgs = gather_push_messages(&conn, "u1").unwrap();
-        // The user message should be included.
-        assert_eq!(push_msgs.len(), 1);
-        assert_eq!(push_msgs[0].role, "user");
+        let mut roles: Vec<String> = gather_push_messages(&conn, "u1")
+            .unwrap()
+            .into_iter()
+            .map(|m| m.role)
+            .collect();
+        roles.sort();
+        assert_eq!(roles, vec!["assistant", "system", "user"]);
     }
 
     // ── Test 4: Ack-clear ────────────────────────────────────────────────────
@@ -1493,38 +1617,10 @@ mod tests {
     }
 
     // ── Test 10: Gating ──────────────────────────────────────────────────────
-
-    /// TRUST-BOUNDARY: active_mode="local" must force cloud_sync_enabled=false
-    /// regardless of what chat_storage_mode is set to in user preferences.
-    /// This mirrors the logic in chat_send_message in send_message.rs.
-    #[test]
-    fn local_active_mode_forces_cloud_sync_disabled_even_with_cloud_storage_pref() {
-        let compute_cloud_sync_enabled = |active_mode: Option<&str>, storage_mode: &str| -> bool {
-            let active_mode_is_local = active_mode == Some("local");
-            if active_mode_is_local {
-                false
-            } else {
-                storage_mode == "cloud"
-            }
-        };
-
-        assert!(
-            !compute_cloud_sync_enabled(Some("local"), "cloud"),
-            "active_mode=local with storage_mode=cloud must yield cloud_sync_enabled=false"
-        );
-        assert!(
-            compute_cloud_sync_enabled(Some("cloud"), "cloud"),
-            "active_mode=cloud with storage_mode=cloud must yield cloud_sync_enabled=true"
-        );
-        assert!(
-            !compute_cloud_sync_enabled(Some("local"), "local"),
-            "active_mode=local with storage_mode=local must yield cloud_sync_enabled=false"
-        );
-        assert!(
-            compute_cloud_sync_enabled(None, "cloud"),
-            "active_mode=None with storage_mode=cloud must yield cloud_sync_enabled=true"
-        );
-    }
+    // (The active_mode→cloud_sync_enabled trust-boundary rule is tested directly
+    // against the real `derive_cloud_sync_enabled` fn in send_message_setup.rs. The
+    // tautological closure duplicate that lived here was removed. The mint-level
+    // gating — a local conversation never gets a cloud_id — is proven below.)
 
     #[test]
     fn local_conversation_never_gets_cloud_id() {
@@ -1554,5 +1650,101 @@ mod tests {
         // Verify push gather also excludes it.
         let push_convs = gather_push_conversations(&conn, "u1").unwrap();
         assert_eq!(push_convs.len(), 0, "local conversation must not appear in push gather");
+    }
+
+    // ── Pull deltas built from the snake_case wire shape ─────────────────────
+
+    fn conv_delta(id: &str, sv: &str, deleted_at: Option<&str>) -> ConversationDelta {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "title": "T", "model": null, "project_id": null, "pinned": false,
+            "created_at": "2026-06-20T00:00:00Z", "updated_at": "2026-06-20T00:00:00Z",
+            "deleted_at": deleted_at, "server_version": sv,
+        }))
+        .unwrap()
+    }
+
+    fn msg_delta(id: &str, conv_cloud_id: &str, sv: &str, deleted_at: Option<&str>) -> MessageDelta {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "conversation_id": conv_cloud_id, "role": "user", "content": "hello",
+            "model": null, "provider": null, "created_at": "2026-06-20T00:00:00Z",
+            "deleted_at": deleted_at, "server_version": sv,
+        }))
+        .unwrap()
+    }
+
+    fn count(conn: &Connection, sql: &str) -> i64 {
+        conn.query_row(sql, [], |r| r.get(0)).unwrap()
+    }
+
+    /// A pulled message whose parent conversation has not landed is BUFFERED (not
+    /// dropped), then inserted with the correct INTEGER FK once the parent arrives.
+    /// This is the orphan-loss fix: server_version is reassigned on every update, so
+    /// a conversation routinely sits above its own messages and arrives in a later page.
+    #[test]
+    fn pull_orphan_message_is_buffered_then_drained_when_parent_lands() {
+        let conn = fresh_db();
+
+        // Message arrives before its parent conversation exists locally.
+        let applied = apply_message_deltas(&conn, "u1", &[msg_delta("m1", "conv-c1", "10", None)]);
+        assert_eq!(applied, 0, "orphan is not inserted into messages");
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages WHERE cloud_id='m1'"),
+            1,
+            "orphan must be buffered, never dropped"
+        );
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"), 0);
+
+        // Parent conversation lands; draining resolves the buffered orphan.
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("conv-c1", "20", None)]);
+        let drained = drain_pending_messages(&conn, "u1");
+        assert_eq!(drained, 1, "buffered orphan is inserted once its parent exists");
+
+        let parent_local: i64 = conn
+            .query_row("SELECT id FROM conversations WHERE cloud_id='conv-c1'", [], |r| r.get(0))
+            .unwrap();
+        let msg_fk: i64 = conn
+            .query_row("SELECT conversation_id FROM messages WHERE cloud_id='m1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(msg_fk, parent_local, "message FK maps to the parent's local INTEGER id");
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
+            0,
+            "buffer is emptied after draining"
+        );
+    }
+
+    /// DEDUP INVARIANT: re-pulling the same cloud_id UPDATEs in place, never inserts a
+    /// second local row (the partial UNIQUE index is the backstop).
+    #[test]
+    fn pull_conversation_repull_is_idempotent_no_duplicate_row() {
+        let conn = fresh_db();
+        let delta = conv_delta("cc1", "5", None);
+        apply_conversation_deltas(&conn, "u1", std::slice::from_ref(&delta));
+        apply_conversation_deltas(&conn, "u1", std::slice::from_ref(&delta));
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM conversations WHERE cloud_id='cc1'"),
+            1,
+            "re-pulling the same cloud_id must not create a duplicate row"
+        );
+    }
+
+    /// A pulled message tombstone SOFT-deletes (sets deleted_at_utc); it must never
+    /// hard-delete, which would FK-CASCADE-orphan siblings.
+    #[test]
+    fn pull_message_tombstone_soft_deletes() {
+        let conn = fresh_db();
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "5", None)]);
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "6", None)]);
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "7", Some("2026-06-20T01:00:00Z"))]);
+
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"),
+            1,
+            "tombstoned message row must NOT be hard-deleted"
+        );
+        let deleted: Option<String> = conn
+            .query_row("SELECT deleted_at_utc FROM messages WHERE cloud_id='m1'", [], |r| r.get(0))
+            .unwrap();
+        assert!(deleted.is_some(), "deleted_at_utc must be set on a tombstoned message");
     }
 }
