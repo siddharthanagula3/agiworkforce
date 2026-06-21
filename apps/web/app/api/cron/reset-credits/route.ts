@@ -96,7 +96,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'No subscriptions to process', count: 0 });
     }
 
-    const now = new Date();
     let resetCount = 0;
     let errorCount = 0;
 
@@ -105,21 +104,23 @@ export async function GET(request: NextRequest) {
         const periodStart = new Date(subscription.current_period_start);
         const periodEnd = new Date(subscription.current_period_end);
 
-        // Check if we're at the start of a new billing period (within 1 hour of period start)
-        const timeSincePeriodStart = now.getTime() - periodStart.getTime();
-        const oneHour = 60 * 60 * 1000;
+        // Idempotent allocate (getOrCreate) for the CURRENT period instead of a
+        // DESTRUCTIVE force-reset gated on a fragile 1-hour window:
+        //  - at true period rollover this creates the new period's credit account;
+        //  - within an active period it is a no-op, so it NEVER wipes in-period
+        //    usage (the old force-reset restored already-spent quota for free);
+        //  - being idempotent, the cron no longer depends on hitting a 1-hour
+        //    window it almost always missed when run once daily.
+        const accountId = await SubscriptionService.allocateCreditsForPeriod(
+          subscription.user_id,
+          subscription.id,
+          subscription.plan_tier || 'free',
+          periodStart,
+          periodEnd,
+          { stripePriceId: subscription.stripe_price_id },
+        );
 
-        // Only reset if we're within 1 hour of period start and haven't reset yet today
-        if (timeSincePeriodStart >= 0 && timeSincePeriodStart < oneHour) {
-          await SubscriptionService.resetCreditsForNewPeriod(
-            subscription.user_id,
-            subscription.id,
-            subscription.plan_tier || 'free',
-            periodStart,
-            periodEnd,
-            { stripePriceId: subscription.stripe_price_id },
-          );
-
+        if (accountId) {
           resetCount++;
           logger.info(
             {
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
               subscriptionId: subscription.id,
               planTier: subscription.plan_tier,
             },
-            'Credits reset for subscription',
+            'Credits ensured for current period',
           );
         }
       } catch (error) {

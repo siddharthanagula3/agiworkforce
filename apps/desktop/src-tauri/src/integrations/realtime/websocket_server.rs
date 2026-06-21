@@ -536,6 +536,28 @@ impl RealtimeServer {
             return;
         }
 
+        // CSRF guard: reject cross-site Origins. Loopback-only is NOT enough — the
+        // browser is on loopback, so any web page can fetch() this port. A legit
+        // pairing request comes from an extension (chrome-extension://,
+        // vscode-webview://) or a native client (no Origin / "null"); a normal web
+        // origin (https://evil.com) must not be able to rotate or read the pair token.
+        let origin = header_section.lines().find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            if name.trim().eq_ignore_ascii_case("origin") {
+                Some(value.trim())
+            } else {
+                None
+            }
+        });
+        if !is_origin_allowed(origin) {
+            tracing::warn!("E2: /pair rejected — disallowed Origin {:?}", origin);
+            let response =
+                b"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
+            let _ = stream.write_all(response).await;
+            let _ = stream.shutdown().await;
+            return;
+        }
+
         let extension_id = match parse_pair_extension_id(header_section) {
             Ok(extension_id) => extension_id,
             Err(error) => {

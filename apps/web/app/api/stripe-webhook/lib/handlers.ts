@@ -272,7 +272,14 @@ export async function dispatchStripeEvent(
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
       const stripeCustomerId = charge.customer as string | null;
-      const refundedAmount = charge.amount_refunded;
+      // Revoke only the DELTA of the most recent refund, NOT charge.amount_refunded
+      // (which is the running CUMULATIVE total). `charge.refunded` fires once per
+      // refund carrying the cumulative amount, so revoking the cumulative each time
+      // over-revokes on partial/multiple refunds (e.g. refund $10 then $5 would
+      // revoke $10 + $15 = $25 instead of $15). Fall back to the cumulative only
+      // when no individual refund is present (single-refund case where they match).
+      const latestRefund = charge.refunds?.data?.[0];
+      const refundedAmount = latestRefund?.amount ?? charge.amount_refunded;
 
       logger.info(
         { chargeId: charge.id, customerId: stripeCustomerId, refundedAmount },
