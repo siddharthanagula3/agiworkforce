@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   canAccessManualModelSelection,
+  evaluateModelEnvironment,
+  MODEL_ENVIRONMENTS,
   getCoreManualModelOptions,
   getDefaultModelFor,
   getManagedCloudProviderIds,
@@ -489,5 +491,60 @@ describe('R25-V2 model-id drift — known-good IDs resolve; removed IDs return n
     expect(getModelMetadataById('fake-model-that-does-not-exist')).toBeNull();
     expect(getModelMetadataById(null)).toBeNull();
     expect(getModelMetadataById(undefined)).toBeNull();
+  });
+});
+
+describe('model env-gating (requiresEnvironment)', () => {
+  it('SAFETY: no current model declares requiresEnvironment (Phase A is a pure no-op)', () => {
+    // The env-gating schema must change behavior for ZERO current models. The first
+    // env-gated model is introduced later (with E2B), not in this additive phase.
+    const gated = listCanonicalModels().filter((m) => m.requiresEnvironment !== undefined);
+    expect(gated).toEqual([]);
+  });
+
+  it('every requiresEnvironment value (if any appear) is a known environment', () => {
+    const known = new Set<string>(MODEL_ENVIRONMENTS);
+    for (const model of listCanonicalModels()) {
+      if (model.requiresEnvironment !== undefined) {
+        expect(known.has(model.requiresEnvironment)).toBe(true);
+      }
+    }
+  });
+
+  describe('evaluateModelEnvironment', () => {
+    it('is selectable when the model requires no environment', () => {
+      expect(evaluateModelEnvironment(undefined, undefined)).toEqual({ selectable: true });
+      // Availability is irrelevant for an unconstrained model.
+      expect(evaluateModelEnvironment(undefined, { configured: false })).toEqual({
+        selectable: true,
+      });
+    });
+
+    it('FAIL-CLOSED: an env-required model is not selectable when the env is unconfigured', () => {
+      const verdict = evaluateModelEnvironment('e2b', { configured: false });
+      expect(verdict.selectable).toBe(false);
+      expect(verdict.reason).toMatch(/managed compute/i);
+    });
+
+    it('FAIL-CLOSED: an env-required model is not selectable with no availability info', () => {
+      expect(evaluateModelEnvironment('e2b', undefined).selectable).toBe(false);
+    });
+
+    it('is selectable only when the env is configured AND available', () => {
+      expect(evaluateModelEnvironment('e2b', { configured: true }).selectable).toBe(true);
+      expect(
+        evaluateModelEnvironment('e2b', { configured: true, available: true }).selectable,
+      ).toBe(true);
+      // Configured but unreachable → still locked.
+      expect(
+        evaluateModelEnvironment('e2b', { configured: true, available: false }).selectable,
+      ).toBe(false);
+    });
+
+    it('local-runtime requirement surfaces a runtime-install reason', () => {
+      const verdict = evaluateModelEnvironment('local-runtime', { configured: false });
+      expect(verdict.selectable).toBe(false);
+      expect(verdict.reason).toMatch(/local model runtime/i);
+    });
   });
 });
