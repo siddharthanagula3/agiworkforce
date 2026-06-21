@@ -61,6 +61,38 @@ do NOT represent E2B-tier execution as working.
   is VISUAL QA + any polish that only a running-app pass reveals.
 - **Slice 3+ (later, supervisor fan-out): desktop (canvas) + mobile (artifacts) parity.**
 
+## Cross-surface audit (read-only) — the persistence-model conflict (FOUNDER PAUSE TRIGGER)
+
+Audited desktop + mobile against the same reference. UI maturity is decent; the blocker is
+the **artifact persistence model differs by surface**, which collides with the
+"persists identically across Web/Desktop/Mobile in cloud mode" mandate:
+
+| Surface | Artifact model                                                                                                                        | Edit-in-place?                                           | Cloud persistence                                          |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| Web     | DERIVED from message content (view-only)                                                                                              | No                                                       | FREE via message sync                                      |
+| Mobile  | DERIVED from message content (view-only)                                                                                              | No                                                       | FREE via message sync                                      |
+| Desktop | FIRST-CLASS (Tauri SQLite: `artifactStore` / `api/artifacts.ts`, `conversation_id`/`message_id` backrefs, per-artifact version table) | **YES** (`InlineArtifactEditor` + `applyDiffToArtifact`) | **NOT covered** — edited content diverges from the message |
+
+**The conflict:** on web+mobile, an artifact == a deterministic projection of synced message
+content, so it persists for free. On desktop, an artifact is an independently-stored,
+USER-EDITABLE entity whose content can diverge from any message — so message sync does NOT
+carry it. Making desktop artifacts cloud-consistent is therefore genuine DB/sync work, and
+it's the founder's stated pause condition ("conflict between UI requirements and
+database-level sync constraints"). Trust boundary still applies: any such sync is
+managed-only; Local/BYOK artifacts stay on-device.
+
+Resolution options (founder decision — see escalation):
+
+- (A) Sync desktop's first-class artifacts as a NEW managed-only synced entity (new
+  table/columns on the existing gated `/api/chat/sync` path). True parity; real schema work.
+- (B) Make desktop artifacts derived + view-only like web/mobile (drop edit-in-place).
+  No schema; removes a desktop capability.
+- (C) Keep desktop edit-in-place but scope edited artifacts as desktop-local (not synced).
+  No schema; "identical across surfaces" holds only for unedited/derived artifacts.
+
+Independent of the choice: mobile parity polish (preview/source toggle + live HTML preview +
+download in `ArtifactFullScreen`) is UI-only, needs NO schema, and can proceed regardless.
+
 ## Verification status
 
 - Slice 1: web typecheck clean; artifacts + artifacts-store tests 7/7; card branch
