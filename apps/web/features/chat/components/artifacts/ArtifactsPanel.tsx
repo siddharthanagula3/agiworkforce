@@ -87,10 +87,15 @@ function EmptyState() {
 // Preview/Code tabs, versioning, sharing, and download functionality.
 // ============================================================================
 
-function ArtifactViewer({ artifact }: { artifact: Artifact }) {
+function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <ArtifactPreview artifact={artifact} className="mt-0 rounded-none border-0" />
+      <ArtifactPreview
+        artifact={artifact}
+        className="mt-0 rounded-none border-0"
+        variant="panel"
+        onClose={onClose}
+      />
     </div>
   );
 }
@@ -134,7 +139,12 @@ export function ArtifactsPanel() {
           'animate-in slide-in-from-right duration-300',
         )}
       >
-        {/* Header */}
+        {/* Header — slim strip: panel title + count badge + Download all.
+            Close X only shown here when no artifact is selected (no toolbar
+            Close visible). When an artifact IS selected, the ArtifactPreview
+            panel-variant toolbar carries the Close button. This ensures the
+            panel is always closeable on mobile even with zero or unresolved
+            artifact selections. */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
           <div className="flex items-center gap-2">
             <PanelRightOpen className="h-4 w-4 text-muted-foreground" />
@@ -158,15 +168,19 @@ export function ArtifactsPanel() {
                 <span className="ml-1 hidden sm:inline">Download all</span>
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPanelOpen(false)}
-              className="h-7 w-7 p-0"
-              aria-label="Close artifacts panel"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            {/* Show Close here only when the viewer toolbar is not visible
+                (empty panel or no artifact selected) to avoid duplicating it. */}
+            {!selectedArtifact && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPanelOpen(false)}
+                className="h-7 w-7 p-0"
+                aria-label="Close artifacts panel"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -190,7 +204,11 @@ export function ArtifactsPanel() {
 
             {/* Content */}
             <div className="flex flex-1 flex-col overflow-hidden bg-[#1e1e1e]">
-              {selectedArtifact ? <ArtifactViewer artifact={selectedArtifact} /> : <EmptyState />}
+              {selectedArtifact ? (
+                <ArtifactViewer artifact={selectedArtifact} onClose={() => setPanelOpen(false)} />
+              ) : (
+                <EmptyState />
+              )}
             </div>
           </>
         )}
