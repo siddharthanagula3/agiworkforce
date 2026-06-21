@@ -201,6 +201,30 @@ describe('syncNow — pull', () => {
     expect(mockGet).toHaveBeenNthCalledWith(2, '/api/chat/sync?since=10');
     expect(useCloudSyncStateStore.getState().cursor).toBe('20');
   });
+
+  it('trusts the server safe cursor and never overshoots to a per-row max', async () => {
+    // Saturation page: a message at server_version 99 whose parent conversation is
+    // in a LATER page. The server returns a SAFE cursor (10) bounded to the lagging
+    // table's frontier. The client must persist 10 — NOT 99 — or the in-gap rows
+    // (10..99) would be skipped on the next pull and lost forever.
+    mockGet
+      .mockResolvedValueOnce({
+        conversations: [convDelta('c1', '8')],
+        messages: [msgDelta('m1', 'c1', '99')],
+        cursor: '10',
+        hasMore: true,
+      } as never)
+      .mockResolvedValueOnce(emptyPull('10') as never);
+
+    await syncNow();
+
+    // The message at sv 99 was applied, but the cursor follows the server (10), not 99.
+    expect((useChatCloudMessageStore.getState().messages.c1 ?? []).map((m) => m.id)).toEqual([
+      'm1',
+    ]);
+    expect(useCloudSyncStateStore.getState().cursor).toBe('10');
+    expect(mockGet).toHaveBeenNthCalledWith(2, '/api/chat/sync?since=10');
+  });
 });
 
 describe('syncNow — push', () => {
@@ -270,9 +294,10 @@ describe('syncNow — push', () => {
     seedMessage('c1', { id: 'm1', role: 'user', content: 'orphan' });
     markMessageForSync('c1', 'm1'); // conversation intentionally NOT marked dirty
     // Server rejects the message (parent missing → EXISTS fails): applied.messages empty.
-    mockPost.mockImplementationOnce(
-      (async () => ({ applied: { conversations: [], messages: [] }, cursor: '0' })) as never,
-    );
+    mockPost.mockImplementationOnce((async () => ({
+      applied: { conversations: [], messages: [] },
+      cursor: '0',
+    })) as never);
 
     await syncNow();
 
