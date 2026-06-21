@@ -30,8 +30,13 @@ jest.mock('@/lib/clipboard', () => ({
   copyToClipboard: (text: string) => mockCopyToClipboard(text),
 }));
 
+const mockExportToText = jest.fn().mockResolvedValue({ uri: 'file:///tmp/export.txt' });
+const mockExportToMarkdown = jest.fn().mockResolvedValue({ uri: 'file:///tmp/export.md' });
+
 jest.mock('@/services/fileCreation', () => ({
   shareFile: (uri: string) => mockShareFile(uri),
+  exportToText: (...args: unknown[]) => mockExportToText(...args),
+  exportToMarkdown: (...args: unknown[]) => mockExportToMarkdown(...args),
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -52,7 +57,7 @@ jest.mock('lucide-react-native', () => {
     <Icon testID={`icon-${name}`} {...props} />
   );
   return {
-    Code2: iconFactory('code'),
+    Code2: iconFactory('code2'),
     Mail: iconFactory('mail'),
     BookOpen: iconFactory('book'),
     Image: iconFactory('image'),
@@ -64,6 +69,11 @@ jest.mock('lucide-react-native', () => {
     Copy: iconFactory('copy'),
     Check: iconFactory('check'),
     Share2: iconFactory('share'),
+    RefreshCw: iconFactory('refresh-cw'),
+    // new icons added for parity work
+    Eye: iconFactory('eye'),
+    Code: iconFactory('code'),
+    Download: iconFactory('download'),
     // icons consumed transitively via GeneratedFileCard rendered inside
     // ArtifactFullScreen / InlineArtifactCard chains.
     AlertTriangle: iconFactory('alert-triangle'),
@@ -174,7 +184,9 @@ describe('mobile artifacts and code screens', () => {
       <ArtifactFullScreen artifact={codeArtifact} visible onClose={onClose} />,
     );
 
-    expect(getByText('main.py')).toBeTruthy();
+    // Header now shows "Title · TYPE" combined label (language uppercased)
+    expect(getByText('main.py · PYTHON')).toBeTruthy();
+    // Language badge still appears in the source view above the code block
     expect(getByText('python')).toBeTruthy();
     expect(getByText(CODE_CONTENT)).toBeTruthy();
 

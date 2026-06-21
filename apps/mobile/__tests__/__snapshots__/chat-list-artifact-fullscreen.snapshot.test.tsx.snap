@@ -21,173 +21,223 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
     <View
       style={
         {
-          "alignItems": "center",
           "backgroundColor": "#111",
           "borderBottomColor": "#333",
           "borderBottomWidth": 1,
-          "flexDirection": "row",
-          "gap": 12,
-          "paddingBottom": 12,
-          "paddingHorizontal": 16,
+          "paddingBottom": 10,
+          "paddingHorizontal": 12,
           "paddingTop": 52,
         }
       }
     >
       <View
-        color="#aaa"
-        size={18}
-        testID="icon-code2"
-      />
-      <Text
-        numberOfLines={1}
         style={
           {
-            "color": "#fff",
-            "flex": 1,
-            "fontSize": 16,
-            "fontWeight": "600",
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 8,
           }
         }
       >
-        fibonacci.py
-      </Text>
-      <View
-        accessibilityLabel="Regenerate artifact"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
+        <Text
+          accessibilityLabel="fibonacci.py · PYTHON"
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 15,
+              "fontWeight": "600",
+            }
           }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "backgroundColor": "#242424",
-            "borderRadius": 8,
-            "padding": 8,
-          }
-        }
-      >
+        >
+          fibonacci.py · PYTHON
+        </Text>
         <View
-          color="#aaa"
-          size={18}
-          testID="icon-refresh-cw"
-        />
-      </View>
-      <View
-        accessibilityLabel="Copy content"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
+          accessibilityLabel="Download artifact"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": false,
+              "expanded": undefined,
+              "selected": undefined,
+            }
           }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
           }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "backgroundColor": "#242424",
-            "borderRadius": 8,
-            "padding": 8,
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "opacity": 1,
+              "padding": 8,
+            }
           }
-        }
-      >
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-download"
+          />
+        </View>
         <View
-          color="#aaa"
-          size={18}
-          testID="icon-copy"
-        />
-      </View>
-      <View
-        accessibilityLabel="Close"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
+          accessibilityLabel="Regenerate artifact"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
           }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
           }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "backgroundColor": "#242424",
-            "borderRadius": 8,
-            "padding": 8,
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "padding": 8,
+            }
           }
-        }
-      >
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-refresh-cw"
+          />
+        </View>
         <View
-          color="#aaa"
-          size={18}
-          testID="icon-x"
-        />
+          accessibilityLabel="Copy content"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "padding": 8,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-copy"
+          />
+        </View>
+        <View
+          accessibilityLabel="Close"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "padding": 8,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-x"
+          />
+        </View>
       </View>
     </View>
     <RCTScrollView
@@ -197,6 +247,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
           "paddingBottom": 58,
         }
       }
+      horizontal={false}
       showsVerticalScrollIndicator={true}
       style={
         {
@@ -208,29 +259,44 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
         <View
           style={
             {
+              "marginBottom": 6,
+            }
+          }
+        />
+        <RCTScrollView
+          contentContainerStyle={
+            {
+              "padding": 12,
+            }
+          }
+          horizontal={true}
+          showsHorizontalScrollIndicator={true}
+          style={
+            {
               "backgroundColor": "#111",
               "borderColor": "#333",
               "borderRadius": 8,
               "borderWidth": 1,
-              "padding": 12,
             }
           }
         >
-          <Text
-            selectable={true}
-            style={
-              {
-                "color": "#fff",
-                "fontFamily": "Menlo",
-                "fontSize": 13,
-                "lineHeight": 20,
+          <View>
+            <Text
+              selectable={true}
+              style={
+                {
+                  "color": "#fff",
+                  "fontFamily": "Menlo",
+                  "fontSize": 13,
+                  "lineHeight": 20,
+                }
               }
-            }
-          >
-            def fib(n):
+            >
+              def fib(n):
     return n if n &lt; 2 else fib(n-1) + fib(n-2)
-          </Text>
-        </View>
+            </Text>
+          </View>
+        </RCTScrollView>
       </View>
     </RCTScrollView>
   </View>
@@ -258,127 +324,177 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
     <View
       style={
         {
-          "alignItems": "center",
           "backgroundColor": "#111",
           "borderBottomColor": "#333",
           "borderBottomWidth": 1,
-          "flexDirection": "row",
-          "gap": 12,
-          "paddingBottom": 12,
-          "paddingHorizontal": 16,
+          "paddingBottom": 10,
+          "paddingHorizontal": 12,
           "paddingTop": 52,
         }
       }
     >
       <View
-        color="#aaa"
-        size={18}
-        testID="icon-code2"
-      />
-      <Text
-        numberOfLines={1}
         style={
           {
-            "color": "#fff",
-            "flex": 1,
-            "fontSize": 16,
-            "fontWeight": "600",
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 8,
           }
         }
       >
-        fibonacci.py
-      </Text>
-      <View
-        accessibilityLabel="Copy content"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
+        <Text
+          accessibilityLabel="fibonacci.py · PYTHON"
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 15,
+              "fontWeight": "600",
+            }
           }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "backgroundColor": "#242424",
-            "borderRadius": 8,
-            "padding": 8,
-          }
-        }
-      >
+        >
+          fibonacci.py · PYTHON
+        </Text>
         <View
-          color="#aaa"
-          size={18}
-          testID="icon-copy"
-        />
-      </View>
-      <View
-        accessibilityLabel="Close"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
+          accessibilityLabel="Download artifact"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": false,
+              "expanded": undefined,
+              "selected": undefined,
+            }
           }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
           }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "backgroundColor": "#242424",
-            "borderRadius": 8,
-            "padding": 8,
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "opacity": 1,
+              "padding": 8,
+            }
           }
-        }
-      >
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-download"
+          />
+        </View>
         <View
-          color="#aaa"
-          size={18}
-          testID="icon-x"
-        />
+          accessibilityLabel="Copy content"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "padding": 8,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-copy"
+          />
+        </View>
+        <View
+          accessibilityLabel="Close"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "#242424",
+              "borderRadius": 8,
+              "padding": 8,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={17}
+            testID="icon-x"
+          />
+        </View>
       </View>
     </View>
     <RCTScrollView
@@ -388,6 +504,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
           "paddingBottom": 58,
         }
       }
+      horizontal={false}
       showsVerticalScrollIndicator={true}
       style={
         {
@@ -399,29 +516,44 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
         <View
           style={
             {
+              "marginBottom": 6,
+            }
+          }
+        />
+        <RCTScrollView
+          contentContainerStyle={
+            {
+              "padding": 12,
+            }
+          }
+          horizontal={true}
+          showsHorizontalScrollIndicator={true}
+          style={
+            {
               "backgroundColor": "#111",
               "borderColor": "#333",
               "borderRadius": 8,
               "borderWidth": 1,
-              "padding": 12,
             }
           }
         >
-          <Text
-            selectable={true}
-            style={
-              {
-                "color": "#fff",
-                "fontFamily": "Menlo",
-                "fontSize": 13,
-                "lineHeight": 20,
+          <View>
+            <Text
+              selectable={true}
+              style={
+                {
+                  "color": "#fff",
+                  "fontFamily": "Menlo",
+                  "fontSize": 13,
+                  "lineHeight": 20,
+                }
               }
-            }
-          >
-            def fib(n):
+            >
+              def fib(n):
     return n if n &lt; 2 else fib(n-1) + fib(n-2)
-          </Text>
-        </View>
+            </Text>
+          </View>
+        </RCTScrollView>
       </View>
     </RCTScrollView>
   </View>
