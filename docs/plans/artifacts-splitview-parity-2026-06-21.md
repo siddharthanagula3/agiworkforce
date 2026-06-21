@@ -50,11 +50,22 @@ do NOT represent E2B-tier execution as working.
   - single reference toolbar: LEFT `[Eye=Preview | Code=Source]` segmented toggle then
     `Title · TYPE`; RIGHT Copy / Download / Refresh / Open-in-new-tab / Fullscreen / Close.
     `ArtifactsPanel` passes `variant='panel'`.
-- **Slice 2 (web, next): inline tool-call → structured rendering fidelity.** Refs 378/379/
-  382/383/385/386. `ToolTimeline` + `InlineToolResults`: "Used X, loaded tools ⌄" →
-  per-step rows (icon + name + Result pill) → "✓ Done", collapsing to a compact
-  "Ran N commands, created a file, read a file" summary. Exact lucide iconography per refs.
+- **Slice 2 (web): inline tool-call → structured rendering fidelity. — ALREADY PRESENT.**
+  Audited the live components: `ToolTimeline.tsx` is already built against these exact refs
+  (its comments cite "image 381/383/385"): collapsed "Ran N commands, created a file, read a
+  file" summary (383), per-step icon rows + filename chips (378/382/385), "✓ Done" row (378),
+  inline web-search source cards w/ favicons (381). `InlineArtifactCards.tsx` renders in-thread
+  cards (thumbnail + title + type badge + "+N more") that open the split-view panel on click
+  (the parity equivalent of the refs' "Open in …" CTA). `CodeExecutionBlock.tsx` renders
+  stdout/stderr/images. ⇒ No rebuild needed; the gap was the viewer (Slice 1). Remaining here
+  is VISUAL QA + any polish that only a running-app pass reveals.
 - **Slice 3+ (later, supervisor fan-out): desktop (canvas) + mobile (artifacts) parity.**
+
+## Verification status
+
+- Slice 1: web typecheck clean; artifacts + artifacts-store tests 7/7; card branch
+  byte-identical (gallery unaffected). **Browser visual QA of the panel = PENDING** (no dev
+  server booted in this env). This is the one open verification item for web parity.
 
 ## Blast-radius guardrails (web)
 
