@@ -12,6 +12,8 @@ import {
   CREATE_FOLDER_TOOL,
   isExecutionTool,
   e2bExecutionToolDefs,
+  resolveCodeExecutionTools,
+  modelSupportsCodeExecution,
   routeExecutionTool,
 } from '../execution-tools';
 import { MAX_EXECUTION_OUTPUT_BYTES, type E2BExecutor } from '../types';
@@ -115,5 +117,56 @@ describe('routeExecutionTool — output cap', () => {
     const executor = mockExecutor({ runCode: vi.fn(async () => ({ ok: true, output: 'small' })) });
     const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, { code: 'x' });
     expect(result.output).toBe('small');
+  });
+});
+
+describe('resolveCodeExecutionTools — conditional router (hybrid cut-over)', () => {
+  describe('E2B OFF — backward compatible with the live provider-native behavior', () => {
+    it('openai → provider-native code_interpreter (byte-for-byte unchanged)', () => {
+      expect(resolveCodeExecutionTools('openai', false)).toEqual([{ type: 'code_interpreter' }]);
+    });
+    it('anthropic → provider-native code_execution_20260120 (unchanged)', () => {
+      expect(resolveCodeExecutionTools('anthropic', false)).toEqual([
+        { type: 'code_execution_20260120', name: 'code_execution', allowed_callers: ['direct'] },
+      ]);
+    });
+    it('google → provider-native code_execution (unchanged)', () => {
+      expect(resolveCodeExecutionTools('google', false)).toEqual([{ code_execution: {} }]);
+    });
+    it.each(['deepseek', 'moonshot', 'kimi', 'zhipu', 'glm', 'minimax'])(
+      'FAIL-CLOSED: %s (no native execution) → NO tool when E2B is off',
+      (provider) => {
+        expect(resolveCodeExecutionTools(provider, false)).toEqual([]);
+      },
+    );
+  });
+
+  describe('E2B ON — universal: every model routes through the E2B sandbox', () => {
+    it.each(['openai', 'anthropic', 'google', 'deepseek', 'kimi', 'glm', 'minimax'])(
+      '%s → the universal E2B execution tools (NOT provider-native)',
+      (provider) => {
+        const tools = resolveCodeExecutionTools(provider, true);
+        expect(tools).toEqual(e2bExecutionToolDefs());
+        // Never the provider-native shapes when E2B is on.
+        expect(JSON.stringify(tools)).not.toContain('code_interpreter');
+        expect(JSON.stringify(tools)).not.toContain('code_execution_20260120');
+      },
+    );
+  });
+});
+
+describe('modelSupportsCodeExecution', () => {
+  it('E2B off: only native-execution providers can run code', () => {
+    for (const p of ['openai', 'anthropic', 'google']) {
+      expect(modelSupportsCodeExecution(p, false)).toBe(true);
+    }
+    for (const p of ['deepseek', 'kimi', 'glm', 'minimax']) {
+      expect(modelSupportsCodeExecution(p, false)).toBe(false);
+    }
+  });
+  it('E2B on: every provider can run code (universal sandbox)', () => {
+    for (const p of ['openai', 'deepseek', 'kimi', 'glm', 'minimax']) {
+      expect(modelSupportsCodeExecution(p, true)).toBe(true);
+    }
   });
 });

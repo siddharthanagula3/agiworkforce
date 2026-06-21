@@ -17,16 +17,27 @@ export const E2B_EXECUTION_ENV = 'AGI_E2B_EXECUTION';
 export const E2B_API_KEY_ENV = 'E2B_API_KEY';
 
 /**
- * Whether E2B execution should be offered for this deployment. ALL of:
- *  1. managed-compute private beta is enabled (the managed-cloud trust gate), AND
- *  2. the E2B cut-over flag is explicitly on, AND
- *  3. an E2B API key is configured.
- * Any miss → false (fail-closed). The picker-level `requiresEnvironment` gate and the
- * per-request managed-compute gate are separate, complementary enforcement layers.
+ * Whether E2B execution is configured for this deployment. Per the founder's hybrid
+ * cut-over: E2B routing is active when an E2B API key OR the explicit cut-over flag is
+ * present. Both are SERVER env vars (operator-controlled, never user-controlled), so
+ * this is a deliberate deployment opt-in — consistent with the managed-cloud gating
+ * principle (managed compute is operator-gated, not publicly open). Off by default.
+ *
+ * When false, the conditional router falls back to provider-native code execution for
+ * providers that support it, and fail-closes for providers that don't.
  */
 export function e2bExecutionEnabled(): boolean {
-  if (!isManagedComputePrivateBetaEnabled()) return false;
-  if (process.env[E2B_EXECUTION_ENV] !== '1') return false;
   const key = process.env[E2B_API_KEY_ENV];
-  return typeof key === 'string' && key.length > 0;
+  const hasKey = typeof key === 'string' && key.length > 0;
+  const flagOn = process.env[E2B_EXECUTION_ENV] === '1';
+  return hasKey || flagOn;
+}
+
+/**
+ * Managed-compute private-beta status — a SEPARATE, broader gate (used by the
+ * route-level managed-compute enforcement). Re-exported here for callers that need to
+ * reason about both gates together. Not required for `e2bExecutionEnabled()`.
+ */
+export function managedComputeBetaEnabled(): boolean {
+  return isManagedComputePrivateBetaEnabled();
 }

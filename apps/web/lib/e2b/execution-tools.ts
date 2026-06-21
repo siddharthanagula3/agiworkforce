@@ -80,6 +80,48 @@ export function e2bExecutionToolDefs(): Array<{
   ];
 }
 
+/** Providers that expose a NATIVE (provider-executed) code interpreter today. */
+const NATIVE_CODE_EXECUTION_PROVIDERS = new Set(['anthropic', 'google', 'openai']);
+
+/**
+ * Conditional code-execution router (the founder's hybrid cut-over). Returns the tools
+ * to attach when `code_execution` is requested:
+ *  - E2B configured  → the UNIVERSAL E2B execution tools, for EVERY model/provider.
+ *  - E2B not configured → graceful fallback to PROVIDER-NATIVE execution, ONLY for the
+ *    providers that support it (today's exact behavior, byte-for-byte).
+ *  - E2B not configured + provider has no native execution (deepseek/kimi/glm/minimax/…)
+ *    → FAIL-CLOSED: no execution tool (the model cannot run code until E2B is keyed).
+ *
+ * Pure + exhaustively unit-tested so the live cut-over decision can't silently regress.
+ */
+export function resolveCodeExecutionTools(provider: string, e2bEnabled: boolean): unknown[] {
+  if (e2bEnabled) {
+    return e2bExecutionToolDefs();
+  }
+  const p = provider.toLowerCase();
+  if (p === 'anthropic') {
+    return [
+      { type: 'code_execution_20260120', name: 'code_execution', allowed_callers: ['direct'] },
+    ];
+  }
+  if (p === 'google') {
+    return [{ code_execution: {} }];
+  }
+  if (p === 'openai') {
+    return [{ type: 'code_interpreter' }];
+  }
+  return [];
+}
+
+/**
+ * Whether a model can run code at all, given the deployment's E2B state: true if E2B is
+ * configured (universal) OR the provider has native execution. Surfaces let the UI gray
+ * out the code-execution affordance for models that can't (non-native, no E2B).
+ */
+export function modelSupportsCodeExecution(provider: string, e2bEnabled: boolean): boolean {
+  return e2bEnabled || NATIVE_CODE_EXECUTION_PROVIDERS.has(provider.toLowerCase());
+}
+
 /** Cap output bytes returned to the model (memory/context guard). */
 function capOutput(output: string): string {
   if (Buffer.byteLength(output, 'utf8') <= MAX_EXECUTION_OUTPUT_BYTES) return output;

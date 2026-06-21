@@ -6,6 +6,8 @@ import { randomUUID } from 'crypto';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
+import { resolveCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import { e2bExecutionEnabled } from '@/lib/e2b/gate';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -1064,16 +1066,15 @@ export async function processRequest(
   }
 
   if (chatRequest.code_execution && (resolvedModelCaps?.codeExecution ?? true)) {
-    if (providerLower === 'anthropic') {
-      resolvedTools = [
-        ...(resolvedTools ?? []),
-        { type: 'code_execution_20260120', name: 'code_execution', allowed_callers: ['direct'] },
-      ];
-    } else if (providerLower === 'google') {
-      resolvedTools = [...(resolvedTools ?? []), { code_execution: {} }];
-    } else if (providerLower === 'openai') {
-      resolvedTools = [...(resolvedTools ?? []), { type: 'code_interpreter' }];
-    }
+    // Conditional execution router (P3 hybrid cut-over): when E2B is configured, ALL
+    // models route code execution through the universal E2B sandbox; otherwise fall
+    // back to provider-native execution for providers that support it (today's exact
+    // behavior), and fail-closed (no tool) for providers that don't. When E2B is off
+    // (the default), this is byte-for-byte identical to the previous behavior.
+    resolvedTools = [
+      ...(resolvedTools ?? []),
+      ...resolveCodeExecutionTools(providerLower, e2bExecutionEnabled()),
+    ];
   }
 
   const llmRequest = {
