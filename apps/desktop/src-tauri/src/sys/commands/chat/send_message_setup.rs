@@ -484,7 +484,10 @@ fn load_or_create_conversation(
         let conversation = repository::get_conversation(&conn, id, &request.user_id)
             .map_err(|e| format!("Failed to get new conversation: {e}"))?;
         if cloud_sync_enabled {
-            cloud_sync::spawn_sync_conversation(conversation.clone());
+            // Mint UUIDv7 cloud_id and mark for push.
+            // Reuse the already-held guard — re-acquiring the same non-reentrant
+            // std::sync::Mutex would deadlock.
+            let _ = cloud_sync::mark_conversation_for_push(&conn, id);
         }
         Ok(conversation)
     }
@@ -547,7 +550,10 @@ fn create_user_message_record(
         let saved_message = repository::get_message(&conn, id)
             .map_err(|e| format!("Failed to retrieve user message: {e}"))?;
         if cloud_sync_enabled {
-            cloud_sync::spawn_sync_message(saved_message.clone());
+            // Mint cloud_id and mark user message for push.
+            // Reuse the already-held guard — re-acquiring the same non-reentrant
+            // std::sync::Mutex would deadlock.
+            let _ = cloud_sync::mark_message_for_push(&conn, id);
         }
         saved_message
     };

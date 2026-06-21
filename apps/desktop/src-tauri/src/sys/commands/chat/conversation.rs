@@ -328,8 +328,9 @@ pub fn chat_get_conversation_stats(
     })
 }
 
-/// Manually trigger a bulk sync of all conversations and messages to cloud.
-/// Returns an error if the user's chat_storage_mode is not "cloud".
+/// Manually trigger a delta sync (push + pull) of cloud conversations and
+/// messages. Returns an error if cloud sync is disabled or authentication
+/// is not available. Repoints the old bulk_sync stub at the new sync_now engine.
 #[tauri::command]
 pub async fn sync_conversations_to_cloud(
     db: State<'_, AppDatabase>,
@@ -340,7 +341,7 @@ pub async fn sync_conversations_to_cloud(
         return Err("User ID cannot be empty".to_string());
     }
 
-    // Respect the user's chat storage preference
+    // Egress gate: check chat storage preference (managed-only).
     {
         let s = settings_state.settings.lock().await;
         let mode = s
@@ -355,26 +356,16 @@ pub async fn sync_conversations_to_cloud(
         }
     }
 
-    let client = cloud_sync::CloudSyncClient::new()
-        .ok_or_else(|| "Cloud sync is not available in the desktop runtime".to_string())?;
+    // Auth: get bearer token and base URL (managed-cloud path).
+    let token = crate::sys::account::get_access_token()?;
+    let base_url = crate::sys::account::get_api_base_url();
 
-    // Scope the MutexGuard so it is dropped before any .await.
-    // Only sync conversations that were created in cloud mode — local conversations
-    // must NEVER be synced to the cloud without explicit user action.
-    let (conversations, all_messages) = {
-        let conn = db.connection()?;
-        let convs =
-            repository::list_conversations_by_mode(&conn, DEFAULT_CONVERSATION_LIST_LIMIT, 0, &user_id, "cloud")
-                .map_err(|e| format!("Failed to list conversations: {e}"))?;
+    let outcome = cloud_sync::sync_now(&db, &user_id, &token, &base_url).await?;
 
-        let mut msgs = Vec::new();
-        for conv in &convs {
-            if let Ok(m) = repository::list_messages(&conn, conv.id) {
-                msgs.extend(m);
-            }
-        }
-        (convs, msgs)
-    };
-
-    Ok(client.bulk_sync(&conversations, &all_messages).await)
+    Ok(cloud_sync::BulkSyncResult {
+        conversations_synced: outcome.conversations_pushed + outcome.conversations_pulled,
+        conversations_failed: 0,
+        messages_synced: outcome.messages_pushed + outcome.messages_pulled,
+        messages_failed: 0,
+    })
 }
