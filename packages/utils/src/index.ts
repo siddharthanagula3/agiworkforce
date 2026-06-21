@@ -9,6 +9,10 @@
 // Core utilities
 export * from './signaling';
 
+// UUIDv7 — client-generatable, time-ordered cloud identity for cross-device sync
+export { uuidv7, isUuidV7, uuidV7TimestampMs, setUuidV7RandomSource } from './uuidv7';
+export type { RandomBytesSource } from './uuidv7';
+
 // Secret-redacting logger facade (FIX-024)
 export { logger, redactSecrets, redactSecretsWithReport, scanSecrets } from './logger';
 export type { LogLevel, SecretScanOptions, SecretScanResult } from './logger';
