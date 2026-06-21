@@ -161,6 +161,59 @@ export interface ModelMetadata {
   supersedes?: string[];
   supersedes_effective_date?: string;
   supersedes_note?: string;
+  /**
+   * Hosted execution environment this model REQUIRES to run. Absent/undefined =
+   * no environment requirement (the default — all current models). When set, the
+   * model is only selectable when that environment is configured + reachable, and
+   * pickers gray it out otherwise. Like `imageApi`, this is catalog-driven: marking
+   * a model as env-gated is a models.curation.json edit, no code change.
+   *   - 'e2b'           → managed-cloud E2B execution sandbox (agentic code/tools).
+   *                       MANAGED-CLOUD ONLY: such models are hard-gated behind the
+   *                       managed-compute gate, never auto-routed from Local/BYOK.
+   *   - 'local-runtime' → an on-device local model runtime must be installed.
+   */
+  requiresEnvironment?: 'e2b' | 'local-runtime';
+}
+
+/** The set of hosted execution environments a model may require. */
+export const MODEL_ENVIRONMENTS = ['e2b', 'local-runtime'] as const;
+export type ModelEnvironment = (typeof MODEL_ENVIRONMENTS)[number];
+
+/**
+ * Runtime availability of a model's required execution environment. Mirrors
+ * {@link ProviderHealthStatus} — env-availability is RUNTIME state ("is E2B
+ * configured + reachable?"), NOT a static tier, so it must be threaded into the
+ * pickers separately from the pure tier/access logic.
+ */
+export interface EnvironmentAvailability {
+  /** Whether the environment is configured (e.g. managed-compute beta enabled / runtime installed). */
+  configured: boolean;
+  /** Whether the environment is currently reachable (optional; defaults to `configured`). */
+  available?: boolean;
+}
+
+/**
+ * Decide whether a model is selectable given its environment requirement and the
+ * runtime availability of that environment. Returns a structured verdict so each
+ * surface's picker can gray-out + show a distinct lock reason.
+ *
+ * Fail-closed: a model that requires an environment is NOT selectable unless that
+ * environment is both configured AND available. A model with no requirement is
+ * always environment-OK (its other gates — tier, provider key — apply separately).
+ */
+export function evaluateModelEnvironment(
+  requiresEnvironment: ModelEnvironment | undefined,
+  availability: EnvironmentAvailability | undefined,
+): { selectable: boolean; reason?: string } {
+  if (!requiresEnvironment) return { selectable: true };
+  const configured = availability?.configured === true;
+  const available = availability?.available ?? configured;
+  if (configured && available) return { selectable: true };
+  const reason =
+    requiresEnvironment === 'e2b'
+      ? 'Requires managed compute — currently in private beta'
+      : 'Requires a local model runtime to be installed';
+  return { selectable: false, reason };
 }
 
 /**
@@ -1171,6 +1224,19 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
       throw new Error(
         `SLOT_REGISTRY references unknown model: ${slot.modelId} (slot: ${slot.slot}). ` +
           `Update packages/types/src/models.json or fix SLOT_REGISTRY.`,
+      );
+    }
+  }
+  // Any model declaring `requiresEnvironment` must name a known environment, so a
+  // typo in models.json fails loudly at import instead of silently never gating
+  // (which would expose an env-gated model as if it had no requirement).
+  const knownEnvironments = new Set<string>(MODEL_ENVIRONMENTS);
+  for (const model of Object.values(modelsById)) {
+    const env = model.requiresEnvironment as string | undefined;
+    if (env !== undefined && !knownEnvironments.has(env)) {
+      throw new Error(
+        `Model "${model.id}" declares unknown requiresEnvironment: "${env}". ` +
+          `Allowed: ${MODEL_ENVIRONMENTS.join(', ')}. Fix packages/types/src/models.json.`,
       );
     }
   }
