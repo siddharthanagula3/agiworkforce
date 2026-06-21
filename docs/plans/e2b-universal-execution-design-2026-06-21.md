@@ -139,3 +139,26 @@ From the review (to be verified before any live cut-over):
   Flipping to E2B is a user-facing change requiring a key + verification. Confirm when
   to cut over (and whether to keep provider-native as a temporary fallback — NOT
   recommended: it re-introduces provider-execution, which the directive bans).
+
+## 7. Phase A cross-surface gating-leak audit (close in Phase B with SERVER enforcement)
+
+Every surface's PICKER now grays out env-gated models, but each engineer honestly
+flagged programmatic/direct-selection paths that bypass the picker gate. ALL are safe
+today (no model sets `requiresEnvironment`); they must be closed before the first
+env-gated model ships. The durable fix is SERVER-SIDE: enforce `requiresEnvironment`
+
+- the managed-compute gate at the API (a client gate is UX, the server gate is
+  enforcement — same lesson as P1/P2 RLS).
+
+* **Web**: `model-store.ts` selection setters (`applyModelSelection`/`selectModel`),
+  `GET /app/api/models` (returns all models unflagged), and `/app/api/chat/*` (no
+  server-side `requiresEnvironment` validation — the real backstop).
+* **Mobile**: `isSelectableModelIdForCloudAccess()` is fail-open; static `MODEL_LIST`/
+  `LOCKED_CLOUD_MODELS` built at module load; local-runtime gating needs `OnDeviceModel`
+  to carry the field.
+* **Desktop**: `modelStore.selectModel` (palette/shortcuts) tier-only; cloud-mode
+  `ManagedCloudModel` mapping drops the field; `ModelComparison`/quick-query render paths.
+* **CLI**: `--model <id>` flag, `/model <arg>`, `default_model()` and routing dispatch
+  bypass the picker filter.
+* **VS Code**: flat `MODEL_PICKER_OPTIONS` (sidebar), `normalizeConfiguredModelId()`
+  (settings.json), and `auto-*` resolved ids are not re-gated at send time.
