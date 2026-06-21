@@ -162,3 +162,20 @@ env-gated model ships. The durable fix is SERVER-SIDE: enforce `requiresEnvironm
   bypass the picker filter.
 * **VS Code**: flat `MODEL_PICKER_OPTIONS` (sidebar), `normalizeConfiguredModelId()`
   (settings.json), and `auto-*` resolved ids are not re-gated at send time.
+
+## 8. Cost-optimized routing update (2026 billing, founder spec)
+
+The cut-over is NOT a blunt "universal E2B for everything." Per the founder's 2026
+billing analysis, `resolveCodeExecutionTools(provider, e2bEnabled)` routes by provider:
+
+- **Free native tier** — Anthropic + Gemini ALWAYS use their own native code-execution
+  sandboxes (free compute), regardless of E2B.
+- **E2B credit tier** — OpenAI (to avoid its per-session interpreter fees) + DeepSeek /
+  Kimi / GLM / MiniMax (no native sandbox) route to E2B when it is configured.
+- **Risk mitigation (E2B off, today's default)** — OpenAI keeps its native interpreter
+  (don't break a working path); no-native providers fail-closed until E2B is keyed.
+
+The code encodes only the routing POLICY; the specific billing figures (the Anthropic
+free-tier hours, OpenAI session fees) are the founder's and are a one-line change if the
+billing reality shifts. (These 2026 provider-billing specifics are beyond verification
+from the repo / model knowledge cutoff.)
