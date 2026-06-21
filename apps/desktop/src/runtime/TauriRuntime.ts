@@ -28,6 +28,7 @@ import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useUnifiedAuthStore } from '../stores/auth';
 import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
+import { triggerCloudSyncAfterTurn } from '../lib/cloudSyncTrigger';
 import { useChatStore as useDesktopChatStore, uuidToDbId } from '../stores/chat/chatStore';
 
 // ---------------------------------------------------------------------------
@@ -258,6 +259,9 @@ export class TauriRuntime implements ChatRuntime {
         }
       }
     }
+    // Post-turn cloud sync: debounced, managed-only gate re-checked inside.
+    // Fire-and-forget — never blocks the caller.
+    triggerCloudSyncAfterTurn();
   }
 
   onStream(

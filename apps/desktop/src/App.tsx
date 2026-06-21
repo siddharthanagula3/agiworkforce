@@ -168,6 +168,7 @@ const ErrorToastContainer = lazy(() =>
 );
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
+import { initCloudSyncScheduler } from './lib/cloudSyncTrigger';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
 import { PlansModal } from './features/pricing/PlansModal';
@@ -430,6 +431,9 @@ const DesktopShell = () => {
       void runStartupStep('Runtime activity event listener', () =>
         initializeRuntimeActivityEventListeners(),
       );
+      // Cloud sync scheduler: fires on managed-mode entry + every 30 s.
+      // Managed-only gate is enforced inside; Local and BYOK never trigger sync.
+      registerCleanup(initCloudSyncScheduler());
     }
 
     // Wire up mcpb:install_progress Tauri event into the MCPB store (Tauri-only)
