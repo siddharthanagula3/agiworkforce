@@ -1,6 +1,6 @@
 use super::process_reasoning::ProcessType;
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -74,7 +74,8 @@ pub struct ProcessOntology {
 impl ProcessOntology {
     pub fn new(db_path: String) -> Result<Self> {
         // Ensure the process_templates table exists before any reads or writes
-        let conn = Connection::open(&db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS process_templates (
                 id TEXT PRIMARY KEY,
@@ -490,7 +491,8 @@ impl ProcessOntology {
     }
 
     fn load_templates_from_db(&mut self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, process_type, name, description, typical_steps, success_criteria,
@@ -547,7 +549,8 @@ impl ProcessOntology {
     }
 
     fn save_template_to_db(&self, template: &ProcessTemplate) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "INSERT OR REPLACE INTO process_templates

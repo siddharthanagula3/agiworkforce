@@ -120,7 +120,7 @@ pub struct ProjectMemoryManager {
 impl ProjectMemoryManager {
     /// Create a new ProjectMemoryManager with a connection to the database
     pub fn new(db_path: &str) -> Result<Self> {
-        let conn = Connection::open(db_path)
+        let conn = crate::data::db::encryption::open_keyed_connection(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
 
         Ok(Self {
@@ -130,7 +130,7 @@ impl ProjectMemoryManager {
 
     /// Create a ProjectMemoryManager from an existing connection path
     pub fn from_path(path: &std::path::Path) -> Result<Self> {
-        let conn = Connection::open(path)
+        let conn = crate::data::db::encryption::open_keyed_connection(path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
 
         Ok(Self {
