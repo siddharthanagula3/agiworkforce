@@ -260,6 +260,7 @@ pub async fn llm_send_message(
         strategy: RoutingStrategy::Auto,
         context: None,
         prefer_cloud_credits: request.prefer_cloud_credits,
+        local_only: false,
     };
 
     let candidates = {
@@ -1076,6 +1077,7 @@ mod tests {
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         let candidate = {

@@ -130,12 +130,22 @@ pub(super) fn build_router_preferences(
         routing_reason: meta.routing_reason.clone(),
     });
 
+    // TRUST BOUNDARY: pure Local mode must never receive a ManagedCloud candidate.
+    // Mirror the canonical is_local_mode derivation above (active_mode "local" wins;
+    // legacy callers without active_mode fall back to !prefer_cloud_credits).
+    let local_only = match request.active_mode.as_deref() {
+        Some("local") => true,
+        Some("cloud") => false,
+        _ => !request.prefer_cloud_credits,
+    };
+
     RouterPreferences {
         provider: provider_enum,
         model: Some(model.to_string()),
         strategy: resolve_routing_strategy(model),
         context: router_context,
         prefer_cloud_credits: request.prefer_cloud_credits,
+        local_only,
     }
 }
 

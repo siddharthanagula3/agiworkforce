@@ -260,6 +260,7 @@ Provide a detailed analysis in a structured format."#
             strategy: crate::core::llm::RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         let candidates = router.candidates(&llm_request, &preferences);

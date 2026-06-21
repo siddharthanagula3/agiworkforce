@@ -204,6 +204,7 @@ impl LlmExecutor {
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         // Build LLM request
