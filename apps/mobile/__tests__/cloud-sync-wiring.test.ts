@@ -216,3 +216,52 @@ describe('cloud send → sync write-through', () => {
     expect(useCloudSyncStateStore.getState().dirtyConversationIds).toHaveLength(0);
   });
 });
+
+describe('cross-device history continuation', () => {
+  it('feeds cloud-store (pulled) history to the LLM when continuing a conversation authored elsewhere', async () => {
+    // Prior turns exist ONLY in the cloud store (pulled from web/desktop), never in
+    // the local message store — the cross-device continuation case.
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: CONV_ID,
+      title: 'Started on Web',
+      createdAt: '2026-06-20T00:00:00.000Z',
+      updatedAt: '2026-06-20T00:00:01.000Z',
+      messageCount: 2,
+      pinned: false,
+      model: CLOUD_MODEL,
+      executionMode: 'cloud',
+    });
+    useChatCloudMessageStore.getState().setCloudMessages(CONV_ID, [
+      {
+        id: '0190a000-0000-7000-8000-00000000aaaa',
+        role: 'user',
+        content: 'started on web',
+        createdAt: '2026-06-20T00:00:00.000Z',
+      },
+      {
+        id: '0190a000-0000-7000-8000-00000000bbbb',
+        role: 'assistant',
+        content: 'replied on web',
+        createdAt: '2026-06-20T00:00:01.000Z',
+      },
+    ] as never);
+
+    let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+    mockStreamChat.mockImplementation(async (body, callbacks: StreamCallbacks) => {
+      capturedBody = body;
+      callbacks.onDelta({ content: 'continued on mobile' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'continue on mobile', CLOUD_MODEL);
+
+    const contents = (capturedBody?.messages ?? []).map((m) =>
+      typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    );
+    // The pulled web turns are present AND precede the new mobile message.
+    expect(contents).toEqual(
+      expect.arrayContaining(['started on web', 'replied on web', 'continue on mobile']),
+    );
+    expect(contents.indexOf('replied on web')).toBeLessThan(contents.indexOf('continue on mobile'));
+  });
+});
