@@ -8,7 +8,12 @@ import {
   type StreamChunk as ProviderStreamChunk,
 } from '@/lib/providerStreamClient';
 import { getAuthToken } from './authSession';
-import { secureFetch } from './secureFetch';
+// Zero-leak chokepoint: the SSE call below targets OUR managed cloud
+// (`${API_URL}/api/llm/...`). Route it through guardedFetch so that, in Local
+// mode, the request is refused BEFORE any network I/O (fail-closed). guardedFetch
+// delegates to secureFetch (TLS pinning) for allowed requests, so pin coverage
+// is preserved.
+import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError } from './api';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
@@ -84,7 +89,7 @@ async function attemptStream(
 ): Promise<boolean> {
   const token = await getAuthToken();
 
-  const response = await secureFetch(`${API_URL}/api/llm/v1/chat/completions`, {
+  const response = await guardedFetch(`${API_URL}/api/llm/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

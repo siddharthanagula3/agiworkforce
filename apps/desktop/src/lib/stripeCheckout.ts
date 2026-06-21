@@ -1,5 +1,6 @@
 import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
+import { guardedFetch } from './egressGuard';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { openExternalUrl } from '../utils/navigation';
 
@@ -31,7 +32,7 @@ export async function openCheckout(
 
   let url: string;
   try {
-    const res = await fetch(`${WEB_APP_URL}/api/checkout`, {
+    const res = await guardedFetch(`${WEB_APP_URL}/api/checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +74,7 @@ export async function openBillingPortal(): Promise<string | null> {
 
   let url: string;
   try {
-    const res = await fetch(`${WEB_APP_URL}/api/portal`, {
+    const res = await guardedFetch(`${WEB_APP_URL}/api/portal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -11,7 +11,11 @@
  */
 
 import type { Effort } from '@agiworkforce/types';
-import { secureFetch } from '@/services/secureFetch';
+// Zero-leak chokepoint: this client streams through OUR api-gateway
+// (`${gatewayUrl}/api/v1/providers/...`, gatewayUrl = API_URL). Route it through
+// guardedFetch so Local mode refuses the request before any network I/O
+// (fail-closed). guardedFetch delegates to secureFetch (TLS pinning) when allowed.
+import { guardedFetch } from '@/lib/egressGuard';
 import { combineAbortSignals } from '@/lib/abortSignal';
 
 export type ProviderStreamProvider =
@@ -114,7 +118,7 @@ export async function* streamFromProvider(
   let res: Response;
 
   try {
-    res = await secureFetch(url, {
+    res = await guardedFetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

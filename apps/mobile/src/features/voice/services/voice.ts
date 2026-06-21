@@ -10,7 +10,11 @@
 import { Platform } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+// Zero-leak: the ephemeral-token endpoint is OUR cloud (`${API_URL}/api/v1/voice/token`)
+// → guardedFetch (Local mode blocks before network I/O, fail-closed). The Deepgram
+// call below is a direct-to-provider host, so it stays on secureFetch (TLS pinning).
 import { secureFetch } from '@/services/secureFetch';
+import { guardedFetch } from '@/lib/egressGuard';
 import { getAuthToken } from '@/services/authSession';
 import {
   startCaptureSession,
@@ -161,7 +165,7 @@ export async function getDeepgramEphemeralToken(): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.DEFAULT);
 
   try {
-    const response = await secureFetch(`${API_URL}/api/v1/voice/token`, {
+    const response = await guardedFetch(`${API_URL}/api/v1/voice/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
