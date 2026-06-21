@@ -7,7 +7,6 @@ import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { resolveCodeExecutionTools } from '@/lib/e2b/execution-tools';
-import { e2bExecutionEnabled } from '@/lib/e2b/gate';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -1066,15 +1065,14 @@ export async function processRequest(
   }
 
   if (chatRequest.code_execution && (resolvedModelCaps?.codeExecution ?? true)) {
-    // Conditional execution router (P3 hybrid cut-over): when E2B is configured, ALL
-    // models route code execution through the universal E2B sandbox; otherwise fall
-    // back to provider-native execution for providers that support it (today's exact
-    // behavior), and fail-closed (no tool) for providers that don't. When E2B is off
-    // (the default), this is byte-for-byte identical to the previous behavior.
-    resolvedTools = [
-      ...(resolvedTools ?? []),
-      ...resolveCodeExecutionTools(providerLower, e2bExecutionEnabled()),
-    ];
+    // Code-execution router: native (provider-executed) interpreter for anthropic /
+    // google / openai, fail-closed for providers without one. The E2B cut-over is NOT
+    // wired into this path — the server-side tool loop that would run platform-executed
+    // E2B tools is unreachable in production (manual-approval gate, no resume endpoint;
+    // a pre-existing architectural gap). Offering E2B tools here would inject a tool
+    // nothing executes and strip OpenAI's working interpreter — a regression. So this is
+    // byte-for-byte the pre-P3 behavior. See docs/plans/e2b-universal-execution-design-*.
+    resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];
   }
 
   const llmRequest = {
