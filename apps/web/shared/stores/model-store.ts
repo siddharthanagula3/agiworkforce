@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { RoutingDecision, RoutingTaskType } from '@agiworkforce/types';
+import type { ModelEnvironment, RoutingDecision, RoutingTaskType } from '@agiworkforce/types';
 import {
   MODEL_PRESETS,
   PROVIDER_LABELS,
@@ -17,6 +17,13 @@ export interface AIModel {
   provider: string;
   providerKey: string;
   description: string;
+  /**
+   * Mirrors ModelMetadata.requiresEnvironment. Absent on all current models.
+   * Populated in buildAvailableModels() so pickers can gate without a separate
+   * catalog lookup at render time. Phase A: no model sets this, so all pickers
+   * behave identically to before.
+   */
+  requiresEnvironment?: ModelEnvironment;
 }
 
 export type { RoutingDecision, RoutingTaskType };
@@ -99,6 +106,11 @@ function buildAvailableModels(): AIModel[] {
       provider: PROVIDER_LABELS[metadata.provider] ?? metadata.provider,
       providerKey: metadata.provider,
       description: describeModel(metadata),
+      // Propagate env requirement so pickers can gate without extra catalog lookup.
+      // All current models have this absent; Phase B will surface models that set it.
+      ...(metadata.requiresEnvironment !== undefined
+        ? { requiresEnvironment: metadata.requiresEnvironment }
+        : {}),
     }));
 
   return [...autoModeEntries, ...manualEntries];

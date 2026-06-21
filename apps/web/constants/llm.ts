@@ -58,6 +58,11 @@ export interface ModelMetadata {
   qualityTier: string;
   bestFor: string[];
   released?: string;
+  /**
+   * Mirrors ModelMetadata.requiresEnvironment from @agiworkforce/types.
+   * Absent on all current models; set on future env-gated models (Phase B).
+   */
+  requiresEnvironment?: 'e2b' | 'local-runtime';
 }
 
 // ---- Derived data from JSON ----
