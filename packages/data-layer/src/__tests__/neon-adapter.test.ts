@@ -212,10 +212,13 @@ describe('NeonDatabaseAdapter.transaction', () => {
       return null;
     });
     const setLocal = state.clientCalls.find((c) =>
-      c.sql.startsWith('SET LOCAL request.jwt.claim.sub'),
+      c.sql.includes("set_config('request.jwt.claim.sub'"),
     );
     expect(setLocal).toBeDefined();
     expect(setLocal?.params).toEqual(['user-42']);
+    // Privilege restriction: per-user queries must run as the non-bypass role.
+    const setRole = state.clientCalls.find((c) => c.sql === 'SET LOCAL ROLE app_rls');
+    expect(setRole).toBeDefined();
   });
 });
 
@@ -245,7 +248,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
     expect(() => adapter.withUser(makeJwt({ sub: 'attacker' }))).toThrow(DataLayerConfigError);
     // The deny happens at withUser() time, before any SET LOCAL could fire.
     const setLocal = state.clientCalls.find((c) =>
-      c.sql.startsWith('SET LOCAL request.jwt.claim.sub'),
+      c.sql.includes("set_config('request.jwt.claim.sub'"),
     );
     expect(setLocal).toBeUndefined();
   });
@@ -274,7 +277,7 @@ describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATAL
     const rows = await scoped.query<{ id: number }>('select id from t');
     expect(rows).toEqual([{ id: 7 }]);
     const setLocal = state.clientCalls.find((c) =>
-      c.sql.startsWith('SET LOCAL request.jwt.claim.sub'),
+      c.sql.includes("set_config('request.jwt.claim.sub'"),
     );
     expect(setLocal?.params).toEqual(['user-abc']);
   });
@@ -319,9 +322,12 @@ describe('NeonDatabaseAdapter.withUser', () => {
     const rows = await scoped.query<{ id: number }>('select id from t');
     expect(rows).toEqual([{ id: 7 }]);
     const setLocal = state.clientCalls.find((c) =>
-      c.sql.startsWith('SET LOCAL request.jwt.claim.sub'),
+      c.sql.includes("set_config('request.jwt.claim.sub'"),
     );
     expect(setLocal?.params).toEqual(['user-abc']);
+    // Privilege restriction: per-user queries must run as the non-bypass role.
+    const setRole = state.clientCalls.find((c) => c.sql === 'SET LOCAL ROLE app_rls');
+    expect(setRole).toBeDefined();
   });
 
   it('throws DataLayerConfigError when the JWT is malformed', () => {
