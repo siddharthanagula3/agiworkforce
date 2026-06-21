@@ -366,7 +366,30 @@ impl ComputerUseAgent {
                     continue;
                 }
 
-                // Handle confirmation requirement
+                // Handle confirmation requirement. FAIL CLOSED: the pause/resume flow
+                // below is an unwired stub (no resume command exists and the wait loop
+                // has no timeout). A destructive action the safety layer flags for
+                // confirmation must NOT auto-execute — the previous gate
+                // (`&& task.require_confirmation`, always false) let it run with no
+                // confirmation at all. Unless the caller explicitly opts into the
+                // pause flow (require_confirmation=true) AND drives resume, block it.
+                if decision.requires_confirmation && !task.require_confirmation {
+                    tracing::warn!(
+                        "Destructive action requires confirmation but no HITL is available; blocking: {:?}",
+                        decision.warnings
+                    );
+                    return self.complete_task(
+                        &mut session,
+                        state,
+                        CompletionReason::SafetyBlocked {
+                            reason: format!(
+                                "Action requires user confirmation which is not available: {}",
+                                decision.warnings.join(", ")
+                            ),
+                        },
+                    );
+                }
+
                 if decision.requires_confirmation && task.require_confirmation {
                     session.pause(decision.warnings.join(", "), action.clone());
 

@@ -84,6 +84,29 @@ fn restore_redacted_env_values(
                 }
             }
         }
+
+        // Restore redacted HTTP transport credentials (mcp_get_config redacts
+        // api_key / bearer_token / header values so they never reach the renderer).
+        // Without this, saving an edited config would persist "<redacted>" and wipe
+        // the real credentials.
+        use crate::core::mcp::transport::TransportConfig;
+        if let (Some(TransportConfig::Http(incoming_http)), Some(TransportConfig::Http(existing_http))) =
+            (incoming_server.transport.as_mut(), existing_server.transport.as_ref())
+        {
+            if incoming_http.api_key.as_deref() == Some(redacted_sentinel) {
+                incoming_http.api_key = existing_http.api_key.clone();
+            }
+            if incoming_http.bearer_token.as_deref() == Some(redacted_sentinel) {
+                incoming_http.bearer_token = existing_http.bearer_token.clone();
+            }
+            for (header_key, header_value) in incoming_http.headers.iter_mut() {
+                if header_value == redacted_sentinel {
+                    if let Some(existing_value) = existing_http.headers.get(header_key) {
+                        *header_value = existing_value.clone();
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1068,6 +1091,24 @@ pub async fn mcp_get_config(state: State<'_, McpState>) -> Result<Value, String>
         for env_value in server_config.env.values_mut() {
             if !env_value.starts_with("<from_") {
                 *env_value = "<redacted>".to_string();
+            }
+        }
+
+        // SECURITY: redact HTTP transport credentials too — they were previously
+        // sent to the renderer in plaintext. api_key / bearer_token / all header
+        // values are replaced with the sentinel; restore_redacted_env_values puts
+        // the real values back on mcp_update_config so editing never wipes them.
+        if let Some(crate::core::mcp::transport::TransportConfig::Http(http_config)) =
+            server_config.transport.as_mut()
+        {
+            if http_config.api_key.is_some() {
+                http_config.api_key = Some("<redacted>".to_string());
+            }
+            if http_config.bearer_token.is_some() {
+                http_config.bearer_token = Some("<redacted>".to_string());
+            }
+            for header_value in http_config.headers.values_mut() {
+                *header_value = "<redacted>".to_string();
             }
         }
     }
