@@ -37,6 +37,9 @@ export async function requireCurrentUserId(): Promise<string> {
   if (!userId) {
     throw createError.unauthorized();
   }
+  // Reject suspended/banned accounts (admin suspend-user must actually take effect).
+  const { assertAccountActive } = await import('@/lib/api-auth');
+  await assertAccountActive(userId);
   return userId;
 }
 
