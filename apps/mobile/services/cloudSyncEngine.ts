@@ -14,7 +14,7 @@ import { api } from './api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
-import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
+import { useCloudSyncStateStore, type DirtyMessageRef } from '@/stores/chat/cloudSyncStateStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 const SYNC_PATH = '/api/chat/sync';
@@ -180,6 +180,14 @@ interface PushMessage {
   createdAt?: string;
 }
 
+interface PushResponse {
+  applied: {
+    conversations: Array<{ id: string; server_version: string }>;
+    messages: Array<{ id: string; server_version: string }>;
+  };
+  cursor: string;
+}
+
 async function push(): Promise<void> {
   const { dirtyConversationIds, dirtyMessages } = useCloudSyncStateStore.getState();
   if (dirtyConversationIds.length === 0 && dirtyMessages.length === 0) return;
@@ -202,31 +210,46 @@ async function push(): Promise<void> {
       updatedAt: c.updatedAt,
     }));
 
-  const messages = dirtyMessages
-    .map(({ conversationId, messageId }): PushMessage | null => {
-      const msg = (cloud.messages[conversationId] ?? []).find((m) => m.id === messageId);
-      if (!msg) return null;
-      // The cloud schema is a user/assistant/system transcript; 'tool' records are
-      // transient tool-call state and are not synced.
-      if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system') return null;
-      return {
-        id: msg.id,
-        conversationId,
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-        model: (msg as { model?: string }).model ?? null,
-        provider: (msg as { provider?: string }).provider ?? null,
-        createdAt: (msg as { createdAt?: string }).createdAt,
-      };
-    })
-    .filter((m): m is PushMessage => m !== null);
-
-  // Clear the dirty refs we attempted regardless — a row that vanished locally
-  // (e.g. deleted) has nothing to push, and a successful POST persisted the rest.
-  if (conversations.length > 0 || messages.length > 0) {
-    await api.post(SYNC_PATH, { conversations, messages });
+  // Split message refs into buildable (a syncable local row exists) and dead (the
+  // row vanished locally, or is a non-syncable 'tool' record). Dead refs are dropped
+  // unconditionally; buildable refs are only cleared once the server ACKS them.
+  const buildableRefs: DirtyMessageRef[] = [];
+  const deadRefs: DirtyMessageRef[] = [];
+  const messages: PushMessage[] = [];
+  for (const ref of dirtyMessages) {
+    const msg = (cloud.messages[ref.conversationId] ?? []).find((m) => m.id === ref.messageId);
+    if (!msg || (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system')) {
+      deadRefs.push(ref);
+      continue;
+    }
+    buildableRefs.push(ref);
+    messages.push({
+      id: msg.id,
+      conversationId: ref.conversationId,
+      role: msg.role,
+      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+      model: (msg as { model?: string }).model ?? null,
+      provider: (msg as { provider?: string }).provider ?? null,
+      createdAt: (msg as { createdAt?: string }).createdAt,
+    });
   }
-  useCloudSyncStateStore.getState().clearDirty(dirtyConversationIds, dirtyMessages);
+
+  let ackedMessageIds = new Set<string>();
+  if (conversations.length > 0 || messages.length > 0) {
+    const res = await api.post<PushResponse>(SYNC_PATH, { conversations, messages });
+    ackedMessageIds = new Set((res?.applied?.messages ?? []).map((m) => m.id));
+  }
+
+  // Conversations are LWW and dependency-free: clearing every attempted ref is safe
+  // (a no-op re-push achieves nothing; a stale local copy is repaired by the next
+  // pull). Messages: clear only refs the server ACKED (persisted) plus dead refs. An
+  // attempted-but-unacked message — its parent conversation isn't on the server yet —
+  // stays dirty so a later push retries it once the conversation lands. Never drop it.
+  const clearedMessageRefs = [
+    ...deadRefs,
+    ...buildableRefs.filter((ref) => ackedMessageIds.has(ref.messageId)),
+  ];
+  useCloudSyncStateStore.getState().clearDirty(dirtyConversationIds, clearedMessageRefs);
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────────
