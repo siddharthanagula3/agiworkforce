@@ -223,6 +223,14 @@ pub struct Model {
     pub status: String,
     #[serde(default)]
     pub cloud_eligible: bool,
+    /// OPTIONAL environment gate signal, mirroring the TS catalog's
+    /// `requiresEnvironment?: 'e2b' | 'local-runtime'` field.
+    ///
+    /// `None` on all current models (absent from models.json).
+    /// Phase B wires the real env-availability check; Phase A stubs it as always-false
+    /// so any model that would carry this flag is hidden until the env is live.
+    #[serde(default, rename = "requiresEnvironment")]
+    pub requires_environment: Option<String>,
 }
 
 fn default_model_status() -> String {
@@ -300,6 +308,10 @@ struct SharedModelMetadata {
     /// "fast" | "balanced" | "best" — from models.json qualityTier field.
     #[serde(default, rename = "qualityTier")]
     quality_tier: Option<String>,
+    /// Optional env gate from models.json `requiresEnvironment` field.
+    /// Absent on all current models → always deserializes to None.
+    #[serde(default, rename = "requiresEnvironment")]
+    requires_environment: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -574,6 +586,7 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
                 status: model.status.clone().unwrap_or_else(|| "active".to_string()),
                 cloud_eligible: cloud_eligible_ids.contains(&model.id)
                     || cloud_eligible_ids.contains(&api_id),
+                requires_environment: model.requires_environment.clone(),
             }
         })
         .collect();
@@ -894,6 +907,7 @@ async fn fetch_remote() -> Option<Vec<Model>> {
                     release_date: md.release_date.unwrap_or_default(),
                     status: "active".into(),
                     cloud_eligible: false, // only bundled models are cloud-eligible
+                    requires_environment: None, // models.dev has no env-gate concept
                 });
             }
         }
@@ -959,6 +973,7 @@ impl UserModelOverride {
             release_date: String::new(),
             status: "active".into(),
             cloud_eligible: false,
+            requires_environment: None, // user overrides cannot declare env gates
         }
     }
 }
