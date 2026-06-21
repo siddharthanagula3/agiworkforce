@@ -101,17 +101,22 @@ apps/web/lib/e2b/
   gate.ts             — e2bExecutionEnabled(): the cut-over flag (off by default).
 ```
 
-### 3a. Gating (two independent gates, fail-closed)
+### 3a. Gating (fail-closed)
+
+> NOTE (supersedes the original intent below): per §1.1, `request-processor` does NOT
+> offer E2B tools today regardless of any flag/key — the request seam is native-always.
+> These gates now scope only the DORMANT `getE2BExecutor()` binding (runtime.ts). They
+> become the cut-over gates again once the §1.1 execution loop lands.
 
 1. **Managed-compute gate** — E2B is managed cloud, so it inherits
    `buildManagedComputeGateResponse()` semantics (`AGI_MANAGED_COMPUTE_PRIVATE_BETA`):
    no E2B unless the private-beta flag is on. (Locked rule: managed compute stays
    gated until abuse/fraud/limits/retention/deletion are proven.)
-2. **Cut-over flag** — `AGI_E2B_EXECUTION` (off by default). Only when ON does
-   `request-processor` offer the universal E2B execution tools INSTEAD of the
-   provider-native code tools. Off → today's provider-native behavior, unchanged.
+2. **Binding flag** — `AGI_E2B_EXECUTION` (off by default). With `E2B_API_KEY`, it
+   gates whether `getE2BExecutor()` constructs the live binding. It does NOT change what
+   tools `request-processor` offers (that is native-always until the §1.1 loop exists).
 3. **Key presence** — `getE2BExecutor()` returns null without `E2B_API_KEY`.
-   All three must hold to route execution to E2B. Any miss → fail-closed.
+   All gates must hold for the binding to construct. Any miss → fail-closed.
 
 ### 3b. Trust boundary (never silently route Local/BYOK to E2B)
 
