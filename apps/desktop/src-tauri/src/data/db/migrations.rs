@@ -192,6 +192,7 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "artifact_versions",
         // Cloud sync state (added in v67)
         "cloud_sync_state",
+        "cloud_sync_pending_messages",
     ])
 });
 
@@ -5520,6 +5521,27 @@ fn apply_migration_v67(conn: &Connection) -> Result<()> {
             user_id TEXT PRIMARY KEY, \
             cursor TEXT NOT NULL DEFAULT '0', \
             last_sync_at TEXT \
+        )",
+        [],
+    )?;
+
+    // Orphan buffer: a pulled message whose parent conversation has not landed yet
+    // (the conversation is re-versioned on every update, so it can sit ABOVE its own
+    // older messages and arrive in a later pull page). Persist the message here
+    // instead of dropping it, and replay once the parent's local row exists — without
+    // this, such messages are lost permanently.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cloud_sync_pending_messages ( \
+            cloud_id TEXT PRIMARY KEY, \
+            conversation_cloud_id TEXT NOT NULL, \
+            user_id TEXT NOT NULL, \
+            role TEXT, \
+            content TEXT, \
+            model TEXT, \
+            provider TEXT, \
+            created_at TEXT, \
+            deleted_at TEXT, \
+            server_version TEXT NOT NULL \
         )",
         [],
     )?;
