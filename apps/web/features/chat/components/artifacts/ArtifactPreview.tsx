@@ -13,6 +13,7 @@ import {
   ExternalLink,
   History,
   Shield,
+  X,
 } from 'lucide-react';
 import {
   summarizeGeneratedFileBundle,
@@ -64,6 +65,11 @@ interface ArtifactPreviewProps {
   onVersionChange?: (versionIndex: number) => void;
   onShare?: () => void;
   className?: string;
+  /** 'card' (default) = inline card with fixed heights + TabsList row.
+   *  'panel' = split-view panel: full-height flex-fill + single reference toolbar. */
+  variant?: 'card' | 'panel';
+  /** Called when user clicks the Close button in panel variant toolbar. */
+  onClose?: () => void;
 }
 
 /**
@@ -87,6 +93,8 @@ export function ArtifactPreview({
   onVersionChange,
   onShare,
   className,
+  variant = 'card',
+  onClose,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
@@ -452,6 +460,264 @@ export function ArtifactPreview({
 
   const canPreview = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
 
+  // ============================================================================
+  // PANEL VARIANT — single-toolbar, full-height flex-fill layout
+  // ============================================================================
+  if (variant === 'panel') {
+    // Whether to show the preview content (vs source code)
+    const showPreview = activeTab === 'preview' && (canPreview || isPdf || isDocx);
+    // Human-readable type label for the toolbar, e.g. "· HTML", "· MD".
+    // For code/document artifacts the type alone is generic ("CODE"/"DOCUMENT");
+    // prefer the language field which carries the actual format (ts, md, pdf...).
+    const typeLabel =
+      artifact.type === 'code' || artifact.type === 'document'
+        ? (artifact.language ?? artifact.type).toUpperCase()
+        : artifact.type.toUpperCase();
+
+    return (
+      <div
+        ref={containerRef}
+        className={cn(
+          'flex h-full min-h-0 flex-col',
+          isFullscreen && 'fixed inset-0 z-modal',
+          className,
+        )}
+      >
+        {/* Single reference toolbar */}
+        <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-card/80 px-3 py-1.5">
+          {/* LEFT: toggle + title + type */}
+          <div className="flex min-w-0 items-center gap-2">
+            {/* Eye/Code segmented toggle — only when there is previewable content */}
+            {(canPreview || isPdf || isDocx) && (
+              <div className="flex items-center rounded-md border border-border/40 bg-muted/40 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('preview')}
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded transition-colors',
+                    activeTab === 'preview'
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  aria-label="Preview"
+                  title="Preview"
+                >
+                  <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('code')}
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded transition-colors',
+                    activeTab === 'code'
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  aria-label="Source"
+                  title="Source"
+                >
+                  <Code className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+            {/* Title + muted TYPE label */}
+            <span className="truncate text-sm font-semibold text-foreground">
+              {artifact.title || 'Artifact'}
+            </span>
+            <span className="shrink-0 text-sm text-muted-foreground">· {typeLabel}</span>
+          </div>
+
+          {/* RIGHT: Copy / Download / Refresh / Open-in-new-tab / Fullscreen / Close */}
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Copy */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleCopy()}
+              className="h-7 px-2"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-green-500" />
+                  <span className="ml-1 text-xs">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  <span className="ml-1 text-xs">Copy</span>
+                </>
+              )}
+            </Button>
+
+            {/* Download dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 px-2">
+                  <Download className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleDownload('html')}>
+                  Download as HTML
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload('txt')}>
+                  Download as {artifact.language?.toUpperCase() || 'TXT'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload('md')}>
+                  Download as Markdown
+                </DropdownMenuItem>
+                {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
+                  <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
+                    Download generated file
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Refresh — only when previewable */}
+            {canPreview && (
+              <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 px-2">
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {/* Open in new tab — only when previewable */}
+            {canPreview && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenInNewTab}
+                className="h-7 px-2"
+                aria-label="Open source in new tab"
+                title="Open source in new tab"
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            )}
+
+            {/* Fullscreen */}
+            <Button variant="ghost" size="sm" onClick={handleFullscreen} className="h-7 px-2">
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+
+            {/* Close — panel-only */}
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="h-7 w-7 p-0"
+                aria-label="Close artifact viewer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Security warning — keep for non-HTML artifacts with XSS patterns */}
+        {securityWarning && (
+          <Alert className="m-4 shrink-0 border-yellow-500 bg-yellow-50">
+            <Shield className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-800">
+              <strong>Security Notice:</strong> This artifact contained potentially unsafe patterns
+              that were removed before rendering.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Generated file manifest block */}
+        {hasGeneratedFileManifest && (
+          <div className="shrink-0 border-b border-border bg-muted/10 px-4 py-3">
+            <GeneratedFileCard
+              presentation={generatedFileSummary}
+              onDownload={
+                generatedFileSummary.primaryUri
+                  ? () => void handleDownloadGeneratedFile()
+                  : undefined
+              }
+              onShare={
+                generatedFileSummary.canShare ? () => void handleShareGeneratedFile() : undefined
+              }
+            />
+            {generatedFileSummary.localOnly && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Local file. Web shares a reference only; it is not uploaded.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Content area — fills remaining height. min-h-0 prevents a flex-child
+            from refusing to shrink below its content height (iframe collapse). */}
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          {/* Preview: HTML / React / SVG / Mermaid */}
+          {showPreview && canPreview && (
+            <div className="h-full w-full bg-white">
+              <SandboxedIframe
+                payload={sandboxPayload}
+                fallbackSrcDoc={getPreviewHTML()}
+                title={artifact.title || 'Artifact Preview'}
+                className="h-full w-full border-0"
+                refreshKey={refreshKey}
+              />
+            </div>
+          )}
+
+          {/* Preview: PDF */}
+          {showPreview && isPdf && (
+            <iframe
+              title={artifact.title || 'PDF Preview'}
+              src={artifact.content}
+              sandbox="allow-same-origin"
+              className="h-full w-full border-0"
+              aria-label={artifact.title || 'PDF document'}
+            />
+          )}
+
+          {/* Preview: DOCX */}
+          {showPreview && isDocx && (
+            <>
+              {docxError ? (
+                <div className="flex items-center justify-center p-8 text-sm text-destructive">
+                  Could not render document: {docxError}
+                </div>
+              ) : docxPreviewHtml ? (
+                <iframe
+                  title={`${artifact.title || 'DOCX'} document preview`}
+                  srcDoc={docxPreviewHtml}
+                  sandbox=""
+                  referrerPolicy="no-referrer"
+                  className="h-full w-full border-0 bg-background"
+                />
+              ) : (
+                <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+                  Converting document...
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Source / Code — shown whenever not previewing (or for pure-code artifacts) */}
+          {!showPreview && (
+            <ScrollArea className="h-full w-full bg-gray-900">
+              <pre className="p-4">
+                <code className="text-sm text-gray-100">
+                  {artifact.versions && artifact.currentVersion !== undefined
+                    ? artifact!.versions[artifact.currentVersion]!.content
+                    : artifact.content}
+                </code>
+              </pre>
+            </ScrollArea>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // CARD VARIANT (default) — original behavior, byte-identical markup
+  // ============================================================================
   return (
     <div
       ref={containerRef}
