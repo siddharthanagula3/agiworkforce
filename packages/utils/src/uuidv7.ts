@@ -93,40 +93,26 @@ export function uuidv7(): string {
   bytes[6] = 0x70 | ((counter >> 8) & 0x0f);
   bytes[7] = counter & 0xff;
 
-  // 8 random bytes for the variant + rand_b field.
+  // 8 random bytes for the variant + rand_b field. (`?? 0` is a no-op for the
+  // fixed-length array — it only satisfies noUncheckedIndexedAccess.)
   const rand = randomBytes(8);
   // variant (0b10) in the top 2 bits of byte 8; keep the rest random.
-  bytes[8] = 0x80 | (rand[0] & 0x3f);
-  bytes[9] = rand[1];
-  bytes[10] = rand[2];
-  bytes[11] = rand[3];
-  bytes[12] = rand[4];
-  bytes[13] = rand[5];
-  bytes[14] = rand[6];
-  bytes[15] = rand[7];
+  bytes[8] = 0x80 | ((rand[0] ?? 0) & 0x3f);
+  bytes[9] = rand[1] ?? 0;
+  bytes[10] = rand[2] ?? 0;
+  bytes[11] = rand[3] ?? 0;
+  bytes[12] = rand[4] ?? 0;
+  bytes[13] = rand[5] ?? 0;
+  bytes[14] = rand[6] ?? 0;
+  bytes[15] = rand[7] ?? 0;
 
-  return (
-    HEX[bytes[0]] +
-    HEX[bytes[1]] +
-    HEX[bytes[2]] +
-    HEX[bytes[3]] +
-    '-' +
-    HEX[bytes[4]] +
-    HEX[bytes[5]] +
-    '-' +
-    HEX[bytes[6]] +
-    HEX[bytes[7]] +
-    '-' +
-    HEX[bytes[8]] +
-    HEX[bytes[9]] +
-    '-' +
-    HEX[bytes[10]] +
-    HEX[bytes[11]] +
-    HEX[bytes[12]] +
-    HEX[bytes[13]] +
-    HEX[bytes[14]] +
-    HEX[bytes[15]]
-  );
+  // Build the canonical 8-4-4-4-12 hex string. Iterating the Uint8Array yields a
+  // number per byte; HEX is a complete 0..255 lookup (`?? '00'` never triggers).
+  let hex = '';
+  for (const b of bytes) {
+    hex += HEX[b] ?? '00';
+  }
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

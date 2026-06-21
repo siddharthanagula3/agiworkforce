@@ -36,7 +36,6 @@
 import {
   type AuthAdapter,
   type DatabaseAdapter,
-  type DatabaseConnectionConfig,
   type DatabaseProvider,
   type AuthProvider,
   type RealtimeAdapter,
@@ -46,7 +45,7 @@ import {
   DataLayerConfigError,
 } from './types';
 import { ClerkAuthAdapter } from './adapters/clerk';
-import { NeonDatabaseAdapter } from './adapters/neon';
+import { NeonDatabaseAdapter, type NeonDatabaseAdapterConfig } from './adapters/neon';
 
 // Browser-safe env getter — falls back to `undefined` if `process.env`
 // isn't defined (we're not in Node). This lets the factory be imported
@@ -92,6 +91,14 @@ export interface CreateDatabaseClientOptions {
   connectionString?: string;
   poolSize?: number;
   applicationName?: string;
+  /**
+   * Opt into the verified-JWT-only `withUser()` path (sets the Neon adapter's
+   * `unsafeAllowUnverifiedJwtSubject`). ONLY pass `true` from a caller that
+   * signature-verifies the token UPSTREAM (Clerk `verifyToken` / a signed Clerk
+   * session token) before binding its `sub` as the RLS subject. The default-deny
+   * `getNeonDb()` path leaves this unset.
+   */
+  unsafeAllowUnverifiedJwtSubject?: boolean;
 }
 
 /**
@@ -120,9 +127,12 @@ export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): Da
           'Neon adapter requires AGI_DATABASE_URL (or DATABASE_URL) — a postgres:// connection string.',
         );
       }
-      const cfg: DatabaseConnectionConfig = { connectionString };
+      const cfg: NeonDatabaseAdapterConfig = { connectionString };
       if (opts.poolSize !== undefined) cfg.poolSize = opts.poolSize;
       if (opts.applicationName !== undefined) cfg.applicationName = opts.applicationName;
+      if (opts.unsafeAllowUnverifiedJwtSubject === true) {
+        cfg.unsafeAllowUnverifiedJwtSubject = true;
+      }
       return new NeonDatabaseAdapter(cfg);
     }
   }

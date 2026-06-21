@@ -22,7 +22,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const MAX_CONVERSATIONS_PULL = 500;
 const MAX_MESSAGES_PULL = 1000;
@@ -66,7 +66,9 @@ async function handlePull(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
+  // RLS-scoped: every query runs as app_rls with request.jwt.claim.sub bound, so
+  // the DB's WITH CHECK policies enforce isolation (not just the user_id filters).
+  const { db, userId } = await getUserScopedDb(request);
 
   const url = new URL(request.url);
   const sinceRaw = url.searchParams.get('since') ?? '0';
@@ -74,7 +76,6 @@ async function handlePull(request: NextRequest) {
   const since = /^\d{1,19}$/.test(sinceRaw) ? sinceRaw : '0';
 
   try {
-    const db = getNeonChatDb();
     const conversations = await db.query<ConversationDelta>(
       `
         select id, title, model, project_id, pinned,
@@ -156,7 +157,9 @@ async function handlePush(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
+  // RLS-scoped: writes run as app_rls with request.jwt.claim.sub bound, so the
+  // WITH CHECK policies reject any row whose user_id != the authenticated subject.
+  const { db, userId } = await getUserScopedDb(request);
 
   let rawBody: unknown;
   try {
@@ -170,7 +173,6 @@ async function handlePush(request: NextRequest) {
   }
   const { conversations = [], messages = [] } = parsed.data;
 
-  const db = getNeonChatDb();
   const applied = {
     conversations: [] as Array<{ id: string; server_version: string }>,
     messages: [] as Array<{ id: string; server_version: string }>,
