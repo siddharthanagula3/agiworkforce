@@ -26,6 +26,22 @@ use crate::model_catalog::Model;
 use crate::tui::terminal_palette::{ui_accent, ui_muted};
 
 // ---------------------------------------------------------------------------
+// Environment-gate stub (Phase A)
+// ---------------------------------------------------------------------------
+
+/// Returns true if the named environment is configured and available for use.
+///
+/// Phase A stub: always returns false — any model with `requires_environment`
+/// set is hidden from the picker until the environment is live.
+///
+/// Phase B: replace this body with a real check against the E2B SDK connection
+/// state (or local-runtime presence) passed through from the session context.
+fn environment_available(_env: &str) -> bool {
+    // Phase B: wire real env signal here.
+    false
+}
+
+// ---------------------------------------------------------------------------
 // Public state
 // ---------------------------------------------------------------------------
 
@@ -97,6 +113,15 @@ impl ModelPickerState {
                         let catalog_pid = ProviderId::from_catalog_name(&m.provider);
                         if catalog_pid != Some(pid) {
                             return false;
+                        }
+                        // Phase A env-gate: skip models whose required environment
+                        // is not yet available. All current models have None here,
+                        // so this has zero effect on the current picker output.
+                        // Phase B replaces environment_available() with a real signal.
+                        if let Some(env) = &m.requires_environment {
+                            if !environment_available(env) {
+                                return false;
+                            }
                         }
                         if query.is_empty() {
                             return true;
@@ -714,6 +739,78 @@ mod tests {
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
         assert_eq!(mode_headers(&state), vec![AccessMode::Byok]);
+    }
+
+    /// Build a model fixture with an explicit `requiresEnvironment` value.
+    fn model_env_gated(id: &str, provider: &str, env: &str) -> Model {
+        serde_json::from_str(&format!(
+            "{{\"id\":\"{id}\",\"provider\":\"{provider}\",\"display_name\":\"{id}\",\
+             \"context_window\":8192,\"max_output_tokens\":4096,\"input_price_per_1m\":0.0,\
+             \"output_price_per_1m\":0.0,\"supports_tools\":true,\"supports_vision\":false,\
+             \"supports_reasoning\":false,\"requiresEnvironment\":\"{env}\"}}"
+        ))
+        .expect("env-gated model fixture")
+    }
+
+    /// (a) Models with `requires_environment = None` are unaffected by the gate.
+    ///     Existing catalog behavior: all models pass through rebuild_rows() unchanged.
+    #[test]
+    fn env_gate_none_models_unaffected() {
+        let models = vec![
+            model("claude-x", "anthropic"),
+            model("gpt-y", "openai"),
+        ];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        let model_ids: Vec<&str> = state
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                PickerRow::ModelRow { model, .. } => Some(model.id.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        assert!(
+            model_ids.contains(&"claude-x"),
+            "None-gated model claude-x must appear in picker"
+        );
+        assert!(
+            model_ids.contains(&"gpt-y"),
+            "None-gated model gpt-y must appear in picker"
+        );
+    }
+
+    /// (b) A model with `requires_environment = Some("e2b")` is filtered out
+    ///     when `environment_available` returns false (Phase A stub).
+    ///     A sibling model on the same provider without the gate must still appear.
+    #[test]
+    fn env_gate_e2b_model_filtered_when_unavailable() {
+        let models = vec![
+            model("claude-normal", "anthropic"),           // no env gate — must appear
+            model_env_gated("claude-e2b", "anthropic", "e2b"), // e2b gate — must be hidden
+        ];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        let model_ids: Vec<&str> = state
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                PickerRow::ModelRow { model, .. } => Some(model.id.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        assert!(
+            model_ids.contains(&"claude-normal"),
+            "Ungated model claude-normal must appear in picker even when sibling is gated"
+        );
+        assert!(
+            !model_ids.contains(&"claude-e2b"),
+            "e2b-gated model claude-e2b must be hidden in Phase A (env unavailable)"
+        );
     }
 
     #[test]
