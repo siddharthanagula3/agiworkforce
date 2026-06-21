@@ -6,7 +6,7 @@
 /// - Listing and filtering checkpoints
 /// - Cleanup and archival operations
 use anyhow::Result;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, OptionalExtension};
 use std::path::Path;
 use tracing::{debug, info};
 
@@ -29,7 +29,8 @@ impl CheckpointStore {
     pub async fn init(&self) -> Result<()> {
         let db_path = self.db_path.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
 
             // Enable WAL mode for better concurrency
             conn.execute_batch("PRAGMA journal_mode = WAL")?;
@@ -187,7 +188,8 @@ impl CheckpointStore {
         let checkpoint_clone = checkpoint.clone();
 
         tokio::task::spawn_blocking(move || {
-            let mut conn = Connection::open(&db_path)?;
+            let mut conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| anyhow::anyhow!(e))?;
             let tx = conn.transaction()?;
 
             // Mark previous latest checkpoints as non-latest
@@ -248,7 +250,8 @@ impl CheckpointStore {
         let db_path = self.db_path.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let checkpoint = conn
                 .query_row(
@@ -275,7 +278,8 @@ impl CheckpointStore {
         let db_path = self.db_path.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let checkpoint = conn
                 .query_row(
@@ -308,7 +312,8 @@ impl CheckpointStore {
         let db_path = self.db_path.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| anyhow::anyhow!(e))?;
             let mut stmt = conn.prepare(
                 "SELECT id, task_id, current_step, total_steps, progress_percent,
                         created_at_ms, checkpoint_reason, is_latest, estimated_remaining_ms
@@ -345,7 +350,8 @@ impl CheckpointStore {
         let db_path = self.db_path.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
             conn.execute(
                 "DELETE FROM agi_task_checkpoints WHERE id = ?1",
                 params![checkpoint_id],
@@ -364,7 +370,8 @@ impl CheckpointStore {
         let keep_count = keep_count as i32;
 
         let deleted = tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
 
             // Get checkpoint IDs to delete
             let mut stmt = conn.prepare(
@@ -419,7 +426,8 @@ impl CheckpointStore {
         let db_path = self.db_path.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = Connection::open(&db_path)?;
+            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
 
             conn.execute(
                 "INSERT INTO agi_checkpoint_restore_history (

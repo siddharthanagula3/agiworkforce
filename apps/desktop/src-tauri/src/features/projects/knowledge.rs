@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -55,7 +55,8 @@ impl KnowledgeBase {
     }
 
     fn init_database(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS knowledge_documents (
@@ -135,7 +136,8 @@ impl KnowledgeBase {
     }
 
     pub fn add_document(&self, document: KnowledgeDocument) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "INSERT INTO knowledge_documents
@@ -158,7 +160,8 @@ impl KnowledgeBase {
     }
 
     pub fn add_chunk(&self, chunk: KnowledgeChunk) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let embedding_bytes = chunk
             .embedding
@@ -185,7 +188,8 @@ impl KnowledgeBase {
     }
 
     pub fn get_document(&self, document_id: &str) -> Result<Option<KnowledgeDocument>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_at
@@ -215,7 +219,8 @@ impl KnowledgeBase {
     }
 
     pub fn get_project_documents(&self, project_id: &str) -> Result<Vec<KnowledgeDocument>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, project_id, file_path, file_name, file_type, size, content, metadata, indexed_at, created_at
@@ -246,7 +251,8 @@ impl KnowledgeBase {
     }
 
     pub fn get_document_chunks(&self, document_id: &str) -> Result<Vec<KnowledgeChunk>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, document_id, project_id, content, chunk_index, embedding, metadata, created_at
@@ -283,7 +289,8 @@ impl KnowledgeBase {
 
     /// Get all knowledge chunks for a given project.
     pub fn get_project_chunks(&self, project_id: &str) -> Result<Vec<KnowledgeChunk>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, document_id, project_id, content, chunk_index, embedding, metadata, created_at
@@ -319,7 +326,8 @@ impl KnowledgeBase {
     }
 
     pub fn add_memory(&self, memory: ProjectMemory) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let embedding_bytes = memory
             .embedding
@@ -352,7 +360,8 @@ impl KnowledgeBase {
         project_id: &str,
         limit: usize,
     ) -> Result<Vec<ProjectMemory>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, project_id, content, memory_type, source, salience, embedding, created_at, last_accessed, access_count
@@ -393,7 +402,8 @@ impl KnowledgeBase {
     }
 
     pub fn update_memory_access(&self, memory_id: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "UPDATE project_memory
@@ -408,7 +418,8 @@ impl KnowledgeBase {
     }
 
     pub fn delete_document(&self, document_id: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "DELETE FROM knowledge_documents WHERE id = ?1",
@@ -419,13 +430,15 @@ impl KnowledgeBase {
     }
 
     pub fn delete_memory(&self, memory_id: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
         conn.execute("DELETE FROM project_memory WHERE id = ?1", [memory_id])?;
         Ok(())
     }
 
     pub fn clear_project_knowledge(&self, project_id: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "DELETE FROM knowledge_documents WHERE project_id = ?1",
@@ -443,6 +456,7 @@ impl KnowledgeBase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
     use tempfile::tempdir;
 
     #[test]

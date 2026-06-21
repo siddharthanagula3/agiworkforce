@@ -37,10 +37,15 @@ pub struct CollectorConfig {
     /// events to `analytics_events.json` inside this directory (the Tauri
     /// app-data directory). When `None` the local-file fallback is skipped.
     pub app_data_dir: Option<PathBuf>,
-    /// TRUST-BOUNDARY: when `Some("local")` the collector silently drops all
-    /// events and flushes — mirroring the TS analytics.ts gate. Other values
-    /// (including `None`) allow normal operation. Never promote "local" events
-    /// to the HTTP endpoint or the local file regardless of `enabled`.
+    /// TRUST-BOUNDARY: when the session is in a Local trust boundary —
+    /// `Some("local")` (device-only) OR `Some("byok")` (user's own keys,
+    /// client-direct, no AGI compute) — the collector silently drops all events
+    /// and flushes, mirroring the TS analytics.ts gate. Per the suite rule
+    /// "Local Mode (on-device + BYOK) = zero cloud telemetry", BYOK telemetry
+    /// must never reach our cloud. Only `Some("managed")` / other values
+    /// (including `None`, the pre-sync default) allow normal operation. Never
+    /// promote Local/BYOK events to the HTTP endpoint or the local file
+    /// regardless of `enabled`. See `is_local_trust_boundary`.
     pub privacy_mode: Option<String>,
 }
 
@@ -75,8 +80,16 @@ impl TelemetryCollector {
         }
     }
 
+    /// True when the configured privacy mode is a Local trust boundary in which
+    /// NO telemetry may reach our cloud: `"local"` (device-only) or `"byok"`
+    /// (user-supplied keys, client-direct). Managed cloud and the `None`
+    /// pre-sync default are NOT Local boundaries here.
+    fn is_local_trust_boundary(&self) -> bool {
+        matches!(self.config.privacy_mode.as_deref(), Some("local") | Some("byok"))
+    }
+
     pub async fn track(&self, event: TelemetryEvent) -> Result<()> {
-        if self.config.privacy_mode.as_deref() == Some("local") {
+        if self.is_local_trust_boundary() {
             return Ok(());
         }
         if !self.config.enabled {
@@ -95,7 +108,7 @@ impl TelemetryCollector {
     }
 
     pub async fn flush(&self) -> Result<()> {
-        if self.config.privacy_mode.as_deref() == Some("local") {
+        if self.is_local_trust_boundary() {
             return Ok(());
         }
         if !self.config.enabled {
@@ -488,6 +501,42 @@ mod tests {
             0,
             "TRUST-BOUNDARY: local mode must produce zero buffered events"
         );
+    }
+
+    #[tokio::test]
+    async fn byok_mode_blocks_track_even_when_enabled() {
+        // BYOK is a Local trust boundary (user's own keys, client-direct). Per
+        // "Local Mode (on-device + BYOK) = zero cloud telemetry", BYOK telemetry
+        // must NEVER reach our cloud. This is the regression guard for a leak
+        // where the gate only checked "local" and let "byok" through.
+        let config = CollectorConfig {
+            enabled: true,
+            batch_size: 100,
+            flush_interval_secs: 30,
+            app_data_dir: None,
+            privacy_mode: Some("byok".to_string()),
+        };
+        let collector = TelemetryCollector::new(config);
+
+        for i in 0..10 {
+            let event = TelemetryEvent {
+                name: format!("event_{}", i),
+                properties: HashMap::new(),
+                timestamp: 0,
+                session_id: collector.get_session_id(),
+                user_id: None,
+            };
+            collector.track(event).await.unwrap();
+        }
+
+        assert_eq!(
+            collector.get_event_count().await,
+            0,
+            "TRUST-BOUNDARY: byok mode must produce zero buffered events"
+        );
+
+        // flush() must also be a no-op in BYOK mode.
+        collector.flush().await.unwrap();
     }
 
     #[tokio::test]

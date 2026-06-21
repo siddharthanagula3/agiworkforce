@@ -39,7 +39,8 @@ impl KnowledgeBase {
             std::fs::create_dir_all(parent)?;
         }
 
-        let conn = Connection::open(&db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
         let kb = Self {
             db: Mutex::new(conn),
             _memory_limit_mb: memory_limit_mb,

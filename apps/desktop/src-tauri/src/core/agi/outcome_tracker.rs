@@ -1,6 +1,6 @@
 use super::process_reasoning::{Outcome, ProcessType, Strategy};
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -72,7 +72,8 @@ impl OutcomeTracker {
     }
 
     pub fn track_outcome(&self, goal_id: String, outcome: Outcome) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let actual_value = outcome.actual_value.unwrap_or(0.0);
 
@@ -144,7 +145,8 @@ impl OutcomeTracker {
     }
 
     pub fn get_outcomes_for_goal(&self, goal_id: &str) -> Result<Vec<TrackedOutcome>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_at
@@ -184,7 +186,8 @@ impl OutcomeTracker {
             }
         }
 
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let total: i64 = conn.query_row(
             "SELECT COUNT(*) FROM outcome_tracking WHERE process_type = ?1",
@@ -219,7 +222,8 @@ impl OutcomeTracker {
         &self,
         process_type: ProcessType,
     ) -> Result<ProcessSuccessRate> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let total: i64 = conn.query_row(
             "SELECT COUNT(DISTINCT goal_id) FROM outcome_tracking WHERE process_type = ?1",
@@ -328,7 +332,8 @@ impl OutcomeTracker {
         start_timestamp: i64,
         end_timestamp: i64,
     ) -> Result<OutcomeSummary> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let total_outcomes: i64 = conn.query_row(
             "SELECT COUNT(*) FROM outcome_tracking WHERE tracked_at >= ?1 AND tracked_at <= ?2",
@@ -382,7 +387,8 @@ impl OutcomeTracker {
     }
 
     fn refresh_cache(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, goal_id, process_type, metric_name, target_value, actual_value, achieved, tracked_at
@@ -439,7 +445,8 @@ impl OutcomeTracker {
     }
 
     fn calculate_success_rate_from_db(&self, process_type: ProcessType) -> Result<f64> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let total: i64 = conn.query_row(
             "SELECT COUNT(*) FROM outcome_tracking WHERE process_type = ?1",
@@ -465,7 +472,8 @@ impl OutcomeTracker {
         process_type: ProcessType,
         days: i64,
     ) -> Result<Vec<TrendingMetric>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let cutoff_timestamp = chrono::Utc::now().timestamp() - (days * 86400);
 
@@ -528,6 +536,7 @@ pub struct TrendingMetric {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
     use tempfile::TempDir;
 
     fn setup_test_db() -> (TempDir, String) {
