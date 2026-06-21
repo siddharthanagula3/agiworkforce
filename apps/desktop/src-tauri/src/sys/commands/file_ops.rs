@@ -164,6 +164,22 @@ fn validate_read_path(path: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
+/// Validate a path for WRITE. Same guarantees as `validate_read_path`
+/// (canonicalize + reject `..` + blacklist + blocked-paths denylist), returning
+/// the canonical path so callers write to the resolved path (not the raw,
+/// symlink-followable input). The denylist matters at least as much for writes:
+/// it prevents writing to `~/.ssh`, `~/.aws/credentials`, shell rc files, etc.
+fn validate_write_path(path: &str) -> Result<PathBuf, String> {
+    let canonical = validate_path_security(path)?;
+    if crate::sys::security::blocked_paths::is_blocked(&canonical) {
+        return Err(format!(
+            "Access denied: path is on the blocked-paths denylist: {}",
+            path
+        ));
+    }
+    Ok(canonical)
+}
+
 // AUDIT-003-014 fix: Escape glob special characters in path strings.
 // This prevents directory names containing glob metacharacters from being
 // interpreted as patterns, which could lead to unintended file access.
@@ -1827,7 +1843,8 @@ pub async fn file_write_text(
     content: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    let _ = validate_path_security(&file_path)?;
+    let canonical = validate_write_path(&file_path)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
 
     if content.len() > 100_000_000 {
         return Err(format!(
@@ -1848,7 +1865,7 @@ pub async fn file_write_text(
         return Err("Operation denied by user".to_string());
     }
 
-    if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1861,13 +1878,13 @@ pub async fn file_write_text(
         return Err(error);
     }
 
-    if let Some(parent) = Path::new(&file_path).parent() {
+    if let Some(parent) = canonical.parent() {
         if !parent.exists() {
             fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
         }
     }
 
-    match fs::write(&file_path, content) {
+    match fs::write(&canonical, content) {
         Ok(_) => {
             log_file_operation(&file_path, FileOperation::Write, true, None, &state).await?;
             Ok(())
@@ -1936,7 +1953,8 @@ pub async fn file_write_binary(
     base64_content: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<(), String> {
-    let _ = validate_path_security(&file_path)?;
+    let canonical = validate_write_path(&file_path)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
 
     if base64_content.len() > 134_000_000 {
         return Err("Content too large. Maximum is 100MB decoded".to_string());
@@ -1956,7 +1974,7 @@ pub async fn file_write_binary(
         return Err("Operation denied by user".to_string());
     }
 
-    if !check_file_permission(&file_path, FileOperation::Write, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1973,13 +1991,13 @@ pub async fn file_write_binary(
         .decode(&base64_content)
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
 
-    if let Some(parent) = Path::new(&file_path).parent() {
+    if let Some(parent) = canonical.parent() {
         if !parent.exists() {
             fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
         }
     }
 
-    match fs::write(&file_path, data) {
+    match fs::write(&canonical, data) {
         Ok(_) => {
             log_file_operation(&file_path, FileOperation::Write, true, None, &state).await?;
             Ok(())
