@@ -36,10 +36,10 @@ cursor spans conversations + messages + artifacts (a single `since` pulls all th
 ```sql
 -- web_artifacts: first-class cloud artifact (the canonical cloud copy).
 CREATE TABLE IF NOT EXISTS public.web_artifacts (
-  id              UUID PRIMARY KEY,                 -- = cloud_id (desktop maps its INT PK → UUIDv7)
+  id              UUID PRIMARY KEY,                 -- = cloud_id; for derived artifacts this is the deterministic derived_id (§4)
   user_id         <subject type> NOT NULL,          -- forced server-side; RLS WITH CHECK
   conversation_id UUID NOT NULL REFERENCES public.web_conversations(id) ON DELETE CASCADE,
-  message_id      UUID REFERENCES public.web_messages(id) ON DELETE SET NULL, -- backref (de-dup key)
+  message_id      UUID REFERENCES public.web_messages(id) ON DELETE SET NULL, -- backref (display overlay; id carries the de-dup)
   title           TEXT,
   artifact_type   TEXT NOT NULL,                    -- 'html'|'react'|'svg'|'mermaid'|'code'|'document'|…
   language        TEXT,
@@ -97,22 +97,53 @@ Open schema sub-decisions (flagged for sign-off):
 message_id, title, artifact_type, language, content, current_version, pinned, tags,
 created_at, updated_at, deleted_at, server_version`.
 
-## 4. Client roles (the asymmetry that avoids duplication)
+## 3.5 Premise verification (live desktop code — done 2026-06-21)
 
-- **Desktop = the only PUSHER.** Desktop owns first-class editable artifacts. On managed
-  mode, it maps local INT `id`/`conversation_id`/`message_id` → their cloud UUIDs (reuse the
-  P2 Phase-2 `cloud_id` mapping) and pushes via the extended endpoint. Reuses
-  `cloudSyncTrigger` (mode transition / post-turn / periodic).
-- **Web + mobile = PULL + render; do NOT push.** Their artifacts are local projections of
-  already-synced messages, so pushing them would duplicate. They PULL desktop-authored
-  artifacts and render them.
-- **De-dup rule (load-bearing):** when a client renders a message, if a pulled cloud
-  artifact exists with that `message_id`, render the CLOUD artifact (authoritative, may be
-  edited) and SUPPRESS local re-extraction for that message. Otherwise fall back to local
-  re-extraction (today's behavior). Keying on `message_id` makes this deterministic.
-- **Edit propagation:** web/mobile remain view-only for now (no edit-in-place → no push
-  path needed). If web/mobile editing is ever added, they become pushers too and the same
-  last-writer-wins applies. Out of scope for P5.
+Confirmed in live code (not the audit's hedged inference), per CLAUDE.md "confirm audit
+claims in source before acting":
+
+- Desktop materializes FIRST-CLASS artifacts during live streaming:
+  `ChatStream.tsx:117,131` → `useArtifactStore.getState().createArtifact(...)` (Tauri
+  SQLite via `artifactCreate`/`artifactCreateStreaming`).
+- The LIVE panel is `features/artifacts/ArtifactPanel` (mounted by `AppLayout`), reads
+  `useArtifactStore`, and renders `InlineArtifactEditor` (`ArtifactPanel.tsx:789`) →
+  edit-in-place is reachable; edited content diverges from the message.
+- No web-style `extractArtifacts`/`artifact-detector` on desktop. (`useCanvasStore` in
+  `editingStore.ts` is a separate/legacy path, NOT the mounted panel.)
+
+⇒ The Option-A premise holds: desktop artifacts are first-class + editable + divergent, so
+message sync cannot carry them. P5 is real. (Process note: this verification was done AFTER
+the founder's Option-A decision; it should have preceded the escalation — corrected now.)
+
+## 4. Client roles — bidirectional, with a stable per-artifact identity
+
+Resolves two design points an internal review flagged in the first draft (the original
+"desktop-only pusher + de-dup by message_id" was insufficient).
+
+- **Stable per-artifact id (de-dup key — was too coarse).** One message yields N artifacts
+  (`extractArtifacts` returns an array; `InlineArtifactCards` has "+N more"), so `message_id`
+  alone collides. Every surface computes the SAME deterministic id for a derived artifact:
+  `derived_id = uuidv5(NS, conversation_id || ':' || message_id || ':' || ordinal)` where
+  `ordinal` = the artifact's index within that message. A desktop-authored-from-scratch
+  artifact (not message-derived) gets a random uuid. An EDITED artifact KEEPS its
+  `derived_id`, so the cloud row overlays exactly the right derived artifact.
+- **Render set on EVERY surface = (locally derived) ⊕ (pulled cloud artifacts), merged by
+  id; the cloud row WINS** (it is the edited/authoritative copy). This gives true
+  bidirectional parity without duplication.
+- **The cloud `web_artifacts` table holds ONLY non-re-derivable artifacts:** edited
+  (diverged) artifacts + desktop-authored-from-scratch artifacts. Un-edited derived
+  artifacts are NEVER pushed by anyone — every surface re-derives them identically from the
+  already-synced message. Keeps the cloud table minimal.
+- **Pushers:** Desktop pushes its edited / from-scratch artifacts (maps local INT ids →
+  cloud UUIDs, reuse P2 Phase-2 `cloud_id` mapping; wire into `cloudSyncTrigger`). Web +
+  mobile push NOTHING for now (view-only; all their artifacts are re-derivable).
+- **Desktop display gap (the bidirectional fix):** desktop currently materializes artifacts
+  only from ITS OWN stream, so a web/mobile-authored artifact (whose message synced to
+  desktop) would not appear. Desktop must also DERIVE-for-display from PULLED messages using
+  the same `derived_id`, then overlay any pulled cloud artifact. (Small desktop addition;
+  no schema impact.)
+- **Edit propagation:** if web/mobile edit-in-place is ever added, they become pushers too,
+  keyed by the same `derived_id`; same last-writer-wins. Out of scope for P5.
 
 ## 5. Conflict resolution
 
@@ -129,7 +160,8 @@ is append-only and union-merged by `(artifact_id, version)` so no version is los
 3. **Endpoint extension** — GET/POST artifacts on `/api/chat/sync`, with tests (RLS
    isolation, UPSERT idempotency, bound saturation, tombstones) mirroring the P2 sync tests.
 4. **Desktop push/pull** — cloud_id mapping + wire into `cloudSyncTrigger`.
-5. **Web + mobile pull + render + de-dup** — overlay cloud artifacts by `message_id`.
+5. **Web + mobile + desktop pull + render + de-dup** — overlay cloud artifacts by the
+   stable `derived_id` (§4); desktop also derives-for-display from pulled messages.
 6. **Mobile UI polish (parallel, no schema):** preview/source toggle + live preview +
    download in `ArtifactFullScreen` (can land anytime, independent of 1–5).
 
