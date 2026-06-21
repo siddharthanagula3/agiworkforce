@@ -190,7 +190,12 @@ async function handlePush(request: NextRequest) {
           values ($1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()), $8::timestamptz, $9::timestamptz)
           on conflict (id) do update set
             title = excluded.title,
-            model = excluded.model,
+            -- A conversation always has a model; a client that doesn't track it
+            -- (desktop has no conversations.model column) pushes null. COALESCE so a
+            -- null push can never clobber a model another client/device already set.
+            -- (project_id/pinned keep last-writer-wins: null/false there are legit
+            -- "unassign from project" / "unpin" intents that must propagate.)
+            model = coalesce(excluded.model, web_conversations.model),
             project_id = excluded.project_id,
             pinned = excluded.pinned,
             updated_at = excluded.updated_at,
