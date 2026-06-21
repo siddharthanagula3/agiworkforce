@@ -18,12 +18,21 @@ pub struct AsyncConnection {
 }
 
 impl AsyncConnection {
-    /// Open (or create) a database at `path`.
-    pub async fn open(path: &str) -> Result<Self, rusqlite::Error> {
+    /// Open (or create) an encrypted (SQLCipher) database at `path`.
+    ///
+    /// Routes through [`crate::data::db::encryption::open_keyed_connection`] so
+    /// that auxiliary databases opened via this async wrapper are encrypted with
+    /// the per-machine database key, transparently migrating any legacy
+    /// plaintext file in place. The error type is `String` because the keyed
+    /// helper surfaces redacted, human-readable encryption errors rather than
+    /// raw `rusqlite::Error`s.
+    pub async fn open(path: &str) -> Result<Self, String> {
         let path = path.to_string();
-        let conn = tokio::task::spawn_blocking(move || RawConnection::open(&path))
-            .await
-            .expect("spawn_blocking join")?;
+        let conn = tokio::task::spawn_blocking(move || {
+            crate::data::db::encryption::open_keyed_connection(&path)
+        })
+        .await
+        .map_err(|e| format!("spawn_blocking join failed: {}", e))??;
         Ok(Self {
             inner: Arc::new(Mutex::new(conn)),
         })

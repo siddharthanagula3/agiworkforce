@@ -6,8 +6,45 @@
  * durations only.
  */
 
+import { storage } from '@/lib/mmkv';
 import { getDb } from './db';
 import type { TelemetryEvent } from './types';
+
+/** MMKV consent key — telemetry is enqueued/flushed only when this is true. */
+export const TELEMETRY_OPT_IN_KEY = 'telemetry_opted_in';
+
+/**
+ * Enforced gate (fail-closed): telemetry may be enqueued ONLY when the user has
+ * explicitly opted in AND the app is NOT in Local mode.
+ *
+ *   - Opt-in: the real MMKV key `telemetry_opted_in` must be strictly `true`.
+ *     Absent / unset / false / unreadable → not consented → drop.
+ *   - Mode:   Local mode is on-device only; our telemetry collector must never
+ *     receive Local-mode events even if a consent flag is somehow set. Any
+ *     failure to determine the mode is treated as Local (drop).
+ *
+ * Returns true only when BOTH conditions pass. Any thrown error → false (drop).
+ */
+export function isTelemetryAllowed(): boolean {
+  try {
+    const consented = storage.getBoolean(TELEMETRY_OPT_IN_KEY) === true;
+    if (!consented) return false;
+
+    // Lazy require keeps this storage module importable without pulling the
+    // chat-feature store graph at load time, and preserves fail-closed behaviour
+    // if the store module ever fails to load. Relative specifier (not '@/'):
+    // an aliased dynamic require is not guaranteed to be rewritten at runtime.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('../src/features/chat/store/appModeStore') as {
+      useChatAppModeStore?: { getState?: () => { appMode?: unknown } };
+    };
+    const appMode = mod.useChatAppModeStore?.getState?.()?.appMode;
+    // Fail-closed: only 'cloud' is allowed; anything else (incl. undefined) drops.
+    return appMode === 'cloud';
+  } catch {
+    return false;
+  }
+}
 
 function parsePayload(payload: unknown): Record<string, unknown> {
   if (typeof payload !== 'string') {
@@ -35,6 +72,11 @@ export async function enqueueTelemetryEvent(
   event_type: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
+  // Enforced opt-in + non-local gate. Without this, events could accumulate in
+  // the local queue (and later flush to our collector) for users who never
+  // consented or who are in Local mode — a zero-leak violation. Drop silently.
+  if (!isTelemetryAllowed()) return;
+
   const db = await getDb();
   await db.runAsync(
     'INSERT INTO telemetry_queue (event_type, payload, created_at) VALUES (?, ?, ?);',

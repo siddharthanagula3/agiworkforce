@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -62,7 +62,8 @@ impl ProjectManager {
     }
 
     fn init_database(&self) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS projects (
@@ -102,7 +103,8 @@ impl ProjectManager {
     }
 
     pub fn create_project(&self, project: Project) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "INSERT INTO projects (id, name, description, custom_instructions, visibility, created_by)
@@ -128,7 +130,8 @@ impl ProjectManager {
     }
 
     pub fn get_project(&self, project_id: &str) -> Result<Option<Project>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_at
@@ -156,7 +159,8 @@ impl ProjectManager {
     }
 
     pub fn get_user_projects(&self, user_id: &str) -> Result<Vec<Project>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT id, name, description, custom_instructions, visibility, created_by, created_at, updated_at
@@ -185,7 +189,8 @@ impl ProjectManager {
     }
 
     pub fn update_project(&self, project: &Project) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "UPDATE projects
@@ -204,7 +209,8 @@ impl ProjectManager {
     }
 
     pub fn delete_project(&self, project_id: &str) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute("DELETE FROM projects WHERE id = ?1", [project_id])?;
 
@@ -214,7 +220,8 @@ impl ProjectManager {
     }
 
     pub fn get_settings(&self, project_id: &str) -> Result<Option<ProjectSettings>> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         let mut stmt = conn.prepare(
             "SELECT project_id, default_model, temperature, enable_memory, enable_rag, rag_top_k, custom_instructions
@@ -241,7 +248,8 @@ impl ProjectManager {
     }
 
     pub fn update_settings(&self, settings: &ProjectSettings) -> Result<()> {
-        let conn = Connection::open(&self.db_path)?;
+        let conn = crate::data::db::encryption::open_keyed_connection(&self.db_path)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         conn.execute(
             "INSERT INTO project_settings

@@ -194,3 +194,121 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
 
     Ok(())
 }
+
+/// Open a keyed (SQLCipher-encrypted) connection to an auxiliary database.
+///
+/// This is the one-call convenience used by every auxiliary SQLite database in
+/// the app (checkpoints, project memory, knowledge bases, ontology, outcomes,
+/// etc.) so they never open plaintext. It mirrors the main-DB bootstrap in
+/// `lib.rs`:
+///
+/// 1. Derives the per-machine `DatabaseEncryption` key.
+/// 2. If a file already exists at `path`, transparently migrates a legacy
+///    plaintext database to SQLCipher (no-op if already encrypted). A migration
+///    error is logged but does not abort the open — the subsequent
+///    `open_encrypted_connection` will surface a hard error if the database is
+///    genuinely unreadable with the key.
+/// 3. Opens the connection with the encryption key applied.
+///
+/// The key is derived on each call; callers that open connections on hot paths
+/// should hold a long-lived connection rather than reopening per operation.
+///
+/// # Arguments
+/// * `path` - Filesystem path to the SQLite database file
+///
+/// # Errors
+/// Returns an error string if the connection cannot be opened or the encryption
+/// key cannot be applied/verified.
+pub fn open_keyed_connection(path: impl AsRef<std::path::Path>) -> Result<Connection, String> {
+    use crate::sys::security::{derive_key, KeyPurpose};
+
+    // Accept &str / &Path / PathBuf uniformly; the lower-level helpers take &str.
+    let path_ref = path.as_ref();
+    let path_str = path_ref.to_string_lossy();
+
+    let key = derive_key(KeyPurpose::DatabaseEncryption);
+
+    // Transparently migrate any pre-existing plaintext database in place. This
+    // is a one-time upgrade for databases created before encryption landed.
+    if path_ref.exists() {
+        if let Err(e) = migrate_to_encrypted(&path_str, &key) {
+            tracing::warn!(
+                "Auxiliary database encryption migration skipped or failed for '{}': {}. \
+                 Attempting to open as-is.",
+                path_str,
+                e
+            );
+        }
+    }
+
+    open_encrypted_connection(&path_str, &key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Proves `open_keyed_connection` produces a working, encrypted database:
+    ///
+    /// 1. Round-trip: a row written through the keyed connection is readable
+    ///    through a freshly opened keyed connection to the same file. This holds
+    ///    under both the plain `bundled` and `bundled-sqlcipher` builds.
+    /// 2. Negative proof (only meaningful under SQLCipher): when the build
+    ///    actually supports SQLCipher (`PRAGMA cipher_version` is non-empty), a
+    ///    plain `rusqlite::Connection::open` without the key must NOT be able to
+    ///    read the database. Under a plain `bundled` test build the PRAGMA key is
+    ///    a no-op, so this negative assertion is correctly skipped.
+    #[test]
+    fn open_keyed_connection_yields_encrypted_db() {
+        let tmp = std::env::temp_dir().join(format!(
+            "agi_enc_test_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path = tmp.to_string_lossy().to_string();
+        // Ensure a clean slate.
+        let _ = std::fs::remove_file(&path);
+
+        // 1. Create + write through the keyed helper.
+        let cipher_version = {
+            let conn = open_keyed_connection(&path).expect("open keyed connection");
+            conn.execute_batch(
+                "CREATE TABLE secret (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO secret (id, value) VALUES (1, 'top-secret');",
+            )
+            .expect("create + insert");
+
+            // Capture whether this build actually has SQLCipher available.
+            conn.query_row("PRAGMA cipher_version;", [], |r| r.get::<_, String>(0))
+                .unwrap_or_default()
+        };
+
+        // 1b. Round-trip through a second keyed connection (must always work).
+        {
+            let conn = open_keyed_connection(&path).expect("reopen keyed connection");
+            let value: String = conn
+                .query_row("SELECT value FROM secret WHERE id = 1;", [], |r| r.get(0))
+                .expect("read back row through keyed connection");
+            assert_eq!(value, "top-secret");
+        }
+
+        // 2. Negative proof — only exercised when SQLCipher is compiled in.
+        if !cipher_version.trim().is_empty() {
+            let plain = Connection::open(&path).expect("plain open of file handle");
+            let read_result = plain.query_row("SELECT value FROM secret WHERE id = 1;", [], |r| {
+                r.get::<_, String>(0)
+            });
+            assert!(
+                read_result.is_err(),
+                "plaintext connection must NOT be able to read an encrypted database \
+                 (cipher_version = {:?})",
+                cipher_version
+            );
+        }
+
+        let _ = std::fs::remove_file(&path);
+    }
+}
