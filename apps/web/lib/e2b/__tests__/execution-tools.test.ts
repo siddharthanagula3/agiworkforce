@@ -141,15 +141,22 @@ describe('resolveCodeExecutionTools — conditional router (hybrid cut-over)', (
     );
   });
 
-  describe('E2B ON — universal: every model routes through the E2B sandbox', () => {
-    it.each(['openai', 'anthropic', 'google', 'deepseek', 'kimi', 'glm', 'minimax'])(
-      '%s → the universal E2B execution tools (NOT provider-native)',
+  describe('E2B ON — cost-optimized: free native for Anthropic/Gemini, E2B for the rest', () => {
+    it('anthropic stays on its free native sandbox even when E2B is on', () => {
+      expect(resolveCodeExecutionTools('anthropic', true)).toEqual([
+        { type: 'code_execution_20260120', name: 'code_execution', allowed_callers: ['direct'] },
+      ]);
+    });
+    it('google (gemini) stays on its free native sandbox even when E2B is on', () => {
+      expect(resolveCodeExecutionTools('google', true)).toEqual([{ code_execution: {} }]);
+    });
+    it.each(['openai', 'deepseek', 'kimi', 'glm', 'minimax'])(
+      '%s → the E2B sandbox (OpenAI to avoid session fees; others have no native sandbox)',
       (provider) => {
         const tools = resolveCodeExecutionTools(provider, true);
         expect(tools).toEqual(e2bExecutionToolDefs());
-        // Never the provider-native shapes when E2B is on.
+        // OpenAI must NOT use its native interpreter when E2B is on.
         expect(JSON.stringify(tools)).not.toContain('code_interpreter');
-        expect(JSON.stringify(tools)).not.toContain('code_execution_20260120');
       },
     );
   });
