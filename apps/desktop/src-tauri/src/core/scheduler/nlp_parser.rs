@@ -223,15 +223,22 @@ fn try_parse_relative_time(input: &str) -> Result<Option<ParsedSchedule>, ParseE
 
         let unit = caps.get(2).map(|m| m.as_str()).unwrap_or("");
 
+        // Use the fallible constructors: the panicking Duration::seconds/minutes/…
+        // overflow-panic on out-of-range values, and `amount * 30` can overflow i64.
+        // `amount` is parsed from LLM-controlled schedule text, so this must fail
+        // gracefully rather than crash the scheduler.
         let duration = match unit {
-            "second" | "seconds" => Duration::seconds(amount),
-            "minute" | "minutes" => Duration::minutes(amount),
-            "hour" | "hours" => Duration::hours(amount),
-            "day" | "days" => Duration::days(amount),
-            "week" | "weeks" => Duration::weeks(amount),
-            "month" | "months" => Duration::days(amount * 30), // Approximate
+            "second" | "seconds" => Duration::try_seconds(amount),
+            "minute" | "minutes" => Duration::try_minutes(amount),
+            "hour" | "hours" => Duration::try_hours(amount),
+            "day" | "days" => Duration::try_days(amount),
+            "week" | "weeks" => Duration::try_weeks(amount),
+            "month" | "months" => amount.checked_mul(30).and_then(Duration::try_days), // Approximate
             _ => return Err(ParseError::InvalidInterval(format!("Unknown unit: {unit}"))),
-        };
+        }
+        .ok_or_else(|| {
+            ParseError::InvalidInterval(format!("Interval out of range: {amount} {unit}"))
+        })?;
 
         let target_time = Utc::now() + duration;
         return Ok(Some(ParsedSchedule::Once(target_time)));

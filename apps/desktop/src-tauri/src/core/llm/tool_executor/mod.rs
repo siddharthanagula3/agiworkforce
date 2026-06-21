@@ -694,6 +694,36 @@ impl ToolExecutor {
                 }
             };
 
+            // Fail closed if the resolved path still contains a `..` component. The
+            // fallback arms above can return an UN-canonicalized path (e.g. when an
+            // intermediate directory does not exist yet for a new-file write), and
+            // `starts_with` is component-prefix based — so `<allowed>/x/../../../etc/..`
+            // would otherwise pass the allowed-dir check and the OS would resolve the
+            // `..` at write time, escaping the sandbox. Mirrors the `..` rejection on
+            // the direct command path (sys/commands/file_ops.rs).
+            if canonical_path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(anyhow!(
+                    "Access denied: Path '{}' contains directory traversal ('..').",
+                    path_str
+                ));
+            }
+
+            // Hard denylist: even inside an allowed directory, the agent's file
+            // tools must never touch sensitive credential/secret paths (~/.ssh,
+            // ~/.aws/credentials, ~/.gnupg, browser cookies, shell history, …).
+            // The direct command path (sys/commands/file_ops.rs) already enforces
+            // this; the LLM-tool path previously did not. The denylist is scoped to
+            // secrets, so ordinary workspace files (incl. project .env) are unaffected.
+            if crate::sys::security::blocked_paths::is_blocked(&canonical_path) {
+                return Err(anyhow!(
+                    "Access denied: Path '{}' is a protected system path.",
+                    path_str
+                ));
+            }
+
             for allowed_dir in &allowed_canonical {
                 if canonical_path.starts_with(allowed_dir) {
                     return Ok(canonical_path);
