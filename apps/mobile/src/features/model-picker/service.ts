@@ -14,6 +14,12 @@ import {
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel, PickerModelTier } from '@agiworkforce/types';
 import {
+  evaluateModelEnvironment,
+  getModelMetadataById,
+  type EnvironmentAvailability,
+  type ModelEnvironment,
+} from '@agiworkforce/types';
+import {
   MODEL_LIST as CLOUD_MODEL_LIST,
   getProviderById as getCloudProviderById,
   type ModelDef as CloudModelDef,
@@ -63,6 +69,52 @@ export interface AutoModeDef {
 
 const LOCAL_PROVIDER_ID = 'local';
 export const CLOUD_LOCK_REASON = 'AGI Cloud is invite-only on mobile.';
+
+// ---------------------------------------------------------------------------
+// P3 Phase A: Environment-gating helpers
+//
+// `environmentAvailability` returns the runtime availability signal for a
+// required execution environment. Phase A always returns `{ configured: false }`,
+// locking every env-gated model in the picker until Phase B wires the real
+// signal:
+//   - 'e2b'           → managed-compute beta enabled + reachable (Phase B)
+//   - 'local-runtime' → on-device runtime installed + ready (Phase B)
+//
+// SAFETY: no current model sets `requiresEnvironment`, so Phase A is a
+// pure no-op for all live catalog rows.
+// ---------------------------------------------------------------------------
+
+/** Phase A stub — Phase B replaces with real env probe. */
+export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
+  // Phase B: check managed-compute beta flag for 'e2b';
+  //          check installed local runtime for 'local-runtime'.
+  return { configured: false };
+}
+
+/**
+ * Apply environment gating as the final transform on any ModelDef.
+ * When `requiresEnvironment` is set and the environment is unavailable,
+ * overrides `availability` to 'locked' and sets `lockReason` to the verdict
+ * reason from `evaluateModelEnvironment`.
+ *
+ * Must be called AFTER all other availability assignments so that env-locked
+ * models stay locked even when cloud is unlocked.
+ *
+ * When `requiresEnvironment` is undefined (all current models), returns `def`
+ * unchanged — zero cost to existing rows.
+ */
+export function applyEnvironmentGate(
+  def: ModelDef,
+  requiresEnvironment: ModelEnvironment | undefined,
+): ModelDef {
+  if (!requiresEnvironment) return def;
+  const verdict = evaluateModelEnvironment(
+    requiresEnvironment,
+    environmentAvailability(requiresEnvironment),
+  );
+  if (verdict.selectable) return def;
+  return { ...def, availability: 'locked', lockReason: verdict.reason };
+}
 
 /**
  * Static model descriptions shown as a subtitle in the picker.
@@ -283,7 +335,7 @@ function maxOutputForContext(contextWindow: number): number {
 }
 
 function toLocalModelDef(model: OnDeviceModel): ModelDef {
-  return {
+  const def: ModelDef = {
     id: model.id,
     name: model.displayName,
     provider: LOCAL_PROVIDER_ID,
@@ -302,12 +354,16 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
     executorchPreset: model.executorchPreset,
     license: model.license,
   };
+  // NOTE: OnDeviceModel does not carry requiresEnvironment today — local-runtime
+  // gating is unwireable until the local catalog exposes the field (Phase B).
+  // Passing `undefined` is a safe no-op for all current on-device models.
+  return applyEnvironmentGate(def, undefined);
 }
 
 function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef {
   const providerLabel = getCloudProviderById(model.provider)?.name ?? model.provider;
 
-  return {
+  const def: ModelDef = {
     id: model.id,
     name: model.name || CLOUD_ROUTE_FALLBACK_NAMES[model.provider] || 'AGI Cloud',
     provider: model.provider,
@@ -324,6 +380,12 @@ function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef
     description: `${providerLabel} model in AGI Cloud`,
     lockReason: cloudUnlocked ? undefined : CLOUD_LOCK_REASON,
   };
+
+  // Apply environment gate LAST so env-locked models remain locked even when
+  // cloud is unlocked. CloudModelDef (from getPickerModels/PickerModelView)
+  // does not carry requiresEnvironment — look it up from the canonical catalog.
+  const requiresEnvironment = getModelMetadataById(model.id)?.requiresEnvironment;
+  return applyEnvironmentGate(def, requiresEnvironment);
 }
 
 function firstCloudModelByProvider(providerId: string): CloudModelDef | undefined {
