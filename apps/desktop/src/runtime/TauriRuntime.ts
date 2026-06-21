@@ -453,7 +453,12 @@ export class TauriRuntime implements ChatRuntime {
           // activeMode is the authoritative trust-boundary signal.  The backend
           // MUST honor this: "local" => no ManagedCloud, "cloud" => cloud only.
           activeMode,
-          preferCloudCredits: activeMode === 'cloud',
+          // Cloud credits (AGI Managed Cloud) are ONLY for managed mode. BYOK is a
+          // private path that goes DIRECT to the user's provider — it must never be
+          // billed/routed through AGI managed cloud. activeMode is binary
+          // ('local'|'cloud') and lumps byok+managed together, so derive the 3-way
+          // PrivacyMode here (mirrors the canonical logic in features/chat/index.tsx).
+          preferCloudCredits: selectPrivacyMode(useAppModeStore.getState()) === 'managed',
           // Composer controls — the Rust ChatSendMessageRequest already accepts
           // these camelCase aliases; they were previously dropped client-side.
           thinkingMode: thinkingEnabled,

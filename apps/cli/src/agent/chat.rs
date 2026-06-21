@@ -1692,6 +1692,10 @@ message -- revise and call `update_plan` again.\n\n",
         question: &str,
         on_chunk: StreamCallback,
     ) -> Result<String> {
+        // Trust boundary: a /btw side-query must honor the same Local→cloud guard
+        // as send() — a Local session must never silently egress to cloud here.
+        self.validate_privacy_boundary()?;
+
         let mut fork_messages = Vec::new();
         if let Some(sys) = self.messages.first() {
             fork_messages.push(sys.clone());

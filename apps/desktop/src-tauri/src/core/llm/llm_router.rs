@@ -226,6 +226,9 @@ pub struct RouterPreferences {
     pub strategy: RoutingStrategy,
     pub context: Option<RouterContext>,
     pub prefer_cloud_credits: bool, // When true, prioritize ManagedCloud for Pro/Max users
+    /// TRUST BOUNDARY: when true (pure Local mode), candidate selection must NEVER
+    /// yield `Provider::ManagedCloud` — a Local chat must not cross into AGI cloud.
+    pub local_only: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -863,6 +866,11 @@ impl LLMRouter {
                 });
             }
 
+            // TRUST BOUNDARY: even an explicitly-preferred provider cannot be
+            // ManagedCloud in pure Local mode.
+            if preferences.local_only {
+                order.retain(|c| c.provider != Provider::ManagedCloud);
+            }
             return order;
         }
 
@@ -979,6 +987,14 @@ impl LLMRouter {
                 .partition(|c| !tracker.is_rate_limited(c.provider, Some(&c.model)));
             order = ok;
             order.extend(limited);
+        }
+
+        // TRUST BOUNDARY: in pure Local mode, never offer a ManagedCloud candidate —
+        // a Local chat must not cross into AGI cloud, regardless of how candidates were
+        // assembled (prefer_cloud_credits, context signal, strategy order, default, or
+        // the fallback loop above).
+        if preferences.local_only {
+            order.retain(|c| c.provider != Provider::ManagedCloud);
         }
 
         order

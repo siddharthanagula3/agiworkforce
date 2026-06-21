@@ -222,6 +222,7 @@ Return ONLY the JSON array."#,
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         let request = LLMRequest {
@@ -655,6 +656,7 @@ Return ONLY a JSON array of steps with this structure:
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
+            local_only: false,
         };
 
         let request = LLMRequest {
