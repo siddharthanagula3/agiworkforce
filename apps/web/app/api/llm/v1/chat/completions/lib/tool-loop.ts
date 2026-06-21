@@ -329,15 +329,17 @@ async function runMcpTool(
   // the default deployment. FAIL-CLOSED: an unavailable executor returns an explicit
   // error to the model (getE2BExecutor() is null until the Phase B SDK binding lands).
   if (isExecutionTool(toolCall.qualifiedName)) {
-    const result = await routeExecutionTool(
-      getE2BExecutor(),
-      toolCall.qualifiedName,
-      toolCall.args,
-    );
-    return {
-      content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
-      isError: !result.ok,
-    };
+    const executor = await getE2BExecutor();
+    try {
+      const result = await routeExecutionTool(executor, toolCall.qualifiedName, toolCall.args);
+      return {
+        content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
+        isError: !result.ok,
+      };
+    } finally {
+      // One sandbox per execution tool call (Phase B: conversation-scoped sessions).
+      await executor?.dispose();
+    }
   }
 
   const parsed = parseQualifiedToolName(toolCall.qualifiedName);
