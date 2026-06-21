@@ -84,25 +84,24 @@ export function e2bExecutionToolDefs(): Array<{
 const NATIVE_CODE_EXECUTION_PROVIDERS = new Set(['anthropic', 'google', 'openai']);
 
 /**
- * Cost-optimized code-execution router (founder spec, 2026 billing). Returns the tools
- * to attach when `code_execution` is requested:
+ * Code-execution router. Returns the tools to attach when `code_execution` is
+ * requested. Providers with a NATIVE (provider-executed) interpreter use it; providers
+ * without one fail-closed (no tool).
  *
- *  - FREE NATIVE TIER — Anthropic + Gemini ALWAYS use their own native code-execution
- *    sandboxes (generous free compute), regardless of E2B.
- *  - E2B CREDIT TIER — everyone else routes to OUR E2B sandbox WHEN it is configured:
- *    OpenAI (to avoid its per-session interpreter fees) and DeepSeek/Kimi/GLM/MiniMax
- *    (which have no native sandbox).
- *  - RISK MITIGATION when E2B is NOT configured (today's default, no key): never break a
- *    currently-working path — OpenAI keeps its native interpreter; providers with no
- *    native sandbox fail-closed (no tool) until E2B is keyed.
+ * IMPORTANT — E2B offering is intentionally DISABLED on this request path. The E2B
+ * execution tools are platform-executed (the agentic loop must run them), but the
+ * server-side tool loop is unreachable in production (the route enters it only with a
+ * non-empty MCP catalog AND under a hardcoded manual-approval gate that has no resume
+ * endpoint — a pre-existing architectural gap, predating P3). Offering E2B tools here
+ * would inject a tool that NOTHING executes and would strip OpenAI's working native
+ * interpreter — a regression. So this stays native-always / fail-closed until a
+ * reachable, approval-gated E2B execution loop exists (founder decision — see the
+ * design doc). The lib/e2b binding + tools remain as the verified, dormant foundation.
  *
- * NOTE: the 2026 per-provider billing rationale (Anthropic free-tier hours, OpenAI
- * session fees) is the founder's; the code encodes only the routing policy, which is a
- * one-line change if the billing reality shifts. Pure + exhaustively unit-tested.
+ * Effect: this is byte-for-byte the pre-P3 behavior, regardless of E2B configuration.
  */
-export function resolveCodeExecutionTools(provider: string, e2bEnabled: boolean): unknown[] {
+export function resolveCodeExecutionTools(provider: string): unknown[] {
   const p = provider.toLowerCase();
-  // Free native tiers: Anthropic + Gemini, always native.
   if (p === 'anthropic') {
     return [
       { type: 'code_execution_20260120', name: 'code_execution', allowed_callers: ['direct'] },
@@ -111,28 +110,27 @@ export function resolveCodeExecutionTools(provider: string, e2bEnabled: boolean)
   if (p === 'google') {
     return [{ code_execution: {} }];
   }
-  // E2B credit tier: OpenAI + the no-native providers route to E2B when configured.
-  if (e2bEnabled) {
-    return e2bExecutionToolDefs();
-  }
-  // E2B off: don't break OpenAI (keep its native interpreter); others fail-closed.
   if (p === 'openai') {
     return [{ type: 'code_interpreter' }];
   }
+  // No native interpreter and no reachable E2B execution loop → fail-closed.
   return [];
 }
 
 /**
- * Whether a model can run code at all, given the deployment's E2B state: true if the
- * provider has native execution (anthropic/google/openai) OR E2B is configured. Surfaces
- * use this to gray out the code-execution affordance for models that can't (a no-native
- * provider with E2B off).
+ * Whether a model can run code at all today: only providers with a native interpreter
+ * (anthropic/google/openai), since the E2B execution path is not reachable in prod.
+ * Surfaces use this to gray out the code-execution affordance for no-native providers.
  */
-export function modelSupportsCodeExecution(provider: string, e2bEnabled: boolean): boolean {
-  return e2bEnabled || NATIVE_CODE_EXECUTION_PROVIDERS.has(provider.toLowerCase());
+export function modelSupportsCodeExecution(provider: string): boolean {
+  return NATIVE_CODE_EXECUTION_PROVIDERS.has(provider.toLowerCase());
 }
 
-/** Cap output bytes returned to the model (memory/context guard). */
+/**
+ * Cap a string returned to the model (memory/context guard). Used for BOTH the success
+ * output and the error string — an executor error can carry model-influenced content
+ * (e.g. a runtime error `value`), so it must be bounded too.
+ */
 function capOutput(output: string): string {
   if (Buffer.byteLength(output, 'utf8') <= MAX_EXECUTION_OUTPUT_BYTES) return output;
   // Slice by bytes, not chars, to honor the byte cap with multibyte content.
@@ -186,12 +184,16 @@ export async function routeExecutionTool(
       default:
         return { ok: false, output: '', error: `Not an execution tool: ${name}` };
     }
-    return { ...result, output: capOutput(result.output) };
+    return {
+      ...result,
+      output: capOutput(result.output),
+      error: result.error ? capOutput(result.error) : result.error,
+    };
   } catch (err) {
     return {
       ok: false,
       output: '',
-      error: `Execution failed: ${err instanceof Error ? err.message : String(err)}`,
+      error: capOutput(`Execution failed: ${err instanceof Error ? err.message : String(err)}`),
     };
   }
 }
