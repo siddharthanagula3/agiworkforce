@@ -114,6 +114,24 @@ Ordering: messages within a conversation order by `created_at_utc` then `cloud_i
 - **Phase 2 — Desktop (the hard part).** Add `cloud_id`/`server_version`/UTC columns + the INTEGER↔cloud_id mapping layer; build the offline-tolerant local↔cloud reconciliation engine (pull on connect, push local changes, tombstone deletes); replace the dead `supabase_sync.rs`/`CloudSyncClient`. Gated strictly behind managed mode.
 - **Out of scope (by matrix):** CLI/VS Code coding history stays local; Chrome chats stay a separate store.
 
+### Phase 1 status (2026-06-21) — SHIPPED, with one tracked carry-over
+
+Mobile cloud chat is now wired to bidirectional sync (commits `f4061321d`, `1ca5ca97f`,
+`76026ae83`): client-generated UUIDv7 ids for cloud conversations + messages, the REST
+create endpoint accepts client ids, an additive write-through mirrors finalized cloud
+turns into the cloud store + queues them, and a managed-only loop pushes/pulls deltas.
+This is also the **first** server-side persistence path for mobile cloud chat (sends were
+streaming-only before).
+
+**Carry-over to Phase 2 (cross-device history continuation):** pulled messages land in
+`chatCloudMessageStore` and display correctly via the merge facade, but `sendMessage`
+builds LLM history from the local `msgStore.messages[conversationId]` (chatExecutionStore
+line ~501). So continuing — on mobile — a conversation that was authored on web/desktop
+and pulled down does NOT yet feed the pulled history to the model. Single-device authoring
+is unaffected. Fix belongs with the Phase 2 reconciliation engine (unify history-building
+to read the merged/cloud store for cloud conversations). Receive is also poll-based
+(≤30s loop tick), not realtime — acceptable for v1.
+
 ---
 
 ## 4. Decisions to confirm before I build (Phase 0)
