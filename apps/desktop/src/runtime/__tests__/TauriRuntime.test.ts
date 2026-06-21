@@ -33,6 +33,9 @@ vi.mock('../../stores/appModeStore', () => ({
       mode: 'local',
     }),
   },
+  // TauriRuntime.ts uses selectPrivacyMode (lines 172/461); the mock must
+  // export it or those calls throw and the create→send flow aborts.
+  selectPrivacyMode: (state: { mode: string }) => (state.mode === 'local' ? 'local' : 'managed'),
 }));
 
 vi.mock('../../stores/chat/chatStore', () => ({
