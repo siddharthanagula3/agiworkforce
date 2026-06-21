@@ -620,7 +620,10 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
         ]) as usize;
 
         if chunk_id == b"fmt " {
-            if chunk_size >= 16 {
+            // The loop only guarantees pos+8 bytes, but the fmt body reads up to
+            // pos+23 — bound-check before indexing or a truncated/malformed WAV
+            // (reachable via the voice_transcribe_file IPC command) panics.
+            if chunk_size >= 16 && pos + 24 <= audio_bytes.len() {
                 num_channels = u16::from_le_bytes([audio_bytes[pos + 10], audio_bytes[pos + 11]]);
                 sample_rate = u32::from_le_bytes([
                     audio_bytes[pos + 12],

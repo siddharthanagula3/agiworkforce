@@ -1000,6 +1000,11 @@ export const useSettingsStore = create<SettingsState>()(
         },
 
         setAutoApproveTools: async (enabled: boolean) => {
+          // Safety toggle: if the backend sync fails we must NOT leave the UI
+          // showing a value the backend never applied (auto-approving dangerous
+          // tools the user thinks are gated, or vice versa). Roll back on failure,
+          // mirroring setAgentMode.
+          const previousAutoApprove = get().chatPreferences.autoApproveTools;
           set(
             (state) => ({
               chatPreferences: { ...state.chatPreferences, autoApproveTools: enabled },
@@ -1011,6 +1016,17 @@ export const useSettingsStore = create<SettingsState>()(
             await invoke('set_auto_approve_all', { enabled });
           } catch (error) {
             console.error('Failed to sync auto-approve-all to backend:', error);
+            set(
+              (state) => ({
+                chatPreferences: {
+                  ...state.chatPreferences,
+                  autoApproveTools: previousAutoApprove,
+                },
+              }),
+              undefined,
+              'settings/setAutoApproveTools/rollback',
+            );
+            throw error;
           }
         },
 
