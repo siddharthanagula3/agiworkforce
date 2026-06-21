@@ -15,8 +15,11 @@ import {
   getPickerModelTier,
   normalizeModelId,
   resolveAutoModeModel,
+  evaluateModelEnvironment,
   PROVIDER_DISPLAY,
   type ProviderId,
+  type EnvironmentAvailability,
+  type ModelEnvironment,
 } from '@agiworkforce/types';
 
 export interface ModelPickerOption {
@@ -24,6 +27,18 @@ export interface ModelPickerOption {
   label: string;
   description: string;
   detail: string;
+}
+
+// ─── Environment-gating helper ────────────────────────────────────────────────
+//
+// Phase A: returns { configured: false } for every environment so any future
+// model that sets `requiresEnvironment` is gated (locked) until Phase B wires
+// the real E2B / local-runtime availability signal.
+//
+// Phase B: replace this stub with real availability checks (e.g. query the
+// managed-compute beta status from the bridge or desktop agent).
+export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
+  return { configured: false };
 }
 
 // ─── Provider → ProviderId bridge ─────────────────────────────────────────────
@@ -126,6 +141,20 @@ export function buildGroupedQuickPickItems(): GroupedQuickPickItem[] {
     const modelsForProvider = manualOptions.filter((o) => String(o.provider) === provider);
     for (const opt of modelsForProvider) {
       const metadata = getModelMetadataById(opt.id);
+
+      // P3 Phase A: gate models whose `requiresEnvironment` flag is set.
+      // evaluateModelEnvironment is fail-closed: absent flag → selectable: true
+      // (no-op for every current model). Phase B replaces environmentAvailability
+      // with a real availability check.
+      const requiredEnv = metadata?.requiresEnvironment;
+      if (requiredEnv !== undefined) {
+        const envResult = evaluateModelEnvironment(
+          requiredEnv,
+          environmentAvailability(requiredEnv),
+        );
+        if (!envResult.selectable) continue;
+      }
+
       const modelHasThinking = metadata?.capabilities.thinking ?? false;
 
       const descriptionParts: string[] = [getPickerCapabilityLabel(opt.id, opt.detail)];
