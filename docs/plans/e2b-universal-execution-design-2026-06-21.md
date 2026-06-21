@@ -1,6 +1,6 @@
 # E2B universal execution layer — design (P3)
 
-Status: Design + additive scaffolding (live cut-over pending founder decision + E2B key)
+Status: Phase A shipped; live @e2b binding VERIFIED (sandbox round-trip passed 2026-06-21). Cut-over (OpenAI + no-native providers -> E2B) activates when E2B_API_KEY is set in the deployment env.
 Owner: this session
 Last updated: 2026-06-21
 
