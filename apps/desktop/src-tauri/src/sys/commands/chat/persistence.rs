@@ -66,7 +66,10 @@ pub(super) fn save_assistant_message(
     let saved = repository::get_message(&conn, id)
         .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?;
     if cloud_sync {
-        cloud_sync::spawn_sync_message(saved.clone());
+        // Mint cloud_id and mark assistant message for push.
+        // Reuse the already-held connection guard — acquiring a second lock on the same
+        // non-reentrant std::sync::Mutex would deadlock.
+        let _ = cloud_sync::mark_message_for_push(&conn, id);
     }
     Ok(saved)
 }
