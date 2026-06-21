@@ -494,7 +494,15 @@ fn apply_conversation_deltas(
                 );
                 applied += 1;
             }
-            // If not present, tombstone is a no-op.
+            // The parent is gone — drop any orphan messages buffered under it so they
+            // can't strand the buffer forever (a conversation deleted on another device
+            // would otherwise leak a pending row that never drains). Runs whether or not
+            // the conversation exists locally.
+            let _ = conn.execute(
+                "DELETE FROM cloud_sync_pending_messages \
+                 WHERE conversation_cloud_id = ?1 AND user_id = ?2",
+                params![d.id, user_id],
+            );
         } else if let Some(local_id) = existing_id {
             // Update metadata (LWW). Note: desktop conversations table has no `model`
             // column (model is per-message); only title/updated_at/server_version are updated.
@@ -771,6 +779,35 @@ fn drain_pending_messages(conn: &Connection, user_id: &str) -> usize {
 }
 
 // ---------------------------------------------------------------------------
+// Pull-page composition (pure DB; the orchestrator's HTTP is the only async part).
+// ---------------------------------------------------------------------------
+
+/// Select the next cursor from a pull response. We TRUST the server's cursor (a
+/// safe min-frontier bound across the two independently-paginated tables) and only
+/// guard against moving backwards — we must NOT recompute it from the max of per-row
+/// server_versions, which would overshoot the lagging table's frontier and skip its
+/// in-gap rows. Pure + unit-tested so this safety-critical choice can't silently
+/// regress inside the (HTTP-bound, hard-to-test) orchestrator.
+fn select_next_cursor(current: &str, resp_cursor: &Option<String>) -> String {
+    match resp_cursor {
+        Some(c) => max_cursor(current, std::slice::from_ref(c)),
+        None => current.to_string(),
+    }
+}
+
+/// Apply one pulled page in the load-bearing order: conversations FIRST (so message
+/// FK-mapping + the orphan drain can resolve parents), THEN drain messages buffered
+/// on a prior page whose parent just landed, THEN this page's messages (orphans
+/// buffered, never dropped). Returns (conversations_applied, messages_applied).
+/// Extracted so the ordering invariant is testable without HTTP.
+fn apply_pull_page(conn: &Connection, user_id: &str, page: &PullResponse) -> (usize, usize) {
+    let convs = apply_conversation_deltas(conn, user_id, &page.conversations);
+    let drained = drain_pending_messages(conn, user_id);
+    let applied = apply_message_deltas(conn, user_id, &page.messages);
+    (convs, drained + applied)
+}
+
+// ---------------------------------------------------------------------------
 // Public async engine: sync_now.
 // ---------------------------------------------------------------------------
 
@@ -925,26 +962,14 @@ async fn sync_now_inner(
             .map_err(|e| format!("Failed to parse pull response: {e}"))?;
 
         let has_more = pull_resp.has_more;
-        // Trust the server's SAFE cursor. The two tables paginate independently and
-        // share one version sequence, so taking the max of per-row server_versions
-        // overshoots the lagging table's frontier and skips its in-gap rows (the
-        // server now bounds the cursor to that frontier). Never move backwards.
-        let new_cursor = match &pull_resp.cursor {
-            Some(c) => max_cursor(&cursor, std::slice::from_ref(c)),
-            None => cursor.clone(),
-        };
+        let new_cursor = select_next_cursor(&cursor, &pull_resp.cursor);
 
         // Apply page (acquire conn, apply, advance cursor, drop conn).
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            // Conversations first (so message FK-map + orphan drain find them).
-            total_convs_pulled +=
-                apply_conversation_deltas(&conn, user_id, &pull_resp.conversations);
-            // Resolve any messages buffered on a prior page whose parent just landed.
-            total_msgs_pulled += drain_pending_messages(&conn, user_id);
-            // Apply this page's messages (orphans whose parent is not yet present are
-            // buffered, never dropped — see apply_message_deltas).
-            total_msgs_pulled += apply_message_deltas(&conn, user_id, &pull_resp.messages);
+            let (convs, msgs) = apply_pull_page(&conn, user_id, &pull_resp);
+            total_convs_pulled += convs;
+            total_msgs_pulled += msgs;
             write_cursor(&conn, user_id, &new_cursor);
         }
 
@@ -1746,5 +1771,164 @@ mod tests {
             .query_row("SELECT deleted_at_utc FROM messages WHERE cloud_id='m1'", [], |r| r.get(0))
             .unwrap();
         assert!(deleted.is_some(), "deleted_at_utc must be set on a tombstoned message");
+    }
+
+    /// The engine must advance the cursor from the SERVER's safe cursor, never the
+    /// max of per-row server_versions (which overshoots and drops in-gap rows). This
+    /// pins the consumption choice that lives in the otherwise-untested orchestrator.
+    #[test]
+    fn select_next_cursor_trusts_server_cursor_not_row_max() {
+        // Server returns a safe cursor (10) below a row at sv 99 in the page.
+        assert_eq!(select_next_cursor("0", &Some("10".to_string())), "10");
+        // Never moves backwards if the server (somehow) returns a lower value.
+        assert_eq!(select_next_cursor("50", &Some("10".to_string())), "50");
+        // Missing cursor → hold position.
+        assert_eq!(select_next_cursor("7", &None), "7");
+    }
+
+    /// apply_pull_page must run conversations → drain → messages, so an orphan buffered
+    /// on a prior page is resolved when its parent lands on this page.
+    #[test]
+    fn apply_pull_page_drains_orphan_when_parent_lands_this_page() {
+        let conn = fresh_db();
+        // Page 1: a message arrives before its parent → buffered.
+        let page1: PullResponse = serde_json::from_value(serde_json::json!({
+            "conversations": [],
+            "messages": [{
+                "id": "m1", "conversation_id": "cc1", "role": "user", "content": "hi",
+                "model": null, "provider": null, "created_at": "2026-06-20T00:00:00Z",
+                "deleted_at": null, "server_version": "6"
+            }],
+            "cursor": "6", "hasMore": true,
+        }))
+        .unwrap();
+        let (_c1, m1) = apply_pull_page(&conn, "u1", &page1);
+        assert_eq!(m1, 0, "orphan not applied yet");
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"), 1);
+
+        // Page 2: the parent conversation lands → drain resolves the buffered orphan.
+        let page2: PullResponse = serde_json::from_value(serde_json::json!({
+            "conversations": [{
+                "id": "cc1", "title": "T", "model": null, "project_id": null, "pinned": false,
+                "created_at": "2026-06-20T00:00:00Z", "updated_at": "2026-06-20T00:00:00Z",
+                "deleted_at": null, "server_version": "20"
+            }],
+            "messages": [], "cursor": "20", "hasMore": false,
+        }))
+        .unwrap();
+        let (c2, m2) = apply_pull_page(&conn, "u1", &page2);
+        assert_eq!(c2, 1, "parent conversation applied");
+        assert_eq!(m2, 1, "buffered orphan drained on the page its parent landed");
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"), 1);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"), 0);
+    }
+
+    /// Re-pulling the same non-tombstone message must not insert a duplicate row.
+    #[test]
+    fn pull_message_repull_is_idempotent_no_duplicate() {
+        let conn = fresh_db();
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "5", None)]);
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "6", None)]);
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "6", None)]);
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"),
+            1,
+            "re-pulling the same message cloud_id must not create a duplicate"
+        );
+    }
+
+    /// A conversation tombstone drops any orphan messages buffered under it, so a
+    /// conversation deleted on another device can't strand the buffer forever.
+    #[test]
+    fn conversation_tombstone_drops_buffered_orphans() {
+        let conn = fresh_db();
+        // Buffer an orphan (parent never seen).
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc-gone", "6", None)]);
+        assert_eq!(count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"), 1);
+        // Parent arrives only as a tombstone (deleted on another device).
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc-gone", "9", Some("2026-06-20T01:00:00Z"))]);
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
+            0,
+            "tombstoned parent must drop its buffered orphan messages"
+        );
+    }
+
+    /// The alias-fixed mint UPDATE must actually populate conversation_cloud_id from
+    /// the parent (the half of the SQL fix that 'it no longer errors' doesn't prove).
+    #[test]
+    fn mark_message_populates_conversation_cloud_id_from_parent() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('Cloud', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, conv_id).unwrap();
+        let conv_cloud_id: String = conn
+            .query_row("SELECT cloud_id FROM conversations WHERE id=?1", params![conv_id], |r| r.get(0))
+            .unwrap();
+
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content, created_at) \
+             VALUES (?1, 'u1', 'assistant', 'hi', CURRENT_TIMESTAMP)",
+            params![conv_id],
+        )
+        .unwrap();
+        let msg_id = conn.last_insert_rowid();
+        mark_message_for_push(&conn, msg_id).unwrap();
+
+        let (needs_push, msg_conv_cloud): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT needs_push, conversation_cloud_id FROM messages WHERE id=?1",
+                params![msg_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(needs_push, 1, "cloud-conversation message must be marked");
+        assert_eq!(
+            msg_conv_cloud.as_deref(),
+            Some(conv_cloud_id.as_str()),
+            "conversation_cloud_id must be populated from the parent's cloud_id"
+        );
+    }
+
+    /// TRUST BOUNDARY (CLAUDE.md locked rule): the engine must perform ZERO network
+    /// I/O without a bearer token. An empty token returns an empty outcome and leaves
+    /// dirty rows untouched — no push, no clear. (An unreachable base_url also proves
+    /// no HTTP was attempted: if the guard were removed, the connect would error.)
+    #[tokio::test]
+    async fn sync_now_inner_no_egress_without_token() {
+        use crate::sys::commands::chat::state::AppDatabase;
+        let db_inner = crate::data::db::Database::in_memory().unwrap();
+        let db = AppDatabase {
+            conn: std::sync::Arc::clone(&db_inner.get_connection()),
+        };
+        {
+            let conn = db.connection().unwrap();
+            conn.execute(
+                "INSERT INTO conversations (title, user_id, app_mode) VALUES ('C','u1','cloud')",
+                [],
+            )
+            .unwrap();
+            let cid = conn.last_insert_rowid();
+            mark_conversation_for_push(&conn, cid).unwrap();
+        }
+
+        let outcome = sync_now_inner(&db, "u1", "  ", "http://127.0.0.1:1/")
+            .await
+            .expect("empty-token sync must return Ok(empty), not attempt the network");
+        assert_eq!(outcome.conversations_pushed, 0);
+        assert_eq!(outcome.messages_pushed, 0);
+        assert_eq!(outcome.conversations_pulled, 0);
+        assert_eq!(outcome.messages_pulled, 0);
+
+        let conn = db.connection().unwrap();
+        let needs_push: i64 = conn
+            .query_row("SELECT needs_push FROM conversations WHERE user_id='u1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(needs_push, 1, "no push happened, so the dirty flag is untouched");
     }
 }

@@ -5596,6 +5596,75 @@ mod tests {
         assert_eq!(fk_enabled, 1);
     }
 
+    /// The real-world v67 path is an UPGRADE of an existing v66 install with live
+    /// data. Build the v66-shape conversations/messages (INTEGER PK, app_mode, NO
+    /// cloud sync columns), populate them, then apply v67 and assert: existing rows
+    /// survive, the new columns + buffer table appear, and the INTEGER PK is intact.
+    #[test]
+    fn migration_v67_upgrades_populated_v66_tables_without_data_loss() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
+        conn.execute(
+            "CREATE TABLE conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, \
+             user_id TEXT, app_mode TEXT NOT NULL DEFAULT 'local')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, \
+             conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE, \
+             user_id TEXT, role TEXT, content TEXT)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode) VALUES ('Existing','u1','cloud')",
+            [],
+        )
+        .unwrap();
+        let conv_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content) VALUES (?1,'u1','user','hi')",
+            params![conv_id],
+        )
+        .unwrap();
+
+        // Apply v67 to the POPULATED v66 schema.
+        apply_migration_v67(&conn).expect("v67 must apply cleanly to a populated v66 schema");
+
+        // Existing data survived intact.
+        let title: String = conn
+            .query_row("SELECT title FROM conversations WHERE id=?1", params![conv_id], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "Existing");
+        let msg_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM messages WHERE conversation_id=?1", params![conv_id], |r| r.get(0))
+            .unwrap();
+        assert_eq!(msg_count, 1);
+
+        // New columns + buffer table exist; INTEGER PK is unchanged.
+        let has_cloud_id: bool = conn
+            .query_row(
+                "SELECT COUNT(*)>0 FROM pragma_table_info('conversations') WHERE name='cloud_id'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(has_cloud_id, "v67 must add cloud_id to a populated table");
+        let pk_type: String = conn
+            .query_row("SELECT type FROM pragma_table_info('conversations') WHERE pk=1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(pk_type, "INTEGER", "INTEGER PK must survive the upgrade");
+        let has_buffer: bool = conn
+            .query_row(
+                "SELECT COUNT(*)>0 FROM sqlite_master WHERE type='table' AND name='cloud_sync_pending_messages'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(has_buffer, "v67 must create the orphan buffer table");
+    }
+
     /// FIX-047: verify run_migrations is idempotent. The current_version
     /// guard means the second call should be a no-op (no errors, no
     /// duplicate schema_version rows for a single version, schema still
