@@ -761,8 +761,12 @@ export async function updateSubscriptionFromStripeSubscription(
         [stripeSubId],
       )
       .catch((fetchError: unknown) => {
+        // A READ error must NOT be silently treated as "no existing subscription":
+        // that falls through to the create/upsert path and bypasses the
+        // isNewPeriod reset-vs-allocate distinction, mis-allocating credits.
+        // Re-throw so the webhook returns non-2xx and Stripe retries.
         logger.error({ error: fetchError, stripeSubId }, 'Failed to check existing subscription');
-        return [] as { id: string; user_id: string; current_period_start: string | null }[];
+        throw fetchError instanceof Error ? fetchError : new Error(String(fetchError));
       });
 
     const existingSub = existingSubs[0];

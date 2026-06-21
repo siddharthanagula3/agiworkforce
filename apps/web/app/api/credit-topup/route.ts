@@ -87,8 +87,12 @@ async function handleCreditTopup(request: NextRequest) {
       Pick<ProfileRow, 'stripe_customer_id'>
     >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
     .catch((profileError: unknown) => {
-      logger.warn({ error: profileError, userId: userId }, 'Failed to fetch profile for top-up');
-      return [];
+      // Do NOT swallow: a failed profile lookup must not fall through to creating
+      // a brand-new Stripe customer below — that orphans the user's existing
+      // customer and causes duplicate customers for the same user. Surface the
+      // error so the top-up can be retried against the real profile.
+      logger.error({ error: profileError, userId: userId }, 'Failed to fetch profile for top-up');
+      throw createError.internal('Failed to load billing profile. Please try again.');
     });
 
   let customerId = profileRow?.stripe_customer_id;

@@ -259,7 +259,10 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
           creditAccount.id,
           deltaCents,
           `Plan upgrade: ${currentTier} → ${targetPlan}`,
-          'upgrade',
+          // add_credits only accepts ('purchase','adjustment','refund','bonus');
+          // 'upgrade' was rejected by the guard so the incremental grant silently
+          // failed. An upgrade credit is an adjustment.
+          'adjustment',
         ]);
         logger.info(
           { userId, creditAccountId: creditAccount.id, deltaCents, currentTier, targetPlan },
