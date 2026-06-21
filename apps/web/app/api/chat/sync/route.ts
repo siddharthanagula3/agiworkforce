@@ -102,11 +102,11 @@ async function handlePull(request: NextRequest) {
       [userId, since],
     );
 
-    // Next cursor = highest server_version returned this page (compare as bigint).
-    const cursor = maxServerVersion(since, conversations, messages);
+    const convSaturated = conversations.length >= MAX_CONVERSATIONS_PULL;
+    const msgSaturated = messages.length >= MAX_MESSAGES_PULL;
     // hasMore: a full page on either table means the client should pull again.
-    const hasMore =
-      conversations.length >= MAX_CONVERSATIONS_PULL || messages.length >= MAX_MESSAGES_PULL;
+    const hasMore = convSaturated || msgSaturated;
+    const cursor = computePullCursor(since, conversations, messages, convSaturated, msgSaturated);
 
     return NextResponse.json({ conversations, messages, cursor, hasMore });
   } catch (error) {
@@ -265,6 +265,43 @@ async function handlePush(request: NextRequest) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Compute the SAFE next pull cursor.
+ *
+ * `conversations` and `messages` are paginated INDEPENDENTLY (separate LIMITs) but
+ * share one `server_version` sequence, and a row's version is reassigned on every
+ * update (so a conversation can be re-versioned ABOVE its own older messages). If we
+ * advanced the cursor to the global max, the lagging table's rows whose version
+ * falls in the gap would be `> since` no longer and never returned again — silent
+ * loss. So when a table saturates its page, the cursor must not pass the LOWEST
+ * saturated frontier (the last/highest version that table delivered); the next page
+ * re-requests the overlap, which the client UPSERTs idempotently. When nothing
+ * saturates, every row `> since` was delivered, so advance to the global max.
+ *
+ * Inputs are ordered `by server_version asc`, so the last element is each table's
+ * frontier. Exported for direct unit testing.
+ */
+export function computePullCursor(
+  since: string,
+  conversations: Array<{ server_version: string }>,
+  messages: Array<{ server_version: string }>,
+  convSaturated: boolean,
+  msgSaturated: boolean,
+): string {
+  if (!convSaturated && !msgSaturated) {
+    return maxServerVersion(since, conversations, messages);
+  }
+  const frontiers: string[] = [];
+  if (convSaturated && conversations.length > 0) {
+    frontiers.push(conversations[conversations.length - 1]!.server_version);
+  }
+  if (msgSaturated && messages.length > 0) {
+    frontiers.push(messages[messages.length - 1]!.server_version);
+  }
+  if (frontiers.length === 0) return since;
+  return frontiers.reduce((min, v) => (bigintGreater(min, v) ? v : min), frontiers[0]!);
+}
 
 /** Max of a set of bigint-as-string server_versions (compares numerically by length then lexicographically). */
 function maxServerVersion(

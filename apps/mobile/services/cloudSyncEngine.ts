@@ -157,12 +157,11 @@ async function pull(): Promise<void> {
     const res = await api.get<PullResponse>(`${SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
     applyConversationDeltas(res.conversations ?? []);
     applyMessageDeltas(res.messages ?? []);
-    cursor = maxCursor(
-      cursor,
-      ...(res.conversations ?? []).map((c) => c.server_version),
-      ...(res.messages ?? []).map((m) => m.server_version),
-      res.cursor ?? '0',
-    );
+    // Trust the server's SAFE cursor. The two tables paginate independently and
+    // share one version sequence, so taking the max of per-row server_versions
+    // overshoots the lagging table's frontier and skips rows that fall in the gap
+    // (the server now bounds the cursor to that frontier). Only ever move forward.
+    cursor = maxCursor(cursor, res.cursor ?? '0');
     useCloudSyncStateStore.getState().setCursor(cursor);
     if (!res.hasMore) break;
   }
