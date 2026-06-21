@@ -8,6 +8,7 @@ import { ModelCard } from './ModelCard';
 import {
   getAllModels,
   getAllowedAutoModesForTier,
+  getModelEnvironmentGate,
   isModelAllowedForTier,
   normalizeSubscriptionTier,
   PROVIDER_LABELS,
@@ -172,6 +173,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   }, [filteredModels]);
 
   const handleModelSelect = (model: ModelMetadata) => {
+    // Guard: env-gated models must not be selectable even if a click slips through.
+    const { envSelectable } = getModelEnvironmentGate(model);
+    if (!envSelectable) return;
     selectModel(model.id, model.provider);
     onSelect?.(model.id, model.provider);
   };
@@ -354,18 +358,23 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         : 'space-y-2',
                     )}
                   >
-                    {models.map((model) => (
-                      <ModelCard
-                        key={model.id}
-                        model={model}
-                        selected={selectedModel === model.id}
-                        favorite={favorites.includes(model.id)}
-                        onClick={() => handleModelSelect(model)}
-                        onToggleFavorite={() => toggleFavorite(model.id)}
-                        compact={viewMode === 'list'}
-                        showBenchmarks={showBenchmarks}
-                      />
-                    ))}
+                    {models.map((model) => {
+                      const { envSelectable, reason: envReason } = getModelEnvironmentGate(model);
+                      return (
+                        <ModelCard
+                          key={model.id}
+                          model={model}
+                          selected={selectedModel === model.id}
+                          favorite={favorites.includes(model.id)}
+                          onClick={() => handleModelSelect(model)}
+                          onToggleFavorite={() => toggleFavorite(model.id)}
+                          compact={viewMode === 'list'}
+                          showBenchmarks={showBenchmarks}
+                          disabled={!envSelectable}
+                          disabledReason={envReason}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               );

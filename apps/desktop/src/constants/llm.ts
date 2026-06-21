@@ -12,6 +12,7 @@ import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from './planModels';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,
+  evaluateModelEnvironment,
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
   getManagedCloudProviderIds as getCatalogManagedCloudProviderIds,
   getManualOverrideModels as getCatalogManualOverrideModels,
@@ -26,7 +27,12 @@ import {
   modelsCatalogJson as modelsJson,
   normalizeModelId as normalizeCatalogModelId,
   providerLabels,
+  type EnvironmentAvailability,
+  type ModelEnvironment,
 } from '@agiworkforce/types';
+
+export type { EnvironmentAvailability, ModelEnvironment };
+export { evaluateModelEnvironment };
 
 // ---- Types (unchanged from original) ----
 
@@ -88,6 +94,14 @@ export interface ModelMetadata {
   released?: string;
   /** Mirrors the optional `deprecated` flag in models.json. */
   deprecated?: boolean;
+  /**
+   * GATING signal: if set, this model's agentic value depends on the named
+   * execution environment being live. Pickers must gray it out when the
+   * environment is not configured + available. Absent = no gating (every
+   * current model). Mirrors ModelMetadata.requiresEnvironment from
+   * @agiworkforce/types/model-catalog.
+   */
+  requiresEnvironment?: 'e2b' | 'local-runtime';
 }
 
 // ---- Derived data from JSON ----
@@ -267,4 +281,53 @@ export function getManualOverrideModels(
 
 export function getTierPolicy(tier: SubscriptionTier | string | null | undefined) {
   return getCatalogTierPolicy(tier);
+}
+
+// ---------------------------------------------------------------------------
+// Environment gating (Phase A — Phase B replaces environmentAvailability with
+// the real managed-compute-beta signal once the E2B client is wired in).
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the current availability of a model's required execution environment.
+ *
+ * PHASE A: returns { configured: false } for every environment, locking all
+ * env-gated models until Phase B wires the real managed-compute-beta signal.
+ * No current model sets requiresEnvironment, so this never triggers today.
+ *
+ * PHASE B: replace the body with a hook/context read that checks whether the
+ * managed-compute beta is enabled for the current user and whether E2B is
+ * currently reachable, then return { configured: true, available: <ping> }.
+ */
+export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
+  // Phase A: all environments are unconfigured — env-gated models stay locked.
+  return { configured: false };
+}
+
+/**
+ * Pure function: given a model's metadata, return whether it is selectable
+ * under the current (Phase A) environment availability, and why not if locked.
+ *
+ * Keeping this separate from tier logic means callers (pickers, tests) can
+ * consume a single, predictable seam — no gating leak is possible from a
+ * partial update.
+ *
+ * CRITICAL SAFETY: models without requiresEnvironment are always environment-OK,
+ * so no current model's appearance or selectability is altered.
+ *
+ * Returns:
+ *   envSelectable: true  → no environment gate applies (proceed to tier check)
+ *   envSelectable: false → locked; show `reason` as tooltip/badge copy
+ */
+export function getModelEnvironmentGate(model: Pick<ModelMetadata, 'requiresEnvironment'>): {
+  envSelectable: boolean;
+  reason?: string;
+} {
+  if (!model.requiresEnvironment) return { envSelectable: true };
+  const result = evaluateModelEnvironment(
+    model.requiresEnvironment,
+    environmentAvailability(model.requiresEnvironment),
+  );
+  if (result.selectable) return { envSelectable: true };
+  return { envSelectable: false, reason: result.reason };
 }
