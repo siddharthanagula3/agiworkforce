@@ -6,6 +6,10 @@ Last updated: 2026-05-23 (post R27-PARITY Phase D complete — 5 stages shipped)
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 
+## 2026-06-21 Deferred — tackle AFTER the P2 sync engine ships
+
+- [ ] **BILL-01 — Agentic credit reconciliation.** Reconcile metered agent/compute usage against the credit ledger so managed-cloud agentic runs can't under-bill or double-spend credits (a revenue-leak risk at scale). **Sequencing decision (founder, 2026-06-21):** intentionally deferred until after the P2 cross-device sync engine is built — it does NOT gate the current P2 objective, but must land before managed-cloud agentic billing is exposed at scale. Scope when picked up: per-run usage→ledger reconciliation, idempotent debit on retries/partial runs, and a drift audit between `usage_events`/metering and `token_credits`/`credit_transactions`.
+
 ## 2026-06-03 Demo-Readiness Audit Wave 1 - Read-Only Findings
 
 Scope: verified by reading implementation, not by accepting keyword counts as evidence. This wave covers the demo-critical website chat and marketing paths, CLI, desktop direct/chat tool paths, mobile v1 gates, Chrome extension bridge, and VS Code extension public setup. Code implementation is intentionally paused until the implementation plan is approved.
