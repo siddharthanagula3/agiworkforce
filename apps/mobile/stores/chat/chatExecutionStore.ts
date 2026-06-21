@@ -27,6 +27,7 @@ import {
   executionModeForConversation,
   executionModeForModel,
   providerForExecutionMode,
+  type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, MessageAttachment, ConversationSummary } from '@/types/chat';
 import { uuidv7 } from '@agiworkforce/utils';
@@ -338,6 +339,34 @@ function mirrorCloudTurn(
 }
 
 /**
+ * Build the prior-turn history the LLM sees for a conversation (P2 cross-device).
+ *
+ * For CLOUD conversations this MERGES the cloud store — which holds turns PULLED
+ * from other devices plus the locally-mirrored turns — with the local store, so a
+ * user can seamlessly continue on mobile a conversation they started on web/desktop
+ * and the model receives the full pulled history. Local conversations read only the
+ * local store. Union by id (cloud copy wins — it's the persisted/final content),
+ * ordered by createdAt.
+ */
+function historyMessagesForConversation(
+  conversationId: string,
+  executionMode: ConversationExecutionMode,
+): ChatMessage[] {
+  const local = getMsgStore().getState().messages[conversationId] ?? [];
+  if (executionMode !== 'cloud') return local;
+
+  const cloud = getCloudStore().getState().messages[conversationId] ?? [];
+  if (cloud.length === 0) return local;
+
+  const byId = new Map<string, ChatMessage>();
+  for (const m of local) byId.set(m.id, m);
+  for (const m of cloud) byId.set(m.id, m);
+  return Array.from(byId.values()).sort((a, b) =>
+    (a.createdAt ?? '').localeCompare(b.createdAt ?? ''),
+  );
+}
+
+/**
  * Dark-mode accent palette used when persisting artifacts to the store.
  * Sourced from the shared design-token package so no hex values are hardcoded.
  * The gallery re-derives the live color from useThemeColors() at render time,
@@ -549,7 +578,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       model,
     };
 
-    const existingMessages = msgStore.getState().messages[conversationId] ?? [];
+    // P2: for cloud chats, history merges in turns pulled from other devices so a
+    // conversation started on web/desktop continues seamlessly here.
+    const existingMessages = historyMessagesForConversation(conversationId, executionMode);
 
     const historyMessages: Array<{
       role: string;
