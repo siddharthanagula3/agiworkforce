@@ -1,6 +1,6 @@
 # E2B universal execution layer — design (P3)
 
-Status: Phase A shipped; live @e2b binding VERIFIED (sandbox round-trip passed 2026-06-21). Cut-over (OpenAI + no-native providers -> E2B) activates when E2B_API_KEY is set in the deployment env.
+Status: Phase A (env-gating) SHIPPED + cross-surface verified. E2B binding SCAFFOLDED + live round-trip VERIFIED (2026-06-21). **The E2B cut-over is BLOCKED — NOT a flag flip.** Adversarial review found the server-side execution loop that would run platform-executed E2B tools is UNREACHABLE in production (see §1.1). So `resolveCodeExecutionTools()` is intentionally native-always / fail-closed and ignores E2B config: setting `E2B_API_KEY` activates the dormant binding + verifier but changes ZERO request traffic → zero regression. The cut-over needs a reachable, approval-gated execution loop first (founder decision — §1.1, §6).
 Owner: this session
 Last updated: 2026-06-21
 
@@ -45,8 +45,37 @@ all thread `code_execution`) and has no managed-compute gate at this seam.
 code execution for every current user until E2B is keyed + the beta flag is set —
 a user-facing regression. **The cut-over (provider-native → E2B) is a product
 decision and is the founder's call.** This design keeps the live path intact and
-adds E2B in parallel behind a flag; the cut-over is a one-line flag flip once E2B is
-provisioned and verified.
+adds E2B in parallel; the live path is unchanged.
+
+## 1.1 The cut-over is BLOCKED on a pre-existing architectural gap (adversarial review)
+
+A find→verify adversarial review of the "flip E2B_API_KEY to cut over" plan found it is
+**not** a one-line flip — it would have shipped a broken feature. Two confirmed defects:
+
+1. **E2B tools are platform-executed, but the platform loop is UNREACHABLE in prod.**
+   An E2B tool only works if OUR agentic loop runs it (`runMcpTool` → `routeExecutionTool`).
+   That loop is entered only on the streaming `hasMcpTools` path under a **hardcoded
+   `approvalMode = 'manual'`** gate (`route.ts:85-176`) with **no resume endpoint**, and
+   only when the MCP catalog is non-empty. The default streaming and non-streaming paths
+   never run tools. So a model could emit an `execute_code` call and nothing would ever
+   execute it — the turn would stall on a tool result that never arrives.
+2. **Keying E2B would REGRESS OpenAI.** The earlier `resolveCodeExecutionTools(provider,
+e2bEnabled)` returned the E2B tool defs for `openai` when `e2bEnabled` — stripping
+   OpenAI's working provider-native `code_interpreter` and replacing it with a tool that
+   (per #1) nothing runs. Setting `E2B_API_KEY` would thus break OpenAI code execution.
+
+**Resolution applied this turn (safe-inert):** `resolveCodeExecutionTools(provider)` is now
+single-arg, native-always (anthropic/google/openai → their native interpreter) /
+fail-closed (no-native → no tool), and **ignores E2B config entirely**. This is
+byte-for-byte the pre-P3 behavior regardless of `E2B_API_KEY`. The `lib/e2b/*` binding,
+tools, runtime, and `runMcpTool` interception remain as the **verified, dormant
+foundation** for the future loop. Tests assert the no-E2B-tool-from-this-seam invariant.
+
+**To actually cut over (future work, founder-gated):** build a reachable, approval-gated
+execution loop — an auto-or-explicitly-approved tool path with a resume endpoint that runs
+platform-executed tools on the default chat path — THEN switch `resolveCodeExecutionTools`
+to emit E2B tool defs for the E2B-tier providers. Until that loop exists, flipping any
+flag must NOT change `resolveCodeExecutionTools` output.
 
 ## 2. Why platform-executed, not provider-executed (the model)
 
@@ -163,19 +192,22 @@ env-gated model ships. The durable fix is SERVER-SIDE: enforce `requiresEnvironm
 * **VS Code**: flat `MODEL_PICKER_OPTIONS` (sidebar), `normalizeConfiguredModelId()`
   (settings.json), and `auto-*` resolved ids are not re-gated at send time.
 
-## 8. Cost-optimized routing update (2026 billing, founder spec)
+## 8. Cost-optimized routing target (2026 billing, founder spec) — the INTENDED cut-over
 
-The cut-over is NOT a blunt "universal E2B for everything." Per the founder's 2026
-billing analysis, `resolveCodeExecutionTools(provider, e2bEnabled)` routes by provider:
+This is the DESTINATION once the §1.1 execution loop is built, **not** today's behavior.
+The intended cut-over is NOT a blunt "universal E2B for everything." Per the founder's
+2026 billing analysis, the post-cut-over router routes by provider:
 
 - **Free native tier** — Anthropic + Gemini ALWAYS use their own native code-execution
   sandboxes (free compute), regardless of E2B.
 - **E2B credit tier** — OpenAI (to avoid its per-session interpreter fees) + DeepSeek /
-  Kimi / GLM / MiniMax (no native sandbox) route to E2B when it is configured.
-- **Risk mitigation (E2B off, today's default)** — OpenAI keeps its native interpreter
-  (don't break a working path); no-native providers fail-closed until E2B is keyed.
+  Kimi / GLM / MiniMax (no native sandbox) route to E2B.
 
-The code encodes only the routing POLICY; the specific billing figures (the Anthropic
-free-tier hours, OpenAI session fees) are the founder's and are a one-line change if the
-billing reality shifts. (These 2026 provider-billing specifics are beyond verification
-from the repo / model knowledge cutoff.)
+The billing figures (Anthropic free-tier hours, OpenAI session fees) are the founder's and
+are a one-line change if the billing reality shifts. (These 2026 provider-billing specifics
+are beyond verification from the repo / model knowledge cutoff.)
+
+**TODAY (shipped), `resolveCodeExecutionTools(provider)` is single-arg and native-always /
+fail-closed** — it does NOT implement the E2B-credit tier above, because (per §1.1) there
+is no reachable loop to run E2B tools yet. anthropic/google/openai → native interpreter;
+everything else → no tool. Wiring in the E2B-credit tier is gated on the §1.1 loop landing.

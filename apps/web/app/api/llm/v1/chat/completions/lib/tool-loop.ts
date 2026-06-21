@@ -323,11 +323,17 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
 async function runMcpTool(
   toolCall: PendingToolCall,
 ): Promise<{ content: string; isError: boolean }> {
-  // Universal E2B execution: a code/file/folder execution tool call runs in the E2B
-  // sandbox, never as a generic MCP tool. These tools are only offered when E2B is
-  // configured (request-processor's conditional router), so this branch is dormant in
-  // the default deployment. FAIL-CLOSED: an unavailable executor returns an explicit
-  // error to the model (getE2BExecutor() is null until the Phase B SDK binding lands).
+  // E2B execution interception: if a code/file/folder execution tool is ever invoked, it
+  // runs in the E2B sandbox (gated, fail-closed), never as a generic MCP tool.
+  //
+  // DORMANT TODAY — this branch does not execute in production for two reasons: (1)
+  // `resolveCodeExecutionTools()` is native-always and never emits these tool NAMES, so a
+  // model can't call one; (2) this `runMcpTool` path is itself reachable only under the
+  // route's manual-approval MCP gate (no auto-run, no resume endpoint). It's wired up as
+  // the verified foundation for the future reachable, approval-gated execution loop. The
+  // @e2b binding itself IS live (verified round-trip); `getE2BExecutor()` returns null
+  // only when E2B is unconfigured. FAIL-CLOSED: a null/erroring executor surfaces an
+  // explicit error to the model — never a silent no-op, never a provider-native fallback.
   if (isExecutionTool(toolCall.qualifiedName)) {
     const executor = await getE2BExecutor();
     try {
