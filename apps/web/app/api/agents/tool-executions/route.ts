@@ -12,7 +12,7 @@
  */
 
 import 'server-only';
-import { assertNonInternalHostname } from '@/lib/egress-policy';
+import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -120,7 +120,11 @@ async function handleExecuteTool(request: NextRequest) {
         if (parsedWebhook.protocol !== 'http:' && parsedWebhook.protocol !== 'https:') {
           throw new Error('webhookUrl must use http or https');
         }
-        assertNonInternalHostname(webhookUrl);
+        // DNS-resolving SSRF guard (not lexical-only): blocks hostnames whose
+        // A/AAAA records resolve to internal/link-local/private ranges (e.g. the
+        // cloud metadata endpoint 169.254.169.254), defeating DNS-rebinding. Same
+        // guard the MCP route uses for this class of sink.
+        await assertResolvedPublicHostname(webhookUrl);
         const method = (config['method'] ?? 'POST').toUpperCase();
         if (!WEBHOOK_METHODS.has(method)) {
           throw new Error('webhook method must be POST, PUT, or PATCH');

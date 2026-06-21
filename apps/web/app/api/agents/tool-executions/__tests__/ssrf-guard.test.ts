@@ -37,6 +37,28 @@ vi.mock('@/lib/server/neon-db', () => ({
     query: (...args: unknown[]) => mockNeonQuery(...args),
   })),
 }));
+// The route now uses the DNS-resolving guard assertResolvedPublicHostname. Mock it
+// here (the route test asserts the route RESPECTS the guard; the guard's own DNS
+// logic is covered end-to-end by lib/egress-policy.test.ts). The double mirrors the
+// real reject set so the blocking tests keep their meaning: internal/loopback/
+// link-local/private hosts throw; public hosts resolve.
+vi.mock('@/lib/egress-policy', () => {
+  class EgressPolicyError extends Error {}
+  return {
+    EgressPolicyError,
+    assertResolvedPublicHostname: vi.fn(async (urlString: string) => {
+      const host = new URL(urlString).hostname.toLowerCase();
+      const internal =
+        host === 'localhost' ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^169\.254\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+      if (internal) throw new EgressPolicyError(urlString);
+    }),
+  };
+});
 
 // Stub global fetch at module level so it is intercepted on first import.
 // (vi.mockReset: true clears the implementation between tests; we restore it
