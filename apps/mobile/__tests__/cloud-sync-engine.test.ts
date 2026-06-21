@@ -108,7 +108,17 @@ beforeEach(() => {
   useChatCloudMessageStore.getState().clearCloudData();
   useChatAppModeStore.getState().setAppMode('cloud');
   mockGet.mockResolvedValue(emptyPull() as never);
-  mockPost.mockResolvedValue({ applied: { conversations: [], messages: [] }, cursor: '0' } as never);
+  // Default: the server ACKS exactly what was posted (a healthy round trip).
+  mockPost.mockImplementation((async (
+    _path: string,
+    body: { conversations?: Array<{ id: string }>; messages?: Array<{ id: string }> },
+  ) => ({
+    applied: {
+      conversations: (body?.conversations ?? []).map((c) => ({ id: c.id, server_version: '1' })),
+      messages: (body?.messages ?? []).map((m) => ({ id: m.id, server_version: '1' })),
+    },
+    cursor: '1',
+  })) as never);
 });
 
 describe('isManagedSyncEnabled', () => {
@@ -203,7 +213,10 @@ describe('syncNow — push', () => {
     await syncNow();
 
     expect(mockPost).toHaveBeenCalledTimes(1);
-    const [path, body] = mockPost.mock.calls[0] as [string, { conversations: unknown[]; messages: unknown[] }];
+    const [path, body] = mockPost.mock.calls[0] as [
+      string,
+      { conversations: unknown[]; messages: unknown[] },
+    ];
     expect(path).toBe('/api/chat/sync');
     expect(body.conversations).toHaveLength(1);
     expect(body.conversations[0]).toMatchObject({ id: 'c1', title: 'Chat c1', model: 'gpt-5.4' });
@@ -250,6 +263,23 @@ describe('syncNow — push', () => {
     await syncNow();
 
     expect(order).toEqual(['push', 'pull']);
+  });
+
+  it('keeps an un-acked message dirty (parent not on server yet) instead of dropping it', async () => {
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', { id: 'm1', role: 'user', content: 'orphan' });
+    markMessageForSync('c1', 'm1'); // conversation intentionally NOT marked dirty
+    // Server rejects the message (parent missing → EXISTS fails): applied.messages empty.
+    mockPost.mockImplementationOnce(
+      (async () => ({ applied: { conversations: [], messages: [] }, cursor: '0' })) as never,
+    );
+
+    await syncNow();
+
+    // The ref survives so a later push retries it once the conversation lands — no silent loss.
+    expect(useCloudSyncStateStore.getState().dirtyMessages).toEqual([
+      { conversationId: 'c1', messageId: 'm1' },
+    ]);
   });
 });
 
