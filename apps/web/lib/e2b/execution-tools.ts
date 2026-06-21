@@ -84,21 +84,25 @@ export function e2bExecutionToolDefs(): Array<{
 const NATIVE_CODE_EXECUTION_PROVIDERS = new Set(['anthropic', 'google', 'openai']);
 
 /**
- * Conditional code-execution router (the founder's hybrid cut-over). Returns the tools
+ * Cost-optimized code-execution router (founder spec, 2026 billing). Returns the tools
  * to attach when `code_execution` is requested:
- *  - E2B configured  → the UNIVERSAL E2B execution tools, for EVERY model/provider.
- *  - E2B not configured → graceful fallback to PROVIDER-NATIVE execution, ONLY for the
- *    providers that support it (today's exact behavior, byte-for-byte).
- *  - E2B not configured + provider has no native execution (deepseek/kimi/glm/minimax/…)
- *    → FAIL-CLOSED: no execution tool (the model cannot run code until E2B is keyed).
  *
- * Pure + exhaustively unit-tested so the live cut-over decision can't silently regress.
+ *  - FREE NATIVE TIER — Anthropic + Gemini ALWAYS use their own native code-execution
+ *    sandboxes (generous free compute), regardless of E2B.
+ *  - E2B CREDIT TIER — everyone else routes to OUR E2B sandbox WHEN it is configured:
+ *    OpenAI (to avoid its per-session interpreter fees) and DeepSeek/Kimi/GLM/MiniMax
+ *    (which have no native sandbox).
+ *  - RISK MITIGATION when E2B is NOT configured (today's default, no key): never break a
+ *    currently-working path — OpenAI keeps its native interpreter; providers with no
+ *    native sandbox fail-closed (no tool) until E2B is keyed.
+ *
+ * NOTE: the 2026 per-provider billing rationale (Anthropic free-tier hours, OpenAI
+ * session fees) is the founder's; the code encodes only the routing policy, which is a
+ * one-line change if the billing reality shifts. Pure + exhaustively unit-tested.
  */
 export function resolveCodeExecutionTools(provider: string, e2bEnabled: boolean): unknown[] {
-  if (e2bEnabled) {
-    return e2bExecutionToolDefs();
-  }
   const p = provider.toLowerCase();
+  // Free native tiers: Anthropic + Gemini, always native.
   if (p === 'anthropic') {
     return [
       { type: 'code_execution_20260120', name: 'code_execution', allowed_callers: ['direct'] },
@@ -107,6 +111,11 @@ export function resolveCodeExecutionTools(provider: string, e2bEnabled: boolean)
   if (p === 'google') {
     return [{ code_execution: {} }];
   }
+  // E2B credit tier: OpenAI + the no-native providers route to E2B when configured.
+  if (e2bEnabled) {
+    return e2bExecutionToolDefs();
+  }
+  // E2B off: don't break OpenAI (keep its native interpreter); others fail-closed.
   if (p === 'openai') {
     return [{ type: 'code_interpreter' }];
   }
@@ -114,9 +123,10 @@ export function resolveCodeExecutionTools(provider: string, e2bEnabled: boolean)
 }
 
 /**
- * Whether a model can run code at all, given the deployment's E2B state: true if E2B is
- * configured (universal) OR the provider has native execution. Surfaces let the UI gray
- * out the code-execution affordance for models that can't (non-native, no E2B).
+ * Whether a model can run code at all, given the deployment's E2B state: true if the
+ * provider has native execution (anthropic/google/openai) OR E2B is configured. Surfaces
+ * use this to gray out the code-execution affordance for models that can't (a no-native
+ * provider with E2B off).
  */
 export function modelSupportsCodeExecution(provider: string, e2bEnabled: boolean): boolean {
   return e2bEnabled || NATIVE_CODE_EXECUTION_PROVIDERS.has(provider.toLowerCase());
