@@ -64,8 +64,27 @@ do NOT represent E2B-tier execution as working.
 ## Verification status
 
 - Slice 1: web typecheck clean; artifacts + artifacts-store tests 7/7; card branch
-  byte-identical (gallery unaffected). **Browser visual QA of the panel = PENDING** (no dev
-  server booted in this env). This is the one open verification item for web parity.
+  byte-identical (gallery unaffected).
+- **Browser visual QA = DONE** (Playwright against the live dev server on :3000, via a
+  throwaway `/artifact-qa` harness mounting the real `panel` variant — harness since
+  deleted). Confirmed for both an HTML artifact (Eye/Code toggle + live preview iframe,
+  full-height fill) and a Markdown document (`· MD` label, no toggle, source view): the
+  single reference toolbar renders, conditional buttons gate correctly (Refresh/Open only
+  when previewable), and the `flex-1 min-h-0` height chain fills with no collapse. Matches
+  refs 388/393.
+
+## Found during QA (NOT Slice 1 regressions — tracked for follow-up)
+
+1. **Pre-existing SSR sanitizer quirk.** `buildSandboxSrcDoc` (html-sanitizer) throws
+   `DOMPurify.addHook is not a function` when an HTML artifact is server-rendered (DOMPurify
+   has no DOM under SSR). It **self-recovers to client rendering** and is harmless on real
+   `/chat` (artifacts only ever render client-side, post-stream). Unchanged by Slice 1 (same
+   in the card variant). Fix = make the sanitizer SSR-safe (guard `addHook`); it touches
+   security code, so flag for a dedicated change, not folded into parity work.
+2. **Polish: rendered document preview in panel.** A plain `document`/`md` artifact shows
+   raw markdown source (no preview toggle), whereas ref 393 shows RENDERED markdown. Adding
+   a markdown/document renderer to the panel preview is a Slice-2 polish item (keep derived;
+   render-only, no edit).
 
 ## Blast-radius guardrails (web)
 
