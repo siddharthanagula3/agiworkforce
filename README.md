@@ -2,7 +2,6 @@
 
 > **All the AIs you already pay for, in one place. Beyond one model. Beyond one surface.**
 
-[![CI](https://github.com/siddharthanagula3/agiworkforce/actions/workflows/ci.yml/badge.svg)](https://github.com/siddharthanagula3/agiworkforce/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 
 AGI Workforce is a multi-surface AI workspace that unifies 20+ LLM providers — including local models — into a single application spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome Extension**, and **VS Code Extension**. Each surface enforces its own trust boundary: Local mode keeps data on-device, BYOK (Bring Your Own Key) lets users route to their own provider accounts, and a managed cloud mode (currently waitlisted) adds hosted inference.
