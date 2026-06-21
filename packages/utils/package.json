@@ -9,6 +9,7 @@
     "./format": "./src/format.ts",
     "./privacy-handoff": "./src/privacyHandoff.ts",
     "./signaling": "./src/signaling.ts",
+    "./uuidv7": "./src/uuidv7.ts",
     "./voice": "./src/voice.ts"
   },
   "main": "./src/index.ts",
