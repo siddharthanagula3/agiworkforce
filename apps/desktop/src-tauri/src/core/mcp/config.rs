@@ -101,8 +101,65 @@ const OAUTH_PLACEHOLDER_PREFIX: &str = "<from_oauth:";
 const API_KEY_PLACEHOLDER_PREFIX: &str = "<from_api_key:";
 /// Legacy credential manager placeholder
 const CREDENTIAL_PLACEHOLDER: &str = "<from_credential_manager>";
+/// Marker prefix for an HTTP transport credential that is encrypted AT REST in the
+/// config file (e.g. "<enc:BASE64_CIPHERTEXT>"). Distinguishes encrypted values from
+/// plaintext and from the resolve-on-load placeholders above.
+const ENCRYPTED_AT_REST_PREFIX: &str = "<enc:";
 /// Environment variable used to resolve project-scoped MCP config.
 pub const PROJECT_FOLDER_ENV_VAR: &str = "AGIWORKFORCE_PROJECT_FOLDER";
+
+/// Returns the encrypted-at-rest form of a raw credential value, or `None` if the
+/// value is empty, already encrypted, or a resolve-on-load placeholder (`<from_…>`).
+fn maybe_encrypt_at_rest(value: &str) -> Option<String> {
+    if value.is_empty() || value.starts_with(ENCRYPTED_AT_REST_PREFIX) || value.starts_with("<from_")
+    {
+        return None;
+    }
+    encrypt_mcp_credential(value).map(|ct| format!("{ENCRYPTED_AT_REST_PREFIX}{ct}>"))
+}
+
+/// Returns the decrypted plaintext for an `<enc:…>` value, or `None` if the value is
+/// not encrypted-at-rest (plaintext or a `<from_…>` placeholder are left untouched).
+fn maybe_decrypt_at_rest(value: &str) -> Option<String> {
+    let inner = value.strip_prefix(ENCRYPTED_AT_REST_PREFIX)?.strip_suffix('>')?;
+    decrypt_mcp_credential(inner).ok()
+}
+
+fn map_http_transport_credentials<F: Fn(&str) -> Option<String>>(
+    config: &mut McpServersConfig,
+    transform: F,
+) {
+    use crate::core::mcp::transport::TransportConfig;
+    // Compute the replacement BEFORE assigning so the read-borrow is released first.
+    let apply = |field: &mut Option<String>| {
+        let next = field.as_deref().and_then(&transform);
+        if let Some(next) = next {
+            *field = Some(next);
+        }
+    };
+    for server in config.mcp_servers.values_mut() {
+        if let Some(TransportConfig::Http(http)) = server.transport.as_mut() {
+            apply(&mut http.api_key);
+            apply(&mut http.bearer_token);
+            for value in http.headers.values_mut() {
+                let next = transform(value);
+                if let Some(next) = next {
+                    *value = next;
+                }
+            }
+        }
+    }
+}
+
+/// Encrypt raw HTTP transport credentials in place (for writing to disk).
+fn encrypt_transport_credentials(config: &mut McpServersConfig) {
+    map_http_transport_credentials(config, maybe_encrypt_at_rest);
+}
+
+/// Decrypt at-rest-encrypted HTTP transport credentials in place (after loading).
+fn decrypt_transport_credentials(config: &mut McpServersConfig) {
+    map_http_transport_credentials(config, maybe_decrypt_at_rest);
+}
 /// Project-level MCP config filename (compatible with Cursor/Claude workflows).
 pub const PROJECT_MCP_CONFIG_FILENAME: &str = ".mcp.json";
 /// Alternate project-level MCP config filename (used by Cursor/VS Code).
@@ -204,7 +261,9 @@ impl McpServersConfig {
 
     pub async fn from_file(path: &PathBuf) -> crate::core::mcp::McpResult<Self> {
         let contents = tokio::fs::read_to_string(path).await?;
-        let config: Self = serde_json::from_str(&contents)?;
+        let mut config: Self = serde_json::from_str(&contents)?;
+        // Decrypt any at-rest-encrypted HTTP transport credentials (<enc:…>).
+        decrypt_transport_credentials(&mut config);
         Ok(config)
     }
 
@@ -214,7 +273,13 @@ impl McpServersConfig {
     }
 
     pub async fn save_to_file(&self, path: &PathBuf) -> crate::core::mcp::McpResult<()> {
-        let json = serde_json::to_string_pretty(self)?;
+        // SECURITY: never write raw HTTP transport credentials (api_key / bearer_token
+        // / header values) to disk in plaintext. Encrypt them at rest (<enc:…>) on a
+        // clone before serializing; from_file decrypts them back on load. Placeholders
+        // (<from_…>) are left untouched for the inject_credentials flow.
+        let mut to_save = self.clone();
+        encrypt_transport_credentials(&mut to_save);
+        let json = serde_json::to_string_pretty(&to_save)?;
         let parent = path
             .parent()
             .ok_or_else(|| std::io::Error::other("Invalid config path"))?;
@@ -1452,6 +1517,29 @@ pub fn install_bundle(bundle: &McpBundle, config: &mut McpServersConfig) -> McpR
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transport_credential_at_rest_roundtrip() {
+        let secret = "sk-super-secret-bearer-token";
+        let encrypted = maybe_encrypt_at_rest(secret).expect("raw value should encrypt");
+        assert!(encrypted.starts_with(ENCRYPTED_AT_REST_PREFIX));
+        assert!(
+            !encrypted.contains(secret),
+            "encrypted-at-rest value must not contain the plaintext secret"
+        );
+        assert_eq!(
+            maybe_decrypt_at_rest(&encrypted).expect("should decrypt"),
+            secret
+        );
+
+        // Placeholders / already-encrypted / empty are NOT re-encrypted.
+        assert!(maybe_encrypt_at_rest("<from_api_key:vercel>").is_none());
+        assert!(maybe_encrypt_at_rest(&encrypted).is_none());
+        assert!(maybe_encrypt_at_rest("").is_none());
+        // Plaintext / placeholders are NOT treated as encrypted on load.
+        assert!(maybe_decrypt_at_rest("plaintext-token").is_none());
+        assert!(maybe_decrypt_at_rest("<from_api_key:vercel>").is_none());
+    }
 
     #[test]
     #[ignore]

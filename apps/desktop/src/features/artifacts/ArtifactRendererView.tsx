@@ -345,7 +345,16 @@ function WebRenderer({ data }: { data: WebRenderData }) {
 
     const isFullDoc = /<html[\s>]/i.test(data.html);
     if (isFullDoc) {
-      return data.html.replace(/<head([^>]*)>/i, `<head$1>\n${cspMeta}`);
+      const headOpen = /<head([^>]*)>/i;
+      if (headOpen.test(data.html)) {
+        return data.html.replace(headOpen, `<head$1>\n${cspMeta}`);
+      }
+      // Full document with NO <head>: synthesize one so the CSP is actually applied
+      // (the .replace above would otherwise no-op, leaving the doc with NO CSP).
+      const headBlock = `<head>\n${cspMeta}\n</head>`;
+      return /<html[^>]*>/i.test(data.html)
+        ? data.html.replace(/(<html[^>]*>)/i, `$1\n${headBlock}`)
+        : `${headBlock}\n${data.html}`;
     }
 
     return `<!DOCTYPE html>

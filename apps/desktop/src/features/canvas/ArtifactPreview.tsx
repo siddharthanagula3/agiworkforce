@@ -58,9 +58,11 @@ function renderMarkdown(md: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sandboxed iframe sandbox attribute (no allow-same-origin per security rules)
+// Sandboxed iframe sandbox attribute (no allow-same-origin per security rules).
+// No allow-popups: a popup can navigate to an external URL and exfiltrate data,
+// defeating the CSP connect-src 'none' egress control.
 // ---------------------------------------------------------------------------
-const IFRAME_SANDBOX = 'allow-scripts allow-popups';
+const IFRAME_SANDBOX = 'allow-scripts';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -86,6 +88,7 @@ export function ArtifactPreview({ artifact, onFixBug, className }: ArtifactPrevi
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none'; object-src 'none';">
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; padding: 16px; font-family: system-ui, sans-serif; }
