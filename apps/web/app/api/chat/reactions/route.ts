@@ -94,16 +94,22 @@ async function handleGet(request: NextRequest) {
     throw createError.validation('1-100 message IDs required');
   }
 
+  // IDOR guard: only return reactions for messages in conversations the caller
+  // OWNS. Without the join to web_conversations, any user could read reaction
+  // counts and reactor user IDs for arbitrary message IDs they don't own.
   const rows = await db.query<AggregatedRow>(
     `select
-       message_id,
-       emoji,
+       mr.message_id,
+       mr.emoji,
        count(*)::int as reaction_count,
-       array_agg(user_id) as user_ids,
-       bool_or(user_id = $1) as user_reacted
-     from message_reactions
-     where message_id = any($2::uuid[])
-     group by message_id, emoji
+       array_agg(mr.user_id) as user_ids,
+       bool_or(mr.user_id = $1) as user_reacted
+     from message_reactions mr
+     join web_messages wm on wm.id = mr.message_id
+     join web_conversations wc on wc.id = wm.conversation_id
+     where mr.message_id = any($2::uuid[])
+       and wc.user_id = $1
+     group by mr.message_id, mr.emoji
      order by reaction_count desc`,
     [userId, messageIds],
   );

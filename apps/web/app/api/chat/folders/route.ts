@@ -112,9 +112,14 @@ async function handlePut(request: NextRequest) {
     if (!parsed.success) throw createError.validation('Invalid request body');
 
     const { sessionId, folderId } = parsed.data;
-    await db.query<{ move_session_to_folder: null }>('select move_session_to_folder($1, $2)', [
+    // move_session_to_folder(p_session_id, p_folder_id, p_user_id) — the third
+    // arg is required: it both satisfies the function signature (a 2-arg call
+    // errors at runtime) and enforces the `and user_id = p_user_id` ownership
+    // scoping so a caller cannot move another user's session.
+    await db.query<{ move_session_to_folder: null }>('select move_session_to_folder($1, $2, $3)', [
       sessionId,
       folderId,
+      userId,
     ]);
     return NextResponse.json({ moved: true });
   }

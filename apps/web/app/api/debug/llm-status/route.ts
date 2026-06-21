@@ -5,8 +5,7 @@ import { getOptionalEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { requireAdmin } from '@/lib/auth-guards';
 
 /**
  * Debug endpoint to check LLM provider configuration
@@ -17,32 +16,13 @@ import { getNeonDb } from '@/lib/server/neon-db';
 async function handleGetLlmStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
-  // Only allow in development or with admin auth
+  // Only allow in development or for canonical PLATFORM admins. The previous
+  // check accepted any 'owner'/'admin' of any organization_members row, so a user
+  // who created their own org (and is its owner) could read platform LLM provider
+  // configuration. requireAdmin gates on the platform role (Clerk metadata).
   const isDev = process.env.NODE_ENV === 'development';
-
   if (!isDev) {
-    // In production, require admin authentication via organization membership.
-    let userId: string;
-    try {
-      const auth = await getClerkAuthUser(request);
-      userId = auth.userId;
-    } catch {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Verify admin via organization_members table (owner or admin role only)
-    try {
-      const db = getNeonDb();
-      const rows = await db.query<{ role: string }>(
-        'SELECT role FROM organization_members WHERE user_id = $1 AND role IN ($2, $3) LIMIT 1',
-        [userId, 'owner', 'admin'],
-      );
-      if (rows.length === 0) {
-        return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-      }
-    } catch {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    await requireAdmin(request);
   }
 
   // Provider configuration check

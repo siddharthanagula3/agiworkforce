@@ -49,7 +49,9 @@ const TEAM_PLAN_IDS = ['pro', 'max'] as const;
  * from Pro/Max, so a single Hobby-derived badge overstated Pro/Max savings.
  */
 function annualSavingsPct(plan: { monthlyPriceUsd: number; yearlyPriceUsd: number }): number {
-  if (plan.monthlyPriceUsd <= 0) return 0;
+  // A plan with no annual price (yearlyPriceUsd <= 0, e.g. Max is monthly-only)
+  // is NOT offered annually — return 0 so it never renders a bogus "save 100%".
+  if (plan.monthlyPriceUsd <= 0 || plan.yearlyPriceUsd <= 0) return 0;
   return Math.round((1 - plan.yearlyPriceUsd / 12 / plan.monthlyPriceUsd) * 100);
 }
 
@@ -277,10 +279,17 @@ export default function PricingPage() {
               {TEAM_PLAN_IDS.map((planId, i) => {
                 const plan = BILLING_PLAN_PRICING[planId];
                 const planSavingsPct = annualSavingsPct(plan);
-                const displayPrice = annual
-                  ? `$${(plan.yearlyPriceUsd / 12).toFixed(2)}`
-                  : `$${plan.monthlyPriceUsd.toFixed(2)}`;
-                const sub = annual ? t('perMonthBilledAnnually') : t('perMonthBilledMonthly');
+                // Plans with no annual price fall back to their monthly price even
+                // when Annual is toggled, instead of rendering "$0.00 / save 100%".
+                const annualOffered = plan.yearlyPriceUsd > 0;
+                const displayPrice =
+                  annual && annualOffered
+                    ? `$${(plan.yearlyPriceUsd / 12).toFixed(2)}`
+                    : `$${plan.monthlyPriceUsd.toFixed(2)}`;
+                const sub =
+                  annual && annualOffered
+                    ? t('perMonthBilledAnnually')
+                    : t('perMonthBilledMonthly');
 
                 return (
                   <Reveal as="article" key={planId} delay={i * 60} className="agi-tier">
