@@ -43,6 +43,8 @@ import {
   toOpenAiToolDef,
   type WebMcpToolDef,
 } from '@/lib/mcp-tool-executor';
+import { isExecutionTool, routeExecutionTool } from '@/lib/e2b/execution-tools';
+import { getE2BExecutor } from '@/lib/e2b/runtime';
 import type { ProcessedRequest } from './request-processor';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -321,6 +323,23 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
 async function runMcpTool(
   toolCall: PendingToolCall,
 ): Promise<{ content: string; isError: boolean }> {
+  // Universal E2B execution: a code/file/folder execution tool call runs in the E2B
+  // sandbox, never as a generic MCP tool. These tools are only offered when E2B is
+  // configured (request-processor's conditional router), so this branch is dormant in
+  // the default deployment. FAIL-CLOSED: an unavailable executor returns an explicit
+  // error to the model (getE2BExecutor() is null until the Phase B SDK binding lands).
+  if (isExecutionTool(toolCall.qualifiedName)) {
+    const result = await routeExecutionTool(
+      getE2BExecutor(),
+      toolCall.qualifiedName,
+      toolCall.args,
+    );
+    return {
+      content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
+      isError: !result.ok,
+    };
+  }
+
   const parsed = parseQualifiedToolName(toolCall.qualifiedName);
   if (!parsed) {
     return {
