@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 66;
+const CURRENT_VERSION: i32 = 67;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -190,6 +190,8 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         // Artifacts persistence (added in v60)
         "artifacts",
         "artifact_versions",
+        // Cloud sync state (added in v67)
+        "cloud_sync_state",
     ])
 });
 
@@ -599,6 +601,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 66 {
         run_migration_in_transaction(conn, 66, apply_migration_v66)?;
+    }
+
+    if current_version < 67 {
+        run_migration_in_transaction(conn, 67, apply_migration_v67)?;
     }
 
     Ok(())
@@ -5421,6 +5427,100 @@ fn apply_migration_v66(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_conversations_app_mode \
          ON conversations(app_mode)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migration v67: Cloud sync identity + bookkeeping columns.
+///
+/// Additive only — local INTEGER PKs and the INTEGER conversation_id FK are
+/// untouched. Only the WIRE protocol uses cloud_id. SQLite cannot add a UNIQUE
+/// constraint via ALTER TABLE ADD COLUMN, so uniqueness is enforced via a
+/// partial unique index on non-NULL cloud_ids.
+///
+/// Safety: if `conversations` or `messages` do not yet exist (can happen when
+/// this migration runs in a partial test schema seeded from an earlier version),
+/// the column additions are skipped — the tables will be created with these
+/// columns by their own earlier migrations (v1) in a real upgrade.
+fn apply_migration_v67(conn: &Connection) -> Result<()> {
+    // Helper: returns true if the given table exists in the schema.
+    let table_exists = |table: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            > 0
+    };
+
+    // Cloud sync columns on both tables.
+    for table in ["conversations", "messages"] {
+        if !table_exists(table) {
+            tracing::debug!(
+                table = table,
+                "v67: skipping cloud sync columns — table does not exist yet"
+            );
+            continue;
+        }
+        ensure_column(conn, table, "cloud_id", "cloud_id TEXT")?; // UUIDv7, NULL until synced
+        ensure_column(conn, table, "server_version", "server_version TEXT")?; // bigint-string cursor
+        ensure_column(conn, table, "created_at_utc", "created_at_utc TEXT")?; // UTC ISO-8601
+        ensure_column(conn, table, "deleted_at_utc", "deleted_at_utc TEXT")?; // tombstone
+        ensure_column(
+            conn,
+            table,
+            "needs_push",
+            "needs_push INTEGER NOT NULL DEFAULT 0",
+        )?;
+    }
+    // messages also needs the cloud parent id so a pulled message can be FK-mapped
+    // even before its parent conversation's local row is known.
+    if table_exists("messages") {
+        ensure_column(
+            conn,
+            "messages",
+            "conversation_cloud_id",
+            "conversation_cloud_id TEXT",
+        )?;
+    }
+
+    // Partial UNIQUE indexes: uniqueness only on non-null cloud_ids.
+    if table_exists("conversations") {
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_cloud_id \
+             ON conversations(cloud_id) WHERE cloud_id IS NOT NULL",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_conversations_needs_push \
+             ON conversations(needs_push) WHERE needs_push = 1",
+            [],
+        )?;
+    }
+    if table_exists("messages") {
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_cloud_id \
+             ON messages(cloud_id) WHERE cloud_id IS NOT NULL",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_needs_push \
+             ON messages(needs_push) WHERE needs_push = 1",
+            [],
+        )?;
+    }
+
+    // Per-user sync cursor (server_version high-water mark). Own table so it
+    // survives cold start independent of settings churn.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cloud_sync_state ( \
+            user_id TEXT PRIMARY KEY, \
+            cursor TEXT NOT NULL DEFAULT '0', \
+            last_sync_at TEXT \
+        )",
         [],
     )?;
 
