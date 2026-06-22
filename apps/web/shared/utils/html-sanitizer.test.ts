@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import DOMPurify from 'dompurify';
 import {
   sanitizeHTML,
   sanitizeArtifact,
@@ -674,5 +675,40 @@ describe('buildSandboxSrcDoc — SCRIPT EXECUTION (side-effect verification)', (
     btn?.click();
     btn?.click();
     expect(dom.window.document.getElementById('count')?.textContent).toBe('2');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SSR safety — regression for "DOMPurify.addHook is not a function".
+// DOMPurify v3 needs a real DOM; during Next.js server rendering there is none,
+// so its hooks API is missing and buildSandboxSrcDoc used to THROW at render time
+// (surfaced as a "1 Issue" overlay; self-recovered to client rendering). The
+// sandbox iframe only renders meaningfully client-side, so on the server the
+// sanitizer must degrade to a blank body instead of crashing. (Found via manual QA.)
+// ---------------------------------------------------------------------------
+
+describe('buildSandboxSrcDoc — SSR safety (DOMPurify hooks API unavailable)', () => {
+  it('does not throw and returns a string when DOMPurify.addHook is missing', () => {
+    const originalAddHook = DOMPurify.addHook;
+    try {
+      // Reproduce the server environment where DOMPurify cannot run.
+      (DOMPurify as unknown as { addHook?: unknown }).addHook = undefined;
+      const doc = '<!DOCTYPE html><html><body><h1>hi</h1><script>alert(1)</script></body></html>';
+      expect(() => buildSandboxSrcDoc(doc)).not.toThrow();
+      const out = buildSandboxSrcDoc(doc);
+      expect(typeof out).toBe('string');
+      // Degraded fallback must not leak the unsanitized script into the srcDoc.
+      expect(out).not.toContain('alert(1)');
+    } finally {
+      DOMPurify.addHook = originalAddHook;
+    }
+  });
+
+  it('still sanitizes normally once the DOM (hooks API) is available', () => {
+    // Sanity check that restoring the API returns to the working client path:
+    // scripts are PRESERVED for the null-origin sandbox iframe (by design).
+    const out = buildSandboxSrcDoc('<body><button id="b">x</button><script>1</script></body>');
+    expect(typeof out).toBe('string');
+    expect(out.toLowerCase()).toContain('<script');
   });
 });

@@ -452,6 +452,14 @@ const SANDBOX_ADD_ATTR = [
  *                  will be injected into a wrapper template).
  */
 function runSandboxDOMPurify(html: string, wholeDoc: boolean): string {
+  // SSR guard: DOMPurify v3 needs a real DOM (window). During server rendering there is
+  // none, so `DOMPurify.addHook`/`sanitize` are unavailable and throw
+  // ("addHook is not a function"). The sandboxed artifact iframe is only meaningfully
+  // rendered CLIENT-side (and re-renders there), so on the server we return a blank instead
+  // of crashing SSR — the client produces the real sanitized srcDoc. (Found via manual QA.)
+  if (typeof window === 'undefined' || typeof DOMPurify.addHook !== 'function') {
+    return '';
+  }
   // Hook 1 (uponSanitizeAttribute): allow on* event handlers through.
   //
   // DOMPurify blocks all on* attributes by default regardless of ADD_ATTR /
