@@ -175,13 +175,18 @@ describe('cloud send → sync write-through', () => {
     await syncNow();
 
     expect(mockPost).toHaveBeenCalled();
-    const lastCall = mockPost.mock.calls[mockPost.mock.calls.length - 1] as [
-      string,
-      { conversations: Array<{ id: string }>; messages: Array<{ id: string; role: string }> },
-    ];
-    expect(lastCall[0]).toBe('/api/chat/sync');
-    expect(lastCall[1].conversations.map((c) => c.id)).toContain(CONV_ID);
-    expect(lastCall[1].messages.map((m) => m.role).sort()).toEqual(['assistant', 'user']);
+    // Filter specifically for the chat sync call — settings sync now also POSTs
+    // in the same syncNow() cycle (after pullProjects), so we can't rely on
+    // "last call" ordering. Find the call that targeted /api/chat/sync.
+    const chatSyncCall = mockPost.mock.calls.find((c) => (c[0] as string) === '/api/chat/sync') as
+      | [
+          string,
+          { conversations: Array<{ id: string }>; messages: Array<{ id: string; role: string }> },
+        ]
+      | undefined;
+    expect(chatSyncCall).toBeDefined();
+    expect(chatSyncCall![1].conversations.map((c) => c.id)).toContain(CONV_ID);
+    expect(chatSyncCall![1].messages.map((m) => m.role).sort()).toEqual(['assistant', 'user']);
     // Queue drains once the server acks.
     expect(useCloudSyncStateStore.getState().dirtyMessages).toHaveLength(0);
   });

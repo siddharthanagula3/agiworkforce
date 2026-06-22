@@ -5,6 +5,8 @@
  * sidecar stores (only `services/api` and MMKV are mocked):
  *   - Local mode is an airtight no-op — zero network I/O.
  *   - Pull applies conversation/message deltas, honors tombstones, advances the cursor.
+ *   - Pull applies artifact deltas into cloudArtifacts; tombstones remove entries.
+ *   - Local-mode artifacts are never pushed (mobile is pull-only per design doc §4).
  *   - Push sends dirty rows, skips non-syncable (tool) roles, and clears the queue.
  *   - Pagination follows `hasMore`; a failed round trip surfaces as `error` status.
  */
@@ -28,6 +30,7 @@ import { api } from '../services/api';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
+import { useArtifactStore } from '../src/features/artifacts/store';
 import {
   syncNow,
   markConversationForSync,
@@ -43,12 +46,37 @@ const T = '2026-06-20T00:00:00.000Z';
 interface PullPage {
   conversations: unknown[];
   messages: unknown[];
+  artifacts?: unknown[];
   cursor: string;
   hasMore: boolean;
 }
 
 function emptyPull(cursor = '0'): PullPage {
-  return { conversations: [], messages: [], cursor, hasMore: false };
+  return { conversations: [], messages: [], artifacts: [], cursor, hasMore: false };
+}
+
+/** Build an artifact wire delta (snake_case, as returned by GET /api/chat/sync). */
+function artifactDelta(
+  id: string,
+  serverVersion: string,
+  opts: { deletedAt?: string | null; content?: string; artifactType?: string } = {},
+) {
+  return {
+    id,
+    conversation_id: 'c-art',
+    message_id: 'm-art',
+    title: `Artifact ${id}`,
+    artifact_type: opts.artifactType ?? 'code',
+    language: 'typescript',
+    content: opts.content ?? `console.log('${id}')`,
+    current_version: 1,
+    pinned: false,
+    tags: [],
+    created_at: T,
+    updated_at: T,
+    deleted_at: opts.deletedAt ?? null,
+    server_version: serverVersion,
+  };
 }
 
 function convDelta(id: string, serverVersion: string, deletedAt: string | null = null) {
@@ -106,6 +134,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
+  useArtifactStore.getState().clearCloudArtifacts();
   useChatAppModeStore.getState().setAppMode('cloud');
   mockGet.mockResolvedValue(emptyPull() as never);
   // Default: the server ACKS exactly what was posted (a healthy round trip).
@@ -180,25 +209,41 @@ describe('syncNow — pull', () => {
   });
 
   it('follows pagination until hasMore is false, ending at the latest cursor', async () => {
-    mockGet
-      .mockResolvedValueOnce({
-        conversations: [convDelta('c1', '10')],
-        messages: [],
-        cursor: '10',
-        hasMore: true,
-      } as never)
-      .mockResolvedValueOnce({
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/memory/sync')) {
+        return { memories: [], cursor: '0', hasMore: false } as never;
+      }
+      // First chat call returns page 1, second returns page 2.
+      const chatCalls = mockGet.mock.calls.filter((c) =>
+        (c[0] as string).startsWith('/api/chat/sync'),
+      ).length;
+      if (chatCalls <= 1) {
+        return {
+          conversations: [convDelta('c1', '10')],
+          messages: [],
+          artifacts: [],
+          cursor: '10',
+          hasMore: true,
+        } as never;
+      }
+      return {
         conversations: [convDelta('c2', '20')],
         messages: [],
+        artifacts: [],
         cursor: '20',
         hasMore: false,
-      } as never);
+      } as never;
+    });
 
     await syncNow();
 
-    expect(mockGet).toHaveBeenCalledTimes(2);
-    expect(mockGet).toHaveBeenNthCalledWith(1, '/api/chat/sync?since=0');
-    expect(mockGet).toHaveBeenNthCalledWith(2, '/api/chat/sync?since=10');
+    // Chat sync should have been called exactly twice (2 pages); memory sync once.
+    const chatCalls = mockGet.mock.calls.filter((c) =>
+      (c[0] as string).startsWith('/api/chat/sync'),
+    );
+    expect(chatCalls).toHaveLength(2);
+    expect(chatCalls[0]![0]).toBe('/api/chat/sync?since=0');
+    expect(chatCalls[1]![0]).toBe('/api/chat/sync?since=10');
     expect(useCloudSyncStateStore.getState().cursor).toBe('20');
   });
 
@@ -317,5 +362,163 @@ describe('syncNow — failures', () => {
     const sync = useCloudSyncStateStore.getState();
     expect(sync.status).toBe('error');
     expect(sync.lastError).toContain('network down');
+  });
+});
+
+// ── Artifact pull wiring (migration 0039) ─────────────────────────────────────
+//
+// Verdict: PULL is ALREADY WIRED in cloudSyncEngine.ts:76 (PullResponse includes
+// `artifacts: ArtifactWireDelta[]`) and :185 (applyCloudArtifactDeltas called on
+// every page). PUSH is intentionally absent — mobile is pull-only per design doc
+// §4: "Web + mobile push NOTHING for now (view-only; all their artifacts are
+// re-derivable)." These tests prove the pull wiring and document the intent.
+
+describe('syncNow — artifact pull wiring (migration 0039)', () => {
+  it('applies pulled artifacts into cloudArtifacts on the artifact store', async () => {
+    mockGet.mockResolvedValueOnce({
+      conversations: [],
+      messages: [],
+      artifacts: [artifactDelta('art1', '7')],
+      cursor: '7',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const cloudArts = useArtifactStore.getState().cloudArtifacts;
+    expect(cloudArts).toHaveLength(1);
+    expect(cloudArts[0]?.id).toBe('art1');
+    expect(cloudArts[0]?.type).toBe('code');
+    expect(cloudArts[0]?.content).toBe("console.log('art1')");
+    // Tombstone field is absent (not deleted).
+    expect(cloudArts[0]?.deletedAt ?? null).toBeNull();
+  });
+
+  it('upserts a pulled artifact that already exists in cloudArtifacts (LWW — later delta wins)', async () => {
+    // Seed an existing cloud artifact.
+    useArtifactStore
+      .getState()
+      .applyCloudArtifactDeltas([artifactDelta('art1', '3', { content: 'old content' })]);
+    expect(useArtifactStore.getState().cloudArtifacts[0]?.content).toBe('old content');
+
+    // Pull a newer version of the same artifact.
+    mockGet.mockResolvedValueOnce({
+      conversations: [],
+      messages: [],
+      artifacts: [artifactDelta('art1', '11', { content: 'updated content' })],
+      cursor: '11',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const cloudArts = useArtifactStore.getState().cloudArtifacts;
+    expect(cloudArts).toHaveLength(1);
+    expect(cloudArts[0]?.content).toBe('updated content');
+  });
+
+  it('removes a cloudArtifact when a deleted_at tombstone is pulled', async () => {
+    // Seed an existing cloud artifact.
+    useArtifactStore.getState().applyCloudArtifactDeltas([artifactDelta('art1', '5')]);
+    expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(1);
+
+    // Pull a tombstone for the same id.
+    mockGet.mockResolvedValueOnce({
+      conversations: [],
+      messages: [],
+      artifacts: [artifactDelta('art1', '9', { deletedAt: T })],
+      cursor: '9',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    // The tombstone must remove the artifact from cloudArtifacts.
+    expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(0);
+  });
+
+  it('does NOT push any artifacts in managed cloud mode (mobile is pull-only)', async () => {
+    // Even with cloud artifacts in the store, the push body must never include an
+    // `artifacts` key (mobile has no dirty-artifact tracking; design doc §4).
+    useArtifactStore.getState().applyCloudArtifactDeltas([artifactDelta('art1', '3')]);
+    mockGet.mockResolvedValueOnce(emptyPull() as never);
+
+    await syncNow();
+
+    // The only POST calls in a clean cycle are from settings sync (if dirty), not chat.
+    const chatSyncPosts = mockPost.mock.calls.filter((c) => c[0] === '/api/chat/sync');
+    // No chat push at all (no dirty conversations/messages).
+    expect(chatSyncPosts).toHaveLength(0);
+    // The artifact store still contains the seeded artifact (pull-only, not cleared).
+    expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(1);
+  });
+
+  it('does NOT push or pull artifacts in local mode (gate holds)', async () => {
+    useChatAppModeStore.getState().setAppMode('local');
+
+    await syncNow();
+
+    // Zero network I/O in local mode — same gate that covers conversations/messages.
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+    // cloudArtifacts untouched.
+    expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(0);
+  });
+
+  it('applies an empty artifacts array gracefully (no-op, store unchanged)', async () => {
+    useArtifactStore.getState().applyCloudArtifactDeltas([artifactDelta('art1', '2')]);
+
+    mockGet.mockResolvedValueOnce({
+      conversations: [],
+      messages: [],
+      artifacts: [],
+      cursor: '5',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    // cloudArtifacts is unchanged — the empty pull is a no-op.
+    expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(1);
+  });
+
+  it('applies artifacts across multiple pagination pages', async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/memory/sync')) {
+        return { memories: [], cursor: '0', hasMore: false } as never;
+      }
+      if ((path as string).startsWith('/api/projects/sync')) {
+        return { projects: [], cursor: '0', hasMore: false } as never;
+      }
+      if ((path as string).startsWith('/api/settings/sync')) {
+        return { settings: {}, cursor: '0', hasMore: false } as never;
+      }
+      const chatCalls = mockGet.mock.calls.filter((c) =>
+        (c[0] as string).startsWith('/api/chat/sync'),
+      ).length;
+      if (chatCalls <= 1) {
+        return {
+          conversations: [],
+          messages: [],
+          artifacts: [artifactDelta('art1', '10')],
+          cursor: '10',
+          hasMore: true,
+        } as never;
+      }
+      return {
+        conversations: [],
+        messages: [],
+        artifacts: [artifactDelta('art2', '20')],
+        cursor: '20',
+        hasMore: false,
+      } as never;
+    });
+
+    await syncNow();
+
+    const cloudArts = useArtifactStore.getState().cloudArtifacts;
+    const ids = cloudArts.map((a) => a.id).sort();
+    expect(ids).toEqual(['art1', 'art2']);
+    expect(useCloudSyncStateStore.getState().cursor).toBe('20');
   });
 });

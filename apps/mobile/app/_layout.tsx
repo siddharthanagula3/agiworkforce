@@ -35,7 +35,7 @@ import {
 } from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
-import { setUuidV7RandomSource } from '@agiworkforce/utils';
+import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop } from '@/services/cloudSyncEngine';
 
 // Inject a CSPRNG for UUIDv7 once at module load. React Native has no global Web
