@@ -20,10 +20,7 @@ import {
   Share2,
   Bell,
   X as XIcon,
-  MessageSquare,
-  Folder,
   Settings,
-  Library,
   ChevronUp,
   ChevronRight,
   CreditCard,
@@ -55,7 +52,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
-import { useDirectoryStore } from '@features/chat/stores/directory-store';
+import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
@@ -63,7 +60,6 @@ import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
-import { DirectoryModal } from '../components/dialogs/DirectoryModal';
 import { CloudUpgradeWaitlistDialog } from '../components/dialogs/CloudUpgradeWaitlistDialog';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { UpgradePlanDialog } from '../components/dialogs/UpgradePlanDialog';
@@ -319,7 +315,8 @@ export default function WebChatPage() {
   const { signOut: clerkSignOut } = useClerk();
   const { user, logout } = useAuthStore();
   const subscription = useBillingStore((s) => s.subscription);
-  const openDirectory = useDirectoryStore((s) => s.setOpen);
+  // Skills, Plugins, and Connectors live in the Settings modal (single home).
+  const { openSettings } = useSettingsModal();
 
   // Project store — same data source already used by the filter dropdown in <Sidebar>
   const storeProjects = useProjectStore((s) => s.projects);
@@ -1398,42 +1395,24 @@ export default function WebChatPage() {
     [handleNewChat, handleToggleSidebar],
   );
 
-  // Nav items injected into <Sidebar> via the navItems prop.
-  // "Artifacts" is removed — it linked to /gallery (a marketing page) which is
-  // not the chat workspace artifacts panel. Artifacts are accessible via the
-  // ArtifactsToggleButton in the header.
+  // Single-Chat-tab nav. The rail body already renders the chat list (Recents) and the
+  // project folders, so 'Chats' and 'Projects' route-nav items would be redundant
+  // competing destinations — removed. 'Artifacts' was already removed (it linked to the
+  // /gallery marketing page; artifacts open via the header ArtifactsToggleButton).
+  // Skills, Plugins, and Connectors now live in ONE place — the Settings modal — so the
+  // single 'Customize' entry opens that modal instead of navigating to /customize or a
+  // separate Directory modal (both removed).
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () => [
-      {
-        id: 'chats',
-        label: 'Chats',
-        icon: MessageSquare,
-        onClick: () => router.push('/chat'),
-        isActive: false,
-      },
-      {
-        id: 'projects',
-        label: 'Projects',
-        icon: Folder,
-        onClick: () => router.push('/projects'),
-        isActive: false,
-      },
-      {
-        id: 'directory',
-        label: 'Directory',
-        icon: Library,
-        onClick: () => openDirectory(true),
-        isActive: false,
-      },
       {
         id: 'customize',
         label: 'Customize',
         icon: Settings,
-        onClick: () => router.push('/customize'),
+        onClick: () => openSettings('skills'),
         isActive: false,
       },
     ],
-    [router, openDirectory],
+    [openSettings],
   );
 
   // Billing tier label for the user profile footer.
@@ -1770,7 +1749,6 @@ export default function WebChatPage() {
         <ResearchPanel />
         <ArtifactsPanel />
       </div>
-      <DirectoryModal />
       <CloudUpgradeWaitlistDialog open={cloudWaitlistOpen} onOpenChange={setCloudWaitlistOpen} />
       <CreateProjectDialog open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
       <UpgradePlanDialog
