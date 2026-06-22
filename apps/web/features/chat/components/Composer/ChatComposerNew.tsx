@@ -16,6 +16,7 @@ import {
   EyeOff,
   ImagePlus,
   Image as ImageIcon,
+  Terminal,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -264,6 +265,7 @@ const ChatComposerNewComponent = ({
   const agentMode: ChatMode = initialAgentMode;
   const selectedFolderId: string | null = null;
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [codeExecutionEnabled, setCodeExecutionEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
@@ -292,12 +294,18 @@ const ChatComposerNewComponent = ({
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
   const modelSupportsSearch = selectedModelCaps?.search ?? false;
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
+  const modelSupportsCodeExecution = selectedModelCaps?.codeExecution ?? false;
 
   // If the user switches to a model that can't search, clear the web-search
   // toggle so it never stays "on" for an unsupported model.
   useEffect(() => {
     if (webSearchEnabled && !modelSupportsSearch) setWebSearchEnabled(false);
   }, [webSearchEnabled, modelSupportsSearch]);
+
+  // If the user switches to a model that can't execute code, clear the toggle.
+  useEffect(() => {
+    if (codeExecutionEnabled && !modelSupportsCodeExecution) setCodeExecutionEnabled(false);
+  }, [codeExecutionEnabled, modelSupportsCodeExecution]);
 
   // Incognito / temporary chat
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -573,6 +581,10 @@ const ChatComposerNewComponent = ({
     setWebSearchEnabled((prev) => !prev);
   }, []);
 
+  const handleCodeExecutionToggle = useCallback(() => {
+    setCodeExecutionEnabled((prev) => !prev);
+  }, []);
+
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
     setShowSkillsSubmenu(false);
@@ -747,6 +759,7 @@ const ChatComposerNewComponent = ({
           folderId: selectedFolderId,
           webSearchEnabled,
           thinkingEnabled,
+          codeExecutionEnabled,
           styleMode: styleMode !== 'normal' ? styleMode : undefined,
           skillBody: skillBody ?? undefined,
         },
@@ -772,6 +785,7 @@ const ChatComposerNewComponent = ({
       agentMode,
       selectedFolderId,
       thinkingEnabled,
+      codeExecutionEnabled,
       onSend,
       clearComposerState,
     ],
@@ -840,7 +854,8 @@ const ChatComposerNewComponent = ({
   );
 
   // + button indicator: amber tint when any feature is active
-  const hasOverflowActive = selectedSkill !== null || webSearchEnabled || styleMode !== 'normal';
+  const hasOverflowActive =
+    selectedSkill !== null || webSearchEnabled || codeExecutionEnabled || styleMode !== 'normal';
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
@@ -1214,6 +1229,18 @@ const ChatComposerNewComponent = ({
                       disabled={isLoading || disabled || !modelSupportsSearch}
                     />
 
+                    {/* 8b. Code execution toggle */}
+                    <MenuToggleRow
+                      icon={Terminal}
+                      label="Run code"
+                      checked={codeExecutionEnabled}
+                      onToggle={() => {
+                        handleCodeExecutionToggle();
+                        closeMenu();
+                      }}
+                      disabled={isLoading || disabled || !modelSupportsCodeExecution}
+                    />
+
                     {/* 9. Use style -- right flyout */}
                     <div className="relative">
                       <button
@@ -1298,6 +1325,25 @@ const ChatComposerNewComponent = ({
               >
                 <Globe className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Search</span>
+              </button>
+
+              <button
+                onClick={handleCodeExecutionToggle}
+                disabled={isLoading || disabled || !modelSupportsCodeExecution}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                  codeExecutionEnabled
+                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  (isLoading || disabled || !modelSupportsCodeExecution) &&
+                    'cursor-not-allowed opacity-50',
+                )}
+                aria-label="Toggle code execution"
+                aria-pressed={codeExecutionEnabled}
+                title={modelSupportsCodeExecution ? undefined : "This model can't run code"}
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Code</span>
               </button>
 
               <button
