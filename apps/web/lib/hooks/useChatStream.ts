@@ -321,7 +321,7 @@ export function useChatStream(): UseChatStreamReturn {
       const normalizeToolName = (name: unknown) =>
         typeof name === 'string' && name.trim() ? name.trim() : 'server_tool';
 
-      const startTool = (rawName: unknown, args?: string) => {
+      const startTool = (rawName: unknown, args?: string, statusPhrase?: string) => {
         const name = normalizeToolName(rawName);
         const existingIndex = findLastToolIndex(name, ['pending', 'running']);
         if (existingIndex >= 0) {
@@ -329,6 +329,7 @@ export function useChatStream(): UseChatStreamReturn {
           if (existing) {
             existing.status = 'running';
             existing.args = args ?? existing.args;
+            if (statusPhrase) existing.statusPhrase = statusPhrase;
           }
           publishToolTimeline();
           return;
@@ -341,6 +342,7 @@ export function useChatStream(): UseChatStreamReturn {
           name,
           status: 'running',
           args,
+          statusPhrase,
         });
         publishToolTimeline();
       };
@@ -676,7 +678,13 @@ export function useChatStream(): UseChatStreamReturn {
               if (toolStatus?.type === 'mcp_tool_use') {
                 // Platform-executed tools (MCP and E2B) reported via mcp_tool_use status events
                 if (toolStatus.status === 'running') {
-                  startTool(toolStatus.name);
+                  // Forward the optional status_phrase emitted by tool-loop.ts so the
+                  // timeline running-state header shows a playful per-tool label.
+                  const phrase =
+                    typeof toolStatus.status_phrase === 'string'
+                      ? toolStatus.status_phrase
+                      : undefined;
+                  startTool(toolStatus.name, undefined, phrase);
                 } else if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
                   finishTool(toolStatus.name, toolStatus.status);
                 }
