@@ -136,21 +136,30 @@ export function toolStatusPhrase(toolName: string): string | undefined {
  * Emit an `x_tool_status` SSE event -- reuses the same shape that
  * stream-transform.ts emits for Anthropic server_tool_use blocks so the
  * client's `useChatStream.ts` handles both paths uniformly.
+ *
+ * On `running` events, `args` (the parsed tool arguments object) is included
+ * so the client can store them as `MessageToolEntry.parameters` and render
+ * a syntax-highlighted code block in the Request section of ToolCallCard.
+ *
+ * Exported for unit testing only -- external callers should not depend on the
+ * SSE wire format directly.
  */
-function toolStatusEvent(
+export function toolStatusEvent(
   toolName: string,
   status: 'running' | 'completed' | 'failed',
   responseModel: string,
+  args?: Record<string, unknown>,
 ): SseLine {
   const statusPayload: Record<string, unknown> = {
     type: 'mcp_tool_use',
     name: toolName,
     status,
   };
-  // Only attach status_phrase on the running event to keep payloads small.
+  // Only attach status_phrase and args on the running event to keep payloads small.
   if (status === 'running') {
     const phrase = toolStatusPhrase(toolName);
     if (phrase) statusPayload['status_phrase'] = phrase;
+    if (args && Object.keys(args).length > 0) statusPayload['args'] = args;
   }
   return sseData({
     choices: [
@@ -522,9 +531,10 @@ export async function* runToolLoop(
     const readOnly = pendingToolCalls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = pendingToolCalls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
 
-    // Emit "running" status for all tools.
+    // Emit "running" status for all tools. Include tc.args so the client can
+    // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
     for (const tc of pendingToolCalls) {
-      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel));
+      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
     }
 
     // Execute read-only tools concurrently.
