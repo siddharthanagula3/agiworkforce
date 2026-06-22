@@ -32,6 +32,37 @@ import { logger } from '@/lib/logger';
 import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
+// OpenAI built-in tools that exist only on the Responses API. /v1/chat/completions (which this
+// adapter uses) rejects them with 400 "Supported values are: 'function' and 'custom'". We strip
+// them so the request succeeds — the model degrades to no native search/interpreter rather than
+// erroring. (E2B handles code execution; native web search works on Anthropic/Google. OpenAI web
+// search would need the Responses API — tracked separately.)
+const OPENAI_RESPONSES_ONLY_TOOL_TYPES = new Set(['web_search_preview', 'code_interpreter']);
+
+/** Drop Responses-API-only built-ins, then normalize the rest to OpenAI chat tool format. */
+function toOpenAiChatTools(tools: unknown[]): Array<Record<string, unknown>> {
+  return tools
+    .filter((tool) => {
+      const t = tool as { type?: string };
+      return !(typeof t.type === 'string' && OPENAI_RESPONSES_ONLY_TOOL_TYPES.has(t.type));
+    })
+    .map((tool) => {
+      const t = tool as Record<string, unknown>;
+      if (t['function']) return { type: 'function', function: t['function'] };
+      if (t['input_schema']) {
+        return {
+          type: 'function',
+          function: {
+            name: t['name'],
+            description: t['description'],
+            parameters: t['input_schema'],
+          },
+        };
+      }
+      return { ...t, type: t['type'] || 'function' };
+    });
+}
+
 /**
  * Check if a model requires max_completion_tokens instead of max_tokens
  */
@@ -166,32 +197,12 @@ export class OpenAIProvider extends BaseLLMProvider {
       }
     }
     if (request.tools) {
-      // Transform tools to OpenAI format and ensure 'type' field
-      body['tools'] = request.tools.map((tool: any) => {
-        // If tool already has function field, it's in OpenAI format
-        if (tool.function) {
-          return {
-            type: 'function',
-            function: tool.function,
-          };
-        }
-        // If tool has input_schema, it's in Anthropic format - transform it
-        if (tool.input_schema) {
-          return {
-            type: 'function',
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.input_schema,
-            },
-          };
-        }
-        // Fallback: assume it's already in OpenAI format, just ensure type field
-        return {
-          ...tool,
-          type: tool.type || 'function',
-        };
-      });
+      // Strip Responses-API-only built-ins (web_search_preview, code_interpreter) that
+      // chat/completions rejects, then normalize the rest. Only set tools if any remain.
+      const openAiTools = toOpenAiChatTools(request.tools);
+      if (openAiTools.length > 0) {
+        body['tools'] = openAiTools;
+      }
     }
     if (request.tool_choice) {
       body['tool_choice'] = request.tool_choice;
@@ -359,32 +370,12 @@ export class OpenAIProvider extends BaseLLMProvider {
       }
     }
     if (request.tools) {
-      // Transform tools to OpenAI format and ensure 'type' field
-      body['tools'] = request.tools.map((tool: any) => {
-        // If tool already has function field, it's in OpenAI format
-        if (tool.function) {
-          return {
-            type: 'function',
-            function: tool.function,
-          };
-        }
-        // If tool has input_schema, it's in Anthropic format - transform it
-        if (tool.input_schema) {
-          return {
-            type: 'function',
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.input_schema,
-            },
-          };
-        }
-        // Fallback: assume it's already in OpenAI format, just ensure type field
-        return {
-          ...tool,
-          type: tool.type || 'function',
-        };
-      });
+      // Strip Responses-API-only built-ins (web_search_preview, code_interpreter) that
+      // chat/completions rejects, then normalize the rest. Only set tools if any remain.
+      const openAiTools = toOpenAiChatTools(request.tools);
+      if (openAiTools.length > 0) {
+        body['tools'] = openAiTools;
+      }
     }
     if (request.tool_choice) body['tool_choice'] = request.tool_choice;
 
