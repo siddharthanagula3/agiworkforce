@@ -5,6 +5,97 @@ import { AlertCircle, Copy, Check, Play, X as XIcon } from 'lucide-react';
 import { InlineToolCall, type InlineToolCallStatus } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 
+// ─── Code language detection ──────────────────────────────────────────────────
+
+/**
+ * Tool names that carry executable code in their parameters.
+ * When matched, we look for a `language` and `code` field to highlight.
+ */
+const CODE_EXECUTION_TOOLS = new Set([
+  'execute_code',
+  'code_execute',
+  'run_code',
+  'execute',
+  'computer',
+  'jupyter_execute',
+]);
+
+/**
+ * Returns the { language, code } pair to highlight from a tool's parameters,
+ * or null when the parameters are not code-bearing.
+ */
+export function detectCodeBlock(
+  toolName: string,
+  parameters?: Record<string, unknown>,
+): { language: string; code: string } | null {
+  if (!parameters) return null;
+  const n = toolName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const isCodeTool =
+    CODE_EXECUTION_TOOLS.has(n) ||
+    n.includes('execute') ||
+    n.includes('run_code') ||
+    n.includes('computer');
+  if (!isCodeTool) return null;
+
+  const language = typeof parameters['language'] === 'string' ? parameters['language'] : 'python';
+  const code =
+    typeof parameters['code'] === 'string'
+      ? parameters['code']
+      : typeof parameters['command'] === 'string'
+        ? parameters['command']
+        : null;
+  if (!code) return null;
+  return { language, code };
+}
+
+// ─── Syntax-highlighted code block ───────────────────────────────────────────
+
+/**
+ * Renders a labeled, syntax-highlighted code block.
+ * Reuses the same CSS class names as MarkdownContent.tsx (`code-block-*`).
+ * Highlight.js classes are applied via the `hljs` class on the <code> element
+ * just as rehype-highlight would do, so the same global CSS theme applies.
+ */
+function HighlightedCodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    },
+    [code],
+  );
+
+  return (
+    <div className="code-block-container group relative">
+      <div className="code-block-header-bar">
+        <span className="code-block-lang-label">{language}</span>
+        <button
+          type="button"
+          aria-label={copied ? 'Code copied' : 'Copy code'}
+          onClick={handleCopy}
+          className="h-6 gap-1 px-1.5 text-[10px] flex items-center rounded text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          {copied ? (
+            <Check className="h-2.5 w-2.5" aria-hidden="true" />
+          ) : (
+            <Copy className="h-2.5 w-2.5" aria-hidden="true" />
+          )}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <div className="code-block-body">
+        <pre className="overflow-auto max-h-48">
+          <code className={`language-${language}`}>{code}</code>
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ToolCallStatus =
@@ -87,6 +178,12 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
   const hasParameters = toolCall.parameters && Object.keys(toolCall.parameters).length > 0;
   const inlineStatus = useMemo(() => toInlineStatus(toolCall.status), [toolCall.status]);
 
+  // Detect whether this tool carries executable code to highlight (execute_code et al.)
+  const codeBlock = useMemo(
+    () => detectCodeBlock(toolCall.name, toolCall.parameters),
+    [toolCall.name, toolCall.parameters],
+  );
+
   const handleCopy = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -143,9 +240,15 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1 ml-0.5">
             Request
           </p>
-          <pre className="overflow-auto max-h-40 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
-            {JSON.stringify(toolCall.parameters, null, 2)}
-          </pre>
+          {codeBlock ? (
+            // Code-execution tool: render language-labeled, syntax-highlighted block
+            <HighlightedCodeBlock language={codeBlock.language} code={codeBlock.code} />
+          ) : (
+            // Generic tool: render raw JSON
+            <pre className="overflow-auto max-h-40 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
+              {JSON.stringify(toolCall.parameters, null, 2)}
+            </pre>
+          )}
         </div>
       )}
 
