@@ -100,6 +100,8 @@ export interface MessageToolEntry {
   rawArgs?: Record<string, unknown>;
   /** Tool result content after execution. */
   result?: string;
+  /** Playful action phrase shown in the timeline running-state header (e.g. "Running code"). */
+  statusPhrase?: string;
 }
 
 export interface Message {

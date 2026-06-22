@@ -106,6 +106,33 @@ function sseDone(): SseLine {
 }
 
 /**
+ * Short action phrases shown in the timeline running-state header while a tool
+ * is executing. Matched by tool name prefix (lowercase). Falls back to undefined
+ * (the timeline renders its default "Running tools..." label).
+ */
+const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
+  [/\bweb_search|search_web|browser_search|perplexity/i, 'Searching the web'],
+  [/\bweb_fetch|fetch_url|http_request/i, 'Fetching page'],
+  [/\bcode_execut|execute_code|run_code|jupyter/i, 'Running code'],
+  [/\bfile_read|view|read_file/i, 'Reading file'],
+  [/\bfile_write|write_file|create_file/i, 'Writing file'],
+  [/\bfile_edit|edit_file|patch/i, 'Editing file'],
+  [/\bbash|shell|terminal|command/i, 'Running command'],
+  [/\bgrep|ripgrep|search_codebase/i, 'Searching codebase'],
+  [/\bgit_/i, 'Running git'],
+  [/\bdb_query|sql_query|database/i, 'Querying database'],
+  [/\bskill/i, 'Loading skill'],
+];
+
+/** Derive a playful status phrase for a tool name, or return undefined. */
+export function toolStatusPhrase(toolName: string): string | undefined {
+  for (const [pattern, phrase] of TOOL_STATUS_PHRASES) {
+    if (pattern.test(toolName)) return phrase;
+  }
+  return undefined;
+}
+
+/**
  * Emit an `x_tool_status` SSE event -- reuses the same shape that
  * stream-transform.ts emits for Anthropic server_tool_use blocks so the
  * client's `useChatStream.ts` handles both paths uniformly.
@@ -115,15 +142,21 @@ function toolStatusEvent(
   status: 'running' | 'completed' | 'failed',
   responseModel: string,
 ): SseLine {
+  const statusPayload: Record<string, unknown> = {
+    type: 'mcp_tool_use',
+    name: toolName,
+    status,
+  };
+  // Only attach status_phrase on the running event to keep payloads small.
+  if (status === 'running') {
+    const phrase = toolStatusPhrase(toolName);
+    if (phrase) statusPayload['status_phrase'] = phrase;
+  }
   return sseData({
     choices: [
       {
         delta: {
-          x_tool_status: {
-            type: 'mcp_tool_use',
-            name: toolName,
-            status,
-          },
+          x_tool_status: statusPayload,
         },
         index: 0,
       },
