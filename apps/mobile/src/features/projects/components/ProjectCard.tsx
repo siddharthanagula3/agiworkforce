@@ -4,10 +4,16 @@ import { FolderOpen, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
-import type { Project } from '@/src/features/projects/store';
+/** Minimal project shape required by the card for rendering. */
+interface ProjectCardProject {
+  id: string;
+  name: string;
+  description: string;
+  updatedAt: string;
+}
 
 interface ProjectCardProps {
-  project: Project;
+  project: ProjectCardProject;
   index: number;
   isActive: boolean;
   onPress: (id: string) => void;
