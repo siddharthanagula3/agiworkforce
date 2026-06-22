@@ -2,6 +2,7 @@
 
 use crate::data::cloud_sync;
 use crate::data::db::models::{Conversation, Message, MessageRole};
+use crate::data::{memory_sync, projects_sync, settings_sync};
 use crate::data::db::repository;
 use chrono::Utc;
 use tauri::State;
@@ -361,6 +362,58 @@ pub async fn sync_conversations_to_cloud(
     let base_url = crate::sys::account::get_api_base_url();
 
     let outcome = cloud_sync::sync_now(&db, &user_id, &token, &base_url).await?;
+
+    // Drive MEMORY + PROJECTS delta sync on the SAME managed-cloud trigger, so the
+    // existing scheduler (cloudSyncTrigger: mode→managed, post-turn debounce, 30s
+    // tick) reconciles all three entity types — not just chat. Without this, the
+    // memory_sync/projects_sync engines were built + tested but had no runtime
+    // caller (dead code). Each has its own single-flight guard and `app_mode='cloud'`
+    // row gating, and the egress gate above already restricts this command to managed
+    // mode. A failure in either MUST NOT fail chat sync — log and continue so one
+    // entity's hiccup can't block the others (graceful degradation).
+    match memory_sync::sync_memories_now(&db, &user_id, &token, &base_url).await {
+        Ok(m) => {
+            tracing::debug!(
+                pushed = m.memories_pushed,
+                pulled = m.memories_pulled,
+                "cloud memory sync ok"
+            )
+        }
+        Err(e) => tracing::warn!(error = %e, "cloud memory sync failed (chat sync unaffected)"),
+    }
+    match projects_sync::sync_projects_now(&db, &user_id, &token, &base_url).await {
+        Ok(p) => {
+            tracing::debug!(
+                pushed = p.projects_pushed,
+                pulled = p.projects_pulled,
+                "cloud projects sync ok"
+            )
+        }
+        Err(e) => tracing::warn!(error = %e, "cloud projects sync failed (chat sync unaffected)"),
+    }
+    // Settings sync runs ONLY in managed cloud (egress gate above already guards this).
+    // A failure MUST NOT fail chat sync — log and continue (graceful degradation).
+    // NOTE: sync_settings_now takes 5 args (not 4) because settings live in
+    // SettingsState (Arc<Mutex<Settings>>), not in the SQLite DB.  The db arg
+    // is used only for the cursor.  See settings_sync.rs for the full rationale.
+    match settings_sync::sync_settings_now(
+        &db,
+        &settings_state,
+        &user_id,
+        &token,
+        &base_url,
+    )
+    .await
+    {
+        Ok(s) => {
+            tracing::debug!(
+                pushed = s.settings_pushed,
+                pulled = s.settings_pulled,
+                "cloud settings sync ok"
+            )
+        }
+        Err(e) => tracing::warn!(error = %e, "cloud settings sync failed (chat sync unaffected)"),
+    }
 
     Ok(cloud_sync::BulkSyncResult {
         conversations_synced: outcome.conversations_pushed + outcome.conversations_pulled,
