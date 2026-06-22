@@ -1,6 +1,5 @@
 export { BookmarksDialog } from './BookmarksDialog';
 export { CustomShortcutDialog } from './CustomShortcutDialog';
-export { DirectoryModal } from './DirectoryModal';
 export { EnhancedExportDialog } from './EnhancedExportDialog';
 export { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 export { GlobalSearchDialog } from './GlobalSearchDialog';
