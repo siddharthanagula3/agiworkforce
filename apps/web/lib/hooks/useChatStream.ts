@@ -37,6 +37,8 @@ interface SendMessageOptions {
   styleMode?: string;
   /** Skill body injected as a system message at the start of the request. */
   skillBody?: string;
+  /** Display name of the active skill, used to emit a timeline step. */
+  skillName?: string;
 }
 
 const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
@@ -419,6 +421,15 @@ export function useChatStream(): UseChatStreamReturn {
         // invisibly and does not appear in chat bubbles.
         if (options.skillBody) {
           apiMessages.unshift({ role: 'system', content: options.skillBody });
+
+          // Emit a synthetic timeline step so the skill load is visible as a
+          // timeline entry (type mcp_tool_use, name "Read skill: <name>").
+          // The step completes immediately since loading is synchronous here.
+          const skillStepName = options.skillName
+            ? `Read skill: ${options.skillName}`
+            : 'Read skill';
+          startTool(skillStepName);
+          finishTool(skillStepName, 'completed');
         }
 
         // Prepend a style system message when the user has selected a non-default style.
