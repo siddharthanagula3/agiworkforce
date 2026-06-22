@@ -654,6 +654,14 @@ export function useChatStream(): UseChatStreamReturn {
               if (toolStatus?.type === 'server_tool_use') {
                 startTool(toolStatus.name, toolStatus.status);
               }
+              if (toolStatus?.type === 'mcp_tool_use') {
+                // Platform-executed tools (MCP and E2B) reported via mcp_tool_use status events
+                if (toolStatus.status === 'running') {
+                  startTool(toolStatus.name);
+                } else if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
+                  finishTool(toolStatus.name, toolStatus.status);
+                }
+              }
               if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
                 setSearching(assistantMessageId, true);
               } else if (toolStatus?.status === 'executing') {
@@ -711,6 +719,47 @@ export function useChatStream(): UseChatStreamReturn {
                   currentSearchResults = results;
                   setSearchResults(assistantMessageId, results);
                   finishTool('web_search', 'completed');
+                }
+              }
+
+              // Handle platform-executed tool results (MCP / E2B sandbox)
+              const toolResultBlock = parsed.choices?.[0]?.delta?.x_tool_result;
+              if (toolResultBlock) {
+                const { name, content, is_error } = toolResultBlock as {
+                  tool_call_id?: string;
+                  name?: string;
+                  content?: unknown;
+                  is_error?: boolean;
+                };
+                if (name) {
+                  // Find by name — the local array is the authority; toolCallId is not set
+                  // on streaming entries so matching by name is the correct strategy here.
+                  let idx = findLastToolIndex(name, ['running', 'completed']);
+                  if (idx < 0) {
+                    // Guard: create entry if status event was missed
+                    const id = createToolId(name);
+                    toolStartTimes.set(id, Date.now());
+                    toolTimeline.push({ id, name, status: 'running' });
+                    idx = toolTimeline.length - 1;
+                  }
+                  const entry = toolTimeline[idx];
+                  if (entry) {
+                    const resultText =
+                      typeof content === 'string'
+                        ? content
+                        : Array.isArray(content)
+                          ? (content as Record<string, unknown>[])
+                              .filter((c) => c['type'] === 'text')
+                              .map((c) => c['text'] as string)
+                              .join('\n')
+                          : content != null
+                            ? String(content)
+                            : '';
+                    entry.result = resultText;
+                    entry.status = is_error ? 'failed' : 'completed';
+                    entry.error = is_error ? resultText : entry.error;
+                  }
+                  publishToolTimeline();
                 }
               }
 
