@@ -131,4 +131,24 @@ describe('hasArtifacts + removeArtifactBlocks', () => {
     expect(cleaned).toContain('before');
     expect(cleaned).toContain('after');
   });
+
+  // Regression: in the live web flow MessageBubble passes artifacts from the STORE, whose
+  // content can drift from the final markdown (an artifact captured mid-stream). The old
+  // exact-content regex then missed, leaving a DUPLICATE raw code block beside the card.
+  // Position-based removal must strip the block even with a stale/partial passed content.
+  it('strips a renderable block even when the passed artifact content is stale/partial', () => {
+    const body = `before\n${HTML}\nafter`;
+    const stale = [{ content: '<!DOCTYPE html><html><head><title>Mini', language: 'html' }];
+    const cleaned = removeArtifactBlocks(body, stale);
+    expect(cleaned).not.toContain('<!DOCTYPE');
+    expect(cleaned).not.toContain('```');
+    expect(cleaned).toContain('before');
+    expect(cleaned).toContain('after');
+  });
+
+  it('leaves a non-renderable code block intact when it is not a passed artifact', () => {
+    const body = 'A\n\n```bash\nls -la\n```\n\nB';
+    const cleaned = removeArtifactBlocks(body, [{ content: 'unrelated', language: 'html' }]);
+    expect(cleaned).toContain('ls -la');
+  });
 });

@@ -259,14 +259,25 @@ export function removeArtifactBlocks(
   markdown: string,
   artifacts: ReadonlyArray<Pick<SharedArtifact, 'content' | 'language'>>,
 ): string {
+  if (artifacts.length === 0) return markdown.trim();
+  // Strip the message's own fenced blocks that were surfaced as artifact cards, matching on
+  // the CURRENT markdown's block RANGES (extractCodeBlocks gives exact start/end) — NOT a
+  // regex built from the passed artifact `content`. The passed content can drift from the
+  // final markdown (e.g. an artifact captured mid-stream and cached in the store, or trimmed
+  // differently), which made the old exact-content regex miss and left a DUPLICATE raw code
+  // block sitting next to the rendered card. Position-based removal cannot drift. A block is
+  // stripped when its whitespace-normalized content matches a passed artifact's, OR when it
+  // is itself a renderable artifact (the web inclusion policy that produced the card).
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const wanted = new Set(artifacts.map((a) => norm(a.content)));
+  const blocks = extractCodeBlocks(markdown);
   let cleaned = markdown;
-  for (const artifact of artifacts) {
-    const escapedContent = artifact.content.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(
-      `\`\`\`${artifact.language || '\\w*'}\\s*\\n${escapedContent}\\s*\`\`\``,
-      'g',
-    );
-    cleaned = cleaned.replace(re, '');
+  // Remove right-to-left so earlier startIndex offsets stay valid as we splice.
+  for (let i = blocks.length - 1; i >= 0; i -= 1) {
+    const block = blocks[i]!;
+    if (wanted.has(norm(block.content)) || isRenderableArtifact(block.language, block.content)) {
+      cleaned = cleaned.slice(0, block.startIndex) + cleaned.slice(block.endIndex);
+    }
   }
   return cleaned.trim();
 }
