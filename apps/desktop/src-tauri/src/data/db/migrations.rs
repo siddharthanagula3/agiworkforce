@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 67;
+const CURRENT_VERSION: i32 = 68;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -606,6 +606,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 67 {
         run_migration_in_transaction(conn, 67, apply_migration_v67)?;
+    }
+
+    if current_version < 68 {
+        run_migration_in_transaction(conn, 68, apply_migration_v68)?;
     }
 
     Ok(())
@@ -5545,6 +5549,99 @@ fn apply_migration_v67(conn: &Connection) -> Result<()> {
         )",
         [],
     )?;
+
+    Ok(())
+}
+
+/// Migration v68: Cloud sync columns for `user_memory` (managed-cloud memory sharing).
+///
+/// Mirrors v66 (`app_mode`) + v67 (`cloud_id` / `needs_push` / `server_version` / UTC tombstone
+/// timestamps) but applied to `user_memory` so memories sync cross-device exactly like chats.
+///
+/// Additive only — existing local rows (app_mode DEFAULT 'local') are untouched.
+/// A separate `memory_cursor` column is added to `cloud_sync_state` so the memory HWM
+/// is tracked independently of the chat cursor.
+fn apply_migration_v68(conn: &Connection) -> Result<()> {
+    let table_exists = |table: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            > 0
+    };
+
+    // Sync identity + bookkeeping columns on user_memory.
+    if table_exists("user_memory") {
+        // app_mode mirrors v66 conversations.app_mode: 'local' | 'cloud'.
+        // Local/BYOK memories stay 'local' and are never pushed.
+        ensure_column(
+            conn,
+            "user_memory",
+            "app_mode",
+            "app_mode TEXT NOT NULL DEFAULT 'local'",
+        )?;
+        // UUIDv7 cloud id — NULL until first cloud sync marks the row.
+        ensure_column(conn, "user_memory", "cloud_id", "cloud_id TEXT")?;
+        // Bigint-string server version from the Postgres sequence.
+        ensure_column(conn, "user_memory", "server_version", "server_version TEXT")?;
+        // UTC ISO-8601 counterparts (SQLite CURRENT_TIMESTAMP is space-separated; Z-suffix needed).
+        ensure_column(conn, "user_memory", "created_at_utc", "created_at_utc TEXT")?;
+        // Soft-delete tombstone: set when a cloud memory is deleted so the delete propagates.
+        ensure_column(conn, "user_memory", "deleted_at_utc", "deleted_at_utc TEXT")?;
+        // Dirty flag: 1 → row needs to be pushed to the cloud on next sync.
+        ensure_column(
+            conn,
+            "user_memory",
+            "needs_push",
+            "needs_push INTEGER NOT NULL DEFAULT 0",
+        )?;
+
+        // Partial UNIQUE index: uniqueness enforced only on non-NULL cloud_ids (SQLite
+        // cannot add a UNIQUE constraint via ALTER TABLE ADD COLUMN).
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_memory_cloud_id \
+             ON user_memory(cloud_id) WHERE cloud_id IS NOT NULL",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_user_memory_needs_push \
+             ON user_memory(needs_push) WHERE needs_push = 1",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_user_memory_app_mode \
+             ON user_memory(app_mode)",
+            [],
+        )?;
+    } else {
+        tracing::debug!("v68: skipping user_memory columns — table does not exist yet");
+    }
+
+    // Per-user MEMORY cursor (separate from the chat cursor so the two streams
+    // advance independently). cloud_sync_state may not exist yet if v67 is not
+    // applied (partial test schema), so guard with IF NOT EXISTS on the table.
+    if table_exists("cloud_sync_state") {
+        ensure_column(
+            conn,
+            "cloud_sync_state",
+            "memory_cursor",
+            "memory_cursor TEXT NOT NULL DEFAULT '0'",
+        )?;
+    } else {
+        // cloud_sync_state hasn't been created yet (v67 not applied), so create it
+        // now with both columns. In a normal upgrade v67 runs first, but defensive.
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS cloud_sync_state ( \
+                user_id TEXT PRIMARY KEY, \
+                cursor TEXT NOT NULL DEFAULT '0', \
+                memory_cursor TEXT NOT NULL DEFAULT '0', \
+                last_sync_at TEXT \
+            )",
+            [],
+        )?;
+    }
 
     Ok(())
 }
