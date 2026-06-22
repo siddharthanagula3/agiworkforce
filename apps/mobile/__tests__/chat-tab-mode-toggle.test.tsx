@@ -180,8 +180,9 @@ describe('Chat tab mode toggle', () => {
 
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(false);
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
-    // ProjectSelectorBar is hidden in Cloud mode.
-    expect(queryByTestId('project-selector-bar')).toBeNull();
+    // ProjectSelectorBar is mode-aware and now stays visible in Cloud mode too
+    // (it shows CLOUD projects so a cloud chat can be assigned to a project).
+    expect(queryByTestId('project-selector-bar')).toBeTruthy();
     // No invite/waitlist modal needed since cloud is already unlocked.
     expect(queryByTestId('invite-code-modal')).toBeNull();
   });

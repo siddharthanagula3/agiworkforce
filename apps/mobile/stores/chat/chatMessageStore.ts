@@ -4,6 +4,7 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -118,7 +119,7 @@ export const useChatMessageStore = create<MessageState>()(
         const effectiveProjectId =
           requestedMode === 'local'
             ? (projectId ?? useProjectStore.getState().activeProjectId ?? undefined)
-            : undefined;
+            : resolveCloudProjectId(projectId);
         const selectedModelMode = executionModeForModel(selectedModel);
         const conversationModel = selectedModelMode === requestedMode ? selectedModel : undefined;
 
@@ -150,7 +151,13 @@ export const useChatMessageStore = create<MessageState>()(
         const forkId = await createConversationForMode(
           set,
           forkTitle,
-          sourceMode === 'local' ? sourceConversation?.projectId : undefined,
+          // Carry the source chat's project in BOTH modes. The fork stays in
+          // sourceMode, so a cloud fork inherits a cloud project id and a local
+          // fork a local one — the namespace can never cross. For cloud, re-validate
+          // against a live cloud project so a tombstoned id isn't propagated.
+          sourceMode === 'local'
+            ? sourceConversation?.projectId
+            : resolveCloudProjectId(sourceConversation?.projectId),
           forkModel,
           sourceMode,
         );
@@ -572,6 +579,22 @@ function generateMessageId(): string {
 
 function shouldLoadCloudConversationList(): boolean {
   return isCloudChatEnabled() && useChatAppModeStore.getState().appMode === 'cloud';
+}
+
+/**
+ * Resolve the cloud project a new/forked cloud chat should be stamped with.
+ *
+ * TRUST BOUNDARY: reads ONLY the cloud project store, never the local one, and
+ * validates the candidate (explicit id, else the cloud active project) against a
+ * LIVE (non-tombstoned) cloud project. A local project id, an unknown id, or a
+ * tombstoned id all resolve to `undefined` — so a cloud chat can never be stamped
+ * with a cross-namespace or dangling project_id.
+ */
+function resolveCloudProjectId(explicit?: string): string | undefined {
+  const { activeProjectId, projects } = useCloudProjectStore.getState();
+  const candidate = explicit ?? activeProjectId ?? undefined;
+  if (!candidate) return undefined;
+  return projects.some((p) => p.id === candidate && p.deletedAt === null) ? candidate : undefined;
 }
 
 function isCloudConversation(conversation: ConversationSummary | undefined): boolean {
