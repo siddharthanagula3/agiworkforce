@@ -86,3 +86,34 @@ describe('MarkdownContent math rendering', () => {
     expect(mathCode).toBeNull();
   });
 });
+
+// Regression: \[...\] and \(...\) bracket delimiters must render as KaTeX,
+// not as raw backslash-bracket text. Models commonly emit these instead of $...$.
+describe('MarkdownContent bracket-delimiter math rendering', () => {
+  it('renders \\[ a^2+b^2=c^2 \\] as KaTeX, not raw text', () => {
+    const { container } = render(<MarkdownContent content={'\\[a^2+b^2=c^2\\]'} />);
+    // Must not contain literal backslash-bracket in the rendered output
+    expect(container.textContent).not.toContain('\\[');
+    expect(container.textContent).not.toContain('\\]');
+    // KaTeX should have rendered it
+    expect(container.innerHTML).toContain('katex');
+    // No language-math code block (which would cause hydration errors)
+    expect(container.querySelector('code.language-math')).toBeNull();
+  });
+
+  it('renders \\( x^2 \\) inline math as KaTeX, not raw text', () => {
+    const { container } = render(<MarkdownContent content={'The answer is \\(x^2\\) here.'} />);
+    expect(container.textContent).not.toContain('\\(');
+    expect(container.textContent).not.toContain('\\)');
+    expect(container.innerHTML).toContain('katex');
+  });
+
+  it('does not mangle \\( inside inline code when rendering', () => {
+    const { container } = render(
+      <MarkdownContent content={'Use `re.compile("\\(")` in Python.'} />,
+    );
+    // The inline code element must still contain the raw text
+    const code = container.querySelector('code');
+    expect(code?.textContent).toContain('\\(');
+  });
+});
