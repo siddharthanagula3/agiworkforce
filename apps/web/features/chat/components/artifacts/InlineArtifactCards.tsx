@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useMounted } from '@shared/hooks/useMounted';
 import {
   FileCode,
   Code2,
@@ -85,7 +86,12 @@ function badgeClass(type: ArtifactData['type']): string {
 // ─── Single Full-Width Card (Fix 44) ─────────────────────────────────────────
 
 function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
-  const canRender = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
+  // The sandboxed thumbnail iframe is client-only: buildSandboxSrcDoc runs DOMPurify,
+  // which needs a real DOM. Gate on mount so the server renders an inert placeholder
+  // and the real srcDoc is applied by a post-mount re-render (no SSR crash, no blank
+  // iframe from hydration not re-syncing the attribute). See useMounted.
+  const mounted = useMounted();
+  const canRender = mounted && ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
   const generatedFileSummary = summarizeGeneratedFileBundle({
     computeSession: artifact.computeSession,
     generatedFile: artifact.generatedFile,
