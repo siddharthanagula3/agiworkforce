@@ -14,3 +14,7 @@ export * from './artifacts';
 // Artifact derivation service — the ONE canonical place artifacts are derived
 // from message content (deterministic ids; consumed by web/desktop/mobile).
 export * from './artifact-derivation';
+
+// Model-switch cache-penalty assessment — pure logic for warning users that
+// switching models mid-conversation resets the prompt cache (consumed by all surfaces).
+export * from './model-switch-cache';
