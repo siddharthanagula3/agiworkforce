@@ -159,41 +159,58 @@ Notifications.setNotificationHandler({
 // ---------------------------------------------------------------------------
 
 export async function registerForPushNotifications(): Promise<string | null> {
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  try {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
 
-  if (finalStatus !== 'granted') {
+    if (finalStatus !== 'granted') {
+      return null;
+    }
+
+    if (Platform.OS === 'android') {
+      // Register all four priority channels
+      for (const channel of Object.values(ANDROID_CHANNELS)) {
+        await Notifications.setNotificationChannelAsync(channel.id, {
+          name: channel.name,
+          importance: channel.importance,
+          vibrationPattern: 'vibrationPattern' in channel ? channel.vibrationPattern : undefined,
+          lightColor: channel.lightColor,
+          sound: 'sound' in channel ? (channel.sound as string) : undefined,
+          bypassDnd: 'bypassDnd' in channel ? (channel.bypassDnd as boolean) : undefined,
+        });
+      }
+    }
+
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
+    const pushToken = tokenData.data;
+
+    await sendTokenToBackend(pushToken);
+
+    return pushToken;
+  } catch (err) {
+    // Remote-push registration is a non-fatal CAPABILITY: it legitimately fails on
+    // the iOS Simulator (no "aps-environment" entitlement), on dev builds without a
+    // push capability, when APNs is unreachable, or when the backend token sync
+    // fails. Degrade to "no push token" instead of letting the promise reject —
+    // an uncaught rejection here surfaces as a red error overlay in dev and is a
+    // silent crash risk in prod. Push simply stays off for this session.
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[push] registration skipped (non-fatal):',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
     return null;
   }
-
-  if (Platform.OS === 'android') {
-    // Register all four priority channels
-    for (const channel of Object.values(ANDROID_CHANNELS)) {
-      await Notifications.setNotificationChannelAsync(channel.id, {
-        name: channel.name,
-        importance: channel.importance,
-        vibrationPattern: 'vibrationPattern' in channel ? channel.vibrationPattern : undefined,
-        lightColor: channel.lightColor,
-        sound: 'sound' in channel ? (channel.sound as string) : undefined,
-        bypassDnd: 'bypassDnd' in channel ? (channel.bypassDnd as boolean) : undefined,
-      });
-    }
-  }
-
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  const tokenData = await Notifications.getExpoPushTokenAsync(
-    projectId ? { projectId } : undefined,
-  );
-  const pushToken = tokenData.data;
-
-  await sendTokenToBackend(pushToken);
-
-  return pushToken;
 }
 
 // --- Token backend sync ---

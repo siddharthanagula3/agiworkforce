@@ -89,6 +89,17 @@ async function attemptStream(
 ): Promise<boolean> {
   const token = await getAuthToken();
 
+  // The completions schema expects `thinking_mode` (a boolean), NOT `thinking` —
+  // `thinking` is an OBJECT { type, budget_tokens }. Sending our boolean flag as
+  // `thinking` fails Zod validation with HTTP 400 ("expected object, received
+  // boolean"), which is the exact bug that made EVERY cloud chat reply silently
+  // fail. Remap the boolean to thinking_mode; never send a bare boolean as thinking.
+  const { thinking, ...restBody } = body;
+  const payload = {
+    ...restBody,
+    ...(typeof thinking === 'boolean' ? { thinking_mode: thinking } : {}),
+  };
+
   const response = await guardedFetch(`${API_URL}/api/llm/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -96,7 +107,7 @@ async function attemptStream(
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
     signal,
   });
 
