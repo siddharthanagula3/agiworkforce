@@ -3,13 +3,16 @@
  * Design: docs/plans/cross-device-cloud-sync-design-2026-06-20.md
  *
  *   GET  /api/chat/sync?since=<server_version cursor>
- *        → conversations + messages with server_version > cursor (incl. tombstones),
- *          scoped to the authenticated user, plus the next cursor.
- *   POST /api/chat/sync  { conversations: [...], messages: [...] }
+ *        → conversations + messages + artifacts with server_version > cursor (incl.
+ *          tombstones), scoped to the authenticated user, plus the next cursor.
+ *   POST /api/chat/sync  { conversations: [...], messages: [...], artifacts: [...] }
  *        → idempotent UPSERT by id (= cloud_id). user_id is set SERVER-SIDE from the
  *          verified session (never from the body); RLS WITH CHECK is the backstop.
- *          Conversation metadata = last-writer-wins; messages are append-only
- *          (only a deleted_at tombstone may change an existing message).
+ *          Conversation/artifact metadata = last-writer-wins (by updated_at); messages
+ *          are append-only (only a deleted_at tombstone may change an existing message).
+ *          Artifacts (0039) are the third synced entity — managed-only; the cloud row's
+ *          id is the deterministic derived_id for derived artifacts. See
+ *          docs/plans/artifact-cloud-sync-design-2026-06-21.md.
  *
  * Trust boundary: this endpoint is the Managed-Cloud store. Local/BYOK conversations
  * have no cloud_id and are never pushed/pulled (enforced client-side per the matrix).
@@ -26,8 +29,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const MAX_CONVERSATIONS_PULL = 500;
 const MAX_MESSAGES_PULL = 1000;
+const MAX_ARTIFACTS_PULL = 500;
 const MAX_CONVERSATIONS_PUSH = 500;
 const MAX_MESSAGES_PUSH = 2000;
+const MAX_ARTIFACTS_PUSH = 500;
 
 type ConversationDelta = {
   id: string;
@@ -52,6 +57,23 @@ type MessageDelta = {
   output_tokens: number;
   cost_cents: number;
   metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  server_version: string;
+};
+
+type ArtifactDelta = {
+  id: string;
+  conversation_id: string;
+  message_id: string | null;
+  title: string | null;
+  artifact_type: string;
+  language: string | null;
+  content: string;
+  current_version: number;
+  pinned: boolean;
+  tags: string[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -102,13 +124,36 @@ async function handlePull(request: NextRequest) {
       [userId, since],
     );
 
+    // Artifacts: the third synced entity (managed-only). user_id is denormalized on
+    // web_artifacts (like web_conversations) so the filter is direct.
+    const artifacts = await db.query<ArtifactDelta>(
+      `
+        select id, conversation_id, message_id, title, artifact_type, language, content,
+               current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
+        from web_artifacts
+        where user_id = $1 and server_version > $2
+        order by server_version asc
+        limit ${MAX_ARTIFACTS_PULL}
+      `,
+      [userId, since],
+    );
+
     const convSaturated = conversations.length >= MAX_CONVERSATIONS_PULL;
     const msgSaturated = messages.length >= MAX_MESSAGES_PULL;
-    // hasMore: a full page on either table means the client should pull again.
-    const hasMore = convSaturated || msgSaturated;
-    const cursor = computePullCursor(since, conversations, messages, convSaturated, msgSaturated);
+    const artSaturated = artifacts.length >= MAX_ARTIFACTS_PULL;
+    // hasMore: a full page on any table means the client should pull again.
+    const hasMore = convSaturated || msgSaturated || artSaturated;
+    const cursor = computePullCursor(
+      since,
+      conversations,
+      messages,
+      convSaturated,
+      msgSaturated,
+      artifacts,
+      artSaturated,
+    );
 
-    return NextResponse.json({ conversations, messages, cursor, hasMore });
+    return NextResponse.json({ conversations, messages, artifacts, cursor, hasMore });
   } catch (error) {
     logger.error({ error, userId }, 'Cloud sync pull failed');
     throw createError.internal('Failed to pull sync changes');
@@ -145,9 +190,26 @@ const PushMessageSchema = z.object({
   deletedAt: z.string().datetime().nullable().optional(),
 });
 
+const PushArtifactSchema = z.object({
+  id: z.string().uuid(),
+  conversationId: z.string().uuid(),
+  messageId: z.string().uuid().nullable().optional(),
+  title: z.string().max(500).nullable().optional(),
+  artifactType: z.string().max(50),
+  language: z.string().max(50).nullable().optional(),
+  content: z.string().max(2_000_000),
+  currentVersion: z.number().int().positive().optional(),
+  pinned: z.boolean().optional(),
+  tags: z.array(z.string().max(100)).max(50).optional(),
+  createdAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime(),
+  deletedAt: z.string().datetime().nullable().optional(),
+});
+
 const PushBodySchema = z.object({
   conversations: z.array(PushConversationSchema).max(MAX_CONVERSATIONS_PUSH).optional(),
   messages: z.array(PushMessageSchema).max(MAX_MESSAGES_PUSH).optional(),
+  artifacts: z.array(PushArtifactSchema).max(MAX_ARTIFACTS_PUSH).optional(),
 });
 
 async function handlePush(request: NextRequest) {
@@ -171,11 +233,12 @@ async function handlePush(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid sync payload', parsed.error);
   }
-  const { conversations = [], messages = [] } = parsed.data;
+  const { conversations = [], messages = [], artifacts = [] } = parsed.data;
 
   const applied = {
     conversations: [] as Array<{ id: string; server_version: string }>,
     messages: [] as Array<{ id: string; server_version: string }>,
+    artifacts: [] as Array<{ id: string; server_version: string }>,
   };
 
   try {
@@ -259,7 +322,61 @@ async function handlePush(request: NextRequest) {
       if (rows[0]) applied.messages.push(rows[0]);
     }
 
-    const cursor = maxServerVersion('0', applied.conversations, applied.messages);
+    // Artifacts: UPSERT, last-writer-wins by updated_at. user_id is forced to the
+    // session user; the parent conversation must be owned by the caller. RLS WITH
+    // CHECK is the DB-level backstop. A null updated_at can never clobber a newer row.
+    for (const a of artifacts) {
+      const rows = await db.query<{ id: string; server_version: string }>(
+        `
+          insert into web_artifacts
+            (id, user_id, conversation_id, message_id, title, artifact_type, language,
+             content, current_version, pinned, tags, created_at, updated_at, deleted_at)
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                 coalesce($12::timestamptz, now()), $13::timestamptz, $14::timestamptz
+          where exists (
+            select 1 from web_conversations where id = $3 and user_id = $2
+          )
+          on conflict (id) do update set
+            title = excluded.title,
+            artifact_type = excluded.artifact_type,
+            language = excluded.language,
+            content = excluded.content,
+            current_version = excluded.current_version,
+            pinned = excluded.pinned,
+            tags = excluded.tags,
+            message_id = coalesce(excluded.message_id, web_artifacts.message_id),
+            updated_at = excluded.updated_at,
+            deleted_at = excluded.deleted_at
+          where web_artifacts.user_id = $2
+            and excluded.updated_at >= web_artifacts.updated_at
+          returning id, server_version
+        `,
+        [
+          a.id,
+          userId,
+          a.conversationId,
+          a.messageId ?? null,
+          a.title ?? null,
+          a.artifactType,
+          a.language ?? null,
+          a.content,
+          a.currentVersion ?? 1,
+          a.pinned ?? false,
+          a.tags ?? [],
+          a.createdAt ?? null,
+          a.updatedAt,
+          a.deletedAt ?? null,
+        ],
+      );
+      if (rows[0]) applied.artifacts.push(rows[0]);
+    }
+
+    const cursor = maxServerVersion(
+      '0',
+      applied.conversations,
+      applied.messages,
+      applied.artifacts,
+    );
     return NextResponse.json({ applied, cursor });
   } catch (error) {
     logger.error({ error, userId }, 'Cloud sync push failed');
@@ -293,9 +410,11 @@ export function computePullCursor(
   messages: Array<{ server_version: string }>,
   convSaturated: boolean,
   msgSaturated: boolean,
+  artifacts: Array<{ server_version: string }> = [],
+  artSaturated = false,
 ): string {
-  if (!convSaturated && !msgSaturated) {
-    return maxServerVersion(since, conversations, messages);
+  if (!convSaturated && !msgSaturated && !artSaturated) {
+    return maxServerVersion(since, conversations, messages, artifacts);
   }
   const frontiers: string[] = [];
   if (convSaturated && conversations.length > 0) {
@@ -303,6 +422,9 @@ export function computePullCursor(
   }
   if (msgSaturated && messages.length > 0) {
     frontiers.push(messages[messages.length - 1]!.server_version);
+  }
+  if (artSaturated && artifacts.length > 0) {
+    frontiers.push(artifacts[artifacts.length - 1]!.server_version);
   }
   if (frontiers.length === 0) return since;
   return frontiers.reduce((min, v) => (bigintGreater(min, v) ? v : min), frontiers[0]!);
