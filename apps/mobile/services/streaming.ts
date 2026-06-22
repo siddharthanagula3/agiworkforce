@@ -73,6 +73,34 @@ function isNetworkError(err: unknown): boolean {
  * Returns true when the stream ends cleanly (onDone was called),
  * or throws on network-level errors so the caller can retry.
  */
+/**
+ * Parse one raw SSE line (`data: {...}` / `data: [DONE]`) and fire onDelta for
+ * any choice delta or finish_reason. Returns true when the line is the `[DONE]`
+ * sentinel so the caller can finalize. Shared by the streaming reader and the
+ * non-streaming `response.text()` fallback so both parse identically.
+ */
+function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
+  const trimmed = line.trim();
+  if (!trimmed || !trimmed.startsWith('data: ')) return false;
+
+  const payload = trimmed.slice(6);
+  if (payload === '[DONE]') return true;
+
+  try {
+    const parsed = JSON.parse(payload);
+    const choice = parsed.choices?.[0];
+    if (choice?.delta) {
+      callbacks.onDelta(choice.delta);
+    }
+    if (choice?.finish_reason) {
+      callbacks.onDelta({ finish_reason: choice.finish_reason });
+    }
+  } catch {
+    // Skip malformed JSON lines
+  }
+  return false;
+}
+
 async function attemptStream(
   body: {
     model: string;
@@ -139,9 +167,22 @@ async function attemptStream(
   }
 
   const reader = response.body?.getReader();
+
+  // React Native's global `fetch` (whatwg-fetch) does NOT expose a streaming
+  // response body — `response.body` is null, so `getReader()` is unavailable.
+  // This silently broke EVERY cloud reply: the request 200s, but with no reader
+  // the old code called onError('No response body'). Fall back to reading the
+  // full SSE buffer at once via `response.text()` and run it through the same
+  // line parser. Non-incremental (the reply appears all at once when the stream
+  // closes after [DONE]) but correct — a working reply beats a streamed nothing.
+  // (True token-by-token streaming needs expo/fetch, handled separately.)
   if (!reader) {
-    callbacks.onError(new Error('No response body'));
-    return false;
+    const full = await response.text();
+    for (const line of full.split('\n')) {
+      if (processSseLine(line, callbacks)) break;
+    }
+    callbacks.onDone();
+    return true;
   }
 
   const decoder = new TextDecoder();
@@ -159,29 +200,12 @@ async function attemptStream(
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-        const payload = trimmed.slice(6);
-        if (payload === '[DONE]') {
+        if (processSseLine(line, callbacks)) {
           if (!doneCalled) {
             doneCalled = true;
             callbacks.onDone();
           }
           return true;
-        }
-
-        try {
-          const parsed = JSON.parse(payload);
-          const choice = parsed.choices?.[0];
-          if (choice?.delta) {
-            callbacks.onDelta(choice.delta);
-          }
-          if (choice?.finish_reason) {
-            callbacks.onDelta({ finish_reason: choice.finish_reason });
-          }
-        } catch {
-          // Skip malformed JSON lines
         }
       }
     }
