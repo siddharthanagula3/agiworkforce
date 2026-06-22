@@ -264,6 +264,8 @@ export interface ToolEntry {
   error?: string;
   /** Tool execution result content (stdout / response body), populated via x_tool_result SSE events */
   result?: string;
+  /** Playful action phrase shown in the running-state header (e.g. "Running code"). */
+  statusPhrase?: string;
 }
 
 interface ToolTimelineProps {
@@ -547,6 +549,13 @@ function ToolTimeline({
   const groups = useMemo(() => groupTools(tools), [tools]);
   const summary = useMemo(() => buildCompactSummary(tools), [tools]);
 
+  // Pick the status phrase from the most recently started running tool, if set.
+  // Falls back to "Working..." so the header is always informative.
+  const runningPhrase = useMemo(() => {
+    const running = [...tools].reverse().find((t) => t.status === 'running');
+    return running?.statusPhrase ?? 'Working...';
+  }, [tools]);
+
   const handleToggle = useCallback(() => {
     if (isOpen) {
       // User is collapsing · if tools are running, force closed
@@ -603,7 +612,7 @@ function ToolTimeline({
       >
         <span className="flex-1 text-left">
           {hasRunning ? (
-            <span className="text-primary">Running tools...</span>
+            <span className="text-primary">{runningPhrase}</span>
           ) : (
             <>
               {summary}
