@@ -2,6 +2,15 @@
 //!
 //! These commands expose the MemoryManager to the frontend,
 //! allowing the AGI to persist and recall information across sessions.
+//!
+//! CLOUD SYNC HOOK (Requirement 4):
+//! Write commands (remember/store/forget/delete/forget_topic) accept an optional
+//! `active_mode` param. When the active mode is managed-cloud, they call
+//! `mark_memory_for_push` on the AppDatabase so the next memory sync cycle will
+//! push the change. The gate uses the same `derive_cloud_sync_enabled` function
+//! that chat sync uses — the identical trust-boundary function, not a reimplementation.
+//! `user_memory.app_mode = 'cloud'` is set on rows created in cloud mode; the WHERE
+//! guard in `mark_memory_for_push` makes it impossible to mark a local row.
 
 use chrono::Utc;
 use std::collections::HashSet;
@@ -14,8 +23,38 @@ use crate::core::agi::memory_manager::{
     MemoryCompactionResult, MemoryEntry, MemoryExport, MemoryManager, MemoryStats,
 };
 use crate::core::llm::memory_integration::MemoryInjectionConfig;
+use crate::data::memory_sync;
+use crate::sys::commands::chat::state::AppDatabase;
+use crate::sys::commands::chat::send_message_setup::derive_cloud_sync_enabled;
+use crate::sys::commands::settings::SettingsState;
 use crate::sys::error::{Error, Result};
 use tokio::sync::RwLock;
+
+// ---------------------------------------------------------------------------
+// Internal helper: derive whether we're in managed-cloud mode for memory writes.
+// Reuses the EXACT same function as send_message.rs (not a reimplementation).
+// ---------------------------------------------------------------------------
+
+/// Set `app_mode='cloud'` on a user_memory row. Called for rows created while
+/// cloud sync is enabled so they are marked correctly for push.
+fn set_memory_cloud_mode(db: &AppDatabase, memory_id: i64) {
+    if let Ok(conn) = db.connection() {
+        let _ = conn.execute(
+            "UPDATE user_memory SET app_mode = 'cloud' WHERE id = ?1 AND app_mode = 'local'",
+            rusqlite::params![memory_id],
+        );
+    }
+}
+
+/// Mark an existing cloud memory for push. Non-fatal — a failed mark is logged
+/// but must never cause the write command to fail.
+fn try_mark_memory_for_push(db: &AppDatabase, memory_id: i64) {
+    if let Ok(conn) = db.connection() {
+        if let Err(e) = memory_sync::mark_memory_for_push(&conn, memory_id) {
+            tracing::warn!(error = %e, memory_id, "memory: failed to mark memory for cloud push");
+        }
+    }
+}
 
 /// State wrapper for the MemoryManager
 pub struct MemoryState {
@@ -111,6 +150,9 @@ impl ConversationSummarizerState {
 /// Store or update a memory
 ///
 /// If a memory with the same category+topic already exists, it will be updated.
+///
+/// `active_mode`: optional frontend mode string (`"local"` | `"cloud"`).
+/// When in cloud mode, marks the memory for push to the managed cloud.
 #[tauri::command]
 pub async fn memory_remember(
     category: String,
@@ -118,12 +160,32 @@ pub async fn memory_remember(
     content: String,
     importance: Option<i32>,
     source: Option<String>,
+    active_mode: Option<String>,
     state: State<'_, MemoryState>,
+    db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
 ) -> Result<i64> {
     let category = parse_category(&category)?;
-    state
+    let memory_id = state
         .manager
-        .remember(category, &topic, &content, importance, source.as_deref())
+        .remember(category, &topic, &content, importance, source.as_deref())?;
+
+    // CLOUD SYNC HOOK: derive_cloud_sync_enabled is the single source of truth
+    // for the managed-cloud trust boundary (send_message_setup.rs:64).
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
+        set_memory_cloud_mode(&db, memory_id);
+        try_mark_memory_for_push(&db, memory_id);
+    }
+
+    Ok(memory_id)
 }
 
 /// Recall a specific memory by category and topic
@@ -170,19 +232,83 @@ pub async fn memory_get_important(
 }
 
 /// Delete a memory by ID
+///
+/// In cloud mode: soft-deletes the row (sets deleted_at_utc + needs_push=1)
+/// so the tombstone propagates to other devices. Falls through to hard-delete
+/// for local rows.
 #[tauri::command]
-pub async fn memory_forget(memory_id: i64, state: State<'_, MemoryState>) -> Result<bool> {
+pub async fn memory_forget(
+    memory_id: i64,
+    active_mode: Option<String>,
+    state: State<'_, MemoryState>,
+    db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
+) -> Result<bool> {
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+
+    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
+        // Attempt soft-delete for cloud rows. If the row is a cloud row, return true
+        // (soft-deleted, tombstone will propagate). If not a cloud row, fall through.
+        if let Ok(conn) = db.connection() {
+            match memory_sync::soft_delete_memory_for_push(&conn, memory_id) {
+                Ok(true) => return Ok(true), // cloud row soft-deleted
+                Ok(false) => {}              // not a cloud row — hard-delete below
+                Err(e) => {
+                    tracing::warn!(error = %e, memory_id, "memory_forget: soft-delete failed — falling through to hard delete");
+                }
+            }
+        }
+    }
+
     state.manager.forget(memory_id)
 }
 
 /// Delete a memory by category and topic
+///
+/// In cloud mode: soft-deletes the row so the tombstone propagates.
 #[tauri::command]
 pub async fn memory_forget_topic(
     category: String,
     topic: String,
+    active_mode: Option<String>,
     state: State<'_, MemoryState>,
+    db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
 ) -> Result<bool> {
     let category = parse_category(&category)?;
+
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+
+    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
+        if let Ok(conn) = db.connection() {
+            match memory_sync::soft_delete_memory_by_topic_for_push(
+                &conn,
+                category.as_str(),
+                &topic,
+            ) {
+                Ok(true) => return Ok(true),
+                Ok(false) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, topic = %topic, "memory_forget_topic: soft-delete failed — falling through to hard delete");
+                }
+            }
+        }
+    }
+
     state.manager.forget_topic(category, &topic)
 }
 
@@ -252,17 +378,64 @@ pub async fn memory_store(
     content: String,
     importance: Option<i32>,
     source: Option<String>,
+    active_mode: Option<String>,
     state: State<'_, MemoryState>,
+    db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
 ) -> Result<i64> {
     let category = parse_category(&category)?;
-    state
+    let memory_id = state
         .manager
-        .remember(category, &topic, &content, importance, source.as_deref())
+        .remember(category, &topic, &content, importance, source.as_deref())?;
+
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
+        set_memory_cloud_mode(&db, memory_id);
+        try_mark_memory_for_push(&db, memory_id);
+    }
+
+    Ok(memory_id)
 }
 
 /// Delete a memory by ID (alias for memory_forget for frontend compatibility)
+///
+/// In cloud mode: soft-deletes the row so the tombstone propagates.
 #[tauri::command]
-pub async fn memory_delete(memory_id: i64, state: State<'_, MemoryState>) -> Result<bool> {
+pub async fn memory_delete(
+    memory_id: i64,
+    active_mode: Option<String>,
+    state: State<'_, MemoryState>,
+    db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
+) -> Result<bool> {
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+
+    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
+        if let Ok(conn) = db.connection() {
+            match memory_sync::soft_delete_memory_for_push(&conn, memory_id) {
+                Ok(true) => return Ok(true),
+                Ok(false) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, memory_id, "memory_delete: soft-delete failed — falling through to hard delete");
+                }
+            }
+        }
+    }
+
     state.manager.forget(memory_id)
 }
 

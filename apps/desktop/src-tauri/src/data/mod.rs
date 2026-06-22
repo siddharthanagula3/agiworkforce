@@ -5,6 +5,7 @@ pub mod cloud_sync;
 pub mod config_hierarchy;
 pub mod database;
 pub mod db;
+pub mod memory_sync;
 pub mod metrics;
 pub mod settings;
 pub mod state;
