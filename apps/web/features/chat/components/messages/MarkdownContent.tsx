@@ -9,7 +9,6 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
-import 'katex/dist/katex.min.css';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import type { Components } from 'react-markdown';
 import { Button } from '@/shared/components/ui/button';
