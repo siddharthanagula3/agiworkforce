@@ -856,7 +856,15 @@ export async function processRequest(
     effort: effectiveEffort,
   });
 
-  let maxTokens = chatRequest.max_tokens || chatRequest.max_completion_tokens || 1000;
+  // Default output cap when the client doesn't specify one. 1000 was far too low: it
+  // truncated HTML/code artifacts mid-stream, so the closing ``` fence never arrived, the
+  // artifact couldn't be extracted into a card, and the transcript was left showing raw
+  // code (this broke claude.ai-style artifact parity). 8192 lets a full artifact / long
+  // answer complete. It is a CAP, not a target — short replies still stop early, so cost
+  // for them is unchanged; only genuinely long responses use the extra headroom.
+  const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+  let maxTokens =
+    chatRequest.max_tokens || chatRequest.max_completion_tokens || DEFAULT_MAX_OUTPUT_TOKENS;
   if (
     providerLower === 'anthropic' &&
     thinkingConfig?.type === 'enabled' &&
