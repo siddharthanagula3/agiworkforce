@@ -56,3 +56,33 @@ describe('EnhancedMarkdownRenderer XSS hardening', () => {
     expectSanitized(container.innerHTML);
   });
 });
+
+// Regression: inline math must not produce a language-math <code> block
+// (div/pre inside <p>) which triggers a React hydration error.
+describe('MarkdownContent math rendering', () => {
+  it('converts inline math to KaTeX spans, not language-math code elements', () => {
+    const { container } = render(
+      <MarkdownContent content="The area is $A = \\pi r^2$ for a circle." />,
+    );
+    // rehype-katex renders math as <span class="katex">...</span>, NOT code.language-math
+    const mathCode = container.querySelector('code.language-math');
+    expect(mathCode).toBeNull();
+    // KaTeX output should be present (span.katex or similar)
+    expect(container.innerHTML).toContain('katex');
+  });
+
+  it('converts block math to KaTeX, not language-math code blocks', () => {
+    const { container } = render(<MarkdownContent content={'$$\nE = mc^2\n$$'} />);
+    const mathCode = container.querySelector('code.language-math');
+    expect(mathCode).toBeNull();
+    expect(container.innerHTML).toContain('katex');
+  });
+
+  it('still syntax-highlights regular fenced code blocks after math plugin addition', () => {
+    const { container } = render(<MarkdownContent content={'```python\nx = 1\n```'} />);
+    expect(container.innerHTML).toContain('language-python');
+    // math pipeline must not interfere with code highlighting
+    const mathCode = container.querySelector('code.language-math');
+    expect(mathCode).toBeNull();
+  });
+});
