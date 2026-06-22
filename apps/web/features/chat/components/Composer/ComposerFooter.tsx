@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
@@ -8,6 +8,18 @@ import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTr
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@shared/ui/switch';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@shared/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@shared/ui/alert-dialog';
+import { assessModelSwitchCache } from '@agiworkforce/services';
+import { useChatStore } from '@/stores/chatStore';
 import {
   EFFORT_LABEL,
   PROVIDER_DISPLAY,
@@ -485,6 +497,46 @@ export function ComposerFooter({
   const tier = subscription?.tier ?? 'free';
 
   const selectedModel = getSelectedModel();
+
+  // Prompt-cache safety: switching the model mid-conversation resets the cache and re-bills
+  // prior context at full input price (caching is per-model). Warn before committing such a
+  // switch. Logic lives in the shared @agiworkforce/services util (reused by all surfaces).
+  const assistantTurnCount = useChatStore(
+    (s) => s.messages.filter((m) => m.role === 'assistant').length,
+  );
+  const [pendingSwitch, setPendingSwitch] = useState<{ id: string; message: string } | null>(null);
+
+  const commitModel = useCallback(
+    (id: string) => {
+      setSelectedModelId(id);
+      setOpen(false);
+    },
+    [setSelectedModelId],
+  );
+
+  const handleSelectModel = useCallback(
+    (model: AIModel) => {
+      if (model.id === selectedModelId) {
+        setOpen(false);
+        return;
+      }
+      const assessment = assessModelSwitchCache({
+        priorModelId: selectedModelId,
+        nextModelId: model.id,
+        priorTurnCount: assistantTurnCount,
+        priorModelLabel: selectedModel?.name,
+        nextModelLabel: model.name,
+      });
+      if (assessment.warn) {
+        setPendingSwitch({ id: model.id, message: assessment.message });
+        setOpen(false);
+        return;
+      }
+      commitModel(model.id);
+    },
+    [selectedModelId, assistantTurnCount, selectedModel, commitModel],
+  );
+
   const lockedDisplayModel =
     AVAILABLE_MODELS.find((model) => model.id === getBestAutoModeForTier('free')) ?? selectedModel;
   const dailyUsageLabel = useDailyUsageLabel();
@@ -649,14 +701,7 @@ export function ComposerFooter({
                         lockKind={model.lockKind}
                         lockReason={model.lockReason}
                         onUpgradeRequest={model.lockKind === 'tier' ? onUpgradeRequest : undefined}
-                        onSelect={
-                          model.isLocked
-                            ? undefined
-                            : () => {
-                                setSelectedModelId(model.id);
-                                setOpen(false);
-                              }
-                        }
+                        onSelect={model.isLocked ? undefined : () => handleSelectModel(model)}
                       />
                     );
                   })}
@@ -763,14 +808,7 @@ export function ComposerFooter({
                               lockKind={lock.kind}
                               lockReason={lock.reason}
                               onUpgradeRequest={lock.kind === 'tier' ? onUpgradeRequest : undefined}
-                              onSelect={
-                                lock.locked
-                                  ? undefined
-                                  : () => {
-                                      setSelectedModelId(model.id);
-                                      setOpen(false);
-                                    }
-                              }
+                              onSelect={lock.locked ? undefined : () => handleSelectModel(model)}
                             />
                           );
                         })}
@@ -788,6 +826,32 @@ export function ComposerFooter({
           )}
         </div>
       </div>
+      <AlertDialog
+        open={pendingSwitch !== null}
+        onOpenChange={(o) => {
+          if (!o) setPendingSwitch(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Switch model mid-conversation?</AlertDialogTitle>
+            <AlertDialogDescription>{pendingSwitch?.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingSwitch(null)}>
+              Keep current model
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingSwitch) commitModel(pendingSwitch.id);
+                setPendingSwitch(null);
+              }}
+            >
+              Switch anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
