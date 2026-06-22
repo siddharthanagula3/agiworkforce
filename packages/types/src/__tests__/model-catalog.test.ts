@@ -216,6 +216,21 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
   });
 
+  describe('explicit model selection is respected (not re-routed by task)', () => {
+    it('concrete model + coding taskType returns the SAME model, not the coding slot', () => {
+      // Regression: the task-aware path ignored the input model and returned the
+      // task slot model, silently swapping an explicit pick (gpt-5.4-mini ->
+      // claude-sonnet-4.6) and re-routing to a provider the user never chose.
+      expect(resolveAutoModeModel('gpt-5.4-mini', 'pro', 'coding')).toBe('gpt-5.4-mini');
+    });
+    it('concrete model + reasoning taskType returns the SAME model', () => {
+      expect(resolveAutoModeModel('gpt-5.4-mini', 'pro', 'reasoning')).toBe('gpt-5.4-mini');
+    });
+    it('auto alias still task-routes (control — task routing only applies to auto-*)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe('claude-sonnet-4.6');
+    });
+  });
+
   describe('Pro tier task-aware routing', () => {
     it('coding task → coding_premium_pro slot (Sonnet 4.6)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe('claude-sonnet-4.6');
