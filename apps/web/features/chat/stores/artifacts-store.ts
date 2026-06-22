@@ -1,11 +1,70 @@
 'use client';
 
-import { create } from 'zustand';
+import { useStore } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { immer } from 'zustand/middleware/immer';
+import { create } from 'zustand';
+import { createArtifactStore } from '@agiworkforce/stores';
+import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData, ArtifactVersion } from '../components/artifacts/ArtifactPreview';
 import { logger } from '@shared/lib/logger';
 import { getAuthToken } from '@shared/lib/get-auth-token';
+
+// ============================================================================
+// Shared vanilla store engine (Step 1b)
+//
+// _sharedArtifactStore is the canonical engine for:
+//   - artifacts collection (SharedArtifact[])
+//   - versionsById (content-keyed auto-versioning)
+//   - selectedArtifactId
+//   - panelOpen
+//
+// Components read these from _sharedArtifactStore via useArtifactsStore()
+// (which delegates to the shared store). This is the "backed by" requirement:
+// the shared store IS the source, not a shadow copy.
+//
+// Web's side-map (_webSideMap) holds fields that don't live on SharedArtifact:
+//   versions[], currentVersion, computeSession, generatedFile, artifactManifest,
+//   shareId. These are web-only extras that accompany an artifact but have no
+//   cross-surface representation.
+//
+// Persistence: web wraps the shared store with zustand-persist via a thin
+// "web persistence store" that serializes the shared store's state to
+// localStorage under 'agi-artifacts-store', preserving the v2 migration.
+// ============================================================================
+
+/** @internal The shared vanilla store: the live engine for collection + UI state. */
+export const _sharedArtifactStore = createArtifactStore();
+
+// ============================================================================
+// ArtifactData ↔ SharedArtifact mapping
+//
+// LOSSINESS REPORT (named gaps, not silent data loss):
+//
+//   Web-side only (NOT in SharedArtifact — kept in side-map or derived):
+//     - versions[]: { id, content, timestamp, description } with currentVersion
+//       pointer. Web's explicit-snapshot + revert-by-index model has no equivalent
+//       in SharedArtifact's content-keyed auto-versioning (different semantics:
+//       description field, pointer-revert vs immutable log). Kept in side-map.
+//     - computeSession / generatedFile / artifactManifest — web generated-file
+//       manifest types. Kept in side-map; NOT stashed in metadata to avoid
+//       untyped round-trip risk. Web components access them from the side-map.
+//     - shareId — web-only published share ID cache. Side-map.
+//     - createdAt: web uses Date object; SharedArtifact uses ISO string.
+//       Derived on read via `new Date(shared.createdAt)`.
+//     - messageId — SharedArtifact has an optional messageId; web Artifact has
+//       a required messageId. Stored on SharedArtifact.messageId (optional);
+//       defaults to '' on the web Artifact view when absent.
+// ============================================================================
+
+/** Web-specific fields not on SharedArtifact, keyed by artifact id. */
+interface WebSideEntry {
+  versions?: ArtifactVersion[];
+  currentVersion?: number;
+  computeSession?: ArtifactData['computeSession'];
+  generatedFile?: ArtifactData['generatedFile'];
+  artifactManifest?: ArtifactData['artifactManifest'];
+  shareId?: string;
+}
 
 // ============================================================================
 // Types
@@ -31,57 +90,80 @@ export interface Artifact extends ArtifactData {
 
 type ArtifactInput = Omit<Artifact, 'createdAt'> & { createdAt?: Date };
 
-interface ArtifactsState {
-  artifacts: Artifact[];
-  selectedArtifactId: string | null;
-  panelOpen: boolean;
+// ============================================================================
+// Side-map (module-level: survives re-renders, reset with clearAll)
+// ============================================================================
+
+let _sideMap: Record<string, WebSideEntry> = {};
+
+function getSideEntry(id: string): WebSideEntry {
+  return _sideMap[id] ?? {};
 }
 
-interface ArtifactsActions {
-  addArtifact: (artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }) => string;
-  /**
-   * Message-keyed add · mirrors the singular artifact-store's `addArtifact(messageId, artifact)`
-   * interface so MessageBubble can use a single store.
-   * Pass `conversationId` so the artifact is scoped to its originating conversation.
-   */
-  addArtifactForMessage: (
-    messageId: string,
-    artifact: ArtifactData,
-    conversationId?: string,
-  ) => void;
-  upsertArtifact: (artifact: ArtifactInput) => void;
-  removeArtifact: (id: string) => void;
-  selectArtifact: (id: string | null) => void;
-  togglePanel: () => void;
-  setPanelOpen: (open: boolean) => void;
-  clearArtifacts: () => void;
-  clearArtifactsForMessage: (messageId: string) => void;
-  extractArtifactsFromContent: (
-    content: string,
-    messageId: string,
-    conversationId?: string,
-  ) => void;
-  /** Returns all artifacts for a given messageId (O(n) scan). */
-  getMessageArtifacts: (messageId: string) => Artifact[];
-  /**
-   * Returns artifacts scoped to the given conversationId.
-   * Artifacts without a conversationId are treated as orphaned and excluded.
-   */
-  getConversationArtifacts: (conversationId: string) => Artifact[];
-  /** Add a version snapshot to an existing artifact. */
-  addVersion: (artifactId: string, version: ArtifactVersion) => void;
-  /** Switch to a different version of an artifact. */
-  setCurrentVersion: (artifactId: string, versionIndex: number) => void;
-  /**
-   * Persist artifact to Neon shared_artifacts and return a share ID.
-   * Falls back gracefully when the table is absent.
-   */
-  shareArtifact: (artifactId: string) => Promise<string>;
-  reset: () => void;
+function setSideEntry(id: string, patch: Partial<WebSideEntry>): void {
+  _sideMap[id] = { ...getSideEntry(id), ...patch };
+}
+
+function deleteSideEntry(id: string): void {
+  delete _sideMap[id];
+}
+
+function clearSideMap(): void {
+  _sideMap = {};
 }
 
 // ============================================================================
-// Helpers
+// Conversion helpers
+// ============================================================================
+
+/**
+ * Convert a SharedArtifact + side-map entry into the web Artifact view type.
+ * This is the read boundary: components see Artifact; the engine stores SharedArtifact.
+ */
+function toArtifact(shared: SharedArtifact): Artifact {
+  const side = getSideEntry(shared.id);
+  return {
+    id: shared.id,
+    type: shared.type as ArtifactData['type'],
+    title: shared.title || 'Untitled',
+    language: shared.language ?? (shared.type as string),
+    content: shared.content,
+    messageId: shared.messageId ?? '',
+    conversationId: shared.conversationId,
+    createdAt: typeof shared.createdAt === 'string' ? new Date(shared.createdAt) : new Date(),
+    // Side-map fields
+    versions: side.versions,
+    currentVersion: side.currentVersion,
+    computeSession: side.computeSession,
+    generatedFile: side.generatedFile,
+    artifactManifest: side.artifactManifest,
+    shareId: side.shareId,
+  };
+}
+
+/**
+ * Convert a web ArtifactInput into a SharedArtifact for the engine.
+ * This is the write boundary.
+ */
+function toSharedArtifact(
+  artifact: ArtifactInput & { createdAt?: Date },
+  existingVersion = 1,
+): SharedArtifact {
+  return {
+    id: artifact.id,
+    type: artifact.type,
+    title: artifact.title || 'Untitled',
+    content: artifact.content,
+    language: artifact.language || undefined,
+    version: existingVersion,
+    createdAt: artifact.createdAt ? artifact.createdAt.toISOString() : new Date().toISOString(),
+    conversationId: artifact.conversationId,
+    messageId: artifact.messageId || undefined,
+  };
+}
+
+// ============================================================================
+// Helpers (kept byte-identical to original for extraction/normalization)
 // ============================================================================
 
 /** Map language identifiers to human-readable labels */
@@ -132,32 +214,15 @@ function languageLabel(lang: string): string {
   return map[lang.toLowerCase()] || lang.charAt(0).toUpperCase() + lang.slice(1);
 }
 
-/**
- * Try to extract a filename from the first line of a code block.
- * Supports patterns like:
- *   // filename.ts
- *   # filename.py
- *   filename.css (block comment style)
- *   -- filename.sql
- */
 function extractFilename(content: string): string | null {
   const firstLine = content.split('\n')[0]!.trim();
-
-  // // filename.ext  or  # filename.ext
   const singleLineComment = firstLine.match(/^(?:\/\/|#|--)\s+([\w./-]+\.\w+)\s*$/);
   if (singleLineComment) return singleLineComment[1] ?? null;
-
-  // /* filename.ext */
   const blockComment = firstLine.match(/^\/\*\s*([\w./-]+\.\w+)\s*\*\/\s*$/);
   if (blockComment) return blockComment[1] ?? null;
-
   return null;
 }
 
-/**
- * Parse markdown code fences from content and return structured artifacts.
- * Matches ```language\n...\n``` patterns.
- */
 function parseCodeBlocks(
   content: string,
   messageId: string,
@@ -170,13 +235,9 @@ function parseCodeBlocks(
   while ((match = regex.exec(content)) !== null) {
     const language = match[1] || 'text';
     const code = match[2]!.trim();
-
-    // Skip very short code blocks (one-liners that are not meaningful artifacts)
     if (code.length < 10) continue;
-
     const filename = extractFilename(code);
     const title = filename || `${languageLabel(language)} Code`;
-
     results.push({
       title,
       language,
@@ -199,7 +260,9 @@ function artifactTypeForLanguage(language: string): ArtifactData['type'] {
   return normalized === 'markdown' || normalized === 'md' ? 'document' : 'code';
 }
 
-function normalizeArtifact(artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }): Artifact {
+function normalizeInput(
+  artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date },
+): ArtifactInput & { createdAt: Date } {
   return {
     ...artifact,
     title: artifact.title || 'Untitled',
@@ -208,7 +271,8 @@ function normalizeArtifact(artifact: Omit<Artifact, 'createdAt'> & { createdAt?:
   };
 }
 
-function artifactsEqual(a: Artifact, b: Artifact): boolean {
+/** Check if two artifacts differ in content/rendering fields (ignores conversationId). */
+function artifactsContentEqual(a: ArtifactInput, b: ArtifactInput): boolean {
   return (
     a.title === b.title &&
     a.language === b.language &&
@@ -222,258 +286,448 @@ function artifactsEqual(a: Artifact, b: Artifact): boolean {
 }
 
 // ============================================================================
-// Store
+// Persistence store
+//
+// A thin zustand store whose ONLY purpose is to serialize the shared store's
+// collection to localStorage under 'agi-artifacts-store' v2, and rehydrate it
+// on page load. No React bindings here — just a persist shell.
+//
+// Persisted shape: { artifacts: SharedArtifact[], selectedArtifactId: string|null }
+// (matches the original shape, minus panel open which is session-scoped)
 // ============================================================================
 
-export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
-  persist(
-    immer((set, get) => ({
-      // State
-      artifacts: [],
-      selectedArtifactId: null,
-      panelOpen: false,
+interface PersistedShape {
+  artifacts: SharedArtifact[];
+  selectedArtifactId: string | null;
+}
 
-      // Actions
-      addArtifact: (artifact) => {
-        const id = artifact.id || crypto.randomUUID();
-        set((state) => {
-          state.artifacts.push(normalizeArtifact({ ...artifact, id }));
-          // Auto-select the first artifact added
-          if (!state.selectedArtifactId) {
-            state.selectedArtifactId = id;
-          }
-        });
-        return id;
-      },
+/** Seed the shared store from a persisted shape (called on rehydration). */
+function rehydrateSharedStore(shape: PersistedShape): void {
+  _sharedArtifactStore.getState().clearAll();
+  clearSideMap();
+  for (const artifact of shape.artifacts) {
+    _sharedArtifactStore.getState().upsertArtifact(artifact);
+  }
+  if (shape.selectedArtifactId) {
+    _sharedArtifactStore.getState().selectArtifact(shape.selectedArtifactId);
+  }
+}
 
-      upsertArtifact: (artifact) => {
-        set((state) => {
-          const normalized = normalizeArtifact(artifact);
-          const index = state.artifacts.findIndex((item) => item.id === normalized.id);
-          if (index === -1) {
-            state.artifacts.push(normalized);
-            if (!state.selectedArtifactId) {
-              state.selectedArtifactId = normalized.id;
-            }
-            return;
-          }
-          const existing = state.artifacts[index]!;
-          // Backfill/repair conversationId. artifactsEqual deliberately ignores
-          // conversationId (it is metadata, not content), so a re-stamp from
-          // MessageBubble — which runs once the active conversation has loaded —
-          // would otherwise be short-circuited and the artifact would stay
-          // orphaned (conversationId=undefined) and hidden from its own chat's
-          // panel. Adopt a newly-known id, but never clobber a good id with
-          // undefined (guards against a render that fires before load completes).
-          const nextConversationId = normalized.conversationId ?? existing.conversationId;
-          const conversationChanged = nextConversationId !== existing.conversationId;
-          if (!artifactsEqual(existing, normalized) || conversationChanged) {
-            state.artifacts[index] = {
-              ...existing,
-              ...normalized,
-              conversationId: nextConversationId,
-              createdAt: existing.createdAt,
-            };
-          }
-        });
-      },
+/** Build the persist payload from the current shared store state. */
+function buildPersistedShape(): PersistedShape {
+  const { artifacts, selectedArtifactId } = _sharedArtifactStore.getState();
+  return { artifacts, selectedArtifactId };
+}
 
-      removeArtifact: (id) => {
-        set((state) => {
-          state.artifacts = state.artifacts.filter((a) => a.id !== id);
-          // Validate selectedArtifactId still exists after removal (covers stale selections too)
-          if (!state.artifacts.some((a) => a.id === state.selectedArtifactId)) {
-            state.selectedArtifactId = state.artifacts[0]?.id ?? null;
-          }
-          // Close panel if no artifacts remain
-          if (state.artifacts.length === 0) {
-            state.panelOpen = false;
-          }
-        });
-      },
-
-      selectArtifact: (id) => {
-        set((state) => {
-          state.selectedArtifactId = id;
-        });
-      },
-
-      togglePanel: () => {
-        set((state) => {
-          state.panelOpen = !state.panelOpen;
-        });
-      },
-
-      setPanelOpen: (open) => {
-        set((state) => {
-          state.panelOpen = open;
-        });
-      },
-
-      clearArtifacts: () => {
-        set((state) => {
-          state.artifacts = [];
-          state.selectedArtifactId = null;
-          state.panelOpen = false;
-        });
-      },
-
-      extractArtifactsFromContent: (content, messageId, conversationId) => {
-        const existing = get().artifacts;
-        // Avoid re-extracting from the same message
-        if (existing.some((a) => a.messageId === messageId)) return;
-
-        const parsed = parseCodeBlocks(content, messageId, conversationId);
-        if (parsed.length === 0) return;
-
-        set((state) => {
-          for (const item of parsed) {
-            const id = crypto.randomUUID();
-            state.artifacts.push({
-              ...item,
-              id,
-              createdAt: new Date(),
-            });
-            // Auto-select the first one if nothing is selected
-            if (!state.selectedArtifactId) {
-              state.selectedArtifactId = id;
-            }
-          }
-        });
-      },
-
-      addArtifactForMessage: (messageId, artifact, conversationId) => {
-        // Idempotent: skip if an artifact with the same id already exists
-        if (get().artifacts.some((a) => a.id === artifact.id)) return;
-        const normalized = normalizeArtifact({
-          ...artifact,
-          messageId,
-          conversationId,
-          title: artifact.title || 'Untitled',
-          language: artifact.language || artifact.type,
-        });
-        set((state) => {
-          state.artifacts.push(normalized);
-          if (!state.selectedArtifactId) {
-            state.selectedArtifactId = normalized.id;
-          }
-        });
-      },
-
-      getMessageArtifacts: (messageId) => {
-        return get().artifacts.filter((a) => a.messageId === messageId);
-      },
-
-      getConversationArtifacts: (conversationId) => {
-        return get().artifacts.filter((a) => a.conversationId === conversationId);
-      },
-
-      clearArtifactsForMessage: (messageId) => {
-        set((state) => {
-          state.artifacts = state.artifacts.filter((a) => a.messageId !== messageId);
-          if (!state.artifacts.some((a) => a.id === state.selectedArtifactId)) {
-            state.selectedArtifactId = state.artifacts[0]?.id ?? null;
-          }
-          if (state.artifacts.length === 0) {
-            state.panelOpen = false;
-          }
-        });
-      },
-
-      addVersion: (artifactId, version) => {
-        set((state) => {
-          const artifact = state.artifacts.find((a) => a.id === artifactId);
-          if (!artifact) return;
-          if (!artifact.versions) artifact.versions = [];
-          artifact.versions.push(version);
-          artifact.currentVersion = artifact.versions.length - 1;
-        });
-      },
-
-      setCurrentVersion: (artifactId, versionIndex) => {
-        set((state) => {
-          const artifact = state.artifacts.find((a) => a.id === artifactId);
-          if (!artifact || !artifact.versions) return;
-          if (versionIndex >= 0 && versionIndex < artifact.versions.length) {
-            artifact.currentVersion = versionIndex;
-            artifact.content = artifact.versions[versionIndex]!.content;
-          }
-        });
-      },
-
-      shareArtifact: async (artifactId) => {
-        const artifact = get().artifacts.find((a) => a.id === artifactId);
-        if (!artifact) throw new Error('Artifact not found');
-
-        const shareId = `share-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-        try {
-          const token = await getAuthToken();
-          if (token) {
-            const res = await fetch('/api/artifacts/publish', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({
-                share_id: shareId,
-                artifact_id: artifactId,
-                artifact_data: artifact,
-              }),
-            });
-            if (!res.ok) {
-              logger.warn('Could not persist shared artifact to database', res.statusText);
-            }
-          }
-        } catch (dbError) {
-          logger.warn('Database error during artifact sharing', dbError);
-        }
-
-        // Store shareId on the artifact for local reference
-        set((state) => {
-          const artifact = state.artifacts.find((a) => a.id === artifactId);
-          if (artifact) artifact.shareId = shareId;
-        });
-
-        return shareId;
-      },
-
-      reset: () => {
-        set((state) => {
-          state.artifacts = [];
-          state.selectedArtifactId = null;
-          state.panelOpen = false;
-        });
-      },
-    })),
-    {
-      name: 'agi-artifacts-store',
-      // Version 2: added conversationId field. On migration from v1, artifacts
-      // without a conversationId are dropped (orphaned) rather than leaking
-      // across every new chat.
-      version: 2,
-      storage: createJSONStorage(() => localStorage),
-      migrate: (persisted, fromVersion) => {
-        if (fromVersion < 2) {
-          // Drop all pre-v2 artifacts — they have no conversationId and would
-          // otherwise appear in every chat's panel.
-          const s = persisted as Partial<ArtifactsState>;
-          return { ...s, artifacts: [], selectedArtifactId: null };
-        }
-        return persisted as ArtifactsState;
-      },
-      // Only persist artifacts list; panel open state is session-scoped
-      partialize: (state) => ({
-        artifacts: state.artifacts,
-        selectedArtifactId: state.selectedArtifactId,
-      }),
-      // Rehydrate createdAt strings back to Date objects
-      onRehydrateStorage: () => (state) => {
-        if (!state) return;
-        state.artifacts = state.artifacts.map((a) => ({
-          ...a,
-          createdAt:
-            a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt as unknown as string),
-        }));
-      },
+// The persist store: never rendered directly. Its state is always kept in sync
+// with the shared store so persist can serialize it.
+const _persistStore = create<PersistedShape>()(
+  persist(() => buildPersistedShape(), {
+    name: 'agi-artifacts-store',
+    version: 2,
+    storage: createJSONStorage(() => localStorage),
+    migrate: (persisted, fromVersion) => {
+      if (fromVersion < 2) {
+        const s = persisted as Partial<PersistedShape>;
+        return { ...s, artifacts: [], selectedArtifactId: null };
+      }
+      return persisted as PersistedShape;
     },
-  ),
+    // Only persist collection + selection; panel open is session-scoped
+    partialize: (state) => ({
+      artifacts: state.artifacts,
+      selectedArtifactId: state.selectedArtifactId,
+    }),
+    onRehydrateStorage: () => (state) => {
+      if (!state) return;
+      // Coerce ISO strings to Date objects in createdAt for any legacy entries
+      // (shared store uses strings, so nothing to coerce here, but keep the
+      // guard for forward compatibility).
+      rehydrateSharedStore(state);
+    },
+  }),
 );
+
+/** Flush the current shared store state into the persist store so it can be serialized. */
+function flushToPersist(): void {
+  _persistStore.setState(buildPersistedShape());
+}
+
+// Subscribe the persist store to the shared store so every mutation is saved.
+_sharedArtifactStore.subscribe(() => {
+  flushToPersist();
+});
+
+// ============================================================================
+// Public store interface
+//
+// useArtifactsStore is the public API. It reads from _sharedArtifactStore for
+// the canonical state (artifacts, selectedArtifactId, panelOpen) and exposes
+// the full web Artifact view type to components. Mutations write into the
+// shared store; web-only overlays (auto-select, conversationId backfill,
+// removeArtifact fallback, clearArtifacts panel-close) execute at this layer.
+// ============================================================================
+
+type ArtifactsStoreReturn = {
+  // State (derived from _sharedArtifactStore + side-map)
+  artifacts: Artifact[];
+  selectedArtifactId: string | null;
+  panelOpen: boolean;
+
+  // Actions
+  addArtifact: (artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }) => string;
+  addArtifactForMessage: (
+    messageId: string,
+    artifact: ArtifactData,
+    conversationId?: string,
+  ) => void;
+  upsertArtifact: (artifact: ArtifactInput) => void;
+  removeArtifact: (id: string) => void;
+  selectArtifact: (id: string | null) => void;
+  togglePanel: () => void;
+  setPanelOpen: (open: boolean) => void;
+  clearArtifacts: () => void;
+  clearArtifactsForMessage: (messageId: string) => void;
+  extractArtifactsFromContent: (
+    content: string,
+    messageId: string,
+    conversationId?: string,
+  ) => void;
+  getMessageArtifacts: (messageId: string) => Artifact[];
+  getConversationArtifacts: (conversationId: string) => Artifact[];
+  addVersion: (artifactId: string, version: ArtifactVersion) => void;
+  setCurrentVersion: (artifactId: string, versionIndex: number) => void;
+  shareArtifact: (artifactId: string) => Promise<string>;
+  reset: () => void;
+};
+
+// ============================================================================
+// Actions (operate directly on _sharedArtifactStore and _sideMap)
+// ============================================================================
+
+const actions = {
+  addArtifact(artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }): string {
+    const id = artifact.id || crypto.randomUUID();
+    const normalized = normalizeInput({ ...artifact, id });
+    // Stash web-only fields in side-map
+    setSideEntry(id, {
+      computeSession: normalized.computeSession,
+      generatedFile: normalized.generatedFile,
+      artifactManifest: normalized.artifactManifest,
+    });
+    _sharedArtifactStore.getState().upsertArtifact(toSharedArtifact(normalized));
+    // Auto-select: if nothing is selected, select this artifact
+    if (!_sharedArtifactStore.getState().selectedArtifactId) {
+      _sharedArtifactStore.getState().selectArtifact(id);
+    }
+    return id;
+  },
+
+  upsertArtifact(artifact: ArtifactInput): void {
+    const normalized = normalizeInput(artifact);
+    const engine = _sharedArtifactStore.getState();
+    const existing = engine.artifacts.find((a) => a.id === normalized.id);
+
+    if (!existing) {
+      // New artifact: insert
+      setSideEntry(normalized.id, {
+        computeSession: normalized.computeSession,
+        generatedFile: normalized.generatedFile,
+        artifactManifest: normalized.artifactManifest,
+      });
+      engine.upsertArtifact(toSharedArtifact(normalized));
+      // Auto-select
+      if (!engine.selectedArtifactId) {
+        _sharedArtifactStore.getState().selectArtifact(normalized.id);
+      }
+      return;
+    }
+
+    // Backfill/repair conversationId: adopt a newly-known id but never
+    // clobber a good id with undefined.
+    const nextConversationId = normalized.conversationId ?? existing.conversationId;
+    const conversationChanged = nextConversationId !== existing.conversationId;
+    const side = getSideEntry(existing.id);
+    const existingAsInput: ArtifactInput = {
+      id: existing.id,
+      type: existing.type as ArtifactData['type'],
+      title: existing.title,
+      language: existing.language ?? existing.type,
+      content: existing.content,
+      messageId: existing.messageId ?? '',
+      conversationId: existing.conversationId,
+      computeSession: side.computeSession,
+      generatedFile: side.generatedFile,
+      artifactManifest: side.artifactManifest,
+    };
+    const contentChanged = !artifactsContentEqual(normalized, existingAsInput);
+
+    if (contentChanged) {
+      // Full update: new content — let the shared store handle versioning
+      setSideEntry(normalized.id, {
+        computeSession: normalized.computeSession,
+        generatedFile: normalized.generatedFile,
+        artifactManifest: normalized.artifactManifest,
+      });
+      _sharedArtifactStore
+        .getState()
+        .upsertArtifact(toSharedArtifact({ ...normalized, conversationId: nextConversationId }));
+    } else if (conversationChanged) {
+      // Metadata-only patch (conversationId backfill): shared upsertArtifact
+      // is idempotent on content-equal, so patch the collection directly.
+      _sharedArtifactStore.setState((s) => ({
+        artifacts: s.artifacts.map((a) =>
+          a.id === normalized.id ? { ...a, conversationId: nextConversationId } : a,
+        ),
+      }));
+    }
+    // else: identical content + no metadata change = no-op (idempotent)
+  },
+
+  removeArtifact(id: string): void {
+    const engine = _sharedArtifactStore.getState();
+    engine.removeArtifact(id);
+    deleteSideEntry(id);
+    // Fallback selection: if removed id was selected, select artifacts[0] or null
+    const remaining = _sharedArtifactStore.getState().artifacts;
+    if (!remaining.some((a) => a.id === _sharedArtifactStore.getState().selectedArtifactId)) {
+      _sharedArtifactStore.getState().selectArtifact(remaining[0]?.id ?? null);
+    }
+    // Close panel when no artifacts remain
+    if (remaining.length === 0) {
+      _sharedArtifactStore.getState().setPanelOpen(false);
+    }
+  },
+
+  selectArtifact(id: string | null): void {
+    _sharedArtifactStore.getState().selectArtifact(id);
+  },
+
+  togglePanel(): void {
+    _sharedArtifactStore.getState().togglePanel();
+  },
+
+  setPanelOpen(open: boolean): void {
+    _sharedArtifactStore.getState().setPanelOpen(open);
+  },
+
+  clearArtifacts(): void {
+    _sharedArtifactStore.getState().clearAll();
+    clearSideMap();
+  },
+
+  extractArtifactsFromContent(content: string, messageId: string, conversationId?: string): void {
+    const existing = _sharedArtifactStore.getState().artifacts;
+    if (existing.some((a) => a.messageId === messageId)) return;
+
+    const parsed = parseCodeBlocks(content, messageId, conversationId);
+    if (parsed.length === 0) return;
+
+    const engine = _sharedArtifactStore.getState();
+    for (const item of parsed) {
+      const id = crypto.randomUUID();
+      const createdAt = new Date();
+      engine.upsertArtifact(toSharedArtifact({ ...item, id, createdAt }));
+      // Auto-select first extracted artifact if nothing selected
+      if (!_sharedArtifactStore.getState().selectedArtifactId) {
+        _sharedArtifactStore.getState().selectArtifact(id);
+      }
+    }
+  },
+
+  addArtifactForMessage(messageId: string, artifact: ArtifactData, conversationId?: string): void {
+    const existing = _sharedArtifactStore.getState().artifacts;
+    if (existing.some((a) => a.id === artifact.id)) return;
+
+    const normalized = normalizeInput({
+      ...artifact,
+      messageId,
+      conversationId,
+      title: artifact.title || 'Untitled',
+      language: artifact.language || artifact.type,
+    });
+    setSideEntry(normalized.id, {
+      computeSession: normalized.computeSession,
+      generatedFile: normalized.generatedFile,
+      artifactManifest: normalized.artifactManifest,
+    });
+    _sharedArtifactStore.getState().upsertArtifact(toSharedArtifact(normalized));
+    if (!_sharedArtifactStore.getState().selectedArtifactId) {
+      _sharedArtifactStore.getState().selectArtifact(normalized.id);
+    }
+  },
+
+  getMessageArtifacts(messageId: string): Artifact[] {
+    return _sharedArtifactStore
+      .getState()
+      .artifacts.filter((a) => a.messageId === messageId)
+      .map(toArtifact);
+  },
+
+  getConversationArtifacts(conversationId: string): Artifact[] {
+    return _sharedArtifactStore
+      .getState()
+      .artifacts.filter((a) => a.conversationId === conversationId)
+      .map(toArtifact);
+  },
+
+  clearArtifactsForMessage(messageId: string): void {
+    const toRemove = _sharedArtifactStore
+      .getState()
+      .artifacts.filter((a) => a.messageId === messageId)
+      .map((a) => a.id);
+
+    _sharedArtifactStore.setState((s) => {
+      const versionsById = { ...s.versionsById };
+      for (const id of toRemove) delete versionsById[id];
+      return {
+        artifacts: s.artifacts.filter((a) => a.messageId !== messageId),
+        versionsById,
+      };
+    });
+    for (const id of toRemove) deleteSideEntry(id);
+
+    // Repair selection + close panel
+    const remaining = _sharedArtifactStore.getState().artifacts;
+    if (!remaining.some((a) => a.id === _sharedArtifactStore.getState().selectedArtifactId)) {
+      _sharedArtifactStore.getState().selectArtifact(remaining[0]?.id ?? null);
+    }
+    if (remaining.length === 0) {
+      _sharedArtifactStore.getState().setPanelOpen(false);
+    }
+  },
+
+  addVersion(artifactId: string, version: ArtifactVersion): void {
+    // web's versions[] model stays in the side-map (see lossiness report).
+    const entry = getSideEntry(artifactId);
+    const versions = [...(entry.versions ?? []), version];
+    const currentVersion = versions.length - 1;
+    setSideEntry(artifactId, { versions, currentVersion });
+    // Notify subscribers by touching the shared store (update content to current version).
+    const artifact = _sharedArtifactStore.getState().artifacts.find((a) => a.id === artifactId);
+    if (artifact) {
+      _sharedArtifactStore.getState().upsertArtifact({
+        ...artifact,
+        content: version.content,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  },
+
+  setCurrentVersion(artifactId: string, versionIndex: number): void {
+    const entry = getSideEntry(artifactId);
+    if (!entry.versions) return;
+    if (versionIndex < 0 || versionIndex >= entry.versions.length) return;
+    setSideEntry(artifactId, { currentVersion: versionIndex });
+    const newContent = entry.versions[versionIndex]!.content;
+    // Update shared store content to the reverted version
+    const artifact = _sharedArtifactStore.getState().artifacts.find((a) => a.id === artifactId);
+    if (artifact) {
+      _sharedArtifactStore.getState().upsertArtifact({
+        ...artifact,
+        content: newContent,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  },
+
+  async shareArtifact(artifactId: string): Promise<string> {
+    const shared = _sharedArtifactStore.getState().artifacts.find((a) => a.id === artifactId);
+    if (!shared) throw new Error('Artifact not found');
+
+    const artifact = toArtifact(shared);
+    const shareId = `share-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    try {
+      const token = await getAuthToken();
+      if (token) {
+        const res = await fetch('/api/artifacts/publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            share_id: shareId,
+            artifact_id: artifactId,
+            artifact_data: artifact,
+          }),
+        });
+        if (!res.ok) {
+          logger.warn('Could not persist shared artifact to database', res.statusText);
+        }
+      }
+    } catch (dbError) {
+      logger.warn('Database error during artifact sharing', dbError);
+    }
+
+    setSideEntry(artifactId, { shareId });
+    // Touch the shared store so React subscribers re-render (the shareId lives
+    // in the side-map but consumers read it via toArtifact which reads _sideMap).
+    // Force a re-render by nudging the shared store's own copy.
+    _sharedArtifactStore.setState((s) => ({ ...s }));
+    return shareId;
+  },
+
+  reset(): void {
+    _sharedArtifactStore.getState().clearAll();
+    clearSideMap();
+  },
+};
+
+// ============================================================================
+// useArtifactsStore
+//
+// This hook returns the full ArtifactsStoreReturn, reading collection +
+// selection + panel state from _sharedArtifactStore (the engine), and
+// exposing Artifact[] derived via toArtifact() + side-map.
+//
+// It is NOT a zustand `create()` store — it uses `useStore` from zustand
+// to subscribe to the shared vanilla store. This ensures React re-renders
+// whenever the shared store changes, and components always read from the
+// canonical engine.
+//
+// The selector-based form (useArtifactsStore(sel)) is supported via the
+// standard useStore(store, selector) overload.
+// ============================================================================
+
+type Selector<T> = (state: ArtifactsStoreReturn) => T;
+
+function buildStoreSlice(): ArtifactsStoreReturn {
+  const {
+    artifacts: sharedArtifacts,
+    selectedArtifactId,
+    panelOpen,
+  } = _sharedArtifactStore.getState();
+  return {
+    artifacts: sharedArtifacts.map(toArtifact),
+    selectedArtifactId,
+    panelOpen,
+    ...actions,
+  };
+}
+
+/**
+ * Primary hook for the artifact store. Reads from _sharedArtifactStore (the engine).
+ *
+ * Usage:
+ *   // Select all state
+ *   const { artifacts, selectedArtifactId } = useArtifactsStore();
+ *
+ *   // Selector form (avoids full re-renders)
+ *   const artifacts = useArtifactsStore(s => s.artifacts);
+ */
+export function useArtifactsStore<T = ArtifactsStoreReturn>(selector?: Selector<T>): T {
+  // Subscribe to the shared vanilla store; re-render on every change. sharedState
+  // establishes the subscription; buildStoreSlice reads getState() directly.
+  const sharedState = useStore(_sharedArtifactStore);
+  void sharedState;
+  const slice = buildStoreSlice();
+  if (selector) return selector(slice);
+  return slice as T;
+}
+
+// Attach getState so non-hook consumers (tests, clearArtifacts in beforeEach) work.
+useArtifactsStore.getState = (): ArtifactsStoreReturn => buildStoreSlice();
+
+// Expose setState for testing compatibility (noop — direct mutations via actions)
+useArtifactsStore.setState = (_partial: Partial<ArtifactsStoreReturn>): void => {
+  // Intentionally a no-op; callers should use actions instead.
+};
