@@ -34,7 +34,7 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     id: 'rememberChats',
     label: 'Remember chats',
     description:
-      'When enabled, conversations are saved on this device and synced to Web, Desktop, and Mobile (never CLI / VS Code / Chrome extension). Turn off to use chat in ephemeral mode only.',
+      'When enabled, conversations are stored in the cloud and accessible on Web, Desktop, and Mobile (never CLI / VS Code / Chrome extension). Turn off to stop new conversations from being saved.',
     defaultValue: true,
   },
   {

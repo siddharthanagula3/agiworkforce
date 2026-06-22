@@ -203,6 +203,9 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
     } catch {
       // Clerk not available or already signed out - proceed with local cleanup
     }
+    // Clear chat store (lazy import avoids circular dependency at module-init)
+    const { useChatStore } = await import('@/stores/chatStore');
+    useChatStore.getState().reset();
     set({ ...INITIAL_STATE, isLoading: false, initialized: true });
     if (typeof window !== 'undefined') {
       window.location.href = '/login';
