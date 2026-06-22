@@ -1,223 +1,101 @@
+/**
+ * Web artifact adapter.
+ *
+ * Delegates ALL derivation to the canonical shared service
+ * (`@agiworkforce/services` `artifact-derivation`) and maps the
+ * platform-agnostic `SharedArtifact` to the web `ArtifactData` view type.
+ *
+ * Do NOT reimplement derivation here — the shared service is the single source
+ * of truth (Step 1a of the shared-packages consolidation). Its deterministic
+ * ids (`uuidv5(conversationId:messageId:ordinal)`) are what enable cross-surface
+ * de-dup + cloud sync; the old per-surface `Date.now()`/`randomUUID()` ids did
+ * not. Pass message context to `extractArtifacts` to get those stable ids.
+ */
+import {
+  deriveArtifacts,
+  removeArtifactBlocks as removeArtifactBlocksShared,
+  hasArtifacts as hasArtifactsShared,
+  extractArtifactTitle,
+  isRenderableArtifact,
+  extractCodeBlocks,
+  type DeriveArtifactsOptions,
+} from '@agiworkforce/services';
+import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 
-/**
- * Artifact Detector Utility
- *
- * Automatically detects code blocks that should be rendered as interactive artifacts.
- * This enables Claude Artifacts-like functionality where code is live-rendered.
- *
- * Detection Rules:
- * - HTML: Complete HTML documents or fragments with tags
- * - React/JSX: Code containing JSX syntax
- * - SVG: SVG markup
- * - Mermaid: Mermaid diagram syntax
- * - Interactive code: Code marked with special comments
- */
+// Re-export the shared classification helpers under their historical web names
+// so any future caller resolves to the canonical implementation.
+export { extractCodeBlocks, extractArtifactTitle };
+export const shouldRenderAsArtifact = isRenderableArtifact;
 
-interface CodeBlock {
-  language: string;
-  content: string;
-  startIndex: number;
-  endIndex: number;
+/** Context that makes derived artifact ids deterministic + cross-surface stable. */
+export interface ExtractArtifactsContext {
+  conversationId?: string;
+  messageId?: string;
+}
+
+/** Map a platform-agnostic SharedArtifact to the web ArtifactData view type. */
+function toArtifactData(a: SharedArtifact): ArtifactData {
+  return {
+    id: a.id,
+    // The derivation only emits html | react | svg | mermaid | code — all of
+    // which are valid ArtifactData types.
+    type: a.type as ArtifactData['type'],
+    language: a.language,
+    title: a.title,
+    content: a.content,
+    versions: [
+      {
+        id: `v1-${a.id}`,
+        content: a.content,
+        timestamp: new Date(a.createdAt),
+        description: 'Initial version',
+      },
+    ],
+    currentVersion: 0,
+  };
 }
 
 /**
- * Extract all code blocks from markdown content
+ * Derive renderable artifacts from a message's markdown (web policy), as
+ * `ArtifactData`. Pass `context` (conversation + message ids) for deterministic,
+ * sync-stable ids — without it, ids collide across messages.
  */
-export function extractCodeBlocks(markdown: string): CodeBlock[] {
-  const codeBlocks: CodeBlock[] = [];
-  const regex = /```(\w+)?\n([\s\S]*?)```/g;
-  let match;
-
-  while ((match = regex.exec(markdown)) !== null) {
-    codeBlocks.push({
-      language: match[1] || 'text',
-      content: match[2]!.trim(),
-      startIndex: match.index,
-      endIndex: match.index + match[0].length,
-    });
-  }
-
-  return codeBlocks;
+export function extractArtifacts(
+  markdown: string,
+  context: ExtractArtifactsContext = {},
+): ArtifactData[] {
+  const opts: DeriveArtifactsOptions = {
+    conversationId: context.conversationId,
+    messageId: context.messageId,
+    include: 'renderable',
+  };
+  return deriveArtifacts(markdown, opts).map(toArtifactData);
 }
 
-/**
- * Detect if a code block should be rendered as an artifact
- */
-export function shouldRenderAsArtifact(language: string, content: string): boolean {
-  const lang = language.toLowerCase();
-
-  // HTML - check for HTML tags
-  if (lang === 'html' || lang === 'htm') {
-    return true;
-  }
-
-  // React/JSX
-  if (lang === 'jsx' || lang === 'tsx' || lang === 'react') {
-    return true;
-  }
-
-  // SVG
-  if (lang === 'svg' || content.trim().startsWith('<svg')) {
-    return true;
-  }
-
-  // Mermaid diagrams
-  if (lang === 'mermaid') {
-    return true;
-  }
-
-  // Check for HTML-like content in other languages
-  if (
-    content.includes('<!DOCTYPE') ||
-    content.includes('<html') ||
-    (content.includes('<div') && content.includes('</div>'))
-  ) {
-    return true;
-  }
-
-  // Check for special artifact markers in comments
-  if (
-    content.includes('// @artifact') ||
-    content.includes('<!-- @artifact -->') ||
-    content.includes('# @artifact')
-  ) {
-    return true;
-  }
-
-  return false;
+/** Strip derived artifact code blocks from the chat body to avoid duplication. */
+export function removeArtifactBlocks(
+  markdown: string,
+  artifacts: ReadonlyArray<Pick<ArtifactData, 'content' | 'language'>>,
+): string {
+  return removeArtifactBlocksShared(markdown, artifacts);
 }
 
-/**
- * Extract title from code block (from comments or tags)
- */
-export function extractArtifactTitle(content: string): string | undefined {
-  // Try HTML title tag
-  const titleMatch = content.match(/<title>(.*?)<\/title>/i);
-  if (titleMatch) {
-    return titleMatch[1];
-  }
-
-  // Try comment-based title
-  const commentMatch = content.match(/(?:\/\/|<!--|#)\s*@title:?\s*(.+?)(?:\n|-->)/i);
-  if (commentMatch) {
-    return commentMatch[1]!.trim();
-  }
-
-  // Try first heading
-  const headingMatch = content.match(/<h1[^>]*>(.*?)<\/h1>/i);
-  if (headingMatch) {
-    let text = headingMatch[1];
-    let prev;
-    do {
-      prev = text;
-      text = text?.replace(/<[^>]*>/g, '');
-    } while (text !== prev);
-    return text!.trim();
-  }
-
-  return undefined;
-}
-
-/**
- * Detect artifact type from language and content
- */
-export function detectArtifactType(language: string, content: string): ArtifactData['type'] {
-  const lang = language.toLowerCase();
-
-  if (lang === 'mermaid') return 'mermaid';
-  if (lang === 'svg' || content.trim().startsWith('<svg')) return 'svg';
-  if (lang === 'jsx' || lang === 'tsx' || lang === 'react') return 'react';
-  if (lang === 'html' || lang === 'htm') return 'html';
-
-  // Check content for HTML-like structure
-  if (
-    content.includes('<!DOCTYPE') ||
-    content.includes('<html') ||
-    (content.includes('<div') && content.includes('</div>'))
-  ) {
-    return 'html';
-  }
-
-  return 'code';
-}
-
-/**
- * Convert markdown message to artifacts
- */
-export function extractArtifacts(markdown: string): ArtifactData[] {
-  const codeBlocks = extractCodeBlocks(markdown);
-  const artifacts: ArtifactData[] = [];
-
-  for (const block of codeBlocks) {
-    if (shouldRenderAsArtifact(block.language, block.content)) {
-      const type = detectArtifactType(block.language, block.content);
-      const title = extractArtifactTitle(block.content);
-
-      artifacts.push({
-        id: `artifact-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
-        type,
-        language: block.language,
-        title,
-        content: block.content,
-        versions: [
-          {
-            id: `v1-${Date.now()}`,
-            content: block.content,
-            timestamp: new Date(),
-            description: 'Initial version',
-          },
-        ],
-        currentVersion: 0,
-      });
-    }
-  }
-
-  return artifacts;
-}
-
-/**
- * Remove artifact code blocks from markdown to avoid duplication
- */
-export function removeArtifactBlocks(markdown: string, artifacts: ArtifactData[]): string {
-  let cleaned = markdown;
-
-  // Remove code blocks that are rendered as artifacts
-  for (const artifact of artifacts) {
-    // Create regex to match the specific code block
-    const escapedContent = artifact.content.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(
-      `\`\`\`${artifact.language || '\\w*'}\\s*\\n${escapedContent}\\s*\`\`\``,
-      'g',
-    );
-    cleaned = cleaned.replace(regex, '');
-  }
-
-  return cleaned.trim();
-}
-
-/**
- * Check if message has any artifacts
- */
+/** Whether the message contains at least one renderable artifact. */
 export function hasArtifacts(markdown: string): boolean {
-  const codeBlocks = extractCodeBlocks(markdown);
-  return codeBlocks.some((block) => shouldRenderAsArtifact(block.language, block.content));
+  return hasArtifactsShared(markdown);
 }
 
-/**
- * Get artifact statistics for analytics
- */
+/** Artifact statistics for analytics. */
 export function getArtifactStats(artifacts: ArtifactData[]) {
   const stats = {
     total: artifacts.length,
     byType: {} as Record<string, number>,
     totalVersions: 0,
   };
-
   for (const artifact of artifacts) {
     stats.byType[artifact.type] = (stats.byType[artifact.type] || 0) + 1;
     stats.totalVersions += artifact.versions?.length || 1;
   }
-
   return stats;
 }

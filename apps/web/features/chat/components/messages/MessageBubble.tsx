@@ -273,8 +273,13 @@ const MessageBubbleComponent = function MessageBubble({
   const existingArtifacts = getMessageArtifacts(message.id);
   const extractedArtifacts = useMemo(() => {
     if (isUser) return [];
-    return extractArtifacts(message.content);
-  }, [message.content, isUser]);
+    // Pass message context so derived ids are deterministic + cross-surface
+    // stable (the shared derivation keys on conversationId:messageId:ordinal).
+    return extractArtifacts(message.content, {
+      conversationId: artifactConversationId,
+      messageId: message.id,
+    });
+  }, [message.content, isUser, artifactConversationId, message.id]);
 
   const generatedFileArtifacts = useMemo<ArtifactData[]>(() => {
     if (isUser) return [];
