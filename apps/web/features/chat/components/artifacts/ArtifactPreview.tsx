@@ -552,8 +552,14 @@ export function ArtifactPreview({
             {/* Download dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 px-2">
-                  <Download className="h-3.5 w-3.5" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2"
+                  aria-label="Download artifact"
+                  title="Download"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -576,8 +582,15 @@ export function ArtifactPreview({
 
             {/* Refresh — only when previewable */}
             {canPreview && (
-              <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 px-2">
-                <RefreshCw className="h-3.5 w-3.5" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                className="h-7 px-2"
+                aria-label="Refresh preview"
+                title="Refresh preview"
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             )}
 
@@ -596,8 +609,15 @@ export function ArtifactPreview({
             )}
 
             {/* Fullscreen */}
-            <Button variant="ghost" size="sm" onClick={handleFullscreen} className="h-7 px-2">
-              <Maximize2 className="h-3.5 w-3.5" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleFullscreen}
+              className="h-7 px-2"
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              title="Fullscreen"
+            >
+              <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
 
             {/* Close — panel-only */}
@@ -800,8 +820,14 @@ export function ArtifactPreview({
           {/* Download Options */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 px-2">
-                <Download className="h-3.5 w-3.5" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                aria-label="Download artifact"
+                title="Download"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -830,15 +856,24 @@ export function ArtifactPreview({
                 hasGeneratedFileManifest ? void handleShareGeneratedFile() : onShare?.()
               }
               className="h-7 px-2"
+              aria-label="Share artifact"
+              title="Share"
             >
-              <Share2 className="h-3.5 w-3.5" />
+              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
           )}
 
           {canPreview && (
             <>
-              <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 px-2">
-                <RefreshCw className="h-3.5 w-3.5" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefresh}
+                className="h-7 px-2"
+                aria-label="Refresh preview"
+                title="Refresh preview"
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
 
               <Button
@@ -852,8 +887,15 @@ export function ArtifactPreview({
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
 
-              <Button variant="ghost" size="sm" onClick={handleFullscreen} className="h-7 px-2">
-                <Maximize2 className="h-3.5 w-3.5" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleFullscreen}
+                className="h-7 px-2"
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                title="Fullscreen"
+              >
+                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </>
           )}
