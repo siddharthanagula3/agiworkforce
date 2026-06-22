@@ -556,7 +556,7 @@ const ChatComposerNewComponent = ({
     textarea.style.height = `${newHeight}px`;
   }, [message]);
 
-  // Close popover on outside click
+  // Close popover on outside click or Escape
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
@@ -569,8 +569,23 @@ const ChatComposerNewComponent = ({
         setShowMentions(false);
       }
     }
+    // The composer textarea's onKeyDown only fires while the textarea has focus; once the
+    // "+" menu opens, focus moves into the popover, so Escape must be handled at the
+    // document level to close the menu (otherwise it stays open until an outside click).
+    function handleEscapeKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      setShowOverflowMenu(false);
+      setShowSkillsSubmenu(false);
+      setShowConnectorsSubmenu(false);
+      setShowStyleSubmenu(false);
+      setShowMentions(false);
+    }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
   }, []);
 
   const handleTagDismiss = useCallback((id: string) => {
