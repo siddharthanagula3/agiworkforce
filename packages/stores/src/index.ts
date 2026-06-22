@@ -33,6 +33,16 @@ export type {
   SendChatCallbacks,
 } from './chat/types';
 
+// ---------------------------------------------------------------------------
+// Artifact store (platform-agnostic; canonical SharedArtifact; Step 1b consolidation)
+// ---------------------------------------------------------------------------
+export { createArtifactStore } from './artifacts/artifactStore';
+export type {
+  ArtifactStore,
+  ArtifactStoreState,
+  CreateArtifactStoreOptions,
+} from './artifacts/artifactStore';
+
 // Additional stores will be exported here as they are created in subsequent waves.
 // Example (Wave 1+):
 // export { useSettingsStore } from './settingsStore';
