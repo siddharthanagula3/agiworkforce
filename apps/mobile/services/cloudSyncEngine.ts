@@ -15,7 +15,9 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore, type DirtyMessageRef } from '@/stores/chat/cloudSyncStateStore';
+import { useArtifactStore } from '@/src/features/artifacts/store';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { ArtifactWireDelta } from '@agiworkforce/services';
 
 const SYNC_PATH = '/api/chat/sync';
 /** Safety bound on the pull pagination loop (each page is up to 500 rows). */
@@ -51,6 +53,7 @@ interface MessageDelta {
 interface PullResponse {
   conversations: ConversationDelta[];
   messages: MessageDelta[];
+  artifacts: ArtifactWireDelta[];
   cursor: string;
   hasMore: boolean;
 }
@@ -157,6 +160,9 @@ async function pull(): Promise<void> {
     const res = await api.get<PullResponse>(`${SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
     applyConversationDeltas(res.conversations ?? []);
     applyMessageDeltas(res.messages ?? []);
+    // Artifacts (0039): mobile is a PULLER — apply pulled cloud artifacts via the shared
+    // state-sync logic. Kept in a separate store slice; the gallery merges on render.
+    useArtifactStore.getState().applyCloudArtifactDeltas(res.artifacts ?? []);
     // Trust the server's SAFE cursor. The two tables paginate independently and
     // share one version sequence, so taking the max of per-row server_versions
     // overshoots the lagging table's frontier and skips rows that fall in the gap
