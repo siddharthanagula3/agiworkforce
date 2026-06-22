@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 68;
+const CURRENT_VERSION: i32 = 69;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -610,6 +610,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 68 {
         run_migration_in_transaction(conn, 68, apply_migration_v68)?;
+    }
+
+    if current_version < 69 {
+        run_migration_in_transaction(conn, 69, apply_migration_v69)?;
     }
 
     Ok(())
@@ -5637,6 +5641,102 @@ fn apply_migration_v68(conn: &Connection) -> Result<()> {
                 user_id TEXT PRIMARY KEY, \
                 cursor TEXT NOT NULL DEFAULT '0', \
                 memory_cursor TEXT NOT NULL DEFAULT '0', \
+                last_sync_at TEXT \
+            )",
+            [],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Migration v69: Cloud sync columns for `projects` (managed-cloud project sharing).
+///
+/// Mirrors v68 (`user_memory`) but applied to `projects` so projects sync cross-device
+/// exactly like memories and chats.
+///
+/// Additive only — existing local rows (app_mode DEFAULT 'local') are untouched.
+/// A separate `project_cursor` column is added to `cloud_sync_state` so the projects
+/// HWM is tracked independently of chat and memory cursors.
+///
+/// Also adds a `metadata` TEXT column to `projects` (JSON blob) that the wire protocol
+/// includes for arbitrary structured data — absent from the original v44 schema.
+fn apply_migration_v69(conn: &Connection) -> Result<()> {
+    let table_exists = |table: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            > 0
+    };
+
+    // Sync identity + bookkeeping columns on projects.
+    if table_exists("projects") {
+        // app_mode mirrors v66/v68: 'local' | 'cloud'.
+        // Local/BYOK projects stay 'local' and are never pushed.
+        ensure_column(
+            conn,
+            "projects",
+            "app_mode",
+            "app_mode TEXT NOT NULL DEFAULT 'local'",
+        )?;
+        // UUIDv7 cloud id — NULL until first cloud sync marks the row.
+        ensure_column(conn, "projects", "cloud_id", "cloud_id TEXT")?;
+        // Bigint-string server version from the Postgres sequence.
+        ensure_column(conn, "projects", "server_version", "server_version TEXT")?;
+        // UTC ISO-8601 creation timestamp (wire field `createdAt`).
+        ensure_column(conn, "projects", "created_at_utc", "created_at_utc TEXT")?;
+        // Soft-delete tombstone: set when a cloud project is deleted.
+        ensure_column(conn, "projects", "deleted_at_utc", "deleted_at_utc TEXT")?;
+        // Dirty flag: 1 → row needs to be pushed to the cloud on next sync.
+        ensure_column(
+            conn,
+            "projects",
+            "needs_push",
+            "needs_push INTEGER NOT NULL DEFAULT 0",
+        )?;
+        // metadata JSON blob — wire field `metadata` (record<string, unknown>).
+        // Not part of original v44 schema; added here so pull can store it.
+        ensure_column(conn, "projects", "metadata", "metadata TEXT")?;
+
+        // Partial UNIQUE index on cloud_id (cannot add UNIQUE via ALTER TABLE ADD COLUMN).
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_cloud_id \
+             ON projects(cloud_id) WHERE cloud_id IS NOT NULL",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_projects_needs_push \
+             ON projects(needs_push) WHERE needs_push = 1",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_projects_app_mode \
+             ON projects(app_mode)",
+            [],
+        )?;
+    } else {
+        tracing::debug!("v69: skipping projects columns — table does not exist yet");
+    }
+
+    // Per-user PROJECTS cursor (separate from chat + memory cursors).
+    if table_exists("cloud_sync_state") {
+        ensure_column(
+            conn,
+            "cloud_sync_state",
+            "project_cursor",
+            "project_cursor TEXT NOT NULL DEFAULT '0'",
+        )?;
+    } else {
+        // cloud_sync_state not yet created (v67 not applied) — create defensively.
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS cloud_sync_state ( \
+                user_id TEXT PRIMARY KEY, \
+                cursor TEXT NOT NULL DEFAULT '0', \
+                memory_cursor TEXT NOT NULL DEFAULT '0', \
+                project_cursor TEXT NOT NULL DEFAULT '0', \
                 last_sync_at TEXT \
             )",
             [],
