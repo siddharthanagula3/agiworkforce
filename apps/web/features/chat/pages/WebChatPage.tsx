@@ -96,6 +96,8 @@ type SendMeta = {
   styleMode?: string;
   /** Skill body to inject as a system message in the LLM request. */
   skillBody?: string;
+  /** Display name of the active skill, forwarded for timeline step labeling. */
+  skillName?: string;
 };
 
 type PendingByokHandoff = {
@@ -592,6 +594,7 @@ export default function WebChatPage() {
         codeExecution: options.meta?.codeExecutionEnabled,
         styleMode: options.meta?.styleMode,
         skillBody: options.meta?.skillBody,
+        skillName: options.meta?.skillName,
       });
     },
     [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId, router],
