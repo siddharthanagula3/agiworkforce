@@ -10,3 +10,7 @@
 // Artifact publish service — local export now, BYOK/managed publish gated until
 // the managed artifact publishing boundary is proven.
 export * from './artifacts';
+
+// Artifact derivation service — the ONE canonical place artifacts are derived
+// from message content (deterministic ids; consumed by web/desktop/mobile).
+export * from './artifact-derivation';
