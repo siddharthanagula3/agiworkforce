@@ -132,9 +132,17 @@ export function WebSettingsModal({
 
   const [activeSection, setActiveSection] = useState<string>(sectionFromPath ?? initialSection);
 
+  // Sync the active section when the URL changes (deep-link) OR when the modal is
+  // (re)opened to a requested section. The modal stays mounted (open=false) between
+  // uses, so the useState initializer alone won't pick up a newly-requested
+  // initialSection (e.g. the rail's "Customize" → openSettings('skills')) — sync on open.
   useEffect(() => {
-    if (sectionFromPath) setActiveSection(sectionFromPath);
-  }, [sectionFromPath]);
+    if (sectionFromPath) {
+      setActiveSection(sectionFromPath);
+    } else if (open) {
+      setActiveSection(initialSection);
+    }
+  }, [open, initialSection, sectionFromPath]);
 
   const handleSectionChange = useCallback(
     (key: string) => {
