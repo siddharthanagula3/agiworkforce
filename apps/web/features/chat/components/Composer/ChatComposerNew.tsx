@@ -60,6 +60,8 @@ interface ChatComposerProps {
       styleMode?: string;
       /** Resolved skill body injected as a system message in the LLM request. */
       skillBody?: string;
+      /** Display name of the active skill, forwarded for timeline step labeling. */
+      skillName?: string;
     },
   ) => void | false;
   isLoading?: boolean;
@@ -786,6 +788,7 @@ const ChatComposerNewComponent = ({
           codeExecutionEnabled,
           styleMode: styleMode !== 'normal' ? styleMode : undefined,
           skillBody: skillBody ?? undefined,
+          skillName: selectedSkill?.name ?? undefined,
         },
       );
 
