@@ -391,13 +391,12 @@ function captureArtifactsFromMessage(
 ): void {
   try {
     /* eslint-disable @typescript-eslint/no-require-imports */
-    const { useArtifactStore, extractCodeBlocks, codeBlocksToMobileArtifacts } =
+    const { useArtifactStore, deriveAndMapToMobileArtifacts } =
       require('@/src/features/artifacts/store') as typeof import('@/src/features/artifacts/store');
     /* eslint-enable @typescript-eslint/no-require-imports */
-    const blocks = extractCodeBlocks(content);
-    if (blocks.length === 0) return;
-    const mobileArtifacts = codeBlocksToMobileArtifacts(
-      blocks,
+    const mobileArtifacts = deriveAndMapToMobileArtifacts(
+      content,
+      conversationId,
       messageId,
       createdAt,
       conversationTitle,

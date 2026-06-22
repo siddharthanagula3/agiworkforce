@@ -39,6 +39,7 @@
     "@agiworkforce/local-llm": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/services": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",

@@ -12,10 +12,16 @@
  * Storage: MMKV with at-rest encryption via the shared mmkvStorage adapter.
  * Cap: last MAX_ARTIFACTS entries to prevent unbounded growth (mirrors
  * chatMessageStore's partialize strategy).
+ *
+ * Derivation is delegated to @agiworkforce/services `deriveArtifacts` — the
+ * ONE canonical place across web, desktop, and mobile (shared-packages-
+ * consolidation-plan-2026-06-21.md §3). Mobile-specific PRESENTATION helpers
+ * (kind mapping, accent colors, preview lines, age label) remain here.
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import { deriveArtifacts } from '@agiworkforce/services';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 
 // ---------------------------------------------------------------------------
@@ -184,84 +190,55 @@ export function canonicalToMobileArtifact(
 }
 
 // ---------------------------------------------------------------------------
-// Fenced-code-block extractor
+// Canonical derivation delegate
 // ---------------------------------------------------------------------------
 
-/** A fenced code block parsed from a markdown string. */
-export interface ParsedCodeBlock {
-  language: string;
-  content: string;
-}
-
-const FENCED_CODE_RE = /```(\w*)\n([\s\S]*?)```/g;
-
 /**
- * Extract all fenced code blocks from a markdown string.
- * Returns only blocks whose non-empty line count is at least MIN_CODE_LINES —
- * single-line inline snippets are not gallery-worthy.
+ * Derive MobileArtifacts from a markdown message by delegating extraction and
+ * identity to the shared `deriveArtifacts` service, then mapping each
+ * `SharedArtifact` to the mobile presentation type.
+ *
+ * This is the ONLY call site for artifact extraction. `codeBlocksToMobileArtifacts`
+ * and `extractCodeBlocks` have been removed — all derivation is now canonical.
+ *
+ * - ids: deterministic uuidv5(conversationId:messageId:ordinal) — same as web/desktop.
+ * - Gallery policy: include: 'code', minCodeLines: 4 (unchanged from fork).
+ * - language: 'text' sentinel (unlabeled blocks) is mapped back to undefined so
+ *   the gallery card falls back to the kind label rather than showing "text".
+ * - kind: toMobileKind(shared.type) — html/svg/react/mermaid blocks now correctly
+ *   map to 'document' instead of the fork's hardcoded 'code'. This is intentional
+ *   and matches the future direction (those block types are not code gallery items).
  */
-const MIN_CODE_LINES = 4;
-
-export function extractCodeBlocks(text: string): ParsedCodeBlock[] {
-  const blocks: ParsedCodeBlock[] = [];
-  let match: RegExpExecArray | null;
-  FENCED_CODE_RE.lastIndex = 0;
-  while ((match = FENCED_CODE_RE.exec(text)) !== null) {
-    const language = (match[1] ?? '').trim();
-    const content = (match[2] ?? '').trimEnd();
-    if (content.split('\n').filter((l) => l.trim().length > 0).length >= MIN_CODE_LINES) {
-      blocks.push({ language, content });
-    }
-  }
-  return blocks;
-}
-
-const MAX_TITLE_CONTENT_CHARS = 60;
-
-/**
- * Derive a human-readable title from a code block's first non-empty line
- * (e.g. a comment, function signature, or markdown heading).
- * Falls back to "${language} snippet" or "Code snippet".
- */
-export function titleFromCodeBlock(block: ParsedCodeBlock, index: number): string {
-  const lines = block.content.split('\n').filter((l) => l.trim().length > 0);
-  const first = lines[0] ?? '';
-  // Strip common comment/heading markers
-  const cleaned = first
-    .replace(/^#+\s+/, '')
-    .replace(/^\/\/+\s*/, '')
-    .replace(/^#\s*/, '')
-    .trim();
-  if (cleaned.length > 2 && cleaned.length <= MAX_TITLE_CONTENT_CHARS) {
-    return cleaned;
-  }
-  const lang = block.language ? `${block.language} snippet` : 'Code snippet';
-  return index === 0 ? lang : `${lang} ${index + 1}`;
-}
-
-/**
- * Convert fenced code blocks extracted from an LLM response into MobileArtifacts.
- * messageId is used to generate stable, collision-resistant IDs.
- */
-export function codeBlocksToMobileArtifacts(
-  blocks: ParsedCodeBlock[],
+export function deriveAndMapToMobileArtifacts(
+  markdown: string,
+  conversationId: string,
   messageId: string,
   createdAt: string,
   conversationTitle: string,
   themeColors: { teal: string; terraCotta: string; agentThinking: string; agentActive: string },
 ): MobileArtifact[] {
-  return blocks.map((block, i) => {
-    const kind: MobileArtifactKind = 'code';
+  const shared = deriveArtifacts(markdown, {
+    conversationId,
+    messageId,
+    include: 'code',
+    minCodeLines: 4,
+    now: createdAt,
+  });
+
+  return shared.map((s) => {
+    const kind = toMobileKind(s.type);
     return {
-      id: `${messageId}_code_${i}`,
-      title: titleFromCodeBlock(block, i),
+      id: s.id, // shared deterministic id — do NOT regenerate
+      title: s.title,
       kind,
-      language: block.language || undefined,
-      content: block.content,
-      ageLabel: formatAgeLabel(createdAt),
+      // 'text' is the shared service's sentinel for unlabeled blocks; map to
+      // undefined so the gallery card shows the kind label instead of "text".
+      language: s.language === 'text' ? undefined : s.language,
+      content: s.content,
+      ageLabel: formatAgeLabel(s.createdAt),
       sourceLabel: conversationTitle || 'Chat',
       accentColor: accentColorForKind(kind, themeColors),
-      previewLines: buildPreviewLines(block.content),
+      previewLines: buildPreviewLines(s.content),
     };
   });
 }
