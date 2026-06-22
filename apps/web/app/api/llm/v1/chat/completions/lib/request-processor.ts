@@ -119,6 +119,7 @@ export const ChatCompletionRequestSchema = z.object({
   seed: z.number().int().optional(),
   web_search: z.boolean().optional(),
   web_fetch: z.boolean().optional(),
+  research: z.boolean().optional(),
   code_execution: z.boolean().optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
@@ -238,6 +239,30 @@ export function extractTextContent(
     .filter((part) => part.type === 'text' && part.text)
     .map((part) => part.text!)
     .join('\n');
+}
+
+// Exported so it can be unit-tested without importing the full processRequest stack.
+export const RESEARCH_SYSTEM_PROMPT =
+  'You are in deep research mode. Your job is to produce a thorough, well-structured report.' +
+  ' Search the web using several distinct, targeted queries that cover different angles of the topic.' +
+  ' Cross-reference multiple sources before drawing conclusions.' +
+  ' Inline-cite every factual claim with a bracketed number, e.g. [1], matched to a numbered Sources list at the end.' +
+  ' Structure the report with a brief executive summary, clearly labeled sections, and a Sources list.' +
+  ' Use plain language; avoid jargon where simpler terms work just as well.' +
+  ' Do not pad the report with filler sentences; every paragraph must add new information.';
+
+/**
+ * Mutates chatRequest in place: forces web_search on and prepends the research
+ * system prompt. Should only be called when the model supports search (caller's guard).
+ */
+export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
+  chatRequest.web_search = true;
+  const firstMessage = chatRequest.messages[0];
+  if (firstMessage?.role === 'system') {
+    firstMessage.content = RESEARCH_SYSTEM_PROMPT + '\n\n' + firstMessage.content;
+  } else {
+    chatRequest.messages.unshift({ role: 'system', content: RESEARCH_SYSTEM_PROMPT });
+  }
 }
 
 function resolveAutoModel(
@@ -616,6 +641,14 @@ export async function processRequest(
         ),
       };
     }
+  }
+
+  // Deep Research mode: when the frontend sends research:true and the resolved
+  // model supports web search, inject the research system prompt and force
+  // web_search on so the tool-injection block below picks it up automatically.
+  // Non-search models silently skip this block (no crash, no wasted request).
+  if (chatRequest.research && (resolvedModelCaps?.search ?? false)) {
+    applyResearchMode(chatRequest);
   }
 
   // Model tier access check
