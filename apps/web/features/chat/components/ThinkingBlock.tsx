@@ -43,6 +43,42 @@ function formatDuration(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
+/**
+ * Derive a short live verb phrase from the leading content of a reasoning block.
+ * Returns one of a small set of gerund phrases inferred from keywords in the
+ * first non-empty line (or the most recent non-empty line) of the thinking text.
+ * Falls back to "Thinking" when no keyword matches.
+ *
+ * No em-dashes. Max length 20 chars to fit the header bar.
+ */
+export function deriveReasoningPhrase(content: string): string {
+  // Prefer the last non-empty line (most recent reasoning direction)
+  const lines = content.split('\n');
+  const activeLine =
+    [...lines]
+      .reverse()
+      .find((l) => l.trim().length > 0)
+      ?.trim()
+      .toLowerCase() ?? '';
+
+  if (!activeLine) return 'Thinking';
+
+  if (/\b(analyz|analys|examin|review)\w*/.test(activeLine)) return 'Analyzing';
+  if (/\b(calculat|comput|count|measur)\w*/.test(activeLine)) return 'Calculating';
+  if (/\b(search|look|find|check)\w*/.test(activeLine)) return 'Searching';
+  if (/\b(read|pars|scan|skim)\w*/.test(activeLine)) return 'Reading';
+  if (/\b(writ|draft|generat|creat|compil)\w*/.test(activeLine)) return 'Writing';
+  if (/\b(plan|outlin|structur|organiz)\w*/.test(activeLine)) return 'Planning';
+  if (/\b(reason|infer|deduc|conclud)\w*/.test(activeLine)) return 'Reasoning';
+  if (/\b(translat|convert|transform)\w*/.test(activeLine)) return 'Translating';
+  if (/\b(debug|fix|correct|repair)\w*/.test(activeLine)) return 'Debugging';
+  if (/\b(summar|condens|distil)\w*/.test(activeLine)) return 'Summarizing';
+  if (/\b(compar|contrast|evaluat|assess)\w*/.test(activeLine)) return 'Comparing';
+  if (/\b(explain|describ|clarif)\w*/.test(activeLine)) return 'Explaining';
+
+  return 'Thinking';
+}
+
 export function ThinkingBlock({
   content,
   isStreaming,
@@ -132,7 +168,12 @@ export function ThinkingBlock({
   const previewText = previewLine.length > 80 ? previewLine.slice(0, 77) + '…' : previewLine;
 
   // ── Computed label ────────────────────────────────────────────────────────
-  const headerLabel = isStreaming ? `Thinking… ${durationLabel}` : `Thought for ${durationLabel}`;
+  // While streaming: derive a live verb phrase from the reasoning content so the
+  // header reads e.g. "Analyzing • 4s" instead of the static "Thinking... 4s".
+  // The phrase updates every render as new thinking tokens arrive.
+  const headerLabel = isStreaming
+    ? `${deriveReasoningPhrase(content)} • ${durationLabel}`
+    : `Thought for ${durationLabel}`;
 
   // Don't render an empty completed block (edge case: <thinking></thinking>)
   if (!isStreaming && (!content || content.trim().length === 0)) {
