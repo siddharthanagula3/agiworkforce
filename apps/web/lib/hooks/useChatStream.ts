@@ -144,7 +144,15 @@ async function saveMessageToDb(
     });
 
     if (!response.ok) {
-      console.error('[useChatStream] Failed to save message to DB:', response.status);
+      // A 429 here is a transient rate-limit on a best-effort persistence write: the
+      // message is already rendered and the turn proceeds (we return null and move on),
+      // so surfacing it as a hard error trips the dev error overlay for a non-fatal,
+      // expected condition. Log it as a warning; treat genuine failures as errors.
+      if (response.status === 429) {
+        console.warn('[useChatStream] Message persistence rate-limited (429); chat unaffected');
+      } else {
+        console.error('[useChatStream] Failed to save message to DB:', response.status);
+      }
       return null;
     }
 
