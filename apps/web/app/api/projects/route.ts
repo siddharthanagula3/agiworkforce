@@ -58,8 +58,9 @@ async function handleGetProjects(request: NextRequest) {
   let data: Record<string, unknown>[];
   try {
     data = await db.query<Record<string, unknown>>(
+      // Hide soft-deleted projects (deleted_at tombstones from cross-device sync, 0041).
       `select * from user_projects
-       where user_id = $1
+       where user_id = $1 and deleted_at is null
        order by updated_at desc
        limit $2 offset $3`,
       [userId, limit, offset],
