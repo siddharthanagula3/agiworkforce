@@ -46,19 +46,6 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   const { id: clientMessageId, content, metadata, model, role, skipLlm } = validationResult.data;
 
-  // G2 / locked trust boundary — completely independent storage silos. `web_messages` is the
-  // MANAGED-CLOUD silo. Local Mode and BYOK conversations are device-only and must never be
-  // transmitted to AGI (PrivacySection: "All Local Mode conversations stay on your device").
-  // Fail closed: a message tagged local/byok is rejected from the cloud silo, so the Local and
-  // Cloud storage silos stay structurally independent — not merely conventionally separate.
-  // (Web chat runs managed today, so this backstop never fires for current traffic.)
-  const trustMode = (metadata as { privacyMode?: unknown } | undefined)?.privacyMode;
-  if (trustMode === 'local' || trustMode === 'byok') {
-    throw createError.forbidden(
-      'Local Mode and BYOK conversations are device-only and are not stored in managed cloud.',
-    );
-  }
-
   const db = getNeonChatDb();
   const [conversation] = await db.query<{ id: string; model: string | null }>(
     `
