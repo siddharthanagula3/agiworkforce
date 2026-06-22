@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as Crypto from 'expo-crypto';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
   insertMemoryFact,
   listMemoryFacts,
@@ -10,6 +11,9 @@ import {
   searchMemoryByEmbedding,
 } from '@/storage/memory';
 import type { MemoryFact } from '@/storage/types';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
+import { markMemoryForSync } from '@/services/cloudSyncEngine';
 
 export type { MemoryFact };
 
@@ -50,7 +54,31 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   fetchMemories: async () => {
     set({ loading: true, error: null });
     try {
-      const entries = await listMemoryFacts({ limit: 500 });
+      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      let entries: MemoryFact[];
+      if (isCloud) {
+        // ── Cloud path: read from the cloud memory store (synced via cloudSyncEngine).
+        // Cloud entries use the same display type: we map CloudMemoryEntry → MemoryFact.
+        // Non-deleted entries only; tombstones pending push stay in the cloud store
+        // but must not appear in the list.
+        const cloudEntries = useCloudMemoryStore
+          .getState()
+          .entries.filter((e) => !e.isDeleted)
+          .map(
+            (e): MemoryFact => ({
+              id: e.id,
+              fact: e.content,
+              source_conversation_id: null,
+              pinned: false,
+              created_at: new Date(e.createdAt).getTime(),
+            }),
+          )
+          .sort((a, b) => b.created_at - a.created_at);
+        entries = cloudEntries;
+      } else {
+        // ── Local path: read from SQLite (unchanged).
+        entries = await listMemoryFacts({ limit: 500 });
+      }
       set({ entries, loading: false });
 
       const { searchQuery } = get();
@@ -71,29 +99,70 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   addMemory: async (fact, _category) => {
     set({ error: null });
     try {
-      const id = Crypto.randomUUID();
-      const newFact: Omit<MemoryFact, 'pinned'> & { pinned?: boolean } = {
-        id,
-        fact: fact.trim(),
-        source_conversation_id: null,
-        pinned: false,
-        created_at: Date.now(),
-      };
-      await insertMemoryFact(newFact);
-      set((state) => {
-        const entry = { ...newFact, pinned: false };
-        // #28: also surface the new memory in the filtered view when a search is
-        // active and it matches — otherwise it stays invisible until the query is
-        // cleared (the screen renders filteredEntries while searching).
-        const q = state.searchQuery.trim().toLowerCase();
-        const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
-        return {
-          entries: [entry, ...state.entries],
-          filteredEntries: matchesSearch
-            ? [entry, ...state.filteredEntries]
-            : state.filteredEntries,
+      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      if (isCloud) {
+        // ── Cloud path: write to cloud memory store + queue for push ──────────
+        // TRUST BOUNDARY: local SQLite is NOT written. Cloud memory IDs are
+        // UUIDv7 (collision-free, time-ordered) as required by the server contract.
+        const id = uuidv7();
+        const now = new Date().toISOString();
+        const cloudEntry = {
+          id,
+          content: fact.trim(),
+          category: null,
+          source: 'mobile' as const,
+          isDeleted: false,
+          createdAt: now,
+          updatedAt: now,
         };
-      });
+        useCloudMemoryStore.getState().upsertCloudMemory(cloudEntry);
+        markMemoryForSync(id);
+        // Also optimistically surface in the local store's entry list so the UI
+        // reflects the add immediately without waiting for the next pull. We use
+        // a synthetic MemoryFact shape (fact = content, created_at = epoch ms).
+        set((state) => {
+          const entry: MemoryFact = {
+            id,
+            fact: fact.trim(),
+            source_conversation_id: null,
+            pinned: false,
+            created_at: Date.now(),
+          };
+          const q = state.searchQuery.trim().toLowerCase();
+          const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
+          return {
+            entries: [entry, ...state.entries],
+            filteredEntries: matchesSearch
+              ? [entry, ...state.filteredEntries]
+              : state.filteredEntries,
+          };
+        });
+      } else {
+        // ── Local path: write to SQLite (unchanged) ───────────────────────────
+        const id = Crypto.randomUUID();
+        const newFact: Omit<MemoryFact, 'pinned'> & { pinned?: boolean } = {
+          id,
+          fact: fact.trim(),
+          source_conversation_id: null,
+          pinned: false,
+          created_at: Date.now(),
+        };
+        await insertMemoryFact(newFact);
+        set((state) => {
+          const entry = { ...newFact, pinned: false };
+          // #28: also surface the new memory in the filtered view when a search is
+          // active and it matches — otherwise it stays invisible until the query is
+          // cleared (the screen renders filteredEntries while searching).
+          const q = state.searchQuery.trim().toLowerCase();
+          const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
+          return {
+            entries: [entry, ...state.entries],
+            filteredEntries: matchesSearch
+              ? [entry, ...state.filteredEntries]
+              : state.filteredEntries,
+          };
+        });
+      }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to add memory' });
     }
@@ -101,12 +170,28 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
 
   updateMemory: async (id, fact) => {
     set({ error: null });
+    // Optimistic update in the local entries list (shared by both modes for display).
     set((state) => ({
       entries: state.entries.map((e) => (e.id === id ? { ...e, fact } : e)),
       filteredEntries: state.filteredEntries.map((e) => (e.id === id ? { ...e, fact } : e)),
     }));
     try {
-      await updateMemoryFact(id, fact.trim());
+      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      if (isCloud) {
+        // ── Cloud path ────────────────────────────────────────────────────────
+        const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
+        if (existing) {
+          useCloudMemoryStore.getState().upsertCloudMemory({
+            ...existing,
+            content: fact.trim(),
+            updatedAt: new Date().toISOString(),
+          });
+          markMemoryForSync(id);
+        }
+      } else {
+        // ── Local path ────────────────────────────────────────────────────────
+        await updateMemoryFact(id, fact.trim());
+      }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to update memory' });
       await get().fetchMemories();
@@ -117,12 +202,33 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     set({ error: null });
     const prev = get().entries;
     const prevFiltered = get().filteredEntries;
+    // Optimistic local removal from the display list.
     set((state) => ({
       entries: state.entries.filter((e) => e.id !== id),
       filteredEntries: state.filteredEntries.filter((e) => e.id !== id),
     }));
     try {
-      await deleteMemoryFact(id);
+      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      if (isCloud) {
+        // ── Cloud path: mark as tombstone, keep in cloud store until server acks ──
+        // CRITICAL: must NOT hard-delete locally before the server receives the
+        // tombstone, otherwise the delete is silently lost. The sync engine's
+        // pushMemory() will hard-delete after receiving the server ack.
+        const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
+        if (existing) {
+          useCloudMemoryStore.getState().upsertCloudMemory({
+            ...existing,
+            isDeleted: true,
+            updatedAt: new Date().toISOString(),
+          });
+          markMemoryForSync(id);
+        }
+        // If the entry is not in the cloud store (e.g. a local entry that leaked
+        // to the display list in a previous session), nothing to push.
+      } else {
+        // ── Local path ────────────────────────────────────────────────────────
+        await deleteMemoryFact(id);
+      }
     } catch (err) {
       set({
         entries: prev,

@@ -13,7 +13,7 @@ import {
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
-import { uuidv7 } from '@agiworkforce/utils';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync } from '@/services/cloudSyncEngine';
 // SEPARATION-FIX: cloud conversations are physically separated into their own store.
 // Lazy import to avoid circular dependency at module initialisation time.

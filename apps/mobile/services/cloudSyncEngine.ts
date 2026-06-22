@@ -10,6 +10,11 @@
  * chat cursor). Memory sync runs inside the same `syncNow()` call, gated by the same
  * `isManagedSyncEnabled()` check.
  *
+ * Also delta-syncs managed-cloud user settings with `/api/settings/sync` using a
+ * SEPARATE settings cursor (independent from chat/memory/project cursors). Settings
+ * sync runs last inside `syncNow()`. Only cloud-safe namespaces are ever pushed or
+ * applied (see services/cloudSettingsMapping.ts).
+ *
  * MANAGED-ONLY: every entry point is gated on `isManagedSyncEnabled()` and the `api`
  * client routes through `guardedFetch`, which independently refuses any network I/O
  * in Local mode. Local-mode conversations live in a separate store and are never
@@ -25,12 +30,16 @@ import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/clou
 import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
+import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import type { ArtifactWireDelta } from '@agiworkforce/services';
 
 const SYNC_PATH = '/api/chat/sync';
 const MEMORY_SYNC_PATH = '/api/memory/sync';
 const PROJECTS_SYNC_PATH = '/api/projects/sync';
+const SETTINGS_SYNC_PATH = '/api/settings/sync';
 /** Safety bound on the pull pagination loop (each page is up to 500 rows). */
 const PULL_PAGE_GUARD = 50;
 
@@ -223,7 +232,10 @@ async function push(): Promise<void> {
       projectId: c.projectId ?? null,
       pinned: c.pinned ?? false,
       createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
+      // The server REQUIRES updatedAt (string) as the LWW key. Cloud conversation
+      // summaries don't always carry it, so fall back to createdAt, then now — never
+      // push undefined (that 400s the whole chat-sync push with a Zod error).
+      updatedAt: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
     }));
 
   // Split message refs into buildable (a syncable local row exists) and dead (the
@@ -522,6 +534,114 @@ async function pushProjects(): Promise<void> {
   useProjectSyncStateStore.getState().clearProjectDirty(toClear);
 }
 
+// ── Settings wire shapes (/api/settings/sync) ──────────────────────────────────
+
+/** Shape returned by GET /api/settings/sync. */
+interface SettingsPullResponse {
+  settings: Record<string, unknown>;
+  cursor: string;
+  hasMore: false;
+}
+
+/** Shape returned by POST /api/settings/sync. */
+interface SettingsPushResponse {
+  /** true = merged; false = stale (server LWW skipped this push). */
+  applied: boolean;
+  cursor: string;
+}
+
+// ── Settings push ───────────────────────────────────────────────────────────────
+
+/**
+ * Push the cloud-safe settings projection if a real local edit has been made since
+ * the last push. Uses two guards in combination:
+ *
+ * 1. `settingsUpdatedAt !== null` — null means this device has never changed any
+ *    cloud-safe setting (factory defaults). A fresh device must NOT push defaults
+ *    before pulling, as that would clobber the user's existing cloud settings via
+ *    server-side LWW. Only real edits (stamped by cloud-safe setters) are pushed.
+ *
+ * 2. Snapshot-diff: the current cloud projection serializes differently from
+ *    `lastPushedSnapshot`. Skips the POST when nothing changed since last push
+ *    (prevents redundant network I/O on background sync cycles).
+ *
+ * The `updatedAt` in the push body is `settingsUpdatedAt` (the time the user last
+ * changed a setting on this device), NOT `new Date()`. This is the LWW version
+ * key: sending the real edit time lets the server correctly order concurrent edits
+ * from multiple surfaces. Sending push-time would make "whichever synced last wins"
+ * instead of "last writer wins."
+ *
+ * After a successful push (applied=true or applied=false for a stale LWW skip),
+ * advances the settings cursor and updates the baseline snapshot so the pull path
+ * can detect whether re-pushing after a pull would create churn.
+ */
+async function pushSettings(): Promise<void> {
+  const storeSnapshot = useSettingsStore.getState();
+
+  // Guard 1: Never push if no cloud-safe setting has ever been locally edited.
+  // settingsUpdatedAt is null on a fresh install or after a settings reset.
+  // The pull path (pullSettings) will adopt the server state instead.
+  const { settingsUpdatedAt } = storeSnapshot;
+  if (settingsUpdatedAt === null) return;
+
+  const current = toCloudSettings(storeSnapshot);
+  const currentJson = JSON.stringify(current);
+  const { lastPushedSnapshot } = useSettingsSyncStateStore.getState();
+
+  // Guard 2: Skip if the projection matches the last pushed snapshot (no change).
+  if (lastPushedSnapshot === currentJson) return;
+
+  const res = await api.post<SettingsPushResponse>(SETTINGS_SYNC_PATH, {
+    settings: current,
+    // Use the real local-edit time as the LWW key (not push time). This lets the
+    // server correctly resolve concurrent edits from multiple surfaces.
+    updatedAt: settingsUpdatedAt,
+  });
+
+  // Advance cursor regardless of applied (LWW skipped = server cursor still moves).
+  const newCursor = res?.cursor ?? useSettingsSyncStateStore.getState().settingsCursor;
+  useSettingsSyncStateStore
+    .getState()
+    .setSettingsCursor(maxCursor(useSettingsSyncStateStore.getState().settingsCursor, newCursor));
+  // Mark the snapshot as pushed so we don't re-push on the next cycle.
+  useSettingsSyncStateStore.getState().setLastPushedSnapshot(currentJson);
+}
+
+// ── Settings pull ───────────────────────────────────────────────────────────────
+
+/**
+ * Pull cloud settings. Settings is a single document (not a collection), so
+ * there is no pagination loop — the server always returns hasMore:false.
+ *
+ * After applying the pulled namespaces into the live store, update the baseline
+ * snapshot so the next pushSettings() call does not re-push what was just pulled
+ * (which would create an infinite churn loop).
+ */
+async function pullSettings(): Promise<void> {
+  const cursor = useSettingsSyncStateStore.getState().settingsCursor;
+  const res = await api.get<SettingsPullResponse>(
+    `${SETTINGS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
+  );
+
+  const pulledSettings = res.settings ?? {};
+  const newCursor = res.cursor ?? cursor;
+  const advancedCursor = maxCursor(cursor, newCursor);
+
+  // Only apply if the server returned a new cursor (something changed).
+  if (advancedCursor !== cursor && Object.keys(pulledSettings).length > 0) {
+    // Apply pulled cloud-safe namespaces into the live settings store (LWW).
+    applyCloudSettings(pulledSettings as CloudSettings);
+
+    // After applying, recompute the cloud projection from the now-updated store
+    // and set it as the new baseline — prevents treating the pull as a local change
+    // that triggers a redundant push on the next cycle.
+    const freshSnapshot = toCloudSettings(useSettingsStore.getState());
+    useSettingsSyncStateStore.getState().setLastPushedSnapshot(JSON.stringify(freshSnapshot));
+  }
+
+  useSettingsSyncStateStore.getState().setSettingsCursor(advancedCursor);
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────────
 
 let syncing = false;
@@ -555,6 +675,12 @@ export async function syncNow(): Promise<void> {
     // both the chat cursor and the memory cursor.
     await pushProjects();
     await pullProjects();
+    // Settings sync: push cloud-safe preferences if changed, then pull.
+    // Runs LAST (most sensitive — allowlist-gated). Uses its own cursor
+    // (settingsSyncStateStore) — independent from all other cursors.
+    // Push uses snapshot-diff dirty detection (no per-setter hooks needed).
+    await pushSettings();
+    await pullSettings();
     useCloudSyncStateStore.getState().setStatus('idle');
     useCloudSyncStateStore.setState({ lastSyncAt: Date.now() });
   } catch (err) {
