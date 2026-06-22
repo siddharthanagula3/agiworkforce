@@ -64,3 +64,60 @@ export function isDerivedArtifact(a: SharedArtifact): boolean {
 export function selectArtifactsToPush(artifacts: ReadonlyArray<SharedArtifact>): SharedArtifact[] {
   return artifacts.filter((a) => !isDerivedArtifact(a));
 }
+
+/** The snake_case artifact delta returned by `GET /api/chat/sync` (migration 0039). */
+export interface ArtifactWireDelta {
+  id: string;
+  conversation_id: string;
+  message_id: string | null;
+  title: string | null;
+  artifact_type: string;
+  language: string | null;
+  content: string;
+  current_version: number;
+  pinned: boolean;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  server_version: string;
+}
+
+/** Map a sync wire delta to the client-domain `CloudArtifact` (SharedArtifact + tombstone). */
+export function wireToCloudArtifact(d: ArtifactWireDelta): CloudArtifact {
+  return {
+    id: d.id,
+    type: d.artifact_type as SharedArtifact['type'],
+    title: d.title ?? '',
+    content: d.content,
+    language: d.language ?? undefined,
+    version: d.current_version,
+    createdAt: d.created_at,
+    updatedAt: d.updated_at,
+    conversationId: d.conversation_id,
+    messageId: d.message_id ?? undefined,
+    metadata: { pinned: d.pinned, tags: d.tags, serverVersion: d.server_version },
+    deletedAt: d.deleted_at,
+  };
+}
+
+/**
+ * Apply pulled artifact deltas to a surface's CURRENT persisted cloud-artifact set. Upsert by
+ * id; a tombstone (`deleted_at`) removes it. PURE — the surface persists the returned set, then
+ * renders `mergeCloudArtifacts(localDerived, returnedSet)`. Each surface's sync engine calls
+ * this (web/desktop/mobile) so the apply logic lives in ONE place.
+ *
+ * Deltas arrive ordered by `server_version asc` (server contract), so a later delta for the
+ * same id naturally wins.
+ */
+export function applyArtifactDeltas(
+  current: ReadonlyArray<CloudArtifact>,
+  deltas: ReadonlyArray<ArtifactWireDelta>,
+): CloudArtifact[] {
+  const byId = new Map(current.map((a) => [a.id, a]));
+  for (const d of deltas) {
+    if (d.deleted_at) byId.delete(d.id);
+    else byId.set(d.id, wireToCloudArtifact(d));
+  }
+  return [...byId.values()];
+}

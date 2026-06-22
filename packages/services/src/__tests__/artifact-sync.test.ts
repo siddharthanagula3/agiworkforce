@@ -3,7 +3,10 @@ import {
   mergeCloudArtifacts,
   selectArtifactsToPush,
   isDerivedArtifact,
+  applyArtifactDeltas,
+  wireToCloudArtifact,
   type CloudArtifact,
+  type ArtifactWireDelta,
 } from '../artifact-sync';
 import type { SharedArtifact } from '@agiworkforce/types';
 
@@ -85,5 +88,51 @@ describe('isDerivedArtifact', () => {
     expect(isDerivedArtifact(art({ metadata: { derived: true } }))).toBe(true);
     expect(isDerivedArtifact(art({ metadata: { derived: false } }))).toBe(false);
     expect(isDerivedArtifact(art({ metadata: {} }))).toBe(false);
+  });
+});
+
+describe('applyArtifactDeltas + wireToCloudArtifact', () => {
+  const wire = (over: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta => ({
+    id: 'a1',
+    conversation_id: 'c1',
+    message_id: 'm1',
+    title: 'T',
+    artifact_type: 'code',
+    language: 'python',
+    content: 'print(1)',
+    current_version: 1,
+    pinned: false,
+    tags: [],
+    created_at: '2026-06-21T00:00:00.000Z',
+    updated_at: '2026-06-21T00:00:00.000Z',
+    deleted_at: null,
+    server_version: '10',
+    ...over,
+  });
+
+  it('maps a wire delta to a CloudArtifact (snake_case → camelCase)', () => {
+    const c = wireToCloudArtifact(wire({ message_id: null, language: null }));
+    expect(c.conversationId).toBe('c1');
+    expect(c.messageId).toBeUndefined();
+    expect(c.language).toBeUndefined();
+    expect(c.version).toBe(1);
+    expect(c.deletedAt).toBeNull();
+  });
+
+  it('upserts new + replaces existing by id', () => {
+    const out = applyArtifactDeltas(
+      [wireToCloudArtifact(wire({ id: 'a1', content: 'old' }))],
+      [wire({ id: 'a1', content: 'new', current_version: 2 }), wire({ id: 'a2' })],
+    );
+    expect(out.find((a) => a.id === 'a1')?.content).toBe('new');
+    expect(out.map((a) => a.id).sort()).toEqual(['a1', 'a2']);
+  });
+
+  it('a tombstone delta removes the artifact from the set', () => {
+    const out = applyArtifactDeltas(
+      [wireToCloudArtifact(wire({ id: 'a1' })), wireToCloudArtifact(wire({ id: 'a2' }))],
+      [wire({ id: 'a1', deleted_at: '2026-06-21T01:00:00.000Z' })],
+    );
+    expect(out.map((a) => a.id)).toEqual(['a2']);
   });
 });
