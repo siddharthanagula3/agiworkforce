@@ -18,3 +18,7 @@ export * from './artifact-derivation';
 // Model-switch cache-penalty assessment — pure logic for warning users that
 // switching models mid-conversation resets the prompt cache (consumed by all surfaces).
 export * from './model-switch-cache';
+
+// Artifact cloud-sync merge — the pure render-overlay + push-selection rules every
+// surface applies to reconcile locally-derived artifacts with pulled cloud artifacts.
+export * from './artifact-sync';
