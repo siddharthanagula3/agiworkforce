@@ -38,6 +38,25 @@ function mockLlmErrorResponse(body: unknown, status = 503) {
   );
 }
 
+/**
+ * Build a streaming SSE Response from an array of parsed SSE data objects.
+ * Each item is emitted as `data: <json>\n\n`, terminated with `data: [DONE]\n\n`.
+ */
+function mockSseStream(events: unknown[]) {
+  const lines = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+  const body = lines + 'data: [DONE]\n\n';
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(body));
+      controller.close();
+    },
+  });
+  vi.mocked(fetch).mockResolvedValueOnce(
+    new Response(stream, { status: 200, headers: new Headers() }),
+  );
+}
+
 describe('useChatStream', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
@@ -53,6 +72,124 @@ describe('useChatStream', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  describe('x_tool_result / mcp_tool_use wiring', () => {
+    it('populates tool result and survives a trailing finishRunningTools flush', async () => {
+      // Emit: mcp_tool_use running → x_tool_result → finish_reason (triggers finishRunningTools)
+      // The discriminating assertion: result must survive the trailing publishToolTimeline
+      // called inside finishRunningTools at stream end.
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_status: { type: 'mcp_tool_use', name: 'bash', status: 'running' },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_result: {
+                  tool_call_id: 'tc-1',
+                  name: 'bash',
+                  content: 'Hello from E2B',
+                  is_error: false,
+                },
+              },
+            },
+          ],
+        },
+        // Assistant text follows the tool result — this triggers another publishToolTimeline
+        // indirectly via flushContentBuffer → no, but finish_reason calls finishRunningTools
+        { choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('run bash', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const state = useChatStore.getState();
+      const assistantMsg = state.messages.find((m) => m.role === 'assistant');
+      const tools = assistantMsg?.metadata?.tools ?? [];
+      const bashEntry = tools.find((t) => t.name === 'bash');
+      expect(bashEntry, 'bash tool entry should exist').toBeDefined();
+      expect(bashEntry?.result).toBe('Hello from E2B');
+      expect(bashEntry?.status).toBe('completed');
+    });
+
+    it('accepts mcp_tool_use failed status and marks tool failed', async () => {
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_status: { type: 'mcp_tool_use', name: 'bash', status: 'running' },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_status: { type: 'mcp_tool_use', name: 'bash', status: 'failed' },
+              },
+            },
+          ],
+        },
+        { choices: [{ delta: { content: 'Error.' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('run bash', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const state = useChatStore.getState();
+      const assistantMsg = state.messages.find((m) => m.role === 'assistant');
+      const bashEntry = assistantMsg?.metadata?.tools?.find((t) => t.name === 'bash');
+      expect(bashEntry?.status).toBe('failed');
+    });
+
+    it('still handles server_tool_use events (regression)', async () => {
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_tool_status: {
+                  type: 'server_tool_use',
+                  name: 'web_search',
+                  status: 'searching',
+                },
+              },
+            },
+          ],
+        },
+        { choices: [{ delta: { content: 'Results.' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('search', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const state = useChatStore.getState();
+      const assistantMsg = state.messages.find((m) => m.role === 'assistant');
+      const searchEntry = assistantMsg?.metadata?.tools?.find((t) => t.name === 'web_search');
+      expect(searchEntry, 'web_search tool entry should exist').toBeDefined();
+    });
   });
 
   it('renders failed LLM responses as visible assistant errors without console-directed copy', async () => {
