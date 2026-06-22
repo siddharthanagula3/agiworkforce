@@ -144,7 +144,13 @@ export class OpenAIProvider extends BaseLLMProvider {
       }
     }
     const reasoningEffort = normalizeReasoningEffort(request.effort, request.model);
-    if (reasoningEffort) {
+    const hasTools = Array.isArray(request.tools) && request.tools.length > 0;
+    if (reasoningEffort && !hasTools) {
+      // OpenAI /v1/chat/completions returns HTTP 400 when a request combines
+      // reasoning_effort with function tools (observed for GPT-5 series).
+      // When tools are present, omit reasoning_effort so the call succeeds.
+      // TODO: migrate GPT-5 tool requests to /v1/responses endpoint (see
+      // packages/llm-normalize/src/openai-responses-payload-policy.ts).
       body['reasoning_effort'] = reasoningEffort;
     }
     if (request.stream !== undefined) {
@@ -335,7 +341,13 @@ export class OpenAIProvider extends BaseLLMProvider {
       }
     }
     const reasoningEffort = normalizeReasoningEffort(request.effort, request.model);
-    if (reasoningEffort) {
+    const hasTools = Array.isArray(request.tools) && request.tools.length > 0;
+    if (reasoningEffort && !hasTools) {
+      // OpenAI /v1/chat/completions returns HTTP 400 when a request combines
+      // reasoning_effort with function tools (observed for GPT-5 series).
+      // When tools are present, omit reasoning_effort so the call succeeds.
+      // TODO: migrate GPT-5 tool requests to /v1/responses endpoint (see
+      // packages/llm-normalize/src/openai-responses-payload-policy.ts).
       body['reasoning_effort'] = reasoningEffort;
     }
     // Stable prompt_cache_key (same derivation as sendRequest) to improve
