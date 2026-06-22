@@ -1686,6 +1686,15 @@ export function resolveAutoModeModel(
   // map task → tier-appropriate slot → modelId. Slots not in the tier's
   // allowedSlots fall back to workhorse_general (which every tier has, even Free).
   if (taskType !== undefined) {
+    // Respect explicit model selections: task-aware routing applies ONLY to the
+    // auto-mode aliases (auto / auto-economy / auto-balanced / auto-premium). A
+    // concrete model id the user picked deliberately (e.g. 'gpt-5.4-mini') must be
+    // used as-is — never silently swapped for the task's slot model. Without this
+    // guard the task classifier overrode every explicit pick (e.g. gpt-5.4-mini ->
+    // claude-sonnet-4.6), which also re-routed to a provider the user never chose.
+    if (!AUTO_MODE_IDS.has(normalizedMode)) {
+      return normalizeModelId(normalizedMode);
+    }
     const policy = getTierPolicy(normalizedTier);
     const taskMap = pickTaskTypeMapForTier(normalizedTier);
     const desiredSlot = taskMap.get(taskType);
