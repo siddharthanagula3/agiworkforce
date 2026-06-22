@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { uuidv7 } from '@agiworkforce/utils';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { markProjectForSync } from '@/services/cloudSyncEngine';

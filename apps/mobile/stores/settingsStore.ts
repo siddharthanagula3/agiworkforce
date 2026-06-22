@@ -30,7 +30,7 @@ interface Capabilities {
   camera: boolean;
 }
 
-interface SettingsState {
+export interface SettingsState {
   /** Auto-approve mode for tool execution */
   autoApproveMode: AutoApproveMode;
   /** Enable haptic feedback */
@@ -67,6 +67,23 @@ interface SettingsState {
   personalization: Personalization;
   /** AI capability toggles */
   capabilities: Capabilities;
+  /**
+   * ISO timestamp of the last cloud-safe settings edit on this device. Null until
+   * the user explicitly changes a setting that belongs to the cloud-safe allowlist.
+   *
+   * Used by the cloud settings sync engine as the LWW `updatedAt` in push payloads.
+   * A null value means "factory defaults — never edited on this device", and the sync
+   * engine skips the POST so a fresh device pull adopts the existing cloud state rather
+   * than clobbering it with local defaults.
+   *
+   * Stamped by every cloud-safe setter (themeMode, accentColor, fontPreference,
+   * personalization, notificationsEnabled, speechLanguage, autoListenEnabled).
+   * Device-only setters (hapticsEnabled, voiceEnabled, etc.) do NOT stamp it.
+   *
+   * NEVER included in the push payload — internal metadata only. The cloud-settings
+   * mapping layer (cloudSettingsMapping.ts) explicitly excludes it.
+   */
+  settingsUpdatedAt: string | null;
 
   setAutoApproveMode: (mode: AutoApproveMode) => void;
   setHapticsEnabled: (enabled: boolean) => void;
@@ -90,6 +107,17 @@ interface SettingsState {
   setTemporaryChat: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
   setCapability: (key: keyof Capabilities, value: boolean) => void;
+  /**
+   * Internal: called by applyCloudSettings after a pull to update settingsUpdatedAt
+   * to the server's version timestamp without treating the pull as a local edit.
+   * Do not call this from UI code.
+   */
+  _setSettingsUpdatedAt: (iso: string | null) => void;
+}
+
+/** Stamp now for cloud-safe setter changes. */
+function nowIso(): string {
+  return new Date().toISOString();
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -131,26 +159,40 @@ export const useSettingsStore = create<SettingsState>()(
         voice: true,
         camera: true,
       },
+      // null = never locally edited; sync engine must NOT push defaults to cloud.
+      settingsUpdatedAt: null,
 
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
+      // Device-only setters — do NOT stamp settingsUpdatedAt.
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
-      setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
       setBackgroundFetchEnabled: (enabled) => set({ backgroundFetchEnabled: enabled }),
-      setThemeMode: (mode) => set({ themeMode: mode }),
-      setAccentColor: (color) => set({ accentColor: color }),
-      setFontPreference: (pref) => set({ fontPreference: pref }),
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
       setSpeechRate: (rate) => set({ speechRate: Math.min(Math.max(rate, 0.5), 2.0) }),
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
-      setSpeechLanguage: (language) => set({ speechLanguage: language }),
-      setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
-      setPersonalization: (partial) =>
-        set({ personalization: { ...get().personalization, ...partial } }),
       setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
+
+      // Cloud-safe setters — stamp settingsUpdatedAt so the sync engine knows a
+      // real local edit happened and can use this timestamp as the LWW key.
+      setThemeMode: (mode) => set({ themeMode: mode, settingsUpdatedAt: nowIso() }),
+      setAccentColor: (color) => set({ accentColor: color, settingsUpdatedAt: nowIso() }),
+      setFontPreference: (pref) => set({ fontPreference: pref, settingsUpdatedAt: nowIso() }),
+      setNotificationsEnabled: (enabled) =>
+        set({ notificationsEnabled: enabled, settingsUpdatedAt: nowIso() }),
+      setSpeechLanguage: (language) =>
+        set({ speechLanguage: language, settingsUpdatedAt: nowIso() }),
+      setAutoListenEnabled: (enabled) =>
+        set({ autoListenEnabled: enabled, settingsUpdatedAt: nowIso() }),
+      setPersonalization: (partial) =>
+        set({
+          personalization: { ...get().personalization, ...partial },
+          settingsUpdatedAt: nowIso(),
+        }),
+
+      _setSettingsUpdatedAt: (iso) => set({ settingsUpdatedAt: iso }),
     }),
     {
       name: 'settings-store',
