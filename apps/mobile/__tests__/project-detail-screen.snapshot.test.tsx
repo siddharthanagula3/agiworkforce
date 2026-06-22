@@ -114,6 +114,9 @@ jest.mock('@/src/features/projects/store', () => ({
 jest.mock('@/stores/chatStore', () => ({
   useChatMessageStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ conversations: [] }),
+  // ProjectChatsTab is now mode-aware and reads cloud conversations in Cloud mode.
+  useChatCloudMessageStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ conversations: [] }),
 }));
 
 import ProjectDetailScreen from '@/app/(app)/projects/[id]';

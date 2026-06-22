@@ -11,8 +11,10 @@ import { useRouter } from 'expo-router';
 import { Clock, MessageSquare, SquarePen } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { useChatMessageStore } from '@/stores/chatStore';
+import { useChatMessageStore, useChatCloudMessageStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 
 interface ProjectChatsTabProps {
@@ -65,20 +67,30 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
   const colors = useThemeColors();
   const router = useRouter();
 
-  const allConversations = useChatMessageStore((s) => s.conversations);
+  // Mode-aware: cloud projects list cloud conversations and activate via the
+  // cloud project store; local does the same against the local stores. The two
+  // namespaces never cross.
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const localConversations = useChatMessageStore((s) => s.conversations);
+  const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
   const conversations = useMemo(
-    () => allConversations.filter((conversation) => conversation.projectId === projectId),
-    [allConversations, projectId],
+    () =>
+      (isCloud ? cloudConversations : localConversations).filter(
+        (conversation) => conversation.projectId === projectId,
+      ),
+    [isCloud, cloudConversations, localConversations, projectId],
   );
 
-  const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const setLocalActive = useProjectStore((s) => s.setActiveProject);
+  const setCloudActive = useCloudProjectStore((s) => s.setActiveCloudProject);
 
   const handleNewChat = useCallback(() => {
     // Activate the project so the chat tab picks it up, then navigate to the
     // main chat surface. There is no dedicated chat/new route in v1.
-    setActiveProject(projectId);
+    if (isCloud) setCloudActive(projectId);
+    else setLocalActive(projectId);
     router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-  }, [router, projectId, setActiveProject]);
+  }, [router, projectId, isCloud, setCloudActive, setLocalActive]);
 
   const handleOpenChat = useCallback(
     (id: string) => {
