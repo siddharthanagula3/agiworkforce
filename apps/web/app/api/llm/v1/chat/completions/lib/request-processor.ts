@@ -818,12 +818,21 @@ export async function processRequest(
   }
 
   // Token + cost estimation
-  const estimatedPromptTokens = chatRequest.messages.reduce((sum, msg) => {
+  const rawEstimatedPromptTokens = chatRequest.messages.reduce((sum, msg) => {
     const textContent = extractTextContent(msg.content);
     const baseTokens = Math.ceil(textContent.length / 3.5);
     const overheadTokens = 4;
     return sum + baseTokens + overheadTokens;
   }, 0);
+  // Clamp the prompt-token estimate to a realistic ceiling. No real prompt exceeds the
+  // largest model context window (~1M tokens), so a larger figure is a malformed/runaway
+  // estimate — and because this estimate drives the credit RESERVE, an inflated value
+  // produced huge per-request charges (e.g. an unresolved "unknown"-model request reserving
+  // $10+ that was never reconciled back down). The reserve is only an upper bound; the
+  // post-response reconciliation settles the real cost from actual tokens, so clamping here
+  // can only ever reduce an over-reserve, never under-charge a legitimate request.
+  const MAX_ESTIMATED_PROMPT_TOKENS = 1_000_000;
+  const estimatedPromptTokens = Math.min(rawEstimatedPromptTokens, MAX_ESTIMATED_PROMPT_TOKENS);
 
   // Per-prompt input-token cap for the free trial — abuse control so a single
   // free prompt can't burn cost on a giant context across the 3 chances.

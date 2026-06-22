@@ -122,9 +122,10 @@ export function BillingSection() {
   const isManagedPaid = !isFreeTier && subscription?.status === 'active';
 
   function usageBadgeText(): string | null {
+    // Tiers are Local/Free, Pro, Max (the 'hobby' tier was removed). The Pro badge compared
+    // against the now-nonexistent 'Hobby' tier — compare against Free instead.
     if (tier === 'max') return '20x more usage than Pro';
-    if (tier === 'pro') return '5x more usage than Hobby';
-    if (tier === 'hobby') return 'Standard usage';
+    if (tier === 'pro') return '5x more usage than Free';
     return null;
   }
 
