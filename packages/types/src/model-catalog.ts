@@ -993,10 +993,12 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     // Round 16 — Pro elevates tools + MCP to unlimited.
     allowToolUse: 'unlimited',
     allowMCP: 'unlimited',
-    tokenCapPerMonth: 20_000_000,
-    // Daily cap on manual gpt-5.5 usage — Pro gets picker access but not
-    // unlimited flagship burns (ChatGPT Plus parity: 160 msgs/3hr cap).
-    flagshipDailyTokenCap: 15_000,
+    tokenCapPerMonth: 40_000_000,
+    // Daily cap on flagship model usage — Pro gets picker access but not
+    // unlimited flagship burns. 50K/day ~ 30-50 long messages with top models.
+    // Clearly above Free (100K/mo) and below Max (100M/mo, no flagship daily cap).
+    // FLAG FOR FOUNDER CONFIRMATION: raised from 20M/mo to 40M/mo and 15K/day to 50K/day.
+    flagshipDailyTokenCap: 50_000,
     capBehavior: STANDARD_CAP_BEHAVIOR,
   },
   max: {

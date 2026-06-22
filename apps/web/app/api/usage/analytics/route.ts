@@ -82,7 +82,7 @@ async function handleGetAnalytics(request: NextRequest) {
          date_trunc('day', created_at)::date::text as date,
          coalesce(sum((metadata->>'tokens')::bigint), 0)::text as total_tokens,
          sum(abs(amount_cents))::text as total_cost_cents,
-         count(distinct metadata->>'session_id')::text as session_count
+         count(distinct coalesce(metadata->>'session_id', id::text))::text as session_count
        from public.credit_transactions
        where user_id = $1
          and transaction_type = 'deduction'
@@ -96,7 +96,7 @@ async function handleGetAnalytics(request: NextRequest) {
       `select
          coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then (metadata->>'tokens')::bigint else 0 end), 0)::text as total_tokens,
          coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then abs(amount_cents) else 0 end), 0)::text as total_cost_cents,
-         count(distinct case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then metadata->>'session_id' else null end)::text as session_count,
+         count(distinct case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then coalesce(metadata->>'session_id', id::text) else null end)::text as session_count,
          coalesce(sum(case when created_at >= now() - interval '1 day' then (metadata->>'tokens')::bigint else 0 end), 0)::text as today_tokens,
          coalesce(sum(case when created_at >= now() - interval '1 day' then abs(amount_cents) else 0 end), 0)::text as today_cost_cents,
          coalesce(sum(case when created_at >= now() - interval '7 days' then (metadata->>'tokens')::bigint else 0 end), 0)::text as week_tokens,

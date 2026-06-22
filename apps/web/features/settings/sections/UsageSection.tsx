@@ -21,6 +21,7 @@ type AnalyticsResponse = {
   stats?: {
     sessions_count: number;
     today_cost: number;
+    today_tokens: number;
     week_cost: number;
     month_cost: number;
     total_tokens: number;
@@ -116,16 +117,26 @@ export function UsageSection() {
   const rawTier = usage?.plan_tier ?? billingTier ?? 'free';
   const planName = rawTier[0]!.toUpperCase() + rawTier.slice(1);
   const creditPercent = Math.min(100, Math.max(0, usage?.usage_percentage ?? 0));
-  const currentSessionPercent = useMemo(() => {
-    const monthCost = analytics?.stats?.month_cost ?? 0;
-    const todayCost = analytics?.stats?.today_cost ?? 0;
-    return monthCost > 0 ? Math.min(100, Math.round((todayCost / monthCost) * 100)) : 0;
-  }, [analytics]);
 
+  // "Today" bar: today_cost vs monthly allocation (prorated for a single day).
+  // Denominator is 1/30 of the monthly allocation so a full day's run reads as ~100%.
+  // Falls back to monthly allocation as denominator when prorate is 0.
+  const todayPercent = useMemo(() => {
+    const allocated = usage?.credits_allocated_cents ?? 0;
+    const todayCost = analytics?.stats?.today_cost ?? 0;
+    const dailyAllocation = allocated > 0 ? Math.round(allocated / 30) : 0;
+    return dailyAllocation > 0 ? Math.min(100, Math.round((todayCost / dailyAllocation) * 100)) : 0;
+  }, [analytics, usage]);
+
+  // "Weekly usage" bar: week_cost vs prorated weekly allocation (7/30 of monthly).
+  // Using a prorated denominator keeps the bar meaningful and comparable to the monthly bar.
   const weeklyPercent = useMemo(() => {
     const allocated = usage?.credits_allocated_cents ?? 0;
     const weekCost = analytics?.stats?.week_cost ?? 0;
-    return allocated > 0 ? Math.min(100, Math.round((weekCost / allocated) * 100)) : 0;
+    const weeklyAllocation = allocated > 0 ? Math.round((allocated * 7) / 30) : 0;
+    return weeklyAllocation > 0
+      ? Math.min(100, Math.round((weekCost / weeklyAllocation) * 100))
+      : 0;
   }, [analytics, usage]);
 
   return (
@@ -201,16 +212,16 @@ export function UsageSection() {
 
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <UsageBar
-            label="Current session"
-            percent={currentSessionPercent}
-            value={`${analytics?.stats?.sessions_count ?? 0} sessions in last 30 days`}
-            detail={`${money(analytics?.stats?.today_cost ?? 0)} spent today`}
+            label="Today"
+            percent={todayPercent}
+            value={`${money(analytics?.stats?.today_cost ?? 0)} spent in last 24 hours`}
+            detail={`${(analytics?.stats?.today_tokens ?? 0).toLocaleString()} tokens used today`}
           />
 
           <UsageBar
             label="Weekly usage"
             percent={weeklyPercent}
-            value={`${money(analytics?.stats?.week_cost ?? 0)} this week`}
+            value={`${money(analytics?.stats?.week_cost ?? 0)} spent in last 7 days`}
             detail={formatReset(usage?.period_end ?? null)}
           />
 
@@ -220,7 +231,7 @@ export function UsageSection() {
             value={`${money(usage?.credits_used_cents ?? 0)} used of ${money(
               usage?.credits_allocated_cents ?? 0,
             )}`}
-            detail={`${money(usage?.credits_remaining_cents ?? 0)} remaining`}
+            detail={`${money(usage?.credits_remaining_cents ?? 0)} remaining - ${analytics?.stats?.sessions_count ?? 0} sessions in last 30 days`}
           />
         </div>
 
