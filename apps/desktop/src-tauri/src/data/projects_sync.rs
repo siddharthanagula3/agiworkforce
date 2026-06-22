@@ -402,7 +402,10 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
                 params![
                     d.id,           // id = cloud_id (TEXT PK)
                     d.name,
-                    d.description.as_deref(),
+                    // description is NOT NULL DEFAULT '' — server may send null (nullable optional),
+                    // so we must not bind NULL into a NOT NULL column.
+                    d.description.as_deref().unwrap_or(""),
+                    // custom_instructions mapped from wire `instructions` (NOT NULL DEFAULT '').
                     d.instructions.as_deref().unwrap_or(""),
                     d.color.as_deref(),
                     is_archived_int,
@@ -847,7 +850,60 @@ mod tests {
         assert!(deleted_at_utc.is_some(), "tombstone must set deleted_at_utc");
     }
 
-    // ── Test 7: Cursor advances ───────────────────────────────────────────────
+    // ── Test 7: Pull INSERT new row — null description/instructions must land ──
+    //
+    // Core cross-device scenario: device B pulls a project it has never seen.
+    // Server may send description: null (the Zod type is `string | null`).
+    // The local schema is `description TEXT NOT NULL DEFAULT ''`, so binding
+    // SQL NULL would violate the constraint and silently drop the row.
+    // After the fix (`.unwrap_or("")`) the row must be inserted and both
+    // nullable-on-wire / NOT NULL-locally fields read back as "".
+
+    #[test]
+    fn pull_insert_new_row_with_null_description_and_instructions() {
+        let conn = fresh_db();
+
+        // Verify no rows with this cloud_id exist yet.
+        let count_before: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM projects WHERE cloud_id = 'new-cloud-uuid-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count_before, 0, "precondition: row must not exist before pull");
+
+        let delta = ProjectDelta {
+            id: "new-cloud-uuid-1".to_string(),
+            name: "Remote Project".to_string(),
+            description: None,        // server sends null — must not 500 on NOT NULL column
+            instructions: None,       // same
+            color: None,
+            is_archived: false,
+            metadata: None,
+            created_at: "2026-06-21T00:00:00.000Z".to_string(),
+            updated_at: "2026-06-22T00:00:00.000Z".to_string(),
+            deleted_at: None,
+            server_version: "77".to_string(),
+        };
+
+        apply_project_deltas(&conn, &[delta]);
+
+        // Row must now exist (1 row).
+        let (row_count, description, instructions): (i64, String, String) = conn
+            .query_row(
+                "SELECT COUNT(*), description, custom_instructions \
+                 FROM projects WHERE cloud_id = 'new-cloud-uuid-1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .expect("row must be present after cross-device pull INSERT");
+        assert_eq!(row_count, 1, "INSERT must create exactly one row");
+        assert_eq!(description, "", "null description must land as empty string");
+        assert_eq!(instructions, "", "null instructions must land as empty string");
+    }
+
+    // ── Test 8: Cursor advances ─────── (was 7; renumbered after INSERT test) ──
 
     #[test]
     fn project_cursor_persists_and_advances() {
@@ -868,7 +924,7 @@ mod tests {
         assert_eq!(select_next_project_cursor("7", &None), "7");
     }
 
-    // ── Test 8: Push wire shape — camelCase + omit None fields ────────────────
+    // ── Test 10: Push wire shape — camelCase + omit None fields ──────────────
     //
     // Zod schema: description/instructions/color/isArchived/metadata/createdAt
     //             all `.optional()` or `.nullable().optional()`.
@@ -952,7 +1008,7 @@ mod tests {
         assert!(p_tomb.get("instructions").is_none());
     }
 
-    // ── Test 9: Ack-clear ─────────────────────────────────────────────────────
+    // ── Test 9: Ack-clear ────────────────────────────────────────────────────
 
     #[test]
     fn ack_clear_marks_projects_clean() {
@@ -985,7 +1041,7 @@ mod tests {
         assert_eq!(sv.as_deref(), Some("99"), "server_version must be set from ack");
     }
 
-    // ── Test 10: Token-empty gate (no network egress) ─────────────────────────
+    // ── Test 11: Token-empty gate (no network egress) ────────────────────────
 
     #[tokio::test]
     async fn sync_projects_no_egress_without_token() {
