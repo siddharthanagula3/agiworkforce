@@ -468,16 +468,19 @@ const ChatComposerNewComponent = ({
     };
   }, [selectedSkill]);
 
-  // Handle prefillText prop · React "derived state from props" pattern.
-  // When the parent passes a new non-empty prefillText, we update message
-  // and notify the parent. This uses the recommended setState-during-render
-  // pattern (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
+  // into the local message and notify the parent it was consumed. This runs in an EFFECT,
+  // not during render: onPrefillConsumed is a PARENT (WebChatPage) state setter, and calling
+  // it during this component's render triggers React's "Cannot update a component while
+  // rendering a different component" warning (the recurring dev-overlay "1 Issue").
   const [prevPrefill, setPrevPrefill] = useState(prefillText);
-  if (prefillText && prefillText.length > 0 && prefillText !== prevPrefill) {
-    setPrevPrefill(prefillText);
-    setMessage(prefillText);
-    onPrefillConsumed?.();
-  }
+  useEffect(() => {
+    if (prefillText && prefillText.length > 0 && prefillText !== prevPrefill) {
+      setPrevPrefill(prefillText);
+      setMessage(prefillText);
+      onPrefillConsumed?.();
+    }
+  }, [prefillText, prevPrefill, onPrefillConsumed]);
 
   const addImageAttachments = useCallback(
     (files: File[]) => {
