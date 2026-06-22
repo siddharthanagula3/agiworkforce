@@ -60,8 +60,11 @@ pub struct AppearanceSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageSettings {
+    // Canonical cross-surface inner key is `locale` (matches the mobile mapping in
+    // apps/mobile/services/cloudSettingsMapping.ts and web's field name) — NOT
+    // `language`, so a locale set on mobile actually applies on desktop.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub language: Option<String>,
+    pub locale: Option<String>,
 }
 
 /// `personalization` namespace — user style sliders.
@@ -191,7 +194,7 @@ pub fn to_cloud_settings(s: &Settings) -> CloudSettings {
 
     // language
     let language = Some(LanguageSettings {
-        language: Some(s.window_preferences.language.clone()),
+        locale: Some(s.window_preferences.language.clone()),
     });
 
     // personalization (style sliders)
@@ -241,7 +244,7 @@ pub fn apply_cloud_settings(dst: &mut Settings, cloud: &CloudSettings) {
     }
 
     if let Some(ref l) = cloud.language {
-        if let Some(ref lang) = l.language {
+        if let Some(ref lang) = l.locale {
             dst.window_preferences.language = lang.clone();
         }
     }
@@ -726,7 +729,7 @@ mod tests {
 
         // language
         let lang = cloud.language.as_ref().expect("language must be present");
-        assert_eq!(lang.language.as_deref(), Some("fr"));
+        assert_eq!(lang.locale.as_deref(), Some("fr"));
 
         // personalization
         let per = cloud.personalization.as_ref().expect("personalization must be present");
@@ -796,7 +799,7 @@ mod tests {
 
         let cloud = CloudSettings {
             appearance: Some(AppearanceSettings { theme: Some("light".into()) }),
-            language: Some(LanguageSettings { language: Some("de".into()) }),
+            language: Some(LanguageSettings { locale: Some("de".into()) }),
             personalization: Some(PersonalizationSettings {
                 formality: Some(1),
                 warmth: Some(2),
