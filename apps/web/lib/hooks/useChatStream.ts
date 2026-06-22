@@ -39,6 +39,8 @@ interface SendMessageOptions {
   skillBody?: string;
   /** Display name of the active skill, used to emit a timeline step. */
   skillName?: string;
+  /** Deep Research mode: forces web_search and injects a research system prompt. */
+  research?: boolean;
 }
 
 const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
@@ -477,8 +479,9 @@ export function useChatStream(): UseChatStreamReturn {
             stream: true,
             temperature: options.temperature,
             max_tokens: options.maxTokens,
-            web_search: options.webSearch || undefined,
+            web_search: options.webSearch || options.research || undefined,
             web_fetch: options.webFetch || undefined,
+            research: options.research || undefined,
             code_execution: options.codeExecution || undefined,
             thinking_mode: thinkingEnabled || undefined,
             effort: thinkingEnabled ? thinkingEffort : undefined,

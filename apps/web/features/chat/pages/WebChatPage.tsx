@@ -92,6 +92,8 @@ type SendMeta = {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
+  /** Deep Research mode: server injects research system prompt and forces web search. */
+  researchEnabled?: boolean;
   /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
   styleMode?: string;
   /** Skill body to inject as a system message in the LLM request. */
@@ -592,6 +594,7 @@ export default function WebChatPage() {
         webSearch: options.meta?.webSearchEnabled,
         thinkingEnabled: options.meta?.thinkingEnabled,
         codeExecution: options.meta?.codeExecutionEnabled,
+        research: options.meta?.researchEnabled,
         styleMode: options.meta?.styleMode,
         skillBody: options.meta?.skillBody,
         skillName: options.meta?.skillName,
