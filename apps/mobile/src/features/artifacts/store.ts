@@ -21,7 +21,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { deriveArtifacts } from '@agiworkforce/services';
+import { deriveArtifacts, applyArtifactDeltas } from '@agiworkforce/services';
+import type { CloudArtifact, ArtifactWireDelta } from '@agiworkforce/services';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 
 // ---------------------------------------------------------------------------
@@ -46,6 +47,16 @@ interface ArtifactStoreState {
 
   /** Clear all user artifacts (e.g. sign-out). */
   clearArtifacts: () => void;
+
+  // --- Cloud-synced artifacts (managed sync, migration 0039) ---
+  // Kept SEPARATE from the locally-derived `artifacts` slice so the derived gallery is
+  // untouched; the render layer merges (mergeCloudArtifacts) when cloud sync is live.
+  /** Pulled cloud artifacts (edited/desktop-authored), keyed by id. */
+  cloudArtifacts: CloudArtifact[];
+  /** Apply pulled artifact deltas from `/api/chat/sync` (delegates to the shared logic). */
+  applyCloudArtifactDeltas: (deltas: ArtifactWireDelta[]) => void;
+  /** Clear pulled cloud artifacts (sign-out / leaving cloud mode). */
+  clearCloudArtifacts: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +82,15 @@ export const useArtifactStore = create<ArtifactStoreState>()(
       },
 
       clearArtifacts: () => set({ artifacts: [] }),
+
+      cloudArtifacts: [],
+
+      applyCloudArtifactDeltas: (deltas) => {
+        if (deltas.length === 0) return;
+        set((state) => ({ cloudArtifacts: applyArtifactDeltas(state.cloudArtifacts, deltas) }));
+      },
+
+      clearCloudArtifacts: () => set({ cloudArtifacts: [] }),
     }),
     {
       name: 'artifact-store',
@@ -82,6 +102,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
       },
       partialize: (state) => ({
         artifacts: state.artifacts.slice(0, MAX_ARTIFACTS),
+        cloudArtifacts: state.cloudArtifacts.slice(0, MAX_ARTIFACTS),
       }),
     },
   ),
