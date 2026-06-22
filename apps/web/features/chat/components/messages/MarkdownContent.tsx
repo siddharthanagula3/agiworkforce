@@ -6,12 +6,16 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import 'katex/dist/katex.min.css';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import type { Components } from 'react-markdown';
 import { Button } from '@/shared/components/ui/button';
 import { Copy, Check } from 'lucide-react';
+// KaTeX CSS must be loaded alongside rehype-katex so rendered math is styled.
+import 'katex/dist/katex.min.css';
 
 const CodeBlock = ({ className, children }: { className?: string; children: React.ReactNode }) => {
   const [copied, setCopied] = useState(false);
@@ -101,9 +105,18 @@ export default function MarkdownContent({ content, isStreaming }: MarkdownConten
     <>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        // Order matters: raw HTML is parsed, then sanitized, then highlighted.
+        // Order: raw HTML parsed -> sanitized -> math rendered as KaTeX spans
+        // (rehype-katex must run before rehype-highlight so highlight never
+        // sees language-math code blocks, which would otherwise produce
+        // block-level div/pre nodes and trigger a p > div hydration error
+        // when math appears inline) -> syntax highlighted.
         // rehypeRaw without a sanitizer is an XSS hazard on this live path.
-        rehypePlugins={[rehypeRaw, [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA], rehypeHighlight]}
+        rehypePlugins={[
+          rehypeRaw,
+          [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
+          rehypeKatex,
+          rehypeHighlight,
+        ]}
         components={markdownComponents}
       >
         {content}
