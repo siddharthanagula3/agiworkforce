@@ -20,6 +20,15 @@ export {
 // Auth Store - Authentication and user management (unified)
 export { useAuthStore, type AuthState, type AuthResult } from './authentication-store';
 
+// Cowork Folder Store - local-only working directory (File System Access API)
+export {
+  useCoworkFolderStore,
+  supportsDirectoryPicker,
+  type CoworkFolderStore,
+  type CoworkFolderState,
+  type CoworkFolderActions,
+} from './cowork-folder-store';
+
 // Chat Store - Chat conversations and messages
 export {
   useChatStore,
