@@ -48,7 +48,6 @@ import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton'
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
-  getModelById,
   isAutoMode,
 } from '@/src/features/model-picker/service';
 import {
@@ -325,10 +324,15 @@ export default function ChatScreen() {
   }, [stopStreaming]);
 
   const resolveAppMode = useCallback((modelId: string): AppMode => {
+    // Auto-routing modes run in Local mode.
     if (isAutoMode(modelId)) return 'local';
-    const def = getModelById(modelId);
-    if (!def) return 'local';
-    return def.surface === 'local' ? 'local' : 'cloud';
+    // Use the canonical classifier, which consults the FULL managed-cloud catalog
+    // (cloudModelSourceMap). The old path used getModelById, whose map only holds
+    // local models + ONE "preview" cloud model per provider — so every non-preview
+    // cloud model (e.g. Claude Opus 4.8, GPT-5.5, Grok 4.3) fell through to 'local'
+    // and wrongly triggered a "Switch from AGI Cloud to Local Mode" prompt when
+    // selected inside a Cloud chat. executionModeForModel classifies them as 'cloud'.
+    return executionModeForModel(modelId) === 'cloud' ? 'cloud' : 'local';
   }, []);
 
   const handleOpenModelPicker = useCallback(
