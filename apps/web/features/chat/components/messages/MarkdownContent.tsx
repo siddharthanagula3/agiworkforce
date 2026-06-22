@@ -10,6 +10,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
+import { preprocessMath } from './preprocessMath';
 import type { Components } from 'react-markdown';
 import { Button } from '@/shared/components/ui/button';
 import { Copy, Check } from 'lucide-react';
@@ -100,6 +101,9 @@ interface MarkdownContentProps {
 }
 
 export default function MarkdownContent({ content, isStreaming }: MarkdownContentProps) {
+  // Convert \[...\] and \(...\) to $$...$$/$...$ before remark-math runs,
+  // since remark-math only recognises dollar-sign delimiters by default.
+  const processedContent = preprocessMath(content);
   return (
     <>
       <ReactMarkdown
@@ -118,7 +122,7 @@ export default function MarkdownContent({ content, isStreaming }: MarkdownConten
         ]}
         components={markdownComponents}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
       {isStreaming && content.trim() && (
         <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
