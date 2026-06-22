@@ -47,14 +47,29 @@ use uuid::Uuid;
 // ---------------------------------------------------------------------------
 
 /// Pushed memory (camelCase, matching PushMemorySchema on server).
+///
+/// IMPORTANT: The server Zod schema uses `.optional()` (not `.nullable()`) for
+/// `isDeleted` and `createdAt`. That means `undefined` (key absent) is accepted
+/// but `null` (key present, JSON null) fails validation. All `Option<T>` fields
+/// on this struct MUST carry `skip_serializing_if = "Option::is_none"` so serde
+/// omits the key entirely rather than emitting `"isDeleted": null`.
+///
+/// `category` and `source` are `.nullable().optional()` on the server, so null
+/// is technically OK there — but omitting them is equally safe and simpler.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PushMemory {
     id: String,              // cloud_id (UUIDv7)
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     category: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     source: Option<String>,
+    /// Only emitted when `true` (tombstone). Non-deleted rows omit the key.
+    #[serde(skip_serializing_if = "Option::is_none")]
     is_deleted: Option<bool>,
+    /// Omitted when NULL in the DB. Server accepts absent as undefined.
+    #[serde(skip_serializing_if = "Option::is_none")]
     created_at: Option<String>,
     updated_at: String,
 }
@@ -830,32 +845,79 @@ mod tests {
         assert_eq!(select_next_memory_cursor("7", &None), "7");
     }
 
-    // ── Test 8: Push wire shape camelCase ─────────────────────────────────────
+    // ── Test 8a: Push wire shape — non-deleted memory (common case) ──────────
+    //
+    // Zod schema: isDeleted: z.boolean().optional()   → optional (not nullable)
+    //             createdAt: z.string().datetime().optional() → optional (not nullable)
+    //
+    // When these fields are None, serde MUST omit the key entirely (skip_serializing_if).
+    // Emitting `"isDeleted": null` would fail Zod and 400 the push.
 
     #[test]
     fn push_body_serializes_to_camelcase_schema() {
-        let body = MemoryPushBody {
+        // Case A: normal (non-deleted) memory — isDeleted + createdAt must be ABSENT.
+        let body_normal = MemoryPushBody {
             memories: vec![PushMemory {
                 id: "m1".into(),
                 content: "some memory".into(),
                 category: Some("Fact".into()),
                 source: Some("desktop".into()),
-                is_deleted: None,
-                created_at: Some("2026-06-20T00:00:00.000Z".into()),
+                is_deleted: None,      // must be omitted (key absent → Zod undefined OK)
+                created_at: None,      // must be omitted
                 updated_at: "2026-06-22T00:00:00.000Z".into(),
             }],
         };
-        let v = serde_json::to_value(&body).unwrap();
-        let mem = &v["memories"][0];
-        // camelCase keys
-        assert!(mem.get("isDeleted").is_some(), "is_deleted → isDeleted");
-        assert!(mem.get("createdAt").is_some(), "created_at → createdAt");
-        assert!(mem.get("updatedAt").is_some(), "updated_at → updatedAt");
-        // snake_case must NOT appear
-        assert!(mem.get("is_deleted").is_none(), "must not emit is_deleted");
-        assert!(mem.get("created_at").is_none(), "must not emit created_at");
-        // user_id must not be in push body
-        assert!(mem.get("userId").is_none() && mem.get("user_id").is_none());
+        let v_normal = serde_json::to_value(&body_normal).unwrap();
+        let mem_normal = &v_normal["memories"][0];
+
+        // Required fields present.
+        assert!(mem_normal.get("updatedAt").is_some(), "updatedAt must be present");
+        assert_eq!(mem_normal["id"], "m1");
+        assert_eq!(mem_normal["content"], "some memory");
+
+        // None → key MUST be absent (Zod .optional() rejects null; undefined = absent).
+        assert!(
+            mem_normal.get("isDeleted").is_none(),
+            "isDeleted must be absent when None — Zod .optional() rejects null"
+        );
+        assert!(
+            mem_normal.get("createdAt").is_none(),
+            "createdAt must be absent when None — Zod .optional() rejects null"
+        );
+
+        // snake_case keys must never appear.
+        assert!(mem_normal.get("is_deleted").is_none(), "must not emit is_deleted");
+        assert!(mem_normal.get("created_at").is_none(), "must not emit created_at");
+
+        // user_id must not be in push body.
+        assert!(mem_normal.get("userId").is_none() && mem_normal.get("user_id").is_none());
+
+        // Case B: tombstone — isDeleted must be present and true.
+        let body_tombstone = MemoryPushBody {
+            memories: vec![PushMemory {
+                id: "m2".into(),
+                content: "deleted memory".into(),
+                category: None,
+                source: None,
+                is_deleted: Some(true),
+                created_at: Some("2026-06-20T00:00:00.000Z".into()),
+                updated_at: "2026-06-22T01:00:00.000Z".into(),
+            }],
+        };
+        let v_tomb = serde_json::to_value(&body_tombstone).unwrap();
+        let mem_tomb = &v_tomb["memories"][0];
+        assert_eq!(
+            mem_tomb.get("isDeleted").and_then(|v| v.as_bool()),
+            Some(true),
+            "tombstone must emit isDeleted: true"
+        );
+        assert!(
+            mem_tomb.get("createdAt").is_some(),
+            "createdAt must be present when Some"
+        );
+        // category/source absent when None (nullable optional — omitting is fine).
+        assert!(mem_tomb.get("category").is_none());
+        assert!(mem_tomb.get("source").is_none());
     }
 
     // ── Test 9: Ack-clear ─────────────────────────────────────────────────────
