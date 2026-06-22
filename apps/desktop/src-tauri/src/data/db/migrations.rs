@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 69;
+const CURRENT_VERSION: i32 = 70;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -614,6 +614,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 69 {
         run_migration_in_transaction(conn, 69, apply_migration_v69)?;
+    }
+
+    if current_version < 70 {
+        run_migration_in_transaction(conn, 70, apply_migration_v70)?;
     }
 
     Ok(())
@@ -5737,6 +5741,46 @@ fn apply_migration_v69(conn: &Connection) -> Result<()> {
                 cursor TEXT NOT NULL DEFAULT '0', \
                 memory_cursor TEXT NOT NULL DEFAULT '0', \
                 project_cursor TEXT NOT NULL DEFAULT '0', \
+                last_sync_at TEXT \
+            )",
+            [],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Migration v70: add `settings_cursor` column to `cloud_sync_state`.
+/// Settings sync (data/settings_sync.rs) persists a per-user server version
+/// cursor here so pull can skip unchanged documents.  No user-data table is
+/// altered — settings live in-memory (SettingsState) not in a dedicated table.
+fn apply_migration_v70(conn: &Connection) -> Result<()> {
+    let table_exists = |table: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            > 0
+    };
+
+    if table_exists("cloud_sync_state") {
+        ensure_column(
+            conn,
+            "cloud_sync_state",
+            "settings_cursor",
+            "settings_cursor TEXT NOT NULL DEFAULT '0'",
+        )?;
+    } else {
+        // cloud_sync_state not yet created — create defensively with all known columns.
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS cloud_sync_state ( \
+                user_id TEXT PRIMARY KEY, \
+                cursor TEXT NOT NULL DEFAULT '0', \
+                memory_cursor TEXT NOT NULL DEFAULT '0', \
+                project_cursor TEXT NOT NULL DEFAULT '0', \
+                settings_cursor TEXT NOT NULL DEFAULT '0', \
                 last_sync_at TEXT \
             )",
             [],
