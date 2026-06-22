@@ -19,6 +19,7 @@ import {
   Terminal,
   Folder,
   FolderOpen,
+  Telescope,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -56,6 +57,8 @@ interface ChatComposerProps {
       webSearchEnabled?: boolean;
       thinkingEnabled?: boolean;
       codeExecutionEnabled?: boolean;
+      /** Deep Research mode: server injects research system prompt and forces web search. */
+      researchEnabled?: boolean;
       /** Output style hint forwarded to the LLM system prompt. undefined = 'normal'. */
       styleMode?: string;
       /** Resolved skill body injected as a system message in the LLM request. */
@@ -276,6 +279,7 @@ const ChatComposerNewComponent = ({
   const canPickFolder = supportsDirectoryPicker();
 
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [researchEnabled, setResearchEnabled] = useState(false);
   const [codeExecutionEnabled, setCodeExecutionEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
@@ -312,6 +316,11 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (webSearchEnabled && !modelSupportsSearch) setWebSearchEnabled(false);
   }, [webSearchEnabled, modelSupportsSearch]);
+
+  // Research requires web search; clear it if the model loses search support.
+  useEffect(() => {
+    if (researchEnabled && !modelSupportsSearch) setResearchEnabled(false);
+  }, [researchEnabled, modelSupportsSearch]);
 
   // If the user switches to a model that can't execute code, clear the toggle.
   useEffect(() => {
@@ -419,6 +428,7 @@ const ChatComposerNewComponent = ({
     setSelectedSkill(null);
     setSkillBody(null);
     setWebSearchEnabled(false);
+    setResearchEnabled(false);
     setStyleMode('normal');
     setShowStyleSubmenu(false);
     setActiveTags([]);
@@ -438,6 +448,7 @@ const ChatComposerNewComponent = ({
     setSelectedSkill(null);
     setSkillBody(null);
     setWebSearchEnabled(false);
+    setResearchEnabled(false);
     setStyleMode('normal');
     setShowOverflowMenu(false);
     setShowSkillsSubmenu(false);
@@ -529,7 +540,7 @@ const ChatComposerNewComponent = ({
     setPrevDroppedFiles(droppedFiles);
     if (!modelSupportsVision) {
       setLocalNotice(
-        'The selected model can’t read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.',
+        "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
       );
     } else {
       addImageAttachments(droppedFiles);
@@ -605,6 +616,10 @@ const ChatComposerNewComponent = ({
 
   const handleWebSearchToggle = useCallback(() => {
     setWebSearchEnabled((prev) => !prev);
+  }, []);
+
+  const handleResearchToggle = useCallback(() => {
+    setResearchEnabled((prev) => !prev);
   }, []);
 
   const handleCodeExecutionToggle = useCallback(() => {
@@ -786,6 +801,7 @@ const ChatComposerNewComponent = ({
           webSearchEnabled,
           thinkingEnabled,
           codeExecutionEnabled,
+          researchEnabled,
           styleMode: styleMode !== 'normal' ? styleMode : undefined,
           skillBody: skillBody ?? undefined,
           skillName: selectedSkill?.name ?? undefined,
@@ -871,7 +887,7 @@ const ChatComposerNewComponent = ({
     (files: File[]) => {
       if (!modelSupportsVision) {
         setLocalNotice(
-          'The selected model can’t read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.',
+          "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
         );
         return;
       }
@@ -882,7 +898,11 @@ const ChatComposerNewComponent = ({
 
   // + button indicator: amber tint when any feature is active
   const hasOverflowActive =
-    selectedSkill !== null || webSearchEnabled || codeExecutionEnabled || styleMode !== 'normal';
+    selectedSkill !== null ||
+    webSearchEnabled ||
+    researchEnabled ||
+    codeExecutionEnabled ||
+    styleMode !== 'normal';
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
@@ -1073,7 +1093,7 @@ const ChatComposerNewComponent = ({
                         'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
                         !modelSupportsVision && 'cursor-not-allowed opacity-50',
                       )}
-                      title={modelSupportsVision ? undefined : 'This model can’t read images'}
+                      title={modelSupportsVision ? undefined : "This model can't read images"}
                     >
                       <Paperclip className="h-4 w-4 text-muted-foreground" />
                       <span className="flex-1 text-left">Add photos &amp; files</span>
@@ -1323,6 +1343,18 @@ const ChatComposerNewComponent = ({
                       disabled={isLoading || disabled || !modelSupportsSearch}
                     />
 
+                    {/* 8a. Deep Research toggle */}
+                    <MenuToggleRow
+                      icon={Telescope}
+                      label="Deep Research"
+                      checked={researchEnabled}
+                      onToggle={() => {
+                        handleResearchToggle();
+                        closeMenu();
+                      }}
+                      disabled={isLoading || disabled || !modelSupportsSearch}
+                    />
+
                     {/* 8b. Code execution toggle */}
                     <MenuToggleRow
                       icon={Terminal}
@@ -1415,10 +1447,29 @@ const ChatComposerNewComponent = ({
                 )}
                 aria-label="Toggle web search"
                 aria-pressed={webSearchEnabled}
-                title={modelSupportsSearch ? undefined : 'This model can’t search the web'}
+                title={modelSupportsSearch ? undefined : "This model can't search the web"}
               >
                 <Globe className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Search</span>
+              </button>
+
+              <button
+                onClick={handleResearchToggle}
+                disabled={isLoading || disabled || !modelSupportsSearch}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                  researchEnabled
+                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  (isLoading || disabled || !modelSupportsSearch) &&
+                    'cursor-not-allowed opacity-50',
+                )}
+                aria-label="Toggle deep research"
+                aria-pressed={researchEnabled}
+                title={modelSupportsSearch ? undefined : "This model can't search the web"}
+              >
+                <Telescope className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Research</span>
               </button>
 
               <button
