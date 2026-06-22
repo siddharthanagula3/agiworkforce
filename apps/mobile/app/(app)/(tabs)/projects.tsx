@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Pressable,
@@ -18,6 +18,8 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { ProjectCard } from '@/src/features/projects';
 import { useProjectStore, type Project } from '@/src/features/projects/store';
+import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme } from '@/src/ui/theme';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 
@@ -25,10 +27,44 @@ import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
  * Projects tab -- manage project contexts that apply instructions to chat.
  * Tap a project to set it active, long-press for edit/delete.
  */
+/** Project shape shared across local and cloud for display purposes. */
+type DisplayProject = {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  updatedAt: string;
+};
+
+function toDisplayProject(p: Project | CloudProject): DisplayProject {
+  return {
+    id: p.id,
+    name: p.name,
+    description: (p.description ?? '') as string,
+    instructions: (p.instructions ?? '') as string,
+    updatedAt: p.updatedAt,
+  };
+}
+
 export default function ProjectsTabScreen() {
   const { colors, statusBarStyle } = useTheme();
   const navigation = useNavigation();
-  const projects = useProjectStore((s) => s.projects);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const isCloud = appMode === 'cloud';
+
+  // Read from the appropriate store depending on mode.
+  const localProjects = useProjectStore((s) => s.projects);
+  const cloudProjectsRaw = useCloudProjectStore((s) => s.projects);
+  // Only show non-tombstoned, non-archived cloud projects.
+  const cloudProjects = useMemo(
+    () => cloudProjectsRaw.filter((p) => p.deletedAt === null && !p.isArchived),
+    [cloudProjectsRaw],
+  );
+  const projects: DisplayProject[] = useMemo(
+    () => (isCloud ? cloudProjects.map(toDisplayProject) : localProjects.map(toDisplayProject)),
+    [isCloud, cloudProjects, localProjects],
+  );
+
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const createProject = useProjectStore((s) => s.createProject);
   const updateProject = useProjectStore((s) => s.updateProject);
@@ -36,7 +72,7 @@ export default function ProjectsTabScreen() {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editingProject, setEditingProject] = useState<DisplayProject | null>(null);
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formInstructions, setFormInstructions] = useState('');
@@ -49,7 +85,7 @@ export default function ProjectsTabScreen() {
     setModalVisible(true);
   }, []);
 
-  const openEditModal = useCallback((project: Project) => {
+  const openEditModal = useCallback((project: DisplayProject) => {
     setEditingProject(project);
     setFormName(project.name);
     setFormDescription(project.description);
