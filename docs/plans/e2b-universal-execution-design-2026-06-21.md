@@ -1,6 +1,6 @@
 # E2B universal execution layer — design (P3)
 
-Status: Phase A (env-gating) SHIPPED + cross-surface verified. E2B binding SCAFFOLDED + live round-trip VERIFIED (2026-06-21). **The E2B cut-over is BLOCKED — NOT a flag flip.** Adversarial review found the server-side execution loop that would run platform-executed E2B tools is UNREACHABLE in production (see §1.1). So `resolveCodeExecutionTools()` is intentionally native-always / fail-closed and ignores E2B config: setting `E2B_API_KEY` activates the dormant binding + verifier but changes ZERO request traffic → zero regression. The cut-over needs a reachable, approval-gated execution loop first (founder decision — §1.1, §6).
+Status: Phase A (env-gating) SHIPPED. E2B binding SCAFFOLDED + live round-trip VERIFIED (2026-06-21). **Phase B-cutover WIRED (2026-06-22) behind `AGI_E2B_EXECUTION=1`.** The reachable, approval-gated execution loop from §1.1 is now built: request-processor offers `e2bExecutionToolDefs()` to E2B-tier providers on streaming non-free-trial requests, route.ts enters the agentic loop in 'auto' mode, and `runMcpTool` routes execution tools through `routeExecutionTool` (fail-closed). Flag OFF (default) = byte-for-byte pre-P3 behavior, zero regression. §9 conversation-scoped sandbox pause/resume remains a follow-up (per-call sandbox shipped now).
 Owner: this session
 Last updated: 2026-06-21
 

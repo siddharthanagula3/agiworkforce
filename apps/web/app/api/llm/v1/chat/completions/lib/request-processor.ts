@@ -6,7 +6,12 @@ import { randomUUID } from 'crypto';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
-import { resolveCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import {
+  resolveCodeExecutionTools,
+  e2bExecutionToolDefs,
+  providerRoutesToE2B,
+} from '@/lib/e2b/execution-tools';
+import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -1082,14 +1087,31 @@ export async function processRequest(
   }
 
   if (chatRequest.code_execution && (resolvedModelCaps?.codeExecution ?? true)) {
-    // Code-execution router: native (provider-executed) interpreter for anthropic /
-    // google / openai, fail-closed for providers without one. The E2B cut-over is NOT
-    // wired into this path — the server-side tool loop that would run platform-executed
-    // E2B tools is unreachable in production (manual-approval gate, no resume endpoint;
-    // a pre-existing architectural gap). Offering E2B tools here would inject a tool
-    // nothing executes and strip OpenAI's working interpreter — a regression. So this is
-    // byte-for-byte the pre-P3 behavior. See docs/plans/e2b-universal-execution-design-*.
-    resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];
+    // Code-execution router: tiered by provider when AGI_E2B_EXECUTION=1; native-always otherwise.
+    //
+    // E2B CUT-OVER (flag ON, streaming, non-free-trial):
+    //   - Anthropic + Google: free-native tier — they run code in their own sandboxes at no
+    //     E2B credit cost, so we keep their provider-native tools.
+    //   - OpenAI + everyone else: E2B-credit tier — routes to the platform-executed E2B sandbox
+    //     (avoids OpenAI per-session fees; provides a sandbox for providers with no native exec).
+    //
+    // The offer is guarded to streaming non-free-trial only (offer⊆run constraint): E2B tools
+    // are platform-executed and require the agentic loop to actually run them. That loop is only
+    // entered on the streaming non-free-trial path in route.ts. Offering E2B tools on non-streaming
+    // or free-trial paths would inject a tool_call that nothing executes and stall the turn.
+    //
+    // FLAG OFF (default): byte-for-byte the pre-P3 behavior regardless of E2B configuration.
+    // See docs/plans/e2b-universal-execution-design-* for the full design rationale.
+    if (
+      e2bCutoverEnabled() &&
+      providerRoutesToE2B(providerLower) &&
+      chatRequest.stream &&
+      !freeTrial
+    ) {
+      resolvedTools = [...(resolvedTools ?? []), ...e2bExecutionToolDefs()];
+    } else {
+      resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];
+    }
   }
 
   const llmRequest = {
