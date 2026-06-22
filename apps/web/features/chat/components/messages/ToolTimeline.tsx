@@ -262,6 +262,8 @@ export interface ToolEntry {
   parallelGroup?: string;
   /** Optional error message when status === 'failed' */
   error?: string;
+  /** Tool execution result content (stdout / response body), populated via x_tool_result SSE events */
+  result?: string;
 }
 
 interface ToolTimelineProps {
@@ -668,6 +670,7 @@ function ToolTimeline({
                               status: toToolCallStatus(tool.status),
                               durationMs: tool.durationMs,
                               parameters: buildParameters(tool.args, tool.parameters),
+                              result: tool.result,
                             };
                             const attachSources =
                               !sourcesAttached &&
@@ -698,6 +701,7 @@ function ToolTimeline({
                         status: toToolCallStatus(tool.status),
                         durationMs: tool.durationMs,
                         parameters: buildParameters(tool.args, tool.parameters),
+                        result: tool.result,
                       };
                       const attachSources =
                         !sourcesAttached &&
@@ -757,7 +761,8 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
       p.durationMs !== n.durationMs ||
       p.args !== n.args ||
       p.parallelGroup !== n.parallelGroup ||
-      p.error !== n.error
+      p.error !== n.error ||
+      p.result !== n.result
     ) {
       return false;
     }

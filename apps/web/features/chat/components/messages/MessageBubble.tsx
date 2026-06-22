@@ -242,9 +242,8 @@ const MessageBubbleComponent = function MessageBubble({
   onEdit,
   onRegenerate,
   onDelete,
-  onPin,
+  // onPin and onBranch kept in interface for future wiring; not rendered until callbacks are connected
   onReact,
-  onBranch,
   hasBranches,
   animationIndex = 0,
   onRegenerateImage,
@@ -943,6 +942,24 @@ const MessageBubbleComponent = function MessageBubble({
                   </>
                 )}
 
+                {/* Regenerate — primary action for assistant messages */}
+                {!isUser && onRegenerate && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onRegenerate(message.id)}
+                        aria-label="Regenerate response"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Regenerate</TooltipContent>
+                  </Tooltip>
+                )}
+
                 {/* More actions menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -956,28 +973,10 @@ const MessageBubbleComponent = function MessageBubble({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align={isUser ? 'end' : 'start'}>
-                    {onPin && (
-                      <DropdownMenuItem onClick={() => onPin(message.id)}>
-                        <Pin className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {message.metadata?.isPinned ? 'Unpin' : 'Pin'}
-                      </DropdownMenuItem>
-                    )}
-                    {onBranch && (
-                      <DropdownMenuItem onClick={() => onBranch(message.id)}>
-                        <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Create branch from here
-                      </DropdownMenuItem>
-                    )}
                     {isUser && onEdit && (
                       <DropdownMenuItem onClick={() => onEdit(message.id)}>
                         <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
                         Edit
-                      </DropdownMenuItem>
-                    )}
-                    {!isUser && onRegenerate && (
-                      <DropdownMenuItem onClick={() => onRegenerate(message.id)}>
-                        <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Regenerate
                       </DropdownMenuItem>
                     )}
                     {message.metadata?.tokensUsed && (
