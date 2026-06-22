@@ -143,6 +143,17 @@ export function ArtifactPreview({
   // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
   const [refreshKey, setRefreshKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Keep the in-page expanded layout in sync when the user leaves NATIVE fullscreen via
+  // Escape or browser UI (which fires fullscreenchange without going through our button).
+  // Without this the panel would stay visually "fullscreen" after Escape.
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setIsFullscreen(false);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
   const generatedFileSummary = useMemo(
     () =>
       summarizeGeneratedFileBundle({
@@ -449,12 +460,21 @@ export function ArtifactPreview({
   };
 
   const handleFullscreen = () => {
-    if (!document.fullscreenElement && containerRef.current) {
-      containerRef.current.requestFullscreen();
-      setIsFullscreen(true);
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen();
-      setIsFullscreen(false);
+    const enter = !isFullscreen;
+    // The in-page expanded layout (isFullscreen) is the real fullscreen experience and
+    // the source of truth. The native Fullscreen API is a best-effort ENHANCEMENT: it
+    // can reject (permissions policy, no user activation, unsupported context), so its
+    // promise is always caught. An uncaught rejection would otherwise surface as a dev
+    // error overlay ("not granted") and, in production, an unhandled promise rejection.
+    setIsFullscreen(enter);
+    try {
+      if (enter && !document.fullscreenElement && containerRef.current?.requestFullscreen) {
+        void containerRef.current.requestFullscreen().catch(() => {});
+      } else if (!enter && document.fullscreenElement && document.exitFullscreen) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    } catch {
+      /* native fullscreen unsupported — the CSS-expanded layout still applies */
     }
   };
 
