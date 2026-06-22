@@ -431,7 +431,8 @@ export default function ChatTabScreen() {
         )}
       </ScrollView>
 
-      {activeMode === 'local' ? <ProjectSelectorBar /> : null}
+      {/* Mode-aware: shows local projects in Local, cloud projects in Cloud. */}
+      <ProjectSelectorBar />
 
       <ChatInput
         onSend={handleSend}
