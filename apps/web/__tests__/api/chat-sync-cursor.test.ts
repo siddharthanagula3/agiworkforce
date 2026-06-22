@@ -56,4 +56,21 @@ describe('computePullCursor', () => {
     // min saturated frontier = 750 > since (500)
     expect(cursor).toBe('750');
   });
+
+  // --- artifacts: the third synced entity (0039) ---
+
+  it('includes artifacts in the global max when nothing saturates', () => {
+    const cursor = computePullCursor('0', [sv(8)], [sv(99)], false, false, [sv(150)], false);
+    expect(cursor).toBe('150');
+  });
+
+  it('bounds to the artifact frontier when only artifacts saturate', () => {
+    const arts = Array.from({ length: 500 }, (_, i) => sv(i + 1)); // ...500 (saturated)
+    const cursor = computePullCursor('0', [sv(700)], [sv(800)], false, false, arts, true);
+    expect(cursor).toBe('500');
+  });
+
+  it('defaults (no artifacts args) keep the original 2-table behavior', () => {
+    expect(computePullCursor('0', [sv(8)], [sv(99)], false, false)).toBe('99');
+  });
 });
