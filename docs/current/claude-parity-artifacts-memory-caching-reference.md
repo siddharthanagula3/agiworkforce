@@ -258,7 +258,18 @@ Required UX:
 Mapped against an audit of our actual code. We are NOT greenfield — caching is surprisingly
 mature; memory/knowledge are mostly scaffolding. Each gap cites the audit's evidence.
 
-### 8.1 Caching — strong foundation, one money-losing gap
+### 8.1 Caching — strong foundation (the "web gets zero caching" alarm was FALSE)
+
+> **CORRECTION (verified in code 2026-06-21).** An earlier audit pass claimed "the web path
+> never enables the cache policy → zero caching." That is **WRONG**. Traced the live path:
+> `apps/web/lib/runtime/WebChatRuntime.ts:146` sends `use_prompt_cache: true`, and the web
+> `AnthropicProvider` (`apps/web/lib/llm-providers/anthropic.ts`, used via
+> `lib/llm-providers/factory.ts`) applies `cache_control` to system + tools + last block
+> **gated on `request.usePromptCache`** (lines 186-188 / 383-385), with a `highReusePrefix`
+> 1h-TTL upgrade when tools are present. So web Anthropic caching IS active. The
+> `request-processor` simply forwards `usePromptCache` to the provider (which constructs the
+> policy) — it does not need to construct it itself. (`api-gateway` is a SEPARATE service path
+> that enables it its own way.) Lesson logged: confirm in source before acting on audit claims.
 
 WE HAVE (verified):
 
@@ -272,13 +283,8 @@ WE HAVE (verified):
 - Cache-friendly request assembly: system prompt pass-through (no volatile injection), tool
   list deterministically ordered, history append-only.
 
-GAPS (prioritized):
+GAPS (prioritized) — the web-cache-enable "gap" was a false alarm (see correction above):
 
-- **P0 — the web path doesn't enable the cache policy.** `apps/web/app/api/llm/v1/chat/
-completions/lib/request-processor.ts` reads `use_prompt_cache` but never constructs the
-  Anthropic payload policy; only `services/api-gateway/.../providerAdapters.ts:70` enables it.
-  ⇒ Web chat likely gets ZERO Anthropic caching. Fix: enable the policy on the web request
-  path; confirm TTL against §4 (5-min default = break-even after 1 read).
 - **P0 — model-switch protection missing.** No model lineage in the request envelope, no
   warning when the user switches models mid-conversation. Per §5/§6.3 this silently re-bills
   the whole prefix at full price. Fix: pin model per conversation + the §6.3 warning UX.
