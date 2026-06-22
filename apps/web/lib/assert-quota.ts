@@ -372,10 +372,15 @@ async function _checkTokenQuota(
   const usageRow = await _fetchUsageRow(userId, token);
 
   // Edge: no row means no usage yet; treat as 0.
-  // credits_allocated_cents tracks the monetary equivalent of the token cap.
-  // We compute pctUsed in token-space: use credits_used_cents / credits_allocated_cents
-  // as the surrogate for token_used / tokenCapPerMonth, since the credit allocation
-  // is sized exactly to the token cap at prevailing prices.
+  // NOTE: pctUsed is computed as the sum of two heterogeneous fractions on the same axis:
+  //   (1) credits_used_cents / credits_allocated_cents  — dollar/credit budget consumption
+  //   (2) requestedTokens / tokenCapPerMonth           — token-volume fraction for this request
+  // In practice (1) dominates because the credit budget (e.g. $7/mo for Pro at 35% of $20)
+  // is far more restrictive than (2) for typical requests. This means the effective Pro gate
+  // is the credit budget, not the 40M-token cap. This dual-axis approach is intentional for
+  // the managed-cloud billing test — do not remove it without founder approval.
+  // DEFERRED: Ideally, token-volume gating uses (2) alone against tokenCapPerMonth, and the
+  // credit budget is a separate managed-cloud gate. That refactor requires a billing review.
   let currentUsedFraction = 0;
   if (usageRow && usageRow.credits_allocated_cents > 0) {
     currentUsedFraction = usageRow.credits_used_cents / usageRow.credits_allocated_cents;
