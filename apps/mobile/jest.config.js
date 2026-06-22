@@ -18,7 +18,8 @@ module.exports = {
   // The optional (?:.pnpm/[^/]+/node_modules/)? prefix handles both npm and pnpm layouts
   // so React Native packages that use Flow types still get transformed by Babel.
   transformIgnorePatterns: [
-    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens))',
+    // uuid and @agiworkforce/services are ESM packages — include them in the Babel transform.
+    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/services|uuid))',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
@@ -26,6 +27,8 @@ module.exports = {
     '^react$': '<rootDir>/node_modules/react',
     // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
     '^@agiworkforce/local-llm$': '<rootDir>/../../packages/local-llm/src/index',
+    // @agiworkforce/services is ESM; resolve src directly so Jest/Babel picks up TS.
+    '^@agiworkforce/services$': '<rootDir>/../../packages/services/src/index',
     // expo-clipboard is a native Expo module; keep Jest from loading native glue.
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     // expo-sqlite stub for storage tests until the native module is linked.
