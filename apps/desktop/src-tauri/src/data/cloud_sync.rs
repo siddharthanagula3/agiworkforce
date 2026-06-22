@@ -1,23 +1,33 @@
 //! Desktop cloud sync engine (P2 Phase 2).
 //!
-//! Delta-syncs the SQLite chat store (`conversations` + `messages` where
-//! `app_mode='cloud'`) with the managed-cloud `/api/chat/sync` endpoint:
+//! Delta-syncs the SQLite chat store (`conversations` + `messages` + `artifacts`
+//! where `app_mode='cloud'`) with the managed-cloud `/api/chat/sync` endpoint:
 //! push locally-changed rows (needs_push=1), then pull everything with a
 //! `server_version` greater than our per-user cursor.
 //!
 //! MANAGED-ONLY: every entry point is gated on the caller supplying a valid
 //! bearer token (i.e. managed-cloud mode is active). The mint hooks
-//! (`mark_conversation_for_push` / `mark_message_for_push`) are only called
-//! inside the `if cloud_sync_enabled` branch in send_message_setup.rs /
-//! persistence.rs, and that flag is forced to `false` in Local mode.
+//! (`mark_conversation_for_push` / `mark_message_for_push` /
+//! `mark_artifact_for_push`) are only called inside the `if cloud_sync_enabled`
+//! branch in send_message_setup.rs / persistence.rs, and that flag is forced to
+//! `false` in Local mode.
 //!
 //! Wire protocol is the live `/api/chat/sync` (Next.js route):
-//!   POST { conversations, messages } → { applied: { conversations, messages }, cursor }
-//!   GET  ?since=<cursor>            → { conversations, messages, cursor, hasMore }
+//!   POST { conversations, messages, artifacts }
+//!        → { applied: { conversations, messages, artifacts }, cursor }
+//!   GET  ?since=<cursor>
+//!        → { conversations, messages, artifacts, cursor, hasMore }
+//!
+//! Artifacts share the chat cursor (one shared server_version sequence for all
+//! three entity types on `/api/chat/sync`).
 //!
 //! INTEGER PKs are never sent over the wire; only `cloud_id` (UUIDv7) is.
 //! `user_id` is NEVER sent in a push body — the server derives it from the
 //! verified session and RLS WITH CHECK is the DB-level backstop.
+//!
+//! Known gap: a pulled artifact whose parent conversation has not yet landed
+//! locally is silently skipped (not buffered). Cross-page artifact orphans can
+//! be recovered on the next pull cycle once the conversation appears.
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Client;
@@ -47,8 +57,10 @@ pub struct BulkSyncResult {
 pub struct SyncOutcome {
     pub conversations_pushed: usize,
     pub messages_pushed: usize,
+    pub artifacts_pushed: usize,
     pub conversations_pulled: usize,
     pub messages_pulled: usize,
+    pub artifacts_pulled: usize,
 }
 
 // ---------------------------------------------------------------------------
@@ -107,9 +119,42 @@ struct PushMessage {
     conversation_id: String,  // conversation_cloud_id
     role: String,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deleted_at: Option<String>,
+}
+
+/// Pushed artifact (camelCase, matching PushArtifactSchema on server).
+///
+/// Server Zod schema uses `.optional()` for all nullable fields, so absent keys
+/// (undefined) are accepted but JSON `null` is NOT — hence `skip_serializing_if`.
+/// `conversationId`, `artifactType`, `content`, `updatedAt`, and `id` are required.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PushArtifact {
+    id: String,               // cloud_id (UUIDv7)
+    conversation_id: String,  // parent conversation cloud_id
+    artifact_type: String,
+    content: String,
+    updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    current_version: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pinned: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     deleted_at: Option<String>,
 }
 
@@ -118,6 +163,8 @@ struct PushMessage {
 struct PushBody {
     conversations: Vec<PushConversation>,
     messages: Vec<PushMessage>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    artifacts: Vec<PushArtifact>,
 }
 
 /// Ack from the server for a single pushed row.
@@ -140,6 +187,8 @@ struct PushResponse {
 struct PushApplied {
     conversations: Vec<AckedRow>,
     messages: Vec<AckedRow>,
+    #[serde(default)]
+    artifacts: Vec<AckedRow>,
 }
 
 /// Pulled conversation delta (snake_case, matching server SELECT columns).
@@ -175,12 +224,35 @@ struct MessageDelta {
     server_version: String,
 }
 
+/// Pulled artifact delta (snake_case, matching server SELECT columns).
+#[derive(Debug, Deserialize)]
+struct ArtifactDelta {
+    id: String,               // cloud_id (UUIDv7)
+    conversation_id: String,  // parent conversation cloud_id
+    message_id: Option<String>,
+    title: Option<String>,
+    artifact_type: String,
+    language: Option<String>,
+    content: String,
+    current_version: Option<i64>,
+    pinned: Option<bool>,
+    /// Server returns a JSONB array; deserialized as Vec<String>.
+    #[serde(default)]
+    tags: Vec<String>,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+    deleted_at: Option<String>,
+    server_version: String,
+}
+
 /// GET response.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PullResponse {
     conversations: Vec<ConversationDelta>,
     messages: Vec<MessageDelta>,
+    #[serde(default)]
+    artifacts: Vec<ArtifactDelta>,
     cursor: Option<String>,
     has_more: bool,
 }
@@ -337,6 +409,31 @@ pub fn mark_message_for_push(conn: &Connection, msg_id: i64) -> SqlResult<()> {
     Ok(())
 }
 
+/// Mint a UUIDv7 cloud_id for a cloud artifact and mark it for push.
+///
+/// Also captures the parent conversation's cloud_id into `conversation_cloud_id`
+/// so gather can filter without an extra join. The `artifacts.conversation_id`
+/// column stores the INTEGER conversation id AS TEXT (e.g. "42"), so the join
+/// uses `CAST(artifacts.conversation_id AS INTEGER) = conversations.id`.
+///
+/// Guard: only marks rows where `artifacts.app_mode = 'cloud'`. Local artifacts
+/// (default `app_mode = 'local'`) are never touched.
+pub fn mark_artifact_for_push(conn: &Connection, artifact_id: &str) -> SqlResult<()> {
+    let cloud_id = Uuid::now_v7().to_string();
+    conn.execute(
+        "UPDATE artifacts \
+         SET cloud_id = COALESCE(cloud_id, ?1), \
+             conversation_cloud_id = ( \
+                 SELECT c.cloud_id FROM conversations c \
+                 WHERE c.id = CAST(artifacts.conversation_id AS INTEGER) \
+             ), \
+             needs_push = 1 \
+         WHERE id = ?2 AND app_mode = 'cloud'",
+        params![cloud_id, artifact_id],
+    )?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // DB-only push helpers (no HTTP — pure functions for testability).
 // ---------------------------------------------------------------------------
@@ -462,9 +559,239 @@ fn ack_clear_messages(conn: &Connection, acked: &[AckedRow]) {
     }
 }
 
+/// Gather cloud artifacts that need pushing.
+///
+/// Skips rows whose `conversation_cloud_id` is NULL (parent conversation not yet
+/// minted — they stay dirty and retry on the next cycle, matching message behavior).
+/// The `tags` TEXT column holds a JSON array; it is deserialized and re-serialized
+/// to produce a Vec<String> for the wire.
+fn gather_push_artifacts(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushArtifact>> {
+    let mut stmt = conn.prepare(
+        "SELECT a.cloud_id, a.conversation_cloud_id, a.artifact_type, a.content, \
+                a.title, a.language, a.version, a.is_pinned, a.tags, \
+                a.created_at, a.updated_at, a.deleted_at_utc \
+         FROM artifacts a \
+         JOIN conversations c ON c.id = CAST(a.conversation_id AS INTEGER) \
+         WHERE a.needs_push = 1 AND a.app_mode = 'cloud' AND c.user_id = ?1 \
+           AND a.cloud_id IS NOT NULL \
+           AND a.conversation_cloud_id IS NOT NULL",
+    )?;
+    let rows = stmt.query_map(params![user_id], |row| {
+        let cloud_id: String = row.get(0)?;
+        let conv_cloud_id: String = row.get(1)?;
+        let artifact_type: String = row.get(2)?;
+        let content: String = row.get(3)?;
+        let title: Option<String> = row.get(4)?;
+        let language: Option<String> = row.get(5)?;
+        let current_version: Option<i64> = row.get(6)?;
+        let is_pinned: Option<i64> = row.get(7)?;
+        let tags_json: Option<String> = row.get(8)?;
+        let created_at_raw: Option<String> = row.get(9)?;
+        let updated_at_raw: String = row.get(10)?;
+        let deleted_at_utc: Option<String> = row.get(11)?;
+
+        let created_at = created_at_raw.as_deref().map(to_z_datetime);
+        let updated_at = to_z_datetime(&updated_at_raw);
+        let deleted_at = deleted_at_utc.as_deref().map(to_z_datetime);
+        let pinned = is_pinned.map(|v| v != 0);
+        // Deserialize tags JSON array; fall back to empty vec on parse error.
+        let tags: Vec<String> = tags_json
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
+        let tags_opt = if tags.is_empty() { None } else { Some(tags) };
+
+        Ok(PushArtifact {
+            id: cloud_id,
+            conversation_id: conv_cloud_id,
+            artifact_type,
+            content,
+            updated_at,
+            title,
+            language,
+            current_version,
+            pinned,
+            tags: tags_opt,
+            created_at,
+            deleted_at,
+        })
+    })?;
+    rows.collect()
+}
+
+/// Ack-clear: mark acked artifacts as needs_push=0 and store server_version.
+/// Unacked artifacts STAY needs_push=1 (parent conversation may not be on server yet).
+fn ack_clear_artifacts(conn: &Connection, acked: &[AckedRow]) {
+    for row in acked {
+        let _ = conn.execute(
+            "UPDATE artifacts SET needs_push = 0, server_version = ?1 \
+             WHERE cloud_id = ?2",
+            params![row.server_version, row.id],
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // DB-only pull helpers.
 // ---------------------------------------------------------------------------
+
+/// Apply pulled artifact deltas into the local SQLite DB.
+///
+/// Dedup invariant: always SELECT id WHERE cloud_id=? before INSERT.
+/// FK-mapping: resolves cloud conversation_id → local INTEGER conversations.id.
+/// If the parent conversation is not present locally, the artifact is skipped
+/// (not buffered — see module-level known-gap note). The caller (apply_pull_page)
+/// applies conversations first, so within-page orphans are usually resolved; only
+/// cross-page orphans are lost until the next sync cycle.
+fn apply_artifact_deltas(
+    conn: &Connection,
+    user_id: &str,
+    deltas: &[ArtifactDelta],
+) -> usize {
+    let mut applied = 0usize;
+    for d in deltas {
+        // FK-map: resolve cloud conversation_id → local INTEGER id.
+        let local_conv_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM conversations WHERE cloud_id = ?1",
+                params![d.conversation_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        let local_conv_id = match local_conv_id {
+            Some(id) => id,
+            None => {
+                // Parent conversation not present locally — skip (documented gap).
+                debug!(
+                    cloud_id = %d.id,
+                    conv_cloud_id = %d.conversation_id,
+                    "artifact_sync: parent conversation not found — skipping artifact (cross-page orphan)"
+                );
+                continue;
+            }
+        };
+
+        // Dedup: find existing local row by cloud_id.
+        let existing_id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM artifacts WHERE cloud_id = ?1",
+                params![d.id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(deleted_at) = &d.deleted_at {
+            // Tombstone: soft-delete only.
+            if let Some(ref local_id) = existing_id {
+                let _ = conn.execute(
+                    "UPDATE artifacts SET deleted_at_utc = ?1, server_version = ?2 \
+                     WHERE id = ?3",
+                    params![deleted_at, d.server_version, local_id],
+                );
+                applied += 1;
+            }
+            // If not present locally, delete already propagated — no-op.
+        } else if let Some(ref local_id) = existing_id {
+            // LWW update: update mutable metadata fields (content, title, etc.).
+            let tags_json = serde_json::to_string(&d.tags).unwrap_or_else(|_| "[]".to_string());
+            let _ = conn.execute(
+                "UPDATE artifacts \
+                 SET artifact_type = ?1, \
+                     content = COALESCE(?2, content), \
+                     title = COALESCE(?3, title), \
+                     language = COALESCE(?4, language), \
+                     version = COALESCE(?5, version), \
+                     is_pinned = COALESCE(?6, is_pinned), \
+                     tags = ?7, \
+                     server_version = ?8, \
+                     needs_push = 0 \
+                 WHERE id = ?9",
+                params![
+                    d.artifact_type,
+                    d.content.as_str(),
+                    d.title.as_deref(),
+                    d.language.as_deref(),
+                    d.current_version,
+                    d.pinned.map(|p| if p { 1i64 } else { 0i64 }),
+                    tags_json,
+                    d.server_version,
+                    local_id,
+                ],
+            );
+            applied += 1;
+        } else {
+            // New artifact from another device — INSERT.
+            // The local `artifacts` table uses a TEXT primary key; we use the cloud_id
+            // as the local id for pulled artifacts (dedup on it is already guaranteed).
+            let now = now_z();
+            let created_at = d
+                .created_at
+                .as_deref()
+                .map(to_z_datetime)
+                .unwrap_or_else(|| now.clone());
+            let updated_at = d
+                .updated_at
+                .as_deref()
+                .map(to_z_datetime)
+                .unwrap_or_else(|| now.clone());
+            let is_pinned: i64 = d.pinned.map_or(0, |p| if p { 1 } else { 0 });
+            let tags_json = serde_json::to_string(&d.tags).unwrap_or_else(|_| "[]".to_string());
+            let conv_id_str = local_conv_id.to_string();
+
+            let r = conn.execute(
+                "INSERT INTO artifacts \
+                 (id, cloud_id, conversation_id, artifact_type, title, content, language, \
+                  version, is_pinned, tags, status, created_at, updated_at, \
+                  conversation_cloud_id, server_version, needs_push, app_mode) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'complete', \
+                         ?11, ?12, ?13, ?14, 0, 'cloud')",
+                params![
+                    // id = cloud_id (TEXT PK for pulled rows)
+                    d.id,
+                    d.id,
+                    conv_id_str,
+                    d.artifact_type,
+                    d.title.as_deref().unwrap_or("Untitled"),
+                    d.content,
+                    d.language.as_deref(),
+                    d.current_version.unwrap_or(1),
+                    is_pinned,
+                    tags_json,
+                    created_at,
+                    updated_at,
+                    d.conversation_id,
+                    d.server_version,
+                ],
+            );
+            match r {
+                Ok(_) => {
+                    applied += 1;
+                    // Pulled artifact: if it has a message_id, note the gap.
+                    if d.message_id.is_some() {
+                        debug!(cloud_id = %d.id, "artifact_sync: pulled artifact has message_id (desktop has no message_id column — field ignored)");
+                    }
+                }
+                Err(e) => {
+                    debug!(cloud_id = %d.id, error = %e, "artifact_sync: skipping duplicate pulled artifact");
+                }
+            }
+            // Synthesize user_id annotation (no user_id column on artifacts table;
+            // ownership is via conversations → user_id).
+            let _ = user_id;
+        }
+    }
+    applied
+}
+
+/// Apply pulled artifact deltas into the local SQLite DB.
+fn apply_artifact_deltas_in_page(
+    conn: &Connection,
+    user_id: &str,
+    page: &PullResponse,
+) -> usize {
+    apply_artifact_deltas(conn, user_id, &page.artifacts)
+}
 
 /// Apply pulled conversation deltas into the local SQLite DB.
 /// DEDUP invariant: always SELECT id WHERE cloud_id=? before INSERT.
@@ -795,16 +1122,21 @@ fn select_next_cursor(current: &str, resp_cursor: &Option<String>) -> String {
     }
 }
 
-/// Apply one pulled page in the load-bearing order: conversations FIRST (so message
-/// FK-mapping + the orphan drain can resolve parents), THEN drain messages buffered
-/// on a prior page whose parent just landed, THEN this page's messages (orphans
-/// buffered, never dropped). Returns (conversations_applied, messages_applied).
+/// Apply one pulled page in the load-bearing order:
+/// 1. Conversations FIRST (so message/artifact FK-mapping can resolve parents).
+/// 2. Drain buffered messages whose parent just landed.
+/// 3. Messages for this page (orphans buffered, never dropped).
+/// 4. Artifacts for this page (conversations applied first resolves within-page
+///    orphans; cross-page artifact orphans are skipped — documented gap).
+///
+/// Returns (conversations_applied, messages_applied, artifacts_applied).
 /// Extracted so the ordering invariant is testable without HTTP.
-fn apply_pull_page(conn: &Connection, user_id: &str, page: &PullResponse) -> (usize, usize) {
+fn apply_pull_page(conn: &Connection, user_id: &str, page: &PullResponse) -> (usize, usize, usize) {
     let convs = apply_conversation_deltas(conn, user_id, &page.conversations);
     let drained = drain_pending_messages(conn, user_id);
-    let applied = apply_message_deltas(conn, user_id, &page.messages);
-    (convs, drained + applied)
+    let msgs = apply_message_deltas(conn, user_id, &page.messages);
+    let arts = apply_artifact_deltas_in_page(conn, user_id, page);
+    (convs, drained + msgs, arts)
 }
 
 // ---------------------------------------------------------------------------
@@ -834,8 +1166,10 @@ pub async fn sync_now(
         return Ok(SyncOutcome {
             conversations_pushed: 0,
             messages_pushed: 0,
+            artifacts_pushed: 0,
             conversations_pulled: 0,
             messages_pulled: 0,
+            artifacts_pulled: 0,
         });
     }
 
@@ -857,8 +1191,10 @@ async fn sync_now_inner(
         return Ok(SyncOutcome {
             conversations_pushed: 0,
             messages_pushed: 0,
+            artifacts_pushed: 0,
             conversations_pulled: 0,
             messages_pulled: 0,
+            artifacts_pulled: 0,
         });
     }
 
@@ -872,23 +1208,27 @@ async fn sync_now_inner(
     // ── PUSH ────────────────────────────────────────────────────────────────
 
     // Gather push payload (acquire conn, gather owned data, drop conn).
-    let (push_convs, push_msgs) = {
+    let (push_convs, push_msgs, push_arts) = {
         let conn = db.connection().map_err(|e| e.to_string())?;
         let convs = gather_push_conversations(&conn, user_id)
             .map_err(|e| format!("gather push conversations: {e}"))?;
         let msgs = gather_push_messages(&conn, user_id)
             .map_err(|e| format!("gather push messages: {e}"))?;
-        (convs, msgs)
+        let arts = gather_push_artifacts(&conn, user_id)
+            .map_err(|e| format!("gather push artifacts: {e}"))?;
+        (convs, msgs, arts)
     };
 
     let n_conv_attempted: Vec<String> = push_convs.iter().map(|c| c.id.clone()).collect();
     let n_convs_pushed = push_convs.len();
     let n_msgs_pushed = push_msgs.len();
+    let n_arts_pushed = push_arts.len();
 
-    if n_convs_pushed > 0 || n_msgs_pushed > 0 {
+    if n_convs_pushed > 0 || n_msgs_pushed > 0 || n_arts_pushed > 0 {
         let body = PushBody {
             conversations: push_convs,
             messages: push_msgs,
+            artifacts: push_arts,
         };
 
         // HTTP POST (connection already dropped).
@@ -920,6 +1260,7 @@ async fn sync_now_inner(
                 &n_conv_attempted,
             );
             ack_clear_messages(&conn, &push_resp.applied.messages);
+            ack_clear_artifacts(&conn, &push_resp.applied.artifacts);
         }
     }
 
@@ -928,6 +1269,7 @@ async fn sync_now_inner(
     const PULL_PAGE_GUARD: usize = 50;
     let mut total_convs_pulled = 0usize;
     let mut total_msgs_pulled = 0usize;
+    let mut total_arts_pulled = 0usize;
 
     // Read cursor (short-lived conn).
     let mut cursor = {
@@ -967,9 +1309,10 @@ async fn sync_now_inner(
         // Apply page (acquire conn, apply, advance cursor, drop conn).
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            let (convs, msgs) = apply_pull_page(&conn, user_id, &pull_resp);
+            let (convs, msgs, arts) = apply_pull_page(&conn, user_id, &pull_resp);
             total_convs_pulled += convs;
             total_msgs_pulled += msgs;
+            total_arts_pulled += arts;
             write_cursor(&conn, user_id, &new_cursor);
         }
 
@@ -982,8 +1325,10 @@ async fn sync_now_inner(
     Ok(SyncOutcome {
         conversations_pushed: n_convs_pushed,
         messages_pushed: n_msgs_pushed,
+        artifacts_pushed: n_arts_pushed,
         conversations_pulled: total_convs_pulled,
         messages_pulled: total_msgs_pulled,
+        artifacts_pulled: total_arts_pulled,
     })
 }
 
@@ -1802,7 +2147,7 @@ mod tests {
             "cursor": "6", "hasMore": true,
         }))
         .unwrap();
-        let (_c1, m1) = apply_pull_page(&conn, "u1", &page1);
+        let (_c1, m1, _a1) = apply_pull_page(&conn, "u1", &page1);
         assert_eq!(m1, 0, "orphan not applied yet");
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"), 1);
 
@@ -1813,10 +2158,10 @@ mod tests {
                 "created_at": "2026-06-20T00:00:00Z", "updated_at": "2026-06-20T00:00:00Z",
                 "deleted_at": null, "server_version": "20"
             }],
-            "messages": [], "cursor": "20", "hasMore": false,
+            "messages": [], "artifacts": [], "cursor": "20", "hasMore": false,
         }))
         .unwrap();
-        let (c2, m2) = apply_pull_page(&conn, "u1", &page2);
+        let (c2, m2, _a2) = apply_pull_page(&conn, "u1", &page2);
         assert_eq!(c2, 1, "parent conversation applied");
         assert_eq!(m2, 1, "buffered orphan drained on the page its parent landed");
         assert_eq!(count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"), 1);
@@ -1923,6 +2268,7 @@ mod tests {
                 created_at: Some("2026-06-20T00:00:00Z".into()),
                 deleted_at: None,
             }],
+            artifacts: vec![],
         };
         let v = serde_json::to_value(&body).unwrap();
 
@@ -1942,6 +2288,9 @@ mod tests {
         for obj in [conv, msg] {
             assert!(obj.get("userId").is_none() && obj.get("user_id").is_none());
         }
+
+        // Empty artifacts array is omitted (skip_serializing_if = Vec::is_empty).
+        assert!(v.get("artifacts").is_none(), "empty artifacts must be omitted from body");
     }
 
     /// The push ACK response is snake_case (`server_version` from the SQL RETURNING).
@@ -1951,14 +2300,17 @@ mod tests {
         let resp: PushResponse = serde_json::from_value(serde_json::json!({
             "applied": {
                 "conversations": [{ "id": "c1", "server_version": "42" }],
-                "messages": [{ "id": "m1", "server_version": "43" }]
+                "messages": [{ "id": "m1", "server_version": "43" }],
+                "artifacts": [{ "id": "a1", "server_version": "44" }]
             },
-            "cursor": "43"
+            "cursor": "44"
         }))
         .unwrap();
         assert_eq!(resp.applied.conversations[0].id, "c1");
         assert_eq!(resp.applied.conversations[0].server_version, "42");
         assert_eq!(resp.applied.messages[0].server_version, "43");
+        assert_eq!(resp.applied.artifacts[0].id, "a1");
+        assert_eq!(resp.applied.artifacts[0].server_version, "44");
     }
 
     /// TRUST BOUNDARY (CLAUDE.md locked rule): the engine must perform ZERO network
@@ -1988,13 +2340,481 @@ mod tests {
             .expect("empty-token sync must return Ok(empty), not attempt the network");
         assert_eq!(outcome.conversations_pushed, 0);
         assert_eq!(outcome.messages_pushed, 0);
+        assert_eq!(outcome.artifacts_pushed, 0);
         assert_eq!(outcome.conversations_pulled, 0);
         assert_eq!(outcome.messages_pulled, 0);
+        assert_eq!(outcome.artifacts_pulled, 0);
 
         let conn = db.connection().unwrap();
         let needs_push: i64 = conn
             .query_row("SELECT needs_push FROM conversations WHERE user_id='u1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(needs_push, 1, "no push happened, so the dirty flag is untouched");
+    }
+
+    // ── Artifact sync tests ──────────────────────────────────────────────────
+
+    /// Migration v71 adds cloud sync columns + indexes to artifacts.
+    #[test]
+    fn migration_v71_adds_artifact_sync_columns() {
+        let conn = fresh_db();
+
+        for col in ["cloud_id", "server_version", "needs_push", "app_mode",
+                    "conversation_cloud_id", "deleted_at_utc"] {
+            let exists: bool = conn
+                .query_row(
+                    &format!(
+                        "SELECT COUNT(*) > 0 FROM pragma_table_info('artifacts') WHERE name = '{}'",
+                        col
+                    ),
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            assert!(exists, "artifacts.{} should exist after v71", col);
+        }
+
+        // app_mode default must be 'local' (safe default — existing rows are local-only).
+        conn.execute(
+            "INSERT INTO artifacts (id, artifact_type, title, content, created_at, updated_at) \
+             VALUES ('test-art-id', 'code', 'T', 'content', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let app_mode: String = conn
+            .query_row(
+                "SELECT app_mode FROM artifacts WHERE id = 'test-art-id'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(app_mode, "local", "artifacts.app_mode must default to 'local'");
+    }
+
+    /// mint_local_artifact: mark_artifact_for_push is a no-op for local artifacts.
+    #[test]
+    fn mint_local_artifact_does_not_set_cloud_id() {
+        let conn = fresh_db();
+
+        // Insert a local conversation and artifact (default app_mode='local').
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, created_at, updated_at) \
+             VALUES ('LocalConv', 'u1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id: i64 = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO artifacts (id, artifact_type, title, content, conversation_id, created_at, updated_at) \
+             VALUES ('local-art-1', 'code', 'T', 'content', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            params![conv_id.to_string()],
+        )
+        .unwrap();
+
+        mark_artifact_for_push(&conn, "local-art-1").unwrap();
+
+        let (cloud_id, needs_push): (Option<String>, i64) = conn
+            .query_row(
+                "SELECT cloud_id, needs_push FROM artifacts WHERE id = 'local-art-1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+
+        assert!(cloud_id.is_none(), "local artifact must NOT get a cloud_id");
+        assert_eq!(needs_push, 0, "local artifact must NOT get needs_push=1");
+    }
+
+    /// mint_cloud_artifact: mark_artifact_for_push sets cloud_id + conversation_cloud_id.
+    #[test]
+    fn mint_cloud_artifact_sets_cloud_id_and_conversation_cloud_id() {
+        let conn = fresh_db();
+
+        // Create a cloud conversation with a cloud_id.
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('CloudConv', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id: i64 = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, conv_id).unwrap();
+        let conv_cloud_id: String = conn
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id = ?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        // Create a cloud artifact for this conversation.
+        conn.execute(
+            "INSERT INTO artifacts (id, artifact_type, title, content, conversation_id, \
+             created_at, updated_at, app_mode) \
+             VALUES ('cloud-art-1', 'code', 'T', 'content', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'cloud')",
+            params![conv_id.to_string()],
+        )
+        .unwrap();
+
+        mark_artifact_for_push(&conn, "cloud-art-1").unwrap();
+
+        let (cloud_id, conv_cloud_id_col, needs_push): (Option<String>, Option<String>, i64) = conn
+            .query_row(
+                "SELECT cloud_id, conversation_cloud_id, needs_push FROM artifacts WHERE id = 'cloud-art-1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+
+        assert!(cloud_id.is_some(), "cloud artifact must get a cloud_id after mint");
+        assert_eq!(needs_push, 1, "cloud artifact must get needs_push=1 after mint");
+        assert_eq!(
+            conv_cloud_id_col.as_deref(),
+            Some(conv_cloud_id.as_str()),
+            "conversation_cloud_id must be populated from the parent's cloud_id"
+        );
+    }
+
+    /// push_gather_excludes_local_artifacts: gather only pulls cloud artifacts.
+    #[test]
+    fn push_gather_excludes_local_artifacts() {
+        let conn = fresh_db();
+
+        // Cloud conversation.
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('CloudConv', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id: i64 = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, conv_id).unwrap();
+        let conv_cloud_id: String = conn
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id=?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+
+        // Cloud artifact.
+        conn.execute(
+            "INSERT INTO artifacts (id, artifact_type, title, content, conversation_id, \
+             created_at, updated_at, app_mode, cloud_id, conversation_cloud_id, needs_push) \
+             VALUES ('cloud-art-2', 'code', 'T', 'hello', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, \
+                     'cloud', 'uuid-cloud-art-2', ?2, 1)",
+            params![conv_id.to_string(), conv_cloud_id],
+        )
+        .unwrap();
+
+        // Local artifact (default app_mode).
+        conn.execute(
+            "INSERT INTO artifacts (id, artifact_type, title, content, conversation_id, \
+             created_at, updated_at) \
+             VALUES ('local-art-2', 'code', 'T', 'local', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            params![conv_id.to_string()],
+        )
+        .unwrap();
+
+        let arts = gather_push_artifacts(&conn, "u1").unwrap();
+        assert_eq!(arts.len(), 1, "only cloud artifact should be gathered");
+        assert_eq!(arts[0].id, "uuid-cloud-art-2");
+        assert_eq!(arts[0].artifact_type, "code", "artifact_type must be gathered");
+        assert_eq!(arts[0].content, "hello", "content must be gathered");
+    }
+
+    /// artifact push wire shape: camelCase with skip_serializing_if for None.
+    #[test]
+    fn artifact_push_body_serializes_to_camelcase_schema() {
+        let body = PushBody {
+            conversations: vec![],
+            messages: vec![],
+            artifacts: vec![PushArtifact {
+                id: "art-uuid-1".into(),
+                conversation_id: "conv-uuid-1".into(),
+                artifact_type: "code".into(),
+                content: "fn main() {}".into(),
+                updated_at: "2026-06-22T00:00:00.000Z".into(),
+                title: Some("My Artifact".into()),
+                language: Some("rust".into()),
+                current_version: Some(2),
+                pinned: Some(true),
+                tags: Some(vec!["tag1".into()]),
+                created_at: Some("2026-06-20T00:00:00.000Z".into()),
+                deleted_at: None,
+            }],
+        };
+        let v = serde_json::to_value(&body).unwrap();
+
+        // artifacts must be present (non-empty).
+        let arts = &v["artifacts"];
+        assert!(arts.is_array(), "artifacts must be an array");
+        let art = &arts[0];
+
+        // Required camelCase fields.
+        assert_eq!(art["id"], "art-uuid-1");
+        assert_eq!(art["conversationId"], "conv-uuid-1", "conversationId must be camelCase");
+        assert_eq!(art["artifactType"], "code", "artifactType must be camelCase");
+        assert_eq!(art["content"], "fn main() {}");
+        assert!(art.get("updatedAt").is_some(), "updatedAt must be present");
+
+        // Optional camelCase fields.
+        assert_eq!(art["title"], "My Artifact");
+        assert_eq!(art["language"], "rust");
+        assert_eq!(art["currentVersion"], 2, "currentVersion must be camelCase");
+        assert_eq!(art["pinned"], true);
+        assert_eq!(art["createdAt"], "2026-06-20T00:00:00.000Z");
+
+        // deletedAt absent when None (Zod optional rejects null).
+        assert!(
+            art.get("deletedAt").is_none(),
+            "deletedAt must be absent when None — Zod .optional() rejects null"
+        );
+
+        // snake_case keys must never appear.
+        assert!(art.get("artifact_type").is_none(), "must not emit snake_case artifact_type");
+        assert!(art.get("conversation_id").is_none(), "must not emit snake_case conversation_id");
+        assert!(art.get("current_version").is_none(), "must not emit snake_case current_version");
+
+        // user_id must never appear.
+        assert!(art.get("userId").is_none() && art.get("user_id").is_none());
+    }
+
+    /// artifact push wire shape: None optionals must be absent (not null).
+    #[test]
+    fn artifact_push_none_optionals_are_absent_not_null() {
+        let body = PushBody {
+            conversations: vec![],
+            messages: vec![],
+            artifacts: vec![PushArtifact {
+                id: "art-uuid-2".into(),
+                conversation_id: "conv-uuid-2".into(),
+                artifact_type: "document".into(),
+                content: "some text".into(),
+                updated_at: "2026-06-22T00:00:00.000Z".into(),
+                title: None,
+                language: None,
+                current_version: None,
+                pinned: None,
+                tags: None,
+                created_at: None,
+                deleted_at: None,
+            }],
+        };
+        let v = serde_json::to_value(&body).unwrap();
+        let art = &v["artifacts"][0];
+
+        // All None optional fields must be completely absent (key must not exist).
+        for key in ["title", "language", "currentVersion", "pinned", "tags",
+                    "createdAt", "deletedAt"] {
+            assert!(
+                art.get(key).is_none(),
+                "Optional field '{}' must be absent when None — Zod .optional() rejects null",
+                key
+            );
+        }
+    }
+
+    /// pull_artifact_dedup: re-pulling the same cloud_id updates in place, never inserts a duplicate.
+    #[test]
+    fn pull_artifact_dedup_updates_not_inserts_on_existing_cloud_id() {
+        let conn = fresh_db();
+
+        // Create a cloud conversation and give it a cloud_id.
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('Conv', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id: i64 = conn.last_insert_rowid();
+        let conv_cloud_id = "conv-cloud-uuid-art-dedup";
+        conn.execute(
+            "UPDATE conversations SET cloud_id = ?1 WHERE id = ?2",
+            params![conv_cloud_id, conv_id],
+        )
+        .unwrap();
+
+        // First pull → INSERT.
+        let delta = ArtifactDelta {
+            id: "art-cloud-uuid-1".to_string(),
+            conversation_id: conv_cloud_id.to_string(),
+            message_id: None,
+            title: Some("Original".to_string()),
+            artifact_type: "code".to_string(),
+            language: Some("rust".to_string()),
+            content: "fn hello() {}".to_string(),
+            current_version: Some(1),
+            pinned: Some(false),
+            tags: vec![],
+            created_at: Some("2026-06-20T00:00:00Z".to_string()),
+            updated_at: Some("2026-06-20T00:00:00Z".to_string()),
+            deleted_at: None,
+            server_version: "10".to_string(),
+        };
+        apply_artifact_deltas(&conn, "u1", &[delta]);
+
+        // Second pull (re-pull same cloud_id) → UPDATE, no duplicate.
+        let delta2 = ArtifactDelta {
+            id: "art-cloud-uuid-1".to_string(),
+            conversation_id: conv_cloud_id.to_string(),
+            message_id: None,
+            title: Some("Updated Title".to_string()),
+            artifact_type: "code".to_string(),
+            language: Some("rust".to_string()),
+            content: "fn hello_world() {}".to_string(),
+            current_version: Some(2),
+            pinned: Some(true),
+            tags: vec!["tag1".to_string()],
+            created_at: Some("2026-06-20T00:00:00Z".to_string()),
+            updated_at: Some("2026-06-21T00:00:00Z".to_string()),
+            deleted_at: None,
+            server_version: "20".to_string(),
+        };
+        apply_artifact_deltas(&conn, "u1", &[delta2]);
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM artifacts WHERE cloud_id = 'art-cloud-uuid-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "re-pulling the same artifact cloud_id must not create a duplicate row");
+    }
+
+    /// pull_artifact_tombstone: a deleted_at in the delta soft-deletes the local row.
+    #[test]
+    fn pull_artifact_tombstone_soft_deletes() {
+        let conn = fresh_db();
+
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('Conv', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id: i64 = conn.last_insert_rowid();
+        let conv_cloud_id = "conv-cloud-tombstone-art";
+        conn.execute(
+            "UPDATE conversations SET cloud_id = ?1 WHERE id = ?2",
+            params![conv_cloud_id, conv_id],
+        )
+        .unwrap();
+
+        // Insert a local cloud artifact (simulating a previously-pulled artifact).
+        conn.execute(
+            "INSERT INTO artifacts (id, cloud_id, artifact_type, title, content, conversation_id, \
+             created_at, updated_at, app_mode, conversation_cloud_id) \
+             VALUES ('art-local-id-1', 'art-cloud-tomb-1', 'code', 'T', 'c', ?1, \
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'cloud', ?2)",
+            params![conv_id.to_string(), conv_cloud_id],
+        )
+        .unwrap();
+
+        // Pull a tombstone delta.
+        let delta = ArtifactDelta {
+            id: "art-cloud-tomb-1".to_string(),
+            conversation_id: conv_cloud_id.to_string(),
+            message_id: None,
+            title: Some("T".to_string()),
+            artifact_type: "code".to_string(),
+            language: None,
+            content: "c".to_string(),
+            current_version: Some(1),
+            pinned: Some(false),
+            tags: vec![],
+            created_at: None,
+            updated_at: None,
+            deleted_at: Some("2026-06-22T00:00:00.000Z".to_string()),
+            server_version: "50".to_string(),
+        };
+        apply_artifact_deltas(&conn, "u1", &[delta]);
+
+        // Row must still exist (soft delete).
+        let (still_exists, deleted_at_utc): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT COUNT(*), deleted_at_utc FROM artifacts WHERE id = 'art-local-id-1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(still_exists, 1, "tombstoned artifact must NOT be hard-deleted");
+        assert!(deleted_at_utc.is_some(), "tombstoned artifact must have deleted_at_utc set");
+    }
+
+    /// pull_artifact_orphan: artifact whose parent conversation is absent is skipped.
+    #[test]
+    fn pull_artifact_orphan_skipped_when_parent_absent() {
+        let conn = fresh_db();
+
+        // No conversation with this cloud_id exists locally.
+        let delta = ArtifactDelta {
+            id: "orphan-art-uuid".to_string(),
+            conversation_id: "nonexistent-conv-cloud-id".to_string(),
+            message_id: None,
+            title: None,
+            artifact_type: "code".to_string(),
+            language: None,
+            content: "orphan".to_string(),
+            current_version: None,
+            pinned: None,
+            tags: vec![],
+            created_at: None,
+            updated_at: None,
+            deleted_at: None,
+            server_version: "1".to_string(),
+        };
+
+        let applied = apply_artifact_deltas(&conn, "u1", &[delta]);
+        assert_eq!(applied, 0, "orphan artifact must not be applied");
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM artifacts WHERE cloud_id = 'orphan-art-uuid'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0, "orphan artifact must NOT be inserted into artifacts table");
+    }
+
+    /// apply_pull_page resolves within-page artifact orphan when conversation lands first.
+    #[test]
+    fn pull_artifact_resolved_when_conversation_lands_same_page() {
+        let conn = fresh_db();
+
+        // One page: conversation + artifact for that conversation.
+        let page: PullResponse = serde_json::from_value(serde_json::json!({
+            "conversations": [{
+                "id": "conv-art-page-1", "title": "T", "model": null, "project_id": null,
+                "pinned": false, "created_at": "2026-06-20T00:00:00Z",
+                "updated_at": "2026-06-20T00:00:00Z", "deleted_at": null, "server_version": "5"
+            }],
+            "messages": [],
+            "artifacts": [{
+                "id": "art-page-1", "conversation_id": "conv-art-page-1", "message_id": null,
+                "title": "Code", "artifact_type": "code", "language": "rust",
+                "content": "fn main() {}", "current_version": 1, "pinned": false,
+                "tags": [], "created_at": "2026-06-20T00:00:00Z",
+                "updated_at": "2026-06-20T00:00:00Z", "deleted_at": null, "server_version": "6"
+            }],
+            "cursor": "6", "hasMore": false
+        }))
+        .unwrap();
+
+        let (convs, _msgs, arts) = apply_pull_page(&conn, "u1", &page);
+        assert_eq!(convs, 1, "conversation must be applied");
+        assert_eq!(arts, 1, "artifact must be applied (conversation landed first on same page)");
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM artifacts WHERE cloud_id = 'art-page-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "artifact must be in DB after apply_pull_page");
     }
 }
