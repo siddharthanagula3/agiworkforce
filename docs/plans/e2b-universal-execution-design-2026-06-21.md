@@ -216,3 +216,35 @@ are beyond verification from the repo / model knowledge cutoff.)
 fail-closed** — it does NOT implement the E2B-credit tier above, because (per §1.1) there
 is no reachable loop to run E2B tools yet. anthropic/google/openai → native interpreter;
 everything else → no tool. Wiring in the E2B-credit tier is gated on the §1.1 loop landing.
+
+## 9. E2B billing + persistent execution — VERIFIED from `~/Desktop/E2B/docs`
+
+Earlier notes hedged that E2B billing was "beyond verification." It is NOT — the local E2B
+docs repo (`~/Desktop/E2B/docs`) is the primary source. Verified facts (`docs/billing.mdx`,
+`docs/code-interpreting/contexts.mdx`, `docs/sandbox/persistence.mdx`, `auto-resume.mdx`):
+
+- **Pricing is per-SECOND compute** (vCPU + RAM + disk) while a sandbox RUNS — NOT per-token
+  or a flat per-session fee. Default resources 2 vCPU / 1 GB RAM (customizable per template).
+  New accounts get **$100 one-time free credits**; Pro is **$150/mo** (raises limits —
+  concurrency, runtime, resource ceilings — grants NO extra credits). Founder's "E2B for
+  Startups $20k credits" maps to this credit pool.
+- **`sbx.pause()` stops billing while PRESERVING state**; `resume` brings it back;
+  `sbx.kill()` releases. **Auto-pause on idle** is the headline cost lever. → You pay only
+  for active execution seconds, not wall-clock conversation time.
+- **Code contexts** (`createCodeContext` + `runCode({ context })`) give STATEFUL execution
+  (variables persist across `runCode` calls in the same context), with list/restart/remove.
+
+**This resolves the two P3 design gaps directly:**
+
+- The "per-call sandbox loses state" issue (§3 runtime note) → use ONE
+  **conversation-scoped sandbox + a persistent code context**, not a per-call sandbox.
+- The cost concern behind the E2B-credit tier → **pause the sandbox between turns**
+  (no billing while the user reads/thinks), resume on the next tool call. The per-second
+  model + auto-pause makes E2B-tier routing economically sound, grounded in real pricing.
+
+**Revised execution-loop design (for the future §1.1 reachable loop):** one E2B sandbox per
+conversation (keyed by conversationId), a persistent code context per session, `pause()` on
+turn end / idle, `resume()` on next execution, `kill()` on conversation close. Secured-access
+
+- network policy + the existing output cap remain the resource boundary. (Refs:
+  `docs/sandbox/persistence.mdx`, `docs/sandbox/secured-access.mdx`, `docs/quickstart/connect-llms.mdx`.)
