@@ -12,7 +12,7 @@ import {
   SquareTerminal,
   FolderOpen,
   Globe,
-  Sparkles,
+  BookOpen,
   Search,
   ExternalLink,
 } from 'lucide-react';
@@ -73,7 +73,8 @@ function getToolIcon(toolName: string, filename?: string | null): IconComponent 
     return FolderOpen;
   }
   if (n.includes('skill') || n.includes('learn')) {
-    return Sparkles;
+    // Claude reference (image 400 "Read design skill") uses an open-book glyph for skills.
+    return BookOpen;
   }
   // Default: file-read / view
   return FileText;
