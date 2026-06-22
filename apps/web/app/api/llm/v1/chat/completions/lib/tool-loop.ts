@@ -326,14 +326,16 @@ async function runMcpTool(
   // E2B execution interception: if a code/file/folder execution tool is ever invoked, it
   // runs in the E2B sandbox (gated, fail-closed), never as a generic MCP tool.
   //
-  // DORMANT TODAY — this branch does not execute in production for two reasons: (1)
-  // `resolveCodeExecutionTools()` is native-always and never emits these tool NAMES, so a
-  // model can't call one; (2) this `runMcpTool` path is itself reachable only under the
-  // route's manual-approval MCP gate (no auto-run, no resume endpoint). It's wired up as
-  // the verified foundation for the future reachable, approval-gated execution loop. The
-  // @e2b binding itself IS live (verified round-trip); `getE2BExecutor()` returns null
-  // only when E2B is unconfigured. FAIL-CLOSED: a null/erroring executor surfaces an
-  // explicit error to the model — never a silent no-op, never a provider-native fallback.
+  // ACTIVE when AGI_E2B_EXECUTION=1 AND the provider routes to E2B (not anthropic/google):
+  //   - request-processor offers e2bExecutionToolDefs() on streaming non-free-trial requests.
+  //   - route.ts enters the loop in 'auto' mode (no resume endpoint needed; isolated sandbox).
+  //   - getE2BExecutor() returns null when E2B_API_KEY is absent → explicit "unavailable" error.
+  //
+  // DORMANT when AGI_E2B_EXECUTION=0 (default): resolveCodeExecutionTools() is native-always
+  // and never emits these tool names, so this branch is never reached. Zero regression.
+  //
+  // FAIL-CLOSED: a null/erroring executor surfaces an explicit error to the model — never a
+  // silent no-op, never a provider-native fallback.
   if (isExecutionTool(toolCall.qualifiedName)) {
     const executor = await getE2BExecutor();
     try {

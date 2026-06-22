@@ -12,6 +12,7 @@ import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { buildStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
+import { isExecutionTool } from '@/lib/e2b/execution-tools';
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -90,12 +91,28 @@ async function handleChatCompletions(request: NextRequest) {
     const mcpTools = await loadMcpToolDefs();
     const hasMcpTools = mcpTools.length > 0 && !processed.freeTrial;
 
-    if (hasMcpTools) {
-      // Fail-closed: tool calls require explicit per-tool approval. Auto-approval
-      // is intentionally NOT read from a client-supplied query param — a client
-      // must not be able to skip the gate. The only thing that may grant 'auto'
-      // is a future server-side policy (authenticated tier + tool sensitivity).
-      const approvalMode = 'manual' as const;
+    // Detect E2B execution tools offered on this request (set by request-processor when
+    // AGI_E2B_EXECUTION=1 and the provider routes to E2B). Uses isExecutionTool() on the
+    // tool `function.name` field — the shape `e2bExecutionToolDefs()` returns is
+    // `{type:'function', function:{name,...}}`, while native tools use type-object shapes
+    // with no `function` key, so they never match.
+    const hasE2BTools =
+      !processed.freeTrial &&
+      (processed.llmRequest.tools ?? []).some((t) =>
+        isExecutionTool((t as { function?: { name?: string } }).function?.name ?? ''),
+      );
+
+    if (hasMcpTools || hasE2BTools) {
+      // Approval mode:
+      //   - E2B-only: 'auto' — E2B tools run in an isolated sandbox (no real fs/secrets),
+      //     and there is no /approve resume endpoint, so auto-run is both safe and
+      //     necessary. The loop uses runMcpTool → routeExecutionTool, fail-closed (explicit
+      //     error to model if E2B_API_KEY is absent or sandbox creation fails).
+      //   - MCP tools present (with or without E2B): 'manual' — keep the existing
+      //     fail-closed approval gate. If both MCP + E2B tools are present, MCP's manual
+      //     gate takes precedence; E2B tool calls in that mix stall on approval (acceptable;
+      //     mixed MCP+E2B is an edge case and the operator can enable the resume endpoint).
+      const approvalMode = hasMcpTools ? ('manual' as const) : ('auto' as const);
 
       // Build the agentic SSE stream from the tool-loop generator.
       const toolLoopGen = runToolLoop(processed, { mcpTools, approvalMode });

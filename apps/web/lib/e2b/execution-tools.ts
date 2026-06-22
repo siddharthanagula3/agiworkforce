@@ -80,6 +80,23 @@ export function e2bExecutionToolDefs(): Array<{
   ];
 }
 
+/**
+ * Whether the given provider routes to E2B (platform-executed sandbox) under the §8
+ * cost-optimized cut-over plan, when `e2bCutoverEnabled()` is on.
+ *
+ * - FREE-NATIVE tier (Anthropic + Google): always use their own provider-native sandboxes
+ *   (free compute, no E2B credit spend). NOT routed to E2B.
+ * - E2B-CREDIT tier (OpenAI + everyone else — DeepSeek, Kimi, GLM, MiniMax, etc.):
+ *   routed to E2B (avoids OpenAI's per-session interpreter fees; provides a sandbox for
+ *   providers that have no native code execution at all).
+ *
+ * Called only when `e2bCutoverEnabled()` is true. Has no side-effects.
+ */
+export function providerRoutesToE2B(provider: string): boolean {
+  const p = provider.toLowerCase();
+  return p !== 'anthropic' && p !== 'google';
+}
+
 /** Providers that expose a NATIVE (provider-executed) code interpreter today. */
 const NATIVE_CODE_EXECUTION_PROVIDERS = new Set(['anthropic', 'google', 'openai']);
 

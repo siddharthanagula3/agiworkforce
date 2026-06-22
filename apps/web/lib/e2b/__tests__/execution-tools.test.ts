@@ -15,6 +15,7 @@ import {
   resolveCodeExecutionTools,
   modelSupportsCodeExecution,
   routeExecutionTool,
+  providerRoutesToE2B,
 } from '../execution-tools';
 import { MAX_EXECUTION_OUTPUT_BYTES, type E2BExecutor } from '../types';
 
@@ -161,4 +162,28 @@ describe('modelSupportsCodeExecution', () => {
       expect(modelSupportsCodeExecution(p)).toBe(false);
     }
   });
+});
+
+describe('providerRoutesToE2B — §8 routing table', () => {
+  // Free-native tier: Anthropic + Google always use their own sandboxes (free compute).
+  it.each(['anthropic', 'Anthropic', 'ANTHROPIC'])(
+    'anthropic (%s) → false (free-native tier)',
+    (p) => {
+      expect(providerRoutesToE2B(p)).toBe(false);
+    },
+  );
+  it.each(['google', 'Google', 'GOOGLE'])('google (%s) → false (free-native tier)', (p) => {
+    expect(providerRoutesToE2B(p)).toBe(false);
+  });
+
+  // E2B-credit tier: OpenAI + all others route to E2B.
+  it.each(['openai', 'OpenAI'])('openai (%s) → true (avoids per-session interpreter fees)', (p) => {
+    expect(providerRoutesToE2B(p)).toBe(true);
+  });
+  it.each(['deepseek', 'kimi', 'glm', 'minimax', 'moonshot', 'zhipu', 'xai', 'qwen'])(
+    '%s → true (no native sandbox, E2B provides execution)',
+    (p) => {
+      expect(providerRoutesToE2B(p)).toBe(true);
+    },
+  );
 });
