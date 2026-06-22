@@ -264,7 +264,18 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const { id } = await context.params;
 
   try {
-    await db.execute(`delete from user_projects where id = $1 and user_id = $2`, [id, userId]);
+    // SOFT-delete (set the deleted_at tombstone) instead of a hard DELETE so the
+    // deletion propagates across devices via cross-device sync (0041). The BEFORE
+    // UPDATE trigger bumps server_version, so the next /api/projects/sync pull
+    // carries the tombstone. Hard-deleting would resurrect the row on the next pull
+    // from another device that still has it. updated_at is bumped so last-writer-wins
+    // treats the delete as the latest change.
+    await db.execute(
+      `update user_projects
+         set deleted_at = now(), updated_at = now()
+       where id = $1 and user_id = $2 and deleted_at is null`,
+      [id, userId],
+    );
   } catch (error) {
     logger.error({ error, projectId: id, userId }, 'Failed to delete project');
     throw createError.internal('Failed to delete project');

@@ -1,0 +1,215 @@
+/**
+ * Cross-device cloud SETTINGS sync — single-document delta (mirrors the sync family).
+ * Design: docs/plans/shared-cloud-state-2026-06-22.md
+ *
+ *   GET  /api/settings/sync?since=<server_version cursor>
+ *        → the user's CLOUD-SAFE settings subset IF its row server_version > cursor,
+ *          plus the cursor. Otherwise an empty doc (nothing new).
+ *   POST /api/settings/sync  { settings: {<namespace>: {...}}, updatedAt }
+ *        → merges ONLY cloud-safe namespaces into the stored JSONB doc (last-writer-
+ *          wins by updated_at). user_id is server-side; RLS WITH CHECK is the backstop.
+ *
+ * TRUST BOUNDARY — THE WHOLE POINT OF THIS FILE:
+ * `user_settings.settings` is one JSONB doc keyed by namespace and it can hold
+ * SECRETS (BYOK / provider API keys, local model paths, device/push config,
+ * providerMode). A wholesale settings sync would LEAK credentials across devices /
+ * the trust boundary. So sync is enforced SERVER-SIDE through a **fail-closed
+ * namespace ALLOWLIST** (an allowlist, not a denylist: an incomplete list merely
+ * under-syncs a preference — it can never leak a secret) PLUS a recursive secret-key
+ * scrubber as defense-in-depth. Enforcement is on the server, never trusting the
+ * client. Both PULL (don't emit secret namespaces) and PUSH (don't store via sync)
+ * are filtered.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+
+/**
+ * Cloud-safe settings namespaces — device-agnostic UI/personalization prefs that are
+ * safe to share across a single account's devices. FAIL-CLOSED: any namespace NOT in
+ * this set (incl. unknown/new ones) is never pulled or pushed. Expand only with a
+ * namespace proven to contain no secrets/device-specific values. NEVER add: byok,
+ * apiKeys, providers, models (local paths), device, security, credentials, account.
+ */
+export const CLOUD_SAFE_SETTINGS_NAMESPACES: readonly string[] = [
+  'appearance',
+  'personalization',
+  'profile',
+  'notifications',
+  'language',
+  'accessibility',
+  'chat',
+  'editor',
+];
+
+/** Namespaces that must NEVER sync — asserted in tests as a tripwire on the allowlist. */
+export const FORBIDDEN_SETTINGS_NAMESPACES: readonly string[] = [
+  'byok',
+  'apiKeys',
+  'api_keys',
+  'providers',
+  'models',
+  'device',
+  'security',
+  'secrets',
+  'credentials',
+  'account',
+];
+
+/** Key substrings that signal a secret; scrubbed even inside an allowed namespace. */
+const SECRET_KEY_PATTERN =
+  /(api[-_]?key|secret|token|password|passwd|credential|bearer|authorization|private[-_]?key|access[-_]?key|client[-_]?secret)/i;
+
+/**
+ * Recursively drop any object key that looks like a secret. Defense-in-depth on top
+ * of the namespace allowlist: even a "safe" namespace can't carry a stray token.
+ */
+export function scrubSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(scrubSecrets);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (SECRET_KEY_PATTERN.test(k)) continue; // drop secret-looking keys entirely
+      out[k] = scrubSecrets(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Project a namespace-keyed settings doc down to the cloud-safe allowlist, then scrub
+ * secret-looking keys from the survivors. The only function that decides what crosses
+ * the device boundary. Exported for direct unit testing.
+ */
+export function filterCloudSafeSettings(
+  settings: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (!settings || typeof settings !== 'object') return {};
+  const out: Record<string, unknown> = {};
+  for (const ns of CLOUD_SAFE_SETTINGS_NAMESPACES) {
+    if (Object.prototype.hasOwnProperty.call(settings, ns)) {
+      out[ns] = scrubSecrets(settings[ns]);
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Pull
+// ---------------------------------------------------------------------------
+
+async function handleGet(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'settings-activity');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { db, userId } = await getUserScopedDb(request);
+
+  const url = new URL(request.url);
+  const sinceRaw = url.searchParams.get('since') ?? '0';
+  const since = /^\d{1,19}$/.test(sinceRaw) ? sinceRaw : '0';
+
+  try {
+    const [row] = await db.query<{
+      settings: Record<string, unknown> | null;
+      server_version: string;
+    }>(`select settings, server_version from user_settings where user_id = $1 limit 1`, [userId]);
+    if (!row || !bigintGreater(row.server_version, since)) {
+      return NextResponse.json({ settings: {}, cursor: since, hasMore: false });
+    }
+    return NextResponse.json({
+      settings: filterCloudSafeSettings(row.settings),
+      cursor: row.server_version,
+      hasMore: false,
+    });
+  } catch (error) {
+    logger.error({ error, userId }, 'Settings sync pull failed');
+    throw createError.internal('Failed to pull settings changes');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Push
+// ---------------------------------------------------------------------------
+
+const PushBodySchema = z.object({
+  settings: z.record(z.string(), z.unknown()),
+  updatedAt: z.string().datetime(),
+});
+
+async function handlePost(request: NextRequest) {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse as NextResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { db, userId } = await getUserScopedDb(request);
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    throw createError.validation('Invalid JSON body');
+  }
+  const parsed = PushBodySchema.safeParse(rawBody);
+  if (!parsed.success) {
+    throw createError.validation('Invalid settings sync payload', parsed.error);
+  }
+
+  // SERVER-SIDE enforcement: only cloud-safe namespaces, scrubbed, ever get stored
+  // through sync. A client cannot push a secret namespace into the synced surface.
+  const safeIncoming = filterCloudSafeSettings(parsed.data.settings);
+
+  try {
+    // Merge (jsonb `||`): existing doc keeps its non-synced namespaces (incl. any
+    // BYOK/secret namespaces stored by /api/settings/preferences) and only the
+    // cloud-safe namespaces are overwritten. Last-writer-wins by updated_at.
+    const rows = await db.query<{ server_version: string }>(
+      `
+        insert into user_settings (user_id, settings, updated_at)
+        values ($1, $2::jsonb, coalesce($3::timestamptz, now()))
+        on conflict (user_id) do update set
+          settings = user_settings.settings || excluded.settings,
+          updated_at = excluded.updated_at
+        where excluded.updated_at >= user_settings.updated_at
+        returning server_version
+      `,
+      [userId, JSON.stringify(safeIncoming), parsed.data.updatedAt],
+    );
+
+    if (rows[0]) {
+      return NextResponse.json({ applied: true, cursor: rows[0].server_version });
+    }
+    // LWW skipped (stale push): return the current cursor so the client can advance.
+    const [current] = await db.query<{ server_version: string }>(
+      `select server_version from user_settings where user_id = $1 limit 1`,
+      [userId],
+    );
+    return NextResponse.json({ applied: false, cursor: current?.server_version ?? '0' });
+  } catch (error) {
+    logger.error({ error, userId }, 'Settings sync push failed');
+    throw createError.internal('Failed to push settings changes');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Compare two non-negative integer strings without precision loss. */
+function bigintGreater(a: string, b: string): boolean {
+  const na = (a ?? '0').replace(/^0+/, '') || '0';
+  const nb = (b ?? '0').replace(/^0+/, '') || '0';
+  if (na.length !== nb.length) return na.length > nb.length;
+  return na > nb;
+}
+
+export const GET = withErrorHandler(handleGet);
+export const POST = withErrorHandler(handlePost);
