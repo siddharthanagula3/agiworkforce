@@ -237,7 +237,7 @@ async function patchConversationMessageReaction(params: {
 }
 
 export default function WebChatPage() {
-  const { getToken } = useAuth();
+  const { getToken, isLoaded: authLoaded } = useAuth();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -494,6 +494,11 @@ export default function WebChatPage() {
   // the empty new-chat surface and create persistence only when the user sends.
   const routeInitializedRef = useRef(false);
   useEffect(() => {
+    // Wait for Clerk auth to resolve before loading a conversation by URL. While the
+    // session is still loading, loadConversation()'s getAuthHeaders throws and returns
+    // false — without this guard a valid conversation opened by direct or fast navigation
+    // gets wrongly redirected to /chat (losing it). Re-runs once authLoaded flips true.
+    if (!authLoaded) return;
     if (routeInitializedRef.current && !urlConversationId) return;
     routeInitializedRef.current = true;
 
@@ -511,7 +516,14 @@ export default function WebChatPage() {
       setBareChatSessionId(null);
       setActiveConversation(null);
     }
-  }, [activeConversationId, loadConversation, router, setActiveConversation, urlConversationId]);
+  }, [
+    activeConversationId,
+    authLoaded,
+    loadConversation,
+    router,
+    setActiveConversation,
+    urlConversationId,
+  ]);
 
   const sendContent = useCallback(
     async (
