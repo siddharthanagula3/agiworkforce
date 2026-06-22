@@ -323,7 +323,12 @@ export function useChatStream(): UseChatStreamReturn {
       const normalizeToolName = (name: unknown) =>
         typeof name === 'string' && name.trim() ? name.trim() : 'server_tool';
 
-      const startTool = (rawName: unknown, args?: string, statusPhrase?: string) => {
+      const startTool = (
+        rawName: unknown,
+        args?: string,
+        statusPhrase?: string,
+        parameters?: Record<string, unknown>,
+      ) => {
         const name = normalizeToolName(rawName);
         const existingIndex = findLastToolIndex(name, ['pending', 'running']);
         if (existingIndex >= 0) {
@@ -332,6 +337,7 @@ export function useChatStream(): UseChatStreamReturn {
             existing.status = 'running';
             existing.args = args ?? existing.args;
             if (statusPhrase) existing.statusPhrase = statusPhrase;
+            if (parameters && Object.keys(parameters).length > 0) existing.parameters = parameters;
           }
           publishToolTimeline();
           return;
@@ -345,6 +351,7 @@ export function useChatStream(): UseChatStreamReturn {
           status: 'running',
           args,
           statusPhrase,
+          parameters,
         });
         publishToolTimeline();
       };
@@ -687,7 +694,16 @@ export function useChatStream(): UseChatStreamReturn {
                     typeof toolStatus.status_phrase === 'string'
                       ? toolStatus.status_phrase
                       : undefined;
-                  startTool(toolStatus.name, undefined, phrase);
+                  // Forward tool args (e.g. {language, code} for execute_code) so
+                  // ToolCallCard's detectCodeBlock can render a syntax-highlighted
+                  // Request block. Only set when the server included them.
+                  const parameters =
+                    toolStatus.args != null &&
+                    typeof toolStatus.args === 'object' &&
+                    !Array.isArray(toolStatus.args)
+                      ? (toolStatus.args as Record<string, unknown>)
+                      : undefined;
+                  startTool(toolStatus.name, undefined, phrase, parameters);
                 } else if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
                   finishTool(toolStatus.name, toolStatus.status);
                 }
