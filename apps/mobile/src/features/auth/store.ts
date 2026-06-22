@@ -100,17 +100,32 @@ export const useAuthStore = create<AuthState>()(
             authSubscription = null;
           }
           // P2 sync teardown: stop the loop and drop cloud-scoped state so a
-          // different account can never inherit this user's cloud chats or pending
-          // sync queue. Lazy require avoids an auth↔api↔sync import cycle at init.
+          // different account can never inherit this user's cloud chats, memories,
+          // or pending sync queues. Lazy require avoids an auth↔api↔sync import
+          // cycle at init.
           try {
             /* eslint-disable @typescript-eslint/no-require-imports */
             const { stopCloudSyncLoop } = require('@/services/cloudSyncEngine');
             const { useCloudSyncStateStore } = require('@/stores/chat/cloudSyncStateStore');
             const { useChatCloudMessageStore } = require('@/stores/chat/chatCloudMessageStore');
+            const { useCloudMemoryStore } = require('@/stores/memory/cloudMemoryStore');
+            const { useMemorySyncStateStore } = require('@/stores/memory/memorySyncStateStore');
+            const { useCloudProjectStore } = require('@/stores/projects/cloudProjectStore');
+            const { useProjectSyncStateStore } = require('@/stores/projects/projectSyncStateStore');
             /* eslint-enable @typescript-eslint/no-require-imports */
             stopCloudSyncLoop();
             useCloudSyncStateStore.getState().reset();
             useChatCloudMessageStore.getState().clearCloudData();
+            // Memory trust-boundary reset: cloud memories and the memory sync cursor
+            // are scoped to the signed-in user and MUST be cleared on sign-out so a
+            // subsequent account cannot inherit a prior user's memories.
+            useCloudMemoryStore.getState().clearCloudMemoryData();
+            useMemorySyncStateStore.getState().resetMemorySync();
+            // Project trust-boundary reset: cloud projects and the project sync cursor
+            // are scoped to the signed-in user and MUST be cleared on sign-out so a
+            // subsequent account cannot inherit a prior user's projects.
+            useCloudProjectStore.getState().clearCloudProjectData();
+            useProjectSyncStateStore.getState().resetProjectSync();
           } catch (err) {
             console.warn('[auth] cloud sync teardown on sign-out failed:', err);
           }

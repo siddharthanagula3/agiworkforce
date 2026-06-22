@@ -5,6 +5,11 @@
  * `/api/chat/sync` endpoint: push locally-changed rows, then pull everything with a
  * `server_version` greater than our cursor, advancing the cursor as we go.
  *
+ * Also delta-syncs the CLOUD memory store (`cloudMemoryStore`) with the managed-cloud
+ * `/api/memory/sync` endpoint using a SEPARATE memory cursor (independent from the
+ * chat cursor). Memory sync runs inside the same `syncNow()` call, gated by the same
+ * `isManagedSyncEnabled()` check.
+ *
  * MANAGED-ONLY: every entry point is gated on `isManagedSyncEnabled()` and the `api`
  * client routes through `guardedFetch`, which independently refuses any network I/O
  * in Local mode. Local-mode conversations live in a separate store and are never
@@ -16,10 +21,16 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore, type DirtyMessageRef } from '@/stores/chat/cloudSyncStateStore';
 import { useArtifactStore } from '@/src/features/artifacts/store';
+import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
+import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
+import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
+import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import type { ArtifactWireDelta } from '@agiworkforce/services';
 
 const SYNC_PATH = '/api/chat/sync';
+const MEMORY_SYNC_PATH = '/api/memory/sync';
+const PROJECTS_SYNC_PATH = '/api/projects/sync';
 /** Safety bound on the pull pagination loop (each page is up to 500 rows). */
 const PULL_PAGE_GUARD = 50;
 
@@ -257,6 +268,260 @@ async function push(): Promise<void> {
   useCloudSyncStateStore.getState().clearDirty(dirtyConversationIds, clearedMessageRefs);
 }
 
+// ── Memory wire shapes (snake_case from /api/memory/sync) ─────────────────────
+
+/** Shape returned by GET /api/memory/sync — server uses snake_case. */
+interface MemoryPullItem {
+  id: string;
+  content: string;
+  category: string | null;
+  source: 'mobile' | 'desktop' | 'web' | 'auto';
+  is_deleted: boolean;
+  created_at: string;
+  updated_at: string;
+  server_version: string;
+}
+
+interface MemoryPullResponse {
+  memories: MemoryPullItem[];
+  cursor: string;
+  hasMore: boolean;
+}
+
+/** Shape for POST /api/memory/sync — server expects camelCase. */
+interface MemoryPushItem {
+  id: string;
+  content: string;
+  category?: string | null;
+  source?: string;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface MemoryPushResponse {
+  applied: Array<{ id: string; server_version: string }>;
+  cursor: string;
+}
+
+// ── Memory pull ────────────────────────────────────────────────────────────────
+
+async function pullMemory(): Promise<void> {
+  let cursor = useMemorySyncStateStore.getState().memoryCursor;
+  for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
+    const res = await api.get<MemoryPullResponse>(
+      `${MEMORY_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
+    );
+    const memories = res.memories ?? [];
+    if (memories.length > 0) {
+      // Map wire snake_case → client camelCase, then apply to store.
+      const deltas: CloudMemoryEntry[] = memories.map((m) => ({
+        id: m.id,
+        content: m.content,
+        category: m.category,
+        source: m.source,
+        isDeleted: m.is_deleted,
+        createdAt: m.created_at,
+        updatedAt: m.updated_at,
+      }));
+      useCloudMemoryStore.getState().applyCloudMemoryDeltas(deltas);
+    }
+    cursor = maxCursor(cursor, res.cursor ?? '0');
+    useMemorySyncStateStore.getState().setMemoryCursor(cursor);
+    if (!res.hasMore) break;
+  }
+}
+
+// ── Memory push ────────────────────────────────────────────────────────────────
+
+async function pushMemory(): Promise<void> {
+  const { dirtyMemoryIds } = useMemorySyncStateStore.getState();
+  if (dirtyMemoryIds.length === 0) return;
+
+  const allEntries = useCloudMemoryStore.getState().entries;
+  const entryById = new Map(allEntries.map((e) => [e.id, e]));
+
+  // Separate live entries from dead refs (entry vanished from store — skip, clear).
+  const liveIds: string[] = [];
+  const deadIds: string[] = [];
+  const payload: MemoryPushItem[] = [];
+
+  for (const id of dirtyMemoryIds) {
+    const entry = entryById.get(id);
+    if (!entry) {
+      deadIds.push(id);
+      continue;
+    }
+    liveIds.push(id);
+    // Deleted entries are sent as tombstones; the server applies the soft-delete.
+    payload.push({
+      id: entry.id,
+      content: entry.content,
+      category: entry.category,
+      source: entry.source,
+      isDeleted: entry.isDeleted,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    });
+  }
+
+  // Dead refs: clear immediately (nothing to push).
+  const ackedIds = new Set<string>();
+  if (payload.length > 0) {
+    const res = await api.post<MemoryPushResponse>(MEMORY_SYNC_PATH, { memories: payload });
+    for (const applied of res?.applied ?? []) {
+      ackedIds.add(applied.id);
+    }
+  }
+
+  // Hard-delete tombstones that the server acked.
+  for (const id of liveIds) {
+    const entry = entryById.get(id);
+    if (entry?.isDeleted && ackedIds.has(id)) {
+      useCloudMemoryStore.getState().hardDeleteCloudMemory(id);
+    }
+  }
+
+  // Clear dirty queue for: dead refs + server-acked live refs.
+  const toClear = [...deadIds, ...liveIds.filter((id) => ackedIds.has(id))];
+  useMemorySyncStateStore.getState().clearMemoryDirty(toClear);
+}
+
+// ── Project wire shapes (snake_case from /api/projects/sync) ──────────────────
+
+/** Shape returned by GET /api/projects/sync — server uses snake_case. */
+interface ProjectPullItem {
+  id: string;
+  name: string;
+  description: string | null;
+  instructions: string | null;
+  color: string | null;
+  is_archived: boolean;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  /** Non-null = tombstone row. */
+  deleted_at: string | null;
+  server_version: string;
+}
+
+interface ProjectPullResponse {
+  projects: ProjectPullItem[];
+  cursor: string;
+  hasMore: boolean;
+}
+
+/** Shape for POST /api/projects/sync — server expects camelCase. */
+interface ProjectPushItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  instructions?: string | null;
+  color?: string | null;
+  isArchived?: boolean;
+  metadata?: Record<string, unknown> | null;
+  createdAt?: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+interface ProjectPushResponse {
+  applied: Array<{ id: string; server_version: string }>;
+  cursor: string;
+}
+
+// ── Project pull ───────────────────────────────────────────────────────────────
+
+async function pullProjects(): Promise<void> {
+  let cursor = useProjectSyncStateStore.getState().projectCursor;
+  for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
+    const res = await api.get<ProjectPullResponse>(
+      `${PROJECTS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
+    );
+    const items = res.projects ?? [];
+    if (items.length > 0) {
+      // Map wire snake_case → client camelCase, then apply to store.
+      const deltas: CloudProject[] = items.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        instructions: p.instructions,
+        color: p.color,
+        isArchived: p.is_archived,
+        metadata: p.metadata,
+        // Pulled rows may come from any surface; use 'web' as the fallback source
+        // since the wire format does not include a source field.
+        source: 'web' as const,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+        deletedAt: p.deleted_at,
+      }));
+      useCloudProjectStore.getState().applyCloudProjectDeltas(deltas);
+    }
+    cursor = maxCursor(cursor, res.cursor ?? '0');
+    useProjectSyncStateStore.getState().setProjectCursor(cursor);
+    if (!res.hasMore) break;
+  }
+}
+
+// ── Project push ───────────────────────────────────────────────────────────────
+
+async function pushProjects(): Promise<void> {
+  const { dirtyProjectIds } = useProjectSyncStateStore.getState();
+  if (dirtyProjectIds.length === 0) return;
+
+  const allProjects = useCloudProjectStore.getState().projects;
+  const projectById = new Map(allProjects.map((p) => [p.id, p]));
+
+  // Separate live projects from dead refs (project vanished from store — skip, clear).
+  const liveIds: string[] = [];
+  const deadIds: string[] = [];
+  const payload: ProjectPushItem[] = [];
+
+  for (const id of dirtyProjectIds) {
+    const project = projectById.get(id);
+    if (!project) {
+      deadIds.push(id);
+      continue;
+    }
+    liveIds.push(id);
+    // Tombstone projects are sent with deletedAt; the server applies the soft-delete.
+    payload.push({
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      instructions: project.instructions,
+      color: project.color,
+      isArchived: project.isArchived,
+      metadata: project.metadata,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      deletedAt: project.deletedAt,
+    });
+  }
+
+  // Dead refs: clear immediately (nothing to push).
+  const ackedIds = new Set<string>();
+  if (payload.length > 0) {
+    const res = await api.post<ProjectPushResponse>(PROJECTS_SYNC_PATH, { projects: payload });
+    for (const applied of res?.applied ?? []) {
+      ackedIds.add(applied.id);
+    }
+  }
+
+  // Hard-delete tombstones that the server acked.
+  for (const id of liveIds) {
+    const project = projectById.get(id);
+    if (project?.deletedAt !== null && ackedIds.has(id)) {
+      useCloudProjectStore.getState().hardDeleteCloudProject(id);
+    }
+  }
+
+  // Clear dirty queue for: dead refs + server-acked live refs.
+  const toClear = [...deadIds, ...liveIds.filter((id) => ackedIds.has(id))];
+  useProjectSyncStateStore.getState().clearProjectDirty(toClear);
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────────
 
 let syncing = false;
@@ -266,13 +531,30 @@ let syncing = false;
  * mode is active. Single-flight: a concurrent call is dropped while one is in flight.
  */
 export async function syncNow(): Promise<void> {
+  // ── GATING ENFORCEMENT POINT ────────────────────────────────────────────
+  // Both chat AND memory sync are gated here. isManagedSyncEnabled() requires
+  // FEATURES.cloudChat === true AND appMode === 'cloud'. A Local-mode call exits
+  // before any network I/O. The api client's guardedFetch is an independent
+  // fail-closed backstop that refuses egress in Local mode regardless.
   if (!isManagedSyncEnabled()) return;
   if (syncing) return;
   syncing = true;
   useCloudSyncStateStore.getState().setStatus('syncing');
   try {
+    // Chat sync: push dirty conversations/messages, then pull deltas.
     await push();
     await pull();
+    // Memory sync: push dirty cloud memories, then pull deltas.
+    // Runs after chat so the gating check above covers both. Uses its own
+    // cursor (memorySyncStateStore) — independent from the chat cursor.
+    await pushMemory();
+    await pullMemory();
+    // Project sync: push dirty cloud projects, then pull deltas.
+    // Runs after memory so the single isManagedSyncEnabled() gate covers all
+    // three. Uses its own cursor (projectSyncStateStore) — independent from
+    // both the chat cursor and the memory cursor.
+    await pushProjects();
+    await pullProjects();
     useCloudSyncStateStore.getState().setStatus('idle');
     useCloudSyncStateStore.setState({ lastSyncAt: Date.now() });
   } catch (err) {
@@ -310,4 +592,26 @@ export function markConversationForSync(id: string): void {
 /** Mark a locally-created/edited cloud message for the next push. */
 export function markMessageForSync(conversationId: string, messageId: string): void {
   useCloudSyncStateStore.getState().markMessageDirty(conversationId, messageId);
+}
+
+/**
+ * Mark a locally-created/edited/deleted cloud memory for the next push.
+ * Only call this when appMode === 'cloud' (enforced by the memory store write
+ * paths in src/features/memory/store.ts). An isManagedSyncEnabled() check at
+ * the syncNow() entry point is the network-level gate; this function is the
+ * write-side marker.
+ */
+export function markMemoryForSync(id: string): void {
+  useMemorySyncStateStore.getState().markMemoryDirty(id);
+}
+
+/**
+ * Mark a locally-created/edited/archived/deleted cloud project for the next push.
+ * Only call this when appMode === 'cloud' (enforced by the project store write
+ * paths in src/features/projects/store.ts). An isManagedSyncEnabled() check at
+ * the syncNow() entry point is the network-level gate; this function is the
+ * write-side marker.
+ */
+export function markProjectForSync(id: string): void {
+  useProjectSyncStateStore.getState().markProjectDirty(id);
 }

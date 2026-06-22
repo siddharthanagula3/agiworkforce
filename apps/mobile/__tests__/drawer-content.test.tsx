@@ -224,8 +224,12 @@ describe('DrawerContent', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const cloud = renderDrawer();
 
+    // Cloud mode now shows AGI Agent AND Projects (cloud projects are synced).
     expect(cloud.getByText('AGI Agent')).toBeTruthy();
-    expect(cloud.queryByLabelText('Projects')).toBeNull();
+    // Projects nav row is now visible in cloud mode (task: unblock cloud projects).
+    expect(cloud.getByLabelText('Projects')).toBeTruthy();
+    // The local project "Launch demo" should NOT appear in cloud mode
+    // (cloud mode reads from cloudProjectStore, not local store).
     expect(cloud.queryByText('Launch demo')).toBeNull();
   });
 

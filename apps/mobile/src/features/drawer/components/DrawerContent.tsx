@@ -21,6 +21,7 @@ import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanion
 import { useChatStore } from '@/stores/chatStore';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -238,7 +239,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const pathname = usePathname();
   const conversations = useChatStore((s) => s.conversations);
-  const projects = useProjectStore((s) => s.projects);
+  const localProjects = useProjectStore((s) => s.projects);
+  const cloudProjects = useCloudProjectStore((s) => s.projects);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const setModel = useModelStore((s) => s.setModel);
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -309,18 +311,29 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   }, [appMode, conversations, isSearching, query]);
 
   const displayedProjects = useMemo(() => {
-    if (appMode === 'cloud') return [];
     if (!FEATURES.projects) return [];
+    // Cloud mode: read from the cloud projects store (synced via cloudSyncEngine).
+    // Only show non-tombstoned projects. Local mode: read from local store as before.
+    if (appMode === 'cloud') {
+      const source = cloudProjects.filter((p) => p.deletedAt === null && !p.isArchived);
+      const filtered = isSearching
+        ? source.filter((p) => p.name.toLowerCase().includes(query))
+        : source;
+      return filtered.slice(0, 6);
+    }
     const source = isSearching
-      ? projects.filter((project) => project.name.toLowerCase().includes(query))
-      : projects;
+      ? localProjects.filter((project) => project.name.toLowerCase().includes(query))
+      : localProjects;
     return source.slice(0, 6);
-  }, [appMode, isSearching, projects, query]);
+  }, [appMode, cloudProjects, isSearching, localProjects, query]);
 
   const visiblePrimaryItems = useMemo(
     () =>
       PRIMARY_ITEMS.filter((item) => {
-        if (appMode === 'cloud') return item.key !== 'projects';
+        // In cloud mode: show Projects (now synced via cloudProjectStore), Artifacts,
+        // and the AGI Agent item. All three are relevant in cloud mode.
+        // In local mode: show Projects and Artifacts; hide the cloud-only AGI Agent item.
+        if (appMode === 'cloud') return true;
         return item.key !== 'agi-agent';
       }),
     [appMode],
