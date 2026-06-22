@@ -2,11 +2,24 @@
 //!
 //! This module provides Tauri commands for creating, reading, updating, and deleting
 //! projects. Projects group conversations, files, and custom instructions together.
+//!
+//! CLOUD SYNC HOOK:
+//! Write commands (project_create, project_update, project_delete) accept an optional
+//! `active_mode` param. When the active mode is managed-cloud, they call
+//! `mark_project_for_push` / `soft_delete_project_for_push` on the AppDatabase so the
+//! next project sync cycle will push the change. The gate uses the same
+//! `derive_cloud_sync_enabled` function that chat + memory sync use — the identical
+//! trust-boundary function, not a reimplementation.
+//! `projects.app_mode = 'cloud'` is set on rows created in cloud mode; the WHERE guard
+//! in `mark_project_for_push` makes it impossible to mark a local row.
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::data::projects_sync;
+use crate::sys::commands::chat::send_message_setup::derive_cloud_sync_enabled;
+use crate::sys::commands::settings::SettingsState;
 use crate::sys::commands::AppDatabase;
 
 /// Represents a file associated with a project
@@ -78,14 +91,40 @@ pub struct ProjectUpdate {
     pub knowledge_base_files: Option<serde_json::Value>,
 }
 
+// ---------------------------------------------------------------------------
+// Internal helpers: cloud sync gating for project writes.
+// Reuses the EXACT same derive_cloud_sync_enabled function as memory.rs + send_message.rs.
+// ---------------------------------------------------------------------------
+
+/// Set `app_mode='cloud'` on a projects row. Called for rows created while
+/// cloud sync is enabled so they are marked correctly for push.
+fn set_project_cloud_mode(db: &AppDatabase, project_id: &str) {
+    if let Ok(conn) = db.connection() {
+        let _ = conn.execute(
+            "UPDATE projects SET app_mode = 'cloud' WHERE id = ?1 AND app_mode = 'local'",
+            rusqlite::params![project_id],
+        );
+    }
+}
+
+/// Mark an existing cloud project for push. Non-fatal — a failed mark is logged
+/// but must never cause the write command to fail.
+fn try_mark_project_for_push(db: &AppDatabase, project_id: &str) {
+    if let Ok(conn) = db.connection() {
+        if let Err(e) = projects_sync::mark_project_for_push(&conn, project_id) {
+            tracing::warn!(error = %e, %project_id, "projects: failed to mark project for cloud push");
+        }
+    }
+}
+
 /// Create a new project
 #[tauri::command]
 pub async fn project_create(
     project: Project,
+    active_mode: Option<String>,
     db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
 ) -> Result<Project, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
     // Serialize files and conversation_ids as JSON
     let files_json = serde_json::to_string(&project.files).map_err(|e| e.to_string())?;
     let conversation_ids_json =
@@ -96,31 +135,50 @@ pub async fn project_create(
         .as_ref()
         .map(|v| serde_json::to_string(v).unwrap_or_default());
 
-    conn.execute(
-        "INSERT INTO projects (
-            id, name, description, custom_instructions, files, conversation_ids,
-            color, icon, is_archived, created_at, updated_at,
-            icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-        params![
-            project.id,
-            project.name,
-            project.description,
-            project.custom_instructions,
-            files_json,
-            conversation_ids_json,
-            project.color,
-            project.icon,
-            project.is_archived,
-            project.created_at,
-            project.updated_at,
-            project.icon_emoji,
-            project.accent_color,
-            project.default_privacy_mode,
-            kb_files_json,
-        ],
-    )
-    .map_err(|e| format!("Failed to create project: {}", e))?;
+    // Scope the mutex guard so it is released before calling cloud sync helpers.
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO projects (
+                id, name, description, custom_instructions, files, conversation_ids,
+                color, icon, is_archived, created_at, updated_at,
+                icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            params![
+                project.id,
+                project.name,
+                project.description,
+                project.custom_instructions,
+                files_json,
+                conversation_ids_json,
+                project.color,
+                project.icon,
+                project.is_archived,
+                project.created_at,
+                project.updated_at,
+                project.icon_emoji,
+                project.accent_color,
+                project.default_privacy_mode,
+                kb_files_json,
+            ],
+        )
+        .map_err(|e| format!("Failed to create project: {}", e))?;
+    }
+
+    // CLOUD SYNC HOOK: derive_cloud_sync_enabled is the single source of truth
+    // for the managed-cloud trust boundary (send_message_setup.rs:64).
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
+        set_project_cloud_mode(&db, &project.id);
+        try_mark_project_for_push(&db, &project.id);
+    }
 
     Ok(project)
 }
@@ -238,9 +296,21 @@ pub async fn project_get(
 pub async fn project_update(
     id: String,
     updates: ProjectUpdate,
+    active_mode: Option<String>,
     db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // Derive cloud sync setting BEFORE building values (avoid holding non-Send
+    // Box<dyn ToSql> across an await point).
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+    let cloud_enabled = derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud);
 
     // Build dynamic UPDATE query based on provided fields
     let mut set_clauses = Vec::new();
@@ -312,21 +382,62 @@ pub async fn project_update(
         set_clauses.join(", ")
     );
 
-    // Add id as the last parameter
-    values.push(Box::new(id));
+    // Scope the lock so it is released before cloud sync helpers re-acquire it.
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        // Add id as the last parameter
+        values.push(Box::new(id.clone()));
 
-    // Convert values to params_from_iter compatible format
-    let params: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v.as_ref()).collect();
+        // Convert values to params_from_iter compatible format
+        let params: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v.as_ref()).collect();
 
-    conn.execute(&query, params.as_slice())
-        .map_err(|e| format!("Failed to update project: {}", e))?;
+        conn.execute(&query, params.as_slice())
+            .map_err(|e| format!("Failed to update project: {}", e))?;
+    }
+
+    // CLOUD SYNC HOOK.
+    if cloud_enabled {
+        try_mark_project_for_push(&db, &id);
+    }
 
     Ok(())
 }
 
 /// Delete a project
+///
+/// In cloud mode: soft-deletes the row (sets deleted_at_utc + needs_push=1)
+/// so the tombstone propagates to other devices. Falls through to hard-delete
+/// for local rows.
 #[tauri::command]
-pub async fn project_delete(id: String, db: State<'_, AppDatabase>) -> Result<(), String> {
+pub async fn project_delete(
+    id: String,
+    active_mode: Option<String>,
+    db: State<'_, AppDatabase>,
+    settings_state: State<'_, SettingsState>,
+) -> Result<(), String> {
+    let storage_mode_is_cloud = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|p| p.chat_storage_mode.as_str() == "cloud")
+            .unwrap_or(false)
+    };
+
+    if derive_cloud_sync_enabled(active_mode.as_deref(), storage_mode_is_cloud) {
+        // Attempt soft-delete for cloud rows. If the row is a cloud row, return early
+        // (soft-deleted, tombstone will propagate). If not a cloud row, fall through.
+        if let Ok(conn) = db.connection() {
+            match projects_sync::soft_delete_project_for_push(&conn, &id) {
+                Ok(true) => return Ok(()), // cloud row — tombstoned, skip hard-delete
+                Ok(false) => {}            // local row — fall through to hard-delete
+                Err(e) => {
+                    tracing::warn!(error = %e, %id, "projects: soft-delete failed, falling back to hard-delete");
+                }
+            }
+        }
+    }
+
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute("DELETE FROM projects WHERE id = ?1", [&id])
