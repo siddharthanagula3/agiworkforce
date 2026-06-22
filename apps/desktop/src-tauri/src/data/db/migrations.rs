@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 70;
+const CURRENT_VERSION: i32 = 71;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -618,6 +618,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 70 {
         run_migration_in_transaction(conn, 70, apply_migration_v70)?;
+    }
+
+    if current_version < 71 {
+        run_migration_in_transaction(conn, 71, apply_migration_v71)?;
     }
 
     Ok(())
@@ -5785,6 +5789,88 @@ fn apply_migration_v70(conn: &Connection) -> Result<()> {
             )",
             [],
         )?;
+    }
+
+    Ok(())
+}
+
+/// Migration v71: Cloud sync identity + bookkeeping columns for `artifacts`.
+///
+/// Mirrors v67 (conversations/messages) but applied to the `artifacts` table
+/// so artifacts participate in the shared chat-cursor sync on `/api/chat/sync`.
+///
+/// The `artifacts` table uses a TEXT primary key (UUID generated at create time,
+/// stored in `id`). We add a dedicated `cloud_id` (UUIDv7) for the wire layer so
+/// the local ID (which may be a v4 UUID or other local-only format) and the cloud
+/// identity are always distinct. `conversation_cloud_id` mirrors the parent
+/// conversation's cloud_id so the gather JOIN can skip the conversations table.
+///
+/// `app_mode` defaults to 'local' — existing rows are local-only and will not be
+/// pushed (safe default, same as conversations/messages/memory/projects).
+/// `deleted_at_utc` is the soft-delete tombstone column (the base schema has no
+/// `deleted_at`; the cloud protocol requires tombstone propagation).
+///
+/// Additive only — existing schema and data are untouched.
+fn apply_migration_v71(conn: &Connection) -> Result<()> {
+    let table_exists = |table: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            > 0
+    };
+
+    if table_exists("artifacts") {
+        // app_mode: 'local' | 'cloud' — existing rows default to 'local'.
+        ensure_column(
+            conn,
+            "artifacts",
+            "app_mode",
+            "app_mode TEXT NOT NULL DEFAULT 'local'",
+        )?;
+        // cloud_id: UUIDv7 assigned at first mint; NULL until synced.
+        ensure_column(conn, "artifacts", "cloud_id", "cloud_id TEXT")?;
+        // server_version: bigint-string from the Postgres sequence.
+        ensure_column(conn, "artifacts", "server_version", "server_version TEXT")?;
+        // conversation_cloud_id: the parent conversation's cloud_id (denormalized
+        // for gather efficiency — avoids joining conversations at push time).
+        ensure_column(
+            conn,
+            "artifacts",
+            "conversation_cloud_id",
+            "conversation_cloud_id TEXT",
+        )?;
+        // deleted_at_utc: soft-delete tombstone (base schema has no deleted_at).
+        ensure_column(conn, "artifacts", "deleted_at_utc", "deleted_at_utc TEXT")?;
+        // needs_push: dirty flag; 1 = push on next sync cycle.
+        ensure_column(
+            conn,
+            "artifacts",
+            "needs_push",
+            "needs_push INTEGER NOT NULL DEFAULT 0",
+        )?;
+
+        // Partial UNIQUE index on non-NULL cloud_ids (SQLite does not support
+        // ADD UNIQUE COLUMN via ALTER TABLE).
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_artifacts_cloud_id \
+             ON artifacts(cloud_id) WHERE cloud_id IS NOT NULL",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_needs_push \
+             ON artifacts(needs_push) WHERE needs_push = 1",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_app_mode \
+             ON artifacts(app_mode)",
+            [],
+        )?;
+    } else {
+        tracing::debug!("v71: skipping artifacts columns — table does not exist yet");
     }
 
     Ok(())
