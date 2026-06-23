@@ -6,6 +6,11 @@ import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { streamChat, type StreamDelta } from '@/services/streaming';
+import {
+  createToolCallAccumulator,
+  accumulateToolCallDelta,
+  toolCallList,
+} from '@/src/features/chat/utils/toolCallAccumulator';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
 import { checkContentFilter } from '@/lib/contentFilter';
 import { isMinorMode } from '@/src/features/auth/services/ageGate';
@@ -887,6 +892,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
+      // Per-turn agentic tool-call accumulator. The server streams tool steps
+      // (web_search / code execution / MCP) as SSE deltas; we fold them into the
+      // assistant message's toolCalls so InlineToolCall renders them live.
+      const toolAcc = createToolCallAccumulator();
+
       await streamChat(
         {
           model,
@@ -909,6 +919,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               newReasoning += delta.reasoning;
             }
 
+            accumulateToolCallDelta(toolAcc, delta);
+            const toolCalls = toolCallList(toolAcc);
+
             const currentMsgStore = getMsgStore();
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
             const updatedMsgs = msgs.map((m) =>
@@ -918,6 +931,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     content: newContent,
                     reasoning: newReasoning || undefined,
                     isStreaming: true,
+                    ...(toolCalls.length > 0 ? { toolCalls } : {}),
                   }
                 : m,
             );
@@ -933,6 +947,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
             thinkingStartTimes.delete(conversationId);
 
+            // Finalize the accumulated tool calls onto the message. mirrorCloudTurn
+            // (below) reads this same finalized message, so the tool steps ride
+            // along into the cloud write-through and survive reload.
+            const finalToolCalls = toolCallList(toolAcc);
+
             const currentMsgStore = getMsgStore();
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
             const updatedMsgs = msgs.map((m) =>
@@ -940,6 +959,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 ? {
                     ...m,
                     isStreaming: false,
+                    ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
                     metadata: {
                       ...m.metadata,
                       ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),

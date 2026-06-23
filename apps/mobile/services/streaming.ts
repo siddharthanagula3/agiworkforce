@@ -19,11 +19,57 @@ import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 
+/** OpenAI-style tool_call fragment streamed by the server-tool path (Anthropic
+ *  cloud chat auto-tools: web_search, code execution). Fragments accumulate by
+ *  `index`; `function.arguments` arrives in pieces and must be concatenated. */
+export interface StreamToolCallFragment {
+  index: number;
+  id?: string;
+  type?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+/** Tool lifecycle status event (`x_tool_status`). `type` distinguishes the
+ *  server-tool family ('server_tool_use') from MCP ('mcp_tool_use'). */
+export interface StreamToolStatus {
+  type?: string;
+  name?: string;
+  status?: string;
+  status_phrase?: string;
+  args?: unknown;
+}
+
+/** MCP tool result (`x_tool_result`). */
+export interface StreamToolResult {
+  tool_call_id: string;
+  name?: string;
+  content?: unknown;
+  is_error?: boolean;
+}
+
+/** MCP approval request (`x_tool_approval_request`) — emitted in manual mode. */
+export interface StreamToolApprovalRequest {
+  tool_call_id: string;
+  name: string;
+  args?: unknown;
+}
+
 export interface StreamDelta {
   content?: string;
   reasoning?: string;
   role?: string;
   finish_reason?: string | null;
+  // Tool-calling wire fields (server already emits these; see tool-loop.ts /
+  // stream-transform.ts). The mobile store accumulates them into
+  // message.toolCalls so InlineToolCall renders the agentic steps.
+  tool_calls?: StreamToolCallFragment[];
+  x_tool_status?: StreamToolStatus;
+  x_tool_result?: StreamToolResult;
+  x_tool_approval_request?: StreamToolApprovalRequest;
+  /** Whole content_block object for a finished server code-execution tool. */
+  x_code_result?: unknown;
+  /** Whole content_block object for a finished server web-search tool. */
+  x_search_results?: unknown;
 }
 
 export interface StreamCallbacks {
