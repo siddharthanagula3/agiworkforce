@@ -1,4 +1,5 @@
 import { Alert } from 'react-native';
+import { router } from 'expo-router';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -119,8 +120,22 @@ function handleUnrecoverableAuth(): void {
     console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
   });
 
+  // Make the prompt actionable: the Clerk login screen at /(auth)/login works —
+  // it was simply never reached. A bare "OK" stranded the user with no path back
+  // into cloud (the P0 dead-end). Offer a Sign In action that routes there.
   Alert.alert('Session Expired', 'Your session has expired. Please sign in again to continue.', [
-    { text: 'OK', style: 'default' },
+    { text: 'Not now', style: 'cancel' },
+    {
+      text: 'Sign In',
+      style: 'default',
+      onPress: () => {
+        try {
+          router.push('/(auth)/login');
+        } catch (err) {
+          if (__DEV__) console.warn('[API] login navigation failed (non-blocking):', err);
+        }
+      },
+    },
   ]);
 }
 
