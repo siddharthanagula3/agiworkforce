@@ -195,7 +195,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             if key.is_none() {
                 return Err(CliError::auth(
                     name,
-                    "No API key found. Run `agi login --provider ollama-cloud` or set OLLAMA_API_KEY."
+                    "No API key found. Run `agi login ollama-cloud` or set OLLAMA_API_KEY."
                         .to_string(),
                 )
                 .into());
@@ -216,7 +216,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 return Err(CliError::auth(
                     *pname,
                     format!(
-                        "No API key found. Run `agi login --provider {}` or set {}.",
+                        "No API key found. Run `agi login {}` or set {}.",
                         pname, env_var
                     ),
                 )
@@ -241,7 +241,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 return Err(CliError::auth(
                     pname.clone(),
                     format!(
-                        "No API key found. Run `agi login --provider {}` or set {}.",
+                        "No API key found. Run `agi login {}` or set {}.",
                         pname, env_var
                     ),
                 )
@@ -264,7 +264,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
                 return Err(CliError::auth(
                     name,
                     format!(
-                        "No API key found. Run `agi login --provider {}` or set {}.",
+                        "No API key found. Run `agi login {}` or set {}.",
                         name, env_var
                     ),
                 )

@@ -508,11 +508,11 @@ export function ChatInterface({
                 conversationId={activeConversationId}
                 projectId={null}
               />
-              {/* Sample-prompt chips below composer per design-spec §8.
-                  Hosts that provide a branded empty state own their own chip row. */}
-              {!hasMessages && emptyStateSlot === undefined && (
-                <QuickChips onChipClick={handleChipClick} />
-              )}
+              {/* Sample-prompt mode chips below the composer (claude.ai parity —
+                  ref: claude_reference/015). This is a composer-area element shown
+                  whenever the chat is empty; it's independent of `emptyStateSlot`,
+                  which owns the content area above (the branded greeting). */}
+              {!hasMessages && <QuickChips onChipClick={handleChipClick} />}
               <Disclaimer variant={disclaimerVariant} />
             </>
           )}

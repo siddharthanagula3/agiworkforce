@@ -1,7 +1,7 @@
 // Markdown → ratatui rendering with syntax highlighting
 // Markdown rendering with syntax highlighting
 
-use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::sync::OnceLock;
@@ -34,9 +34,17 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut current_spans: Vec<Span<'static>> = Vec::new();
 
-    let parser = Parser::new(text);
+    let parser = Parser::new_ext(
+        text,
+        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
+    );
 
     let mut in_code_block = false;
+    let mut in_table_cell = false;
+    let mut current_cell = String::new();
+    let mut current_row: Vec<String> = Vec::new();
+    let mut table_rows: Vec<Vec<String>> = Vec::new();
+    let mut table_header_rows = 0usize;
     let mut code_lang = String::new();
     let mut code_content = String::new();
     let mut in_heading = false;
@@ -169,7 +177,9 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 flush_line(&mut lines, &mut current_spans);
             }
             Event::Text(text) => {
-                if in_code_block {
+                if in_table_cell {
+                    current_cell.push_str(&text);
+                } else if in_code_block {
                     code_content.push_str(&text);
                 } else {
                     let style = if in_bold && in_italic {
@@ -221,12 +231,101 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                     Style::default().fg(ui_muted()),
                 )));
             }
+            Event::Start(Tag::Table(_)) => {
+                flush_line(&mut lines, &mut current_spans);
+                table_rows.clear();
+                current_row.clear();
+                table_header_rows = 0;
+            }
+            Event::Start(Tag::TableHead) | Event::Start(Tag::TableRow) => {
+                current_row.clear();
+            }
+            Event::End(TagEnd::TableHead) => {
+                if !current_row.is_empty() {
+                    table_rows.push(std::mem::take(&mut current_row));
+                    table_header_rows = table_rows.len();
+                }
+            }
+            Event::End(TagEnd::TableRow) => {
+                if !current_row.is_empty() {
+                    table_rows.push(std::mem::take(&mut current_row));
+                }
+            }
+            Event::Start(Tag::TableCell) => {
+                in_table_cell = true;
+                current_cell.clear();
+            }
+            Event::End(TagEnd::TableCell) => {
+                in_table_cell = false;
+                current_row.push(current_cell.trim().to_string());
+            }
+            Event::End(TagEnd::Table) => {
+                lines.extend(render_table(&table_rows, table_header_rows));
+            }
             _ => {}
         }
     }
 
     flush_line(&mut lines, &mut current_spans);
     lines
+}
+
+/// Render a parsed GFM table as bordered, column-aligned terminal lines with a
+/// styled header row and a divider. Column widths are capped so a wide table
+/// can't blow past the pane.
+fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> {
+    if rows.is_empty() {
+        return Vec::new();
+    }
+    let ncols = rows.iter().map(Vec::len).max().unwrap_or(0);
+    if ncols == 0 {
+        return Vec::new();
+    }
+    const MAX_COL: usize = 40;
+    let mut widths = vec![0usize; ncols];
+    for row in rows {
+        for (i, cell) in row.iter().enumerate() {
+            let w = cell.chars().count().min(MAX_COL);
+            if w > widths[i] {
+                widths[i] = w;
+            }
+        }
+    }
+
+    let border = Style::default().fg(ui_muted());
+    let cell_line = |row: &[String], bold: bool| -> Line<'static> {
+        let mut spans: Vec<Span<'static>> = vec![Span::styled("    │ ".to_string(), border)];
+        for (i, w) in widths.iter().enumerate() {
+            let cell = row.get(i).map(String::as_str).unwrap_or("");
+            let truncated: String = cell.chars().take(*w).collect();
+            let style = if bold {
+                Style::default().add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+            spans.push(Span::styled(format!("{truncated:<w$}", w = *w), style));
+            spans.push(Span::styled(" │ ".to_string(), border));
+        }
+        Line::from(spans)
+    };
+    let rule = |left: &str, mid: &str, right: &str| -> Line<'static> {
+        let mut s = format!("    {left}");
+        for (i, w) in widths.iter().enumerate() {
+            s.push_str(&"─".repeat(w + 2));
+            s.push_str(if i + 1 == widths.len() { right } else { mid });
+        }
+        Line::from(Span::styled(s, border))
+    };
+
+    let mut out: Vec<Line<'static>> = vec![rule("┌", "┬", "┐")];
+    for (idx, row) in rows.iter().enumerate() {
+        out.push(cell_line(row, idx < header_rows));
+        if idx + 1 == header_rows {
+            out.push(rule("├", "┼", "┤"));
+        }
+    }
+    out.push(rule("└", "┴", "┘"));
+    out
 }
 
 fn flush_line(lines: &mut Vec<Line<'static>>, spans: &mut Vec<Span<'static>>) {
@@ -293,4 +392,37 @@ fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lines_to_strings(lines: &[Line<'static>]) -> Vec<String> {
+        lines
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn renders_gfm_table_with_borders() {
+        let md = "| Fruit | Color |\n|-------|-------|\n| Apple | Red |\n| Lime | Green |";
+        let rendered = lines_to_strings(&render_markdown(md));
+        for l in &rendered {
+            eprintln!("{l}");
+        }
+        let joined = rendered.join("\n");
+        assert!(joined.contains('┌') && joined.contains('┐'), "top border");
+        assert!(joined.contains('├') && joined.contains('┤'), "header divider");
+        assert!(joined.contains('└') && joined.contains('┘'), "bottom border");
+        assert!(joined.contains("Fruit") && joined.contains("Color"), "header cells");
+        assert!(joined.contains("Apple") && joined.contains("Red"), "row 1");
+        assert!(joined.contains("Lime") && joined.contains("Green"), "row 2");
+    }
 }

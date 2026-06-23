@@ -151,6 +151,24 @@ impl AgentSession {
         }
     }
 
+    /// Reconcile history after a turn was cancelled mid-stream.
+    ///
+    /// `send()` pushes the user message before streaming begins, but a cancelled
+    /// turn never appends an assistant reply. Left as-is, the next `send()` would
+    /// push a second consecutive user message and corrupt the alternation. Append
+    /// the partial assistant text (or a `[stopped]` marker) so history stays a
+    /// valid user→assistant sequence for the next turn.
+    pub fn finalize_cancelled_turn(&mut self, partial: &str) {
+        if self.messages.last().map(|m| m.role.as_str()) == Some("user") {
+            let text = if partial.trim().is_empty() {
+                "[stopped]".to_string()
+            } else {
+                partial.to_string()
+            };
+            self.messages.push(Message::text("assistant", text));
+        }
+    }
+
     /// Send a user message and run the full agentic loop.
     pub async fn send(
         &mut self,
@@ -158,6 +176,11 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        // Complete a pending `/continue-with-byok` handoff only when this message
+        // carries the reviewed draft's BYOK preamble. This is the consent moment —
+        // an unrelated Local message does NOT flip the boundary, so it still blocks
+        // below. (Drafting alone must never leave Local mode.)
+        self.consume_byok_handoff(user_input);
         self.validate_privacy_boundary()?;
 
         // Context compaction: if above 90%, shrink to 70%
@@ -377,14 +400,19 @@ message -- revise and call `update_plan` again.\n\n",
                     if let Some(cli_err) = last_err.downcast_ref::<CliError>() {
                         if cli_err.is_retryable() {
                             let delay = cli_err.retry_delay();
-                            eprintln!(
-                                "  {}",
-                                ts::warning(format!(
-                                    "Retrying in {}s: {}",
-                                    delay.as_secs(),
-                                    cli_err
-                                ))
-                            );
+                            // Suppress the raw stderr notice while the full-screen
+                            // TUI owns the terminal (it would bleed into the live
+                            // spinner frame); exec/REPL still surface it.
+                            if !crate::tui::tui_active() {
+                                eprintln!(
+                                    "  {}",
+                                    ts::warning(format!(
+                                        "Retrying in {}s: {}",
+                                        delay.as_secs(),
+                                        cli_err
+                                    ))
+                                );
+                            }
                             tokio::time::sleep(delay).await;
                             match models::stream_completion(
                                 config,
@@ -1477,14 +1505,18 @@ message -- revise and call `update_plan` again.\n\n",
                     if let Some(cli_err) = e.downcast_ref::<CliError>() {
                         if cli_err.is_retryable() {
                             let delay = cli_err.retry_delay();
-                            eprintln!(
-                                "  {}",
-                                ts::warning(format!(
-                                    "Retrying in {}s: {}",
-                                    delay.as_secs(),
-                                    cli_err
-                                ))
-                            );
+                            // Suppress the raw stderr notice under the TUI (would
+                            // corrupt the live spinner frame); exec/REPL print it.
+                            if !crate::tui::tui_active() {
+                                eprintln!(
+                                    "  {}",
+                                    ts::warning(format!(
+                                        "Retrying in {}s: {}",
+                                        delay.as_secs(),
+                                        cli_err
+                                    ))
+                                );
+                            }
                             tokio::time::sleep(delay).await;
                             models::stream_completion(
                                 config,

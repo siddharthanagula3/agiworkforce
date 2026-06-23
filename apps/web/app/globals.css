@@ -2,6 +2,14 @@
 @import '@agiworkforce/design-tokens/chat.css';
 @plugin "tailwindcss-animate";
 
+/* Shared workspace component packages consumed from source. Tailwind v4 does
+   not auto-scan sibling workspace packages, so utilities used ONLY inside these
+   packages (e.g. arbitrary classes like `bg-[var(--chat-user-bubble-bg)]` in
+   unified-chat) are never generated — silently dropping their theming on pages
+   that render these components directly (projects, artifacts). Scan explicitly. */
+@source "../../../packages/unified-chat/src/**/*.{js,ts,jsx,tsx}";
+@source "../../../packages/ui/src/**/*.{js,ts,jsx,tsx}";
+
 /* OpenDyslexic font for accessibility — DISABLED 2026-05-21.
  *
  * The @font-face declarations referenced

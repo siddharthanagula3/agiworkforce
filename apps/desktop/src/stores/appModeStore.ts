@@ -13,7 +13,11 @@ import { toast } from 'sonner';
 import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import type { PrivacyMode } from '@agiworkforce/types';
 import { storageFallback } from '../lib/storageFallback';
-import { supportsLocalAppMode } from '../lib/tauri-mock';
+// Import directly from the zero-import leaf module, not the heavy `tauri-mock`
+// barrel: pulling this const through the barrel puts it in an import cycle, so it
+// is read (in the zustand initializer below) before the barrel finishes
+// initializing → "Cannot access 'supportsLocalAppMode' before initialization".
+import { supportsLocalAppMode } from '../lib/runtimeEnvironment';
 import { useAuthStore } from './auth';
 import { isChatStoreStreaming } from './chat/chatStoreRef';
 
@@ -127,6 +131,18 @@ export const useAppModeStore = create<AppModeState>()(
     { name: 'AppModeStore', enabled: import.meta.env.DEV },
   ),
 );
+
+// Prime persistence on first load. zustand `persist` lazy-writes only on the
+// first state mutation, so a session that never calls a setter leaves
+// `localStorage['app-mode-store']` absent. The shared unified-chat ModelSelector
+// detects desktop Local mode by reading that key (readPersistedDesktopMode);
+// when it is absent the selector wrongly falls back to the cloud model catalog
+// in Local mode (a trust-boundary-confusing label, not an egress breach — the
+// guard still blocks the call). A one-time no-op setState forces persist to
+// write the current partialized snapshot (mode included) without changing state.
+if (typeof window !== 'undefined' && !window.localStorage.getItem('app-mode-store')) {
+  useAppModeStore.setState((state) => ({ ...state }));
+}
 
 // ---------------------------------------------------------------------------
 // Selectors

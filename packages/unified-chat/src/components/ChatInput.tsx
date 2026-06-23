@@ -86,6 +86,11 @@ export function ChatInput({
   const models = useModelStore((s) => s.models);
   const selectedModel = models.find((m) => m.id === selectedModelId);
   const modelProviderId = (selectedModel?.provider as string) ?? '';
+  // No usable model is selected — e.g. Local mode with no Ollama/BYOK model, where
+  // the selection is reconciled to the empty sentinel. Auto modes ('auto-*') and
+  // concrete IDs are non-empty, so cloud auto-routing stays enabled; only '' means
+  // there is nothing to send to. Block send so a message can't silently no-op.
+  const noModelSelected = selectedModelId.trim() === '';
 
   // Resolve agent control state for the active conversation
   const resolveAgentControl = useAgentControlStore((s) => s.resolve);
@@ -236,7 +241,7 @@ export function ChatInput({
   }, [thumbnailUrls]);
 
   const handleSend = useCallback(() => {
-    if (disabled) return;
+    if (disabled || noModelSelected) return;
     const el = textareaRef.current;
     if (!el) return;
     const content = el.value.trim();
@@ -261,6 +266,7 @@ export function ChatInput({
     setAttachedFiles([]);
   }, [
     disabled,
+    noModelSelected,
     isStreaming,
     onSend,
     conversationId,
@@ -285,9 +291,11 @@ export function ChatInput({
 
   const placeholder = disabled
     ? (disabledMessage ?? 'Connect to start chatting')
-    : hasMessages
-      ? 'Reply...'
-      : 'How can I help you today?';
+    : noModelSelected
+      ? 'Select a model to start'
+      : hasMessages
+        ? 'Reply...'
+        : 'How can I help you today?';
 
   return (
     <div className={cn('mx-auto w-full max-w-3xl px-4 pb-2', className)}>
@@ -477,11 +485,11 @@ export function ChatInput({
                   type="button"
                   onClick={handleSend}
                   aria-label={`Send message (${modKey}+Enter)`}
-                  disabled={disabled}
+                  disabled={disabled || noModelSelected}
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                    disabled
+                    disabled || noModelSelected
                       ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)] cursor-not-allowed'
                       : 'bg-[var(--chat-accent-primary)] text-white hover:opacity-80',
                   )}

@@ -2383,6 +2383,10 @@
     "updater:allow-download",
     "updater:allow-install",
     "updater:allow-download-and-install",
+    "stronghold:default",
+    "stronghold:allow-destroy",
+    "stronghold:allow-remove-store-record",
+    "stronghold:allow-remove-secret",
     {
       "identifier": "shell:allow-open",
       "allow": [

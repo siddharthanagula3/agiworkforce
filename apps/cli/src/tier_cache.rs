@@ -5,6 +5,14 @@
 //! `~/.agiworkforce/cache/tier.toml` so subsequent runs don't block on a
 //! network call.
 //!
+//! ## Tier model
+//! Canonical `ProductTier` (from `packages/types/src/model-catalog.ts`):
+//!   `free` | `pro` | `max` | `enterprise`
+//! The CLI also tracks `byok` for Local/BYOK sessions (not a server-side tier).
+//! Subscription is a flat model — NO token caps, NO credits, NO usage cents.
+//! The single source of truth for tier strings is `normalizeProductTier` in
+//! `packages/types/src/model-catalog.ts`: team→Pro, else unknown→Free (fail-closed).
+//!
 //! ## Flow
 //! 1. Check `~/.agiworkforce/cache/tier.toml` — if present and < 1 h old, return cached tier.
 //! 2. Query `AGIWORKFORCE_API_BASE/api/me` with `Authorization: Bearer <AGIWORKFORCE_JWT>`.
@@ -13,7 +21,7 @@
 //! ## Security
 //! - JWT is read from `AGIWORKFORCE_JWT`, then `~/.agiworkforce/auth.json`
 //!   written by `agi login`, then the legacy `~/.agiworkforce/auth.toml`.
-//! - Request always uses HTTPS.
+//! - Request always uses HTTPS, and only to an allowlisted `*.agiworkforce.com` host.
 //! - Cache file is written atomically via temp-file + rename.
 //! - Timeout: 3 seconds — never blocks interactive startup visibly.
 
@@ -39,6 +47,7 @@ const TIER_FETCH_TIMEOUT: Duration = Duration::from_secs(3);
 const TIER_CACHE_FILE: &str = "cache/tier.toml";
 
 /// Default API base used when `AGIWORKFORCE_API_BASE` is not set.
+/// `/api/me` lives on the root host (verified: apps/web/app/api/me/route.ts).
 const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
 
 // ---------------------------------------------------------------------------
@@ -47,20 +56,20 @@ const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
 
 /// User's current subscription tier as returned by the AGI Workforce API.
 ///
-/// Maps to the `plan_tier` column in the Neon `subscriptions` table.
-/// Keep in sync with the TypeScript `ProductTier` union in
-/// `packages/types/src/model-catalog.ts`.
+/// Mirrors the canonical `ProductTier` union in `packages/types/src/model-catalog.ts`:
+///   `free` | `pro` | `max` | `enterprise`
+/// Plus `Byok` which is a CLI-side classification for Local/BYOK sessions (no server tier).
+///
+/// Keep in sync with `normalizeProductTier` in `packages/types/src/model-catalog.ts`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum UserTier {
     #[default]
     Free,
-    Hobby,
     Pro,
-    #[serde(rename = "pro_plus")]
-    ProPlus,
     Max,
+    Enterprise,
     /// BYOK / Local mode — tier enforcement is the user's responsibility.
     Byok,
 }
@@ -69,41 +78,30 @@ impl UserTier {
     /// Returns the economy-bucket model ID that the CLI should default to when
     /// no explicit `--model` is specified for this tier.
     ///
-    /// Free / Hobby → economy workhorse (first `tierAllowedModels.economy` entry).
-    /// Pro and above → the user chose a managed-cloud tier; auto-economy is still
-    /// the safest default for a CLI where the user hasn't pinned a model.
-    /// BYOK → no managed-cloud default; callers must require `--model`.
+    /// All managed tiers (Free/Pro/Max/Enterprise) default to the economy workhorse
+    /// (first `tierAllowedModels.economy` entry in models.json).  The economy default
+    /// is the safest choice for a CLI where the user hasn't pinned a model; it does NOT
+    /// restrict which models the user can select via `--model`.
+    ///
+    /// BYOK → `None` (no managed-cloud default; callers must require `--model`).
     pub fn default_model_id(&self) -> Option<&'static str> {
         match self {
             UserTier::Free
-            | UserTier::Hobby
             | UserTier::Pro
-            | UserTier::ProPlus
-            | UserTier::Max => Some(crate::model_catalog::economy_default_model()),
+            | UserTier::Max
+            | UserTier::Enterprise => Some(crate::model_catalog::economy_default_model()),
             UserTier::Byok => None,
         }
     }
 
-    /// Human-readable tier label for status-bar display (e.g. "Pro · 2.1M/10M tokens").
+    /// Human-readable tier label for status-bar display.
     pub fn label(&self) -> &'static str {
         match self {
             UserTier::Free => "Free",
-            UserTier::Hobby => "Hobby",
             UserTier::Pro => "Pro",
-            UserTier::ProPlus => "Pro+",
             UserTier::Max => "Max",
+            UserTier::Enterprise => "Enterprise",
             UserTier::Byok => "BYOK",
-        }
-    }
-
-    /// Monthly token cap for this tier (None = unlimited / user-managed).
-    pub fn token_cap(&self) -> Option<u64> {
-        match self {
-            UserTier::Free => Some(100_000),
-            UserTier::Hobby => Some(2_000_000),
-            UserTier::Pro | UserTier::ProPlus => Some(10_000_000),
-            UserTier::Max => Some(50_000_000),
-            UserTier::Byok => None,
         }
     }
 }
@@ -119,16 +117,14 @@ impl std::fmt::Display for UserTier {
 // ---------------------------------------------------------------------------
 
 /// TOML file written to `~/.agiworkforce/cache/tier.toml`.
+/// Only the tier string and timestamp are persisted — no token/credit fields
+/// (the flat subscription model has no usage metering on the CLI side).
 #[derive(Debug, Serialize, Deserialize)]
 struct TierCacheEnvelope {
     /// The resolved tier string (must parse as `UserTier`).
     tier: String,
     /// Unix timestamp (seconds) when the cache was written.
     cached_at: u64,
-    /// Monthly token usage at cache time (optional — for status-bar display).
-    tokens_used: Option<u64>,
-    /// Monthly token cap at cache time (mirrors `UserTier::token_cap()`).
-    tokens_cap: Option<u64>,
 }
 
 fn tier_cache_path() -> PathBuf {
@@ -158,16 +154,12 @@ pub fn read_tier_cache() -> Option<CachedTier> {
     }
 
     let tier = parse_tier_str(&envelope.tier)?;
-    Some(CachedTier {
-        tier,
-        tokens_used: envelope.tokens_used,
-        tokens_cap: envelope.tokens_cap,
-    })
+    Some(CachedTier { tier })
 }
 
 /// Write a fresh tier to the disk cache.  Errors are silently swallowed — a
 /// failed cache write is never fatal.
-pub fn write_tier_cache(tier: &UserTier, tokens_used: Option<u64>, tokens_cap: Option<u64>) {
+pub fn write_tier_cache(tier: &UserTier) {
     let path = tier_cache_path();
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -175,8 +167,6 @@ pub fn write_tier_cache(tier: &UserTier, tokens_used: Option<u64>, tokens_cap: O
     let envelope = TierCacheEnvelope {
         tier: tier_to_str(tier),
         cached_at: now_secs(),
-        tokens_used,
-        tokens_cap,
     };
     if let Ok(content) = toml::to_string(&envelope) {
         // Atomic write: temp file → rename
@@ -192,67 +182,120 @@ pub fn write_tier_cache(tier: &UserTier, tokens_used: Option<u64>, tokens_cap: O
 // ---------------------------------------------------------------------------
 
 /// Minimal shape returned by `GET /api/me`.
-/// The web route nests subscription details under `plan`. Token usage is in
-/// `credits` if present (the response also has user, feature_flags, etc. that
-/// we don't need here).
+/// The web route nests subscription details under `plan`.
+/// We no longer read `credits` — the flat subscription model has no per-use credits.
 #[derive(Debug, Deserialize)]
 struct MeApiResponse {
     plan: Option<MePlan>,
-    #[serde(default)]
-    credits: Option<MeCredits>,
 }
 
 #[derive(Debug, Deserialize)]
 struct MePlan {
-    /// e.g. `"hobby"`, `"pro"`, `"free"`.
+    /// e.g. `"free"`, `"pro"`, `"max"`, `"enterprise"`, `"team"`.
     tier: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct MeCredits {
-    #[serde(default)]
-    used_cents: Option<u64>,
-    #[serde(default)]
-    allocated_cents: Option<u64>,
+// ---------------------------------------------------------------------------
+// Resolution result
+// ---------------------------------------------------------------------------
+
+/// The resolved tier (from cache or network) and whether a 401 was seen.
+/// A 401 means the managed token has expired and the user should re-authenticate.
+#[derive(Debug, Clone, Default)]
+pub struct TierResolution {
+    /// The resolved tier, if available (from cache or network).
+    pub cached: Option<CachedTier>,
+    /// True when the network returned HTTP 401 — signals the caller to print a
+    /// re-auth hint.  Callers MUST NOT block Local/BYOK runs when this is true.
+    pub needs_reauth: bool,
 }
 
-// ---------------------------------------------------------------------------
-// Public resolved type
-// ---------------------------------------------------------------------------
-
-/// The resolved tier (from cache or network) plus optional usage figures for
-/// the status-bar display.
+/// The resolved tier (from cache or network).
 #[derive(Debug, Clone)]
 pub struct CachedTier {
     pub tier: UserTier,
-    /// Tokens consumed in the current billing period (None if unknown).
-    pub tokens_used: Option<u64>,
-    /// Monthly cap (None for BYOK/Local).
-    pub tokens_cap: Option<u64>,
 }
 
 impl CachedTier {
-    /// Format a short status string for the TUI footer: `"Hobby · 1.3M/2M"`.
+    /// Format a short status string for the TUI footer showing tier label only.
+    /// The flat subscription model has no per-session token counters.
     pub fn status_label(&self) -> String {
-        match (self.tokens_used, self.tokens_cap) {
-            (Some(used), Some(cap)) => format!(
-                "{} · {}/{}",
-                self.tier.label(),
-                format_token_count(used),
-                format_token_count(cap),
-            ),
-            _ => self.tier.label().to_string(),
-        }
+        self.tier.label().to_string()
     }
 }
 
-fn format_token_count(n: u64) -> String {
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.0}K", n as f64 / 1_000.0)
+// ---------------------------------------------------------------------------
+// Host allowlist helper
+// ---------------------------------------------------------------------------
+
+/// Resolve the API base URL, applying an allowlist that requires:
+/// - https:// scheme, AND
+/// - host that ends with `agiworkforce.com` (exact match or subdomain).
+///
+/// This closes the JWT-exfiltration risk where an attacker-controlled
+/// `AGIWORKFORCE_API_BASE` env var would cause the CLI to send the Bearer
+/// token to an arbitrary host.
+///
+/// Returns `None` (skip fetch, log warning) if the URL fails the allowlist.
+/// Pass `raw` as the raw env-var value (or `DEFAULT_API_BASE` as the default).
+pub fn resolve_agi_api_base(raw: &str) -> Option<String> {
+    if !raw.starts_with("https://") {
+        tracing::warn!(
+            "[tier_cache] API base '{}' is not HTTPS — skipping tier fetch",
+            raw
+        );
+        return None;
+    }
+
+    // Extract the host portion: everything after "https://" up to the first "/" or end.
+    let after_scheme = &raw["https://".len()..];
+    let host = after_scheme.split('/').next().unwrap_or("");
+
+    // Host must be exactly "agiworkforce.com" or end with ".agiworkforce.com".
+    let host_ok =
+        host == "agiworkforce.com" || host.ends_with(".agiworkforce.com");
+
+    if !host_ok {
+        tracing::warn!(
+            "[tier_cache] AGIWORKFORCE_API_BASE host '{}' is not an agiworkforce.com domain — skipping tier fetch to prevent token exfiltration",
+            host
+        );
+        return None;
+    }
+
+    Some(raw.trim_end_matches('/').to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Tier rank helper (for free-doesn't-clobber-higher logic)
+// ---------------------------------------------------------------------------
+
+/// Numeric rank for reconcile logic: higher rank = higher privilege.
+/// Byok is orthogonal (not a managed tier), ranked 0.
+/// Enterprise is ranked >= Max.
+fn tier_rank(t: &UserTier) -> u8 {
+    match t {
+        UserTier::Byok => 0,
+        UserTier::Free => 1,
+        UserTier::Pro => 2,
+        UserTier::Max => 3,
+        UserTier::Enterprise => 4,
+    }
+}
+
+/// Reconcile a freshly-fetched tier against a still-valid cached tier.
+///
+/// `/api/me` fails OPEN to `plan.tier='free'` on transient DB/auth errors,
+/// so a freshly-fetched `Free` is non-authoritative when a higher tier is
+/// still valid in the cache.  Prefer the cached tier in that case.
+///
+/// If the fetched tier is higher (or equal), use the fetched tier (cache refresh).
+pub fn reconcile_fetched_tier(fetched: &UserTier, cached: &UserTier) -> UserTier {
+    if tier_rank(fetched) >= tier_rank(cached) {
+        fetched.clone()
     } else {
-        n.to_string()
+        // fetched is lower (e.g. Free returned on a DB hiccup) — keep cached.
+        cached.clone()
     }
 }
 
@@ -265,88 +308,159 @@ fn format_token_count(n: u64) -> String {
 /// This function is intentionally non-blocking at the call site: it uses
 /// `tokio::time::timeout` so it never exceeds `TIER_FETCH_TIMEOUT` (3 s).
 ///
+/// Returns a `TierResolution` with:
+///   - `cached`: the resolved tier (from cache or network)
+///   - `needs_reauth`: true when the network returned HTTP 401
+///
 /// # Arguments
 /// * `jwt` — AGI Workforce JWT (Bearer token).  If `None`, we skip
 ///   the network call and return only what's in the cache.
-pub async fn resolve_user_tier(jwt: Option<&str>) -> Option<CachedTier> {
+pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
     // Fast path: return fresh cache without touching the network.
     if let Some(cached) = read_tier_cache() {
-        return Some(cached);
+        return TierResolution {
+            cached: Some(cached),
+            needs_reauth: false,
+        };
     }
 
     // No cache or expired — try the network if we have credentials.
-    let jwt = jwt?;
-    if jwt.is_empty() {
-        return None;
-    }
+    let jwt = match jwt {
+        Some(j) if !j.is_empty() => j,
+        _ => {
+            return TierResolution {
+                cached: None,
+                needs_reauth: false,
+            }
+        }
+    };
 
-    let api_base =
+    let raw_base =
         std::env::var("AGIWORKFORCE_API_BASE").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
 
-    // Safety: only HTTPS allowed.
-    if !api_base.starts_with("https://") {
-        tracing::warn!("[tier_cache] AGIWORKFORCE_API_BASE is not HTTPS — skipping tier fetch");
-        return None;
-    }
+    let api_base = match resolve_agi_api_base(&raw_base) {
+        Some(b) => b,
+        None => {
+            return TierResolution {
+                cached: None,
+                needs_reauth: false,
+            }
+        }
+    };
 
-    let url = format!("{}/api/me", api_base.trim_end_matches('/'));
+    let url = format!("{}/api/me", api_base);
 
     let result = tokio::time::timeout(TIER_FETCH_TIMEOUT, fetch_tier_from_api(&url, jwt)).await;
 
     match result {
         Ok(Ok(resp)) => {
-            // Extract tier from nested plan object (apps/web /api/me shape).
-            let tier_str = resp.plan.as_ref().and_then(|p| p.tier.clone())?;
-            let tier = parse_tier_str(&tier_str)?;
-            // Tokens used/cap come from credits object if present. We expose
-            // these in the status bar; cents → tokens conversion is approximate
-            // (1 cent ≈ 1K tokens for budget models — not exact but useful for
-            // the rough "X / Y" status display).
-            let tokens_used = resp
-                .credits
-                .as_ref()
-                .and_then(|c| c.used_cents)
-                .map(|c| c * 1000);
-            let tokens_cap = resp
-                .credits
-                .as_ref()
-                .and_then(|c| c.allocated_cents)
-                .map(|c| c * 1000);
-            write_tier_cache(&tier, tokens_used, tokens_cap);
-            Some(CachedTier {
-                tier,
-                tokens_used,
-                tokens_cap,
-            })
+            let tier_str = match resp.plan.as_ref().and_then(|p| p.tier.as_deref()) {
+                Some(s) => s.to_string(),
+                None => {
+                    tracing::debug!("[tier_cache] /api/me returned no plan.tier");
+                    return TierResolution {
+                        cached: None,
+                        needs_reauth: false,
+                    };
+                }
+            };
+
+            // Fail-closed: unknown tier strings → Free (never crash, never silently grant
+            // a higher tier).
+            let fetched_tier = parse_tier_str(&tier_str);
+
+            // If fetch returns Free, prefer any valid higher-ranked cache entry
+            // (handles /api/me failing-open to 'free' on transient DB errors).
+            // Note: we just checked the cache above (fast path); if we reach here the
+            // cache was expired/absent, so no live cached tier to protect.
+            // We still run reconcile in case a stale-but-readable entry exists.
+            let existing_cache = read_tier_cache();
+            let resolved = match (fetched_tier, existing_cache) {
+                (Some(fetched), Some(existing)) => reconcile_fetched_tier(&fetched, &existing.tier),
+                (Some(fetched), None) => fetched,
+                (None, Some(existing)) => existing.tier, // unknown string → keep cache
+                (None, None) => {
+                    // Unknown server tier string — fail-closed to Free.
+                    tracing::debug!(
+                        "[tier_cache] Unknown tier string '{}' from /api/me — defaulting to Free (fail-closed)",
+                        tier_str
+                    );
+                    UserTier::Free
+                }
+            };
+
+            write_tier_cache(&resolved);
+            TierResolution {
+                cached: Some(CachedTier { tier: resolved }),
+                needs_reauth: false,
+            }
         }
-        Ok(Err(e)) => {
+        Ok(Err(FetchError::Unauthorized)) => {
+            tracing::debug!("[tier_cache] /api/me returned 401 — managed token expired");
+            // Do NOT write 'free' to cache on a 401; the token is expired, not the tier.
+            TierResolution {
+                cached: None,
+                needs_reauth: true,
+            }
+        }
+        Ok(Err(FetchError::Other(e))) => {
             tracing::debug!("[tier_cache] tier fetch failed: {e}");
-            None
+            TierResolution {
+                cached: None,
+                needs_reauth: false,
+            }
         }
         Err(_) => {
             tracing::debug!("[tier_cache] tier fetch timed out after {TIER_FETCH_TIMEOUT:?}");
-            None
+            TierResolution {
+                cached: None,
+                needs_reauth: false,
+            }
         }
     }
 }
 
-async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse> {
+#[derive(Debug)]
+enum FetchError {
+    Unauthorized,
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for FetchError {
+    fn from(e: anyhow::Error) -> Self {
+        FetchError::Other(e)
+    }
+}
+
+async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse, FetchError> {
     let client = reqwest::Client::builder()
         .timeout(TIER_FETCH_TIMEOUT)
-        .build()?;
+        .build()
+        .map_err(|e| FetchError::Other(anyhow::anyhow!("{e}")))?;
 
     let resp = client
         .get(url)
         .header("Authorization", format!("Bearer {jwt}"))
         .header("Accept", "application/json")
         .send()
-        .await?;
+        .await
+        .map_err(|e| FetchError::Other(anyhow::anyhow!("{e}")))?;
 
-    if !resp.status().is_success() {
-        anyhow::bail!("tier API returned HTTP {}", resp.status().as_u16());
+    if resp.status().as_u16() == 401 {
+        return Err(FetchError::Unauthorized);
     }
 
-    let body: MeApiResponse = resp.json().await?;
+    if !resp.status().is_success() {
+        return Err(FetchError::Other(anyhow::anyhow!(
+            "tier API returned HTTP {}",
+            resp.status().as_u16()
+        )));
+    }
+
+    let body: MeApiResponse = resp
+        .json()
+        .await
+        .map_err(|e| FetchError::Other(anyhow::anyhow!("{e}")))?;
     Ok(body)
 }
 
@@ -354,13 +468,25 @@ async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse> {
 // String ↔ UserTier helpers
 // ---------------------------------------------------------------------------
 
+/// Map a server-returned tier string to `UserTier`.
+///
+/// Mirrors `normalizeProductTier` in `packages/types/src/model-catalog.ts`:
+///   "free"             → `Free`
+///   "pro" | "team"     → `Pro`   (Clerk "team" plan normalizes to Pro)
+///   "max"              → `Max`
+///   "enterprise"       → `Enterprise`
+///   "byok" | "local"   → `Byok`  (CLI-only, never emitted by the server)
+///   <unknown>          → `None`  (callers should treat as fail-closed Free)
+///
+/// FAIL-CLOSED: an unrecognized server string returns `None` so it is never
+/// silently promoted to a higher tier.  Callers default unresolved strings to
+/// `UserTier::Free`.
 fn parse_tier_str(s: &str) -> Option<UserTier> {
     match s.to_lowercase().as_str() {
         "free" => Some(UserTier::Free),
-        "hobby" => Some(UserTier::Hobby),
-        "pro" => Some(UserTier::Pro),
-        "pro_plus" | "pro+" => Some(UserTier::ProPlus),
-        "max" | "enterprise" => Some(UserTier::Max),
+        "pro" | "team" => Some(UserTier::Pro),
+        "max" => Some(UserTier::Max),
+        "enterprise" => Some(UserTier::Enterprise),
         "byok" | "local" => Some(UserTier::Byok),
         _ => None,
     }
@@ -369,10 +495,9 @@ fn parse_tier_str(s: &str) -> Option<UserTier> {
 fn tier_to_str(t: &UserTier) -> String {
     match t {
         UserTier::Free => "free",
-        UserTier::Hobby => "hobby",
         UserTier::Pro => "pro",
-        UserTier::ProPlus => "pro_plus",
         UserTier::Max => "max",
+        UserTier::Enterprise => "enterprise",
         UserTier::Byok => "byok",
     }
     .to_string()
@@ -443,26 +568,45 @@ pub fn load_jwt() -> Option<String> {
 mod tests {
     use super::*;
 
+    // -- parse_tier_str tests -----------------------------------------------
+
     #[test]
-    fn parse_tier_str_recognizes_all_variants() {
+    fn parse_tier_str_canonical_variants() {
         assert_eq!(parse_tier_str("free"), Some(UserTier::Free));
-        assert_eq!(parse_tier_str("hobby"), Some(UserTier::Hobby));
         assert_eq!(parse_tier_str("pro"), Some(UserTier::Pro));
-        assert_eq!(parse_tier_str("pro_plus"), Some(UserTier::ProPlus));
-        assert_eq!(parse_tier_str("pro+"), Some(UserTier::ProPlus));
         assert_eq!(parse_tier_str("max"), Some(UserTier::Max));
-        assert_eq!(parse_tier_str("enterprise"), Some(UserTier::Max));
+        assert_eq!(parse_tier_str("enterprise"), Some(UserTier::Enterprise));
         assert_eq!(parse_tier_str("byok"), Some(UserTier::Byok));
         assert_eq!(parse_tier_str("local"), Some(UserTier::Byok));
-        assert_eq!(parse_tier_str("unknown"), None);
     }
 
     #[test]
+    fn parse_tier_str_team_normalizes_to_pro() {
+        // Mirrors packages/types normalizeProductTier: "team" → Pro
+        assert_eq!(parse_tier_str("team"), Some(UserTier::Pro));
+    }
+
+    #[test]
+    fn parse_tier_str_enterprise_is_distinct() {
+        // Enterprise is NOT collapsed to Max — it has its own variant.
+        assert_eq!(parse_tier_str("enterprise"), Some(UserTier::Enterprise));
+    }
+
+    #[test]
+    fn parse_tier_str_unknown_is_none_fail_closed() {
+        // Unknown strings return None (fail-closed — callers default to Free).
+        assert_eq!(parse_tier_str("unknown_tier"), None);
+        assert_eq!(parse_tier_str(""), None);
+        assert_eq!(parse_tier_str("hobby"), None);
+        assert_eq!(parse_tier_str("pro_plus"), None);
+    }
+
+    // -- default_model_id tests ---------------------------------------------
+
+    #[test]
     fn free_tier_default_model_is_economy() {
-        // The free tier's default model must exist in the economy bucket.
         let model = UserTier::Free.default_model_id();
         assert!(model.is_some(), "Free tier must have a default model ID");
-        // Verify it's not empty
         assert!(
             !model.unwrap().is_empty(),
             "Default model ID must not be empty"
@@ -470,49 +614,112 @@ mod tests {
     }
 
     #[test]
+    fn enterprise_tier_default_model_is_economy() {
+        let model = UserTier::Enterprise.default_model_id();
+        assert!(model.is_some(), "Enterprise tier must have a default model ID");
+    }
+
+    #[test]
     fn byok_has_no_default_model() {
         assert_eq!(UserTier::Byok.default_model_id(), None);
     }
 
-    #[test]
-    fn status_label_formats_token_counts() {
-        let cached = CachedTier {
-            tier: UserTier::Hobby,
-            tokens_used: Some(1_320_000),
-            tokens_cap: Some(2_000_000),
-        };
-        let label = cached.status_label();
-        assert!(
-            label.contains("Hobby"),
-            "Label should contain tier name: {label}"
-        );
-        assert!(
-            label.contains("1.3M"),
-            "Label should format used tokens: {label}"
-        );
-        assert!(
-            label.contains("2.0M"),
-            "Label should format cap tokens: {label}"
-        );
-    }
+    // -- status_label tests -------------------------------------------------
 
     #[test]
-    fn status_label_no_tokens_shows_tier_only() {
+    fn status_label_shows_tier_only() {
+        // Flat subscription: no token counters, just the label.
         let cached = CachedTier {
             tier: UserTier::Pro,
-            tokens_used: None,
-            tokens_cap: None,
         };
         assert_eq!(cached.status_label(), "Pro");
+
+        let cached = CachedTier {
+            tier: UserTier::Max,
+        };
+        assert_eq!(cached.status_label(), "Max");
+
+        let cached = CachedTier {
+            tier: UserTier::Enterprise,
+        };
+        assert_eq!(cached.status_label(), "Enterprise");
+
+        let cached = CachedTier {
+            tier: UserTier::Free,
+        };
+        assert_eq!(cached.status_label(), "Free");
+    }
+
+    // -- resolve_agi_api_base allowlist tests --------------------------------
+
+    #[test]
+    fn resolve_agi_api_base_accepts_root_host() {
+        assert_eq!(
+            resolve_agi_api_base("https://agiworkforce.com"),
+            Some("https://agiworkforce.com".to_string())
+        );
     }
 
     #[test]
-    fn format_token_count_scales_correctly() {
-        assert_eq!(format_token_count(500), "500");
-        assert_eq!(format_token_count(1_500), "2K");
-        assert_eq!(format_token_count(1_000_000), "1.0M");
-        assert_eq!(format_token_count(2_100_000), "2.1M");
+    fn resolve_agi_api_base_accepts_subdomain() {
+        assert_eq!(
+            resolve_agi_api_base("https://api.agiworkforce.com"),
+            Some("https://api.agiworkforce.com".to_string())
+        );
     }
+
+    #[test]
+    fn resolve_agi_api_base_rejects_evil_host() {
+        // An attacker-set env var must not cause the JWT to be sent to evil.com.
+        assert_eq!(resolve_agi_api_base("https://evil.com"), None);
+        assert_eq!(resolve_agi_api_base("https://evil.agiworkforce.com.evil.com"), None);
+    }
+
+    #[test]
+    fn resolve_agi_api_base_rejects_http() {
+        assert_eq!(resolve_agi_api_base("http://agiworkforce.com"), None);
+    }
+
+    #[test]
+    fn resolve_agi_api_base_strips_trailing_slash() {
+        assert_eq!(
+            resolve_agi_api_base("https://agiworkforce.com/"),
+            Some("https://agiworkforce.com".to_string())
+        );
+    }
+
+    // -- reconcile_fetched_tier tests ----------------------------------------
+
+    #[test]
+    fn reconcile_fetched_free_does_not_clobber_higher_cached_tier() {
+        // /api/me fails-open to 'free' on transient errors; cached Pro must survive.
+        let result = reconcile_fetched_tier(&UserTier::Free, &UserTier::Pro);
+        assert_eq!(result, UserTier::Pro);
+
+        let result = reconcile_fetched_tier(&UserTier::Free, &UserTier::Max);
+        assert_eq!(result, UserTier::Max);
+
+        let result = reconcile_fetched_tier(&UserTier::Free, &UserTier::Enterprise);
+        assert_eq!(result, UserTier::Enterprise);
+    }
+
+    #[test]
+    fn reconcile_higher_fetched_tier_upgrades_cache() {
+        // A genuine tier upgrade from the server should be reflected.
+        let result = reconcile_fetched_tier(&UserTier::Max, &UserTier::Pro);
+        assert_eq!(result, UserTier::Max);
+
+        let result = reconcile_fetched_tier(&UserTier::Pro, &UserTier::Free);
+        assert_eq!(result, UserTier::Pro);
+    }
+
+    #[test]
+    fn reconcile_same_tier_is_idempotent() {
+        let result = reconcile_fetched_tier(&UserTier::Pro, &UserTier::Pro);
+        assert_eq!(result, UserTier::Pro);
+    }
+
+    // -- JWT helpers tests --------------------------------------------------
 
     #[test]
     fn jwt_from_auth_store_reads_agiworkforce_oauth_access_token() {
@@ -543,18 +750,17 @@ mod tests {
         );
     }
 
+    // -- TOML round-trip test -----------------------------------------------
+
     #[test]
     fn tier_cache_roundtrip_toml() {
-        // Verify TOML serialization round-trips cleanly.
         let envelope = TierCacheEnvelope {
-            tier: "hobby".to_string(),
+            tier: "pro".to_string(),
             cached_at: 1_746_000_000,
-            tokens_used: Some(500_000),
-            tokens_cap: Some(2_000_000),
         };
         let serialized = toml::to_string(&envelope).expect("should serialize");
         let back: TierCacheEnvelope = toml::from_str(&serialized).expect("should deserialize");
-        assert_eq!(back.tier, "hobby");
-        assert_eq!(back.tokens_used, Some(500_000));
+        assert_eq!(back.tier, "pro");
+        assert_eq!(back.cached_at, 1_746_000_000);
     }
 }

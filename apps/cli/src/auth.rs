@@ -346,7 +346,20 @@ const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
 /// Public per OAuth spec (not a secret). Registered via OpenAI developer portal.
 const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
-const AGIWORKFORCE_API_BASE: &str = "https://api.agiworkforce.com";
+// HOST FOOTGUN NOTE: There are three different hosts in the AGI Workforce surface:
+//   - https://api.agiworkforce.com   — device code login endpoints (oauth.rs device_code_login),
+//                                      used by this const
+//   - https://agiworkforce.com       — /api/me tier lookup (tier_cache::DEFAULT_API_BASE),
+//                                      used by resolve_user_tier()
+//   - https://cloud.agiworkforce.com — managed inference API (cloud.rs CloudConfig, private beta)
+//
+// These MUST NOT be conflated. The unauthenticated device-grant endpoints now
+// live on the web origin (apps/web: POST /api/auth/device/code + /token), so the
+// base targets `agiworkforce.com/api`. The base MUST include `/api` because
+// `device_code_login` appends `/auth/device/code` (→ `/api/auth/device/code`).
+// Override with AGI_AUTH_BASE (e.g. `http://localhost:3000/api`) to test against
+// a local `next dev` web server.
+const AGIWORKFORCE_API_BASE: &str = "https://agiworkforce.com/api";
 /// Maximum number of polling attempts during device code authentication (5s intervals = 5min).
 const MAX_POLL_ATTEMPTS: u32 = 60;
 
@@ -805,6 +818,14 @@ pub async fn resolve_auth(
                 Some("https://chatgpt.com/backend-api/codex/responses".to_string()),
             )))
         }
+        // INTENTIONAL SEAM — managed AGI Workforce cloud auth is NOT wired here.
+        // A future "agiworkforce" / "managed_cloud" arm is BLOCKED on:
+        //   (a) a proven headless token-grant endpoint (device code or browser-link/poll),
+        //   (b) managed-cloud beta exit with ledger, abuse, refund, and retention controls,
+        //   (c) explicit user consent + visible provider label at every inference call.
+        // When that arm is added it MUST preserve the Local/BYOK trust boundary:
+        // Local and BYOK sessions must never be silently routed through managed cloud.
+        // See the HOST FOOTGUN NOTE near AGIWORKFORCE_API_BASE for the three-host context.
         _ => Ok(None),
     }
 }
@@ -869,7 +890,14 @@ pub(crate) fn is_agiworkforce_login_provider(provider: Option<&str>) -> bool {
 }
 
 pub async fn login_agiworkforce() -> Result<()> {
-    let entry = crate::oauth::device_code_login(AGIWORKFORCE_API_BASE).await?;
+    // Allow pointing the device-auth flow at a local `next dev` web server
+    // (AGI_AUTH_BASE=http://localhost:3000/api); defaults to the production web
+    // origin's API. The base must include `/api` (see AGIWORKFORCE_API_BASE).
+    let base = std::env::var("AGI_AUTH_BASE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| AGIWORKFORCE_API_BASE.to_string());
+    let entry = crate::oauth::device_code_login(&base).await?;
     save_auth_entry(AGIWORKFORCE_AUTH_KEY, entry)
 }
 

@@ -1,11 +1,19 @@
 /**
  * v3 empty-chat surface.
  *
- * Per founder request (2026-06-13), the welcome greeting and mode badge are
- * intentionally not rendered — the empty chat is composer-only. Kept as a
- * mount point (wired via ChatInterface `emptyStateSlot`) so a future
- * empty-state treatment can be reintroduced without re-threading the slot.
+ * Renders the centered, time-aware branded greeting in the empty chat content
+ * area. Mirrors the Claude web empty-state structure (a centered greeting block
+ * above the composer — ref: claude_reference/015_web-free__home-composer.png)
+ * while keeping AGI's own brand styling. The composer stays pinned at the bottom
+ * per the v3 layout (ChatInterface keeps the input area in natural flow); this
+ * fills the `emptyStateSlot` so the empty chat is no longer a blank canvas.
  */
+import { BrandedGreeting } from '../chat/BrandedGreeting';
+
 export function EmptyChat() {
-  return null;
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center px-6">
+      <BrandedGreeting />
+    </div>
+  );
 }

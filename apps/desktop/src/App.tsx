@@ -715,6 +715,24 @@ const DesktopShell = () => {
             ),
         }));
         useChatModelStore.getState().setModels(chatModels);
+        // Mode-safe selection: keep the active model consistent with the mode's
+        // available set. In Local mode an auto-routing / cloud model must never
+        // stay active — the egress guard blocks cloud calls in Local mode, so a
+        // stale "Auto Economy" (managed_cloud) selection routes to a blocked
+        // cloud model and fails silently. If the current selection isn't in the
+        // set, drop onto the first local/BYOK model (or clear, so the picker's
+        // "No local model" empty-state guides the user); in cloud mode fall back
+        // to the default auto-routing model.
+        {
+          const ms = useChatModelStore.getState();
+          const nextId = currentMode === 'local' ? (ms.models[0]?.id ?? '') : 'auto-economy';
+          if (
+            !ms.models.some((m) => m.id === ms.selectedModelId) &&
+            nextId !== ms.selectedModelId
+          ) {
+            ms.selectModel(nextId);
+          }
+        }
       } catch {
         // Backend unavailable — try cloud API in web mode, then fall back to hardcoded defaults
         try {
@@ -782,6 +800,19 @@ const DesktopShell = () => {
               ];
             });
           useChatModelStore.getState().setModels(fallbackModels);
+          // Mode-safe selection (see primary path above): never leave a cloud /
+          // auto model active in Local mode (egress-guarded → silent fail); fall
+          // back to the default auto-routing model in cloud mode.
+          {
+            const ms = useChatModelStore.getState();
+            const nextId = currentMode === 'local' ? (ms.models[0]?.id ?? '') : 'auto-economy';
+            if (
+              !ms.models.some((m) => m.id === ms.selectedModelId) &&
+              nextId !== ms.selectedModelId
+            ) {
+              ms.selectModel(nextId);
+            }
+          }
           if (currentMode === 'local' && fallbackModels.length === 0) {
             toast.info(
               'No local or BYOK models detected yet. Add Ollama or an API key in Settings.',

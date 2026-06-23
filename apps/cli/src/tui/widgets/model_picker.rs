@@ -126,9 +126,9 @@ impl ModelPickerState {
                         if query.is_empty() {
                             return true;
                         }
-                        m.id.to_lowercase().contains(&query)
-                            || disp.label.to_lowercase().contains(&query)
-                            || m.display_name.to_lowercase().contains(&query)
+                        crate::tui::fuzzy::fuzzy_score(&query, &m.id).is_some()
+                            || crate::tui::fuzzy::fuzzy_score(&query, disp.label).is_some()
+                            || crate::tui::fuzzy::fuzzy_score(&query, &m.display_name).is_some()
                     })
                     .cloned()
                     .collect();
@@ -228,12 +228,20 @@ impl ModelPickerState {
         }
     }
 
-    /// True when the effort selector should be shown (provider supports effort
-    /// and we are on a model row).
+    /// True when the effort/thinking selector should be shown: the highlighted
+    /// MODEL must actually support reasoning (catalog `supports_reasoning`, from
+    /// the SSOT `capabilities.thinking`) AND its provider must expose an effort
+    /// knob. Gating on the provider alone wrongly showed the control for
+    /// non-reasoning models such as claude-haiku-4-5.
     pub fn show_effort_bar(&self) -> bool {
-        self.selected_provider_id()
+        let model_reasons = self
+            .selected_model()
+            .is_some_and(|m| m.supports_reasoning);
+        let provider_has_effort = self
+            .selected_provider_id()
             .map(|pid| provider_display(pid).supports_effort)
-            .unwrap_or(false)
+            .unwrap_or(false);
+        model_reasons && provider_has_effort
     }
 
     /// Reset picker to initial state (keep search, reset cursor).
@@ -489,7 +497,14 @@ fn format_model_row(
         );
     }
 
-    let suffix = format!("  {:<12} {:>4}K ctx", tier_label, ctx_k);
+    // Local models discovered at runtime don't report a context window
+    // (Ollama's /api/tags omits it), so show "—" instead of a bogus "0K ctx".
+    let ctx_col = if ctx_k == 0 {
+        format!("{:>9}", "—")
+    } else {
+        format!("{ctx_k:>4}K ctx")
+    };
+    let suffix = format!("  {tier_label:<12} {ctx_col}");
     let id_width = row_width
         .saturating_sub(prefix.chars().count() + suffix.chars().count())
         .clamp(12, 34);
@@ -697,6 +712,35 @@ mod tests {
             .collect()
     }
 
+    fn model_with_reasoning(id: &str, provider: &str, reasoning: bool) -> Model {
+        serde_json::from_str(&format!(
+            "{{\"id\":\"{id}\",\"provider\":\"{provider}\",\"display_name\":\"{id}\",\"context_window\":8192,\"max_output_tokens\":4096,\"input_price_per_1m\":0.0,\"output_price_per_1m\":0.0,\"supports_tools\":true,\"supports_vision\":false,\"supports_reasoning\":{reasoning}}}"
+        ))
+        .expect("model fixture")
+    }
+
+    #[test]
+    fn effort_bar_depends_on_model_reasoning_not_just_provider() {
+        // The Anthropic provider exposes an effort knob, but the bar must follow
+        // the highlighted MODEL's reasoning capability: non-reasoning
+        // claude-haiku-4-5 hides it, reasoning claude-sonnet-4-6 shows it.
+        let models = vec![
+            model_with_reasoning("claude-haiku-4-5", "anthropic", false),
+            model_with_reasoning("claude-sonnet-4-6", "anthropic", true),
+        ];
+        let mut picker = ModelPickerState::default();
+        picker.open(&models, "claude-haiku-4-5");
+        assert!(
+            !picker.show_effort_bar(),
+            "non-reasoning haiku must not show the effort bar"
+        );
+        picker.open(&models, "claude-sonnet-4-6");
+        assert!(
+            picker.show_effort_bar(),
+            "reasoning sonnet must show the effort bar"
+        );
+    }
+
     #[test]
     fn provider_access_modes_classify_correctly() {
         assert_eq!(ProviderId::Ollama.access_mode(), AccessMode::Local);
@@ -709,6 +753,43 @@ mod tests {
         assert_eq!(ProviderId::OpenAI.access_mode(), AccessMode::Byok);
         assert_eq!(ProviderId::DeepSeek.access_mode(), AccessMode::Byok);
         assert_eq!(ProviderId::AGICloud.access_mode(), AccessMode::Cloud);
+    }
+
+    #[test]
+    fn rebuild_lists_openrouter_models_under_byok() {
+        // Mirrors the live path: catalog models + OpenRouter models (as
+        // openrouter_models::load_cached_models() produces, provider="openrouter").
+        let models = vec![
+            model("claude-opus-4-8", "anthropic"),
+            model("qwen/qwen3-max", "openrouter"),
+            model("openai/gpt-4o-mini", "openrouter"),
+        ];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        // OpenRouter is a BYOK provider — it must get its own provider section.
+        let has_openrouter_header = state.rows.iter().any(|r| {
+            matches!(r, PickerRow::ProviderHeader { provider_id } if *provider_id == ProviderId::OpenRouter)
+        });
+        assert!(
+            has_openrouter_header,
+            "picker should list an OpenRouter provider section under BYOK"
+        );
+
+        // ...with its models selectable.
+        let openrouter_models: Vec<&str> = state
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                PickerRow::ModelRow {
+                    provider_id: ProviderId::OpenRouter,
+                    model,
+                } => Some(model.id.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(openrouter_models.contains(&"qwen/qwen3-max"));
+        assert!(openrouter_models.contains(&"openai/gpt-4o-mini"));
     }
 
     #[test]
