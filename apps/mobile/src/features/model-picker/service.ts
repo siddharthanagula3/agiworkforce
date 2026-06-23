@@ -360,12 +360,31 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
   return applyEnvironmentGate(def, undefined);
 }
 
+// Public-facing capability labels for specific cloud models: we surface what the
+// model is good for ("Super Fast", "Thinking") instead of the raw model id, while
+// the provider logo still identifies who makes it. Scoped to explicit ids so every
+// other model keeps its real name until we deliberately extend this mapping.
+// FIXME(P1): migrate these labels to a catalog-driven capability/label field so the
+// model-id keys are not hardcoded here (mobile cheapest-tier display names).
+/* eslint-disable no-restricted-syntax -- curated mobile display-name map; explicit model ids are intentional and degrade gracefully (override simply not applied if an id is renamed) */
+const CLOUD_DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+  'gpt-4.1-nano': 'Super Fast', // OpenAI: no reasoning tokens — fastest, cheapest
+  'gemini-3.1-flash-lite': 'Super Fast', // Google: cheapest fast chat model
+  'qwen-flash': 'Super Fast', // Qwen: cheap general-chat (cloud-only; ~403 conv/$1)
+  'gpt-5-nano': 'Thinking', // OpenAI: supports reasoning tokens
+};
+/* eslint-enable no-restricted-syntax */
+
 function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef {
   const providerLabel = getCloudProviderById(model.provider)?.name ?? model.provider;
 
   const def: ModelDef = {
     id: model.id,
-    name: model.name || CLOUD_ROUTE_FALLBACK_NAMES[model.provider] || 'AGI Cloud',
+    name:
+      CLOUD_DISPLAY_NAME_OVERRIDES[model.id] ||
+      model.name ||
+      CLOUD_ROUTE_FALLBACK_NAMES[model.provider] ||
+      'AGI Cloud',
     provider: model.provider,
     providerLabel,
     contextWindow: model.contextWindow,
