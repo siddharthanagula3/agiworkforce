@@ -1,6 +1,7 @@
 use super::color::perceptual_distance;
 use ratatui::style::Color;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,59 +72,196 @@ pub fn v3_on_light() -> Color {
     best_color((15, 15, 14))
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Active-theme semantic palette
+//
+// Every `ui_*` token resolves through the *active* theme palette rather than a
+// fixed brand color, so `/theme` actually recolors the whole TUI (138 `ui_*`
+// call sites follow automatically). `set_active_theme` is called when the user
+// confirms a theme in the picker or runs `/theme <name>`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// RGB values for each semantic token under one theme. Resolved to the best
+/// `Color` the terminal supports at call time via `best_color`.
+#[derive(Clone, Copy)]
+struct Palette {
+    accent: (u8, u8, u8),
+    muted: (u8, u8, u8),
+    success: (u8, u8, u8),
+    warning: (u8, u8, u8),
+    danger: (u8, u8, u8),
+    cloud: (u8, u8, u8),
+    brand: (u8, u8, u8),
+    status_bar_bg: (u8, u8, u8),
+    on_dark: (u8, u8, u8),
+    on_light: (u8, u8, u8),
+}
+
+/// Dark = the existing AGI v3 brand defaults, so the default look is unchanged.
+const PALETTE_DARK: Palette = Palette {
+    accent: V3_TEAL,
+    muted: (128, 128, 128),
+    success: V3_SUCCESS,
+    warning: V3_WARNING,
+    danger: V3_DANGER,
+    cloud: V3_TERRACOTTA,
+    brand: V3_TEAL,
+    status_bar_bg: (48, 48, 48),
+    on_dark: (255, 255, 255),
+    on_light: (15, 15, 14),
+};
+
+/// Light terminals: darker accents/text so foreground reads on a bright bg.
+const PALETTE_LIGHT: Palette = Palette {
+    accent: (0x1a, 0x66, 0x70),
+    muted: (90, 90, 90),
+    success: (0x15, 0x80, 0x3d),
+    warning: (0xb4, 0x53, 0x09),
+    danger: (0xb9, 0x1c, 0x1c),
+    cloud: (0xc2, 0x4a, 0x2c),
+    brand: (0x1a, 0x66, 0x70),
+    status_bar_bg: (222, 222, 216),
+    on_dark: (255, 255, 255),
+    on_light: (15, 15, 14),
+};
+
+/// Pure 16-color ANSI approximations for low-color terminals.
+const PALETTE_ANSI: Palette = Palette {
+    accent: (0, 170, 170),
+    muted: (128, 128, 128),
+    success: (0, 170, 0),
+    warning: (170, 85, 0),
+    danger: (170, 0, 0),
+    cloud: (170, 0, 170),
+    brand: (0, 170, 170),
+    status_bar_bg: (48, 48, 48),
+    on_dark: (255, 255, 255),
+    on_light: (0, 0, 0),
+};
+
+/// Solarized (Ethan Schoonover) — dark variant.
+const PALETTE_SOLARIZED_DARK: Palette = Palette {
+    accent: (38, 139, 210),
+    muted: (88, 110, 117),
+    success: (133, 153, 0),
+    warning: (181, 137, 0),
+    danger: (220, 50, 47),
+    cloud: (203, 75, 22),
+    brand: (42, 161, 152),
+    status_bar_bg: (7, 54, 66),
+    on_dark: (253, 246, 227),
+    on_light: (0, 43, 54),
+};
+
+/// Solarized — light variant (light base, same accents).
+const PALETTE_SOLARIZED_LIGHT: Palette = Palette {
+    accent: (38, 139, 210),
+    muted: (101, 123, 131),
+    success: (133, 153, 0),
+    warning: (181, 137, 0),
+    danger: (220, 50, 47),
+    cloud: (203, 75, 22),
+    brand: (42, 161, 152),
+    status_bar_bg: (238, 232, 213),
+    on_dark: (253, 246, 227),
+    on_light: (0, 43, 54),
+};
+
+/// Deuteranopia-friendly: blue/orange/vermillion instead of green/red so the
+/// success↔danger distinction survives red-green color blindness (Wong palette).
+const PALETTE_COLORBLIND: Palette = Palette {
+    accent: (0, 114, 178),
+    muted: (128, 128, 128),
+    success: (0, 158, 115),
+    warning: (230, 159, 0),
+    danger: (213, 94, 0),
+    cloud: (86, 180, 233),
+    brand: (0, 114, 178),
+    status_bar_bg: (48, 48, 48),
+    on_dark: (255, 255, 255),
+    on_light: (15, 15, 14),
+};
+
+/// Active theme index. Matches `ThemeChoice` declaration order
+/// (Dark=0, Light=1, Ansi=2, SolarizedDark=3, SolarizedLight=4, Colorblind=5).
+static ACTIVE_THEME: AtomicU8 = AtomicU8::new(0);
+
+/// Apply a theme by index; subsequent `ui_*` calls resolve through it. Bumps the
+/// palette version so cached renderers can invalidate. Out-of-range → Dark.
+pub fn set_active_theme(idx: u8) {
+    ACTIVE_THEME.store(idx, Ordering::Relaxed);
+    bump_palette_version();
+}
+
+/// The active theme index (see `set_active_theme`).
+pub fn active_theme_idx() -> u8 {
+    ACTIVE_THEME.load(Ordering::Relaxed)
+}
+
+fn active_palette() -> Palette {
+    match ACTIVE_THEME.load(Ordering::Relaxed) {
+        1 => PALETTE_LIGHT,
+        2 => PALETTE_ANSI,
+        3 => PALETTE_SOLARIZED_DARK,
+        4 => PALETTE_SOLARIZED_LIGHT,
+        5 => PALETTE_COLORBLIND,
+        _ => PALETTE_DARK,
+    }
+}
+
 /// Primary interactive accent for selection, prompts, and active controls.
 pub fn ui_accent() -> Color {
-    v3_teal()
+    best_color(active_palette().accent)
 }
 
 /// Secondary text, borders, dividers, and inactive hints.
 pub fn ui_muted() -> Color {
-    v3_muted()
+    best_color(active_palette().muted)
 }
 
 /// Positive state color for completed work and safe/local indicators.
 pub fn ui_success() -> Color {
-    v3_success()
+    best_color(active_palette().success)
 }
 
 /// Caution state color for warnings, fallbacks, and bypass-style modes.
 pub fn ui_warning() -> Color {
-    v3_warning()
+    best_color(active_palette().warning)
 }
 
 /// Critical state color for errors, failed work, or unsafe modes.
 pub fn ui_danger() -> Color {
-    v3_danger()
+    best_color(active_palette().danger)
 }
 
 /// Hosted/cloud accent, kept separate from local/BYOK state colors.
 pub fn ui_cloud() -> Color {
-    v3_terracotta()
+    best_color(active_palette().cloud)
 }
 
 /// AGI brand foreground for product marks in terminal UI.
 pub fn ui_brand() -> Color {
-    v3_teal()
+    best_color(active_palette().brand)
 }
 
 /// Status bar background.
 pub fn ui_status_bar_bg() -> Color {
-    v3_status_bar_bg()
+    best_color(active_palette().status_bar_bg)
 }
 
 /// Foreground for dark semantic backgrounds.
 pub fn ui_on_dark() -> Color {
-    v3_on_dark()
+    best_color(active_palette().on_dark)
 }
 
 /// Foreground for light semantic backgrounds.
 pub fn ui_on_light() -> Color {
-    v3_on_light()
+    best_color(active_palette().on_light)
 }
 
 /// Badge background for the default chat mode.
 pub fn ui_mode_default() -> Color {
-    v3_status_bar_bg()
+    ui_status_bar_bg()
 }
 
 /// Badge background for plan/read-only mode.
@@ -222,6 +360,55 @@ pub fn default_bg() -> Option<(u8, u8, u8)> {
     default_colors().map(|c| c.bg)
 }
 
+/// Representative RGB for an ANSI 16-color index (xterm palette). Used to turn a
+/// `COLORFGBG` fg/bg index into concrete colors.
+fn ansi16_to_rgb(idx: u8) -> (u8, u8, u8) {
+    match idx {
+        0 => (0, 0, 0),
+        1 => (170, 0, 0),
+        2 => (0, 170, 0),
+        3 => (170, 85, 0),
+        4 => (0, 0, 170),
+        5 => (170, 0, 170),
+        6 => (0, 170, 170),
+        7 => (170, 170, 170),
+        8 => (85, 85, 85),
+        9 => (255, 85, 85),
+        10 => (85, 255, 85),
+        11 => (255, 255, 85),
+        12 => (85, 85, 255),
+        13 => (255, 85, 255),
+        14 => (85, 255, 255),
+        _ => (255, 255, 255), // 15 and out-of-range → white
+    }
+}
+
+/// Parse a `COLORFGBG` value into default fg/bg colors. The variable (set by
+/// rxvt/konsole/some tmux configs) is `"fg;bg"` or `"fg;default;bg"`; the last
+/// field is the background index. Returns `None` when absent or malformed —
+/// most modern terminals (iTerm2, Terminal.app) don't set it, so this is a
+/// best-effort fallback now that crossterm 0.28 removed the OSC color query.
+fn colorfgbg_to_default(raw: &str) -> Option<DefaultColors> {
+    let parts: Vec<&str> = raw.split(';').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let fg_idx: u8 = parts.first()?.trim().parse().ok()?;
+    let bg_idx: u8 = parts.last()?.trim().parse().ok()?;
+    Some(DefaultColors {
+        fg: ansi16_to_rgb(fg_idx),
+        bg: ansi16_to_rgb(bg_idx),
+    })
+}
+
+/// True when the detected (or `COLORFGBG`-reported) terminal background is light.
+/// Falls back to `false` (assume dark) when detection is unavailable.
+pub fn terminal_is_light() -> bool {
+    default_bg()
+        .map(|(r, g, b)| (r as u16 + g as u16 + b as u16) / 3 > 127)
+        .unwrap_or(false)
+}
+
 /// Returns a monotonic counter that increments whenever `requery_default_colors()` runs
 /// successfully so cached renderers can know when their styling assumptions (e.g.
 /// background colors baked into cached transcript rows) are stale and need invalidation.
@@ -237,7 +424,11 @@ mod imp {
     use super::DefaultColors;
 
     pub(super) fn default_colors() -> Option<DefaultColors> {
-        None
+        // crossterm 0.28 removed the OSC color query, so fall back to COLORFGBG
+        // (set by rxvt/konsole/some tmux configs). Absent → None, unchanged.
+        std::env::var("COLORFGBG")
+            .ok()
+            .and_then(|raw| super::colorfgbg_to_default(&raw))
     }
 
     pub(super) fn requery_default_colors() {}
@@ -521,3 +712,74 @@ pub const XTERM_COLORS: [(u8, u8, u8); 256] = [
     (228, 228, 228), // 254 Grey89
     (238, 238, 238), // 255 Grey93
 ];
+
+#[cfg(test)]
+mod colorfgbg_tests {
+    use super::*;
+
+    #[test]
+    fn parses_dark_and_light_backgrounds() {
+        // "fg;bg" — white fg on black bg → dark background.
+        let dark = colorfgbg_to_default("15;0").expect("parse dark");
+        assert_eq!(dark.bg, (0, 0, 0));
+        // black fg on white bg → light background.
+        let light = colorfgbg_to_default("0;15").expect("parse light");
+        assert_eq!(light.bg, (255, 255, 255));
+        assert!(light.bg.0 as u16 + light.bg.1 as u16 + light.bg.2 as u16 > dark.bg.0 as u16);
+        // 3-field form "fg;default;bg" — last field is bg.
+        let three = colorfgbg_to_default("0;default;15").expect("parse 3-field");
+        assert_eq!(three.bg, (255, 255, 255));
+    }
+
+    #[test]
+    fn rejects_malformed_colorfgbg() {
+        assert!(colorfgbg_to_default("nonsense").is_none());
+        assert!(colorfgbg_to_default("").is_none());
+        assert!(colorfgbg_to_default("12").is_none());
+    }
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+
+    #[test]
+    fn set_active_theme_switches_the_semantic_palette() {
+        set_active_theme(0); // Dark (= v3 brand defaults)
+        assert_eq!(active_theme_idx(), 0);
+        let dark = active_palette();
+
+        set_active_theme(5); // Colorblind
+        assert_eq!(active_theme_idx(), 5);
+        let cb = active_palette();
+
+        // The whole point of the re-route: a different theme yields different
+        // semantic colors. Colorblind swaps green/red for bluish-green/vermillion.
+        assert_ne!(dark.success, cb.success);
+        assert_ne!(dark.danger, cb.danger);
+        assert_ne!(dark.accent, cb.accent);
+
+        // Out-of-range index falls back to Dark rather than panicking.
+        set_active_theme(99);
+        assert_eq!(active_palette().accent, PALETTE_DARK.accent);
+
+        // Restore the default so char-only render snapshots stay deterministic.
+        set_active_theme(0);
+    }
+
+    #[test]
+    fn every_theme_index_resolves_to_a_distinct_dark_or_light_base() {
+        // Dark/Ansi/SolarizedDark/Colorblind are dark-based; Light/SolarizedLight
+        // are light-based — their status-bar backgrounds must differ accordingly.
+        set_active_theme(1); // Light
+        let light_bar = active_palette().status_bar_bg;
+        set_active_theme(0); // Dark
+        let dark_bar = active_palette().status_bar_bg;
+        let lightness = |(r, g, b): (u8, u8, u8)| r as u16 + g as u16 + b as u16;
+        assert!(
+            lightness(light_bar) > lightness(dark_bar),
+            "light theme status bar should be brighter than dark"
+        );
+        set_active_theme(0);
+    }
+}

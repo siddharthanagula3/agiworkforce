@@ -43,22 +43,61 @@ export interface SettingsNavEntry {
   key: SettingsNavKey;
   label: string;
   icon: LucideIcon;
+  /**
+   * Extra search aliases so settings search matches common terms that differ
+   * from the visible label — e.g. "theme"/"dark"/"light" resolve to the
+   * Personalization tab, which also houses the Appearance/Themes section.
+   * Without these, searching the obvious term ("theme") returns no results.
+   */
+  keywords?: string[];
 }
 
 /** Flat list of every settings entry (key/label/icon), in canonical order. */
 export const SETTINGS_NAV: SettingsNavEntry[] = [
-  { key: 'general', label: 'General', icon: Settings2 },
-  { key: 'account', label: 'Account', icon: CreditCard },
-  { key: 'appearance', label: 'Personalization', icon: UserRound },
-  { key: 'privacy', label: 'Privacy', icon: Shield },
-  { key: 'models-keys', label: 'Models & Keys', icon: Server },
+  {
+    key: 'general',
+    label: 'General',
+    icon: Settings2,
+    keywords: ['mode', 'keybindings', 'shortcuts'],
+  },
+  {
+    key: 'account',
+    label: 'Account',
+    icon: CreditCard,
+    keywords: ['billing', 'subscription', 'plan'],
+  },
+  {
+    key: 'appearance',
+    label: 'Personalization',
+    icon: UserRound,
+    keywords: [
+      'theme',
+      'themes',
+      'appearance',
+      'dark',
+      'light',
+      'color',
+      'colour',
+      'font',
+      'accessibility',
+      'dyslexic',
+      'custom instructions',
+    ],
+  },
+  { key: 'privacy', label: 'Privacy', icon: Shield, keywords: ['data', 'telemetry', 'analytics'] },
+  {
+    key: 'models-keys',
+    label: 'Models & Keys',
+    icon: Server,
+    keywords: ['api', 'api key', 'byok', 'provider', 'ollama', 'openai', 'anthropic'],
+  },
   { key: 'agents', label: 'Agents', icon: Zap },
   { key: 'skills', label: 'Skills', icon: BookOpen },
-  { key: 'connectors', label: 'Connectors', icon: Plug },
+  { key: 'connectors', label: 'Connectors', icon: Plug, keywords: ['mcp', 'integration'] },
   { key: 'plugins', label: 'Plugins', icon: Puzzle },
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
-  { key: 'voice', label: 'Voice', icon: Mic },
+  { key: 'voice', label: 'Voice', icon: Mic, keywords: ['speech', 'tts', 'microphone', 'audio'] },
 ];
 
 export interface SettingsNavGroup {

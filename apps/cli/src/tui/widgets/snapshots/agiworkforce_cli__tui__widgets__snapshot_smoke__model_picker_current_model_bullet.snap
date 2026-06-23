@@ -1,8 +1,10 @@
 ---
 source: apps/cli/src/tui/widgets/snapshot_smoke.rs
-assertion_line: 201
+assertion_line: 204
 expression: terminal.backend()
 ---
+"                                                                                "
+"                                                                                "
 "                                                                                "
 "                                                                                "
 "                                                                                "
@@ -19,7 +21,5 @@ expression: terminal.backend()
 "  │    fixture-flagship                    Balanced      200K ctx            │  "
 "  │  ● fixture-balanced                    Balanced      200K ctx            │  "
 "  │  OpenAI                                                                  │  "
-"  │    fixture-fast                        Balanced      128K ctx            │  "
-"  │ Thinking: on · Effort: ◀ Medium ▶   Tab/←→                               │  "
 "  └──────────────────────────────────────────────────────────────────────────┘  "
 "                                                                                "

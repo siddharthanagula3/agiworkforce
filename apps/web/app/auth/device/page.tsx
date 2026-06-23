@@ -172,6 +172,22 @@ function DeviceForm() {
               : 'Sign in required'}
         </button>
       </form>
+      <div
+        style={{
+          marginTop: 20,
+          border: '1px solid var(--agi-rule)',
+          borderRadius: 8,
+          padding: '14px 16px',
+          fontSize: 14,
+          color: 'var(--agi-ink-2)',
+        }}
+      >
+        <strong style={{ color: 'var(--agi-ink)' }}>Using AGI Cloud models?</strong> Approving here
+        signs your device in. Running models on AGI Cloud requires a Pro or Max plan.{' '}
+        <Link href="/pricing" style={{ color: 'var(--agi-ink)', fontWeight: 600 }}>
+          Upgrade to Pro or Max &rarr;
+        </Link>
+      </div>
       <p style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
         <Link href="/" style={{ color: 'var(--agi-ink)' }}>
           Cancel

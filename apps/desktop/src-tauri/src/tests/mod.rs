@@ -6,3 +6,6 @@ pub mod llm_tests;
 
 #[cfg(test)]
 pub mod security_tests;
+
+#[cfg(test)]
+pub mod byok_vault_tests;

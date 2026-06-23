@@ -19,6 +19,7 @@ pub enum ProviderId {
     Qwen,
     Moonshot,
     Zhipu,
+    OpenRouter,
     Ollama,
     LMStudio,
     CustomOpenAICompatible,
@@ -37,6 +38,7 @@ impl ProviderId {
         ProviderId::Qwen,
         ProviderId::Moonshot,
         ProviderId::Zhipu,
+        ProviderId::OpenRouter,
         ProviderId::Ollama,
         ProviderId::LMStudio,
         ProviderId::CustomOpenAICompatible,
@@ -55,6 +57,7 @@ impl ProviderId {
             "qwen" | "dashscope" => Some(ProviderId::Qwen),
             "moonshot" | "kimi" => Some(ProviderId::Moonshot),
             "zhipu" | "glm" => Some(ProviderId::Zhipu),
+            "openrouter" | "open-router" | "open_router" => Some(ProviderId::OpenRouter),
             "ollama" | "ollama-local" | "ollama_local" | "ollama-cloud" | "ollama_cloud" => {
                 Some(ProviderId::Ollama)
             }
@@ -210,6 +213,13 @@ pub fn provider_display(id: ProviderId) -> ProviderDisplay {
             id,
             label: "Zhipu",
             brand_color: "#3B82F6",
+            is_local: false,
+            supports_effort: false,
+        },
+        ProviderId::OpenRouter => ProviderDisplay {
+            id,
+            label: "OpenRouter",
+            brand_color: "#6467F2",
             is_local: false,
             supports_effort: false,
         },
@@ -422,9 +432,9 @@ mod tests {
     #[test]
     fn capability_tier_for_known_models() {
         // Use API model IDs as they appear in models.json apiModelId fields.
-        // haiku-4.5 → apiModelId=claude-haiku-4-5-20251001, qualityTier=fast → Fastest
+        // haiku-4.5 → apiModelId=claude-haiku-4-5, qualityTier=fast → Fastest
         assert_eq!(
-            capability_for_model("claude-haiku-4-5-20251001"),
+            capability_for_model("claude-haiku-4-5"),
             CapabilityTier::Fastest
         );
         // sonnet-4.6 → apiModelId=claude-sonnet-4-6, qualityTier=balanced → Balanced

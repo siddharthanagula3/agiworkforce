@@ -198,7 +198,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           if (!normalizedNavQuery) return true;
           return (
             item.label.toLowerCase().includes(normalizedNavQuery) ||
-            item.key.toLowerCase().includes(normalizedNavQuery)
+            item.key.toLowerCase().includes(normalizedNavQuery) ||
+            (item.keywords?.some((kw) => kw.toLowerCase().includes(normalizedNavQuery)) ?? false)
           );
         }),
     })).filter((group) => group.items.length > 0);

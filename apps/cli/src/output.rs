@@ -442,11 +442,11 @@ pub fn print_banner(model: &str, provider: &str) {
     eprintln!();
 }
 
-/// Print the user's tier and token usage to stderr if available from the
-/// on-disk cache.  This is a best-effort display — it is silently skipped when
-/// no cache entry exists (e.g. first-run, BYOK, or local mode).
+/// Print the user's tier to stderr if available from the on-disk cache.
+/// This is a best-effort display — it is silently skipped when no cache entry
+/// exists (e.g. first-run, BYOK, or local mode).
 ///
-/// Example output: `  Hobby · 1.3M/2.0M tokens`
+/// Example output: `  Pro`
 pub fn print_tier_status() {
     if let Some(cached) = crate::tier_cache::read_tier_cache() {
         eprintln!("{}", ts::muted(format!("  {}", cached.status_label())));
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_model_pricing_anthropic_haiku() {
-        let (i, o) = model_pricing("claude-haiku-4-5-20251001");
+        let (i, o) = model_pricing("claude-haiku-4-5");
         assert_eq!(i, 1.0);
         assert_eq!(o, 5.0);
     }
@@ -549,7 +549,8 @@ mod tests {
 
     #[test]
     fn test_model_pricing_case_insensitive() {
-        let (i1, o1) = model_pricing("Claude-Opus-4-6");
+        // Same model, different case → identical pricing (lookup is case-insensitive).
+        let (i1, o1) = model_pricing("Claude-Opus-4-8");
         let (i2, o2) = model_pricing("claude-opus-4-8");
         assert_eq!(i1, i2);
         assert_eq!(o1, o2);

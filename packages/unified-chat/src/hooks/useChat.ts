@@ -419,6 +419,14 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         useModelStore.getState().setRoutingDecision(decision);
       }
 
+      // Resolve the selected model's provider so the backend can route it.
+      // Without this, a dynamic Local model — e.g. an Ollama model like
+      // "gemma4:e4b" that is NOT in the static catalog — reaches the Rust
+      // resolver (resolve_provider_and_model) with provider=None and is never
+      // routed to Ollama: the send silently no-ops (no /api/chat, no response,
+      // no error). The model store carries each model's provider; forward it.
+      const resolvedProvider = modelState.models.find((m) => m.id === resolvedModelId)?.provider;
+
       // Reset assistant message ref for new response
       assistantMessageIdRef.current = null;
 
@@ -433,6 +441,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         .sendMessage(convId, content, {
           ...(systemPrompt ? { systemPrompt } : {}),
           model: resolvedModelId,
+          ...(resolvedProvider ? { provider: resolvedProvider } : {}),
           webSearch: webSearchEnabled,
           thinkingEnabled,
           messageHistory,

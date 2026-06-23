@@ -2,6 +2,10 @@
 //!
 //! Char keys append to an inline filter; Backspace removes the last char;
 //! ↑↓ navigate the filtered set; Enter fills the canonical slash command name.
+//! A space separates the command name from its arguments — fuzzy matching runs
+//! on the name token only (text before the first space), and Enter carries any
+//! typed arguments through so `/privacy-mode local` fills as typed rather than
+//! silently matching nothing.
 //! The render shows `/name — description` rows with `❯ ` bolding the cursor row.
 
 use super::interactive::{InteractiveView, KeyAction, SelectionState, ViewAction};
@@ -19,6 +23,23 @@ impl RegistryCommand {
             name: name.into(),
             description: description.into(),
         }
+    }
+}
+
+/// Inner content width of the popup box (chars between the `│ ` and `│` borders).
+const POPUP_INNER_WIDTH: usize = 59;
+
+/// Truncate a row to at most `max` columns, appending `…` when it would
+/// otherwise overflow the popup's fixed inner width and break the box border.
+/// Counts Unicode scalar values, which matches display width for the ASCII plus
+/// `—`/`❯`/`…` glyphs used in these rows.
+fn truncate_to_cols(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut t: String = s.chars().take(max.saturating_sub(1)).collect();
+        t.push('…');
+        t
     }
 }
 
@@ -43,18 +64,43 @@ impl CommandPopup {
         }
     }
 
-    fn filtered(&self) -> Vec<&RegistryCommand> {
-        if self.filter.is_empty() {
-            self.all.iter().collect()
-        } else {
-            let q = self.filter.to_lowercase();
-            self.all
-                .iter()
-                .filter(|c| {
-                    c.name.to_lowercase().contains(&q) || c.description.to_lowercase().contains(&q)
-                })
-                .collect()
+    /// The command-name portion of the filter — text before the first space.
+    /// Everything after the first space is treated as command arguments and
+    /// must not influence which command the fuzzy matcher selects.
+    fn name_query(&self) -> &str {
+        match self.filter.split_once(' ') {
+            Some((head, _)) => head,
+            None => &self.filter,
         }
+    }
+
+    fn filtered(&self) -> Vec<&RegistryCommand> {
+        let q = self.name_query();
+        if q.is_empty() {
+            return self.all.iter().collect();
+        }
+        // Fuzzy match + rank (best-first). Name matches outrank description-only
+        // matches; ties break by shorter, then alphabetical name.
+        let mut scored: Vec<(i32, &RegistryCommand)> = self
+            .all
+            .iter()
+            .filter_map(|c| {
+                let name = crate::tui::fuzzy::fuzzy_score(q, &c.name);
+                let desc = crate::tui::fuzzy::fuzzy_score(q, &c.description).map(|s| s - 50);
+                match (name, desc) {
+                    (Some(a), Some(b)) => Some((a.max(b), c)),
+                    (Some(a), None) => Some((a, c)),
+                    (None, Some(b)) => Some((b, c)),
+                    (None, None) => None,
+                }
+            })
+            .collect();
+        scored.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then_with(|| a.1.name.len().cmp(&b.1.name.len()))
+                .then_with(|| a.1.name.cmp(&b.1.name))
+        });
+        scored.into_iter().map(|(_, c)| c).collect()
     }
 
     fn sync_state_len(&mut self) {
@@ -67,9 +113,9 @@ impl InteractiveView for CommandPopup {
     fn render(&self) -> String {
         let mut out =
             String::from("┌─ Commands ─────────────────────────────────────────────────┐\n");
-        let filter_line = format!("  /{}", self.filter);
+        let filter_line = truncate_to_cols(&format!("  /{}", self.filter), POPUP_INNER_WIDTH);
         out.push_str(&format!("│ {filter_line:<59}│\n"));
-        out.push_str("│ ──────────────────────────────────────────────────────────  │\n");
+        out.push_str("│ ────────────────────────────────────────────────────────── │\n");
 
         let items = self.filtered();
         if items.is_empty() {
@@ -81,7 +127,10 @@ impl InteractiveView for CommandPopup {
                 } else {
                     "  "
                 };
-                let row = format!("{cursor}/{} — {}", cmd.name, cmd.description);
+                let row = truncate_to_cols(
+                    &format!("{cursor}/{} — {}", cmd.name, cmd.description),
+                    POPUP_INNER_WIDTH,
+                );
                 out.push_str(&format!("│ {row:<59}│\n"));
             }
         }
@@ -94,7 +143,13 @@ impl InteractiveView for CommandPopup {
 
     fn handle_key(&mut self, key: KeyAction) -> ViewAction {
         match key {
-            KeyAction::Char(c) if c != ' ' => {
+            KeyAction::Char(c) => {
+                // A space separates the command name from its arguments. Ignore a
+                // leading space (no command name typed yet); otherwise accept it so
+                // `/privacy-mode local` keeps the args while matching on the name.
+                if c == ' ' && self.filter.is_empty() {
+                    return ViewAction::Continue;
+                }
                 self.filter.push(c);
                 self.sync_state_len();
                 ViewAction::Continue
@@ -105,12 +160,25 @@ impl InteractiveView for CommandPopup {
                 ViewAction::Continue
             }
             KeyAction::Enter => {
-                let items = self.filtered();
-                if let Some(cmd) = items.get(self.state.cursor()) {
-                    let name = cmd.name.clone();
+                let name = self
+                    .filtered()
+                    .get(self.state.cursor())
+                    .map(|cmd| cmd.name.clone());
+                if let Some(name) = name {
+                    // Carry any typed arguments (text after the first space) through
+                    // so the input fills as `/name args`, not just `/name`.
+                    let args = self
+                        .filter
+                        .split_once(' ')
+                        .map(|(_, rest)| rest.trim())
+                        .filter(|a| !a.is_empty());
                     self.selected_command = Some(name.clone());
                     self.done = true;
-                    ViewAction::SideAction(format!("slash:{name}"))
+                    let payload = match args {
+                        Some(a) => format!("slash:{name} {a}"),
+                        None => format!("slash:{name}"),
+                    };
+                    ViewAction::SideAction(payload)
                 } else {
                     ViewAction::Continue
                 }
@@ -204,6 +272,52 @@ mod tests {
     }
 
     #[test]
+    fn space_separates_name_from_args_and_still_matches() {
+        // Regression: typing `/privacy-mode local` used to drop the space, making
+        // the filter `privacy-modelocal` match nothing. Now the args after the
+        // first space don't affect which command matches.
+        let mut popup = make_popup();
+        for c in "exec ls".chars() {
+            popup.handle_key(KeyAction::Char(c));
+        }
+        assert_eq!(popup.filter, "exec ls");
+        let filtered = popup.filtered();
+        assert_eq!(filtered.len(), 1, "args must not break name matching");
+        assert_eq!(filtered[0].name, "exec");
+    }
+
+    #[test]
+    fn enter_carries_typed_arguments_through() {
+        let mut popup = make_popup();
+        for c in "exec git status".chars() {
+            popup.handle_key(KeyAction::Char(c));
+        }
+        let action = popup.handle_key(KeyAction::Enter);
+        // The caller fills the input from this payload: `/exec git status`.
+        assert_eq!(
+            action,
+            ViewAction::SideAction("slash:exec git status".to_string())
+        );
+    }
+
+    #[test]
+    fn leading_space_is_ignored() {
+        let mut popup = make_popup();
+        popup.handle_key(KeyAction::Char(' '));
+        assert_eq!(popup.filter, "", "a leading space (no command yet) is dropped");
+    }
+
+    #[test]
+    fn enter_without_args_is_unchanged() {
+        let mut popup = make_popup();
+        for c in "plan".chars() {
+            popup.handle_key(KeyAction::Char(c));
+        }
+        let action = popup.handle_key(KeyAction::Enter);
+        assert_eq!(action, ViewAction::SideAction("slash:plan".to_string()));
+    }
+
+    #[test]
     fn esc_closes_without_selection() {
         let mut popup = make_popup();
         let action = popup.handle_key(KeyAction::Esc);
@@ -238,5 +352,28 @@ mod tests {
         let popup = make_popup();
         let text = popup.render();
         assert!(text.contains("❯ /plan"), "expected cursor on first item");
+    }
+
+    #[test]
+    fn long_description_is_truncated_so_the_box_border_stays_intact() {
+        let popup = CommandPopup::new(vec![RegistryCommand::new(
+            "sandbox",
+            "Show or toggle sandbox mode (read-only / contained / unrestricted)",
+        )]);
+        let text = popup.render();
+        // The command row (│ {row:<59}│) is 62 cols. No line may exceed the box
+        // width, or it pushes past the right border like the original bug did.
+        for line in text.lines() {
+            assert!(
+                line.chars().count() <= 62,
+                "row overflows the popup box ({} cols): {line:?}",
+                line.chars().count()
+            );
+        }
+        let sandbox_row = text
+            .lines()
+            .find(|l| l.contains("/sandbox"))
+            .expect("sandbox row present");
+        assert!(sandbox_row.ends_with("…│"), "long row should be ellipsized: {sandbox_row:?}");
     }
 }

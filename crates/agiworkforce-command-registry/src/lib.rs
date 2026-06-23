@@ -213,7 +213,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "init",
-            "Create CLAUDE.md for this project",
+            "Create AGENTS.md for this project",
             false,
             false,
             vec![],

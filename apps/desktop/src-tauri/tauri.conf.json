@@ -5,6 +5,7 @@
   "identifier": "com.agiworkforce.desktop",
   "build": {
     "beforeDevCommand": "pnpm run dev:vite",
+    "beforeBuildCommand": "pnpm run build:native-host && pnpm exec vite build",
     "devUrl": "http://127.0.0.1:5173",
     "frontendDist": "../dist",
     "removeUnusedCommands": true

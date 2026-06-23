@@ -1,6 +1,6 @@
 ---
 source: apps/cli/src/tui/widgets/snapshot_smoke.rs
-assertion_line: 182
+assertion_line: 185
 expression: terminal.backend()
 ---
 "                                                                                "
@@ -14,12 +14,12 @@ expression: terminal.backend()
 "                                                                                "
 "                                                                                "
 "                                                                                "
+"                                                                                "
+"                                                                                "
 "  ┌ Models  Local · BYOK · Cloud ────────────────────────────────────────────┐  "
 "  │/ open                                                                    │  "
-"  │──────────────────────────────────────────────────────────────────────────│  "
 "  │Bring your own key · your own provider keys                               │  "
 "  │  OpenAI                                                                  │  "
 "  │    fixture-fast                        Balanced      128K ctx            │  "
-"  │ Thinking: on · Effort: ◀ Medium ▶   Tab/←→                               │  "
 "  └──────────────────────────────────────────────────────────────────────────┘  "
 "                                                                                "

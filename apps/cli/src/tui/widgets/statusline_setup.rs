@@ -80,7 +80,7 @@ impl InteractiveView for StatusLineSetupView {
         for (i, label) in ITEM_LABELS.iter().enumerate() {
             let cursor = if i == self.state.cursor() { "❯" } else { " " };
             let check = if self.item_enabled(i) { "[x]" } else { "[ ]" };
-            let row = format!("{check} {label}");
+            let row = crate::tui::truncate_cols(&format!("{check} {label}"), 58);
             out.push_str(&format!("│ {cursor} {row:<58}│\n"));
         }
         out.push_str("│                                                            │\n");

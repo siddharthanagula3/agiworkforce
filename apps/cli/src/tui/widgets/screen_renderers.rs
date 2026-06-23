@@ -18,7 +18,11 @@
 
 use std::path::Path;
 
-const DIVIDER_WIDTH: usize = 120;
+// Sized to fit the common-minimum 80-column terminal: these screens render as
+// chat `SystemMessage`s that get a 4-space indent and sit inside the chat block's
+// L/R borders, so a wider rule wraps and breaks the layout. 72 + indent + borders
+// stays within 80 cols; on wider terminals it reads as a header rule.
+const DIVIDER_WIDTH: usize = 72;
 
 fn divider() -> String {
     "─".repeat(DIVIDER_WIDTH)
@@ -862,7 +866,7 @@ mod tests {
     use super::*;
 
     fn divider_line() -> String {
-        "─".repeat(120)
+        super::divider()
     }
 
     #[test]

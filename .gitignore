@@ -234,3 +234,11 @@ reports/audit/gate-baseline/
 AUDIT_PARTS/
 AUDIT_BATCHES/
 AUDIT_MANIFEST.txt
+
+# --- Generated QA artifacts / local scratch (not for main) ---
+.agiworkforce/
+apps/web/app/qa-artifacts/
+reports/generated/
+tasks/release-hardening/
+/qa-inchat.png
+/qa-inchat-split.png

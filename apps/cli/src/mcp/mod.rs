@@ -1698,6 +1698,10 @@ impl McpManager {
 
     /// Connect to all configured MCP servers and discover tools.
     pub async fn connect_all(&mut self, configs: &HashMap<String, McpServerConfig>) -> Result<()> {
+        // Suppress raw stderr progress while the full-screen TUI owns the
+        // terminal — otherwise these lines bleed into and corrupt the display.
+        // In exec / non-TUI mode the flag is false and they render normally.
+        let quiet = crate::tui::tui_active();
         for (name, config) in configs {
             match McpConnection::connect(name, config).await {
                 Ok(mut conn) => match conn.list_tools().await {
@@ -1706,7 +1710,7 @@ impl McpManager {
                         self.tools.extend(tools);
                         match conn.list_prompts().await {
                             Ok(prompts) => {
-                                if !prompts.is_empty() {
+                                if !prompts.is_empty() && !quiet {
                                     eprintln!(
                                         "  MCP server '{}': {} prompts discovered",
                                         name,
@@ -1716,19 +1720,30 @@ impl McpManager {
                                 self.prompts.extend(prompts);
                             }
                             Err(e) => {
-                                eprintln!("  MCP server '{}': prompts unavailable: {}", name, e);
+                                if !quiet {
+                                    eprintln!(
+                                        "  MCP server '{}': prompts unavailable: {}",
+                                        name, e
+                                    );
+                                }
                             }
                         }
-                        eprintln!("  MCP server '{}': {} tools discovered", name, count);
+                        if !quiet {
+                            eprintln!("  MCP server '{}': {} tools discovered", name, count);
+                        }
                         self.connections.insert(name.clone(), conn);
                     }
                     Err(e) => {
-                        eprintln!("  MCP server '{}': failed to list tools: {}", name, e);
+                        if !quiet {
+                            eprintln!("  MCP server '{}': failed to list tools: {}", name, e);
+                        }
                         let _ = conn.shutdown().await;
                     }
                 },
                 Err(e) => {
-                    eprintln!("  MCP server '{}': failed to connect: {}", name, e);
+                    if !quiet {
+                        eprintln!("  MCP server '{}': failed to connect: {}", name, e);
+                    }
                 }
             }
         }

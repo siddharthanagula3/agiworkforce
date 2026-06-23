@@ -121,6 +121,83 @@ struct ToolCell {
     output_preview: Option<String>,
 }
 
+/// Per-tool-type glyph shown before the tool name (distinct from the run-state
+/// glyph) so the transcript reads at a glance which kind of action ran.
+fn tool_type_icon(name: &str) -> &'static str {
+    let n = name.to_ascii_lowercase();
+    if n.contains("read") {
+        "▤"
+    } else if n.contains("edit") || n.contains("patch") || n.contains("apply") {
+        "±"
+    } else if n.contains("write") || n.contains("create") {
+        "✎"
+    } else if n.contains("search") || n.contains("grep") || n.contains("glob") || n.contains("find")
+    {
+        "⌕"
+    } else if n.contains("bash")
+        || n.contains("shell")
+        || n.contains("exec")
+        || n.contains("command")
+        || n.contains("powershell")
+        || n.contains("run")
+    {
+        "$"
+    } else if n.contains("web") || n.contains("fetch") || n.contains("http") || n.contains("url") {
+        "↗"
+    } else {
+        "▸"
+    }
+}
+
+/// Render one tool-call cell as transcript lines: a run-state glyph, a per-tool
+/// type icon, the bold tool name, and a summary. Shell tools render the summary
+/// as a `$` command band in accent color so commands stand out from file ops.
+fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
+    use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_muted, ui_success};
+    use crate::tui::transcript_cell::TranscriptCellState;
+
+    let (glyph, glyph_color): (String, _) = match cell.state {
+        TranscriptCellState::Running => (spinner_char.to_string(), ui_muted()),
+        TranscriptCellState::Complete => ("✔".to_string(), ui_success()),
+        TranscriptCellState::Failed => ("✗".to_string(), ui_danger()),
+        TranscriptCellState::Cancelled => ("⊘".to_string(), ui_muted()),
+        TranscriptCellState::Pending => ("•".to_string(), ui_muted()),
+    };
+    let icon = tool_type_icon(&cell.name);
+    let is_command = icon == "$";
+
+    let mut spans = vec![
+        Span::styled(format!("  {glyph} "), Style::default().fg(glyph_color)),
+        Span::styled(format!("{icon} "), Style::default().fg(ui_accent())),
+        Span::styled(
+            cell.name.clone(),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+    ];
+    if !cell.summary.is_empty() {
+        let (text, style) = if is_command {
+            (
+                format!("  $ {}", cell.summary),
+                Style::default().fg(ui_accent()),
+            )
+        } else {
+            (
+                format!("  {}", cell.summary),
+                Style::default().fg(ui_muted()),
+            )
+        };
+        spans.push(Span::styled(text, style));
+    }
+    let mut lines = vec![Line::from(spans)];
+    if let Some(preview) = &cell.output_preview {
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(preview.clone(), Style::default().fg(ui_muted())),
+        ]));
+    }
+    lines
+}
+
 // ---------------------------------------------------------------------------
 // TUI App state
 // ---------------------------------------------------------------------------
@@ -345,18 +422,17 @@ impl TuiApp {
     }
 
     fn spinner_char(&self) -> &str {
-        const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        FRAMES[(self.spinner_tick as usize) % FRAMES.len()]
+        spinner_frame(self.spinner_tick)
+    }
+
+    /// AGI Agent loading verb — stable within a turn, rotating across turns.
+    /// Our own words; deliberately not copied from any reference CLI.
+    fn loading_verb(&self) -> &'static str {
+        loading_verb_for(self.turn_count)
     }
 
     fn context_percent(&self) -> u8 {
-        let ctx_window = crate::model_catalog::context_window(&self.model_name) as u64;
-        if ctx_window == 0 {
-            return 0;
-        }
-        // Token counts are already in tokens, context_window is in tokens — no conversion needed
-        let used = self.total_input_tokens as u64 + self.total_output_tokens as u64;
-        ((used * 100) / ctx_window).min(100) as u8
+        context_percent_for(&self.model_name, self.total_input_tokens, self.total_output_tokens)
     }
 
     pub fn open_overlay(
@@ -499,10 +575,12 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     stdout.execute(EnableBracketedPaste)?;
     let backend = CrosstermBackend::new(stdout);
     let terminal = Terminal::new(backend)?;
+    super::set_tui_active(true);
     Ok(terminal)
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
+    super::set_tui_active(false);
     disable_raw_mode()?;
     terminal.backend_mut().execute(DisableBracketedPaste)?;
     terminal.backend_mut().execute(LeaveAlternateScreen)?;
@@ -530,10 +608,11 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
             ])
             .split(area);
 
-        render_header(frame, chunks[0], app);
-        render_chat(frame, chunks[1], app);
+        let ctx = FrameCtx::from_app(app);
+        render_header(frame, chunks[0], &ctx);
+        render_chat(frame, chunks[1], &ctx);
         render_input(frame, chunks[2], app);
-        render_status_bar(frame, chunks[3], app);
+        render_status_bar(frame, chunks[3], &ctx);
         render_fallback_banner(frame, chunks[1], app);
 
         // Live cost HUD anchored to the top-right; sits on top of the header
@@ -580,9 +659,156 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
     Ok(())
 }
 
-fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
+/// Live in-turn frame. Drawn on each 80ms tick while the send future holds
+/// `&mut app.session`, so it can only consume a `FrameCtx` of disjoint fields —
+/// never `&app`. Mirrors `render`'s layout (header / chat / composer / status)
+/// minus the picker/overlay/HUD layers, which are never active mid-turn. This is
+/// what makes streamed output, the animated spinner, and the stall hint visible
+/// during a turn instead of appearing all at once when it ends.
+fn render_turn_frame(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ctx: &FrameCtx,
+) -> Result<()> {
+    terminal.draw(|frame| {
+        let area = frame.area();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3), // header
+                Constraint::Min(5),    // chat area
+                Constraint::Length(3), // composer (disabled during a turn)
+                Constraint::Length(1), // status bar
+            ])
+            .split(area);
+
+        render_header(frame, chunks[0], ctx);
+        render_chat(frame, chunks[1], ctx);
+
+        let hint = Paragraph::new(Line::from(Span::styled(
+            "  … working — Esc or Ctrl-C to cancel",
+            Style::default().fg(crate::tui::terminal_palette::ui_muted()),
+        )))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(
+                    Style::default().fg(crate::tui::terminal_palette::ui_muted()),
+                ),
+        );
+        frame.render_widget(hint, chunks[2]);
+
+        render_status_bar(frame, chunks[3], ctx);
+    })?;
+    Ok(())
+}
+
+/// Braille spinner frame for a given tick. Free fn so it can be computed from a
+/// `Copy` field during a turn (when `&app`/`&self` is unavailable because the
+/// send future holds `&mut app.session`).
+fn spinner_frame(tick: u8) -> &'static str {
+    const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    FRAMES[(tick as usize) % FRAMES.len()]
+}
+
+/// AGI loading verb for a given turn — stable within a turn, rotating across.
+fn loading_verb_for(turn_count: u32) -> &'static str {
+    const VERBS: &[&str] = &[
+        "Synthesizing",
+        "Architecting",
+        "Orchestrating",
+        "Reasoning",
+        "Computing",
+        "Composing",
+        "Analyzing",
+        "Assembling",
+        "Crafting",
+        "Deliberating",
+        "Formulating",
+        "Strategizing",
+        "Calibrating",
+        "Resolving",
+        "Distilling",
+        "Engineering",
+    ];
+    VERBS[(turn_count as usize) % VERBS.len()]
+}
+
+/// Context-window usage percent (0..=100) for a model + token counts.
+fn context_percent_for(model_name: &str, in_tokens: u32, out_tokens: u32) -> u8 {
+    let ctx_window = crate::model_catalog::context_window(model_name) as u64;
+    if ctx_window == 0 {
+        return 0;
+    }
+    let used = in_tokens as u64 + out_tokens as u64;
+    ((used * 100) / ctx_window).min(100) as u8
+}
+
+/// Disjoint snapshot of the fields the header/chat/status renderers read. Built
+/// either from `&TuiApp` (normal frame) or field-by-field during a turn (live
+/// frame) — the latter is why these are owned/borrowed values rather than
+/// `&TuiApp`: while the send future holds `&mut app.session`, the renderers may
+/// only touch fields *other* than `session`, so they can't take `&app`.
+struct FrameCtx<'a> {
+    model_name: &'a str,
+    provider_name: &'a str,
+    git_branch: Option<&'a str>,
+    total_input_tokens: u32,
+    total_output_tokens: u32,
+    turn_count: u32,
+    context_percent: u8,
+    chat_messages: &'a [ChatMessage],
+    tool_cells: &'a [ToolCell],
+    is_loading: bool,
+    stream_start: Option<Instant>,
+    stream_buffer: &'a str,
+    spinner_char: &'a str,
+    loading_verb: &'a str,
+    scroll_offset: u16,
+    access_mode: crate::design_system::AccessMode,
+    /// Session privacy boundary (governs whether a send is allowed). Distinct
+    /// from `access_mode`, which only reflects where the active model routes.
+    privacy_mode: crate::agent::PrivacyMode,
+    mode: InteractionMode,
+    effort_label: &'a str,
+    sandbox_type: Option<crate::sandbox::SandboxType>,
+    cost_str: String,
+}
+
+impl<'a> FrameCtx<'a> {
+    fn from_app(app: &'a TuiApp) -> Self {
+        FrameCtx {
+            model_name: &app.model_name,
+            provider_name: &app.provider_name,
+            git_branch: app.git_branch.as_deref(),
+            total_input_tokens: app.total_input_tokens,
+            total_output_tokens: app.total_output_tokens,
+            turn_count: app.turn_count,
+            context_percent: app.context_percent(),
+            chat_messages: &app.chat_messages,
+            tool_cells: &app.tool_cells,
+            is_loading: app.is_loading,
+            stream_start: app.stream_start,
+            stream_buffer: &app.stream_buffer,
+            spinner_char: app.spinner_char(),
+            loading_verb: app.loading_verb(),
+            scroll_offset: app.scroll_offset,
+            access_mode: provider_access_mode(&app.session.provider),
+            privacy_mode: app.session.privacy_mode,
+            mode: app.mode,
+            effort_label: app.effort.label(),
+            sandbox_type: app.sandbox_type,
+            cost_str: crate::output::format_cost(
+                &app.session.model,
+                app.session.total_input_tokens,
+                app.session.total_output_tokens,
+            ),
+        }
+    }
+}
+
+fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_danger, ui_muted};
-    let provider_display = match app.provider_name.as_str() {
+    let provider_display = match ctx.provider_name {
         "ollama" => "Local",
         other => other,
     };
@@ -598,14 +824,14 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         ),
         Span::raw(" │ "),
         Span::styled(
-            &app.model_name,
+            ctx.model_name.to_string(),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Span::raw(" │ "),
         Span::styled(provider_display, Style::default().fg(ui_accent())),
     ];
 
-    if let Some(ref branch) = app.git_branch {
+    if let Some(branch) = ctx.git_branch {
         spans.push(Span::raw(" │ "));
         spans.push(Span::styled(
             format!(" {branch}"),
@@ -615,8 +841,8 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     spans.push(Span::raw(" │ "));
     spans.push(Span::styled(
-        format!("{}% ctx", app.context_percent()),
-        Style::default().fg(if app.context_percent() > 80 {
+        format!("{}% ctx", ctx.context_percent),
+        Style::default().fg(if ctx.context_percent > 80 {
             ui_danger()
         } else {
             ui_muted()
@@ -627,9 +853,9 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let tokens_text = format!(
         " {}in / {}out │ Turns: {} ",
-        crate::output::format_tokens(app.total_input_tokens),
-        crate::output::format_tokens(app.total_output_tokens),
-        app.turn_count,
+        crate::output::format_tokens(ctx.total_input_tokens),
+        crate::output::format_tokens(ctx.total_output_tokens),
+        ctx.turn_count,
     );
 
     let block = Block::default()
@@ -644,17 +870,15 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     frame.render_widget(header, area);
 }
 
-fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
-    use crate::tui::terminal_palette::{
-        ui_accent, ui_brand, ui_cloud, ui_danger, ui_muted, ui_success,
-    };
+fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+    use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_cloud, ui_muted, ui_success};
     let mut lines: Vec<Line> = Vec::new();
 
-    if app.chat_messages.is_empty() && !app.is_loading {
+    if ctx.chat_messages.is_empty() && !ctx.is_loading {
         use crate::design_system::AccessMode;
         // Access-mode colors match the status-bar chip so the visual identity is
         // consistent across the app.
-        let (mode_label, mode_color) = match provider_access_mode(&app.session.provider) {
+        let (mode_label, mode_color) = match ctx.access_mode {
             AccessMode::Local => ("local · on-device & private", ui_success()),
             AccessMode::Byok => ("your own key · BYOK", ui_accent()),
             AccessMode::Cloud => ("AGI cloud subscription", ui_cloud()),
@@ -670,7 +894,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         lines.push(Line::from(vec![
             Span::styled("  Model  ", Style::default().fg(ui_muted())),
             Span::styled(
-                app.model_name.clone(),
+                ctx.model_name.to_string(),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled("   ◉ ", Style::default().fg(mode_color)),
@@ -690,7 +914,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
             Style::default().fg(ui_muted()),
         )));
     } else {
-        for msg in &app.chat_messages {
+        for msg in ctx.chat_messages {
             if !lines.is_empty() {
                 lines.push(Line::from(""));
             }
@@ -743,65 +967,42 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     // Tool-call rows: a visible record of what the agent did this turn
     // (running → succeeded/failed), instead of vanishing into swallowed stderr.
-    if !app.tool_cells.is_empty() {
-        use crate::tui::transcript_cell::TranscriptCellState;
+    if !ctx.tool_cells.is_empty() {
         lines.push(Line::from(""));
-        for cell in &app.tool_cells {
-            let (glyph, glyph_color) = match cell.state {
-                TranscriptCellState::Running => (app.spinner_char(), ui_muted()),
-                TranscriptCellState::Complete => ("✔", ui_success()),
-                TranscriptCellState::Failed => ("✗", ui_danger()),
-                TranscriptCellState::Cancelled => ("⊘", ui_muted()),
-                TranscriptCellState::Pending => ("•", ui_muted()),
-            };
-            let mut spans = vec![
-                Span::styled(format!("  {glyph} "), Style::default().fg(glyph_color)),
-                Span::styled(
-                    cell.name.clone(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-            ];
-            if !cell.summary.is_empty() {
-                spans.push(Span::styled(
-                    format!("  {}", cell.summary),
-                    Style::default().fg(ui_muted()),
-                ));
-            }
-            lines.push(Line::from(spans));
-            if let Some(preview) = &cell.output_preview {
-                lines.push(Line::from(vec![
-                    Span::raw("    "),
-                    Span::styled(preview.clone(), Style::default().fg(ui_muted())),
-                ]));
-            }
+        for cell in ctx.tool_cells {
+            lines.extend(tool_cell_lines(cell, ctx.spinner_char));
         }
     }
 
     // Loading indicator with shimmer
-    if app.is_loading {
+    if ctx.is_loading {
         lines.push(Line::from(""));
-        let elapsed = app.stream_start.map(|s| s.elapsed()).unwrap_or_default();
+        let elapsed = ctx.stream_start.map(|s| s.elapsed()).unwrap_or_default();
         let elapsed_str = if elapsed.as_secs() >= 60 {
             format!("{}m {}s", elapsed.as_secs() / 60, elapsed.as_secs() % 60)
         } else {
             format!("{}s", elapsed.as_secs())
         };
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("  {} ", app.spinner_char()),
-                Style::default().fg(ui_accent()),
-            ),
-            Span::styled(
-                format!("Thinking... {elapsed_str}"),
-                Style::default()
-                    .fg(ui_muted())
-                    .add_modifier(Modifier::ITALIC),
-            ),
-        ]));
+        let verb = ctx.loading_verb;
+        // After ~10s with no streamed output yet, add a gentle stall hint so a
+        // slow first token (cold local model, network) doesn't look like a hang.
+        let stalled = ctx.stream_buffer.is_empty() && elapsed.as_secs() >= 10;
+        let status = if stalled {
+            format!("{verb}… {elapsed_str} · still working")
+        } else {
+            format!("{verb}… {elapsed_str}")
+        };
+        let mut spinner_line: Vec<Span<'static>> = vec![Span::styled(
+            format!("  {} ", ctx.spinner_char),
+            Style::default().fg(ui_accent()),
+        )];
+        spinner_line.extend(super::shimmer::shimmer_spans(&status));
+        lines.push(Line::from(spinner_line));
 
-        // Show streaming buffer
-        if !app.stream_buffer.is_empty() {
-            for line in app.stream_buffer.lines().take(5) {
+        // Live streamed output. During a turn this is redrawn each tick, so show
+        // a generous tail (not just 5 lines) for a real streaming feel.
+        if !ctx.stream_buffer.is_empty() {
+            for line in ctx.stream_buffer.lines().rev().take(40).collect::<Vec<_>>().into_iter().rev() {
                 lines.push(Line::from(Span::styled(
                     format!("    {line}"),
                     Style::default(),
@@ -814,7 +1015,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let visible_height = area.height.saturating_sub(2) as usize;
     let total_lines = lines.len();
     let max_scroll = total_lines.saturating_sub(visible_height) as u16;
-    let effective_scroll = app.scroll_offset.min(max_scroll);
+    let effective_scroll = ctx.scroll_offset.min(max_scroll);
     let scroll_pos = max_scroll.saturating_sub(effective_scroll);
 
     let block = Block::default()
@@ -1008,6 +1209,46 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
     frame.render_widget(banner_widget, area);
 }
 
+/// Process-global cache of locally-discovered models (Ollama / LM Studio),
+/// converted to catalog `Model`s so the `/model` picker can show a Local
+/// section for what's actually installed. Populated by a non-blocking
+/// background probe at TUI startup (see the spawn after `TuiApp::new`), so
+/// launch never waits on the 2.5s local-probe timeout. Read synchronously by
+/// the (sync) `/model` slash handler.
+static DISCOVERED_LOCAL_MODELS: std::sync::OnceLock<
+    std::sync::Mutex<Vec<crate::model_catalog::Model>>,
+> = std::sync::OnceLock::new();
+
+/// Map a discovered local model into a catalog `Model`. Provider is what places
+/// the row in the picker's Local section (`ProviderId::from_catalog_name`); the
+/// other fields are presentation-only defaults since context window, tool
+/// support, and routing are re-resolved at model-switch time.
+fn discovered_local_to_catalog_model(
+    d: &crate::local_models::DiscoveredLocalModel,
+) -> crate::model_catalog::Model {
+    crate::model_catalog::Model {
+        id: d.id.clone(),
+        provider: d.provider.clone(),
+        display_name: d.id.clone(),
+        context_window: 0,
+        max_output_tokens: 0,
+        input_price_per_1m: 0.0,
+        output_price_per_1m: 0.0,
+        cache_read_price_per_1m: 0.0,
+        cache_write_price_per_1m: 0.0,
+        supports_tools: false,
+        supports_vision: false,
+        supports_reasoning: false,
+        supports_audio_input: false,
+        supports_audio_output: false,
+        supports_pdf: false,
+        release_date: String::new(),
+        status: "active".to_string(),
+        cloud_eligible: false,
+        requires_environment: None,
+    }
+}
+
 /// Classify the active runtime provider into an access mode for the status
 /// chip. Presentation only — mirrors the model-picker grouping and never
 /// affects routing. A keyless OpenAI-compatible endpoint (e.g. LM Studio) and
@@ -1043,31 +1284,27 @@ fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_sys
     }
 }
 
-fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
+fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     use crate::tui::terminal_palette::{
         ui_accent, ui_cloud, ui_danger, ui_muted, ui_on_dark, ui_on_light, ui_status_bar_bg,
         ui_success,
     };
-    let badge_fg = if app.mode == InteractionMode::Chat {
+    let badge_fg = if ctx.mode == InteractionMode::Chat {
         ui_on_dark()
     } else {
         ui_on_light()
     };
     let mode_span = Span::styled(
-        format!(" {} ", app.mode.label()),
-        Style::default().fg(badge_fg).bg(app.mode.color()),
+        format!(" {} ", ctx.mode.label()),
+        Style::default().fg(badge_fg).bg(ctx.mode.color()),
     );
 
-    let cost_str = crate::output::format_cost(
-        &app.session.model,
-        app.session.total_input_tokens,
-        app.session.total_output_tokens,
-    );
+    let cost_str = ctx.cost_str.clone();
 
-    let effort_str = format!("effort:{}", app.effort.label());
+    let effort_str = format!("effort:{}", ctx.effort_label);
 
     // Sandbox indicator: positive when a sandbox backend is active, critical otherwise.
-    let (sandbox_label, sandbox_color) = match app.sandbox_type {
+    let (sandbox_label, sandbox_color) = match ctx.sandbox_type {
         Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", ui_success()),
         Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", ui_success()),
         Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", ui_success()),
@@ -1080,36 +1317,90 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     // Keeps AGI's core differentiator visible at all times. Purely a label —
     // it reflects the active provider, it never changes routing.
     let access_span = {
+        use crate::agent::PrivacyMode;
         use crate::design_system::AccessMode;
-        let (label, color) = match provider_access_mode(&app.session.provider) {
-            AccessMode::Local => ("local", ui_success()),
-            AccessMode::Byok => ("byok", ui_accent()),
-            AccessMode::Cloud => ("cloud", ui_cloud()),
+        let tier = match ctx.access_mode {
+            AccessMode::Local => "local",
+            AccessMode::Byok => "byok",
+            AccessMode::Cloud => "cloud",
         };
-        Span::styled(
-            format!("◉ {label}"),
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        )
+        // The session privacy mode governs whether a send is allowed; the access
+        // tier only reflects where the active model routes. A Local session with
+        // an off-device model is BLOCKED — surface the mismatch in danger color
+        // so the session mode is visible. (Previously the chip showed only the
+        // tier — e.g. "byok" — which hid that the session was Local and left
+        // users confused about why sends were refused.)
+        if ctx.privacy_mode == PrivacyMode::Local && ctx.access_mode != AccessMode::Local {
+            Span::styled(
+                format!("◉ local≠{tier}"),
+                Style::default().fg(ui_danger()).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            let color = match ctx.access_mode {
+                AccessMode::Local => ui_success(),
+                AccessMode::Byok => ui_accent(),
+                AccessMode::Cloud => ui_cloud(),
+            };
+            Span::styled(
+                format!("◉ {tier}"),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            )
+        }
     };
 
-    let mut spans: Vec<Span> = vec![mode_span, Span::raw(" "), access_span, Span::raw("  ")];
-    spans.extend([
-        Span::styled(cost_str, Style::default().fg(ui_muted())),
-        Span::raw("  "),
-        Span::styled(effort_str, Style::default().fg(ui_muted())),
-        Span::raw("  "),
-        Span::styled(sandbox_label, Style::default().fg(sandbox_color)),
-        Span::raw("  "),
-        Span::styled("Shift+Tab: mode", Style::default().fg(ui_muted())),
-        Span::raw("  "),
-        Span::styled("/: commands", Style::default().fg(ui_muted())),
-        Span::raw("  "),
-        Span::styled("Esc: quit", Style::default().fg(ui_muted())),
-    ]);
-    let status = Line::from(spans);
+    // Context-usage fill bar with escalating color (green → accent → red).
+    let ctx_pct = ctx.context_percent;
+    let bar_w = 8usize;
+    let filled = ((ctx_pct as usize * bar_w) / 100).min(bar_w);
+    let ctx_color = if ctx_pct >= 85 {
+        ui_danger()
+    } else if ctx_pct >= 60 {
+        ui_accent()
+    } else {
+        ui_success()
+    };
+    let ctx_str = format!(
+        "ctx [{}{}] {ctx_pct:>3}%",
+        "█".repeat(filled),
+        "░".repeat(bar_w - filled),
+    );
 
-    let bar =
-        Paragraph::new(status).style(Style::default().bg(ui_status_bar_bg()).fg(ui_on_dark()));
+    // Essential items, highest priority first — always shown.
+    let mut spans: Vec<Span> = vec![
+        mode_span,
+        Span::raw(" "),
+        access_span,
+        Span::raw("  "),
+        Span::styled(ctx_str, Style::default().fg(ctx_color)),
+        Span::raw("  "),
+    ];
+
+    // Optional items in descending priority — added only while they fit, so a
+    // narrow terminal drops the low-priority hints instead of hard-clipping the
+    // important indicators on the right.
+    let optional: Vec<Span> = vec![
+        Span::styled(cost_str, Style::default().fg(ui_muted())),
+        Span::styled(sandbox_label.to_string(), Style::default().fg(sandbox_color)),
+        Span::styled(effort_str, Style::default().fg(ui_muted())),
+        Span::styled("Shift+Tab: mode".to_string(), Style::default().fg(ui_muted())),
+        Span::styled("/: commands".to_string(), Style::default().fg(ui_muted())),
+        Span::styled("Esc: quit".to_string(), Style::default().fg(ui_muted())),
+    ];
+    let avail = area.width as usize;
+    let mut used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+    for opt in optional {
+        let w = opt.content.chars().count() + 2;
+        if used + w <= avail {
+            spans.push(opt);
+            spans.push(Span::raw("  "));
+            used += w;
+        } else {
+            break;
+        }
+    }
+
+    let bar = Paragraph::new(Line::from(spans))
+        .style(Style::default().bg(ui_status_bar_bg()).fg(ui_on_dark()));
     frame.render_widget(bar, area);
 }
 
@@ -1155,13 +1446,33 @@ fn render_overlay(
     ov: &dyn crate::tui::widgets::interactive::InteractiveView,
     scroll_offset: u16,
 ) {
-    let text = ov.render();
-    if text.is_empty() {
+    // Prefer a view's styled lines (e.g. the diff review's +/- coloring); fall
+    // back to the plain text render for every other overlay.
+    let lines: Vec<Line> = match ov.render_styled() {
+        Some(styled) => styled,
+        None => {
+            let text = ov.render();
+            if text.is_empty() {
+                return;
+            }
+            text.lines().map(|l| Line::from(l.to_string())).collect()
+        }
+    };
+    if lines.is_empty() {
         return;
     }
-    let lines: Vec<Line> = text.lines().map(|l| Line::from(l.to_string())).collect();
-    let height = (lines.len() as u16 + 2).min(area.height);
-    let width = area.width.min(84);
+    // Each InteractiveView already renders its own complete ASCII box (with a
+    // title row), so size the overlay to that content and draw it WITHOUT an
+    // extra ratatui border. Previously this wrapped the already-boxed text in
+    // Block::borders(ALL), producing a double box (outer themed frame + the
+    // widget's own `┌─ … ─┐`).
+    let height = (lines.len() as u16).min(area.height);
+    let width = lines
+        .iter()
+        .map(|l| l.width() as u16)
+        .max()
+        .unwrap_or(0)
+        .min(area.width);
     let overlay_area = Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
         y: area.y + area.height.saturating_sub(height) / 2,
@@ -1169,18 +1480,10 @@ fn render_overlay(
         height,
     };
     frame.render_widget(ratatui::widgets::Clear, overlay_area);
-    let visible_lines = overlay_area.height.saturating_sub(2) as usize;
+    let visible_lines = overlay_area.height as usize;
     let max_scroll = lines.len().saturating_sub(visible_lines) as u16;
     let scroll = scroll_offset.min(max_scroll);
-    let border_color = crate::tui::terminal_palette::ui_warning();
-    let para = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color)),
-        )
-        .scroll((scroll, 0))
-        .wrap(Wrap { trim: false });
+    let para = Paragraph::new(lines).scroll((scroll, 0));
     frame.render_widget(para, overlay_area);
 }
 
@@ -1400,7 +1703,7 @@ fn composer_move_down(app: &mut TuiApp) -> bool {
 fn open_command_popup(app: &mut TuiApp) {
     use crate::tui::widgets::command_popup::{CommandPopup, RegistryCommand as PopupCmd};
 
-    let cmds: Vec<PopupCmd> = app
+    let mut cmds: Vec<PopupCmd> = app
         .command_registry
         .commands()
         .iter()
@@ -1411,6 +1714,23 @@ fn open_command_popup(app: &mut TuiApp) {
             )
         })
         .collect();
+
+    // TUI-only interactive overlays. These open ratatui overlays that the
+    // line-based REPL can't render, so they are intentionally kept out of the
+    // shared `builtin_slash_registry_commands()` (whose REPL-coverage contract
+    // would reject them). They are still dispatched by `handle_slash_command`
+    // below, so surface them here so `/` makes them discoverable in the TUI.
+    for (name, desc) in [
+        ("memories", "Configure auto-memory settings"),
+        ("skills-toggle", "Enable or disable individual skills"),
+        ("title", "Configure the terminal window title"),
+        ("diff-review", "Review changed files hunk by hunk"),
+    ] {
+        if !cmds.iter().any(|c| c.name == name) {
+            cmds.push(PopupCmd::new(name, desc));
+        }
+    }
+
     app.open_overlay(Box::new(CommandPopup::new(cmds)));
 }
 
@@ -1529,8 +1849,9 @@ fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     use super::widgets::model_picker::{handle_key, PickerAction};
 
-    let all_models = crate::model_catalog::catalog().all();
-    let action = handle_key(&mut app.model_picker, key, all_models);
+    let mut all_models = crate::model_catalog::catalog().all().to_vec();
+    all_models.extend(crate::models::openrouter_models::load_cached_models());
+    let action = handle_key(&mut app.model_picker, key, &all_models);
 
     match action {
         PickerAction::Nothing => InputAction::None,
@@ -1603,6 +1924,9 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         }
         PickerAction::Select(choice) => {
             app.theme_choice = choice;
+            // Apply the theme: re-routes every `ui_*` semantic token so the whole
+            // TUI recolors on the next frame.
+            crate::tui::terminal_palette::set_active_theme(choice as u8);
             app.input.clear();
             app.cursor = 0;
             app.chat_messages.push(ChatMessage {
@@ -1797,9 +2121,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/model" | "/m" => {
             if arg.is_empty() {
                 // Open the interactive model picker overlay.
-                let all = crate::model_catalog::catalog().all();
+                let mut all = crate::model_catalog::catalog().all().to_vec();
+                all.extend(crate::models::openrouter_models::load_cached_models());
+                // Merge locally-discovered models (Ollama / LM Studio) so the
+                // picker's Local section reflects what's actually installed —
+                // these are dynamic and absent from the static catalog.
+                if let Some(cache) = DISCOVERED_LOCAL_MODELS.get() {
+                    if let Ok(local) = cache.lock() {
+                        all.extend(local.iter().cloned());
+                    }
+                }
                 let current = app.model_name.clone();
-                app.model_picker.open(all, &current);
+                app.model_picker.open(&all, &current);
                 SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
                 match app.session.switch_model(arg) {
@@ -2242,6 +2575,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match ThemeChoice::from_arg(arg) {
                     Some(choice) => {
                         app.theme_choice = choice;
+                        crate::tui::terminal_palette::set_active_theme(choice as u8);
                         SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
                     }
                     None => SlashResult::SystemMessage(format!(
@@ -2474,7 +2808,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/extra-usage" | "/pricing" => {
             SlashResult::SystemMessage(
-                "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nHobby: managed cloud with credits.".into()
+                "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nPro/Max: managed cloud flat subscription (waitlist — agiworkforce.com).".into()
             )
         }
 
@@ -2658,7 +2992,52 @@ pub async fn run(
         }
     }
 
-    crate::attach_mcp_manager_for_session(&mut session, &mcp_config_options, true, true).await?;
+    // Mark the TUI active *before* spawning any background work so the MCP
+    // attach's `connect_all` progress lines ("N tools discovered", etc.) are
+    // suppressed instead of racing the (later) `setup_terminal` flag flip and
+    // bleeding raw stderr into the alternate screen. `setup_terminal` sets it
+    // again (idempotent).
+    super::set_tui_active(true);
+
+    // Do NOT block TUI startup on MCP connect / OAuth. Spawn the connect
+    // (including any browser-OAuth dance) on a background task; the resulting
+    // manager is injected into the session once it's ready (drained
+    // non-blockingly in the event loop). This stops the default TUI from hanging
+    // up to OAUTH_INTERACTIVE_TIMEOUT at launch when a repo `.mcp.json` declares
+    // an HTTP-OAuth server. Mirrors the REPL's P0-1 fix; until the manager is
+    // ready, turns simply run without MCP tools.
+    let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
+        let opts = mcp_config_options.clone();
+        Some(tokio::spawn(async move {
+            match crate::build_mcp_manager(&opts, true, true).await {
+                Ok(mgr) => mgr,
+                Err(e) => {
+                    // Background task during a live TUI: a raw stderr warning
+                    // would corrupt the alternate screen. Swallow it here; the
+                    // user can inspect MCP state via `/mcp`.
+                    if !crate::tui::tui_active() {
+                        crate::output::print_warn(&format!("MCP config/connect error: {e:#}"));
+                    }
+                    None
+                }
+            }
+        }))
+    };
+
+    // Populate the OpenRouter BYOK model cache in the background (public
+    // `/models` endpoint — no key needed) so the model picker can list current
+    // OpenRouter models without blocking startup. Skipped while the cache is
+    // fresh; the picker reads the cache directly, so this task just refreshes it.
+    if crate::models::openrouter_models::load_cached_models().is_empty() {
+        tokio::spawn(async move {
+            if let Ok(models) = crate::models::openrouter_models::fetch_openrouter_models().await {
+                crate::models::openrouter_models::save_cache(
+                    &models,
+                    &chrono::Utc::now().to_rfc3339(),
+                );
+            }
+        });
+    }
 
     // Hooks
     let hooks_config = session.hooks_config().clone();
@@ -2680,9 +3059,33 @@ pub async fn run(
 
     let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
     app.wire_fallback_banner();
+    // Populate the picker's Local section without blocking launch: probe Ollama
+    // / LM Studio in the background (2.5s timeout) and cache the catalog-shaped
+    // results for the sync `/model` handler to read.
+    {
+        let cfg = config.clone();
+        tokio::spawn(async move {
+            let probes = crate::local_models::discover_all(&cfg).await;
+            let models: Vec<crate::model_catalog::Model> =
+                crate::local_models::discovered_models(&probes)
+                    .iter()
+                    .map(discovered_local_to_catalog_model)
+                    .collect();
+            let _ = DISCOVERED_LOCAL_MODELS
+                .get_or_init(|| std::sync::Mutex::new(Vec::new()))
+                .lock()
+                .map(|mut g| *g = models);
+        });
+    }
     let mut terminal = setup_terminal()?;
 
-    let result = run_event_loop(&mut terminal, &mut app).await;
+    let result = run_event_loop(&mut terminal, &mut app, &mut mcp_attach_join).await;
+
+    // Abort the background MCP attach if it never finished (e.g. OAuth still
+    // pending) so it can't keep a browser-wait or connection alive after exit.
+    if let Some(handle) = mcp_attach_join.take() {
+        handle.abort();
+    }
 
     restore_terminal(&mut terminal)?;
 
@@ -2720,10 +3123,39 @@ pub async fn run(
 async fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut TuiApp,
+    mcp_attach_join: &mut Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>>,
 ) -> Result<()> {
     render(terminal, app)?;
 
     loop {
+        // Inject the MCP manager once the background attach finishes — without
+        // blocking the UI. Until then, turns simply run without MCP tools.
+        if mcp_attach_join
+            .as_ref()
+            .map(|h| h.is_finished())
+            .unwrap_or(false)
+        {
+            if let Some(handle) = mcp_attach_join.take() {
+                if let Ok(Some(mgr)) = handle.await {
+                    app.session.set_mcp_manager(mgr);
+                }
+            }
+        }
+
+        // Surface out-of-band notices (e.g. a local model's tool support being
+        // dropped for a turn) as system messages so they are visible instead of
+        // silently swallowed, then redraw so they appear immediately.
+        let notices = crate::tui::drain_tui_notices();
+        if !notices.is_empty() {
+            for text in notices {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text,
+                });
+            }
+            render(terminal, app)?;
+        }
+
         if event::poll(Duration::from_millis(TICK_RATE_MS))? {
             let action = match event::read()? {
                 Event::Key(key) => handle_key_event(app, key),
@@ -3108,6 +3540,18 @@ async fn send_message(
         .effort
         .thinking_budget_for_anthropic();
 
+    // Snapshot the session-derived display bits before the send future takes a
+    // `&mut app.session` borrow. These don't change during a turn (provider is
+    // fixed; token totals only settle once it ends), so the live frame can reuse
+    // them while the rest of `FrameCtx` is built from disjoint `app` fields.
+    let turn_access_mode = provider_access_mode(&app.session.provider);
+    let turn_privacy_mode = app.session.privacy_mode;
+    let turn_cost_str = crate::output::format_cost(
+        &app.session.model,
+        app.session.total_input_tokens,
+        app.session.total_output_tokens,
+    );
+
     let result = {
         let callback = Box::new(move |chunk: &str| {
             if let Ok(mut buf) = buf_for_callback.lock() {
@@ -3121,7 +3565,7 @@ async fn send_message(
         loop {
             tokio::select! {
                 biased;
-                outcome = &mut send_fut => break outcome,
+                outcome = &mut send_fut => break Some(outcome),
                 _ = broker.notified() => {
                     while let Some(req) = broker.drain_pending().await {
                         let choice = run_tui_approval_modal(terminal, &req)?;
@@ -3139,6 +3583,62 @@ async fn send_message(
                 }
                 Some(ev) = tool_rx.recv() => {
                     apply_tool_event(&mut tool_cells, ev);
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_millis(80)) => {
+                    // The UI is parked during a turn (the send future holds a &mut
+                    // borrow of the session), so this tick is the only place we can
+                    // honor a cancel keystroke. Poll non-blockingly; Esc or Ctrl-C
+                    // aborts by breaking out, which drops `send_fut` and cancels the
+                    // in-flight stream.
+                    if crossterm::event::poll(std::time::Duration::ZERO)? {
+                        if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
+                            let cancel = key.code == crossterm::event::KeyCode::Esc
+                                || (key.code == crossterm::event::KeyCode::Char('c')
+                                    && key
+                                        .modifiers
+                                        .contains(crossterm::event::KeyModifiers::CONTROL));
+                            if cancel {
+                                break None;
+                            }
+                        }
+                    }
+
+                    // Live redraw. Pull the latest streamed text into a disjoint
+                    // `app` field, advance the spinner, mirror tool cells, then
+                    // draw a frame built entirely from fields *other* than
+                    // `app.session` (still borrowed by `send_fut`).
+                    if let Ok(b) = buf_for_display.lock() {
+                        app.stream_buffer = b.clone();
+                    }
+                    app.spinner_tick = app.spinner_tick.wrapping_add(1);
+                    let ctx = FrameCtx {
+                        model_name: &app.model_name,
+                        provider_name: &app.provider_name,
+                        git_branch: app.git_branch.as_deref(),
+                        total_input_tokens: app.total_input_tokens,
+                        total_output_tokens: app.total_output_tokens,
+                        turn_count: app.turn_count,
+                        context_percent: context_percent_for(
+                            &app.model_name,
+                            app.total_input_tokens,
+                            app.total_output_tokens,
+                        ),
+                        chat_messages: &app.chat_messages,
+                        tool_cells: &tool_cells,
+                        is_loading: app.is_loading,
+                        stream_start: app.stream_start,
+                        stream_buffer: &app.stream_buffer,
+                        spinner_char: spinner_frame(app.spinner_tick),
+                        loading_verb: loading_verb_for(app.turn_count),
+                        scroll_offset: app.scroll_offset,
+                        access_mode: turn_access_mode,
+                        privacy_mode: turn_privacy_mode,
+                        mode: app.mode,
+                        effort_label: app.effort.label(),
+                        sandbox_type: app.sandbox_type,
+                        cost_str: turn_cost_str.clone(),
+                    };
+                    render_turn_frame(terminal, &ctx)?;
                 }
             }
         }
@@ -3167,7 +3667,7 @@ async fn send_message(
     app.stream_start = None;
 
     match result {
-        Ok(turn) => {
+        Some(Ok(turn)) => {
             let response_text = if app.stream_buffer.is_empty() {
                 turn.response.clone()
             } else {
@@ -3181,11 +3681,29 @@ async fn send_message(
 
             app.sync_stats();
         }
-        Err(e) => {
+        Some(Err(e)) => {
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
                 text: format!("Error: {:#}", e),
             });
+        }
+        None => {
+            // Cancelled mid-stream (Esc / Ctrl-C). Keep whatever streamed so far
+            // and reconcile session history so the next turn stays a valid
+            // user→assistant sequence.
+            let partial = app.stream_buffer.clone();
+            app.session.finalize_cancelled_turn(&partial);
+            if !partial.is_empty() {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::Assistant,
+                    text: partial,
+                });
+            }
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: "⊘ Stopped".to_string(),
+            });
+            app.sync_stats();
         }
     }
 
@@ -3257,6 +3775,50 @@ mod tests {
 
     fn make_key(code: crossterm::event::KeyCode) -> crossterm::event::KeyEvent {
         crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn tool_cell_renders_per_type_icon_state_glyph_and_command_band() {
+        use crate::tui::transcript_cell::TranscriptCellState;
+        let line0 = |cell: &ToolCell| -> String {
+            tool_cell_lines(cell, "⠋")[0]
+                .spans
+                .iter()
+                .map(|s| s.content.as_ref())
+                .collect()
+        };
+
+        // Edit + complete → ✔ state glyph and ± type icon.
+        let edit = ToolCell {
+            call_id: "1".into(),
+            name: "edit_file".into(),
+            summary: "src/main.rs".into(),
+            state: TranscriptCellState::Complete,
+            output_preview: None,
+        };
+        let t = line0(&edit);
+        assert!(t.contains('✔') && t.contains('±') && t.contains("edit_file"), "got: {t}");
+
+        // Shell tool → $ icon AND a `$ <command>` band.
+        let cmd = ToolCell {
+            call_id: "2".into(),
+            name: "bash".into(),
+            summary: "ls -la".into(),
+            state: TranscriptCellState::Running,
+            output_preview: None,
+        };
+        assert!(line0(&cmd).contains("$ ls -la"), "command band missing: {}", line0(&cmd));
+
+        // Failed read → ✗ state glyph and ▤ read icon.
+        let fail = ToolCell {
+            call_id: "3".into(),
+            name: "read_file".into(),
+            summary: String::new(),
+            state: TranscriptCellState::Failed,
+            output_preview: None,
+        };
+        let f = line0(&fail);
+        assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
     }
 
     #[test]
