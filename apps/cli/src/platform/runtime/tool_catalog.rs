@@ -268,7 +268,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         def(
             "read_file",
-            "Read the contents of a file at the given path. Optionally read a specific line range.",
+            "Read a file's contents (optionally a line range). Always read a file before editing or overwriting it, and before proposing changes to code you have not seen.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -281,7 +281,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         ).read_only().with_size_cap(100_000),
         def(
             "write_file",
-            "Write content to a file, creating it if it doesn't exist or overwriting if it does.",
+            "Create a new file, or OVERWRITE an existing file's entire contents. For targeted changes to an existing file, prefer edit_file; read a file before overwriting it so you do not discard existing content.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -318,7 +318,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         ).with_size_cap(50_000),
         def(
             "search_files",
-            "Search for a regex pattern across files in a directory (like grep -rn).",
+            "Search a regex pattern across files in a directory (like grep -rn), returning file:line matches. Use this to locate code, symbols, definitions, or usages before assuming something does not exist.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
