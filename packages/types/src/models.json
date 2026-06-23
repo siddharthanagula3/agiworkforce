@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-06-20",
+  "lastUpdated": "2026-06-23",
   "verificationLog": [
     {
       "date": "2026-06-03",
@@ -19,6 +19,12 @@
       "verifiedBy": "research-agent-2026-06-20",
       "status": "PASS",
       "notes": "GLM-5.2 contextWindow confirmed 1M (was 200K). Groq llama-3.3-70b-versatile and llama-3.1-8b-instant marked deprecated (shutdown 2026-08-16). Qwen API IDs updated to Qwen3 generation: qwen-max\u2192qwen3-max, qwen-flash\u2192qwen3.5-flash, qwen-coder-plus\u2192qwen3-coder-plus, qwen-coder-flash\u2192qwen3-coder-flash. qwen-3.6-plus renamed to qwen-3.5-plus (apiModelId qwen3.6-plus did not exist; correct ID is qwen3.5-plus). qwen-turbo marked deprecated (absorbed by qwen3.5-flash). NVIDIA Nemotron models updated to Nemotron 3 family: ultra-253b\u2192nemotron-3-ultra-550b-a55b, super-49b\u2192nemotron-3-super-120b-a12b, nano-8b\u2192nemotron-3-nano-30b-a3b (all 1M ctx). Grok-4.3, DeepSeek V4, Kimi K2.6 confirmed current \u2014 no changes needed. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, alibabacloud DashScope."
+    },
+    {
+      "date": "2026-06-23",
+      "verifiedBy": "screenshot-verified-openai-compare-2026-06-23",
+      "status": "PASS",
+      "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com): gpt-5-nano = $0.05 input / $0.01 cached / $0.40 output, 400K ctx, reasoning tokens SUPPORTED (released Aug 2025, still served); gpt-4.1-nano = $0.10 input / $0.03 cached / $0.40 output, 1,047,576 ctx, NO reasoning tokens, fine-tuning supported (released Apr 2025, still served). Added to tierAllowedModels.economy and modelPresets.openai. Prior catalog had no nano tier (cheapest OpenAI was gpt-5.4-mini at $0.75/$4.50). For fixed-price cost control prefer gpt-4.1-nano (cannot emit reasoning tokens). Release dates from public launch info (GPT-5 nano Aug 2025, GPT-4.1 nano Apr 2025); the Compare page shows knowledge-cutoff, not release."
     }
   ],
   "providers": {
@@ -2255,6 +2261,70 @@
       "released": "March 2026",
       "deprecation_date": null
     },
+    "gpt-5-nano": {
+      "id": "gpt-5-nano",
+      "apiModelId": "gpt-5-nano",
+      "name": "GPT-5 Nano",
+      "provider": "openai",
+      "modelType": "chat",
+      "contextWindow": 400000,
+      "inputCost": 0.05,
+      "outputCost": 0.4,
+      "cached_input": 0.01,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "fast",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Light Chat", "Classification", "High-Volume Tasks", "Cost-Efficient"],
+      "released": "August 2025",
+      "deprecation_date": null
+    },
+    "gpt-4.1-nano": {
+      "id": "gpt-4.1-nano",
+      "apiModelId": "gpt-4.1-nano",
+      "name": "GPT-4.1 Nano",
+      "provider": "openai",
+      "modelType": "chat",
+      "contextWindow": 1047576,
+      "inputCost": 0.1,
+      "outputCost": 0.4,
+      "cached_input": 0.03,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "fast",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Light Chat", "Long Context", "Classification", "Cost-Efficient"],
+      "released": "April 2025",
+      "deprecation_date": null
+    },
     "gemini-3.5-flash": {
       "id": "gemini-3.5-flash",
       "apiModelId": "gemini-3.5-flash",
@@ -2489,6 +2559,8 @@
   },
   "tierAllowedModels": {
     "economy": [
+      "gpt-5-nano",
+      "gpt-4.1-nano",
       "gemini-3.1-flash-lite",
       "gpt-5.4-mini",
       "deepseek-v4-flash",
@@ -2533,6 +2605,14 @@
       {
         "value": "gpt-5.4-mini",
         "label": "GPT-5.4 Mini"
+      },
+      {
+        "value": "gpt-5-nano",
+        "label": "GPT-5 Nano"
+      },
+      {
+        "value": "gpt-4.1-nano",
+        "label": "GPT-4.1 Nano"
       }
     ],
     "anthropic": [
