@@ -141,6 +141,10 @@ pub struct AgentSession {
     pub allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub privacy_mode: PrivacyMode,
+    /// Armed by `/continue-with-byok` (stores the draft's BYOK preamble). The
+    /// Local→BYOK transition fires only when the user sends a message carrying
+    /// that preamble — drafting alone never leaves Local mode.
+    pub pending_byok_handoff: Option<String>,
     pub additional_context_dirs: Vec<PathBuf>,
     pub attached_context_files: Vec<PathBuf>,
     pub debug_mode: bool,
@@ -378,6 +382,7 @@ impl AgentSession {
             allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
+            pending_byok_handoff: None,
             additional_context_dirs: Vec::new(),
             attached_context_files: Vec::new(),
             debug_mode: false,
@@ -488,12 +493,26 @@ impl AgentSession {
 
     /// Switch the model mid-session (keeps conversation history).
     pub fn switch_model(&mut self, model: &str) -> Result<()> {
-        let next_provider = models::try_detect_provider(model).with_context(|| {
-            format!(
-                "Unknown model '{}'. Run `agi models scan` for local models or `agi models list` for catalog models, then choose a listed model.",
-                model
-            )
-        })?;
+        let next_provider = models::try_detect_provider(model)
+            .or_else(|| {
+                // OpenRouter BYOK models are fetched at runtime and aren't in the
+                // static catalog. If the selected model is in the OpenRouter
+                // cache (i.e. the picker listed it), route it via openrouter.
+                if crate::models::openrouter_models::load_cached_models()
+                    .iter()
+                    .any(|m| m.id == model)
+                {
+                    models::provider_from_name("openrouter")
+                } else {
+                    None
+                }
+            })
+            .with_context(|| {
+                format!(
+                    "Unknown model '{}'. Run `agi models scan` for local models or `agi models list` for catalog models, then choose a listed model.",
+                    model
+                )
+            })?;
         self.model = model.to_string();
         self.provider = next_provider;
         self.adopt_provider_privacy_mode();
@@ -654,6 +673,31 @@ impl AgentSession {
 
     pub fn provider_privacy_mode(&self) -> PrivacyMode {
         provider_privacy_mode(&self.provider)
+    }
+
+    /// Arm an explicit `/continue-with-byok` handoff. Records the draft's BYOK
+    /// preamble so the Local→BYOK transition can be completed only when the user
+    /// actually sends a message carrying that preamble. Arming never changes the
+    /// privacy mode — drafting is not consent.
+    pub fn arm_byok_handoff(&mut self, draft: &str) {
+        let token = draft.lines().next().unwrap_or("").trim().to_string();
+        self.pending_byok_handoff = (!token.is_empty()).then_some(token);
+    }
+
+    /// Complete an armed BYOK handoff iff `user_input` carries the reviewed
+    /// draft's BYOK preamble (the consent moment). An unrelated Local message
+    /// leaves the boundary intact and the flag armed. Returns true if the
+    /// Local→BYOK transition fired.
+    pub fn consume_byok_handoff(&mut self, user_input: &str) -> bool {
+        let matched = self
+            .pending_byok_handoff
+            .as_deref()
+            .is_some_and(|token| user_input.trim_start().starts_with(token));
+        if matched {
+            self.pending_byok_handoff = None;
+            self.set_privacy_mode(self.provider_privacy_mode());
+        }
+        matched
     }
 
     pub fn validate_privacy_boundary(&self) -> Result<()> {
@@ -1432,6 +1476,58 @@ mod tests {
 
         session.set_privacy_mode(PrivacyMode::Byok);
         assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn byok_handoff_consents_only_on_matching_draft_send() {
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new("llama3", &ctx, None);
+        let cloud_model = crate::model_catalog::models_for("openai")
+            .into_iter()
+            .next()
+            .map(|m| m.id.clone())
+            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
+        session.switch_model(&cloud_model).expect("catalog OpenAI model");
+
+        // Local session + cloud model → blocked until an explicit, consented handoff.
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.validate_privacy_boundary().is_err());
+
+        // Arming the handoff (drafting) must NOT change the privacy mode.
+        let draft = "You are continuing an AGI Local chat in BYOK mode.\nPrivacy boundary: the user explicitly selected this handoff.";
+        session.arm_byok_handoff(draft);
+        assert_eq!(
+            session.privacy_mode,
+            PrivacyMode::Local,
+            "drafting must not leave Local mode"
+        );
+
+        // Negative (the leak the earlier fix introduced): an unrelated message must
+        // NOT complete the handoff — the Local boundary stays intact and blocking.
+        assert!(!session.consume_byok_handoff("what files are in this repo?"));
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.validate_privacy_boundary().is_err());
+
+        // Positive: sending a message carrying the draft's BYOK preamble is consent —
+        // the Local→BYOK transition completes and the boundary clears.
+        assert!(session.consume_byok_handoff(draft));
+        assert_ne!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.validate_privacy_boundary().is_ok());
+        assert!(session.pending_byok_handoff.is_none(), "consent consumed");
     }
 
     #[test]

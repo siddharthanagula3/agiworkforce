@@ -27,6 +27,7 @@ import {
 } from './features/background/conversation-history';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import { setupVoiceInput } from './features/side-panel/voice';
+import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
 import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
 import {
   Terminal,
@@ -2377,6 +2378,205 @@ function injectStyles(): void {
     #sp-menu-btn {
       position: relative;
     }
+
+    /* ── First-run onboarding carousel overlay ── */
+    #sp-onboarding-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--agi-ext-bg);
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+    #sp-onboarding-overlay.visible { display: flex; }
+
+    #sp-onboarding-header {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 10px 12px 6px;
+      flex-shrink: 0;
+    }
+    #sp-onboarding-skip {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--agi-ext-text-muted);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 5px;
+      transition: color 0.15s, background 0.15s;
+    }
+    #sp-onboarding-skip:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
+    #sp-onboarding-skip:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+
+    #sp-onboarding-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* individual step panels */
+    .sp-ob-step {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 24px 0;
+      gap: 0;
+      overflow-y: auto;
+    }
+    .sp-ob-step.active { display: flex; }
+
+    .sp-ob-hero {
+      width: 80px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      flex-shrink: 0;
+    }
+    .sp-ob-hero svg { width: 80px; height: 80px; display: block; }
+
+    .sp-ob-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--agi-ext-text);
+      text-align: center;
+      margin-bottom: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Step 1 uses icon-text rows instead of a body paragraph */
+    .sp-ob-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 340px;
+    }
+    .sp-ob-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .sp-ob-row-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+      color: var(--agi-ext-text-muted);
+    }
+    .sp-ob-row-icon svg { width: 16px; height: 16px; display: block; }
+    .sp-ob-row-icon.danger { color: var(--agi-ext-danger); }
+    .sp-ob-row-text {
+      font-size: 12px;
+      color: var(--agi-ext-text-muted);
+      line-height: 1.5;
+    }
+    .sp-ob-row-text.danger { color: var(--agi-ext-danger); }
+    .sp-ob-learn-more {
+      color: var(--agi-ext-accent);
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-size: 12px;
+      padding: 0;
+      display: inline;
+      font-family: inherit;
+    }
+    .sp-ob-learn-more:hover { opacity: 0.8; }
+    .sp-ob-learn-more:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+
+    /* Steps 2-5 body text */
+    .sp-ob-body {
+      font-size: 12px;
+      color: var(--agi-ext-text-muted);
+      line-height: 1.6;
+      text-align: center;
+      max-width: 300px;
+      flex-shrink: 0;
+    }
+
+    /* footer: step dots + nav buttons */
+    #sp-onboarding-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 24px 22px;
+      flex-shrink: 0;
+    }
+
+    .sp-ob-dots {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .sp-ob-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--agi-ext-border-strong);
+      transition: background 0.2s, width 0.2s;
+    }
+    .sp-ob-dot.active {
+      width: 18px;
+      border-radius: 3px;
+      background: var(--agi-ext-accent);
+    }
+
+    .sp-ob-nav {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      max-width: 300px;
+    }
+    .sp-ob-btn-back {
+      flex: 1;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--agi-ext-border-strong);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      font-family: inherit;
+    }
+    .sp-ob-btn-back:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-ob-btn-back:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .sp-ob-btn-back[hidden] { display: none; }
+
+    .sp-ob-btn-next {
+      flex: 2;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: none;
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.12s;
+      font-family: inherit;
+    }
+    .sp-ob-btn-next:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-ob-btn-next:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
   `;
   // M-08 audit 2026-05-19: Constructable Stylesheet — CSP-compliant
   // because it's a DOM API call, not a <style> tag.
@@ -3361,6 +3561,377 @@ function refreshPageHostname(): void {
     });
   } catch {
     // chrome.tabs unavailable in test/SSR environment — ignore
+  }
+}
+
+/**
+ * Builds the first-run onboarding carousel overlay and appends it (hidden) to
+ * document.body.  Call showOnboardingOverlay() after the async storage check
+ * to reveal it.  The overlay sits at z-index 9999 so it covers the composer
+ * and toolbar without needing to toggle their display state.
+ *
+ * Steps:
+ *  0 — Beta disclosure ("I understand")
+ *  1 — Automate repetitive tasks ("Next")
+ *  2 — Tab group access ("Next")
+ *  3 — Shortcuts ("Let's go" → dismisses)
+ *  4 — Pin hint (inline inside carousel, same dismiss path)
+ */
+function buildOnboardingOverlay(onComplete: () => void): void {
+  const TOTAL_STEPS = 5;
+  let currentStep = 0;
+
+  // ── Helper: SVG icons (inline, CSP-safe) ────────────────────────────────
+
+  const flaskSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M9 3h6M9 3v7l-4 8a2 2 0 0 0 1.8 2.9h10.4A2 2 0 0 0 19 18.9L15 10V3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="9.5" cy="16" r="0.75" fill="currentColor"/>
+    <circle cx="13" cy="17.5" r="0.75" fill="currentColor"/>
+  </svg>`;
+
+  const eyeSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
+  </svg>`;
+
+  const warnSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="12" cy="17" r="0.75" fill="currentColor"/>
+  </svg>`;
+
+  // Hero SVG for step 1 (stacked browser windows with checklist glyph)
+  const browserStackSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="6" y="18" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
+    <rect x="12" y="12" width="56" height="42" rx="6" stroke="var(--agi-ext-border-strong)" stroke-width="1.5" fill="var(--agi-ext-surface)"/>
+    <rect x="18" y="8" width="56" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
+    <line x1="18" y1="19" x2="74" y2="19" stroke="var(--agi-ext-border)" stroke-width="1"/>
+    <circle cx="25" cy="14" r="2.5" fill="var(--agi-ext-accent)"/>
+    <line x1="30" y1="26" x2="50" y2="26" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="30" y1="33" x2="60" y2="33" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="30" y1="40" x2="54" y2="40" stroke="var(--agi-ext-text-muted)" stroke-width="1.5" stroke-linecap="round"/>
+    <polyline points="24,25 27,28 31,22" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="24,32 27,35 31,29" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="24,39 27,42 31,36" stroke="var(--agi-ext-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+
+  // Hero SVG for step 2 (browser tab group)
+  const tabGroupSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="8" y="28" width="64" height="42" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
+    <rect x="10" y="14" width="22" height="16" rx="4" fill="var(--agi-ext-accent)" opacity="0.85"/>
+    <rect x="34" y="18" width="18" height="12" rx="3" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-border-strong)" stroke-width="1"/>
+    <rect x="54" y="18" width="14" height="12" rx="3" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-border-strong)" stroke-width="1"/>
+    <text x="21" y="25" font-size="7" fill="var(--agi-ext-on-accent)" text-anchor="middle" font-family="-apple-system,sans-serif" font-weight="600">AGI</text>
+    <line x1="16" y1="44" x2="64" y2="44" stroke="var(--agi-ext-border)" stroke-width="1"/>
+    <rect x="14" y="50" width="52" height="8" rx="2" fill="var(--agi-ext-surface)"/>
+    <rect x="14" y="62" width="40" height="4" rx="2" fill="var(--agi-ext-surface)"/>
+  </svg>`;
+
+  // Hero SVG for step 3 (slash command menu)
+  const shortcutMenuSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="10" y="16" width="60" height="48" rx="8" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
+    <rect x="14" y="22" width="52" height="12" rx="4" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-accent)" stroke-width="1"/>
+    <text x="21" y="31" font-size="9" fill="var(--agi-ext-accent)" font-family="monospace" font-weight="700">/</text>
+    <text x="27" y="31" font-size="7.5" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif">search shortcuts</text>
+    <rect x="14" y="38" width="52" height="8" rx="3" fill="var(--agi-ext-hover)"/>
+    <text x="21" y="44.5" font-size="7" fill="var(--agi-ext-accent)" font-family="monospace">/</text>
+    <text x="27" y="44.5" font-size="7" fill="var(--agi-ext-text)" font-family="-apple-system,sans-serif">sales-lead</text>
+    <rect x="14" y="49" width="52" height="7" rx="3" fill="transparent"/>
+    <text x="21" y="54.5" font-size="7" fill="var(--agi-ext-accent)" font-family="monospace">/</text>
+    <text x="27" y="54.5" font-size="7" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif">unsubscribe</text>
+    <line x1="14" y1="58" x2="66" y2="58" stroke="var(--agi-ext-border)" stroke-width="1"/>
+    <text x="21" y="64.5" font-size="7" fill="var(--agi-ext-accent)" font-family="-apple-system,sans-serif">+ Create new shortcut</text>
+  </svg>`;
+
+  // Hero SVG for step 4 (extension card with pin icon highlighted)
+  const pinHintSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="8" y="28" width="52" height="34" rx="6" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
+    <rect x="14" y="36" width="28" height="4" rx="2" fill="var(--agi-ext-surface)"/>
+    <rect x="14" y="44" width="20" height="3" rx="1.5" fill="var(--agi-ext-surface)"/>
+    <!-- pin icon in top-right of card, highlighted -->
+    <circle cx="53" cy="35" r="10" fill="var(--agi-ext-accent)" opacity="0.15"/>
+    <path d="M53 29l2 4h3l-2.5 3.5 1 4-3.5-2-3.5 2 1-4L48 33h3l2-4z" stroke="var(--agi-ext-accent)" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
+    <!-- arrow pointing to pin -->
+    <path d="M44 50 Q42 42 48 37" stroke="var(--agi-ext-accent-secondary)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    <polyline points="46,36 48,37 47,39" stroke="var(--agi-ext-accent-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+
+  // ── Overlay container ────────────────────────────────────────────────────
+  const overlay = el('div', {
+    id: 'sp-onboarding-overlay',
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-label': 'Welcome to AGI — first-time setup',
+  });
+
+  // ── Skip button ─────────────────────────────────────────────────────────
+  const header = el('div', { id: 'sp-onboarding-header' });
+  const skipBtn = el(
+    'button',
+    { id: 'sp-onboarding-skip', 'aria-label': 'Skip onboarding' },
+    'Skip',
+  );
+  header.appendChild(skipBtn);
+  overlay.appendChild(header);
+
+  // ── Steps container ──────────────────────────────────────────────────────
+  const body = el('div', { id: 'sp-onboarding-body' });
+
+  // Step 0: Beta disclosure
+  const step0 = el('div', {
+    class: 'sp-ob-step active',
+    'data-step': '0',
+    role: 'tabpanel',
+    'aria-label': 'Step 1 of 5',
+  });
+  step0.appendChild(el('div', { class: 'sp-ob-title' }, 'This is a beta feature'));
+  const rows0 = el('div', { class: 'sp-ob-rows' });
+
+  // Row 1: flask
+  const row0a = el('div', { class: 'sp-ob-row' });
+  const row0aIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
+  appendSvgString(row0aIcon, flaskSvg);
+  const row0aText = el(
+    'div',
+    { class: 'sp-ob-row-text' },
+    'This is an early beta with risks distinct from other AGI products. You are fully responsible for all actions taken with it.',
+  );
+  row0a.appendChild(row0aIcon);
+  row0a.appendChild(row0aText);
+  rows0.appendChild(row0a);
+
+  // Row 2: eye
+  const row0b = el('div', { class: 'sp-ob-row' });
+  const row0bIcon = el('div', { class: 'sp-ob-row-icon', 'aria-hidden': 'true' });
+  appendSvgString(row0bIcon, eyeSvg);
+  const row0bText = el(
+    'div',
+    { class: 'sp-ob-row-text' },
+    'AGI can take screenshots of the page when responding. For privacy, avoid using it on sensitive sites like health, banking, or dating platforms.',
+  );
+  row0b.appendChild(row0bIcon);
+  row0b.appendChild(row0bText);
+  rows0.appendChild(row0b);
+
+  // Row 3: warning (danger text + learn more)
+  const row0c = el('div', { class: 'sp-ob-row' });
+  const row0cIcon = el('div', { class: 'sp-ob-row-icon danger', 'aria-hidden': 'true' });
+  appendSvgString(row0cIcon, warnSvg);
+  const row0cText = el('div', { class: 'sp-ob-row-text danger' });
+  row0cText.appendChild(
+    document.createTextNode(
+      'Malicious actors can hide instructions in websites, emails, and documents that trick AI into taking harmful actions without your knowledge. ',
+    ),
+  );
+  const learnMoreBtn = el('button', { class: 'sp-ob-learn-more' }, 'Learn more');
+  learnMoreBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://agi.build/safety' }).catch(() => {});
+  });
+  row0cText.appendChild(learnMoreBtn);
+  row0c.appendChild(row0cIcon);
+  row0c.appendChild(row0cText);
+  rows0.appendChild(row0c);
+
+  step0.appendChild(rows0);
+  body.appendChild(step0);
+
+  // Step 1: Value prop — automate repetitive tasks
+  const step1 = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '1',
+    role: 'tabpanel',
+    'aria-label': 'Step 2 of 5',
+  });
+  const step1Hero = el('div', { class: 'sp-ob-hero' });
+  appendSvgString(step1Hero, browserStackSvg);
+  step1.appendChild(step1Hero);
+  step1.appendChild(el('div', { class: 'sp-ob-title' }, 'Automate your repetitive tasks'));
+  step1.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-body' },
+      'AGI can take on multi-step work like QA testing, researching sales leads, and data entry across multiple sites. You can focus elsewhere knowing AGI is working in the background.',
+    ),
+  );
+  body.appendChild(step1);
+
+  // Step 2: Tab group access
+  const step2 = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '2',
+    role: 'tabpanel',
+    'aria-label': 'Step 3 of 5',
+  });
+  const step2Hero = el('div', { class: 'sp-ob-hero' });
+  appendSvgString(step2Hero, tabGroupSvg);
+  step2.appendChild(step2Hero);
+  step2.appendChild(el('div', { class: 'sp-ob-title' }, 'AGI has tab group access'));
+  step2.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-body' },
+      'When AGI is open in a tab group, it can access the URL, context, and information of all the tabs in that group.',
+    ),
+  );
+  body.appendChild(step2);
+
+  // Step 3: Shortcuts
+  const step3 = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '3',
+    role: 'tabpanel',
+    'aria-label': 'Step 4 of 5',
+  });
+  const step3Hero = el('div', { class: 'sp-ob-hero' });
+  appendSvgString(step3Hero, shortcutMenuSvg);
+  step3.appendChild(step3Hero);
+  step3.appendChild(el('div', { class: 'sp-ob-title' }, 'Use shortcuts to save time'));
+  step3.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-body' },
+      'Shortcuts make it easy to send instructions you repeat often. Type / in the chat to find and create shortcuts.',
+    ),
+  );
+  body.appendChild(step3);
+
+  // Step 4: Pin hint
+  const step4 = el('div', {
+    class: 'sp-ob-step',
+    'data-step': '4',
+    role: 'tabpanel',
+    'aria-label': 'Step 5 of 5',
+  });
+  const step4Hero = el('div', { class: 'sp-ob-hero' });
+  appendSvgString(step4Hero, pinHintSvg);
+  step4.appendChild(step4Hero);
+  step4.appendChild(el('div', { class: 'sp-ob-title' }, 'Pin AGI for quick access'));
+  step4.appendChild(
+    el(
+      'div',
+      { class: 'sp-ob-body' },
+      'Click the pin icon in the top-right corner of the extension window to keep AGI always one click away.',
+    ),
+  );
+  body.appendChild(step4);
+
+  overlay.appendChild(body);
+
+  // ── Footer: progress dots + nav buttons ─────────────────────────────────
+  const footer = el('div', { id: 'sp-onboarding-footer' });
+
+  const dotsRow = el('div', {
+    class: 'sp-ob-dots',
+    role: 'tablist',
+    'aria-label': 'Onboarding steps',
+  });
+  const dots: HTMLElement[] = [];
+  for (let i = 0; i < TOTAL_STEPS; i++) {
+    const dot = el('div', {
+      class: i === 0 ? 'sp-ob-dot active' : 'sp-ob-dot',
+      role: 'tab',
+      'aria-label': `Step ${i + 1}`,
+    });
+    dots.push(dot);
+    dotsRow.appendChild(dot);
+  }
+  footer.appendChild(dotsRow);
+
+  const navRow = el('div', { class: 'sp-ob-nav' });
+  const backBtn = el(
+    'button',
+    { class: 'sp-ob-btn-back', 'aria-label': 'Back', hidden: '' },
+    'Back',
+  );
+  const nextBtn = el(
+    'button',
+    { class: 'sp-ob-btn-next', 'aria-label': 'Continue — step 1 of 5' },
+    'I understand',
+  );
+  navRow.appendChild(backBtn);
+  navRow.appendChild(nextBtn);
+  footer.appendChild(navRow);
+  overlay.appendChild(footer);
+
+  // ── Step labels for each step's primary button ───────────────────────────
+  const stepLabels: string[] = ['I understand', 'Next', 'Next', "Let's go", 'Done'];
+  const stepAriaLabels: string[] = [
+    'Continue — step 1 of 5',
+    'Continue — step 2 of 5',
+    'Continue — step 3 of 5',
+    'Continue — step 4 of 5',
+    'Dismiss onboarding',
+  ];
+
+  // ── Navigation logic ─────────────────────────────────────────────────────
+  function dismiss(): void {
+    markOnboardingComplete();
+    overlay.classList.remove('visible');
+    onComplete();
+  }
+
+  function goToStep(step: number): void {
+    const steps = body.querySelectorAll<HTMLElement>('.sp-ob-step');
+    steps.forEach((s, i) => {
+      s.classList.toggle('active', i === step);
+    });
+    dots.forEach((d, i) => {
+      d.classList.toggle('active', i === step);
+    });
+    currentStep = step;
+    // Back button: hidden on step 0
+    if (step === 0) {
+      backBtn.setAttribute('hidden', '');
+    } else {
+      backBtn.removeAttribute('hidden');
+    }
+    // Primary button label
+    nextBtn.textContent = stepLabels[step] ?? 'Next';
+    nextBtn.setAttribute('aria-label', stepAriaLabels[step] ?? 'Continue');
+    // Focus primary button on each step transition
+    nextBtn.focus();
+  }
+
+  nextBtn.addEventListener('click', () => {
+    if (currentStep < TOTAL_STEPS - 1) {
+      goToStep(currentStep + 1);
+    } else {
+      dismiss();
+    }
+  });
+
+  backBtn.addEventListener('click', () => {
+    if (currentStep > 0) {
+      goToStep(currentStep - 1);
+    }
+  });
+
+  skipBtn.addEventListener('click', () => dismiss());
+
+  // Esc key dismisses
+  overlay.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      dismiss();
+    }
+  });
+
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Reveals the onboarding carousel and focuses the primary button.
+ * Called from the boot Promise.all once we confirm onboarding is incomplete.
+ */
+function showOnboardingOverlay(): void {
+  const overlay = document.getElementById('sp-onboarding-overlay');
+  if (!overlay) return;
+  overlay.classList.add('visible');
+  // Focus the primary CTA for keyboard users
+  const nextBtn = overlay.querySelector<HTMLButtonElement>('.sp-ob-btn-next');
+  if (nextBtn) {
+    // Defer slightly so the overlay is painted before focus
+    setTimeout(() => nextBtn.focus(), 50);
   }
 }
 
@@ -6101,6 +6672,14 @@ function buildUI(): void {
   inputArea.appendChild(promptChipsRow);
   document.body.appendChild(inputArea);
 
+  // First-run onboarding carousel overlay — built hidden; revealed after the
+  // async agi_onboarding_completed storage check in the boot Promise.all.
+  // Callback re-runs probeBridgeStatus() so the correct post-onboarding state
+  // (offline or connected) is shown as soon as the carousel is dismissed.
+  buildOnboardingOverlay(() => {
+    void probeBridgeStatus();
+  });
+
   // 2026-05-21 — drag-drop image attachments onto the composer. Highlights
   // the shell while a Files drag is in flight; on drop we route through
   // acceptIncomingComposerFiles which handles size cap, image-only filter,
@@ -6562,23 +7141,48 @@ buildUI();
 // Populate hostname chip as soon as UI is available
 refreshPageHostname();
 
-Promise.all([
-  loadMessages().then(() => {
-    if (_ctx.messages.length > 0) {
-      renderMessages();
-    }
-  }),
-  // Probe bridge status on init — updates connection pill if desktop is running
-  probeBridgeStatus(),
-])
-  .then(() => {
-    // Check for pending chat from context menu (selection, summarize, explain, translate)
-    checkPendingChat();
-  })
-  .catch((err) => {
-    // Boot errors must not surface to the user, but log for debugging.
-    console.error('[SidePanel] Boot initialization failed:', err);
-  });
+// ── First-run onboarding gate ─────────────────────────────────────────────
+// isOnboardingComplete() reads agi_onboarding_completed from chrome.storage.local
+// (defined in features/side-panel/onboarding.ts and covered by unit tests).
+// We check it BEFORE probing bridge status so we don't surface the offline-
+// onboarding screen underneath the carousel (double-overlay bug).
+// probeBridgeStatus() is called by the carousel's onComplete callback; and
+// also in the returning-user branch below.
+// The storage key literal lives only in features/side-panel/onboarding.ts;
+// isOnboardingComplete() encapsulates the read so the key is a single source
+// of truth shared with the unit tests.
+void (async () => {
+  const onboardingDone = await isOnboardingComplete();
+  if (!onboardingDone) {
+    showOnboardingOverlay();
+    // Defer bridge status until onboarding carousel is dismissed.
+    // probeBridgeStatus() is invoked by the onComplete callback in buildUI().
+    loadMessages()
+      .then(() => {
+        if (_ctx.messages.length > 0) renderMessages();
+      })
+      .catch(() => {});
+    return;
+  }
+  // Onboarding already complete — normal boot.
+  Promise.all([
+    loadMessages().then(() => {
+      if (_ctx.messages.length > 0) {
+        renderMessages();
+      }
+    }),
+    // Probe bridge status on init — updates connection pill if desktop is running
+    probeBridgeStatus(),
+  ])
+    .then(() => {
+      // Check for pending chat from context menu (selection, summarize, explain, translate)
+      checkPendingChat();
+    })
+    .catch((err) => {
+      // Boot errors must not surface to the user, but log for debugging.
+      console.error('[SidePanel] Boot initialization failed:', err);
+    });
+})();
 
 async function probeBridgeStatus(): Promise<void> {
   // Ask the background service worker for the live native-connection status.

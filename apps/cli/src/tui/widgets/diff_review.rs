@@ -10,6 +10,19 @@ use std::path::PathBuf;
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
 
+/// Truncate a row to at most `max` columns with an ellipsis so long filenames or
+/// diff lines can't overflow the box border. Counts Unicode scalar values
+/// (matches display width for the ASCII + `…` used here).
+fn truncate_cols(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut t: String = s.chars().take(max.saturating_sub(1)).collect();
+        t.push('…');
+        t
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReviewDecision {
     Approve,
@@ -128,7 +141,7 @@ impl InteractiveView for DiffReviewView {
                 .and_then(|n| n.to_str())
                 .unwrap_or("?");
             let stat = format!("+{} -{}", file.additions, file.deletions);
-            let row = format!("{decision_str}  {name}  {stat}");
+            let row = truncate_cols(&format!("{decision_str}  {name}  {stat}"), 58);
             out.push_str(&format!("│ {cursor} {row:<58}│\n"));
         }
 
@@ -136,6 +149,7 @@ impl InteractiveView for DiffReviewView {
 
         // Hunk preview for current file
         for hunk in self.current_hunks().iter().take(3) {
+            let hunk = truncate_cols(hunk, 58);
             out.push_str(&format!("│  {hunk:<58}│\n"));
         }
 
@@ -143,6 +157,103 @@ impl InteractiveView for DiffReviewView {
         out.push_str("│  y approve   n reject   s skip   ↑↓ navigate   Enter done  │\n");
         out.push_str("└────────────────────────────────────────────────────────────┘\n");
         out
+    }
+
+    fn render_styled(&self) -> Option<Vec<ratatui::text::Line<'static>>> {
+        use crate::tui::terminal_palette::{
+            ui_accent, ui_danger, ui_muted, ui_success, ui_warning,
+        };
+        use ratatui::style::Style;
+        use ratatui::text::{Line, Span};
+
+        let border = Style::default().fg(ui_muted());
+        let bs = |s: &str| Line::from(Span::styled(s.to_string(), border));
+        let mut out: Vec<Line<'static>> = Vec::new();
+
+        out.push(bs(
+            "┌─ Diff Review ─────────────────────────────────────────────┐",
+        ));
+
+        if self.files.is_empty() {
+            out.push(bs(
+                "│  (no files to review)                                      │",
+            ));
+            out.push(bs(
+                "│                                                            │",
+            ));
+            out.push(bs(
+                "│  Enter finalize   Esc cancel                               │",
+            ));
+            out.push(bs(
+                "└────────────────────────────────────────────────────────────┘",
+            ));
+            return Some(out);
+        }
+
+        // File list — decision label colored by outcome, cursor accented.
+        for (i, file) in self.files.iter().enumerate() {
+            let cursor = if i == self.cursor { "❯" } else { " " };
+            let (decision_str, dec_color) = match self.decisions.get(&file.path) {
+                Some(ReviewDecision::Approve) => ("[y] Approved", ui_success()),
+                Some(ReviewDecision::Reject) => ("[n] Rejected", ui_danger()),
+                Some(ReviewDecision::Skip) => ("[s] Skipped ", ui_warning()),
+                None => ("[ ] Pending   ", ui_muted()),
+            };
+            let name = file
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("?");
+            let stat = format!("+{} -{}", file.additions, file.deletions);
+            let row = truncate_cols(&format!("{decision_str}  {name}  {stat}"), 58);
+            let row = format!("{row:<58}");
+            // Color just the leading decision label (ASCII → byte len == char count).
+            let dlen = decision_str.len().min(row.len());
+            let (dec_part, rest_part) = row.split_at(dlen);
+            out.push(Line::from(vec![
+                Span::styled("│ ".to_string(), border),
+                Span::styled(cursor.to_string(), Style::default().fg(ui_accent())),
+                Span::raw(" ".to_string()),
+                Span::styled(dec_part.to_string(), Style::default().fg(dec_color)),
+                Span::raw(rest_part.to_string()),
+                Span::styled("│".to_string(), border),
+            ]));
+        }
+
+        out.push(bs(
+            "│ ──────────────────────────────────────────────────────────  │",
+        ));
+
+        // Hunk preview — +added green, -removed red, @@ headers accented.
+        for hunk in self.current_hunks().iter().take(3) {
+            let hunk = truncate_cols(hunk, 58);
+            let hunk = format!("{hunk:<58}");
+            let style = if hunk.starts_with('+') {
+                Style::default().fg(ui_success())
+            } else if hunk.starts_with('-') {
+                Style::default().fg(ui_danger())
+            } else if hunk.starts_with("@@") {
+                Style::default().fg(ui_accent())
+            } else {
+                Style::default()
+            };
+            out.push(Line::from(vec![
+                Span::styled("│  ".to_string(), border),
+                Span::styled(hunk, style),
+                Span::styled("│".to_string(), border),
+            ]));
+        }
+
+        out.push(bs(
+            "│                                                            │",
+        ));
+        out.push(bs(
+            "│  y approve   n reject   s skip   ↑↓ navigate   Enter done  │",
+        ));
+        out.push(bs(
+            "└────────────────────────────────────────────────────────────┘",
+        ));
+        Some(out)
     }
 
     fn handle_key(&mut self, key: KeyAction) -> ViewAction {
@@ -211,6 +322,27 @@ mod tests {
         let text = view.render();
         assert!(text.contains("(no files to review)"));
         assert_eq!(view.approved_count(), 0);
+    }
+
+    #[test]
+    fn long_hunk_and_filename_are_truncated_to_the_box() {
+        let long_hunk = format!("+{}", "x".repeat(120));
+        let view = DiffReviewView::new(vec![FileDiff::new(
+            "src/a/very/long/path/with_an_extremely_long_filename_that_would_overflow_the_box.rs",
+            vec![long_hunk],
+            1,
+            0,
+        )]);
+        let text = view.render();
+        // No rendered line may blow past the box border (row line is 63 cols).
+        for line in text.lines() {
+            assert!(
+                line.chars().count() <= 64,
+                "diff-review line overflows the box ({} cols): {line:?}",
+                line.chars().count()
+            );
+        }
+        assert!(text.contains('…'), "overlong content should be ellipsized");
     }
 
     #[test]

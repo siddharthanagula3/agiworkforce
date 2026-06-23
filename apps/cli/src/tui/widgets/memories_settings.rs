@@ -102,7 +102,7 @@ impl InteractiveView for MemoriesSettingsView {
             String::from("┌─ Memory Settings ─────────────────────────────────────────┐\n");
         for i in 0..3 {
             let cursor = if i == self.state.cursor() { "❯" } else { " " };
-            let text = self.item_text(i);
+            let text = crate::tui::truncate_cols(&self.item_text(i), 58);
             out.push_str(&format!("│ {cursor} {text:<58}│\n"));
         }
         out.push_str("│                                                            │\n");

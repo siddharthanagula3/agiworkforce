@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+pub mod openrouter_models;
 pub mod provider_dispatch;
 pub mod serialization;
+pub(crate) mod sse_decoder;
 pub mod streaming;
 
 pub use provider_dispatch::{

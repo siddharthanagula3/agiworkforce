@@ -7,7 +7,11 @@ import {
   asPlanTier,
 } from '../lib/cloudAccountTypes';
 import { API_BASE_URL, WEB_APP_URL } from '../api/config';
-import { invoke, isTauri } from '../lib/tauri-mock';
+import { invoke } from '../lib/tauri-mock';
+// `isTauri` from the zero-import leaf, not the barrel: this module runs during
+// auth-store init (checkSession → isLocalDevBrowser), and pulling `isTauri`
+// through the cyclic `tauri-mock` barrel reads it before initialization.
+import { isTauri } from '../lib/runtimeEnvironment';
 // NOTE: egressGuard is required LAZILY at its call site (fetchAccountSnapshot)
 // to break the load-time cycle egressGuard → appModeStore → auth →
 // cloudAccountAuth → egressGuard. A static import here re-introduces it.

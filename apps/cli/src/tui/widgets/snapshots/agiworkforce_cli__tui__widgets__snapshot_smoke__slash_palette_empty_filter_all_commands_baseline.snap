@@ -4,7 +4,7 @@ expression: rendered
 ---
 ┌─ Commands ─────────────────────────────────────────────────┐
 │   /                                                        │
-│ ──────────────────────────────────────────────────────────  │
+│ ────────────────────────────────────────────────────────── │
 │ ❯ /plan — Switch to plan mode                              │
 │   /model — Choose model and reasoning effort               │
 │   /resume — Resume a saved chat                            │

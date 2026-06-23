@@ -517,6 +517,11 @@ enum Command {
         prompt: String,
         #[arg(short, long)]
         model: Option<String>,
+        /// Provider override (e.g. ollama, anthropic, openai). Falls back to the
+        /// top-level --provider, then config. Required to run a local/BYOK model
+        /// that isn't the configured default.
+        #[arg(long)]
+        provider: Option<String>,
         #[arg(long)]
         full_auto: bool,
         #[arg(long)]
@@ -1324,6 +1329,7 @@ pub async fn run_main() -> Result<()> {
             Command::Exec {
                 prompt,
                 model,
+                provider,
                 full_auto,
                 json,
             } => {
@@ -1336,6 +1342,11 @@ pub async fn run_main() -> Result<()> {
                     .head()
                     .map(|s| s.to_string())
                     .unwrap_or(raw_model.clone());
+                // Honor an explicit provider: exec-level --provider first, then the
+                // top-level --provider, then config. Without this, exec hardcoded
+                // None and a local/BYOK model (e.g. `exec --provider ollama`)
+                // silently fell back to the default provider (anthropic).
+                let exec_provider_override = provider.as_deref().or(cli.provider.as_deref());
                 let mut session = agent::AgentSession::new_checked(
                     &m,
                     &sys_ctx,
@@ -1344,7 +1355,7 @@ pub async fn run_main() -> Result<()> {
                         &m,
                         &app_config.default.model,
                         &app_config.default.provider,
-                        None,
+                        exec_provider_override,
                     ),
                 )?;
                 session.apply_ui_config(&app_config);
@@ -2291,17 +2302,29 @@ pub async fn run_main() -> Result<()> {
     } else {
         // No explicit model — attempt tier-aware selection.
         let jwt = tier_cache::load_jwt();
-        let cached_tier = tokio::time::timeout(
+        let tier_resolution = tokio::time::timeout(
             std::time::Duration::from_secs(3),
             tier_cache::resolve_user_tier(jwt.as_deref()),
         )
         .await
-        .unwrap_or(None);
+        .unwrap_or_default();
 
-        if let Some(ct) = cached_tier {
+        // If the managed token expired (401), print a one-line non-blocking re-auth hint.
+        // Never block Local/BYOK runs — this is purely informational.
+        if tier_resolution.needs_reauth && jwt.is_some() {
+            eprintln!(
+                "{}",
+                colored::Colorize::yellow(
+                    "AGI session expired — run `agi login` (or set AGIWORKFORCE_JWT) to restore managed tier."
+                )
+            );
+        }
+
+        if let Some(ct) = tier_resolution.cached {
             // Use the tier's economy default if no model is pinned in config.
             // Managed-cloud Byok tier falls through to config default so users
             // who added BYOK keys don't accidentally hit the managed API.
+            // Enterprise maps to economy_default_model() like Pro/Max (default_model_id handles this).
             if !matches!(ct.tier, tier_cache::UserTier::Byok) {
                 if let Some(economy_model) = ct.tier.default_model_id() {
                     economy_model.to_string()
@@ -2505,7 +2528,13 @@ pub async fn run_main() -> Result<()> {
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
 
-    // Quota warning: only for Hobby-tier managed accounts with < 10% credits left.
+    // TODO(openQuestion): This block uses the AGI_PLAN=="hobby" env guard and calls
+    // fetch_remaining_pct against https://api.agiworkforce.com (AGI_API_URL).
+    // "Hobby" has been removed from the canonical tier model (tier_cache::UserTier no longer
+    // has a Hobby variant) and the quota endpoint/host is unproven.  This block is left
+    // intact (it only fires if AGI_PLAN=="hobby" is explicitly set, which is not standard)
+    // but should be removed or re-targeted when the flat Pro/Max subscription quota contract
+    // is confirmed.  Tracked as openQuestion in the AGI-subscription implementation plan.
     // BYOK and Local users never see this banner — they have no managed quota.
     {
         // Guard first — skip the auth load and network call entirely for non-Hobby plans.
@@ -2760,8 +2789,28 @@ pub(crate) async fn attach_mcp_manager_for_session(
     include_default_configs: bool,
     include_plugin_configs: bool,
 ) -> Result<()> {
+    if let Some(mgr) =
+        build_mcp_manager(mcp_config_options, include_default_configs, include_plugin_configs).await?
+    {
+        session.set_mcp_manager(mgr);
+    }
+    Ok(())
+}
+
+/// Load MCP configs, connect all servers, and return the connected manager.
+///
+/// This is the sessionless half of `attach_mcp_manager_for_session` — it can
+/// be called from a `tokio::spawn` background task and the resulting
+/// `McpManager` injected into a session later via `set_mcp_manager`.
+///
+/// Returns `Ok(None)` when there are no servers to connect (no-op case).
+pub(crate) async fn build_mcp_manager(
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+) -> Result<Option<mcp::McpManager>> {
     if !include_default_configs && !mcp_config_options.has_explicit_sources() {
-        return Ok(());
+        return Ok(None);
     }
 
     let mut load_options = mcp_config_options.clone();
@@ -2781,16 +2830,19 @@ pub(crate) async fn attach_mcp_manager_for_session(
     }
 
     if mcp_configs.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
 
     let mut mcp_mgr = mcp::McpManager::new();
     if let Err(err) = mcp_mgr.connect_all(&mcp_configs).await {
-        output::print_warn(&format!("MCP connection error: {err:#}"));
+        // Suppress the raw stderr warning while the full-screen TUI owns the
+        // terminal (it would corrupt the alternate screen); exec/REPL still
+        // surface it.
+        if !crate::tui::tui_active() {
+            output::print_warn(&format!("MCP connection error: {err:#}"));
+        }
     }
-    session.set_mcp_manager(mcp_mgr);
-
-    Ok(())
+    Ok(Some(mcp_mgr))
 }
 
 /// Execute a single prompt and exit.

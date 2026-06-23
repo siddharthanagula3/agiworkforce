@@ -137,7 +137,15 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage(handle_privacy_mode(session, arg))
         }
         "/continue-with-byok" | "/fork-byok" | "/byok" => {
-            ParityCommandResult::DraftPrompt(continue_with_byok_draft(session, arg))
+            // Draft ONLY — this must NOT flip the session out of Local here. Flipping
+            // at draft time leaked the trust boundary: an unrelated later message
+            // would silently route to BYOK even if the user never sent the reviewed
+            // draft. The Local→BYOK transition is gated on the user actually SENDING
+            // this reviewed draft (the consent moment); arming records that intent so
+            // the send path can complete the handoff and disclose it.
+            let draft = continue_with_byok_draft(session, arg);
+            session.arm_byok_handoff(&draft);
+            ParityCommandResult::DraftPrompt(draft)
         }
         "/rate-limit-options" => {
             ParityCommandResult::SystemMessage(render_rate_limit_options(session))
@@ -742,7 +750,7 @@ pub fn render_reload_plugins() -> String {
 }
 
 pub fn render_extra_usage() -> String {
-    "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nHobby: managed cloud with credits.".to_string()
+    "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nPro/Max: managed cloud flat subscription (waitlist — agiworkforce.com).".to_string()
 }
 
 pub fn render_remote_env() -> String {

@@ -227,6 +227,25 @@ pub fn run() {
                 data_dir: app_data_dir.clone(),
             });
 
+            // B1: BYOK encrypted key vault (tauri-plugin-stronghold v2.3.1, MIT/Apache-2.0).
+            // Salt persisted to $APPDATA/stronghold.salt; snapshot to $APPDATA/keys.stronghold.
+            // Password-hash = Argon2id (32-byte, persistent salt via kdf feature).
+            // Trust boundary: BYOK only — never routes Local keys to Cloud.
+            {
+                let salt_path = app_data_dir.join("stronghold.salt");
+                if let Err(e) = app.handle().plugin(
+                    tauri_plugin_stronghold::Builder::with_argon2(&salt_path).build(),
+                ) {
+                    tracing::error!(
+                        "Failed to initialize stronghold BYOK vault: {}. \
+                         BYOK key storage will be unavailable.",
+                        e
+                    );
+                } else {
+                    tracing::info!("Stronghold BYOK vault initialized (salt: {:?})", salt_path);
+                }
+            }
+
             // Install native messaging manifest for packaged production IDs.
             // Dev/unpacked extension IDs are added during the HTTP /pair handshake.
             if let Err(e) = crate::integrations::native_messaging::manifest::install_manifests(None)

@@ -59,6 +59,16 @@ pub trait InteractiveView: Send {
     /// this in the bottom pane / overlay region.
     fn render(&self) -> String;
 
+    /// Optional styled render. When `Some`, the overlay host draws these
+    /// pre-colored lines instead of the plain `render()` string (e.g. the diff
+    /// review colors `+/-/@@` hunks and decision labels). Default `None` keeps
+    /// every other overlay on the plain text path. Returned lines must have the
+    /// same column widths the plain `render()` would produce so the box borders
+    /// stay aligned.
+    fn render_styled(&self) -> Option<Vec<ratatui::text::Line<'static>>> {
+        None
+    }
+
     /// Handle a key event. Returns the next action for the event loop.
     fn handle_key(&mut self, key: KeyAction) -> ViewAction;
 

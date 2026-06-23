@@ -118,7 +118,32 @@ pub async fn run_repl(
         }
     }
 
-    crate::attach_mcp_manager_for_session(&mut session, &mcp_config_options, true, true).await?;
+    // P0-1 fix: do NOT block REPL startup on MCP server connection or OAuth.
+    // Spawn the full connect (including any browser-OAuth dance) on a background
+    // task.  The resulting McpManager is injected into the session just before
+    // the first prompt turn is sent, so the REPL prompt appears immediately.
+    //
+    // Servers that have a cached OAuth token connect in the background without
+    // user interaction.  Servers that require a fresh browser OAuth flow will
+    // open the browser after the user types their first message (the drain
+    // point), not before the prompt appears.  Output from connect_all (the
+    // "MCP server '…': N tools discovered" lines) may interleave with the
+    // rustyline prompt in that window — this is accepted and noted.
+    //
+    // NOTE: tui_app.rs:2661 has the same (true,true) blocking call and is a
+    // known sibling — it is out of scope for this fix.
+    let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
+        let opts = mcp_config_options.clone();
+        Some(tokio::spawn(async move {
+            match crate::build_mcp_manager(&opts, true, true).await {
+                Ok(mgr) => mgr,
+                Err(e) => {
+                    crate::output::print_warn(&format!("MCP config/connect error: {e:#}"));
+                    None
+                }
+            }
+        }))
+    };
 
     let hooks_config = session.hooks_config().clone();
     crate::hooks::run_hooks(
@@ -456,6 +481,22 @@ pub async fn run_repl(
                     },
                 )
                 .await;
+
+                // Drain the background MCP attach task on the first real prompt
+                // turn.  After this point `mcp_attach_join` is None and all
+                // subsequent turns see the manager already on the session.
+                if let Some(handle) = mcp_attach_join.take() {
+                    match handle.await {
+                        Ok(Some(mgr)) => session.set_mcp_manager(mgr),
+                        Ok(None) => {}
+                        Err(e) => {
+                            crate::output::print_warn(&format!(
+                                "MCP background attach task failed: {e:#}"
+                            ));
+                        }
+                    }
+                }
+
                 run_prompt_turn(&mut session, config, full_input).await;
             }
             Err(ReadlineError::Interrupted) => {
@@ -506,6 +547,13 @@ pub async fn run_repl(
         },
     )
     .await;
+
+    // If the user exited before their first prompt turn (e.g. `/exit`
+    // immediately), abort the background MCP attach task so it doesn't keep
+    // the tokio runtime alive during shutdown.
+    if let Some(handle) = mcp_attach_join.take() {
+        handle.abort();
+    }
 
     if let Some(mut mgr) = session.take_mcp_manager() {
         mgr.shutdown_all().await;

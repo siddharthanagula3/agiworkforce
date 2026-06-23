@@ -37,6 +37,19 @@ pub(super) async fn handle_streaming_message(
         }),
     );
 
+    // Ensure the mode-appropriate provider is registered BEFORE any routing.
+    // The streaming path otherwise relies entirely on the best-effort frontend
+    // settings-rehydration callback to have registered providers; if it never
+    // fired, `candidates()` returns empty and the send is silently dropped
+    // (no `/api/chat`; the resulting error is filtered out client-side).
+    // Local mode => Ollama; cloud mode => ManagedCloud. Both are no-ops when the
+    // provider is already present, and Local mode must never touch ManagedCloud.
+    if prepared.flags.is_local_mode {
+        ensure_ollama_provider(&runtime.router).await;
+    } else {
+        ensure_managed_cloud_provider(&runtime.router).await;
+    }
+
     if prepared.flags.is_deep_research {
         spawn_streaming_deep_research(runtime, prepared, frontend_message_id);
         return Ok(response);
@@ -73,9 +86,12 @@ pub(super) async fn handle_nonstreaming_message(
 
     // Only attempt to initialize ManagedCloud when the request is explicitly
     // in cloud mode. Local-mode requests must never touch ManagedCloud even
-    // for provider-initialization purposes.
+    // for provider-initialization purposes — they lazily register Ollama
+    // instead so a fresh session isn't silently dropped before `/api/chat`.
     if !prepared.flags.is_local_mode {
         ensure_managed_cloud_provider(&runtime.router).await;
+    } else {
+        ensure_ollama_provider(&runtime.router).await;
     }
     run_nonstreaming_chat(runtime, prepared).await
 }

@@ -1,0 +1,32 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: rendered
+---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Keybindings
+
+    Global
+      Ctrl+C       Cancel current turn / interrupt
+      Ctrl+D       Exit AGI Workforce
+      Ctrl+L       Clear screen (preserve session)
+      Tab          Toggle plan mode
+      Shift+Tab    Cycle plan / accept / reject
+
+    Slash palette
+      /            Open palette
+      ↑/↓          Navigate commands
+      Enter        Run selected command
+      Esc          Close palette
+      type         Filter commands
+
+    Overlays
+      ←/→          Switch tabs
+      ↑/↓          Navigate items
+      Enter        Confirm / open detail
+      Esc          Close overlay
+
+    Editor
+      Ctrl+E       Open external editor for current input
+      Alt+Enter    Insert newline without submitting
+
+  Esc to close

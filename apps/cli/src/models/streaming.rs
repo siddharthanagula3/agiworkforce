@@ -20,6 +20,39 @@ use super::{
 const OLLAMA_SYSTEM_PROMPT_MAX_CHARS: usize = 6_000;
 const OLLAMA_COMPACT_BASE_MAX_CHARS: usize = 1_200;
 
+/// Last-known Ollama tool-support result per model id, so a transient `/api/show`
+/// probe failure can fall back to the last successful check instead of silently
+/// stripping every tool from the turn.
+static OLLAMA_TOOL_SUPPORT: std::sync::OnceLock<std::sync::Mutex<HashMap<String, bool>>> =
+    std::sync::OnceLock::new();
+
+fn cache_ollama_tool_support(model: &str, supported: bool) {
+    if let Ok(mut m) = OLLAMA_TOOL_SUPPORT
+        .get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+        .lock()
+    {
+        m.insert(model.to_string(), supported);
+    }
+}
+
+fn cached_ollama_tool_support(model: &str) -> Option<bool> {
+    OLLAMA_TOOL_SUPPORT
+        .get()
+        .and_then(|m| m.lock().ok().and_then(|g| g.get(model).copied()))
+}
+
+/// Surface a "running this turn without tools" notice: into the TUI transcript
+/// when the full-screen UI owns the terminal, else to stderr (a raw `eprintln!`
+/// would corrupt the alternate screen, which is why the TUI path is separate).
+fn notify_tools_dropped(model: &str, reason: &str) {
+    let msg = format!("Local model '{model}': {reason}. Running this turn without tools.");
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(msg);
+    } else {
+        eprintln!("AGI: {msg}");
+    }
+}
+
 // ---------------------------------------------------------------------------
 // HTTP status → CliError classification
 // ---------------------------------------------------------------------------
@@ -118,7 +151,7 @@ fn classify_http_error(
     }
 
     match code {
-        401 | 403 => CliError::auth(provider, body),
+        401 | 403 => CliError::auth(provider, humanize_auth_error_body(body)),
         429 => {
             // AGI Workforce managed-cloud paywall: 429 + {"kind":"paywall", ...}
             // Takes precedence over generic rate-limit handling.
@@ -130,8 +163,52 @@ fn classify_http_error(
                 .and_then(|s| s.parse::<u64>().ok());
             CliError::rate_limited(provider, secs)
         }
-        _ => CliError::api(provider, code, body),
+        _ => {
+            // Never surface a raw JSON/HTML body to the user. Extract the
+            // human-readable message; fall back to a terse HTTP line.
+            let msg = humanize_error_body(body)
+                .unwrap_or_else(|| format!("request failed (HTTP {code})"));
+            CliError::api(provider, code, msg)
+        }
     }
+}
+
+/// Extract the best human-readable message from a provider error body. Handles
+/// the common shapes — `{"error":{"message":"…"}}` (OpenAI/OpenRouter),
+/// `{"error":"…"}`, `{"message":"…"}`, `{"detail":"…"}` — plus OpenRouter's
+/// nested `{"error":{"metadata":{"raw":"{…}"}}}` where the real provider message
+/// is a JSON string buried inside `metadata.raw`. Returns `None` when nothing
+/// usable is found so callers can pick an appropriate fallback.
+fn humanize_error_body(body: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(body.trim()).ok()?;
+
+    // OpenRouter wraps the upstream provider's error as a JSON *string* under
+    // error.metadata.raw — unwrap it for the most specific message.
+    if let Some(raw) = v.pointer("/error/metadata/raw").and_then(|r| r.as_str()) {
+        if let Ok(inner) = serde_json::from_str::<serde_json::Value>(raw) {
+            let inner_msg = inner
+                .get("error")
+                .and_then(|e| e.as_str().or_else(|| e.get("message").and_then(|m| m.as_str())))
+                .or_else(|| inner.get("message").and_then(|m| m.as_str()));
+            if let Some(m) = inner_msg.map(str::trim).filter(|m| !m.is_empty()) {
+                return Some(m.to_string());
+            }
+        }
+    }
+
+    let msg = v
+        .get("error")
+        .and_then(|e| e.get("message").and_then(|m| m.as_str()).or_else(|| e.as_str()))
+        .or_else(|| v.get("message").and_then(|m| m.as_str()))
+        .or_else(|| v.get("detail").and_then(|m| m.as_str()));
+    msg.map(str::trim).filter(|m| !m.is_empty()).map(str::to_string)
+}
+
+/// Turn a provider's 401/403 error body into a concise, human-readable message
+/// instead of dumping raw JSON at the user. Falls back to a generic auth line
+/// when the body is empty or unparseable, so we never echo raw JSON/HTML.
+fn humanize_auth_error_body(body: &str) -> String {
+    humanize_error_body(body).unwrap_or_else(|| "invalid or expired API key".to_string())
 }
 
 /// Attempt to parse a paywall JSON body returned by the AGI Workforce managed-cloud
@@ -238,6 +315,31 @@ fn compact_ollama_message_values(messages: &mut [Value], tools_available: bool) 
 /// message whose content is a parts-array (vision input on the Local path) is
 /// rejected by Ollama's native API with a 400.
 fn ollama_nativize_message_values(messages: &mut [Value]) {
+    // Ollama's native `/api/chat` wants tool-call arguments as a JSON *object*,
+    // but upstream serialization emits them as a JSON *string* (OpenAI
+    // convention). Re-parse them to an object so the follow-up request after a
+    // tool runs doesn't get rejected; a malformed/truncated model arg-string
+    // (common with small local models) becomes `{}` rather than 400-ing the
+    // whole request with "Value looks like object, but can't find closing '}'".
+    for message in messages.iter_mut() {
+        let Some(tool_calls) = message.get_mut("tool_calls").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for tc in tool_calls.iter_mut() {
+            let Some(func) = tc.get_mut("function").and_then(Value::as_object_mut) else {
+                continue;
+            };
+            let arg_str = func.get("arguments").and_then(Value::as_str).map(str::to_string);
+            if let Some(s) = arg_str {
+                let obj = serde_json::from_str::<Value>(&s)
+                    .ok()
+                    .filter(Value::is_object)
+                    .unwrap_or_else(|| serde_json::json!({}));
+                func.insert("arguments".to_string(), obj);
+            }
+        }
+    }
+
     for message in messages.iter_mut() {
         let Some(parts) = message.get("content").and_then(Value::as_array).cloned() else {
             continue;
@@ -586,18 +688,29 @@ pub async fn stream_completion(
                     )
                     .await
                     {
-                        Ok(true) => Some(tool_defs),
+                        Ok(true) => {
+                            cache_ollama_tool_support(model, true);
+                            Some(tool_defs)
+                        }
                         Ok(false) => {
-                            eprintln!(
-                                "AGI: local Ollama model '{model}' does not advertise tool support; running this turn without tools."
-                            );
+                            cache_ollama_tool_support(model, false);
+                            notify_tools_dropped(model, "does not advertise tool support");
                             None
                         }
                         Err(error) => {
-                            eprintln!(
-                                "AGI: could not verify tool support for local Ollama model '{model}': {error}. Running this turn without tools."
-                            );
-                            None
+                            // A transient probe failure (Ollama busy/loading) must not
+                            // strip tools the model is known to support — fall back to
+                            // the last successful capability check.
+                            match cached_ollama_tool_support(model) {
+                                Some(true) => Some(tool_defs),
+                                _ => {
+                                    notify_tools_dropped(
+                                        model,
+                                        &format!("could not verify tool support ({error})"),
+                                    );
+                                    None
+                                }
+                            }
                         }
                     }
                 }
@@ -678,6 +791,41 @@ pub async fn stream_completion(
 // Anthropic Messages API (streaming)
 // ---------------------------------------------------------------------------
 
+/// Add a prompt-cache breakpoint to the final content block of the last message
+/// so the whole conversation prefix is cacheable on multi-turn requests — the
+/// biggest caching win after system + tools (uncached, every turn re-bills the
+/// full history). Skips `thinking`/`redacted_thinking` blocks, which can't carry
+/// `cache_control`. This is the 3rd breakpoint (system + tools + messages),
+/// within Anthropic's 4-breakpoint limit. Mirrors claude_reference's message
+/// breakpoint strategy (services/api/claude.ts).
+fn add_message_cache_breakpoint(api_messages: &mut [Value]) {
+    let Some(last) = api_messages.last_mut() else {
+        return;
+    };
+    let cache = serde_json::json!({ "type": "ephemeral" });
+    match last.get_mut("content") {
+        Some(Value::String(text)) => {
+            let text = text.clone();
+            last["content"] = serde_json::json!([{
+                "type": "text",
+                "text": text,
+                "cache_control": cache,
+            }]);
+        }
+        Some(Value::Array(blocks)) => {
+            if let Some(Value::Object(map)) = blocks.iter_mut().rev().find(|b| {
+                !matches!(
+                    b.get("type").and_then(|t| t.as_str()),
+                    Some("thinking") | Some("redacted_thinking")
+                )
+            }) {
+                map.insert("cache_control".to_string(), cache);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn stream_anthropic(
     client: &Client,
@@ -690,11 +838,13 @@ async fn stream_anthropic(
     on_chunk: &mut StreamCallback,
     thinking_budget: Option<u32>,
 ) -> Result<CompletionResult> {
-    let api_messages: Vec<Value> = messages
+    let mut api_messages: Vec<Value> = messages
         .iter()
         .filter(|m| m.role != "system")
         .map(convert_message_to_anthropic)
         .collect();
+    // Cache the conversation prefix (3rd breakpoint after system + tools).
+    add_message_cache_breakpoint(&mut api_messages);
 
     let system_text = messages
         .iter()
@@ -809,6 +959,9 @@ async fn stream_anthropic(
     let mut in_thinking_block = false;
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();
+    // Reassemble multibyte UTF-8 codepoints split across chunk boundaries
+    // (emoji/CJK/accents) instead of corrupting them with per-chunk lossy decode.
+    let mut decoder = super::sse_decoder::Utf8StreamDecoder::new();
 
     // Tool call tracking
     let mut tool_calls: Vec<ToolCallResponse> = Vec::new();
@@ -825,7 +978,7 @@ async fn stream_anthropic(
             Ok(Some(result)) => result,
         };
         let bytes = chunk.context("Error reading stream")?;
-        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        buffer.push_str(&decoder.push(&bytes));
 
         // Process complete SSE lines
         while let Some(line_end) = buffer.find('\n') {
@@ -1193,6 +1346,9 @@ async fn stream_google(
     let mut stop_reason: Option<String> = None;
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();
+    // Reassemble multibyte UTF-8 codepoints split across chunk boundaries
+    // (emoji/CJK/accents) instead of corrupting them with per-chunk lossy decode.
+    let mut decoder = super::sse_decoder::Utf8StreamDecoder::new();
 
     loop {
         let chunk = tokio::time::timeout(STREAM_IDLE_TIMEOUT, stream.next()).await;
@@ -1202,7 +1358,7 @@ async fn stream_google(
             Ok(Some(result)) => result,
         };
         let bytes = chunk.context("Error reading stream")?;
-        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        buffer.push_str(&decoder.push(&bytes));
 
         while let Some(line_end) = buffer.find('\n') {
             let line = buffer[..line_end].trim_end().to_string();
@@ -1356,6 +1512,9 @@ async fn stream_ollama(
     let mut stop_reason: Option<String> = None;
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();
+    // Reassemble multibyte UTF-8 codepoints split across chunk boundaries
+    // (emoji/CJK/accents) instead of corrupting them with per-chunk lossy decode.
+    let mut decoder = super::sse_decoder::Utf8StreamDecoder::new();
 
     loop {
         let chunk = tokio::time::timeout(STREAM_IDLE_TIMEOUT, stream.next()).await;
@@ -1365,7 +1524,7 @@ async fn stream_ollama(
             Ok(Some(result)) => result,
         };
         let bytes = chunk.context("Error reading stream")?;
-        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        buffer.push_str(&decoder.push(&bytes));
 
         // Ollama sends newline-delimited JSON (not SSE)
         while let Some(line_end) = buffer.find('\n') {
@@ -1395,6 +1554,9 @@ async fn stream_ollama(
         }
     }
 
+    // Flush any bytes the decoder is still holding so the trailing NDJSON parse
+    // sees a complete object (a clean stream yields "").
+    buffer.push_str(&decoder.finish());
     let trailing = buffer.trim();
     if !trailing.is_empty() {
         match serde_json::from_str::<Value>(trailing) {
@@ -1576,6 +1738,9 @@ async fn parse_openai_sse_stream(
     let mut output_tokens: u32 = 0;
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();
+    // Reassemble multibyte UTF-8 codepoints split across chunk boundaries
+    // (emoji/CJK/accents) instead of corrupting them with per-chunk lossy decode.
+    let mut decoder = super::sse_decoder::Utf8StreamDecoder::new();
 
     // Tool call tracking
     let mut tool_call_buffers: HashMap<usize, (String, String, String)> = HashMap::new();
@@ -1589,7 +1754,7 @@ async fn parse_openai_sse_stream(
             Ok(Some(result)) => result,
         };
         let bytes = chunk.context("Error reading stream")?;
-        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        buffer.push_str(&decoder.push(&bytes));
 
         while let Some(line_end) = buffer.find('\n') {
             let line = buffer[..line_end].trim_end().to_string();
@@ -1769,6 +1934,37 @@ mod tests {
             serde_json::json!({"type": "ephemeral"})
         );
         assert_provider_tool_payload_omits_local_metadata(&serde_json::json!(payload));
+    }
+
+    #[test]
+    fn message_cache_breakpoint_marks_last_block_skipping_thinking() {
+        // String content → converted to a text block carrying the cache breakpoint.
+        let mut msgs = vec![serde_json::json!({"role": "user", "content": "hello"})];
+        add_message_cache_breakpoint(&mut msgs);
+        assert_eq!(msgs[0]["content"][0]["type"], "text");
+        assert_eq!(
+            msgs[0]["content"][0]["cache_control"],
+            serde_json::json!({"type": "ephemeral"})
+        );
+
+        // Array content ending in a thinking block → breakpoint goes on the last
+        // NON-thinking block (thinking blocks can't carry cache_control).
+        let mut msgs2 = vec![serde_json::json!({
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "answer"},
+                {"type": "thinking", "thinking": "..."}
+            ]
+        })];
+        add_message_cache_breakpoint(&mut msgs2);
+        assert!(
+            msgs2[0]["content"][0].get("cache_control").is_some(),
+            "text block should be cached"
+        );
+        assert!(
+            msgs2[0]["content"][1].get("cache_control").is_none(),
+            "thinking block must NOT carry cache_control"
+        );
     }
 
     #[test]
@@ -2093,6 +2289,78 @@ mod tests {
             err.to_string().contains("API error"),
             "500 should be api error"
         );
+    }
+
+    #[test]
+    fn classify_402_humanizes_nested_openrouter_error_no_raw_json() {
+        // OpenRouter buries the real provider message in error.metadata.raw.
+        let body = r#"{"error":{"message":"Provider returned error","code":402,"metadata":{"raw":"{\"error\":\"API key USD spend limit exceeded.\"}","provider_name":"Venice"}}}"#;
+        let err = classify_http_error(
+            "openrouter",
+            reqwest::StatusCode::PAYMENT_REQUIRED,
+            None,
+            body,
+        );
+        let msg = err.to_string();
+        assert!(
+            msg.contains("spend limit"),
+            "should surface the nested provider message: {msg}"
+        );
+        assert!(
+            !msg.contains("metadata") && !msg.contains("{\""),
+            "must not echo raw JSON: {msg}"
+        );
+    }
+
+    #[test]
+    fn humanize_error_body_extracts_standard_and_nested_shapes() {
+        assert_eq!(
+            humanize_error_body(r#"{"error":{"message":"boom"}}"#).as_deref(),
+            Some("boom")
+        );
+        assert_eq!(
+            humanize_error_body(r#"{"message":"hi"}"#).as_deref(),
+            Some("hi")
+        );
+        assert_eq!(
+            humanize_error_body(r#"{"error":"plain"}"#).as_deref(),
+            Some("plain")
+        );
+        assert_eq!(humanize_error_body("not json at all"), None);
+        let nested = r#"{"error":{"metadata":{"raw":"{\"error\":\"real msg\"}"}}}"#;
+        assert_eq!(humanize_error_body(nested).as_deref(), Some("real msg"));
+    }
+
+    #[test]
+    fn ollama_nativize_converts_tool_call_string_args_to_object() {
+        // Upstream emits arguments as a JSON *string*; Ollama wants an object.
+        let mut msgs = vec![serde_json::json!({
+            "role": "assistant",
+            "tool_calls": [{
+                "type": "function",
+                "function": { "name": "run_command", "arguments": "{\"command\":\"echo hi\"}" }
+            }]
+        })];
+        ollama_nativize_message_values(&mut msgs);
+        let args = msgs[0].pointer("/tool_calls/0/function/arguments").unwrap();
+        assert!(args.is_object(), "arguments must be an object, got: {args}");
+        assert_eq!(args.get("command").and_then(|c| c.as_str()), Some("echo hi"));
+    }
+
+    #[test]
+    fn ollama_nativize_malformed_tool_args_become_empty_object_not_400() {
+        // A truncated arg-string from a small model must not 400 the request.
+        let mut msgs = vec![serde_json::json!({
+            "role": "assistant",
+            "tool_calls": [{
+                "type": "function",
+                "function": { "name": "run_command", "arguments": "{\"command\": \"echo" }
+            }]
+        })];
+        ollama_nativize_message_values(&mut msgs);
+        let args = msgs[0].pointer("/tool_calls/0/function/arguments").unwrap();
+        assert!(args.is_object(), "malformed args must fall back to an object: {args}");
+        assert_eq!(args.as_object().map(|o| o.len()), Some(0));
     }
 
     // -- Paywall detection --
