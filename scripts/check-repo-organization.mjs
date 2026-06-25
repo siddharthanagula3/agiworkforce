@@ -31,6 +31,7 @@ const allowedRootFiles = new Set([
   'ONBOARDING.md',
   'PLAN.md',
   'README.md',
+  'SECURITY.md',
   'THIRD_PARTY_LICENSES.md',
   'TODO.md',
   // Hardening-mission root instruments (root-level by design — REMEDIATION_BRIEF.md
