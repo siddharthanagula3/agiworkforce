@@ -23,6 +23,17 @@
  * FAIL-CLOSED: if the mode cannot be read for any reason, we treat the session
  * as Local and block our-cloud egress. Blocking a request is safe; leaking is
  * not.
+ *
+ * SCOPE (do not over-trust): this is the WebView/TS-layer chokepoint — it wraps
+ * `fetch` (`guardedFetch`), where chats, files, telemetry, and account calls
+ * originate today. It does NOT intercept the Tauri Rust backend's own `reqwest`
+ * calls; those sit OUTSIDE this guard and must honor the trust boundary on their
+ * own. As of 2026-06-25 the Rust paths that can reach our cloud are: account/auth
+ * (infra, SSRF-allowlisted to `*.agiworkforce.com` in `sys/account/mod.rs`) and a
+ * DORMANT cloud-sync/device client (`integrations/sync` — declared but never
+ * instantiated or exposed via a Tauri command, so it does not egress in practice).
+ * If that sync client is ever wired up, gate it on `privacyMode === 'managed'` the
+ * same way this guard does. See known-flaws and the Rust-egress audit.
  */
 
 // The private-boundary predicate lives in stores/privacyBoundary so egressGuard,
