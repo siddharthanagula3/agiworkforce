@@ -7,7 +7,8 @@ import {
   analyticsDeleteAllData,
   analyticsSetPrivacyMode,
 } from '../api/analytics';
-import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
+import { useAppModeStore } from '../stores/appModeStore';
+import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
 import {
   AnalyticsConfig,
   AnalyticsEvent,
@@ -150,17 +151,10 @@ class AnalyticsService {
 
   public track(eventName: EventName, properties: Record<string, unknown> = {}) {
     // TRUST-BOUNDARY: never emit telemetry outside Managed Cloud. Local AND BYOK
-    // are private boundaries (BYOK runs under appMode 'cloud' but must not reach
-    // our cloud) — a `=== 'local'` check WOULD leak analytics in BYOK. Mirrors
-    // egressGuard's canonical `!== 'managed'` chokepoint. Consent only gates
-    // managed-mode opt-in. Fail CLOSED: suppress if the mode can't be read.
-    let isManaged: boolean;
-    try {
-      isManaged = selectPrivacyMode(useAppModeStore.getState()) === 'managed';
-    } catch {
-      isManaged = false;
-    }
-    if (!isManaged) {
+    // are private boundaries; delegate to the shared `isPrivateTrustBoundary`
+    // (fail-closed) so this predicate cannot drift — a `=== 'local'` check
+    // previously leaked analytics in BYOK. Consent only gates the managed opt-in.
+    if (isPrivateTrustBoundary()) {
       return;
     }
     if (!this.config.enabled) {
