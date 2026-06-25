@@ -3772,6 +3772,132 @@
       "line": 212,
       "literal": "rgba(",
       "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 153,
+      "literal": "#1a1a1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 161,
+      "literal": "#18BFFF20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 169,
+      "literal": "#0052CC20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 177,
+      "literal": "#F06A6A20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 185,
+      "literal": "#DB403520",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 193,
+      "literal": "#5E6AD220",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 201,
+      "literal": "#0052CC20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 209,
+      "literal": "#18181720",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 217,
+      "literal": "#FC6D2620",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 225,
+      "literal": "#F24E1E20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 234,
+      "literal": "#4A154B20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 242,
+      "literal": "#5865F220",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 250,
+      "literal": "#2D8CFF20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 258,
+      "literal": "#6264A720",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 267,
+      "literal": "#EA433520",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 275,
+      "literal": "#4285F420",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 283,
+      "literal": "#0061FF20",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 291,
+      "literal": "#0078D420",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 300,
+      "literal": "#FF7A5920",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 308,
+      "literal": "#00A1E020",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/cloud-connectors/index.tsx",
+      "line": 316,
+      "literal": "#635BFF20",
+      "rule": "hex"
     }
   ]
 }
