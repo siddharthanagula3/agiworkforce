@@ -521,6 +521,13 @@ describe('L1 Error States - Network', () => {
 
 ### **Package.json Scripts**
 
+> ⚠️ **Superseded — do not copy.** The single-root `vitest run --include=…`
+> approach below does not work in this monorepo: vitest 4 removed the
+> `--include` CLI flag (hard crash), and a config-less root run cannot resolve
+> per-app `@/` aliases or run mobile's jest tests. The shipped implementation
+> fans out per app via `scripts/run-priority-tier.mjs` (each app's own `test`
+> script). See the script header for the full rationale.
+
 ```json
 {
   "test": "vitest run",
