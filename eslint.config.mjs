@@ -434,12 +434,25 @@ export default [
           // Resolution: import `@agiworkforce/types` and use:
           //   - `kimi-k2.6` for any Kimi K2 routing.
           //   - `deepseek-v4-flash` for budget/fast lanes.
-          //   - `deepseek-v4-pro` for premium/reasoning lanes (with auto-
-          //     reroute to `deepseek-v4-flash` post `2026-05-31T15:59:00Z`
-          //     via `resolveThreeTierModel()` from `@agiworkforce/routing`).
+          //   - `deepseek-v4-pro` for premium/reasoning lanes — resolve the
+          //     active routing-slot model via `getRoutingSlotModel()` /
+          //     `resolveAutoModeModel()` from `@agiworkforce/types` (catalog-driven).
           selector: 'Literal[value=/^(kimi-k2-[^.]|deepseek-chat$|deepseek-reasoner$)/]',
           message:
-            'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Read from packages/types/src/models.json via @agiworkforce/types or use resolveThreeTierModel() from @agiworkforce/routing for promo-aware auto-reroute. See packages/routing/src/three-tier-router.ts.',
+            'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Never hardcode model IDs: read from packages/types/src/models.json via @agiworkforce/types (getModelMetadataById / getRoutingSlotModel / resolveAutoModeModel / getDefaultModelFor) so routing stays catalog-driven.',
+        },
+        {
+          // Egress chokepoint (trust-boundary P0). A raw fetch() to an our-cloud
+          // URL built from WEB_APP_URL / API_BASE_URL bypasses the central guard
+          // and can silently upload a Local- or BYOK-mode session to our cloud.
+          // Route every such call through guardedFetch (apps/desktop/src/lib/
+          // egressGuard.ts), which fails closed when privacyMode !== 'managed'.
+          // BYOK provider hosts are intentionally NOT covered. In practice this
+          // only matches apps/desktop — the sole surface defining these constants.
+          selector:
+            "CallExpression[callee.name='fetch']:has(TemplateLiteral Identifier[name=/^(WEB_APP_URL|API_BASE_URL)$/])",
+          message:
+            'Raw fetch() to an our-cloud URL (WEB_APP_URL/API_BASE_URL) bypasses the egress chokepoint and can leak a Local/BYOK session to our cloud. Use guardedFetch from @/lib/egressGuard so non-managed sessions fail closed. See apps/desktop/src/lib/egressGuard.ts.',
         },
       ],
     },
@@ -814,13 +827,6 @@ export default [
       'packages/providers/google/src/catalog.ts',
       'packages/routing/src/classify.ts',
       'packages/api/src/memoryImport.ts',
-
-      // The three-tier router INTENTIONALLY inlines catalog IDs in its
-      // POLICY tables — those literals ARE the routing decision and have
-      // to be readable at a glance. Reading them through the catalog
-      // helpers at the call site would defeat the deterministic-routing
-      // property the router promises. Locked: do not migrate.
-      'packages/routing/src/three-tier-router.ts',
 
       // Services — api-gateway routes.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { invoke } from '@/lib/tauri-mock';
 import { useIsMounted } from '@/hooks/useIsMounted';
 import { WEB_APP_URL } from '@/api/config';
+import { guardedFetch } from '@/lib/egressGuard';
 
 interface ShareConversationDialogProps {
   conversationId: string;
@@ -60,7 +61,11 @@ export function ShareConversationDialog({
     try {
       const result = await invoke<SharePayload>('conversation_share', { conversationId });
 
-      const response = await fetch(`${WEB_APP_URL}/api/shared`, {
+      // Sharing publishes the full conversation to OUR cloud (agiworkforce.com).
+      // Route through the central egress guard so a Local- or BYOK-mode chat can
+      // never be silently uploaded — guardedFetch throws fail-closed before the
+      // network call when privacyMode !== 'managed'. (Trust-boundary P0.)
+      const response = await guardedFetch(`${WEB_APP_URL}/api/shared`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,14 +84,19 @@ export function ShareConversationDialog({
       const data = (await response.json()) as { url: string };
       if (isMounted.current) setShareUrl(data.url);
     } catch (err) {
+      const isEgressBlocked = err instanceof Error && err.message.includes('[egress-guard]');
       const message =
         err instanceof DOMException && err.name === 'AbortError'
           ? 'Request timed out after 30 seconds'
-          : err instanceof Error
-            ? err.message
-            : 'Failed to create share link';
+          : isEgressBlocked
+            ? 'Sharing publishes this conversation to AGI cloud, which is not allowed for Local or BYOK chats. Continue this conversation in Cloud mode to create a share link.'
+            : err instanceof Error
+              ? err.message
+              : 'Failed to create share link';
       if (isMounted.current) setError(message);
-      toast.error('Failed to create share link');
+      toast.error(
+        isEgressBlocked ? 'Not available for Local/BYOK chats' : 'Failed to create share link',
+      );
     } finally {
       clearTimeout(timeoutId);
       if (isMounted.current) setIsLoading(false);

@@ -143,6 +143,15 @@ Implemented via `safeJsonParse` which returns `undefined` on oversize or parse-f
 
 `patchConsole` was removed entirely (M-13). Page-script console interception is a fingerprint and an interference risk. If console-log capture is ever needed, the `chrome.debugger` API gives a per-tab, user-opt-in path with no monkey-patch.
 
+### 3.14 Computer-use agent loop (autonomous CDP control)
+
+The computer-use feature drives a tab via the agent loop (`features/computer-use/agentLoop.ts`, dispatched from `background.ts`). It is the extension's highest-risk capability: an LLM plans actions from page content and executes them against the live tab. The page is untrusted, so the page can attempt **prompt injection** to steer the agent.
+
+- **Human-in-the-loop is the default (P0).** `background.ts` reads `agi_cu_ask_before_acting` from `chrome.storage.local`; an **unset** pref is treated as ask-before-acting (`askPref['agi_cu_ask_before_acting'] !== false`). Allow-all ("autopilot") is an explicit opt-out the user selects by unchecking the side-panel toggle (`computerUsePanel.ts`, default `checked = true`). A prior default-allow-all (auto-execute with no confirmation on injectable pages) is treated as a trust-boundary defect.
+- **Approval gate is forge-resistant and fail-closed.** When gated, `onBeforeAction` sends `AGI_CU_APPROVE_REQUEST` with a **CSPRNG** request id (`crypto.randomUUID`, not `Math.random`) and only honors an `AGI_CU_APPROVE_RESPONSE` from a trusted extension page (`sender.id === chrome.runtime.id && !sender.tab`), so a prompt-injected content script cannot forge approval. No response within 30 s = **DENY**.
+- **Page-data egress is a trust-boundary crossing.** Action planning sends page content/screenshots to the LLM (managed gateway). This leaves the page's trust plane; page text must pass `sanitizePageText` (3.4) and our-cloud targets stay on the exact-match gateway allowlist (3.10).
+- **`chrome.debugger` scope / detach.** CDP control requires the `debugger` permission (per-tab attach). The attach surfaces Chrome's "started debugging this browser" banner (cannot be suppressed); the loop must detach when the goal completes or the tab closes so no stale CDP session outlives the task.
+
 ---
 
 ## 4. Invariants the test suite enforces
@@ -163,6 +172,7 @@ These are contracts every PR must keep — failing any of them is a release-bloc
 - `tabs.onUpdated` sync gated on allowlist (`tab-updated-allowlist.test.ts`).
 - No `<<<<<<<` or `>>>>>>>` markers in `src/` or `__tests__/` (`scripts/check-conflict-markers.sh`, wired as `pretest`).
 - `patchConsole` removed entirely (`security-fixes.test.ts` M-13 block).
+- Computer-use defaults to ask-before-acting: an unset `agi_cu_ask_before_acting` is treated as gated (default-deny), never allow-all (`computer-use-default-ask.test.ts`; §3.14).
 - Commit messages follow Conventional Commits with the `Co-Authored-By:` footer — enforced by `.husky/commit-msg` running `pnpm exec commitlint --edit "$1"` monorepo-wide. The extension's `package.json` does not duplicate this hook because the root hook already gates every commit in the workspace (L-15 audit 2026-05-19).
 
 ---

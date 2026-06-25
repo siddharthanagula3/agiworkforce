@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ErrorTrackingService, ErrorSeverity } from '../errorTracking';
+import { analytics } from '../analytics';
 
 vi.mock('../analytics', () => ({
   analytics: {
@@ -7,11 +8,22 @@ vi.mock('../analytics', () => ({
   },
 }));
 
+// Drive the desktop privacy mode so the trust-boundary telemetry gate is testable.
+// Default 'managed' (telemetry allowed) keeps existing tests exercising the full path.
+const { privacyModeMock } = vi.hoisted(() => ({
+  privacyModeMock: vi.fn(() => 'managed' as string),
+}));
+vi.mock('../../stores/appModeStore', () => ({
+  useAppModeStore: { getState: () => ({}) },
+  selectPrivacyMode: () => privacyModeMock(),
+}));
+
 describe('ErrorTrackingService', () => {
   let service: ErrorTrackingService;
 
   beforeEach(() => {
     localStorage.clear();
+    privacyModeMock.mockReturnValue('managed');
 
     vi.stubEnv('VITE_SENTRY_DSN', '');
     vi.stubEnv('VITE_APP_VERSION', '1.0.0');
@@ -23,6 +35,41 @@ describe('ErrorTrackingService', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+  });
+
+  describe('trust boundary — telemetry suppression (BYOK is private, not just Local)', () => {
+    beforeEach(() => {
+      // Enable reporting so ONLY the privacy gate can suppress; ignore init-time tracks.
+      service.updateConfig({ enabled: true });
+      vi.mocked(analytics.track).mockClear();
+    });
+
+    it('suppresses telemetry in BYOK mode (regression: BYOK must not leak Sentry/analytics)', () => {
+      privacyModeMock.mockReturnValue('byok');
+      service.captureError(new Error('boom'));
+      service.captureMessage('hi');
+      expect(analytics.track).not.toHaveBeenCalled();
+    });
+
+    it('suppresses telemetry in Local mode', () => {
+      privacyModeMock.mockReturnValue('local');
+      service.captureError(new Error('boom'));
+      expect(analytics.track).not.toHaveBeenCalled();
+    });
+
+    it('fails CLOSED — suppresses when the privacy mode cannot be read', () => {
+      privacyModeMock.mockImplementation(() => {
+        throw new Error('store unavailable');
+      });
+      service.captureError(new Error('boom'));
+      expect(analytics.track).not.toHaveBeenCalled();
+    });
+
+    it('allows telemetry only in managed mode', () => {
+      privacyModeMock.mockReturnValue('managed');
+      service.captureError(new Error('boom'));
+      expect(analytics.track).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('Initialization', () => {

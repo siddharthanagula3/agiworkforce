@@ -19,7 +19,7 @@ vi.mock('../../stores/appModeStore', () => ({
     subscribe: vi.fn(() => () => {}),
   },
   selectPrivacyMode: vi.fn((state: { mode: string }) =>
-    state.mode === 'local' ? 'local' : 'managed',
+    state.mode === 'local' ? 'local' : state.mode === 'byok' ? 'byok' : 'managed',
   ),
 }));
 
@@ -253,11 +253,11 @@ describe('AnalyticsService', () => {
     });
   });
 
-  describe('Trust Boundary (Local Mode)', () => {
+  describe('Trust Boundary (Local + BYOK private modes)', () => {
     const mockedGetState = () => vi.mocked(useAppModeStore.getState);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const setMode = (mode: 'local' | 'cloud') => mockedGetState().mockReturnValue({ mode } as any);
+    const setMode = (mode: 'local' | 'cloud' | 'byok') =>
+      mockedGetState().mockReturnValue({ mode } as any);
 
     beforeEach(() => {
       service.updateConfig({ enabled: true });
@@ -270,6 +270,13 @@ describe('AnalyticsService', () => {
 
     it('TRUST-BOUNDARY: never emits telemetry in local mode even when consent is granted', () => {
       setMode('local');
+      const before = service.getSessionInfo().events_count;
+      service.track('app_opened', { page: 'chat' });
+      expect(service.getSessionInfo().events_count).toBe(before);
+    });
+
+    it('TRUST-BOUNDARY: never emits telemetry in BYOK mode (regression: BYOK is private, not managed)', () => {
+      setMode('byok');
       const before = service.getSessionInfo().events_count;
       service.track('app_opened', { page: 'chat' });
       expect(service.getSessionInfo().events_count).toBe(before);
