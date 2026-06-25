@@ -113,7 +113,7 @@ describe('AdvancedEmptyState', () => {
 describe('ChatInterface host ownership slots', () => {
   beforeEach(resetStores);
 
-  it('does not render package quick chips when the host provides an empty state', () => {
+  it('replaces the default content-area empty state with the host slot, but keeps the independent composer quick chips', () => {
     const html = renderToStaticMarkup(
       <ChatInterface
         runtime={null}
@@ -123,10 +123,18 @@ describe('ChatInterface host ownership slots', () => {
       />,
     );
 
+    // The host slot owns the content area: it renders, and it REPLACES the
+    // package's default <EmptyState> greeting ("What can I help with?").
     expect(html).toContain('Desktop empty');
-    expect(html).not.toContain('>Code<');
-    expect(html).not.toContain('>Research<');
-    expect(html).not.toContain('>Computer<');
+    expect(html).not.toContain('What can I help with?');
+
+    // The composer-area sample-prompt chips are a SEPARATE slot, shown whenever
+    // the chat is empty (claude.ai parity — ref: claude_reference/015). They are
+    // intentionally independent of emptyStateSlot (which owns only the greeting
+    // above), so they remain rendered. See the ChatInterface composer block.
+    expect(html).toContain('>Code<');
+    expect(html).toContain('>Research<');
+    expect(html).toContain('>Computer<');
   });
 
   it('keeps the empty-state badge CTA host-configurable', () => {
