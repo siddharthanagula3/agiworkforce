@@ -223,6 +223,12 @@ Expected: File created, no errors
 
 Modify: `package.json`
 
+> ⚠️ **Superseded — do not copy the `test:l*` / `test:security` lines below.**
+> The `vitest run --include=…` form crashes on vitest 4 and cannot resolve
+> per-app aliases or mobile's jest tests. The shipped scripts call
+> `node scripts/run-priority-tier.mjs <token>`, which fans out to each app's
+> own `test` script. See that script's header for the rationale.
+
 ```json
 {
   "scripts": {
