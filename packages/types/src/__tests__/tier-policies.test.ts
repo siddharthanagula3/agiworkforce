@@ -59,8 +59,10 @@ describe('TIER_POLICIES — Free tier (auto-routing-spec §1)', () => {
 describe('TIER_POLICIES — Pro tier (parallel-spinning-hedgehog §3, §4, §6)', () => {
   const policy = getTierPolicy('pro');
 
-  it('caps monthly text tokens at 20M', () => {
-    expect(policy.tokenCapPerMonth).toBe(20_000_000);
+  it('caps monthly text tokens at 40M', () => {
+    // Raised from 20M to 40M in commit d5e6c7978 ("raise pro token limits");
+    // this assertion was the stale half of that deliberate change.
+    expect(policy.tokenCapPerMonth).toBe(40_000_000);
   });
 
   it('exposes Auto + manual via Advanced-mode toggle (auto_plus_manual)', () => {
