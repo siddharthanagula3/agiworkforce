@@ -177,6 +177,8 @@ The `core/skills/` module supports loadable skills from local files, marketplace
 
 ## Security and Privacy
 
+> Security policy, trust-boundary model, and vulnerability reporting: **[SECURITY.md](SECURITY.md)**.
+
 - **Trust boundary enforcement** — Local, BYOK, and Managed Cloud are separate trust boundaries. Local chats never silently route to cloud providers. BYOK transitions require explicit user consent with payload preview and secret scanning.
 - **Encrypted local storage** — Desktop uses SQLCipher-encrypted SQLite for local data. Credentials stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service).
 - **Sandbox policies** — The `crates/sandbox-policy` crate enforces execution policies. The CLI supports Linux seccomp filtering (optional feature).
