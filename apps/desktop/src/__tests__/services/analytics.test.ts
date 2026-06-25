@@ -257,7 +257,9 @@ describe('AnalyticsService', () => {
     const mockedGetState = () => vi.mocked(useAppModeStore.getState);
 
     const setMode = (mode: 'local' | 'cloud' | 'byok') =>
-      mockedGetState().mockReturnValue({ mode } as any);
+      mockedGetState().mockReturnValue({ mode } as unknown as ReturnType<
+        typeof useAppModeStore.getState
+      >);
 
     beforeEach(() => {
       service.updateConfig({ enabled: true });
