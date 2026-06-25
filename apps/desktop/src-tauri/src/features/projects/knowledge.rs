@@ -456,7 +456,6 @@ impl KnowledgeBase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::Connection;
     use tempfile::tempdir;
 
     #[test]
@@ -472,16 +471,22 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("knowledge.db");
         let kb = KnowledgeBase::new(db_path).unwrap();
-        let conn = Connection::open(&kb.db_path).unwrap();
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY
-            )",
-            [],
+
+        // The knowledge DB is opened with open_keyed_connection (SQLCipher-encrypted
+        // under bundled-sqlcipher-vendored-openssl). A plain Connection::open would
+        // fail with "file is not a database". Use the keyed helper instead.
+        //
+        // SQLCipher enables PRAGMA foreign_keys = ON by default in some builds,
+        // so the FK from project_memory(project_id) → projects(id) IS checked.
+        // Satisfy it by creating the projects table via an encrypted connection
+        // before inserting any memories.
+        let conn = crate::data::db::encryption::open_keyed_connection(&kb.db_path)
+            .expect("open keyed connection for test setup");
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY);
+             INSERT OR IGNORE INTO projects (id) VALUES ('project-1');",
         )
-        .unwrap();
-        conn.execute("INSERT INTO projects (id) VALUES (?1)", ["project-1"])
-            .unwrap();
+        .expect("create test projects table");
         drop(conn);
 
         kb.add_memory(ProjectMemory {

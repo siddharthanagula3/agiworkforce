@@ -383,11 +383,13 @@ mod tests {
     #[test]
     fn test_qwen_max_cost() {
         let calc = CostCalculator::new();
-        // qwen-max: $1.60/M input, $6.40/M output
+        // qwen-max: $1.20/M input, $6.00/M output (updated 2026-06-20 per
+        // verified Alibaba Cloud pricing; was $1.60/$6.40 before June 2026).
+        // SSOT: packages/types/src/models.json "qwen-max" inputCost/outputCost.
         let cost = calc.calculate(Provider::Qwen, "qwen-max", 1_000_000, 1_000_000);
         assert!(
-            (cost - 8.00).abs() < 1e-9,
-            "Expected $8.00 for qwen-max 1M+1M tokens, got ${}",
+            (cost - 7.20).abs() < 1e-9,
+            "Expected $7.20 for qwen-max 1M+1M tokens, got ${}",
             cost
         );
     }
