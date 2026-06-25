@@ -456,10 +456,10 @@ impl ChangeTracker {
 
     async fn get_git_branch(&self, working_dir: &std::path::Path) -> Option<String> {
         let working_dir = working_dir.to_path_buf();
-        tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::spawn_blocking(move || -> Option<String> {
             let repo = git2::Repository::open(&working_dir).ok()?;
             let head = repo.head().ok()?;
-            head.shorthand().map(|s| s.to_string())
+            head.shorthand().ok().map(|s| s.to_string())
         })
         .await
         .ok()
@@ -494,7 +494,7 @@ impl ChangeTracker {
 
             let mut files = Vec::new();
             for entry in statuses.iter() {
-                if let Some(path) = entry.path() {
+                if let Ok(path) = entry.path() {
                     files.push(working_dir.join(path));
                 }
             }

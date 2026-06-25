@@ -150,7 +150,7 @@ fn list_agi_worktrees(repo_root: &Path) -> Result<Vec<WorktreeInfo>> {
         .map_err(|e| anyhow!("Failed to list worktrees: {e}"))?;
 
     let mut worktrees = Vec::new();
-    for name in names.iter().flatten() {
+    for name in names.iter().filter_map(|r| r.ok().flatten()) {
         if !name.starts_with(WORKTREE_PREFIX) {
             continue;
         }
