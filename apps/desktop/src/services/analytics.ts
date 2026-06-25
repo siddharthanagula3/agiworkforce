@@ -149,9 +149,18 @@ class AnalyticsService {
   }
 
   public track(eventName: EventName, properties: Record<string, unknown> = {}) {
-    // TRUST-BOUNDARY: never emit telemetry in local mode regardless of consent
-    // toggle. Consent controls cloud-mode opt-in; local mode is always silent.
-    if (selectPrivacyMode(useAppModeStore.getState()) === 'local') {
+    // TRUST-BOUNDARY: never emit telemetry outside Managed Cloud. Local AND BYOK
+    // are private boundaries (BYOK runs under appMode 'cloud' but must not reach
+    // our cloud) — a `=== 'local'` check WOULD leak analytics in BYOK. Mirrors
+    // egressGuard's canonical `!== 'managed'` chokepoint. Consent only gates
+    // managed-mode opt-in. Fail CLOSED: suppress if the mode can't be read.
+    let isManaged: boolean;
+    try {
+      isManaged = selectPrivacyMode(useAppModeStore.getState()) === 'managed';
+    } catch {
+      isManaged = false;
+    }
+    if (!isManaged) {
       return;
     }
     if (!this.config.enabled) {

@@ -109,15 +109,19 @@ class ErrorTrackingService {
   }
 
   /**
-   * TRUST-BOUNDARY: in local privacy mode the desktop must stay silent — never
-   * send crash/error reports regardless of the consent toggle (mirrors
-   * analytics.track). Fails open to false if the mode can't be read.
+   * TRUST-BOUNDARY: in a private trust boundary (Local OR BYOK — i.e. privacy
+   * mode !== 'managed') the desktop must stay silent — never send crash/error
+   * reports regardless of the consent toggle. BYOK runs under appMode 'cloud'
+   * but is a private boundary, so the previous `=== 'local'` check WRONGLY
+   * leaked Sentry telemetry in BYOK mode. This mirrors egressGuard's canonical
+   * `!== 'managed'` chokepoint (apps/desktop/src/lib/egressGuard.ts). Fails
+   * CLOSED (suppress) if the mode can't be read — blocking is safe, leaking is not.
    */
-  private isLocalMode(): boolean {
+  private isPrivateMode(): boolean {
     try {
-      return selectPrivacyMode(useAppModeStore.getState()) === 'local';
+      return selectPrivacyMode(useAppModeStore.getState()) !== 'managed';
     } catch {
-      return false;
+      return true;
     }
   }
 
@@ -149,7 +153,7 @@ class ErrorTrackingService {
       extra?: Record<string, unknown>;
     },
   ) {
-    if (this.isLocalMode()) {
+    if (this.isPrivateMode()) {
       return;
     }
     if (!this.config.enabled) {
@@ -184,7 +188,7 @@ class ErrorTrackingService {
   }
 
   public captureMessage(message: string, severity: ErrorSeverity = ErrorSeverity.LOW) {
-    if (this.isLocalMode()) {
+    if (this.isPrivateMode()) {
       return;
     }
     if (!this.config.enabled) {

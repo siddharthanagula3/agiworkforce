@@ -13,6 +13,7 @@ import {
   verifyInbound,
 } from '../services/dispatch';
 import { API_BASE_URL } from '../api/config';
+import { guardedFetch } from '../lib/egressGuard';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
 const MAX_CONTROL_MESSAGE_BYTES = 64 * 1024;
@@ -421,17 +422,23 @@ export const useConnectionStore = create<MobileCompanionState>()(
             throw new Error('Sign in to pair a mobile companion.');
           }
 
-          const response = await fetch(`${API_BASE_URL.replace(/\/+$/, '')}/api/pair/initiate`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-              'X-Requested-With': 'XMLHttpRequest',
+          // Mobile pairing is a managed-cloud (cross-device sync) operation.
+          // Route through the egress guard so it fails closed in Local/BYOK mode
+          // instead of reaching our signaling/gateway. (Trust-boundary chokepoint.)
+          const response = await guardedFetch(
+            `${API_BASE_URL.replace(/\/+$/, '')}/api/pair/initiate`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              body: JSON.stringify({
+                initiator: 'desktop',
+              }),
             },
-            body: JSON.stringify({
-              initiator: 'desktop',
-            }),
-          });
+          );
           if (!response.ok) {
             throw new Error(`Failed to create pairing (${response.status})`);
           }

@@ -1,3 +1,0 @@
-# TypeScript errors resolved — zero errors as of 2026-03-07
-# Run: cd apps/web && npx tsc --noEmit
-# Result: exit 0 (no errors)

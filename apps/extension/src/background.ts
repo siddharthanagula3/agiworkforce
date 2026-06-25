@@ -1737,13 +1737,19 @@ async function handleMessageAsync(
 
       // Read the "ask before acting" preference stored by the side panel.
       // The side panel writes 'agi_cu_ask_before_acting' (boolean) to
-      // chrome.storage.local when the toggle changes. Default: false (allow-all).
+      // chrome.storage.local when the toggle changes.
+      //
+      // SECURITY (trust-boundary P0): autonomous CDP browser control on a
+      // prompt-injectable page must DEFAULT to human-in-the-loop. So an UNSET
+      // pref means ask-before-acting (default-deny). Allow-all ("autopilot") is
+      // an explicit opt-out the user must choose by turning the toggle OFF.
+      // Only an explicit stored `false` disables the gate.
       const askPref = await chrome.storage.local.get('agi_cu_ask_before_acting');
-      const askBeforeActing = askPref['agi_cu_ask_before_acting'] === true;
+      const askBeforeActing = askPref['agi_cu_ask_before_acting'] !== false;
 
       // onBeforeAction wiring:
-      //   - When askBeforeActing is false (default): no gate — every action is
-      //     allowed immediately (lowest-friction path for automated scenarios).
+      //   - When askBeforeActing is false (explicit autopilot opt-out): no gate —
+      //     every action is allowed immediately (user chose lowest-friction).
       //   - When askBeforeActing is true: the background sends an AGI_CU_APPROVE_REQUEST
       //     message to the side panel, then waits for an AGI_CU_APPROVE_RESPONSE
       //     (allow/deny). The side panel's showApprovalCard() provides the UI.
