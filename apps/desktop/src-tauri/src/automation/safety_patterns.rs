@@ -1,5 +1,5 @@
-//! Shared dangerous-pattern definitions used by both `safety.rs` (ComputerUseSafety)
-//! and `computer_use/safety.rs` (ComputerUseSafetyLayer).
+//! Shared dangerous-pattern definitions for the computer-use safety layer
+//! (`computer_use/safety.rs`, `ComputerUseSafetyLayer`).
 //!
 //! This module is the single source of truth for command/text patterns that are
 //! considered dangerous in automation contexts.
@@ -9,8 +9,7 @@ use std::sync::OnceLock;
 
 /// Dangerous text/command patterns that should be blocked or flagged.
 ///
-/// This is the canonical union of patterns previously defined in
-/// `automation::safety` and `automation::computer_use::safety`.
+/// Canonical pattern set consumed by `automation::computer_use::safety`.
 static DANGEROUS_COMMAND_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
 
 /// Dangerous keyboard shortcuts that should be blocked.

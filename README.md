@@ -183,7 +183,7 @@ The `core/skills/` module supports loadable skills from local files, marketplace
 - **Encrypted local storage** — Desktop uses SQLCipher-encrypted SQLite for local data. Credentials stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service).
 - **Sandbox policies** — The `crates/sandbox-policy` crate enforces execution policies. The CLI supports Linux seccomp filtering (optional feature).
 - **Input validation** — Zod schema validation on API boundaries. Helmet and rate limiting on Express services.
-- **Secure automation** — Automation safety module (`automation/safety.rs`) with pattern-based guards and an allowlist for destructive operations.
+- **Secure automation** — The computer-use loop enforces a `ComputerUseSafetyLayer` (`automation/computer_use/safety.rs`) with shared dangerous-pattern guards (`automation/safety_patterns.rs`) and an allowlist for destructive operations.
 - **Chrome Extension CSP** — Strict Content Security Policy with no `unsafe-inline`, localhost-only bridge connections, and native messaging validation.
 - **CI security gates** — Dependency audits (npm + cargo-audit), Semgrep OWASP/security scans, CodeQL analysis, and hardcoded-secret detection.
 
