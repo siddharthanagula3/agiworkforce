@@ -249,7 +249,7 @@ mod git_tool_tests {
 
         // Verify commit was created
         let commit = repo.find_commit(commit_oid).expect("Failed to find commit");
-        assert_eq!(commit.message(), Some("Test commit message"));
+        assert_eq!(commit.message().ok(), Some("Test commit message"));
 
         // Verify HEAD points to the new commit
         let head = repo.head().expect("Failed to get HEAD");
@@ -965,7 +965,7 @@ mod search_web_tests {
     }
 
     // Note: Integration tests that actually call the DuckDuckGo API should be
-    // marked with #[ignore] to avoid network calls during regular test runs
+    // marked ignored with a reason string to avoid network calls during regular test runs
     #[tokio::test]
     #[ignore = "Requires network access to DuckDuckGo API"]
     async fn test_search_returns_results() {
@@ -1140,7 +1140,7 @@ mod integration_workflow_tests {
 
         // Verify commit exists
         let commit = repo.find_commit(commit_oid).expect("Failed to find commit");
-        assert_eq!(commit.message(), Some("Initial commit"));
+        assert_eq!(commit.message().ok(), Some("Initial commit"));
 
         println!(
             "Git workflow completed successfully. Commit: {}",
