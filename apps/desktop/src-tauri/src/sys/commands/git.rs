@@ -52,7 +52,11 @@ pub(crate) fn make_git_credentials(
         let cfg = git2::Config::open_default().unwrap_or_else(|_| {
             git2::Config::new().expect("git2 in-memory config must be constructible")
         });
-        return Cred::credential_helper(&cfg, url, username_from_url);
+        let mut helper = git2::CredentialHelper::new(url);
+        helper.config(&cfg);
+        if let Some((user, pass)) = helper.execute() {
+            return Cred::userpass_plaintext(&user, &pass);
+        }
     }
 
     Err(git2::Error::from_str(
@@ -194,7 +198,7 @@ pub async fn git_status(path: String) -> Result<GitStatus, String> {
         let head = repo.head().ok();
         let branch = head
             .as_ref()
-            .and_then(|h| h.shorthand())
+            .and_then(|h| h.shorthand().ok())
             .unwrap_or("HEAD (detached)")
             .to_string();
 
@@ -621,7 +625,7 @@ pub async fn git_list_branches(path: String) -> Result<Vec<GitBranch>, String> {
         let head_name = repo
             .head()
             .ok()
-            .and_then(|h| h.shorthand().map(|s| s.to_string()));
+            .and_then(|h| h.shorthand().ok().map(|s| s.to_string()));
 
         for b in branches {
             let (branch, _) = b.map_err(|e| e.message().to_string())?;
@@ -1142,9 +1146,9 @@ pub async fn git_list_remotes(path: String) -> Result<Vec<(String, String)>, Str
         let remotes = repo.remotes().map_err(|e| e.message().to_string())?;
 
         let mut result = Vec::new();
-        for name in remotes.iter().flatten() {
+        for name in remotes.iter().filter_map(|r| r.ok().flatten()) {
             if let Ok(remote) = repo.find_remote(name) {
-                let url = remote.url().unwrap_or("").to_string();
+                let url = remote.url().ok().unwrap_or("").to_string();
                 result.push((name.to_string(), url));
             }
         }
@@ -1539,8 +1543,8 @@ pub async fn git_has_conflicts(path: String) -> Result<bool, String> {
 
         for entry in statuses.iter() {
             let file_path = match entry.path() {
-                Some(p) => p,
-                None => continue,
+                Ok(p) => p,
+                Err(_) => continue,
             };
 
             let full_path = workdir.join(file_path);
@@ -2001,13 +2005,13 @@ pub async fn git_default_branch(path: String) -> Result<String, String> {
 
         // Check remote HEAD reference
         if let Ok(remote) = repo.find_remote("origin") {
-            if let Some(url) = remote.url() {
+            if let Ok(url) = remote.url() {
                 tracing::debug!("Remote URL: {}", url);
             }
 
             // Try to get default branch from remote
             if let Ok(remote_head) = repo.find_reference("refs/remotes/origin/HEAD") {
-                if let Some(target) = remote_head.symbolic_target() {
+                if let Ok(Some(target)) = remote_head.symbolic_target() {
                     // Format: refs/remotes/origin/main
                     if let Some(branch) = target.strip_prefix("refs/remotes/origin/") {
                         return Ok(branch.to_string());

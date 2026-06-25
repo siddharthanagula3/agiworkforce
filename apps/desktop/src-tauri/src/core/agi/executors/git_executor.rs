@@ -1447,11 +1447,12 @@ impl GitExecutor {
 
         // Try credential helper via git config
         if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT) {
-            return git2::Cred::credential_helper(
-                &git2::Config::open_default().or_else(|_| git2::Config::new())?,
-                url,
-                username_from_url,
-            );
+            let config = git2::Config::open_default().or_else(|_| git2::Config::new())?;
+            let mut helper = git2::CredentialHelper::new(url);
+            helper.config(&config);
+            if let Some((user, pass)) = helper.execute() {
+                return git2::Cred::userpass_plaintext(&user, &pass);
+            }
         }
 
         Err(git2::Error::from_str(
@@ -1492,7 +1493,7 @@ impl GitExecutor {
         let branch = match repo.head() {
             Ok(head) => {
                 if head.is_branch() {
-                    head.shorthand().map(|s| s.to_string())
+                    head.shorthand().ok().map(|s| s.to_string())
                 } else {
                     // Detached HEAD - show commit hash
                     head.target()
@@ -1971,7 +1972,7 @@ impl GitExecutor {
                     ));
                 }
                 head.shorthand()
-                    .ok_or_else(|| anyhow!("Failed to get current branch name"))?
+                    .map_err(|_| anyhow!("Failed to get current branch name"))?
                     .to_string()
             };
 
@@ -2274,7 +2275,7 @@ impl GitExecutor {
         let head = repo.head().ok();
         let branch_name = head
             .as_ref()
-            .and_then(|h| h.shorthand())
+            .and_then(|h| h.shorthand().ok())
             .unwrap_or("unknown");
 
         tracing::info!(
