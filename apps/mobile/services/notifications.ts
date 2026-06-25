@@ -203,7 +203,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
     // an uncaught rejection here surfaces as a red error overlay in dev and is a
     // silent crash risk in prod. Push simply stays off for this session.
     if (__DEV__) {
-      // eslint-disable-next-line no-console
       console.warn(
         '[push] registration skipped (non-fatal):',
         err instanceof Error ? err.message : String(err),
