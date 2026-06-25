@@ -25,11 +25,12 @@
  * not.
  */
 
-// The import cycle (cloudAccountAuth → egressGuard → appModeStore → auth →
-// cloudAccountAuth) is broken on the cloudAccountAuth side, which lazy-requires
-// egressGuard. egressGuard can therefore import appModeStore statically here,
-// keeping the guard easily testable via vi.mock.
-import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
+// The private-boundary predicate lives in stores/privacyBoundary so egressGuard,
+// errorTracking, and analytics share ONE implementation (it drifted before — a
+// `=== 'local'` check leaked telemetry in BYOK). privacyBoundary → appModeStore is
+// the same import edge egressGuard used directly; the cloudAccountAuth → egressGuard
+// → appModeStore cycle stays broken on the cloudAccountAuth side (lazy require).
+import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
 
 /**
  * Hostname suffixes that belong to OUR cloud infrastructure. Matched by
@@ -75,20 +76,12 @@ export function isOurCloudHost(host: string | null | undefined): boolean {
 }
 
 /**
- * Reads the current app mode and returns whether we are in a Local trust
- * boundary (Local OR BYOK). FAIL-CLOSED: any error reading the store is treated
- * as Local (block our-cloud egress).
+ * True when we are in a Local trust boundary (Local OR BYOK) and must block
+ * our-cloud egress. Delegates to the shared `isPrivateTrustBoundary` so the
+ * predicate stays in one place (fail-closed on an unreadable store).
  */
 function isLocalMode(): boolean {
-  try {
-    // Local Mode = privacy mode 'local' OR 'byok' (both run on-device /
-    // client-direct and must never reach OUR cloud). Only 'managed'
-    // (AGI-managed cloud) permits our-cloud egress.
-    return selectPrivacyMode(useAppModeStore.getState()) !== 'managed';
-  } catch {
-    // Store unreadable -> fail closed to Local.
-    return true;
-  }
+  return isPrivateTrustBoundary();
 }
 
 /**

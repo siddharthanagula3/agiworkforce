@@ -1,7 +1,7 @@
 import { ErrorEventProperties } from '../types/analytics';
 import { analytics } from './analytics';
 import { safeGetJSON, safeSetJSON } from '../utils/localStorage';
-import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
+import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
 
 import * as Sentry from '@sentry/react';
 
@@ -109,20 +109,14 @@ class ErrorTrackingService {
   }
 
   /**
-   * TRUST-BOUNDARY: in a private trust boundary (Local OR BYOK — i.e. privacy
-   * mode !== 'managed') the desktop must stay silent — never send crash/error
-   * reports regardless of the consent toggle. BYOK runs under appMode 'cloud'
-   * but is a private boundary, so the previous `=== 'local'` check WRONGLY
-   * leaked Sentry telemetry in BYOK mode. This mirrors egressGuard's canonical
-   * `!== 'managed'` chokepoint (apps/desktop/src/lib/egressGuard.ts). Fails
-   * CLOSED (suppress) if the mode can't be read — blocking is safe, leaking is not.
+   * TRUST-BOUNDARY: in a private trust boundary (Local OR BYOK) the desktop must
+   * stay silent — never send crash/error reports regardless of the consent toggle.
+   * Delegates to the shared `isPrivateTrustBoundary` (fail-closed) so the predicate
+   * stays in one place; a `=== 'local'` check previously leaked Sentry telemetry
+   * in BYOK mode.
    */
   private isPrivateMode(): boolean {
-    try {
-      return selectPrivacyMode(useAppModeStore.getState()) !== 'managed';
-    } catch {
-      return true;
-    }
+    return isPrivateTrustBoundary();
   }
 
   public updateConfig(config: Partial<ErrorTrackingConfig>) {
