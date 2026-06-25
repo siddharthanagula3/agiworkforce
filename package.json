@@ -35,7 +35,7 @@
       "rollup": ">=4.59.0",
       "serialize-javascript": ">=7.0.5",
       "vite": ">=8.0.16",
-      "undici": ">=7.24.0",
+      "undici": ">=8.5.0",
       "picomatch": ">=4.0.4",
       "lodash": ">=4.18.0",
       "@tootallnate/once": ">=3.0.1",
