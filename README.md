@@ -364,6 +364,7 @@ _Screenshots and demo recordings will be added here._
 
 ## Contributing
 
+- **For a system overview:** [ARCHITECTURE.md](ARCHITECTURE.md) — surfaces, trust boundaries, shared layers, and request flow in five minutes.
 - **For contributors:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) — product source of truth for humans and high-level context. See [CONTRIBUTING.md](CONTRIBUTING.md) for PR conventions.
 - **For coding agents:** read [AGENTS.md](AGENTS.md) first, then the relevant scoped `AGENTS.md` files and [docs/agent-context/](docs/agent-context/).
 - **For builds and deployment:** [BUILD.md](BUILD.md).
