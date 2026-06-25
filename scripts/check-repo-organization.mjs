@@ -54,7 +54,6 @@ const allowedRootFiles = new Set([
 
 const knownRootDebt = new Set([
   '.DS_Store',
-  '.gitignore.tmp',
   '.mcp.json',
   'AUDIT_BATCHES',
   'AUDIT_FINDINGS.md',
