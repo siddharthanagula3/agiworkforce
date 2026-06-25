@@ -65,7 +65,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
    ┌──────┴──────┐     ┌─────────────────┐
    │  Neon       │     │  Rust Crates    │
    │  PostgreSQL │     │  protocol,      │
-   │  (34 migr.) │     │  sandbox-policy,│
+   │  (42 migr.) │     │  sandbox-policy,│
    │             │     │  command-registry│
    │             │     │  app-server,    │
    │             │     │  + 13 more      │
@@ -123,7 +123,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 - **Express 5** — API gateway and signaling server
 - **Clerk** — authentication (web + API gateway)
 - **Stripe** — payments and subscription management
-- **Neon PostgreSQL** — serverless database with 34 migrations
+- **Neon PostgreSQL** — serverless database with ordered, versioned SQL migrations (`apps/web/db/neon`)
 - **Upstash Redis** — rate limiting and caching
 - **Vercel** — web app deployment
 - **Pino** — structured logging
@@ -140,7 +140,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 - **pnpm 9.15** — workspace package manager
 - **Vite 7** — frontend build tooling
-- **GitHub Actions** — CI/CD with 11 workflow files (lint, typecheck, test, Rust clippy, Semgrep security audit, E2E, release for CLI/desktop/web)
+- **GitHub Actions** — CI/CD across multiple workflows (lint, typecheck, test, Rust clippy, Semgrep security audit, E2E, release for CLI/desktop/web)
 - **Playwright** — end-to-end testing
 - **Vitest** — unit testing
 - **ESLint 9** + **Prettier** — linting and formatting
