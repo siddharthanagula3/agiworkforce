@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Info, X, XCircle } from 'lucide-react';
 import { isTauri } from '../../lib/tauri-mock';
+import { guardedFetch } from '../../lib/egressGuard';
 
 const STATUS_URL: string =
   (typeof import.meta !== 'undefined' &&
@@ -70,7 +71,10 @@ async function fetchStatusMessages(): Promise<StatusMessage[]> {
   // dev server origin triggers CORS; plain browser has no Tauri at all.
   if (!isTauri || import.meta.env.DEV) return [];
   try {
-    const response = await fetch(STATUS_URL, {
+    // status.agiworkforce.com is OUR cloud. Route through the egress guard so a
+    // Local/BYOK session does not ping our infra (reveals IP + app-running). The
+    // guard throws fail-closed there; the catch below degrades to no banner.
+    const response = await guardedFetch(STATUS_URL, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       cache: 'no-store',
     });

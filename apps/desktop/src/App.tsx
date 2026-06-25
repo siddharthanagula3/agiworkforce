@@ -5,6 +5,7 @@ import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
+import { guardedFetch } from './lib/egressGuard';
 import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
 import {
   cleanupAgentWorkflowEventListeners,
@@ -737,7 +738,7 @@ const DesktopShell = () => {
         // Backend unavailable — try cloud API in web mode, then fall back to hardcoded defaults
         try {
           if (!isTauri) {
-            const res = await fetch(`${API_BASE_URL}/api/models`);
+            const res = await guardedFetch(`${API_BASE_URL}/api/models`);
             if (res.ok) {
               const data = await res.json();
               if (Array.isArray(data?.models) && data.models.length > 0) {

@@ -510,8 +510,11 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   const askCheckbox = document.createElement('input');
   askCheckbox.type = 'checkbox';
   askCheckbox.id = 'sp-cu-ask-checkbox';
-  // Default: off (allow-all). User can enable for confirmation on each action.
-  askCheckbox.checked = false;
+  // Default: ON (ask before acting). Autonomous CDP browser control on a
+  // prompt-injectable page must default to human-in-the-loop (trust-boundary
+  // P0). Unchecking is an explicit "autopilot" opt-out; the authoritative gate
+  // is in background.ts (an unset pref is treated as ask-before-acting).
+  askCheckbox.checked = true;
 
   const askText = document.createTextNode('Ask before acting');
   askLabel.appendChild(askCheckbox);

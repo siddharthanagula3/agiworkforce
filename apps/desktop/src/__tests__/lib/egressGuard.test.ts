@@ -163,6 +163,38 @@ describe('guardedFetch — fail-closed', () => {
   });
 });
 
+describe('guardedFetch — desktop P0 endpoints stay behind the chokepoint', () => {
+  // The three desktop call sites wired through guardedFetch in the egress
+  // chokepoint fix (built from WEB_APP_URL / API_BASE_URL — both agiworkforce.com
+  // hosts). The matching eslint rule blocks the raw-fetch form at lint time;
+  // these tests lock the RUNTIME behavior so a denylist gap or a future bypass
+  // re-trips this guard. The Share endpoint is the headline P0 (full chat content).
+  const P0_ENDPOINTS = [
+    'https://agiworkforce.com/api/shared', // ShareConversationDialog — full conversation
+    'https://www.agiworkforce.com/api/models', // App.tsx model-catalog fallback
+    'https://www.agiworkforce.com/api/pair/initiate', // connectionStore mobile pairing
+  ];
+
+  it.each(['local', 'byok'])('blocks every P0 endpoint in %s mode', async (mode) => {
+    getStateMock.mockReturnValue({ privacyMode: mode });
+    for (const url of P0_ENDPOINTS) {
+      await expect(guardedFetch(url, { method: 'POST' })).rejects.toThrow(
+        /blocked our-cloud egress/,
+      );
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('allows the P0 endpoints only in managed mode', async () => {
+    getStateMock.mockReturnValue({ privacyMode: 'managed' });
+    for (const url of P0_ENDPOINTS) {
+      const res = await guardedFetch(url, { method: 'POST' });
+      expect(res.status).toBe(200);
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(P0_ENDPOINTS.length);
+  });
+});
+
 describe('guardedFetch — input shapes (privacy mode "local")', () => {
   beforeEach(() => {
     getStateMock.mockReturnValue({ privacyMode: 'local' });
