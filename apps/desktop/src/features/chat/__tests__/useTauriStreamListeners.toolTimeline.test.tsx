@@ -19,6 +19,7 @@ vi.mock('../../../lib/tauri-mock', () => ({
 
 import { useTauriStreamListeners } from '../useTauriStreamListeners';
 import { useAgentStore } from '../../../stores/chat/agentStore';
+import { useAppModeStore } from '../../../stores/appModeStore';
 import { useChatStore } from '../../../stores/chat/chatStore';
 import { useToolStore } from '../../../stores/chat/toolStore';
 import { useUnifiedChatStore } from '../../../stores/unifiedChatStore';
@@ -62,6 +63,12 @@ describe('useTauriStreamListeners tool timeline', () => {
   beforeEach(() => {
     listenMock.mockReset();
     invokeMock.mockReset();
+    // Force local mode so createConversation does not attempt a cloud API call.
+    // In jsdom, runtimeEnvironment.isTauri is false → appModeStore defaults to
+    // 'cloud' → createConversation fires createCloudConversation which rejects
+    // (no network) → the rollback wipes messagesByConversation and messages →
+    // all stream event handlers find no target message and produce undefined.
+    useAppModeStore.setState({ mode: 'local' });
     useUnifiedChatStore.getState().resetOnLogout();
     useChatStore.getState().resetOnLogout();
     useAgentStore.getState().resetOnLogout();
@@ -73,6 +80,7 @@ describe('useTauriStreamListeners tool timeline', () => {
     useChatStore.getState().resetOnLogout();
     useAgentStore.getState().resetOnLogout();
     useToolStore.getState().resetOnLogout();
+    useAppModeStore.setState({ mode: 'cloud' });
   });
 
   it('writes chat tool events into the per-message tool timeline', async () => {
