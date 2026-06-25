@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-21",
+  "lastUpdated": "2026-06-24",
   "canonicalAgentDoc": "AGENTS.md",
   "surfaces": [
     {
@@ -72,6 +72,15 @@
         "pnpm --filter agi-workforce test"
       ],
       "allowedImports": ["packages/*"]
+    },
+    {
+      "name": "Sandbox",
+      "path": "apps/sandbox",
+      "owner": "Web lead",
+      "stack": "Static HTML (single index.html, no build step), deployed to sandbox.agiworkforce.com via Vercel",
+      "purpose": "Cross-origin artifact renderer — sandboxed iframe/srcDoc rendering of generated artifacts and file previews with download-safety isolation (see risk-map artifact-rendering)",
+      "primaryChecks": ["pnpm --filter @agiworkforce/sandbox build"],
+      "allowedImports": ["none — isolated static renderer; receives content via postMessage only"]
     }
   ],
   "platform": [

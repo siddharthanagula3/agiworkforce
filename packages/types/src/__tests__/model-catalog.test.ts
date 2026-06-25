@@ -120,9 +120,11 @@ describe('model catalog helpers', () => {
   });
 
   it('legacy removed aliases are not in catalog (canonicalization removed for fresh start)', () => {
-    // Canonicalization was removed — starting fresh with no legacy users.
-    // Unknown aliases return null from getModelMetadataById.
-    expect(getModelMetadataById('gpt-5-nano')).toBeNull();
+    // Canonicalization was removed — unknown aliases return null from getModelMetadataById.
+    // NOTE: gpt-5-nano was later re-added as a first-class catalog model
+    // (commit 60668b427 "feat(catalog): add gpt-5-nano and gpt-4.1-nano"), so it now
+    // resolves; gpt-5.4-nano remains an unknown/removed alias.
+    expect(getModelMetadataById('gpt-5-nano')?.id).toBe('gpt-5-nano');
     expect(getModelMetadataById('gpt-5.4-nano')).toBeNull();
     expect(normalizeModelId('gpt-5.4-codex-high')).toBe('gpt-5.4-codex-high');
   });

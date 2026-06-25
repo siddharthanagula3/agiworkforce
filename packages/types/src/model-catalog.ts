@@ -1229,10 +1229,22 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
 // routing to a phantom model. Aligns with rule-models-json.md.
 (() => {
   for (const slot of Object.values(SLOT_REGISTRY)) {
-    if (!modelsById[slot.modelId]) {
+    const meta = modelsById[slot.modelId];
+    if (!meta) {
       throw new Error(
         `SLOT_REGISTRY references unknown model: ${slot.modelId} (slot: ${slot.slot}). ` +
           `Update packages/types/src/models.json or fix SLOT_REGISTRY.`,
+      );
+    }
+    // Provider-match: a slot's declared provider must equal the model's actual
+    // provider in models.json. Otherwise the routing slot silently points at the
+    // wrong vendor (e.g. modelId 'gpt-5.4-mini' but provider 'google'), which the
+    // modelId-only check above would miss. Fail loudly at import, like the rest.
+    if (slot.provider && meta.provider && slot.provider !== meta.provider) {
+      throw new Error(
+        `SLOT_REGISTRY slot "${slot.slot}" declares provider "${slot.provider}" but model ` +
+          `"${slot.modelId}" belongs to provider "${meta.provider}" in models.json. ` +
+          `Fix the slot's provider or modelId.`,
       );
     }
   }

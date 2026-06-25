@@ -316,6 +316,33 @@ if (repoMap) {
       errors.push(`repo-map.json platform path does not exist: ${area.path}`);
     }
   }
+
+  // Surface completeness — prevents the missing-surface drift class. apps/sandbox
+  // was absent from this map for ~1 month, leaving the machine-readable map a
+  // coding agent loads first structurally incomplete (the "AI agent in 5 min: NO"
+  // blocker). Every apps/<dir> must be mapped as a surface.
+  const mappedSurfacePaths = new Set((repoMap.surfaces ?? []).map((surface) => surface.path));
+  const appsRoot = path.join(root, 'apps');
+  if (fs.existsSync(appsRoot)) {
+    for (const entry of fs.readdirSync(appsRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      const surfacePath = `apps/${entry.name}`;
+      if (!mappedSurfacePaths.has(surfacePath)) {
+        errors.push(
+          `repo-map.json is missing a surface entry for ${surfacePath}. Every apps/* surface must be mapped (add it to surfaces[] and bump lastUpdated) so the map stays complete for coding agents.`,
+        );
+      }
+    }
+  }
+
+  // Provenance — a well-formed lastUpdated keeps map staleness visible. (Deterministic
+  // format check only; staleness vs git history is reviewed in PR, not gated here, to
+  // avoid CI flake on shallow clones.)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(repoMap.lastUpdated ?? '')) {
+    errors.push(
+      `repo-map.json must carry a lastUpdated date in YYYY-MM-DD form (found ${JSON.stringify(repoMap.lastUpdated)}).`,
+    );
+  }
 }
 
 const riskMap = readJson('docs/agent-context/risk-map.json');
@@ -326,6 +353,11 @@ if (riskMap) {
         errors.push(`risk-map.json risk ${risk.id ?? '<unknown>'} missing ${key}`);
       }
     }
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(riskMap.lastUpdated ?? '')) {
+    errors.push(
+      `risk-map.json must carry a lastUpdated date in YYYY-MM-DD form (found ${JSON.stringify(riskMap.lastUpdated)}).`,
+    );
   }
 }
 

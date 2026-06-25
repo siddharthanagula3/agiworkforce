@@ -1,14 +1,24 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-21",
+  "lastUpdated": "2026-06-24",
   "risks": [
     {
       "id": "privacy-boundary",
       "severity": "high",
       "owner": "Security/privacy lead",
-      "paths": ["apps/*", "packages/types", "packages/providers", "crates/*"],
-      "reviewFocus": "Local/BYOK/Managed labels, explicit forks, no silent routing across trust boundaries",
-      "checks": ["rg \"PrivacyMode|privacy_mode|BYOK|Managed|Local\" apps packages crates services"]
+      "paths": [
+        "apps/*",
+        "packages/types",
+        "packages/providers",
+        "crates/*",
+        "apps/desktop/src/lib/egressGuard.ts",
+        "apps/desktop/src-tauri/src/sys/account"
+      ],
+      "reviewFocus": "Local/BYOK/Managed labels, explicit forks, no silent routing across trust boundaries. Desktop egress guard (egressGuard.ts) is FETCH-ONLY: JS our-cloud fetches must use guardedFetch (eslint-enforced for WEB_APP_URL/API_BASE_URL templates). KNOWN GAP (2026-06-24): Rust-transport egress is NOT covered by the JS guard — sys/account device/profile/credit Tauri commands reqwest www.agiworkforce.com with the Bearer token and no privacy-mode gate, and fire in BYOK (signed-in cloud session). Open decision: is BYOK account-management intended to reach AGI cloud (then correct the egressGuard 'never account data' docstring) or must it be gated Rust-side (then mirror the guard). Do not route chat/file/session payloads on any ungated transport.",
+      "checks": [
+        "rg \"PrivacyMode|privacy_mode|BYOK|Managed|Local\" apps packages crates services",
+        "rg \"reqwest|get_api_base_url|api/me|api/device\" apps/desktop/src-tauri/src/sys/account"
+      ]
     },
     {
       "id": "provider-routing",
@@ -75,11 +85,12 @@
         "apps/web/features/admin",
         "docs/enterprise"
       ],
-      "reviewFocus": "Tenant isolation, admin policy defaults, SSO/SCIM data ownership, audit immutability, support privacy labels, managed-credit public launch gates",
+      "reviewFocus": "Tenant isolation, admin policy defaults, SSO/SCIM data ownership, support privacy labels, managed-credit public launch gates. KNOWN GAP (verified 2026-06-24): audit immutability is NOT enforced — public.security_audit_logs (0014_security.sql) has no REVOKE or trigger, so the app role app_rls can UPDATE/DELETE rows freely. Correct fix is non-trivial: cleanup_old_security_logs (90-day retention) and the GDPR user-purge (0020_functions.sql) are NOT security definer, so a plain REVOKE would break retention + compliance; the migration must make those 2 functions security definer (with injection review) THEN REVOKE UPDATE,DELETE FROM app_rls, and be DB-verified before apply. See known-flaws AUDIT-IMMUT-01.",
       "checks": [
         "pnpm --filter @agiworkforce/types test -- enterprise",
         "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
-        "pnpm --filter @agiworkforce/web typecheck"
+        "pnpm --filter @agiworkforce/web typecheck",
+        "rg \"REVOKE|security definer|create trigger\" apps/web/db/neon/*security* apps/web/db/neon/0020_functions.sql"
       ]
     },
     {
