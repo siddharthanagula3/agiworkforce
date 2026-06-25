@@ -11,7 +11,7 @@ describe('uuidv7', () => {
     expect(id).toMatch(ANY_UUID_RE);
     expect(isUuidV7(id)).toBe(true);
     expect(id[14]).toBe('7'); // version nibble
-    expect(['8', '9', 'a', 'b']).toContain(id[19].toLowerCase()); // variant
+    expect(['8', '9', 'a', 'b']).toContain(id[19]!.toLowerCase()); // variant
   });
 
   it('is unique across many generations', () => {
@@ -24,8 +24,10 @@ describe('uuidv7', () => {
     const ids: string[] = [];
     for (let i = 0; i < 10_000; i++) ids.push(uuidv7());
     for (let i = 1; i < ids.length; i++) {
-      // strictly increasing — never equal, never decreasing, even within one ms
-      expect(ids[i] > ids[i - 1]).toBe(true);
+      // strictly increasing — never equal, never decreasing, even within one ms.
+      // Indices are provably in-bounds (i ∈ [1, length)), so the non-null
+      // assertions just satisfy noUncheckedIndexedAccess without changing intent.
+      expect(ids[i]! > ids[i - 1]!).toBe(true);
     }
     // sorting a shuffled copy lexically restores creation order
     const shuffled = [...ids].sort(() => Math.random() - 0.5);
