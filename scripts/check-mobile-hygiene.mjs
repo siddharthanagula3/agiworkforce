@@ -73,6 +73,10 @@ const serviceStoreImportBaseline = new Set([
   // The cloud sync engine's job IS to reconcile the cloud chat + sidecar stores with
   // the server, so it necessarily reads/writes those Zustand stores. (P2 sync.)
   'apps/mobile/services/cloudSyncEngine.ts',
+  // cloudSettingsMapping is the settings half of the same cloud-sync subsystem
+  // (cloudSyncEngine calls its applyCloudSettings): it applies server-pulled settings
+  // into the shared settings store, so it reads/writes that Zustand store by design.
+  'apps/mobile/services/cloudSettingsMapping.ts',
   'apps/mobile/services/companion.ts',
   'apps/mobile/services/companionNotifications.ts',
   'apps/mobile/services/desktopStatus.ts',
