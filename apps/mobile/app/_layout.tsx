@@ -18,7 +18,9 @@ import {
   LogBox,
   type AppStateStatus,
 } from 'react-native';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useTierStore } from '@/src/features/billing/store';
@@ -57,6 +59,7 @@ import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
+import { CapabilityProvider } from '@/src/lib/capabilities';
 import '../global.css';
 
 LogBox.ignoreLogs([
@@ -75,25 +78,38 @@ LogBox.ignoreLogs([
  * <ClerkProvider>.
  */
 function ClerkTokenBridge() {
-  const { getToken, userId, isSignedIn } = useAuth();
+  const { getToken, userId, isSignedIn, isLoaded } = useAuth();
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
+  const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
+
+  // Propagate Clerk's loaded state first so auth guards never fire during
+  // the cold-start window where isSignedIn is false even for signed-in users.
+  useEffect(() => {
+    if (isLoaded) {
+      setClerkLoaded(true);
+    }
+  }, [isLoaded, setClerkLoaded]);
 
   useEffect(() => {
     if (isSignedIn) {
       setClerkTokenGetter(
         () => getToken(),
         () => userId ?? null,
+        // Force-refresh getter: bypasses the Clerk token cache so the 401-retry
+        // path in api.ts receives a freshly-issued JWT rather than the same
+        // cached token that was just rejected by the server.
+        () => getToken({ skipCache: true }),
       );
       setClerkSignedIn(true);
     } else {
-      setClerkTokenGetter(null, null);
+      setClerkTokenGetter(null, null, null);
       setClerkSignedIn(false);
     }
   }, [getToken, userId, isSignedIn, setClerkSignedIn]);
 
   useEffect(() => {
     return () => {
-      setClerkTokenGetter(null, null);
+      setClerkTokenGetter(null, null, null);
       useAuthStore.getState().setClerkSignedIn(false);
     };
   }, []);
@@ -108,6 +124,7 @@ export default function RootLayout() {
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initialize = useAuthStore((s) => s.initialize);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const authEnabled = FEATURES.auth;
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
@@ -115,7 +132,10 @@ export default function RootLayout() {
   const url = useURL();
   const backPressCount = useRef(0);
   const { colors: themeColors, statusBarStyle } = useTheme();
-  const themeMode = useSettingsStore((s) => s.themeMode);
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
+  const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
+  const themeMode = isCloud ? cloudThemeMode : localThemeMode;
 
   // Sync the NATIVE color scheme to the app's theme choice. Clerk's native
   // AuthView (clerk-ios SwiftUI) follows the system/app userInterfaceStyle, so
@@ -380,7 +400,13 @@ export default function RootLayout() {
       return;
     }
 
-    if (!session && !inAuthGroup) {
+    // C2: Block routing while Clerk is still loading to avoid cold-start redirect
+    // races. During Clerk's ~200ms init window isClerkSignedIn is false even for a
+    // genuinely-signed-in user. The !authEnabled onboarding branch above is NOT
+    // gated here — local-only onboarding fires immediately on cold-start.
+    if (!isClerkLoaded) return;
+
+    if (!isClerkSignedIn && !inAuthGroup) {
       // Cloud auth (Clerk) is OPTIONAL — Local Mode never forces sign-in (locked
       // rule: Local is the free, account-less hook). Route Local-first; sign-in
       // is reached on demand via the Cloud toggle / invite-redeem flow.
@@ -391,8 +417,13 @@ export default function RootLayout() {
         });
       } else if (onboardingDone && inOnboarding) {
         router.replace({ pathname: '/(app)' as const });
+      } else if (onboardingDone) {
+        // Signed out (or session expired) while inside the app — route to login so
+        // the user can sign in again rather than silently landing on cloud screens
+        // with no session.
+        router.replace({ pathname: '/(auth)/login' as const });
       }
-    } else if (session && inAuthGroup) {
+    } else if (isClerkSignedIn && inAuthGroup) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding) {
         // Age-gate must come before onboarding on first run.
@@ -404,7 +435,7 @@ export default function RootLayout() {
       } else {
         router.replace({ pathname: '/(app)' as const });
       }
-    } else if (session && inOnboarding) {
+    } else if (isClerkSignedIn && inOnboarding) {
       // User landed in onboarding with an active session (e.g. OAuth callback).
       // If they already completed onboarding on a prior launch, go straight to
       // the app so they never see the welcome carousel again.
@@ -412,7 +443,7 @@ export default function RootLayout() {
       if (onboardingDone) {
         router.replace({ pathname: '/(app)' as const });
       }
-    } else if (session && !inAuthGroup && !inOnboarding) {
+    } else if (isClerkSignedIn && !inAuthGroup && !inOnboarding) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone) {
         if (!isAgeGateConfirmed()) {
@@ -422,7 +453,7 @@ export default function RootLayout() {
         }
       }
     }
-  }, [session, isInitialized, isMmkvReady, segments, router, authEnabled]);
+  }, [isClerkSignedIn, isClerkLoaded, isInitialized, isMmkvReady, segments, router, authEnabled]);
 
   // C1: Deep linking — handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
   // Required for QR desktop pairing when app is backgrounded or closed
@@ -607,14 +638,16 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
       <ClerkTokenBridge />
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaProvider>
-          <StatusBar style={statusBarStyle} />
-          <Slot />
-          {/* Global offline banner — renders above all content when NetInfo is offline */}
-          <OfflineBanner />
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
+      <CapabilityProvider platform="mobile">
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <SafeAreaProvider>
+            <StatusBar style={statusBarStyle} />
+            <Slot />
+            {/* Global offline banner — renders above all content when NetInfo is offline */}
+            <OfflineBanner />
+          </SafeAreaProvider>
+        </GestureHandlerRootView>
+      </CapabilityProvider>
     </ClerkProvider>
   );
 }

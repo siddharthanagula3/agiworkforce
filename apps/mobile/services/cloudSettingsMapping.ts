@@ -28,13 +28,15 @@
  */
 
 import type {
-  SettingsState,
   Personalization,
   ThemeMode,
   AccentColor,
   FontPreference,
 } from '@/stores/settingsStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import {
+  useCloudSettingsStore,
+  type CloudSettingsState,
+} from '@/stores/settings/cloudSettingsStore';
 
 // ── Cloud namespace types ────────────────────────────────────────────────────
 
@@ -96,17 +98,17 @@ export interface CloudSettings {
 // ── toCloudSettings ──────────────────────────────────────────────────────────
 
 /**
- * Project a snapshot of the mobile settings store into the cloud-safe namespace
+ * Project a snapshot of the cloud settings store into the cloud-safe namespace
  * shape. Returns the CloudSettings object that can be sent to POST /api/settings/sync.
  *
  * SECURITY: NEVER add secrets, device-specific fields, BYOK keys, or local model
  * paths here. Add only values whose meaning is identical across surfaces.
  *
- * @param store A SettingsState snapshot (from useSettingsStore.getState()).
+ * @param store A CloudSettingsState snapshot (from useCloudSettingsStore.getState()).
  */
 export function toCloudSettings(
   store: Pick<
-    SettingsState,
+    CloudSettingsState,
     | 'themeMode'
     | 'accentColor'
     | 'fontPreference'
@@ -158,18 +160,18 @@ export function toCloudSettings(
 
 /**
  * Apply a pulled CloudSettings payload (namespaces from GET /api/settings/sync)
- * back into the live mobile settings store. Uses LWW semantics: fields are only
+ * back into the live cloud settings store. Uses LWW semantics: fields are only
  * updated when present in the pulled payload (undefined = no change).
  *
- * Operates on `useSettingsStore.getState()` directly (the store is shared
- * local+cloud; pull updates apply into the same store in managed mode).
+ * Operates on `useCloudSettingsStore.getState()` directly (cloud mode only;
+ * local-mode settings are never touched by the sync engine).
  *
  * SECURITY: Only reads the explicitly-typed CloudSettings fields; ignores any
  * additional keys that might arrive from the server. Does not touch any
  * device-specific, BYOK, or secret fields.
  */
 export function applyCloudSettings(partial: CloudSettings): void {
-  const store = useSettingsStore.getState();
+  const store = useCloudSettingsStore.getState();
 
   // appearance
   if (partial.appearance) {

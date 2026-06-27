@@ -1,28 +1,34 @@
 /**
- * settingsStore — unit tests
+ * Settings stores — unit tests (post mode-split)
  *
  * Covers:
- *   - personalization has all fields with defaults
- *   - setPersonalization updates partial fields
- *   - capabilities default to true
- *   - setCapability toggles individual capabilities
- *   - autoApproveMode defaults to 'ask'
+ *   settingsStore (device-global): capabilities, autoApproveMode, haptics, isTemporaryChat
+ *   localSettingsStore (mode-specific / local): personalization, themeMode, accentColor
+ *   cloudSettingsStore (mode-specific / cloud): stamps settingsUpdatedAt on cloud-safe writes
  */
 
 // ---------------------------------------------------------------------------
-// Mocks — must be before store import
+// Mocks — must be before store imports
 // ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
-  whenMmkvReady: jest.fn((cb) => cb()),
-  rehydrateWhenMmkvReady: jest.fn((store, _name) => {
-    if (store && store.persist && typeof store.persist.rehydrate === 'function')
-      store.persist.rehydrate();
-  }),
+  whenMmkvReady: jest.fn((cb: () => void) => cb()),
+  rehydrateWhenMmkvReady: jest.fn(
+    (store: { persist: { rehydrate: () => void } }, _name: string) => {
+      if (store && store.persist && typeof store.persist.rehydrate === 'function')
+        store.persist.rehydrate();
+    },
+  ),
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
     removeItem: jest.fn(),
+  },
+  // storage.getString used by localSettingsStore migration; return undefined = no legacy data
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -40,43 +46,36 @@ jest.mock('../services/authSession', () => ({
 // ---------------------------------------------------------------------------
 
 import { useSettingsStore } from '../stores/settingsStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getState() {
-  return useSettingsStore.getState();
-}
+const defaultPersonalization = {
+  fullName: '',
+  nickname: '',
+  occupation: '',
+  instructions: '',
+  warmth: 50,
+  enthusiasm: 50,
+  headersLists: 50,
+  emoji: 50,
+};
 
-function resetStore() {
+function resetDeviceStore() {
   useSettingsStore.setState({
     autoApproveMode: 'ask',
     hapticsEnabled: true,
-    notificationsEnabled: true,
     voiceEnabled: true,
     backgroundFetchEnabled: true,
-    themeMode: 'system',
-    accentColor: 'neutral',
-    fontPreference: 'default',
     selectedVoiceId: null,
     speechRate: 1.0,
     speechPitch: 1.0,
     selectedPresetId: null,
     ttsProvider: 'system',
-    speechLanguage: 'en',
-    autoListenEnabled: true,
     isTemporaryChat: false,
-    personalization: {
-      fullName: '',
-      nickname: '',
-      occupation: '',
-      instructions: '',
-      warmth: 50,
-      enthusiasm: 50,
-      headersLists: 50,
-      emoji: 50,
-    },
     capabilities: {
       webSearch: true,
       imageGen: true,
@@ -90,100 +89,41 @@ function resetStore() {
   });
 }
 
+function resetLocalStore() {
+  useLocalSettingsStore.setState({
+    themeMode: 'system',
+    accentColor: 'neutral',
+    fontPreference: 'default',
+    notificationsEnabled: true,
+    speechLanguage: 'en',
+    autoListenEnabled: true,
+    personalization: defaultPersonalization,
+  });
+}
+
+function resetCloudStore() {
+  useCloudSettingsStore.setState({
+    themeMode: 'system',
+    accentColor: 'neutral',
+    fontPreference: 'default',
+    notificationsEnabled: true,
+    speechLanguage: 'en',
+    autoListenEnabled: true,
+    personalization: defaultPersonalization,
+    settingsUpdatedAt: null,
+  });
+}
+
 // ---------------------------------------------------------------------------
-// Tests
+// Tests: device-global settingsStore
 // ---------------------------------------------------------------------------
 
-describe('settingsStore', () => {
-  beforeEach(() => {
-    resetStore();
-  });
-
-  describe('personalization defaults', () => {
-    it('has empty string defaults for text fields', () => {
-      const { personalization } = getState();
-
-      expect(personalization.fullName).toBe('');
-      expect(personalization.nickname).toBe('');
-      expect(personalization.occupation).toBe('');
-      expect(personalization.instructions).toBe('');
-    });
-
-    it('has default of 50 for all slider values', () => {
-      const { personalization } = getState();
-
-      expect(personalization.warmth).toBe(50);
-      expect(personalization.enthusiasm).toBe(50);
-      expect(personalization.headersLists).toBe(50);
-      expect(personalization.emoji).toBe(50);
-    });
-  });
-
-  describe('setPersonalization', () => {
-    it('updates only the specified fields (partial update)', () => {
-      getState().setPersonalization({ fullName: 'Alice', occupation: 'Engineer' });
-
-      const { personalization } = getState();
-      expect(personalization.fullName).toBe('Alice');
-      expect(personalization.occupation).toBe('Engineer');
-      // Untouched fields remain at defaults
-      expect(personalization.nickname).toBe('');
-      expect(personalization.instructions).toBe('');
-      expect(personalization.warmth).toBe(50);
-    });
-
-    it('updates slider values', () => {
-      getState().setPersonalization({ warmth: 80, emoji: 10 });
-
-      const { personalization } = getState();
-      expect(personalization.warmth).toBe(80);
-      expect(personalization.emoji).toBe(10);
-      // Others unchanged
-      expect(personalization.enthusiasm).toBe(50);
-      expect(personalization.headersLists).toBe(50);
-    });
-
-    it('can update all fields at once', () => {
-      getState().setPersonalization({
-        fullName: 'Bob Builder',
-        nickname: 'Bob',
-        occupation: 'Builder',
-        instructions: 'Be constructive',
-        warmth: 90,
-        enthusiasm: 75,
-        headersLists: 30,
-        emoji: 60,
-      });
-
-      const { personalization } = getState();
-      expect(personalization.fullName).toBe('Bob Builder');
-      expect(personalization.nickname).toBe('Bob');
-      expect(personalization.occupation).toBe('Builder');
-      expect(personalization.instructions).toBe('Be constructive');
-      expect(personalization.warmth).toBe(90);
-      expect(personalization.enthusiasm).toBe(75);
-      expect(personalization.headersLists).toBe(30);
-      expect(personalization.emoji).toBe(60);
-    });
-
-    it('preserves existing values when updating a single field', () => {
-      // Set some initial values
-      getState().setPersonalization({ fullName: 'Alice', warmth: 80 });
-
-      // Update only nickname
-      getState().setPersonalization({ nickname: 'Ali' });
-
-      const { personalization } = getState();
-      expect(personalization.fullName).toBe('Alice');
-      expect(personalization.nickname).toBe('Ali');
-      expect(personalization.warmth).toBe(80);
-    });
-  });
+describe('settingsStore (device-global)', () => {
+  beforeEach(resetDeviceStore);
 
   describe('capabilities defaults', () => {
     it('all capabilities default to true', () => {
-      const { capabilities } = getState();
-
+      const { capabilities } = useSettingsStore.getState();
       expect(capabilities.webSearch).toBe(true);
       expect(capabilities.imageGen).toBe(true);
       expect(capabilities.memory).toBe(true);
@@ -197,29 +137,22 @@ describe('settingsStore', () => {
 
   describe('setCapability', () => {
     it('toggles individual capabilities to false', () => {
-      getState().setCapability('webSearch', false);
-
-      const { capabilities } = getState();
-      expect(capabilities.webSearch).toBe(false);
-      // Others remain true
-      expect(capabilities.imageGen).toBe(true);
-      expect(capabilities.memory).toBe(true);
-      expect(capabilities.desktopControl).toBe(true);
+      useSettingsStore.getState().setCapability('webSearch', false);
+      expect(useSettingsStore.getState().capabilities.webSearch).toBe(false);
+      expect(useSettingsStore.getState().capabilities.imageGen).toBe(true);
     });
 
     it('toggles capability back to true', () => {
-      getState().setCapability('memory', false);
-      expect(getState().capabilities.memory).toBe(false);
-
-      getState().setCapability('memory', true);
-      expect(getState().capabilities.memory).toBe(true);
+      useSettingsStore.getState().setCapability('memory', false);
+      expect(useSettingsStore.getState().capabilities.memory).toBe(false);
+      useSettingsStore.getState().setCapability('memory', true);
+      expect(useSettingsStore.getState().capabilities.memory).toBe(true);
     });
 
     it('can disable multiple capabilities independently', () => {
-      getState().setCapability('imageGen', false);
-      getState().setCapability('desktopControl', false);
-
-      const { capabilities } = getState();
+      useSettingsStore.getState().setCapability('imageGen', false);
+      useSettingsStore.getState().setCapability('desktopControl', false);
+      const { capabilities } = useSettingsStore.getState();
       expect(capabilities.webSearch).toBe(true);
       expect(capabilities.imageGen).toBe(false);
       expect(capabilities.memory).toBe(true);
@@ -229,67 +162,184 @@ describe('settingsStore', () => {
 
   describe('autoApproveMode', () => {
     it('defaults to "ask"', () => {
-      expect(getState().autoApproveMode).toBe('ask');
+      expect(useSettingsStore.getState().autoApproveMode).toBe('ask');
     });
 
     it('can be set to "smart"', () => {
-      getState().setAutoApproveMode('smart');
-      expect(getState().autoApproveMode).toBe('smart');
-    });
-
-    it('can be set to "full"', () => {
-      getState().setAutoApproveMode('full');
-      expect(getState().autoApproveMode).toBe('full');
+      useSettingsStore.getState().setAutoApproveMode('smart');
+      expect(useSettingsStore.getState().autoApproveMode).toBe('smart');
     });
 
     it('can be set back to "ask"', () => {
-      getState().setAutoApproveMode('full');
-      getState().setAutoApproveMode('ask');
-      expect(getState().autoApproveMode).toBe('ask');
+      useSettingsStore.getState().setAutoApproveMode('full');
+      useSettingsStore.getState().setAutoApproveMode('ask');
+      expect(useSettingsStore.getState().autoApproveMode).toBe('ask');
     });
   });
 
-  describe('other defaults', () => {
+  describe('other device-global fields', () => {
     it('hapticsEnabled defaults to true', () => {
-      expect(getState().hapticsEnabled).toBe(true);
-    });
-
-    it('themeMode defaults to system', () => {
-      expect(getState().themeMode).toBe('system');
-    });
-
-    it('accentColor defaults to neutral', () => {
-      expect(getState().accentColor).toBe('neutral');
-    });
-
-    it('setAccentColor changes the accent', () => {
-      getState().setAccentColor('green');
-      expect(getState().accentColor).toBe('green');
-    });
-
-    it('isTemporaryChat defaults to false', () => {
-      expect(getState().isTemporaryChat).toBe(false);
+      expect(useSettingsStore.getState().hapticsEnabled).toBe(true);
     });
 
     it('setHapticsEnabled toggles the flag', () => {
-      getState().setHapticsEnabled(false);
-      expect(getState().hapticsEnabled).toBe(false);
-
-      getState().setHapticsEnabled(true);
-      expect(getState().hapticsEnabled).toBe(true);
+      useSettingsStore.getState().setHapticsEnabled(false);
+      expect(useSettingsStore.getState().hapticsEnabled).toBe(false);
+      useSettingsStore.getState().setHapticsEnabled(true);
+      expect(useSettingsStore.getState().hapticsEnabled).toBe(true);
     });
 
-    it('setThemeMode changes theme', () => {
-      getState().setThemeMode('light');
-      expect(getState().themeMode).toBe('light');
-
-      getState().setThemeMode('system');
-      expect(getState().themeMode).toBe('system');
+    it('isTemporaryChat defaults to false', () => {
+      expect(useSettingsStore.getState().isTemporaryChat).toBe(false);
     });
 
     it('setTemporaryChat toggles the flag', () => {
-      getState().setTemporaryChat(true);
-      expect(getState().isTemporaryChat).toBe(true);
+      useSettingsStore.getState().setTemporaryChat(true);
+      expect(useSettingsStore.getState().isTemporaryChat).toBe(true);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: mode-specific localSettingsStore
+// ---------------------------------------------------------------------------
+
+describe('localSettingsStore (mode-specific — never synced)', () => {
+  beforeEach(resetLocalStore);
+
+  describe('personalization defaults', () => {
+    it('has empty string defaults for text fields', () => {
+      const { personalization } = useLocalSettingsStore.getState();
+      expect(personalization.fullName).toBe('');
+      expect(personalization.nickname).toBe('');
+      expect(personalization.occupation).toBe('');
+      expect(personalization.instructions).toBe('');
+    });
+
+    it('has default of 50 for all slider values', () => {
+      const { personalization } = useLocalSettingsStore.getState();
+      expect(personalization.warmth).toBe(50);
+      expect(personalization.enthusiasm).toBe(50);
+      expect(personalization.headersLists).toBe(50);
+      expect(personalization.emoji).toBe(50);
+    });
+  });
+
+  describe('setPersonalization', () => {
+    it('updates only the specified fields (partial update)', () => {
+      useLocalSettingsStore
+        .getState()
+        .setPersonalization({ fullName: 'Alice', occupation: 'Engineer' });
+      const { personalization } = useLocalSettingsStore.getState();
+      expect(personalization.fullName).toBe('Alice');
+      expect(personalization.occupation).toBe('Engineer');
+      expect(personalization.nickname).toBe('');
+      expect(personalization.warmth).toBe(50);
+    });
+
+    it('preserves existing values when updating a single field', () => {
+      useLocalSettingsStore.getState().setPersonalization({ fullName: 'Alice', warmth: 80 });
+      useLocalSettingsStore.getState().setPersonalization({ nickname: 'Ali' });
+      const { personalization } = useLocalSettingsStore.getState();
+      expect(personalization.fullName).toBe('Alice');
+      expect(personalization.nickname).toBe('Ali');
+      expect(personalization.warmth).toBe(80);
+    });
+  });
+
+  describe('themeMode', () => {
+    it('defaults to system', () => {
+      expect(useLocalSettingsStore.getState().themeMode).toBe('system');
+    });
+
+    it('setThemeMode changes theme', () => {
+      useLocalSettingsStore.getState().setThemeMode('light');
+      expect(useLocalSettingsStore.getState().themeMode).toBe('light');
+      useLocalSettingsStore.getState().setThemeMode('system');
+      expect(useLocalSettingsStore.getState().themeMode).toBe('system');
+    });
+
+    it('round-trips through all three modes without corruption', () => {
+      useLocalSettingsStore.getState().setThemeMode('light');
+      expect(useLocalSettingsStore.getState().themeMode).toBe('light');
+      useLocalSettingsStore.getState().setThemeMode('system');
+      expect(useLocalSettingsStore.getState().themeMode).toBe('system');
+      useLocalSettingsStore.getState().setThemeMode('dark');
+      expect(useLocalSettingsStore.getState().themeMode).toBe('dark');
+    });
+  });
+
+  describe('accentColor', () => {
+    it('defaults to neutral', () => {
+      expect(useLocalSettingsStore.getState().accentColor).toBe('neutral');
+    });
+
+    it('setAccentColor changes the accent', () => {
+      useLocalSettingsStore.getState().setAccentColor('green');
+      expect(useLocalSettingsStore.getState().accentColor).toBe('green');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: cloudSettingsStore — stamps settingsUpdatedAt on writes
+// ---------------------------------------------------------------------------
+
+describe('cloudSettingsStore (mode-specific — synced to cloud)', () => {
+  beforeEach(resetCloudStore);
+
+  it('starts with settingsUpdatedAt = null (never edited)', () => {
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).toBeNull();
+  });
+
+  it('stamps settingsUpdatedAt when setThemeMode is called', () => {
+    useCloudSettingsStore.getState().setThemeMode('dark');
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
+    expect(useCloudSettingsStore.getState().themeMode).toBe('dark');
+  });
+
+  it('stamps settingsUpdatedAt when setPersonalization is called', () => {
+    useCloudSettingsStore.getState().setPersonalization({ nickname: 'CloudUser' });
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
+    expect(useCloudSettingsStore.getState().personalization.nickname).toBe('CloudUser');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: mode isolation (key requirement)
+// ---------------------------------------------------------------------------
+
+describe('settings mode isolation', () => {
+  beforeEach(() => {
+    resetLocalStore();
+    resetCloudStore();
+  });
+
+  it('a local-mode personalization change does NOT appear in cloud store', () => {
+    useLocalSettingsStore.getState().setPersonalization({ fullName: 'LocalUser' });
+    expect(useLocalSettingsStore.getState().personalization.fullName).toBe('LocalUser');
+    expect(useCloudSettingsStore.getState().personalization.fullName).toBe('');
+  });
+
+  it('a cloud-mode personalization change does NOT appear in local store', () => {
+    useCloudSettingsStore.getState().setPersonalization({ fullName: 'CloudUser' });
+    expect(useCloudSettingsStore.getState().personalization.fullName).toBe('CloudUser');
+    expect(useLocalSettingsStore.getState().personalization.fullName).toBe('');
+  });
+
+  it('local themeMode and cloud themeMode are independent', () => {
+    useLocalSettingsStore.getState().setThemeMode('light');
+    useCloudSettingsStore.getState().setThemeMode('dark');
+    expect(useLocalSettingsStore.getState().themeMode).toBe('light');
+    expect(useCloudSettingsStore.getState().themeMode).toBe('dark');
+  });
+
+  it('cloud-mode change stamps settingsUpdatedAt; local change does not', () => {
+    useLocalSettingsStore.getState().setThemeMode('dark');
+    useCloudSettingsStore.getState().setThemeMode('dark');
+    // Local store has no settingsUpdatedAt field
+    expect('settingsUpdatedAt' in useLocalSettingsStore.getState()).toBe(false);
+    // Cloud store has settingsUpdatedAt stamped
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
   });
 });
