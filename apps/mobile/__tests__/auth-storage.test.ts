@@ -71,6 +71,46 @@ const _cloudAuthMock = require('../services/authSession') as {
 };
 const mockClearAuthSession = _cloudAuthMock.clearAuthSession;
 
+// Settings teardown mocks — intercepted by the lazy require() calls inside
+// signOut's try block. Jest resolves @/ → <rootDir> so these relative paths
+// match exactly what the source requires at runtime.
+jest.mock('../stores/settings/settingsSyncStateStore', () => ({
+  useSettingsSyncStateStore: {
+    getState: jest.fn(),
+  },
+}));
+
+jest.mock('../stores/settingsStore', () => ({
+  useSettingsStore: {
+    getState: jest.fn(),
+    setState: jest.fn(),
+  },
+}));
+
+// Cloud settings store is cleared on sign-out to prevent account-B from
+// inheriting account-A's personalization.
+jest.mock('../stores/settings/cloudSettingsStore', () => ({
+  useCloudSettingsStore: {
+    getState: jest.fn(),
+    setState: jest.fn(),
+  },
+}));
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _settingsSyncMock = require('../stores/settings/settingsSyncStateStore') as {
+  useSettingsSyncStateStore: { getState: jest.Mock };
+};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _settingsMock = require('../stores/settingsStore') as {
+  useSettingsStore: { getState: jest.Mock; setState: jest.Mock };
+};
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _cloudSettingsMock = require('../stores/settings/cloudSettingsStore') as {
+  useCloudSettingsStore: { getState: jest.Mock; setState: jest.Mock };
+};
+const mockResetSettingsSync = jest.fn();
+const mockCloudSettingsSetState = _cloudSettingsMock.useCloudSettingsStore.setState as jest.Mock;
+
 // mmkv is not used by authStore but may be imported transitively.
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -314,6 +354,12 @@ describe('authStore — secure storage persistence', () => {
     mockSetItemAsync.mockResolvedValue(undefined);
     mockGetItemAsync.mockResolvedValue(null);
     mockDeleteItemAsync.mockResolvedValue(undefined);
+
+    // Wire settings teardown mocks (called by lazy require inside signOut)
+    _settingsSyncMock.useSettingsSyncStateStore.getState.mockReturnValue({
+      resetSettingsSync: mockResetSettingsSync,
+    });
+    _settingsMock.useSettingsStore.getState.mockReturnValue({});
   });
 
   it('signInWithEmail throws and does not write session to secure store (Clerk v1)', async () => {
@@ -372,32 +418,93 @@ describe('authStore — secure storage persistence', () => {
     expect(getState().user).toBeNull();
   });
 
-  it('onRehydrateStorage sets isLoading=false and isInitialized=true when session exists', () => {
-    // Simulate what Zustand's persist middleware does after reading from storage
-    const session = makeSession();
+  it('signOut resets settings sync cursor and clears personalization (account-B isolation)', async () => {
+    // Regression: settings personalization (fullName, instructions, etc.) and the
+    // settings sync cursor are cloud-scoped. If not cleared on sign-out, a subsequent
+    // account inherits account A's personalization and may push a stale snapshot.
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
 
-    // Retrieve the onRehydrateStorage callback defined on the store config.
-    // We invoke it directly to validate its behaviour without loading the full
-    // persist middleware in a Node environment.
-    const rehydratedState = {
-      session: session as never,
-      user: session['user'] as never,
-      isLoading: true, // initial value before rehydration
-      isInitialized: false, // initial value before rehydration
-    };
-
-    // The store config's onRehydrateStorage returns a callback; call it with
-    // a state object that already has a session.
-    // We access this indirectly by setting state and testing the invariant:
-    // after rehydration with a session, isLoading should be false.
-    useAuthStore.setState({
-      ...rehydratedState,
-      isLoading: false,
-      isInitialized: true,
+    await act(async () => {
+      await getState().signOut();
     });
 
-    expect(getState().isLoading).toBe(false);
-    expect(getState().isInitialized).toBe(true);
+    // Settings sync cursor must be reset to '0' so the next account starts fresh
+    expect(mockResetSettingsSync).toHaveBeenCalledTimes(1);
+
+    // Cloud settings personalization must be wiped and settingsUpdatedAt set to null
+    // so the wiped state is NOT treated as a local edit (which would push defaults to cloud).
+    // Local settings are intentionally preserved — they belong to the device, not the account.
+    expect(mockCloudSettingsSetState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personalization: {
+          fullName: '',
+          nickname: '',
+          occupation: '',
+          instructions: '',
+          warmth: 50,
+          enthusiasm: 50,
+          headersLists: 50,
+          emoji: 50,
+        },
+        settingsUpdatedAt: null,
+      }),
+    );
+  });
+
+  it('onRehydrateStorage clears session and marks store uninitialized (biometric gate)', () => {
+    // The onRehydrateStorage callback deliberately clears any previously-loaded
+    // session so the app starts in a pristine locked state. initialize() is the
+    // ONLY path that marks the store ready, and it is only called AFTER the
+    // biometric gate in _layout.tsx succeeds.
+    //
+    // Previous (incorrect) test: used useAuthStore.setState() directly and
+    // asserted the manually-set values back — testing Zustand setState, not the
+    // actual callback. This test invokes the callback as the middleware would.
+
+    const session = makeSession();
+
+    // Retrieve and invoke the onRehydrateStorage callback directly so we test
+    // the real callback rather than a setState no-op.
+    const storePersistConfig = (
+      useAuthStore as unknown as {
+        persist: {
+          getOptions: () => {
+            onRehydrateStorage: () => (state: Record<string, unknown> | undefined) => void;
+          };
+        };
+      }
+    ).persist;
+    const options = storePersistConfig?.getOptions?.();
+    const outerCallback = options?.onRehydrateStorage?.();
+
+    // Hard guard: if the Zustand persist API is unavailable here the test below
+    // is a no-op and would silently pass without exercising the real callback.
+    // Fail fast so a Zustand upgrade that removes `.persist.getOptions()` surfaces
+    // immediately rather than leaving the biometric-gate invariant untested.
+    expect(outerCallback).toBeDefined();
+
+    if (outerCallback) {
+      // Simulate Zustand calling the inner callback with the rehydrated state
+      const simulatedState = {
+        session: session as never,
+        user: session['user'] as never,
+        isLoading: false, // would be set to false during normal rehydration
+        isInitialized: true, // would be set to true normally
+      };
+      outerCallback(simulatedState as never);
+
+      // The callback MUST have cleared session and reset loading/initialized
+      // so the biometric gate cannot be bypassed by cached storage state.
+      expect(simulatedState.session).toBeNull();
+      expect(simulatedState.isLoading).toBe(true);
+      expect(simulatedState.isInitialized).toBe(false);
+    } else {
+      // Should be unreachable — the expect(outerCallback).toBeDefined() above
+      // will have already failed the test. Left as a defensive fallback only.
+      throw new Error(
+        'persist API unavailable: Zustand .persist.getOptions() returned no callback',
+      );
+    }
   });
 
   it('refreshSession clears state when no cloud session is available', async () => {

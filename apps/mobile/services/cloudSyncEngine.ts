@@ -30,7 +30,7 @@ import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/clou
 import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
@@ -107,11 +107,15 @@ function maxCursor(base: string, ...versions: string[]): string {
 
 // ── Apply pulled deltas into the cloud store ────────────────────────────────────
 
-function applyConversationDeltas(deltas: ConversationDelta[]): void {
+export function applyConversationDeltas(deltas: ConversationDelta[]): void {
   const store = useChatCloudMessageStore.getState();
+  const dirtyIds = useCloudSyncStateStore.getState().dirtyConversationIds;
   const existing = new Map(store.conversations.map((c) => [c.id, c]));
   for (const d of deltas) {
     if (d.deleted_at) {
+      // A remote delete ALWAYS wins, even over a locally-dirty rename — the
+      // dirty-title guard below runs only on the live (non-deleted) branch so
+      // a tombstone is never suppressed.
       store.removeCloudConversation(d.id);
       existing.delete(d.id);
       continue;
@@ -127,6 +131,13 @@ function applyConversationDeltas(deltas: ConversationDelta[]): void {
       projectId: d.project_id ?? undefined,
       executionMode: 'cloud',
     };
+    // DATA-LOSS FIX: preserve a locally-dirty (un-pushed) title against a
+    // server snapshot that predates the next push, so a concurrent pull can't
+    // revert the user's rename before push() persists it.
+    if (dirtyIds.includes(d.id)) {
+      const localTitle = existing.get(d.id)?.title;
+      if (localTitle) summary.title = localTitle;
+    }
     if (existing.has(d.id)) {
       store.patchCloudConversation(d.id, summary);
     } else {
@@ -576,7 +587,7 @@ interface SettingsPushResponse {
  * can detect whether re-pushing after a pull would create churn.
  */
 async function pushSettings(): Promise<void> {
-  const storeSnapshot = useSettingsStore.getState();
+  const storeSnapshot = useCloudSettingsStore.getState();
 
   // Guard 1: Never push if no cloud-safe setting has ever been locally edited.
   // settingsUpdatedAt is null on a fresh install or after a settings reset.
@@ -635,7 +646,7 @@ async function pullSettings(): Promise<void> {
     // After applying, recompute the cloud projection from the now-updated store
     // and set it as the new baseline — prevents treating the pull as a local change
     // that triggers a redundant push on the next cycle.
-    const freshSnapshot = toCloudSettings(useSettingsStore.getState());
+    const freshSnapshot = toCloudSettings(useCloudSettingsStore.getState());
     useSettingsSyncStateStore.getState().setLastPushedSnapshot(JSON.stringify(freshSnapshot));
   }
 

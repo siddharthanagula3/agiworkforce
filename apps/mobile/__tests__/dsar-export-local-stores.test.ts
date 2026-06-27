@@ -73,7 +73,7 @@ import { exportAllUserData } from '../services/dsarExport';
 import { buildLocalDataExportSnapshot } from '../src/features/settings/data-controls/localDataSnapshot';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 describe('DSAR export local stores', () => {
   beforeEach(() => {
@@ -122,7 +122,9 @@ describe('DSAR export local stores', () => {
       ],
       activeProjectId: 'project-1',
     });
-    useSettingsStore.setState({
+    // buildLocalDataExportSnapshot reads mode-split fields (accentColor, personalization, etc.)
+    // from useLocalSettingsStore (in local mode). Set them there for the export to pick them up.
+    useLocalSettingsStore.setState({
       accentColor: 'blue',
       personalization: {
         fullName: 'Sid',
