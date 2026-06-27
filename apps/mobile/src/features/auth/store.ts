@@ -21,6 +21,15 @@ interface AuthState {
    */
   isClerkSignedIn: boolean;
   setClerkSignedIn: (value: boolean) => void;
+  /**
+   * True once Clerk's SDK has finished its async initialization (useAuth().isLoaded).
+   * Defaults to false on every cold-start; set by ClerkTokenBridge when isLoaded
+   * first fires. Never persisted. Used to guard auth-gated redirects and cloud-send
+   * gates against the ~200ms cold-start window where isClerkSignedIn is false even
+   * for a genuinely-signed-in user.
+   */
+  isClerkLoaded: boolean;
+  setClerkLoaded: (value: boolean) => void;
 
   initialize: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -43,11 +52,19 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       isInitialized: false,
       isClerkSignedIn: false,
+      isClerkLoaded: false,
 
       setClerkSignedIn: (value: boolean) => {
         set((state) => {
           if (state.isClerkSignedIn === value) return state;
           return { isClerkSignedIn: value };
+        });
+      },
+
+      setClerkLoaded: (value: boolean) => {
+        set((state) => {
+          if (state.isClerkLoaded === value) return state;
+          return { isClerkLoaded: value };
         });
       },
 
@@ -112,6 +129,15 @@ export const useAuthStore = create<AuthState>()(
             const { useMemorySyncStateStore } = require('@/stores/memory/memorySyncStateStore');
             const { useCloudProjectStore } = require('@/stores/projects/cloudProjectStore');
             const { useProjectSyncStateStore } = require('@/stores/projects/projectSyncStateStore');
+            // Settings trust-boundary reset: personalization and the settings sync
+            // cursor are scoped to the signed-in user. Clear them so a subsequent
+            // account cannot inherit a prior user's profile or push a wipe to cloud.
+            // settingsUpdatedAt is set to null so the next pull adopts cloud state
+            // rather than treating the cleared defaults as a local edit.
+            const {
+              useSettingsSyncStateStore,
+            } = require('@/stores/settings/settingsSyncStateStore');
+            const { useCloudSettingsStore } = require('@/stores/settings/cloudSettingsStore');
             /* eslint-enable @typescript-eslint/no-require-imports */
             stopCloudSyncLoop();
             useCloudSyncStateStore.getState().reset();
@@ -126,6 +152,25 @@ export const useAuthStore = create<AuthState>()(
             // subsequent account cannot inherit a prior user's projects.
             useCloudProjectStore.getState().clearCloudProjectData();
             useProjectSyncStateStore.getState().resetProjectSync();
+            useSettingsSyncStateStore.getState().resetSettingsSync();
+            // Cloud settings trust-boundary reset: personalization and the settings
+            // sync cursor are scoped to the signed-in user. Clear the cloud store's
+            // personalization and settingsUpdatedAt so the next account starts fresh.
+            // Local settings are intentionally preserved — they belong to this device,
+            // not to the account.
+            useCloudSettingsStore.setState({
+              personalization: {
+                fullName: '',
+                nickname: '',
+                occupation: '',
+                instructions: '',
+                warmth: 50,
+                enthusiasm: 50,
+                headersLists: 50,
+                emoji: 50,
+              },
+              settingsUpdatedAt: null,
+            });
           } catch (err) {
             console.warn('[auth] cloud sync teardown on sign-out failed:', err);
           }

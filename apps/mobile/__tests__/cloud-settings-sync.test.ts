@@ -10,7 +10,7 @@
  *  - Dirty detection: no POST when the cloud-safe projection is unchanged since last push.
  *  - Push: POST body contains only cloud-safe namespaces; cursor advances on ack.
  *  - LWW timestamp: POST body uses settingsUpdatedAt (real edit time), NOT push time.
- *  - Pull: pulled namespaces are applied into the live useSettingsStore.
+ *  - Pull: pulled namespaces are applied into the live useCloudSettingsStore.
  *  - Leak guard: toCloudSettings() NEVER emits secret/BYOK keys or forbidden namespaces.
  *  - Anti-churn: after pullSettings applies data, pushSettings does NOT re-push it
  *    (lastPushedSnapshot is updated to the post-pull projection).
@@ -23,6 +23,11 @@ jest.mock('../lib/mmkv', () => ({
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
     removeItem: jest.fn(),
+  },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -54,7 +59,7 @@ import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useMemorySyncStateStore } from '../stores/memory/memorySyncStateStore';
 import { useProjectSyncStateStore } from '../stores/projects/projectSyncStateStore';
 import { useSettingsSyncStateStore } from '../stores/settings/settingsSyncStateStore';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { syncNow } from '../services/cloudSyncEngine';
 import { toCloudSettings } from '../services/cloudSettingsMapping';
 
@@ -96,10 +101,10 @@ beforeEach(() => {
   useProjectSyncStateStore.getState().resetProjectSync();
   useSettingsSyncStateStore.getState().resetSettingsSync();
 
-  // Reset settings store to factory defaults.
+  // Reset cloud settings store to factory defaults.
   // settingsUpdatedAt is null = "never locally edited" = fresh device state.
   // The push guard reads this and skips POST, letting pull adopt cloud state.
-  useSettingsStore.setState({
+  useCloudSettingsStore.setState({
     themeMode: 'system',
     accentColor: 'neutral',
     fontPreference: 'default',
@@ -164,7 +169,7 @@ describe('settings sync — managed gate', () => {
   it('makes ZERO settings network calls (GET and POST) in local mode', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     // Even if a real edit has been made, local mode must block all network I/O.
-    useSettingsStore.getState().setThemeMode('dark'); // stamps settingsUpdatedAt
+    useCloudSettingsStore.getState().setThemeMode('dark'); // stamps settingsUpdatedAt
 
     await syncNow();
 
@@ -180,7 +185,7 @@ describe('settings sync — managed gate', () => {
 
   it('makes settings network calls in cloud mode after a real edit', async () => {
     // Real edit stamps settingsUpdatedAt so the push guard allows the POST.
-    useSettingsStore.getState().setThemeMode('dark');
+    useCloudSettingsStore.getState().setThemeMode('dark');
     useChatAppModeStore.getState().setAppMode('cloud');
 
     await syncNow();
@@ -200,8 +205,8 @@ describe('settings sync — managed gate', () => {
 describe('settings sync — fresh device guard', () => {
   it('does NOT POST when settingsUpdatedAt is null, and pulls + applies server state', async () => {
     // Precondition: factory state — no local edits.
-    expect(useSettingsStore.getState().settingsUpdatedAt).toBeNull();
-    expect(useSettingsStore.getState().themeMode).toBe('system');
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).toBeNull();
+    expect(useCloudSettingsStore.getState().themeMode).toBe('system');
 
     // Server has the user's preferred dark theme (set from web).
     mockGet.mockImplementation(async (path: string) => {
@@ -225,12 +230,12 @@ describe('settings sync — fresh device guard', () => {
     expect(settingsPostCalls).toHaveLength(0);
 
     // Pull adopted the server's dark theme.
-    expect(useSettingsStore.getState().themeMode).toBe('dark');
+    expect(useCloudSettingsStore.getState().themeMode).toBe('dark');
   });
 
   it('POSTs after the user makes a real local edit on a fresh device', async () => {
     // After the fresh-device pull, user explicitly changes theme.
-    useSettingsStore.getState().setThemeMode('light'); // stamps settingsUpdatedAt
+    useCloudSettingsStore.getState().setThemeMode('light'); // stamps settingsUpdatedAt
 
     await syncNow();
 
@@ -321,7 +326,7 @@ describe('settings sync — cursor independence', () => {
 describe('settings sync — dirty detection and push', () => {
   it('does NOT POST when settingsUpdatedAt is null (fresh device with factory defaults)', async () => {
     // beforeEach sets settingsUpdatedAt: null — no local edits.
-    expect(useSettingsStore.getState().settingsUpdatedAt).toBeNull();
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).toBeNull();
 
     await syncNow();
 
@@ -332,8 +337,8 @@ describe('settings sync — dirty detection and push', () => {
   });
 
   it('POSTs when themeMode changes (real edit stamps settingsUpdatedAt)', async () => {
-    useSettingsStore.getState().setThemeMode('dark'); // stamps settingsUpdatedAt
-    expect(useSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
+    useCloudSettingsStore.getState().setThemeMode('dark'); // stamps settingsUpdatedAt
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
 
     await syncNow();
 
@@ -352,7 +357,7 @@ describe('settings sync — dirty detection and push', () => {
   it('uses the real edit timestamp (settingsUpdatedAt) as the LWW updatedAt — not push time', async () => {
     // Set a known timestamp before calling the setter.
     const beforeEdit = Date.now();
-    useSettingsStore.getState().setThemeMode('dark');
+    useCloudSettingsStore.getState().setThemeMode('dark');
     const afterEdit = Date.now();
 
     await syncNow();
@@ -369,7 +374,7 @@ describe('settings sync — dirty detection and push', () => {
   });
 
   it('clears the dirty baseline after a successful push so a second sync does not re-post', async () => {
-    useSettingsStore.getState().setThemeMode('light');
+    useCloudSettingsStore.getState().setThemeMode('light');
 
     // First sync — posts.
     await syncNow();
@@ -398,10 +403,10 @@ describe('settings sync — dirty detection and push', () => {
 
   it('POSTs the correct namespace structure with only cloud-safe namespaces', async () => {
     // Cloud-safe setters stamp settingsUpdatedAt.
-    useSettingsStore.getState().setThemeMode('dark');
-    useSettingsStore.getState().setPersonalization({ nickname: 'Sid' });
-    useSettingsStore.getState().setNotificationsEnabled(false);
-    useSettingsStore.getState().setSpeechLanguage('fr');
+    useCloudSettingsStore.getState().setThemeMode('dark');
+    useCloudSettingsStore.getState().setPersonalization({ nickname: 'Sid' });
+    useCloudSettingsStore.getState().setNotificationsEnabled(false);
+    useCloudSettingsStore.getState().setSpeechLanguage('fr');
 
     await syncNow();
 
@@ -434,9 +439,9 @@ describe('settings sync — dirty detection and push', () => {
 
 // ── Pull applies into the live store ──────────────────────────────────────────
 
-describe('settings sync — pull applies into useSettingsStore', () => {
+describe('settings sync — pull applies into useCloudSettingsStore', () => {
   it('applies pulled appearance namespace: theme maps to themeMode', async () => {
-    expect(useSettingsStore.getState().themeMode).toBe('system');
+    expect(useCloudSettingsStore.getState().themeMode).toBe('system');
 
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith(SETTINGS_SYNC_PATH))
@@ -452,8 +457,8 @@ describe('settings sync — pull applies into useSettingsStore', () => {
 
     await syncNow();
 
-    expect(useSettingsStore.getState().themeMode).toBe('dark');
-    expect(useSettingsStore.getState().accentColor).toBe('blue');
+    expect(useCloudSettingsStore.getState().themeMode).toBe('dark');
+    expect(useCloudSettingsStore.getState().accentColor).toBe('blue');
   });
 
   it('applies pulled personalization namespace: customInstructions maps to instructions', async () => {
@@ -477,7 +482,7 @@ describe('settings sync — pull applies into useSettingsStore', () => {
 
     await syncNow();
 
-    const p = useSettingsStore.getState().personalization;
+    const p = useCloudSettingsStore.getState().personalization;
     expect(p.nickname).toBe('CloudNick');
     expect(p.instructions).toBe('Be concise');
     expect(p.warmth).toBe(80);
@@ -498,12 +503,12 @@ describe('settings sync — pull applies into useSettingsStore', () => {
 
     await syncNow();
 
-    expect(useSettingsStore.getState().speechLanguage).toBe('fr');
+    expect(useCloudSettingsStore.getState().speechLanguage).toBe('fr');
   });
 
   it('does not apply pulled data when cursor has not advanced (server returns same cursor)', async () => {
     useSettingsSyncStateStore.getState().setSettingsCursor('5');
-    useSettingsStore.setState({ themeMode: 'light' }); // direct setState, no settingsUpdatedAt stamp
+    useCloudSettingsStore.setState({ themeMode: 'light' }); // direct setState, no settingsUpdatedAt stamp
 
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith(SETTINGS_SYNC_PATH))
@@ -520,7 +525,7 @@ describe('settings sync — pull applies into useSettingsStore', () => {
     await syncNow();
 
     // themeMode must NOT have been overwritten because the cursor didn't advance.
-    expect(useSettingsStore.getState().themeMode).toBe('light');
+    expect(useCloudSettingsStore.getState().themeMode).toBe('light');
   });
 });
 
@@ -553,7 +558,7 @@ describe('settings sync — anti-churn after pull', () => {
 
   it('does NOT re-push after a pull even when settingsUpdatedAt is non-null (snapshot-diff guard)', async () => {
     // Simulate: user made an edit before the pull.
-    useSettingsStore.getState().setThemeMode('light'); // stamps settingsUpdatedAt
+    useCloudSettingsStore.getState().setThemeMode('light'); // stamps settingsUpdatedAt
 
     // Pull returns 'dark' — a different value. Apply updates store to 'dark'.
     mockGet.mockImplementation(async (path: string) => {
@@ -590,7 +595,7 @@ describe('settings mapping — leak guard (toCloudSettings)', () => {
     // These fields do NOT exist in the real store shape, but the test simulates
     // a future regression where someone accidentally adds a secret field and maps it.
     const storeWithFakeSecrets = {
-      ...useSettingsStore.getState(),
+      ...useCloudSettingsStore.getState(),
       // Inject fake secret fields at the top level (as if someone added them to the store).
       byokApiKey: 'sk-ant-SHOULD-NOT-APPEAR',
       providerApiKey: 'sk-openai-SHOULD-NOT-APPEAR',
@@ -624,7 +629,7 @@ describe('settings mapping — leak guard (toCloudSettings)', () => {
   });
 
   it('NEVER emits device-specific fields: voiceEnabled, hapticsEnabled, backgroundFetchEnabled', () => {
-    const payload = toCloudSettings(useSettingsStore.getState());
+    const payload = toCloudSettings(useCloudSettingsStore.getState());
     const payloadJson = JSON.stringify(payload);
 
     expect(payloadJson).not.toContain('voiceEnabled');
@@ -643,7 +648,7 @@ describe('settings mapping — leak guard (toCloudSettings)', () => {
   });
 
   it('NEVER emits keys matching secret key patterns (apiKey, token, secret, password)', () => {
-    const payload = toCloudSettings(useSettingsStore.getState());
+    const payload = toCloudSettings(useCloudSettingsStore.getState());
     const payloadJson = JSON.stringify(payload);
 
     // These key substrings must never appear in a settings push body.
@@ -663,7 +668,7 @@ describe('settings mapping — leak guard (toCloudSettings)', () => {
   });
 
   it('only emits the declared cloud-safe namespace keys at the top level', () => {
-    const payload = toCloudSettings(useSettingsStore.getState());
+    const payload = toCloudSettings(useCloudSettingsStore.getState());
     const topLevelKeys = Object.keys(payload);
     const allowedNamespaces = new Set([
       'appearance',

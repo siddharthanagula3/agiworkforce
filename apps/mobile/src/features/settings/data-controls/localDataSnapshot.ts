@@ -21,6 +21,8 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 function valueToIso(value: string | number | undefined, fallback = Date.now()): string {
@@ -55,7 +57,12 @@ function mapMobileMessage(
 export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
   const chatMessages = useChatMessageStore.getState();
   const projects = useProjectStore.getState().projects;
-  const settings = useSettingsStore.getState();
+  const deviceSettings = useSettingsStore.getState();
+  const appMode = useChatAppModeStore.getState().appMode;
+  // Merge device-global fields with the active mode's cloud-safe fields.
+  const modeSettings =
+    appMode === 'cloud' ? useCloudSettingsStore.getState() : useLocalSettingsStore.getState();
+  const settings = { ...deviceSettings, ...modeSettings };
   const chatView = useChatViewStore.getState();
   const model = useModelStore.getState();
 
@@ -170,33 +177,18 @@ export async function resetLocalInMemoryState(): Promise<void> {
     toolAccess: 'auto',
     features: { webSearch: true, imageGen: true, health: false },
   });
+  // Reset device-global settings
   useSettingsStore.setState({
     autoApproveMode: 'ask',
     hapticsEnabled: true,
-    notificationsEnabled: true,
     voiceEnabled: true,
     backgroundFetchEnabled: true,
-    themeMode: 'system',
-    accentColor: 'neutral',
-    fontPreference: 'default',
     selectedVoiceId: null,
     speechRate: 1,
     speechPitch: 1,
     selectedPresetId: null,
     ttsProvider: 'system',
-    speechLanguage: 'en',
-    autoListenEnabled: true,
     isTemporaryChat: false,
-    personalization: {
-      fullName: '',
-      nickname: '',
-      occupation: '',
-      instructions: '',
-      warmth: 50,
-      enthusiasm: 50,
-      headersLists: 50,
-      emoji: 50,
-    },
     capabilities: {
       webSearch: true,
       imageGen: true,
@@ -208,4 +200,26 @@ export async function resetLocalInMemoryState(): Promise<void> {
       camera: true,
     },
   });
+  // Reset mode-specific settings (both local and cloud profiles)
+  const defaultPersonalization = {
+    fullName: '',
+    nickname: '',
+    occupation: '',
+    instructions: '',
+    warmth: 50,
+    enthusiasm: 50,
+    headersLists: 50,
+    emoji: 50,
+  };
+  const defaultModeSettings = {
+    themeMode: 'system' as const,
+    accentColor: 'neutral' as const,
+    fontPreference: 'default' as const,
+    notificationsEnabled: true,
+    speechLanguage: 'en',
+    autoListenEnabled: true,
+    personalization: defaultPersonalization,
+  };
+  useLocalSettingsStore.setState(defaultModeSettings);
+  useCloudSettingsStore.setState({ ...defaultModeSettings, settingsUpdatedAt: null });
 }

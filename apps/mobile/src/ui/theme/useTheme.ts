@@ -1,5 +1,7 @@
 import { useColorScheme } from 'react-native';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { colors, getAccentSwatch, getColors, type ColorScheme } from './tokens';
 import type { StatusBarStyle } from 'expo-status-bar';
 
@@ -14,12 +16,24 @@ interface ThemeResult {
  * the system color scheme. Returns a `colors` palette, a boolean `isDark`
  * flag, and the appropriate status-bar style.
  *
+ * Reads from the mode-specific settings store (local or cloud) based on the
+ * current appMode, mirroring the projects.tsx dual-subscribe pattern.
+ *
  * @example
  *   const { colors: themeColors, isDark, statusBarStyle } = useTheme();
  */
 export function useTheme(): ThemeResult {
-  const themeMode = useSettingsStore((s) => s.themeMode);
-  const accentColor = useSettingsStore((s) => s.accentColor);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const isCloud = appMode === 'cloud';
+
+  const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
+  const localAccentColor = useLocalSettingsStore((s) => s.accentColor);
+  const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
+  const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
+
+  const themeMode = isCloud ? cloudThemeMode : localThemeMode;
+  const accentColor = isCloud ? cloudAccentColor : localAccentColor;
+
   const rawScheme = useColorScheme();
   // Normalize: 'unspecified' (Android default) should fall back to dark
   const systemScheme: 'dark' | 'light' | null =

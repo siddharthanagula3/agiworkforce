@@ -1,6 +1,13 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
+// useUser requires a ClerkProvider in real usage. In tests we stub it out to
+// avoid needing the full provider tree. Return null user (not signed in) by
+// default; individual tests override via useChatCloudMessageStore / useAuthStore.
+jest.mock('@clerk/expo', () => ({
+  useUser: jest.fn().mockReturnValue({ user: null, isLoaded: true }),
+}));
+
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
 
@@ -45,6 +52,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 jest.mock('../lib/secureStorage', () => ({
@@ -72,11 +84,13 @@ import ProfileScreen from '../app/(app)/profile';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatStore } from '../stores/chatStore';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 function resetStores() {
   useChatAppModeStore.setState({ appMode: 'local' });
-  useSettingsStore.setState({
+  // ProfileScreen reads personalization from useLocalSettingsStore in local mode.
+  useLocalSettingsStore.setState({
     personalization: {
       fullName: 'Siddhartha Local',
       nickname: 'Sid',
@@ -93,6 +107,7 @@ function resetStores() {
     user: null,
     isLoading: false,
     isInitialized: true,
+    isClerkSignedIn: false,
   });
   useChatStore.setState({
     conversations: [
@@ -106,20 +121,12 @@ function resetStores() {
         executionMode: 'local',
         provider: 'local',
       },
-      {
-        id: 'cloud-chat',
-        title: 'Cloud chat',
-        createdAt: '2026-06-12T00:00:00.000Z',
-        updatedAt: '2026-06-12T00:00:00.000Z',
-        messageCount: 7,
-        pinned: false,
-        executionMode: 'cloud',
-        provider: 'cloud_managed',
-      },
     ],
     messages: {},
     currentConversationId: null,
   });
+  // Cloud conversations live in the cloud store — clear it between tests.
+  useChatCloudMessageStore.setState({ conversations: [], messages: {} });
 }
 
 describe('Profile mode boundary', () => {
@@ -140,6 +147,23 @@ describe('Profile mode boundary', () => {
 
   it('does not show local identity, settings, or counts in Cloud Mode', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
+    // Cloud stats come from useChatCloudMessageStore (cloud store is authoritative
+    // for cloud mode — useChatStore is local-only).
+    useChatCloudMessageStore.setState({
+      conversations: [
+        {
+          id: 'cloud-chat',
+          title: 'Cloud chat',
+          createdAt: '2026-06-12T00:00:00.000Z',
+          updatedAt: '2026-06-12T00:00:00.000Z',
+          messageCount: 7,
+          pinned: false,
+          executionMode: 'cloud',
+          provider: 'cloud_managed',
+        },
+      ],
+      messages: {},
+    });
 
     const { getByText, queryByText } = render(<ProfileScreen />);
 
