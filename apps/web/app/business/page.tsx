@@ -137,7 +137,7 @@ export default function BusinessPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Start the rollout where the risk is lowest."
-          body="Begin with Local and BYOK at no platform cost, talk to sales about workspace policy, and join the waitlist to evaluate AGI Cloud when invites open."
+          body="Begin with Local and BYOK at no platform cost, evaluate public-alpha AGI managed cloud today, and talk to sales about workspace policy and Team & Enterprise controls."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/download', label: 'Download AGI' },

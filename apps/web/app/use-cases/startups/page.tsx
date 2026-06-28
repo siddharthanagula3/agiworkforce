@@ -109,7 +109,7 @@ export default function StartupsPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Start free, route deliberately."
-          body="Install AGI, run Local and BYOK from day one, and join the waitlist if you want hosted compute later."
+          body="Install AGI, run Local and BYOK from day one, and turn on public-alpha managed cloud whenever you want hosted compute."
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/pricing', label: 'See Pricing' },
