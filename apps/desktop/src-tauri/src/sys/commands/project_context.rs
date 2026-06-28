@@ -485,6 +485,15 @@ fn list_files_recursive(
 /// # Returns
 /// * `Ok(String)` - A formatted summary of the project
 /// * `Err(String)` - Error if no project folder is set
+///
+/// Deterministic ordering for the project file-type breakdown (AC-19 — context
+/// assembly MUST be deterministic). Primary key: file count, descending.
+/// Tiebreaker: extension name, ascending — so equal-count extensions render in a
+/// stable, reproducible order regardless of the source `HashMap`'s iteration order.
+fn cmp_file_type_desc(a: &(&String, &u32), b: &(&String, &u32)) -> std::cmp::Ordering {
+    b.1.cmp(a.1).then_with(|| a.0.cmp(b.0))
+}
+
 #[tauri::command]
 pub async fn project_context_get_summary(
     state: State<'_, ProjectContextState>,
@@ -537,7 +546,7 @@ pub async fn project_context_get_summary(
     if !file_counts.is_empty() {
         summary.push_str("\nFile types:\n");
         let mut sorted_types: Vec<_> = file_counts.iter().collect();
-        sorted_types.sort_by(|a, b| b.1.cmp(a.1)); // Sort by count descending
+        sorted_types.sort_by(cmp_file_type_desc); // count desc, extension asc (deterministic, AC-19)
         for (ext, count) in sorted_types.iter().take(10) {
             summary.push_str(&format!("- .{}: {} files\n", ext, count));
         }
@@ -754,6 +763,26 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    // Regression guard for CTX-004 / AGI-DOC-0018 BK-11.01 (AC-19): equal-count
+    // file types must order deterministically by extension name, independent of
+    // the source HashMap's iteration order.
+    #[test]
+    fn file_type_breakdown_is_deterministic() {
+        let (rs, py, md) = (
+            ("rs".to_string(), 5u32),
+            ("py".to_string(), 5u32), // equal count to rs → tiebreak by name
+            ("md".to_string(), 9u32), // higher count → ranks first
+        );
+        let order = |mut v: Vec<(&String, &u32)>| {
+            v.sort_by(cmp_file_type_desc);
+            v.into_iter().map(|(e, _)| e.clone()).collect::<Vec<_>>()
+        };
+        let expected = vec!["md".to_string(), "py".to_string(), "rs".to_string()];
+        // Same result regardless of input order (the AC-19 property).
+        assert_eq!(order(vec![(&rs.0, &rs.1), (&py.0, &py.1), (&md.0, &md.1)]), expected);
+        assert_eq!(order(vec![(&py.0, &py.1), (&md.0, &md.1), (&rs.0, &rs.1)]), expected);
+    }
 
     #[tokio::test]
     async fn test_project_context_state_new() {

@@ -429,6 +429,16 @@ export const useChatMessageStore = create<ChatMessageState>()(
                       console.error('[ChatStore] Failed to create cloud conversation:', error);
                       set(
                         (s) => {
+                          // DESKTOP-CLOUDROLLBACK-01: only discard the optimistic
+                          // conversation if it holds NO user data. If the user already
+                          // sent a message into it, deleting it here SILENTLY LOSES that
+                          // message. Preserve it locally instead (it keeps the same
+                          // local-id/cloud-mode state it already had during the optimistic
+                          // window); the message send's own failure is surfaced by the
+                          // normal message-error path, so the user is not left with a
+                          // vanished message and no feedback.
+                          const hasUserData = (s.messagesByConversation[id]?.length ?? 0) > 0;
+                          if (hasUserData) return;
                           s.conversations = s.conversations.filter((c) => c.id !== id);
                           delete s.messagesByConversation[id];
                           if (s.activeConversationId === id) {
