@@ -188,41 +188,41 @@ Code anchors: `apps/desktop/src/features/settings`, `apps/mobile/src/features/se
 
 ## Desktop Surface
 
-| Mode / component      | Required behavior                                                                                                                                        | Current AGI status                                                                     |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Chat mode             | Full local/BYOK/managed-gated chat with unified composer, artifacts, files, model selector, settings, sidebar.                                           | Partial/strongest current desktop area.                                                |
-| Cowork mode           | Home, projects, scheduled tasks, live artifacts, dispatch, customize, task list/status, onboarding checklist, task composer.                             | Partial: Cowork pages exist but `DesktopShellV3` still shows placeholder for `cowork`. |
-| Code mode / AGI Code  | Repo/folder dashboard, local folder add, branch/worktree, permissions, model/effort, usage plan, sessions, PRs, routines, terminal/actions, diff review. | Partial/Missing: `DesktopShellV3` still shows placeholder for `code`.                  |
-| Sidebar               | Search, collapse/expand, new chat, projects, artifacts, recent chats, modes, account.                                                                    | Partial.                                                                               |
-| Desktop app controls  | Run on startup, quick access, voice shortcut, menu bar, keep awake, browser use, computer use, accessibility, screen recording, extensions.              | Partial.                                                                               |
-| Local compute host    | File generation, MCP, local models, native messaging, browser/computer-use approvals.                                                                    | Partial.                                                                               |
-| Cloud mode onboarding | Public alpha, open by default (2026-06-27); subscription/entitlement-gated. Waitlist/invite entry retained for genuinely unavailable hosted capacity.    | Public alpha/Partial.                                                                  |
+| Mode / component      | Required behavior                                                                                                                                                                                                                | Current AGI status                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Chat mode             | Full local/BYOK/managed-gated chat with unified composer, artifacts, files, model selector, settings, sidebar.                                                                                                                   | Partial/strongest current desktop area.                                                |
+| Cowork mode           | Home, projects, scheduled tasks, live artifacts, dispatch, customize, task list/status, onboarding checklist, task composer.                                                                                                     | Partial: Cowork pages exist but `DesktopShellV3` still shows placeholder for `cowork`. |
+| Code mode / AGI Code  | Repo/folder dashboard, local folder add, branch/worktree, permissions, model/effort, usage plan, sessions, PRs, routines, terminal/actions, diff review.                                                                         | Partial/Missing: `DesktopShellV3` still shows placeholder for `code`.                  |
+| Sidebar               | Search, collapse/expand, new chat, projects, artifacts, recent chats, modes, account.                                                                                                                                            | Partial.                                                                               |
+| Desktop app controls  | Run on startup, quick access, voice shortcut, menu bar, keep awake, browser use, computer use, accessibility, screen recording, extensions.                                                                                      | Partial.                                                                               |
+| Local compute host    | File generation, MCP, local models, native messaging, browser/computer-use approvals.                                                                                                                                            | Partial.                                                                               |
+| Cloud mode onboarding | Managed cloud is public alpha on Web + Mobile. Desktop cloud is a fast-follow (DCL-1…4): desktop shows honest "coming soon," keeps Local + BYOK, and never claims cloud is "available" until the shared-backend wiring verifies. | Coming soon (desktop); Local + BYOK shipped.                                           |
 
 Primary paths: `apps/desktop/src/features/v3`, `apps/desktop/src/features/settings`, `apps/desktop/src/features/connectors`, `apps/desktop/src-tauri`, `packages/unified-chat`.
 
 ## Web Surface
 
-| Component              | Required behavior                                                                                            | Current AGI status |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------ |
-| Synced app chat        | ChatGPT/Claude-style chat with projects, files, artifacts, tools, settings, account.                         | Partial.           |
-| Projects               | Create/manage/share/move chat/sources/project memory.                                                        | Partial.           |
-| Artifacts              | Sidecar, cards, source/preview, export, share/publish gates.                                                 | Partial.           |
-| Billing/usage/waitlist | Stripe/payment links, invoices, credits, limits, waitlist/invite for managed.                                | Partial/Gated.     |
-| Connectors/apps        | Directory, OAuth/custom apps, sync/search/write action permissions.                                          | Partial/Missing.   |
-| AGI Code dashboard     | Repo selector, activity heatmap, sessions, PRs, routines, run history, and private-beta cloud session gates. | Partial/Missing.   |
-| Admin/team             | Organization policy, audit, connector controls, managed compute readiness.                                   | Partial/Gated.     |
+| Component          | Required behavior                                                                                                                                                    | Current AGI status |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Synced app chat    | ChatGPT/Claude-style chat with projects, files, artifacts, tools, settings, account.                                                                                 | Partial.           |
+| Projects           | Create/manage/share/move chat/sources/project memory.                                                                                                                | Partial.           |
+| Artifacts          | Sidecar, cards, source/preview, export, share/publish gates.                                                                                                         | Partial.           |
+| Billing/usage      | Stripe/payment links, invoices, credits, limits. Managed cloud is public alpha (open by default); a Team/Enterprise early-access interest list is the only waitlist. | Partial/Gated.     |
+| Connectors/apps    | Directory, OAuth/custom apps, sync/search/write action permissions.                                                                                                  | Partial/Missing.   |
+| AGI Code dashboard | Repo selector, activity heatmap, sessions, PRs, routines, run history; managed cloud sessions are public alpha (entitlement-gated, not invite-gated).                | Partial/Missing.   |
+| Admin/team         | Organization policy, audit, connector controls, managed compute readiness.                                                                                           | Partial/Gated.     |
 
 Primary paths: `apps/web/app`, `apps/web/features`, `apps/web/core`, `apps/web/stores`, `services/api-gateway`, `apps/web/db/neon`.
 
 ## Mobile Surface
 
-| Component              | Required behavior                                                                                     | Current AGI status                              |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Local-first onboarding | Choose Local/BYOK/Cloud waitlist, with Cloud waitlist/invite and BYOK consent.                        | Partial: v1 flags local-only; BYOK/cloud gated. |
-| Mobile chat            | Same one-chat UX scaled to mobile: composer, model/mode, attachments, voice, artifacts preview/share. | Partial.                                        |
-| BYOK handoff           | Local to BYOK reviewed fork with scan/preview/consent.                                                | Partial: tests and store paths exist.           |
-| Approvals/continuity   | Approve Desktop/Code/Chrome tasks, review outputs, preview generated files.                           | Partial/Missing.                                |
-| Heavy generation       | Mobile receives/previews/shares Desktop or managed outputs; not first heavy local generator.          | Gated/Partial.                                  |
+| Component              | Required behavior                                                                                                                                        | Current AGI status                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Local-first onboarding | Choose Local or Cloud (Mobile v1 does not expose BYOK). Cloud is public alpha — signed-in users use it now, no invite/waitlist; Local stays fail-closed. | Partial: Local + public-alpha Cloud (sign-in gated). |
+| Mobile chat            | Same one-chat UX scaled to mobile: composer, model/mode, attachments, voice, artifacts preview/share.                                                    | Partial.                                             |
+| BYOK handoff           | Local to BYOK reviewed fork with scan/preview/consent.                                                                                                   | Partial: tests and store paths exist.                |
+| Approvals/continuity   | Approve Desktop/Code/Chrome tasks, review outputs, preview generated files.                                                                              | Partial/Missing.                                     |
+| Heavy generation       | Mobile receives/previews/shares Desktop or managed outputs; not first heavy local generator.                                                             | Gated/Partial.                                       |
 
 Primary paths: `apps/mobile/app`, `apps/mobile/src/features`, `apps/mobile/stores`, `apps/mobile/services`, `apps/mobile/lib/v1FeatureFlags.ts`.
 
@@ -269,15 +269,15 @@ Primary paths: `apps/extension/src`, `apps/extension/native-host`, `apps/extensi
 
 ## Billing, Usage, Waitlist, And Commercial Gates
 
-| Component / option   | Required behavior                                                                           | Current AGI status |
-| -------------------- | ------------------------------------------------------------------------------------------- | ------------------ |
-| Plan display         | Current plan, local/BYOK/free state, managed beta status, adjust plan.                      | Partial.           |
-| Stripe/payment       | Payment link/checkout, invoices, due date, status, action.                                  | Partial/Missing.   |
-| Usage limits         | Current session, weekly limits, credits, monthly spend limit, current balance, auto reload. | Partial/Missing.   |
-| Managed waitlist     | Public cloud mode surfaces capture waitlist interest, not usage.                            | Partial/Gated.     |
-| Invite codes         | Private beta users unlock cloud managed testing.                                            | Partial/Gated.     |
-| Abuse/fraud controls | Metering, quotas, refund/chargeback reserve, provider terms.                                | Missing/Gated.     |
-| Enterprise           | Org policy, audit, SSO/SCIM, connector policy, managed-credit ledger, support workflow.     | Partial/Gated.     |
+| Component / option   | Required behavior                                                                                                                                 | Current AGI status |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Plan display         | Current plan, local/BYOK/free state, managed public-alpha status, adjust plan.                                                                    | Partial.           |
+| Stripe/payment       | Payment link/checkout, invoices, due date, status, action.                                                                                        | Partial/Missing.   |
+| Usage limits         | Current session, weekly limits, credits, monthly spend limit, current balance, auto reload.                                                       | Partial/Missing.   |
+| Team/Enterprise list | Early-access interest list for Team/Enterprise tiers and genuinely-unavailable hosted capacity (managed cloud chat itself is public alpha, open). | Partial/Gated.     |
+| Promo/invite codes   | Optional promo codes redeem plan credits/offers; they do NOT gate managed-cloud access (cloud is open public alpha).                              | Partial/Gated.     |
+| Abuse/fraud controls | Metering, quotas, refund/chargeback reserve, provider terms.                                                                                      | Missing/Gated.     |
+| Enterprise           | Org policy, audit, SSO/SCIM, connector policy, managed-credit ledger, support workflow.                                                           | Partial/Gated.     |
 
 Primary paths: `apps/web/features`, `apps/mobile/app/(app)/billing`, `services/api-gateway`, `packages/types/src/enterprise`, `apps/web/db/neon`.
 
