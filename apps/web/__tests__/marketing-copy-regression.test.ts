@@ -162,4 +162,17 @@ describe('public marketing copy regressions', () => {
     expect(envExample).toContain('NEXT_PUBLIC_ENABLE_REACT_QUERY_DEVTOOLS=false');
     expect(nextConfig).toContain('devIndicators: false');
   });
+
+  it('presents managed cloud as public-alpha-open, not waitlist-gated (WEB-12)', () => {
+    // Managed Cloud is public alpha and open by default (founder decision
+    // 2026-06-27, source-of-truth.md). The homepage must NOT claim it is
+    // waitlist/invite-only — that is an overclaim against shipped scope.
+    const home = readWebFile('app/page.tsx');
+
+    expect(home).not.toContain('Join the Waitlist');
+    expect(home).not.toContain('Private beta via waitlist');
+    expect(home).not.toContain('Account & Cloud waitlist');
+    // The AGI Cloud mode card presents the public-alpha reality.
+    expect(home).toContain('Public alpha — sign in and start, no waitlist');
+  });
 });
