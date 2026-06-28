@@ -50,7 +50,7 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | INC-0.2 | Pin reference SHAs + this tracker     | ✅     | (tracked) |
 | INC-0.3 | Trust-boundary contract tests         | ✅     | d84bbf8d8 |
 | INC-0.4 | Provider-contract test harness        | ✅     | 2897b2b30 |
-| INC-0.5 | SkillSpector vetting service stand-up | ⬜     | —         |
+| INC-0.5 | SkillSpector vetting service stand-up | ✅     | (pending) |
 
 ### Phase 1 — Public Alpha (web/mobile/desktop)
 
@@ -94,9 +94,9 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 
 ## 3. Attribution log (append one row per ported file)
 
-| Date                                          | AGI file | Source repo@commit | Source file | License | Notes |
-| --------------------------------------------- | -------- | ------------------ | ----------- | ------- | ----- |
-| _(none yet — first entry lands with INC-1.1)_ |          |                    |             |         |       |
+| Date       | AGI file                                     | Source repo@commit  | Source file           | License    | Notes                                                                                                                                                                                                                         |
+| ---------- | -------------------------------------------- | ------------------- | --------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-06-28 | `services/skill-vetting/src/skillspector/**` | NVIDIA/skillspector | `src/skillspector/**` | Apache-2.0 | INC-0.5. Adopted the runnable scanner package wholesale (57 modules + YARA). LICENSE+THIRD_PARTY_NOTICES preserved. `model_registry.yaml` rewritten to models.json IDs. verify.sh proves malicious→DO_NOT_INSTALL, safe→SAFE. |
 
 ---
 
