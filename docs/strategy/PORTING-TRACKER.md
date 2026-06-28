@@ -187,6 +187,8 @@ Took the desktop settings IA from **4/11 → 11/11** locked source-of-truth sect
 
 Locked by `settings-ia.test.ts` ("includes all 11 locked source-of-truth sections") + nav↔render consistency guard. Also fixed a pre-existing test-mock gap (`CapabilityProvider` missing from the DesktopShellV3 unified-chat mock). **Full desktop suite green: 1843 passed.** Residual (not a missing section): the extra entries (Personalization, Models & Keys, Agents, Plugins, Memory, Notifications, Voice) the spec nests under General/Capabilities, and visual/functional e2e of each section's rendered content (needs the running app). See `DESK-SETTINGS-IA-01` (now Fixed: sections present + wired).
 
+- **MOB-6 ✅** (`fix(mobile): remove unbuilt skills/plugins settings dead-ends` `e5968a59a` + snapshot `f768b9d15`): the mobile settings nav had **Skills** and **Plugins** rows that were unbuilt stubs (screens "not yet built" — they only opened a cloud gate, a dead-end). Per MOB-6 "implement OR remove dead-ends", removed them (no real mobile Skills/Plugins surface exists yet). All OTHER mobile settings rows route to real screens (verified every `push()` target has a screen file). Added a regression guard (settings has no Skills/Plugins dead-ends) + updated the settings snapshot. Mobile settings is now dead-end-free. Full mobile suite green: 1543 passed.
+
 ### Remaining (next sessions)
 
 INC-0.3 trust-boundary contract **harness** (per-surface tests exist — web/extension/desktop — but no unified `pnpm` gate yet) → INC-0.4/0.5 → runtime C1–C4 ports from codex-rs (INC-1.1–1.4) → website/mobile/desktop production plans (strategy 12/13/14). The catalog/`taskRouting` work proved the SSOT pipeline; edit `models.curation.json` (never `models.json`).
