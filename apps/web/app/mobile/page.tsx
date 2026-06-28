@@ -15,12 +15,12 @@ import { LAUNCH } from '../../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
   description:
-    'AGI Mobile runs chat on your phone in Local Mode by default. Chats, memory, projects, and files stay on-device unless you choose otherwise. AGI Cloud opens by invite.',
+    'AGI Mobile runs chat on your phone in Local Mode by default. Chats, memory, projects, and files stay on-device unless you choose otherwise. AGI managed cloud is in public alpha.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
     title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
     description:
-      'On-device Local chat by default. Your data stays on the phone unless you explicitly choose otherwise. AGI Cloud by invite.',
+      'On-device Local chat by default. Your data stays on the phone unless you explicitly choose otherwise. AGI managed cloud is public alpha.',
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
     images: [{ url: '/app-preview.png', width: 1024, height: 665, alt: 'AGI app preview' }],
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
-    description: `Local Mode by default. AGI Cloud by invite. ${LAUNCH.publicLabel}.`,
+    description: `Local Mode by default. AGI managed cloud is public alpha. ${LAUNCH.publicLabel}.`,
     images: ['/app-preview.png'],
   },
 };
@@ -98,8 +98,8 @@ export default function MobilePage() {
               </h1>
               <p className="agi-fl-lede">
                 Every chat starts in Local Mode. The model runs on your phone. Chats, memory, and
-                files stay on-device unless you say otherwise. AGI Cloud arrives by invite, never by
-                default.
+                files stay on-device unless you say otherwise. AGI Cloud is public alpha — opt-in,
+                never by default.
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
@@ -113,7 +113,7 @@ export default function MobilePage() {
               </div>
               <ul className="agi-fl-mode-ribbon" aria-label="Mobile trust modes">
                 <li>Local · on-device</li>
-                <li>Cloud · by invite</li>
+                <li>Cloud · public alpha</li>
               </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
@@ -195,15 +195,15 @@ export default function MobilePage() {
             {
               mode: 'AGI Cloud',
               glyph: '●',
-              title: 'Managed compute, by invite.',
-              body: 'Hosted capacity opens carefully as controls are proven.',
+              title: 'Managed compute, public alpha.',
+              body: 'Hosted capacity, open by default, with controls keeping pace.',
               points: [
-                'Private beta via waitlist and invite codes',
-                'Synced chats and hosted models when access opens',
+                'Public alpha — sign in and start, no waitlist',
+                'Synced chats and hosted models',
                 'Separate from Local by design',
-                'One email when your access opens',
+                'Usage metered and transparent',
               ],
-              cta: { label: 'Join the Waitlist', waitlist: true },
+              cta: { href: '/get-started', label: 'Get Started' },
             },
           ]}
         />
@@ -254,7 +254,7 @@ export default function MobilePage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Take AGI with you."
-          body="AGI Mobile launches on iPhone and Android. Local Mode is the default. Join the waitlist if you want AGI Cloud when invites open."
+          body="AGI Mobile launches on iPhone and Android. Local Mode is the default. AGI managed cloud is in public alpha — sign in to use it."
           ctas={[
             { href: '/download', label: 'Get Launch Access' },
             { label: 'Join Cloud Waitlist', waitlist: true },
