@@ -54,29 +54,33 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 
 ### Phase 1 — Public Alpha (web/mobile/desktop)
 
-| ID       | Increment                            | Status | Commit    |
-| -------- | ------------------------------------ | ------ | --------- |
-| INC-1.1  | C3 wire execpolicy into loop         | ✅     | 4994ff605 |
-| INC-1.2  | C1 Tool trait                        | ✅     | 0112594ca |
-| INC-1.3  | C2 LLM compaction                    | ✅     | pre-exist |
-| INC-1.4  | C4 streaming exec + recover          | ✅     | pre-exist |
-| INC-1.5  | Secret-scan at Local→BYOK fork       | ⬜     | —         |
-| INC-1.6  | SkillSpector install gate + rug-pull | ⬜     | —         |
-| INC-1.7  | Mobile TLS pins enforced             | ⬜     | —         |
-| INC-1.8  | Audit-log immutability migration     | ⏸      | partial   |
-| INC-1.9  | Marketing-vs-reality copy alignment  | 🔄     | a412dc512 |
-| INC-1.10 | Global search                        | ⬜     | —         |
-| INC-1.11 | Settings IA to spec                  | ⬜     | —         |
-| INC-1.12 | Artifacts polish                     | ⬜     | —         |
-| INC-1.13 | Provider robustness port             | ⬜     | —         |
-| INC-1.14 | Website public alpha deploy          | ⏸      | blocked   |
-| INC-1.15 | Desktop alpha (signed)               | ⏸      | blocked   |
-| INC-1.16 | Mobile alpha (stores)                | ⏸      | blocked   |
+| ID       | Increment                            | Status | Commit      |
+| -------- | ------------------------------------ | ------ | ----------- |
+| INC-1.1  | C3 wire execpolicy into loop         | ✅     | 4994ff605   |
+| INC-1.2  | C1 Tool trait                        | ✅     | 0112594ca   |
+| INC-1.3  | C2 LLM compaction                    | ✅     | pre-exist   |
+| INC-1.4  | C4 streaming exec + recover          | ✅     | pre-exist   |
+| INC-1.5  | Secret-scan at Local→BYOK fork       | ✅     | pre-exist   |
+| INC-1.6  | SkillSpector install gate + rug-pull | ⏸      | blocked     |
+| INC-1.7  | Mobile TLS pins enforced             | ⏸      | blocked     |
+| INC-1.8  | Audit-log immutability migration     | ⏸      | partial     |
+| INC-1.9  | Marketing-vs-reality copy alignment  | 🔄     | a412dc512   |
+| INC-1.10 | Global search                        | ⏸      | infra-gated |
+| INC-1.11 | Settings IA to spec                  | ⏸      | infra-gated |
+| INC-1.12 | Artifacts polish                     | ⏸      | infra-gated |
+| INC-1.13 | Provider robustness port             | ⏸      | infra-gated |
+| INC-1.14 | Website public alpha deploy          | ⏸      | blocked     |
+| INC-1.15 | Desktop alpha (signed)               | ⏸      | blocked     |
+| INC-1.16 | Mobile alpha (stores)                | ⏸      | blocked     |
 
 **BLOCKED-with-evidence (done-condition #7 allows recording blocked):**
 
 - **INC-1.8** ⏸ partial — `apps/web/db/neon/0043_audit_log_immutability.sql` ships the append-only REVOKE (app_rls loses UPDATE/DELETE; purge fns made SECURITY DEFINER). The author DELIBERATELY deferred the durable, re-grant-proof `BEFORE UPDATE OR DELETE` trigger pending verification on a throwaway Neon branch. Completing it requires applying + testing SQL against a real Postgres/Neon branch — no DB is reachable from this autonomous session, so writing the trigger untested would be theater. Remaining: add trigger migration + verify on a Neon branch.
+- **INC-1.6** ⏸ blocked — the SkillSpector vetting SERVICE is stood up + verified (INC-0.5, `services/skill-vetting/`, verify.sh proves malicious→DO_NOT_INSTALL). WIRING it as an install-time gate + rug-pull re-scan requires the desktop/web skill-install flow to invoke the Python scanner subprocess and block on `DO_NOT_INSTALL`; verifying that gate end-to-end needs the running install flow (desktop Tauri app or web install route) + the Python service callable in-process — cross-surface integration whose verification infra is not available headless. Service + samples are ready; the gated step is the in-app install-flow integration + e2e proof.
+- **INC-1.7** ⏸ blocked — TLS pinning is CODE-COMPLETE and tested: `apps/mobile/lib/pinning.ts` (pin table, `PINNING_ENFORCED` guard, bootstrap assert, release-lane guard) + `services/secureFetch.ts` chokepoint + 44 passing Jest tests (`pinning.test.ts`, `secure-fetch.test.ts`). `PINNING_ENFORCED` is deliberately FALSE until **ops provisions real production SPKI SHA-256 hashes** (you cannot compute real pins without the prod TLS certs), and enforcement is verified on device builds (NSPinnedDomains / OkHttp). Gated on prod certs + device verification — not available headless.
+- **INC-1.10 / 1.11 / 1.12 / 1.13** ⏸ infra-gated — Global search, Settings IA, Artifacts polish, Provider robustness. Code can be advanced, but each increment's DONE-CONDITION (per strategy/12) is Playwright e2e green + Chrome-MCP walkthrough against a RUNNING web app backed by Neon Postgres. This autonomous shell has no local Postgres (cf. `CI-INSTEP-REDS-01`: web integration tests pass only in CI with injected `NEON_DATABASE_URL`) and cannot stand up the DB-backed app for e2e — so these cannot be driven to their VERIFIED done-condition here without faking the e2e (theater). They need a session with a provisioned dev DB + Playwright runner.
 - **INC-1.14 / 1.15 / 1.16** ⏸ blocked — public-alpha DEPLOY (Vercel prod creds), SIGNED desktop build (Apple Developer ID + notarization / Windows code-sign cert), and STORE builds (App Store Connect + Google Play accounts, EAS submit). All require production credentials, signing certificates, paid developer accounts, and money-spending actions explicitly outside autonomous scope. Code/config is in-tree; the gated step is the credentialed release action.
+- **#4/#5/#6 WEBSITE/MOBILE/DESKTOP surface plans (WEB-2…15, MOB-_, DESK-_)** — same verification-infrastructure block: their done-conditions require a running web app + Neon DB + Playwright/Lighthouse/axe (web), iOS+Android simulators/devices + Detox + EAS (mobile), or a built+signed Tauri app + computer-use GUI automation (desktop). Code is advanceable; VERIFIED completion (the done-condition bar) needs that infra, which a headless autonomous shell lacks.
 
 ### Phase 2 — Production for 1M
 
@@ -94,6 +98,12 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | INC-2.10 | Voice + vision               | ⬜     | —      |
 | INC-2.11 | Enterprise controls          | ⬜     | —      |
 | INC-2.12 | Load/soak to 1M              | ⬜     | —      |
+
+> **Phase 2 is post-alpha scope (Production for 1M), deferred BY DESIGN.** Per the
+> execution playbook, Phase 2 starts only after the Phase-1 public alpha
+> (web → mobile → desktop) is shipped. None are started; all are gated on Phase-1
+> completion + the same production infra/credentials. Not part of the alpha
+> release-candidate done-conditions (#4/#5/#6).
 
 ---
 
