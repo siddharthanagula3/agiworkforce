@@ -5,6 +5,7 @@
       "contextWindow": 1050000,
       "inputCost": 5,
       "outputCost": 30,
+      "cached_input": 0.5,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -17,15 +18,10 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 84.5,
-        "humaneval": 98,
-        "mmlu": 92.5,
-        "gpqa": 86,
-        "aime": 92
-      },
+      "benchmarks": { "swebench": 84.5, "humaneval": 98, "mmlu": 92.5, "gpqa": 86, "aime": 92 },
       "speed": "medium",
       "released": "April 2026"
     },
@@ -46,7 +42,8 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
       "speed": "slow",
       "released": "May 2026"
@@ -55,6 +52,7 @@
       "contextWindow": 200000,
       "inputCost": 3,
       "outputCost": 15,
+      "cached_input": 0.3,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -67,15 +65,10 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 78.5,
-        "humaneval": 96.2,
-        "mmlu": 89.5,
-        "gpqa": 76,
-        "aime": 88
-      },
+      "benchmarks": { "swebench": 78.5, "humaneval": 96.2, "mmlu": 89.5, "gpqa": 76, "aime": 88 },
       "speed": "fast",
       "released": "February 2026"
     },
@@ -83,6 +76,7 @@
       "contextWindow": 200000,
       "inputCost": 1,
       "outputCost": 5,
+      "cached_input": 0.1,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -95,15 +89,10 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 45,
-        "humaneval": 88,
-        "mmlu": 85,
-        "gpqa": 55,
-        "aime": 40
-      },
+      "benchmarks": { "swebench": 45, "humaneval": 88, "mmlu": 85, "gpqa": 55, "aime": 40 },
       "speed": "very-fast",
       "released": "October 2025"
     },
@@ -111,6 +100,7 @@
       "contextWindow": 2000000,
       "inputCost": 2,
       "outputCost": 12,
+      "cached_input": 0.2,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -123,15 +113,10 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 74.2,
-        "humaneval": 93.5,
-        "mmlu": 89.5,
-        "gpqa": 91.9,
-        "aime": 95
-      },
+      "benchmarks": { "swebench": 74.2, "humaneval": 93.5, "mmlu": 89.5, "gpqa": 91.9, "aime": 95 },
       "speed": "fast",
       "released": "February 2026"
     },
@@ -139,6 +124,7 @@
       "contextWindow": 1000000,
       "inputCost": 0.25,
       "outputCost": 1.5,
+      "cached_input": 0.025,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -151,15 +137,10 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 76.2,
-        "humaneval": 91,
-        "mmlu": 88.6,
-        "gpqa": 60,
-        "aime": 88
-      },
+      "benchmarks": { "swebench": 76.2, "humaneval": 91, "mmlu": 88.6, "gpqa": 60, "aime": 88 },
       "speed": "very-fast",
       "released": "March 2026"
     },
@@ -179,15 +160,10 @@
         "videoGen": true,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
-      "benchmarks": {
-        "swebench": 68,
-        "humaneval": 96.5,
-        "mmlu": 91.5,
-        "gpqa": 80,
-        "aime": 82
-      },
+      "benchmarks": { "swebench": 68, "humaneval": 96.5, "mmlu": 91.5, "gpqa": 80, "aime": 82 },
       "speed": "fast",
       "released": "April 2026"
     },
@@ -208,15 +184,10 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 75,
-        "humaneval": 95,
-        "mmlu": 87,
-        "gpqa": 75,
-        "aime": 85
-      },
+      "benchmarks": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
       "speed": "very-fast",
       "released": "April 2026"
     },
@@ -237,22 +208,17 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 81,
-        "humaneval": 96,
-        "mmlu": 92,
-        "gpqa": 87,
-        "aime": 95
-      },
+      "benchmarks": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
       "speed": "fast",
       "released": "April 2026"
     },
     "qwen-max": {
       "contextWindow": 1000000,
       "inputCost": 1.2,
-      "outputCost": 6.0,
+      "outputCost": 6,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -265,47 +231,12 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": false
       },
-      "benchmarks": {
-        "swebench": 58,
-        "humaneval": 93,
-        "mmlu": 88,
-        "gpqa": 65,
-        "aime": 60
-      },
+      "benchmarks": { "swebench": 58, "humaneval": 93, "mmlu": 88, "gpqa": 65, "aime": 60 },
       "speed": "medium",
-      "released": "January 2026",
-      "apiModelId": "qwen3-max"
-    },
-    "qwen-flash": {
-      "contextWindow": 1000000,
-      "inputCost": 0.1,
-      "outputCost": 0.4,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "benchmarks": {
-        "swebench": 25,
-        "humaneval": 70,
-        "mmlu": 75,
-        "gpqa": 35,
-        "aime": 25
-      },
-      "speed": "very-fast",
-      "released": "November 2025",
-      "apiModelId": "qwen3.5-flash"
+      "released": "January 2026"
     },
     "qwen-turbo": {
       "contextWindow": 1000000,
@@ -323,20 +254,58 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
-      "benchmarks": {
-        "swebench": 28,
-        "humaneval": 72,
-        "mmlu": 76,
-        "gpqa": 38,
-        "aime": 28
-      },
+      "benchmarks": { "swebench": 28, "humaneval": 72, "mmlu": 76, "gpqa": 38, "aime": 28 },
       "speed": "very-fast",
-      "released": "January 2026",
-      "apiModelId": "qwen3.5-flash",
-      "status": "deprecated",
-      "deprecated": true
+      "released": "January 2026"
+    },
+    "qwen-coder-flash": {
+      "contextWindow": 1000000,
+      "inputCost": 0.05,
+      "outputCost": 0.3,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": false
+      },
+      "benchmarks": { "swebench": 40, "humaneval": 82, "mmlu": 70, "gpqa": 35, "aime": 25 },
+      "speed": "very-fast",
+      "released": "January 2026"
+    },
+    "qwen-coder-plus": {
+      "contextWindow": 1000000,
+      "inputCost": 0.5,
+      "outputCost": 2,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": false
+      },
+      "benchmarks": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
+      "speed": "fast",
+      "released": "January 2026"
     },
     "kimi-k2.6": {
       "contextWindow": 262144,
@@ -355,15 +324,10 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 80.2,
-        "humaneval": 96,
-        "mmlu": 89,
-        "gpqa": 86,
-        "aime": 99
-      },
+      "benchmarks": { "swebench": 80.2, "humaneval": 96, "mmlu": 89, "gpqa": 86, "aime": 99 },
       "speed": "fast",
       "released": "April 2026"
     },
@@ -383,15 +347,10 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
-      "benchmarks": {
-        "swebench": 55,
-        "humaneval": 92,
-        "mmlu": 88,
-        "gpqa": 68,
-        "aime": 62
-      },
+      "benchmarks": { "swebench": 55, "humaneval": 92, "mmlu": 88, "gpqa": 68, "aime": 62 },
       "speed": "fast",
       "released": "December 2025"
     },
@@ -411,15 +370,10 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
-      "benchmarks": {
-        "swebench": 42,
-        "humaneval": 85,
-        "mmlu": 84,
-        "gpqa": 55,
-        "aime": 45
-      },
+      "benchmarks": { "swebench": 42, "humaneval": 85, "mmlu": 84, "gpqa": 55, "aime": 45 },
       "speed": "fast",
       "released": "May 2025"
     },
@@ -439,7 +393,8 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "very-fast",
       "released": "January 2025"
@@ -460,39 +415,11 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "medium",
       "released": "November 2024"
-    },
-    "glm-4.6v": {
-      "contextWindow": 128000,
-      "inputCost": 0.3,
-      "outputCost": 0.9,
-      "cached_input": 0.05,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "benchmarks": {
-        "swebench": 68,
-        "humaneval": 82,
-        "mmlu": 86,
-        "gpqa": 58,
-        "aime": 75
-      },
-      "speed": "medium",
-      "released": "December 2025"
     },
     "sonar": {
       "contextWindow": 128000,
@@ -510,11 +437,10 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
-      "benchmarks": {
-        "mmlu": 75
-      },
+      "benchmarks": { "mmlu": 75 },
       "speed": "fast",
       "released": "January 2026"
     },
@@ -534,12 +460,10 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
-      "benchmarks": {
-        "mmlu": 85,
-        "gpqa": 62
-      },
+      "benchmarks": { "mmlu": 85, "gpqa": 62 },
       "speed": "medium",
       "released": "January 2026"
     },
@@ -559,11 +483,10 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
-      "benchmarks": {
-        "mmlu": 88
-      },
+      "benchmarks": { "mmlu": 88 },
       "speed": "medium",
       "released": "January 2026"
     },
@@ -583,13 +506,35 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
-      "benchmarks": {
-        "mmlu": 88
-      },
+      "benchmarks": { "mmlu": 88 },
       "speed": "slow",
       "released": "January 2026"
+    },
+    "gpt-image-2": {
+      "contextWindow": 4000,
+      "inputCost": 8,
+      "outputCost": 30,
+      "cached_input": 2,
+      "capabilities": {
+        "streaming": false,
+        "tools": false,
+        "vision": true,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": true,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "medium",
+      "released": "April 2026"
     },
     "groq-llama-3.3-70b": {
       "contextWindow": 131072,
@@ -607,13 +552,11 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "very-fast",
-      "released": "2024",
-      "status": "deprecated",
-      "deprecated": true,
-      "deprecation_date": "2026-08-16"
+      "released": "2024"
     },
     "groq-llama-3.1-8b": {
       "contextWindow": 131072,
@@ -631,102 +574,17 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": false
+        "codeExecution": false,
+        "caching": false
       },
       "speed": "very-fast",
-      "released": "2024",
-      "status": "deprecated",
-      "deprecated": true,
-      "deprecation_date": "2026-08-16"
-    },
-    "anthropic/claude-opus-4": {
-      "contextWindow": 200000,
-      "inputCost": 15,
-      "outputCost": 75,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": true,
-        "codeExecution": false
-      },
-      "speed": "medium",
-      "released": "2025"
-    },
-    "openai/gpt-4o": {
-      "contextWindow": 128000,
-      "inputCost": 2.5,
-      "outputCost": 10,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speed": "fast",
       "released": "2024"
-    },
-    "google/gemini-2.5-pro": {
-      "contextWindow": 1000000,
-      "inputCost": 1.25,
-      "outputCost": 10,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": true,
-        "codeExecution": true
-      },
-      "speed": "medium",
-      "released": "2025"
-    },
-    "deepseek/deepseek-r1": {
-      "contextWindow": 163840,
-      "inputCost": 0.55,
-      "outputCost": 2.19,
-      "capabilities": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": true,
-        "codeExecution": false
-      },
-      "speed": "medium",
-      "released": "2025"
     },
     "gpt-5.4-mini": {
       "contextWindow": 400000,
       "inputCost": 0.75,
       "outputCost": 4.5,
+      "cached_input": 0.075,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -739,10 +597,57 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
       "speed": "fast",
       "released": "March 2026"
+    },
+    "gpt-5-nano": {
+      "contextWindow": 400000,
+      "inputCost": 0.05,
+      "outputCost": 0.4,
+      "cached_input": 0.01,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "fast",
+      "released": "August 2025"
+    },
+    "gpt-4.1-nano": {
+      "contextWindow": 1047576,
+      "inputCost": 0.1,
+      "outputCost": 0.4,
+      "cached_input": 0.03,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "fast",
+      "released": "April 2025"
     },
     "gemini-3.5-flash": {
       "contextWindow": 1000000,
@@ -761,13 +666,10 @@
         "videoGen": false,
         "search": true,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
-      "benchmarks": {
-        "sweBenchPro": 55.1,
-        "terminalBench2": 76.2,
-        "osWorldVerified": 78.4
-      },
+      "benchmarks": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
       "speed": "fast",
       "released": "May 2026"
     },
@@ -788,20 +690,12 @@
         "videoGen": false,
         "search": false,
         "research": true,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 79,
-        "humaneval": 92,
-        "mmlu": 90,
-        "gpqa": 84,
-        "aime": 92
-      },
+      "benchmarks": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
       "speed": "medium",
-      "released": "June 2026",
-      "id": "glm-5.2",
-      "apiModelId": "glm-5.2",
-      "name": "GLM-5.2"
+      "released": "June 2026"
     },
     "qwen-3.5-plus": {
       "contextWindow": 1000000,
@@ -820,20 +714,12 @@
         "videoGen": false,
         "search": true,
         "research": false,
-        "codeExecution": true
+        "codeExecution": true,
+        "caching": true
       },
-      "benchmarks": {
-        "swebench": 70,
-        "humaneval": 94,
-        "mmlu": 90,
-        "gpqa": 78,
-        "aime": 88
-      },
+      "benchmarks": { "swebench": 70, "humaneval": 94, "mmlu": 90, "gpqa": 78, "aime": 88 },
       "speed": "fast",
-      "released": "April 2026",
-      "id": "qwen-3.5-plus",
-      "apiModelId": "qwen3.5-plus",
-      "name": "Qwen 3.5 Plus"
+      "released": "April 2026"
     }
   }
 }
