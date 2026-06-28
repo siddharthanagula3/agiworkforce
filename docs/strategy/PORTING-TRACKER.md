@@ -174,6 +174,19 @@ Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
 
 - **DESK-1/DESK-2 (partial) ✅ guarded** (`test(desktop): guard settings ia` `165f6091a`): added `settings-ia.test.ts` (4 tests) proving the desktop settings nav↔render is consistent — every `SETTINGS_NAV` key resolves to a rendered panel (**no orphaned settings modes**) and every key is grouped. Discovered + recorded (`DESK-SETTINGS-IA-01`) that the IA does NOT yet match the authoritative `source-of-truth.md` lock: current 12 flat tabs vs the 11 spec sections (General/Account/Privacy/**Billing**/**Usage**/**Capabilities**/Connectors/**AGI Code**/**AGI in Chrome**/**Extensions**/**Developer**) — only 4 match; the spec wants appearance/voice/notifications under General + skills under Capabilities + 7 new sections. Bringing it to spec is a substantial UI restructure needing the running app for e2e nav verification.
 
+### 2026-06-28 — DESK-1 settings IA brought to spec (11/11 sections)
+
+Took the desktop settings IA from **4/11 → 11/11** locked source-of-truth sections, each wired with REAL content, by surfacing **6 substantial panels that existed but were ORPHANED** (unreachable from any nav — DESK-2):
+
+- **Capabilities** ← `ComputerUseSettings` (738 lines) + Skill Marketplace (skills moved under it; top-level `skills` removed) — `5d04dc409`
+- **Usage** ← `UsageDashboard`, **Extensions** ← `ExtensionsSettings` (508) — `83a2`/earlier
+- **Developer** ← `DotfileSettings` (667, ~/.agiworkforce/config.toml editor) + `AgentExecutionSettings` (368) — `c2e803e6b`
+- **AGI Code** ← `InstructionFilesSettings` (358, CLAUDE.md/AGENTS.md patterns) — `389a36482`
+- **AGI in Chrome** ← `BridgeStatusCard` (246, desktop⇄Chrome/VSCode bridge status) — `6af80155b`
+- **Billing** ← new focused `BillingSettings` reading the SAME real `useAuthStore` subscription + `openBillingPortal` Account uses (no fabricated data) — `(billing commit)`
+
+Locked by `settings-ia.test.ts` ("includes all 11 locked source-of-truth sections") + nav↔render consistency guard. Also fixed a pre-existing test-mock gap (`CapabilityProvider` missing from the DesktopShellV3 unified-chat mock). **Full desktop suite green: 1843 passed.** Residual (not a missing section): the extra entries (Personalization, Models & Keys, Agents, Plugins, Memory, Notifications, Voice) the spec nests under General/Capabilities, and visual/functional e2e of each section's rendered content (needs the running app). See `DESK-SETTINGS-IA-01` (now Fixed: sections present + wired).
+
 ### Remaining (next sessions)
 
 INC-0.3 trust-boundary contract **harness** (per-surface tests exist — web/extension/desktop — but no unified `pnpm` gate yet) → INC-0.4/0.5 → runtime C1–C4 ports from codex-rs (INC-1.1–1.4) → website/mobile/desktop production plans (strategy 12/13/14). The catalog/`taskRouting` work proved the SSOT pipeline; edit `models.curation.json` (never `models.json`).
