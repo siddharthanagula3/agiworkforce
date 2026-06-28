@@ -200,7 +200,7 @@ export default function CliPage() {
                 'Clear labels before anything routes to cloud',
                 'Usage metered and transparent',
               ],
-              cta: { label: 'Join the Waitlist', waitlist: true },
+              cta: { href: '/get-started', label: 'Get Started' },
             },
           ]}
         />
@@ -233,7 +233,7 @@ $ agi auth-status`}</pre>
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Open a terminal. Start working."
-          body="Build the agi binary from source on macOS or Linux. Keep your sessions replayable from day one. AGI Cloud opens by invite."
+          body="Build the agi binary from source on macOS or Linux. Keep your sessions replayable from day one. AGI managed cloud is in public alpha, open by default."
           ctas={[
             { href: '/download', label: 'Go to Downloads' },
             { href: '/agi-code', label: 'Explore AGI Code' },

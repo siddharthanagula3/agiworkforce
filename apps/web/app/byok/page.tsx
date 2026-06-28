@@ -170,15 +170,15 @@ export default function ByokPage() {
               Prefer managed compute?
             </h2>
             <p className="agi-callout-p">
-              AGI Cloud is in private beta behind a waitlist and invite codes. Request access with
-              your signed-in account, or leave an email without one. Either way, you get a single
-              note when access opens.
+              AGI managed cloud is in public alpha and open by default — sign in to start, no
+              waitlist. Team &amp; Enterprise (org seats, SSO, admin controls) are rolling out;
+              leave an email and we&rsquo;ll reach out as those land.
             </p>
             <WaitlistForm source="byok" ctaLabel="Request Cloud Invite" />
           </div>
           <div className="agi-fl-cta-row">
             <WaitlistTrigger
-              label="Join the Waitlist Without an Account"
+              label="Request Team &amp; Enterprise Access"
               source="byok"
               className="agi-fl-cta agi-fl-cta--ghost"
             />
