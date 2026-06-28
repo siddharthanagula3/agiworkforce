@@ -221,63 +221,78 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Step 5: Update local DB plan_tier and price immediately
-  // (The webhook will also fire and update these, but local update ensures
-  //  the UI reflects the new plan without waiting for the async webhook.)
+  // Step 5: Update local DB plan_tier and price immediately, as an ATOMIC
+  // compare-and-swap. The `coalesce(plan_tier,'free') = $expectedCurrent` guard
+  // means only the request that actually performs the currentTier→target
+  // transition gets rowcount 1; a concurrent double-submit that arrives after
+  // the tier already moved matches nothing (rowcount 0). Step 6 (the additive,
+  // non-idempotent credit grant) is gated on this so a double-submit cannot
+  // grant the upgrade-delta credits twice. COALESCE keeps a NULL plan_tier row
+  // upgradeable (currentTier defaults to 'free'), so the guard never breaks a
+  // legitimate first upgrade.
+  // (The webhook also fires and reconciles these, so skipping on a contended
+  //  or failed update is safe.)
   // ──────────────────────────────────────────────────────────────────────────
-  await db
-    .execute(`update subscriptions set plan_tier = $1, stripe_price_id = $2 where user_id = $3`, [
-      targetPlan,
-      newPriceId,
-      userId,
-    ])
-    .catch((err) => {
-      logger.error({ err, userId, targetPlan }, 'Failed to update local subscription tier');
-    });
+  let didTransition = false;
+  try {
+    const affected = await db.execute(
+      `update subscriptions set plan_tier = $1, stripe_price_id = $2
+       where user_id = $3 and coalesce(plan_tier, 'free') = $4`,
+      [targetPlan, newPriceId, userId, currentTier],
+    );
+    didTransition = affected === 1;
+  } catch (err) {
+    logger.error({ err, userId, targetPlan }, 'Failed to update local subscription tier');
+    didTransition = false;
+  }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Step 6: Top up credit account with the delta to new plan's allocation
-  // The webhook fires with the same period (mid-cycle upgrade), so
+  // Step 6: Top up credit account with the delta to new plan's allocation.
+  // ONLY runs for the request that actually performed the tier transition, so
+  // a concurrent double-submit (didTransition=false) cannot double-add. The
+  // webhook fires with the same period (mid-cycle upgrade), so
   // allocateCreditsForPeriod will find the existing account and not re-add
   // the full allocation. We add only the incremental difference.
   // ──────────────────────────────────────────────────────────────────────────
-  try {
-    const oldBudgetCents = getPlanUsageBudgetCents(currentTier, 'monthly');
-    const newBudgetCents = getPlanUsageBudgetCents(targetPlan, 'monthly');
-    const deltaCents = newBudgetCents - oldBudgetCents;
+  if (didTransition) {
+    try {
+      const oldBudgetCents = getPlanUsageBudgetCents(currentTier, 'monthly');
+      const newBudgetCents = getPlanUsageBudgetCents(targetPlan, 'monthly');
+      const deltaCents = newBudgetCents - oldBudgetCents;
 
-    if (deltaCents > 0) {
-      const creditAccountRows = await db.query<{ id: string }>(
-        'select id from token_credits where user_id = $1 and subscription_id = $2 limit 1',
-        [userId, sub.id],
-      );
-      const creditAccount = creditAccountRows[0];
+      if (deltaCents > 0) {
+        const creditAccountRows = await db.query<{ id: string }>(
+          'select id from token_credits where user_id = $1 and subscription_id = $2 limit 1',
+          [userId, sub.id],
+        );
+        const creditAccount = creditAccountRows[0];
 
-      if (creditAccount) {
-        await db.execute('select add_credits($1, $2, $3, $4, $5)', [
-          userId,
-          creditAccount.id,
-          deltaCents,
-          `Plan upgrade: ${currentTier} → ${targetPlan}`,
-          // add_credits only accepts ('purchase','adjustment','refund','bonus');
-          // 'upgrade' was rejected by the guard so the incremental grant silently
-          // failed. An upgrade credit is an adjustment.
-          'adjustment',
-        ]);
-        logger.info(
-          { userId, creditAccountId: creditAccount.id, deltaCents, currentTier, targetPlan },
-          'Added incremental credits for plan upgrade',
-        );
-      } else {
-        logger.warn(
-          { userId, subscriptionId: sub.id },
-          'No credit account found for upgrade delta; webhook will handle credit allocation',
-        );
+        if (creditAccount) {
+          await db.execute('select add_credits($1, $2, $3, $4, $5)', [
+            userId,
+            creditAccount.id,
+            deltaCents,
+            `Plan upgrade: ${currentTier} → ${targetPlan}`,
+            // add_credits only accepts ('purchase','adjustment','refund','bonus');
+            // 'upgrade' was rejected by the guard so the incremental grant silently
+            // failed. An upgrade credit is an adjustment.
+            'adjustment',
+          ]);
+          logger.info(
+            { userId, creditAccountId: creditAccount.id, deltaCents, currentTier, targetPlan },
+            'Added incremental credits for plan upgrade',
+          );
+        } else {
+          logger.warn(
+            { userId, subscriptionId: sub.id },
+            'No credit account found for upgrade delta; webhook will handle credit allocation',
+          );
+        }
       }
+    } catch (err) {
+      // Non-fatal: credit top-up failure does not block the upgrade
+      logger.error({ err, userId, currentTier, targetPlan }, 'Failed to add upgrade delta credits');
     }
-  } catch (err) {
-    // Non-fatal: credit top-up failure does not block the upgrade
-    logger.error({ err, userId, currentTier, targetPlan }, 'Failed to add upgrade delta credits');
   }
 
   return NextResponse.json({

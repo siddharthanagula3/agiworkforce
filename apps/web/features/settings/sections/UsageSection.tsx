@@ -211,28 +211,74 @@ export function UsageSection() {
         </div>
 
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Subscription-usage framing (Claude-style): percentage + progress +
+              reset date are the primary metrics. Internal provider/credit dollar
+              figures live in the collapsed "Cost details" section below, not here. */}
           <UsageBar
             label="Today"
             percent={todayPercent}
-            value={`${money(analytics?.stats?.today_cost ?? 0)} spent in last 24 hours`}
-            detail={`${(analytics?.stats?.today_tokens ?? 0).toLocaleString()} tokens used today`}
+            value={`${todayPercent}% used`}
+            detail={`${(analytics?.stats?.today_tokens ?? 0).toLocaleString()} tokens today · resets daily`}
           />
 
           <UsageBar
-            label="Weekly usage"
+            label="This week"
             percent={weeklyPercent}
-            value={`${money(analytics?.stats?.week_cost ?? 0)} spent in last 7 days`}
-            detail={formatReset(usage?.period_end ?? null)}
+            value={`${weeklyPercent}% used`}
+            detail="Resets weekly"
           />
 
           <UsageBar
-            label="Monthly credits"
+            label="This month"
             percent={creditPercent}
-            value={`${money(usage?.credits_used_cents ?? 0)} used of ${money(
-              usage?.credits_allocated_cents ?? 0,
-            )}`}
-            detail={`${money(usage?.credits_remaining_cents ?? 0)} remaining - ${analytics?.stats?.sessions_count ?? 0} sessions in last 30 days`}
+            value={`${creditPercent}% used`}
+            detail={`${formatReset(usage?.period_end ?? null)} · ${analytics?.stats?.sessions_count ?? 0} sessions in last 30 days`}
           />
+
+          {/* Advanced: internal provider/credit cost accounting. Hidden by default —
+              users think in subscription usage, not internal provider dollars. */}
+          <details style={{ marginTop: 4 }}>
+            <summary
+              style={{
+                fontSize: 12,
+                color: 'var(--text-3)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
+              Cost details (advanced)
+            </summary>
+            <div
+              style={{
+                marginTop: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                fontSize: 12,
+                color: 'var(--text-3)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Monthly credit allowance</span>
+                <span>{money(usage?.credits_allocated_cents ?? 0)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Used this period</span>
+                <span>{money(usage?.credits_used_cents ?? 0)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Remaining</span>
+                <span>{money(usage?.credits_remaining_cents ?? 0)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Spent today / this week</span>
+                <span>
+                  {money(analytics?.stats?.today_cost ?? 0)} /{' '}
+                  {money(analytics?.stats?.week_cost ?? 0)}
+                </span>
+              </div>
+            </div>
+          </details>
         </div>
 
         <div

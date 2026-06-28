@@ -86,31 +86,49 @@ async function handlePut(request: NextRequest) {
     throw createError.validation('namespace or settings is required');
   }
 
-  const current = await readSettings(userId);
-  const next = parsed.namespace
-    ? { ...current, [parsed.namespace]: parsed.value ?? parsed.settings ?? {} }
-    : { ...current, ...(parsed.settings ?? {}) };
+  // Persist ONLY the changed namespace/keys (the delta), never the whole
+  // read-merged document. Writing the full merged doc made this a non-atomic
+  // read-modify-write: two concurrent PUTs both read the same old doc and the
+  // second writer's stale copy silently clobbered the first writer's namespace
+  // (lost update). Sending the delta and merging in SQL with `||` makes the
+  // write a single atomic statement, so a concurrent edit to a DIFFERENT
+  // namespace is preserved.
+  const delta: Record<string, unknown> = parsed.namespace
+    ? { [parsed.namespace]: parsed.value ?? parsed.settings ?? {} }
+    : (parsed.settings ?? {});
 
-  const serialized = JSON.stringify(next);
-  if (serialized.length > 100_000) {
+  // Advisory size guard only: estimate the resulting doc from the last read
+  // merged with the delta. This read is no longer on the write's correctness
+  // path (the SQL `||` merge is authoritative); it just bounds runaway growth.
+  const current = await readSettings(userId);
+  const estimated = { ...current, ...delta };
+  if (JSON.stringify(estimated).length > 100_000) {
     throw createError.validation('Settings payload is too large');
   }
 
   const db = getNeonDb();
+  let merged: Record<string, unknown> = estimated;
   try {
-    await db.execute(
+    // `user_settings.settings || excluded.settings` is a top-level (shallow)
+    // jsonb merge that preserves every namespace not present in the delta —
+    // matching the sibling /api/settings/sync route. RETURNING gives us the
+    // true post-merge doc (which may include a concurrent writer's namespace).
+    const [row] = await db.query<UserSettingsRow>(
       `insert into public.user_settings (user_id, settings, updated_at)
        values ($1, $2::jsonb, timezone('utc'::text, now()))
        on conflict (user_id)
-       do update set settings = excluded.settings, updated_at = excluded.updated_at`,
-      [userId, serialized],
+       do update set settings = user_settings.settings || excluded.settings,
+                     updated_at = excluded.updated_at
+       returning settings`,
+      [userId, JSON.stringify(delta)],
     );
+    if (row?.settings) merged = row.settings;
   } catch (error) {
     logger.error({ error, userId }, 'Failed to persist user settings');
     throw createError.internal('Failed to save settings');
   }
 
-  return NextResponse.json({ settings: next });
+  return NextResponse.json({ settings: merged });
 }
 
 export const GET = withErrorHandler(handleGet);

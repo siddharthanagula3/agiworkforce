@@ -69,10 +69,24 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   let message: ChatMessageRow | undefined;
   try {
+    // Idempotent on the client-supplied id so a retry of an already-committed
+    // message (e.g. after a transient network blip on the response path) does
+    // NOT throw a unique-violation or create a duplicate. The ON CONFLICT
+    // update is scoped to the SAME conversation: a cross-conversation id
+    // collision (an attacker POSTing a victim's message id into their own
+    // conversation) matches the WHERE on neither side and updates/returns
+    // nothing, so this cannot be used to overwrite or read another user's
+    // message (IDOR-safe). content/metadata/model are re-asserted from the
+    // retry payload, which in the normal flow are identical to the original.
     [message] = await db.query<ChatMessageRow>(
       `
         insert into web_messages (id, conversation_id, role, content, model, metadata)
         values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb)
+        on conflict (id) do update
+          set content = excluded.content,
+              metadata = excluded.metadata,
+              model = excluded.model
+          where web_messages.conversation_id = excluded.conversation_id
         returning id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
       `,
       [

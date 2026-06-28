@@ -416,6 +416,64 @@ describe('Chat Messages API', () => {
       });
     });
 
+    describe('Idempotency / retry-safety (P1 silent-data-loss fix)', () => {
+      // useChatStream retries a transient save failure. The retry passes the
+      // same client-supplied id, so the insert MUST be idempotent or a retry of
+      // an already-committed message would throw a unique-violation (false
+      // failure) or create a duplicate. The ON CONFLICT update must also be
+      // scoped to the SAME conversation so a victim's message id POSTed into an
+      // attacker's conversation cannot overwrite/return the victim's row (IDOR).
+      function getInsertSql(): string {
+        const insertCall = mockQuery.mock.calls.find(
+          (call) => typeof call[0] === 'string' && call[0].includes('insert into web_messages'),
+        );
+        expect(insertCall, 'expected an insert into web_messages').toBeDefined();
+        return insertCall![0] as string;
+      }
+
+      it('upserts the message id (ON CONFLICT) so retries cannot duplicate or throw', async () => {
+        mockQuery.mockResolvedValueOnce([mockConversation]); // conversation lookup
+        mockQuery.mockResolvedValueOnce([mockUserMessage]); // upsert
+        mockQuery.mockResolvedValueOnce([{ count: '5' }]); // count
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer valid-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: '11111111-1111-4111-8111-111111111111',
+            content: 'Hello',
+            skipLlm: true,
+          }),
+        });
+        await POST(request, mockContext);
+
+        const sql = getInsertSql().toLowerCase();
+        expect(sql).toContain('on conflict (id) do update');
+      });
+
+      it('scopes the ON CONFLICT update to the same conversation (IDOR-safe)', async () => {
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        mockQuery.mockResolvedValueOnce([mockUserMessage]);
+        mockQuery.mockResolvedValueOnce([{ count: '5' }]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer valid-token', 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: '11111111-1111-4111-8111-111111111111',
+            content: 'Hello',
+            skipLlm: true,
+          }),
+        });
+        await POST(request, mockContext);
+
+        const sql = getInsertSql().toLowerCase().replace(/\s+/g, ' ');
+        // Guard against a regression to a bare `do update` that would let a
+        // cross-conversation id collision overwrite another user's message.
+        expect(sql).toContain('where web_messages.conversation_id = excluded.conversation_id');
+      });
+    });
+
     describe('Response shape', () => {
       it('should return { message } (not usage or assistantMessage) in response', async () => {
         // conversation lookup

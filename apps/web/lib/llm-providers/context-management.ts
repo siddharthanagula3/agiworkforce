@@ -98,19 +98,6 @@ export function estimateTokenCount(messages: LlmRequestMessage[]): number {
 }
 
 /**
- * Determine whether compaction should be triggered for the given messages + model.
- *
- * Returns true when the estimated token count exceeds 80% of the model's
- * context window, giving headroom for the model's response.
- */
-export function shouldCompact(messages: LlmRequestMessage[], model: string): boolean {
-  const contextWindow = getModelContextWindow(model);
-  const estimatedTokens = estimateTokenCount(messages);
-  const threshold = Math.floor(contextWindow * 0.8);
-  return estimatedTokens > threshold;
-}
-
-/**
  * Build the Anthropic `context_management` request object.
  *
  * Formats the correct API object for each supported mode:

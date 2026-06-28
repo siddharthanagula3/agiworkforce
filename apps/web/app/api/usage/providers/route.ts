@@ -41,8 +41,8 @@ async function handleGetProviderUsage(request: NextRequest) {
     const rows = await db.query<ProviderUsageRow>(
       `select
          coalesce(metadata->>'provider', 'unknown') as provider,
-         coalesce(sum((metadata->>'tokens')::bigint), 0)::text as total_tokens,
-         sum(abs(amount_cents))::text as total_cost_cents,
+         coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
+         sum(amount_cents)::text as total_cost_cents,
          count(*)::text as request_count
        from public.credit_transactions
        where user_id = $1
@@ -50,7 +50,7 @@ async function handleGetProviderUsage(request: NextRequest) {
          and metadata is not null
          and metadata->>'provider' is not null
        group by metadata->>'provider'
-       order by sum(abs(amount_cents)) desc`,
+       order by sum(amount_cents) desc`,
       [userId],
     );
 

@@ -44,6 +44,7 @@ import { CONNECTORS } from '@features/connectors/data/connectors';
 import { useConnectors } from '@features/connectors/hooks/use-connectors';
 import { Switch } from '@shared/ui/switch';
 import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
+import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 
 interface ChatComposerProps {
@@ -277,6 +278,13 @@ const ChatComposerNewComponent = ({
   const pickFolder = useCoworkFolderStore((s) => s.pickFolder);
   const clearFolder = useCoworkFolderStore((s) => s.clearFolder);
   const canPickFolder = supportsDirectoryPicker();
+
+  // Platform capabilities (PLATFORM axis — does this surface expose the action at
+  // all). Sourced from the shared capability matrix via the CapabilityProvider;
+  // never branch on `platform === 'desktop'` or probe browser APIs. These gate
+  // RENDERING (absent on web), composing with the model/tier gates below.
+  const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
+  const canTakeScreenshotCap = useCapability('canTakeScreenshot');
 
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [researchEnabled, setResearchEnabled] = useState(false);
@@ -951,8 +959,8 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Working Folder Chip — local only; handle never leaves the client */}
-      {folderName && (
+      {/* Working Folder Chip — desktop-only capability; absent on web/mobile */}
+      {canUseWorkingDirectory && folderName && (
         <div className="mb-2 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
             <FolderOpen className="h-3 w-3 shrink-0" />
@@ -1121,66 +1129,72 @@ const ChatComposerNewComponent = ({
                       <span className="flex-1 text-left">Create image</span>
                     </button>
 
-                    {/* 3. Take a screenshot */}
-                    <button
-                      type="button"
-                      disabled
-                      className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/60"
-                      aria-disabled="true"
-                    >
-                      <Camera className="h-4 w-4" />
-                      <span className="flex-1 text-left">Take a screenshot</span>
-                      <span className="text-[10px]">Desktop only</span>
-                    </button>
+                    {/* 3. Take a screenshot — desktop-only capability. Render-gated
+                        so it is ABSENT (not merely disabled) on web/mobile. */}
+                    {canTakeScreenshotCap && (
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                      >
+                        <Camera className="h-4 w-4" />
+                        <span className="flex-1 text-left">Take a screenshot</span>
+                      </button>
+                    )}
 
-                    {/* 4. Select working folder (File System Access API, local only) */}
-                    <button
-                      type="button"
-                      disabled={!canPickFolder}
-                      title={
-                        canPickFolder
-                          ? folderName
-                            ? `Working folder: ${folderName}`
-                            : undefined
-                          : 'Folder access is not supported in this browser'
-                      }
-                      onClick={() => {
-                        pickFolder();
-                        closeMenu();
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                        !canPickFolder && 'cursor-not-allowed opacity-50',
-                        canPickFolder && folderName
-                          ? 'text-amber-300 hover:bg-muted/60'
-                          : 'hover:bg-muted/60',
-                      )}
-                    >
-                      {folderName ? (
-                        <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
-                      ) : (
-                        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      )}
-                      <span className="flex-1 text-left">
-                        {folderName ? folderName : 'Add working folder'}
-                      </span>
-                      {folderName && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clearFolder();
-                          }}
-                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                          aria-label="Clear working folder"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {!canPickFolder && (
-                        <span className="text-[10px] text-muted-foreground">Not supported</span>
-                      )}
-                    </button>
+                    {/* 4. Select working folder — desktop-only capability (local
+                        File System Access). Render-gated: ABSENT on web/mobile.
+                        The browser-API `canPickFolder` check is NOT the platform
+                        gate; it only disables when the desktop browser lacks the
+                        API. */}
+                    {canUseWorkingDirectory && (
+                      <button
+                        type="button"
+                        disabled={!canPickFolder}
+                        title={
+                          canPickFolder
+                            ? folderName
+                              ? `Working folder: ${folderName}`
+                              : undefined
+                            : 'Folder access is not supported in this browser'
+                        }
+                        onClick={() => {
+                          pickFolder();
+                          closeMenu();
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                          !canPickFolder && 'cursor-not-allowed opacity-50',
+                          canPickFolder && folderName
+                            ? 'text-amber-300 hover:bg-muted/60'
+                            : 'hover:bg-muted/60',
+                        )}
+                      >
+                        {folderName ? (
+                          <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
+                        ) : (
+                          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="flex-1 text-left">
+                          {folderName ? folderName : 'Add working folder'}
+                        </span>
+                        {folderName && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearFolder();
+                            }}
+                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                            aria-label="Clear working folder"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                        {!canPickFolder && (
+                          <span className="text-[10px] text-muted-foreground">Not supported</span>
+                        )}
+                      </button>
+                    )}
 
                     {/* Divider */}
                     <div className="my-1 border-t border-border/30" />

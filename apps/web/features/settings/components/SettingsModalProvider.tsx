@@ -51,7 +51,9 @@ export function SettingsModalProvider({ children }: { children: React.ReactNode 
   return (
     <SettingsModalContext.Provider value={{ isOpen, openSettings, closeSettings }}>
       {children}
-      <WebSettingsModal open={isOpen} onClose={closeSettings} initialSection={initialSection} />
+      {isOpen ? (
+        <WebSettingsModal open={isOpen} onClose={closeSettings} initialSection={initialSection} />
+      ) : null}
     </SettingsModalContext.Provider>
   );
 }

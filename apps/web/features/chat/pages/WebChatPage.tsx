@@ -73,6 +73,12 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
+import {
+  planEditRollback,
+  planRegenerateRollback,
+  consumePendingEdit,
+  type PendingEditRollback,
+} from '../lib/pendingEdit';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
@@ -278,6 +284,15 @@ export default function WebChatPage() {
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
 
+  // Pending message edit (DATA-LOSS FIX). Clicking "Edit" on a user message
+  // prefills the composer; the destructive rollback (delete that message + all
+  // later messages) is DEFERRED to the actual resubmission via sendContent.
+  // Deleting on edit-click lost the messages permanently if the user abandoned
+  // the edit. `deletePersistedMessagesRef` bridges the definition-order gap:
+  // sendContent is declared long before deletePersistedMessages.
+  const pendingEditRollbackRef = useRef<PendingEditRollback | null>(null);
+  const deletePersistedMessagesRef = useRef<((ids: string[]) => Promise<boolean>) | null>(null);
+
   // Consume any pending message written by the project-detail composer before
   // navigating here. Reading once on mount prevents the value from surviving
   // page refreshes.
@@ -476,6 +491,15 @@ export default function WebChatPage() {
   } = useConversations();
 
   const displayedConversationId = urlConversationId ?? bareChatSessionId;
+
+  // A pending edit rollback is valid only for the conversation it began in and
+  // only until the next send. Switching conversations abandons it (the messages
+  // are never deleted), preventing a stale rollback from truncating the wrong
+  // conversation on a later send.
+  useEffect(() => {
+    pendingEditRollbackRef.current = null;
+  }, [displayedConversationId]);
+
   const displayedMessages = useMemo(
     () =>
       displayedConversationId && activeConversationId === displayedConversationId ? messages : [],
@@ -586,6 +610,17 @@ export default function WebChatPage() {
             }),
           )
         : undefined;
+
+      // Deferred edit rollback: if this send is the resubmission of an edited
+      // message, delete the original message + everything after it NOW (not on
+      // edit-click) so the edited turn replaces the old one. Abandoning the
+      // edit never reaches here, so nothing is lost. Best-effort: a failed
+      // delete must not block the send.
+      const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
+      if (pendingEdit) {
+        pendingEditRollbackRef.current = null;
+        await deletePersistedMessagesRef.current?.(pendingEdit.rollbackIds);
+      }
 
       await sendMessage(content, {
         model: activeModelId,
@@ -972,6 +1007,19 @@ export default function WebChatPage() {
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
+      // Confirm before deleting so a stray click in the ... menu can never
+      // silently drop a conversation — matching the sibling project-delete
+      // guard (handleProjectDelete) and the mobile confirm. The shared-Sidebar
+      // migration dropped this confirmation that the prior ConversationListItem
+      // had; restore it for parity.
+      const conversation = conversations.find((c) => c.id === id);
+      const label = conversation?.title ? `"${conversation.title}"` : 'this conversation';
+      if (
+        typeof window !== 'undefined' &&
+        !window.confirm(`Delete ${label}? This can't be undone.`)
+      ) {
+        return;
+      }
       const deleted = await deleteConversation(id);
       if (!deleted) return;
       if (id === displayedConversationId) {
@@ -980,7 +1028,7 @@ export default function WebChatPage() {
         router.push('/chat');
       }
     },
-    [deleteConversation, displayedConversationId, router, setActiveConversation],
+    [conversations, deleteConversation, displayedConversationId, router, setActiveConversation],
   );
 
   const handleRenameSession = useCallback(
@@ -1163,6 +1211,11 @@ export default function WebChatPage() {
     [deleteMessage, displayedConversationId, getToken, setChatError],
   );
 
+  // Bridge the latest deletePersistedMessages to the send path (sendContent is
+  // declared earlier and can't reference this const directly). Render-time ref
+  // assignment is idempotent and always reflects the current closure.
+  deletePersistedMessagesRef.current = deletePersistedMessages;
+
   const handleDeleteMessage = useCallback(
     (id: string) => {
       void deletePersistedMessages([id]);
@@ -1227,7 +1280,7 @@ export default function WebChatPage() {
   );
 
   const handleEditMessage = useCallback(
-    async (id: string) => {
+    (id: string) => {
       if (!displayedConversationId || isStreaming) return;
       const idx = displayedMessages.findIndex((m) => m.id === id);
       const msg = idx >= 0 ? displayedMessages[idx] : undefined;
@@ -1236,17 +1289,20 @@ export default function WebChatPage() {
         handleOpenCloudWaitlist();
         return;
       }
-      const rollbackIds = displayedMessages.slice(idx).map((message) => message.id);
-      const deleted = await deletePersistedMessages(rollbackIds);
-      if (deleted) {
-        setComposerPrefill(msg.content);
-      }
+      // DATA-LOSS FIX: stash the rollback and prefill the composer, but do NOT
+      // delete anything yet. The original transcript stays visible while the
+      // user edits; sendContent performs the deletion only when (and if) they
+      // resubmit. Previously this deleted the message + all later messages from
+      // the DB immediately, so abandoning the edit lost them permanently.
+      const plan = planEditRollback(displayedMessages, id, displayedConversationId);
+      if (!plan) return;
+      pendingEditRollbackRef.current = plan;
+      setComposerPrefill(msg.content);
     },
     [
       displayedConversationId,
       displayedMessages,
       isStreaming,
-      deletePersistedMessages,
       isTrialExhausted,
       handleOpenCloudWaitlist,
     ],
@@ -1255,22 +1311,18 @@ export default function WebChatPage() {
   const handleRegenerateMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
-      const idx = displayedMessages.findIndex((m) => m.id === id);
-      if (idx <= 0) return;
-      // Find the user message just before this one
-      let userMsg: (typeof displayedMessages)[0] | undefined;
-      for (let i = idx - 1; i >= 0; i--) {
-        if (displayedMessages[i]?.role === 'user') {
-          userMsg = displayedMessages[i];
-          break;
-        }
-      }
+      const assistantMsg = displayedMessages.find((m) => m.id === id);
+      // Roll back from the user turn being regenerated (inclusive) so re-sending
+      // the user content replaces it instead of creating a duplicate user
+      // message. planRegenerateRollback resolves the preceding user message.
+      const plan = planRegenerateRollback(displayedMessages, id);
+      if (!plan) return;
+      const userMsg = displayedMessages[plan.userIndex];
       if (!userMsg) return;
       if (isTrialExhausted) {
         handleOpenCloudWaitlist();
         return;
       }
-      const assistantMsg = displayedMessages[idx];
       const replayDecision = getRegenerateReplayDecision({
         userMetadata: userMsg.metadata,
         assistantMetadata: assistantMsg?.metadata,
@@ -1279,7 +1331,7 @@ export default function WebChatPage() {
         setChatError(replayDecision.message);
         return;
       }
-      const rollbackIds = displayedMessages.slice(idx).map((message) => message.id);
+      const rollbackIds = plan.rollbackIds;
       const deleted = await deletePersistedMessages(rollbackIds);
       if (deleted) {
         const replayOptions = replayToSendOptions(replayDecision.replay);

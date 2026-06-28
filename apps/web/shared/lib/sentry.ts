@@ -1,9 +1,17 @@
 /**
- * Sentry Integration Stubs
+ * Sentry integration (OBSERVABILITY-WEB-SENTRY-01).
  *
- * No-op implementations that maintain the same API surface
- * so existing imports continue to work without installing @sentry/react.
+ * Real delegations to @sentry/nextjs, isomorphic (server + browser). The API
+ * surface is unchanged so existing consumers need no edits. PII safety is
+ * enforced centrally in lib/sentry-shared (`sendDefaultPii: false` + a beforeSend
+ * scrub that strips prompts, messages, conversation content, API keys,
+ * Authorization headers, cookies, JWTs, request bodies, and user secrets before
+ * any event leaves the process). Sentry is DEFAULT-DISABLED unless NODE_ENV is
+ * 'production' and a DSN is configured, so when unconfigured every call no-ops.
  */
+import * as SentrySDK from '@sentry/nextjs';
+
+import { isSentryConfigured } from '../../lib/sentry-shared';
 
 export type SeverityLevel = 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
 
@@ -19,7 +27,9 @@ export function setUser(user: {
   username?: string;
   [key: string]: unknown;
 }): void {
+  // PII-safe: send ONLY a stable id to Sentry (never email/username/extra fields).
   if (user.id) {
+    SentrySDK.setUser({ id: user.id });
     try {
       localStorage.setItem('user_id', user.id);
     } catch {
@@ -29,6 +39,7 @@ export function setUser(user: {
 }
 
 export function clearUser(): void {
+  SentrySDK.setUser(null);
   try {
     localStorage.removeItem('user_id');
   } catch {
@@ -39,121 +50,134 @@ export function clearUser(): void {
 /* ---------- breadcrumbs ---------- */
 
 export function addBreadcrumb(
-  _message: string,
-  _category: 'ui.click' | 'navigation' | 'api' | 'user' | 'state' | 'error',
-  _data?: Record<string, unknown>,
-  _level: SeverityLevel = 'info',
+  message: string,
+  category: 'ui.click' | 'navigation' | 'api' | 'user' | 'state' | 'error',
+  data?: Record<string, unknown>,
+  level: SeverityLevel = 'info',
 ): void {
-  // no-op
+  SentrySDK.addBreadcrumb({ message, category, data, level });
 }
 
-export function logNavigation(_from: string, _to: string): void {
-  // no-op
+export function logNavigation(from: string, to: string): void {
+  addBreadcrumb(`Navigation: ${from} → ${to}`, 'navigation', { from, to });
 }
 
 export function logUserAction(
-  _action: string,
-  _element?: string,
-  _data?: Record<string, unknown>,
+  action: string,
+  element?: string,
+  data?: Record<string, unknown>,
 ): void {
-  // no-op
+  addBreadcrumb(`User action: ${action}`, 'ui.click', { element, ...data });
 }
 
-export function logApiCall(
-  _method: string,
-  _url: string,
-  _status?: number,
-  _duration?: number,
-): void {
-  // no-op
+export function logApiCall(method: string, url: string, status?: number, duration?: number): void {
+  addBreadcrumb(`API: ${method} ${url}`, 'api', { method, url, status, duration });
 }
 
 export function logStateChange(
-  _storeName: string,
-  _action: string,
-  _data?: Record<string, unknown>,
+  storeName: string,
+  action: string,
+  data?: Record<string, unknown>,
 ): void {
-  // no-op
+  addBreadcrumb(`State: ${storeName}/${action}`, 'state', data);
 }
 
 /* ---------- capture ---------- */
 
 export function captureError(
-  _error: Error | string,
-  _context?: {
+  error: Error | string,
+  context?: {
     tags?: Record<string, string>;
     extra?: Record<string, unknown>;
     level?: SeverityLevel;
     fingerprint?: string[];
   },
 ): string {
-  return '';
+  const err = typeof error === 'string' ? new Error(error) : error;
+  return SentrySDK.captureException(err, {
+    tags: context?.tags,
+    extra: context?.extra,
+    level: context?.level,
+    fingerprint: context?.fingerprint,
+  });
 }
 
 export function captureMessage(
-  _message: string,
-  _level: SeverityLevel = 'info',
-  _context?: Record<string, unknown>,
+  message: string,
+  level: SeverityLevel = 'info',
+  context?: Record<string, unknown>,
 ): string {
-  return '';
+  return SentrySDK.captureMessage(message, { level, extra: context });
 }
 
 /* ---------- tags / context ---------- */
 
-export function setTags(_tags: Record<string, string>): void {
-  // no-op
+export function setTags(tags: Record<string, string>): void {
+  SentrySDK.setTags(tags);
 }
 
-export function setContext(_name: string, _context: Record<string, unknown>): void {
-  // no-op
+export function setContext(name: string, context: Record<string, unknown>): void {
+  SentrySDK.setContext(name, context);
 }
 
 /* ---------- performance ---------- */
 
-export function startTransaction(_name: string, _operation: string): Span | undefined {
-  return undefined;
+export function startTransaction(name: string, operation: string): Span | undefined {
+  if (!isSentryEnabled()) return undefined;
+  const span = SentrySDK.startInactiveSpan({ name, op: operation });
+  return { end: () => span.end() };
 }
 
 /* ---------- error tracking wrapper ---------- */
 
 export async function withErrorTracking<T>(
   fn: () => Promise<T>,
-  _context?: {
+  context?: {
     operation?: string;
     tags?: Record<string, string>;
   },
 ): Promise<T> {
-  return fn();
+  try {
+    return await fn();
+  } catch (error) {
+    captureError(error instanceof Error ? error : new Error(String(error)), {
+      ...(context?.tags ? { tags: context.tags } : {}),
+      ...(context?.operation ? { extra: { operation: context.operation } } : {}),
+    });
+    throw error;
+  }
 }
 
 /* ---------- re-exports that mirror old API ---------- */
 
-export const SentryErrorBoundary = undefined;
+export const SentryErrorBoundary: typeof SentrySDK.ErrorBoundary = SentrySDK.ErrorBoundary;
 
 export function withProfiler<T>(component: T): T {
-  return component;
+  return SentrySDK.withProfiler(component as Parameters<typeof SentrySDK.withProfiler>[0]) as T;
 }
 
 export function isSentryEnabled(): boolean {
-  return false;
+  return isSentryConfigured() && SentrySDK.isInitialized();
 }
 
-export async function flush(_timeout = 2000): Promise<boolean> {
-  return true;
+export async function flush(timeout = 2000): Promise<boolean> {
+  return SentrySDK.flush(timeout);
 }
 
-// Stub Sentry namespace for direct-access imports
+// Sentry namespace for direct-access imports — delegates to the real SDK.
 export const Sentry = {
-  setUser: (_user: unknown) => {},
-  captureException: (_err: unknown, _opts?: unknown) => '',
-  captureMessage: (_msg: string, _opts?: unknown) => '',
-  addBreadcrumb: (_breadcrumb: unknown) => {},
-  setTag: (_key: string, _value: string) => {},
-  setContext: (_name: string, _ctx: unknown) => {},
-  startInactiveSpan: (_opts: unknown) => undefined,
-  isInitialized: () => false,
-  flush: async (_timeout?: number) => true,
-  showReportDialog: (_opts?: unknown) => {},
-  ErrorBoundary: undefined,
-  withProfiler: <T>(c: T) => c,
+  setUser: (user: Parameters<typeof SentrySDK.setUser>[0]) => SentrySDK.setUser(user),
+  captureException: (err: unknown, opts?: Parameters<typeof SentrySDK.captureException>[1]) =>
+    SentrySDK.captureException(err, opts),
+  captureMessage: (msg: string, opts?: Parameters<typeof SentrySDK.captureMessage>[1]) =>
+    SentrySDK.captureMessage(msg, opts),
+  addBreadcrumb: (breadcrumb: Parameters<typeof SentrySDK.addBreadcrumb>[0]) =>
+    SentrySDK.addBreadcrumb(breadcrumb),
+  setTag: (key: string, value: string) => SentrySDK.setTag(key, value),
+  setContext: (name: string, ctx: Parameters<typeof SentrySDK.setContext>[1]) =>
+    SentrySDK.setContext(name, ctx),
+  startInactiveSpan: (opts: Parameters<typeof SentrySDK.startInactiveSpan>[0]) =>
+    SentrySDK.startInactiveSpan(opts),
+  isInitialized: () => SentrySDK.isInitialized(),
+  flush: async (timeout?: number) => SentrySDK.flush(timeout),
 };
