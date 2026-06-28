@@ -14,7 +14,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 ## Key Features
 
-- **Multi-provider model routing** — Catalog of 80+ models from OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Perplexity, Qwen, Moonshot, ZhipuAI, Cohere, AI21, Groq, Together, Fireworks, Cerebras, DeepInfra, Sambanova, NVIDIA NIM, OpenRouter, Azure OpenAI, AWS Bedrock, and Ollama / LM Studio for local inference. Task-aware routing selects models by category (fast completion, code generation, complex reasoning, vision, long context, computer use).
+- **Multi-provider model routing** — Catalog of 57 models from OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Perplexity, Qwen, Moonshot, ZhipuAI, Cohere, AI21, Groq, Together, Fireworks, Cerebras, DeepInfra, Sambanova, NVIDIA NIM, OpenRouter, Azure OpenAI, AWS Bedrock, and Ollama / LM Studio for local inference. Task-aware routing selects models by category (fast completion, code generation, complex reasoning, vision, long context, computer use).
 - **Local-first privacy** — Desktop and mobile surfaces run local models via Ollama, LM Studio, and on-device inference (llama.rn, ExecuTorch). No data leaves the device in Local mode.
 - **Bring Your Own Key (BYOK)** — Users provide their own API keys; AGI Workforce routes requests directly to the user's provider account.
 - **Agentic execution** — Swarm-based orchestration with task decomposition, parallel sub-agent spawning, dependency-graph execution, and result aggregation. The CLI provides an interactive TUI and one-shot execution mode.
@@ -335,7 +335,7 @@ pnpm check:model-catalog      # Model catalog integrity
 ## Deployment
 
 - **Web** — Deployed to Vercel from the `main` branch. Configuration in `vercel.json` builds the Next.js app with output at `apps/web/.next`.
-- **Desktop** — Tauri builds for macOS, Windows, and Linux via `release-desktop.yml` GitHub Actions workflow. Signed releases with auto-updater support.
+- **Desktop** — `release-desktop.yml` currently ships Linux `.AppImage`/`.deb` bundles only; the macOS and Windows build jobs are disabled (`if: false`) pending code-signing and toolchain setup (see [architecture-manifest.md](docs/00-foundation/architecture-manifest.md) §11).
 - **CLI** — Distributed via GitHub Releases, Homebrew (`siddharthanagula3/tap/agiworkforce`), and `cargo install`. Release workflow: `release-cli.yml`.
 - **Mobile** — Built with EAS (Expo Application Services). Release scripts for iOS App Store and Google Play in `apps/mobile/scripts/release/`.
 - **API Gateway** — Dockerized (`services/api-gateway/Dockerfile`). Deployable to any container host.

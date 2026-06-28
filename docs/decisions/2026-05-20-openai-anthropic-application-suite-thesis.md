@@ -40,6 +40,7 @@ AGI Workforce should use those public product behaviors as the baseline feature-
 - Local chats and local developer sessions never silently route to BYOK or managed cloud.
 - Local -> BYOK is an explicit fork or continuation draft with context selection, secret scan, payload preview, and visible provider label.
 - Managed cloud stays waitlist/private beta until billing, fraud, quota, refunds, chargebacks, abuse controls, provider terms, retention, and deletion are proven.
+  - _Superseded 2026-06-27 (founder decision): managed cloud is now public alpha and open by default. The private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only; the controls above must keep pace with public usage but no longer gate access. The separate non-negotiables above still hold: Local/BYOK are never silently routed into managed cloud._
 - Normal chat sync is only for Web, Mobile, and Desktop.
 - CLI, VS Code, and Chrome stay local/workspace/task scoped unless the user explicitly hands off a redacted preview into a synced app chat.
 - OpenAI, Anthropic, Vercel, and other SDKs are adapters. AGI owns runtime schemas, event streams, privacy modes, tool contracts, provider routing, artifacts, generated-file manifests, and usage accounting.
