@@ -16,7 +16,7 @@ export default async function LoginPage({
   return (
     <AuthShell
       title="Welcome back."
-      lede="Sign in to pick up your chats, projects, and artifacts. Manage your AGI Cloud waitlist status here too."
+      lede="Sign in to pick up your chats, projects, and artifacts. Managed cloud is open in public alpha, so you can start right away."
       points={[
         'One account across Web, Mobile & Desktop Cloud',
         'Local Mode never requires an account',

@@ -1,5 +1,5 @@
 /**
- * Knowledge Files API · Cloud Managed feature (waitlist-gated in v1).
+ * Knowledge Files API · Cloud Managed feature, rolling out in public alpha.
  *
  * GET  /api/projects/[id]/knowledge-files · list active files for a project
  * POST /api/projects/[id]/knowledge-files · record an uploaded file

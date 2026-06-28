@@ -1,7 +1,8 @@
 /**
  * POST /api/artifacts/publish
  *
- * Cloud Managed · waitlist-gated pending private beta migration.
+ * Cloud Managed · managed artifact publishing is rolling out as sharing
+ * controls are proven. Managed cloud access itself is public-alpha-open.
  *
  * Until managed artifact publishing is proven, this route returns 200 with
  * `{ kind: 'waitlist', shareUrl: null, waitlistGated: true }`.

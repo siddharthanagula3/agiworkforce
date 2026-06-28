@@ -5,7 +5,7 @@
  * `@agiworkforce/unified-chat` `Project` shape: the selected model id
  * for each project. Persisted to localStorage under `agi-project-meta-web`.
  *
- * v1 LOCAL-ONLY: device-local only. Cloud Managed sync is waitlist-gated.
+ * v1 LOCAL-ONLY: device-local only. Cloud Managed sync is rolling out in public alpha.
  */
 
 import { create } from 'zustand';

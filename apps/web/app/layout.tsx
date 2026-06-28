@@ -73,7 +73,7 @@ export const metadata: Metadata = {
     template: '%s | AGI',
   },
   description:
-    'AGI is an AI workspace for chat, coding, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and invite-gated Cloud boundaries.',
+    'AGI is an AI workspace for chat, coding, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and public-alpha managed cloud boundaries.',
   keywords: [
     'AI agents',
     'automation',
@@ -160,7 +160,7 @@ export default async function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: 'AGI',
-    description: 'AI workspace with explicit Local, BYOK, and invite-gated managed cloud modes',
+    description: 'AI workspace with explicit Local, BYOK, and open managed cloud modes',
     applicationCategory: 'Business Application',
     operatingSystem: 'macOS, Windows, Linux, Web',
     offers: {

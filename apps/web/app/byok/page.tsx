@@ -174,7 +174,7 @@ export default function ByokPage() {
               waitlist. Team &amp; Enterprise (org seats, SSO, admin controls) are rolling out;
               leave an email and we&rsquo;ll reach out as those land.
             </p>
-            <WaitlistForm source="byok" ctaLabel="Request Cloud Invite" />
+            <WaitlistForm source="byok" ctaLabel="Request Team &amp; Enterprise access" />
           </div>
           <div className="agi-fl-cta-row">
             <WaitlistTrigger

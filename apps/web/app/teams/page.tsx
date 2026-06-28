@@ -8,7 +8,7 @@ import { LAUNCH } from '../../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'AGI for Teams: Shared projects, governance, and BYOK policy',
   description:
-    'Team workspace controls for AGI: shared projects, admin policy, connector governance, usage visibility, BYOK enforcement, and invite-only managed cloud.',
+    'Team workspace controls for AGI: shared projects, admin policy, connector governance, usage visibility, BYOK enforcement, and public-alpha managed cloud.',
   alternates: { canonical: 'https://agiworkforce.com/teams' },
 };
 
@@ -22,13 +22,13 @@ export default function TeamsPage() {
           eyebrow="AGI for teams"
           titleLines={['Shared work.', 'Visible routes.']}
           em="Visible routes."
-          lede="Bring chats, files, projects, artifacts, and code into one shared workspace. Explicit policy covers what runs locally, what goes through your own provider keys on Desktop and CLI, and what waits for an AGI Cloud invite."
+          lede="Bring chats, files, projects, artifacts, and code into one shared workspace. Explicit policy covers what runs locally, what goes through your own provider keys on Desktop and CLI, and what runs in AGI managed cloud."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/business', label: 'See the Business Overview' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <FeatureGrid
@@ -60,7 +60,7 @@ export default function TeamsPage() {
             {
               meta: 'Usage',
               title: 'Keep Local, BYOK, and Cloud spend separate',
-              body: 'Local work costs nothing and BYOK bills go straight to your providers. Managed spend exists only for workspaces invited into AGI Cloud.',
+              body: 'Local work costs nothing and BYOK bills go straight to your providers. Managed spend applies when a workspace uses AGI managed cloud.',
             },
             {
               meta: 'Security',
@@ -85,7 +85,7 @@ export default function TeamsPage() {
             },
             {
               k: 'Phase 3',
-              v: 'Bring selected users into AGI Cloud by invite for hosted sync and managed compute.',
+              v: 'Bring users onto AGI managed cloud, open in public alpha, for hosted sync and managed compute.',
             },
             {
               k: 'Phase 4',
@@ -97,11 +97,11 @@ export default function TeamsPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Pilot the workspace before you buy compute."
-          body="Start the team on free Local and BYOK modes today, then bring selected users into AGI Cloud by invite when access opens."
+          body="Start the team on free Local and BYOK modes today, then move selected users onto AGI managed cloud, which is open in public alpha."
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/contact-sales', label: 'Contact Sales' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

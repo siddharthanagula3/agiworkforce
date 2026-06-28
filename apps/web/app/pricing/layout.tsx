@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
   description:
-    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, the web trial includes a small Auto Economy cap, and hosted AGI Cloud plans open by waitlist invite.',
+    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, managed cloud is open in public alpha with a small Auto Economy cap, and higher-capacity AGI Cloud plans are rolling out.',
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
     description:
-      'Local and BYOK stay free forever, the hosted web trial is capped, and AGI Cloud plans open by waitlist invite.',
+      'Local and BYOK stay free forever, managed cloud is open in public alpha with a capped free tier, and higher-capacity AGI Cloud plans are rolling out.',
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
     description:
-      'Local and BYOK stay free forever, the hosted web trial is capped, and AGI Cloud plans open by waitlist invite.',
+      'Local and BYOK stay free forever, managed cloud is open in public alpha with a capped free tier, and higher-capacity AGI Cloud plans are rolling out.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

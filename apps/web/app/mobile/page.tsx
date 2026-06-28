@@ -74,7 +74,7 @@ const LOCAL_STORIES = [
       'Memory & personalization controls',
     ],
     platforms: 'iPhone · Android',
-    status: 'Local + Cloud invite',
+    status: 'Local + Cloud (public alpha)',
     frame: { title: 'AGI Mobile', badge: 'Local' },
   },
 ] as const;
@@ -106,7 +106,7 @@ export default function MobilePage() {
                   Get Launch Access
                 </Link>
                 <WaitlistTrigger
-                  label="Join Cloud Waitlist"
+                  label="Team & Enterprise access"
                   source="website"
                   className="agi-fl-cta agi-fl-cta--secondary"
                 />
@@ -129,7 +129,7 @@ export default function MobilePage() {
           </h2>
           <p className="agi-fl-section-lede">
             Inference, memory, and your workspace live on the device. The cloud is an explicit,
-            invite-gated option. Not the default route.
+            public-alpha option. Not the default route.
           </p>
 
           <ul className="agi-fl-surface-list">
@@ -257,7 +257,7 @@ export default function MobilePage() {
           body="AGI Mobile launches on iPhone and Android. Local Mode is the default. AGI managed cloud is in public alpha — sign in to use it."
           ctas={[
             { href: '/download', label: 'Get Launch Access' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`iPhone & Android · ${LAUNCH.date}`}
         />

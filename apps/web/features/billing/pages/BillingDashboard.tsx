@@ -45,9 +45,10 @@ import { Subscription } from '@features/billing/components/Billing/Subscription'
 import { Usage } from '@features/billing/components/Billing/Usage';
 import { Topup } from '@features/billing/components/Billing/Topup';
 
-// Cloud/billing is waitlist-gated. Set NEXT_PUBLIC_CHECKOUT_ENABLED=true in env
-// to open live checkout for invite-only beta (mirrors server STRIPE_CHECKOUT_ENABLED).
-// Defaults to off so free users are routed to the waitlist, not a live purchase flow.
+// Managed cloud is public-alpha-open; paid-plan checkout is env-gated. Set
+// NEXT_PUBLIC_CHECKOUT_ENABLED=true to open live checkout (mirrors server
+// STRIPE_CHECKOUT_ENABLED). Defaults to off so free users are routed to the
+// early-access list, not a live purchase flow.
 const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
 
 const BillingPage: React.FC = () => {
@@ -184,7 +185,7 @@ const BillingPage: React.FC = () => {
       return;
     }
 
-    // Gate all paid-plan checkout behind the managed-credits/checkout waitlist.
+    // Gate all paid-plan checkout behind the checkout env flag (early-access).
     // When checkout is not enabled, redirect to /pricing#waitlist instead of
     // hitting a live Stripe flow.
     if (!CHECKOUT_ENABLED && plan !== 'enterprise') {
@@ -297,7 +298,7 @@ const BillingPage: React.FC = () => {
       return;
     }
 
-    // Gate credit pack purchases behind the managed-credits waitlist.
+    // Gate credit pack purchases behind the managed-credits env flag (early-access).
     if (!CHECKOUT_ENABLED) {
       window.location.href = '/pricing#waitlist';
       return;

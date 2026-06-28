@@ -19,7 +19,7 @@ const PRODUCT = [
   { href: '/byok', label: 'BYOK' },
   { href: '/local', label: 'Local' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/waitlist', label: 'Cloud Waitlist' },
+  { href: '/waitlist', label: 'Team & Enterprise' },
 ];
 
 const SURFACES = [
@@ -100,8 +100,8 @@ export function MarketingFooter() {
       <div className="agi-footer-strip">
         <span>© 2026 AGI. Proprietary.</span>
         <span>
-          Local and BYOK stay explicit. Managed cloud remains invite-gated until release controls
-          are proven.
+          Local and BYOK stay explicit. Managed cloud is open in public alpha; higher-capacity paid
+          plans roll out as release controls are proven.
         </span>
       </div>
     </footer>

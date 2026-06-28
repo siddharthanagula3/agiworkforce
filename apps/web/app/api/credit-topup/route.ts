@@ -26,11 +26,12 @@ function getStripeClient(): Stripe {
 
 /**
  * POST /api/credit-topup
- * Create a Stripe Checkout session for private-beta managed credits.
+ * Create a Stripe Checkout session for managed credits.
  *
- * Public managed credits/top-ups stay waitlisted until metering, fraud,
- * refunds, chargebacks, abuse controls, provider terms, retention, and
- * deletion controls are proven.
+ * Managed cloud is public-alpha-open; managed credits/top-ups are env-gated
+ * (AGI_MANAGED_CREDITS_PRIVATE_BETA) until metering, fraud, refunds,
+ * chargebacks, abuse controls, provider terms, retention, and deletion
+ * controls are proven.
  */
 async function handleCreditTopup(request: NextRequest) {
   // CSRF protection for state-changing endpoint

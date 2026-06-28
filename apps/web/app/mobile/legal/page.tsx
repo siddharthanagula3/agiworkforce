@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Mobile Legal · Privacy Policy and Terms of Service',
   description:
-    'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local and Cloud invite modes.',
+    'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local and public-alpha Cloud modes.',
   alternates: { canonical: 'https://agiworkforce.com/mobile/legal' },
 };
 
@@ -61,7 +61,7 @@ export default function MobileLegalPage() {
             </h3>
             <p className="agi-callout-p">
               In Local mode, the AI model runs on your device or a local model route and is not
-              silently routed to AGI Cloud. Cloud mode is invite-gated and visibly labeled.
+              silently routed to AGI Cloud. Cloud mode is open in public alpha and visibly labeled.
             </p>
           </div>
 
@@ -79,7 +79,7 @@ export default function MobileLegalPage() {
                 <td>Conversation content</td>
                 <td>Text, images, voice input, documents you share in chat</td>
                 <td>
-                  Local mode stores and processes on device. Cloud is invite-gated and
+                  Local mode stores and processes on device. Cloud is open in public alpha and
                   subscription-backed.
                 </td>
                 <td>To run the AI assistant in the mode you selected.</td>
@@ -105,11 +105,13 @@ export default function MobileLegalPage() {
               <tr>
                 <td>Account data</td>
                 <td>
-                  Email address and authentication token, if you create an account for the cloud
-                  waitlist.
+                  Email address and authentication token, if you create an account or join the Team
+                  &amp; Enterprise early-access list.
                 </td>
                 <td>Managed database. US region. Encrypted at rest.</td>
-                <td>To manage your waitlist position for cloud features.</td>
+                <td>
+                  To run your account and manage early-access interest for higher-capacity plans.
+                </td>
               </tr>
               <tr>
                 <td>HealthKit data (iOS only)</td>
@@ -337,7 +339,7 @@ export default function MobileLegalPage() {
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Third-party models</span>
               <span className="agi-colophon-val">
-                The App may use system local runtimes, downloadable local models, or invite-gated
+                The App may use system local runtimes, downloadable local models, or public-alpha
                 Cloud providers depending on the mode and device. Use of third-party models is
                 subject to the respective provider&rsquo;s terms. AGI Automation LLC is not
                 responsible for the output of third-party models.

@@ -13,8 +13,9 @@ import { requireCsrfToken } from '@/lib/csrf';
 /**
  * POST /api/waitlist/public
  *
- * Anonymous waitlist signup for the AGI Cloud private beta, used by the
- * public marketing site (waitlist modal, hero CTAs, pricing waitlist rows).
+ * Anonymous early-access signup for AGI Team & Enterprise and higher-capacity
+ * plans, used by the public marketing site (waitlist modal, hero CTAs, pricing
+ * early-access rows). Managed cloud itself is public-alpha-open, not gated.
  * Persists to the `cloud_managed_waitlist` table (see apps/web/db/neon/),
  * which allows a null user_id for explicitly anonymous records
  * (migration 0034).

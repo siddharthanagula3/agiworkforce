@@ -28,7 +28,7 @@ export default function EnterprisePage() {
             { href: '/trust', label: 'See Trust & Compliance' },
             { href: '/byok', label: 'Read the BYOK Posture' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · enforceable', 'Cloud · by invite']}
+          modeRibbon={['Local · on-device', 'BYOK · enforceable', 'Cloud · public alpha']}
         />
 
         <LedgerSection

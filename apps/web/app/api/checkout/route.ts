@@ -27,9 +27,10 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-// Fix 6: Gate Stripe checkout for waitlisted plans.
-// All paid cloud plans are waitlist-gated per v1-local-only-cloud-waitlist lock.
-// Set STRIPE_CHECKOUT_ENABLED=true in env to open checkout (invite-only beta).
+// Paid-plan checkout is env-gated while billing controls (metering, refunds,
+// fraud, provider terms) are proven. Managed cloud itself is public-alpha-open;
+// this gate only governs paid higher-capacity tiers, not cloud access.
+// Set STRIPE_CHECKOUT_ENABLED=true in env to open paid-plan checkout.
 const CHECKOUT_ENABLED = process.env['STRIPE_CHECKOUT_ENABLED'] === 'true';
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
