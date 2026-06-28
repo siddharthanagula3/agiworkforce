@@ -39,11 +39,11 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     return csrfError as NextResponse;
   }
 
-  // Fix 6: Reject checkout requests when plans are waitlist-gated.
-  // This prevents bypassing the waitlist by hitting the checkout API directly.
+  // Reject checkout requests when paid-plan checkout is not yet enabled
+  // (STRIPE_CHECKOUT_ENABLED). Prevents bypassing the gate via the API directly.
   if (!CHECKOUT_ENABLED) {
     throw createError.validation(
-      'Paid plans are in private beta. Join the waitlist at /pricing to be notified when checkout opens.',
+      'Paid-plan checkout is not available yet. Local and BYOK are free; managed cloud is in public alpha.',
     );
   }
 
