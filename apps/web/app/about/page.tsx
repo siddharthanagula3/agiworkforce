@@ -51,7 +51,7 @@ export default function AboutPage() {
             <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
               <li>Local · on-device</li>
               <li>BYOK · your keys</li>
-              <li>Cloud · by invite</li>
+              <li>Cloud · public alpha</li>
             </ul>
           </div>
         </section>

@@ -144,7 +144,7 @@ export default function FeaturesAgentsPage() {
         <DevBand
           eyebrow="Boundaries"
           title="An agent never picks its own route."
-          body="Local, BYOK, and AGI Cloud are separate trust boundaries for agents too. A Local session never silently continues on your keys or managed compute. Moving work elsewhere is an explicit, visible step. AGI Cloud stays invite-only."
+          body="Local, BYOK, and AGI Cloud are separate trust boundaries for agents too. A Local session never silently continues on your keys or managed compute. Moving work elsewhere is an explicit, visible step."
           ctas={[
             { href: '/local', label: 'Run AGI Locally' },
             { href: '/byok', label: 'Set Up BYOK' },
@@ -154,7 +154,7 @@ export default function FeaturesAgentsPage() {
         <FinalCta
           eyebrow="Start now"
           title="Put an agent on it."
-          body="Download AGI for Local and BYOK agent work on Desktop and CLI. Join the waitlist for AGI Cloud. It opens by invite."
+          body="Download AGI for Local and BYOK agent work on Desktop and CLI. AGI managed cloud is in public alpha — open by default."
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/agi-code', label: 'Explore AGI Code' },

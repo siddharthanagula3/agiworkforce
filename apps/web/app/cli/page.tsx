@@ -192,13 +192,13 @@ export default function CliPage() {
             {
               mode: 'AGI Cloud',
               glyph: '●',
-              title: 'Managed compute, by invite.',
-              body: 'Cloud execution is waitlist-gated and fails closed in the developer preview.',
+              title: 'Managed compute, public alpha.',
+              body: 'Cloud execution is public alpha, open by default, and still fails closed without an explicit route.',
               points: [
-                'Private beta via waitlist and invite codes',
+                'Public alpha — sign in and start, no waitlist',
                 'agi cloud reports beta status and the model catalog only',
                 'Clear labels before anything routes to cloud',
-                'One email when your access opens',
+                'Usage metered and transparent',
               ],
               cta: { label: 'Join the Waitlist', waitlist: true },
             },

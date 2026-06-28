@@ -10,9 +10,9 @@ import {
 import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI for Business: Local, BYOK, and Cloud-invite workspaces',
+  title: 'AGI for Business: Local, BYOK, and managed-cloud workspaces',
   description:
-    'A business AI workspace with chat, projects, artifacts, research, code, apps, and governance. Local, BYOK, and invite-only managed cloud modes.',
+    'A business AI workspace with chat, projects, artifacts, research, code, apps, and governance. Local, BYOK, and public-alpha managed cloud modes.',
   alternates: { canonical: 'https://agiworkforce.com/business' },
 };
 
@@ -24,13 +24,13 @@ export default function BusinessPage() {
 
         <FlagshipHero
           eyebrow="AGI for business"
-          lede="AGI gives teams the working surface they expect: projects, files, artifacts, cited research, and coding agents. With routing policy on top. Local work stays on the device, BYOK routes to the provider you choose on Desktop and CLI, and AGI Cloud opens by invite as controls are proven."
+          lede="AGI gives teams the working surface they expect: projects, files, artifacts, cited research, and coding agents. With routing policy on top. Local work stays on the device, BYOK routes to the provider you choose on Desktop and CLI, and AGI managed cloud is in public alpha — open by default."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/download', label: 'Download AGI' },
             { label: 'Join Cloud Waitlist', waitlist: true },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <CapabilityGrid
@@ -86,7 +86,7 @@ export default function BusinessPage() {
             },
             {
               k: 'Cost shape',
-              v: 'Adoption starts with free Local and BYOK modes. AGI Cloud stays invite-only until ledgering, abuse, and refund controls are proven.',
+              v: 'Adoption starts with free Local and BYOK modes. AGI managed cloud is public alpha, open by default; ledgering, abuse, and refund controls keep pace with usage.',
             },
             {
               k: 'Data boundary',
