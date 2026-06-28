@@ -30,7 +30,7 @@ export default function SolutionsPage() {
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/business', label: 'See AGI for Business' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -122,7 +122,7 @@ export default function SolutionsPage() {
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/use-cases', label: 'Browse Use Cases' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

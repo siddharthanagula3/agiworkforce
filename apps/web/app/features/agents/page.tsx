@@ -158,7 +158,7 @@ export default function FeaturesAgentsPage() {
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/agi-code', label: 'Explore AGI Code' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
         />
 

@@ -113,7 +113,7 @@ export default function StartupsPage() {
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/pricing', label: 'See Pricing' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
         />
 

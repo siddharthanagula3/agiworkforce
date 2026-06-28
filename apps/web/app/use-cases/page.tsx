@@ -22,11 +22,11 @@ export default function UseCasesPage() {
           eyebrow="Use cases"
           titleLines={['Built for the way', 'you already work.']}
           em="you already work."
-          lede="AGI is a routeable AI workspace for people with real constraints: private local work, provider choice through your own keys on Desktop and CLI, and a cloud invite path when you're ready to scale."
+          lede="AGI is a routeable AI workspace for people with real constraints: private local work, provider choice through your own keys on Desktop and CLI, and managed cloud, open in public alpha, when you're ready to scale."
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/solutions', label: 'See the Solutions Map' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -110,7 +110,7 @@ export default function UseCasesPage() {
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/business', label: 'See AGI for Business' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

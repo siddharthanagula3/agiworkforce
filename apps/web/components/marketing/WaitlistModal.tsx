@@ -208,8 +208,8 @@ export function WaitlistModalProvider({ children }: { children: ReactNode }) {
     setIsOpen(true);
   }, []);
 
-  // Greet new visitors with the Cloud waitlist once per session: after a
-  // short delay, on marketing pages only, and never twice.
+  // Greet new visitors with the Team & Enterprise early-access prompt once per
+  // session: after a short delay, on marketing pages only, and never twice.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (AUTO_PROMPT_BLOCKLIST.some((p) => pathname?.startsWith(p))) return;
@@ -249,7 +249,7 @@ export function WaitlistModalProvider({ children }: { children: ReactNode }) {
  * mounted so the action is never dead.
  */
 export function WaitlistTrigger({
-  label = 'Join Cloud waitlist',
+  label = 'Team & Enterprise access',
   source = 'website',
   className,
 }: {

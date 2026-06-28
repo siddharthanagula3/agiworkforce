@@ -185,7 +185,7 @@ export default function Home() {
                 'Cloud · public alpha',
               ],
               platforms: 'iPhone · Android',
-              status: 'Local + Cloud invite',
+              status: 'Local + Cloud (public alpha)',
               href: '/mobile',
               visual: <MobileMockup />,
             },

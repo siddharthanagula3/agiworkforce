@@ -16,7 +16,7 @@ interface Props {
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
-export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access →' }: Props) {
+export function WaitlistForm({ source = 'byok', ctaLabel = 'Request early access →' }: Props) {
   const emailId = useId();
   const errorId = useId();
   const pathname = usePathname();
