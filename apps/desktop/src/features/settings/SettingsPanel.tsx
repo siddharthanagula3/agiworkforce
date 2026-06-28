@@ -54,6 +54,7 @@ import { ExtensionsTab } from './tabs/Extensions';
 import { DeveloperTab } from './tabs/Developer';
 import { AgiCodeTab } from './tabs/AgiCode';
 import { BillingTab } from './tabs/Billing';
+import { AgiInChromeTab } from './tabs/AgiInChrome';
 
 // Canonical settings tab keys — single source of truth in @agiworkforce/ui.
 type CanonicalTab = SettingsNavKey;
@@ -597,6 +598,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return <ConnectorsTab />;
       case 'agi-code':
         return <AgiCodeTab />;
+      case 'agi-in-chrome':
+        return <AgiInChromeTab />;
       case 'plugins':
         return <PluginsTab />;
       case 'notifications':
