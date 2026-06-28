@@ -231,7 +231,7 @@ describe('ModelPickerSheet', () => {
 
     expect(getByText('On device')).toBeTruthy();
     expect(queryByText('Cloud')).toBeNull();
-    expect(queryByLabelText(/invite required/i)).toBeNull();
+    expect(queryByLabelText(/sign in required/i)).toBeNull();
   });
 
   it('renders local and locked cloud hierarchy when all models are requested', () => {
@@ -239,7 +239,7 @@ describe('ModelPickerSheet', () => {
 
     expect(getByText('On device')).toBeTruthy();
     expect(getByText('Cloud')).toBeTruthy();
-    expect(getAllByText('Invite').length).toBeGreaterThan(0);
+    expect(getAllByText('Sign in').length).toBeGreaterThan(0);
   });
 
   it('marks the selected local model row as selected via accessibilityState', () => {
@@ -264,7 +264,7 @@ describe('ModelPickerSheet', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    const lockedRow = getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`);
+    const lockedRow = getByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`);
     expect(lockedRow.props.accessibilityState.disabled).toBe(false);
   });
 
@@ -318,11 +318,11 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
 
-  it('does not select locked cloud rows and opens invite access', async () => {
+  it('does not select locked cloud rows and opens cloud access', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText, getByTestId } = renderPicker({ modelScope: 'cloud' });
 
-    fireEvent.press(getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`));
+    fireEvent.press(getByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`));
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
@@ -337,7 +337,7 @@ describe('ModelPickerSheet', () => {
       modelScope: 'cloud',
     });
 
-    fireEvent.press(getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`));
+    fireEvent.press(getByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`));
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();

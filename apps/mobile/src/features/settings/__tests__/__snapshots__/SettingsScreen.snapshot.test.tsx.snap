@@ -1158,7 +1158,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Cloud Personalization. Invite"
+            accessibilityLabel="Cloud Personalization. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1240,7 +1240,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                   }
                 }
               >
-                Invite
+                Sign in
               </Text>
             </View>
             <View
@@ -1250,7 +1250,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Cloud Memory. Invite"
+            accessibilityLabel="Cloud Memory. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1332,7 +1332,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                   }
                 }
               >
-                Invite
+                Sign in
               </Text>
             </View>
             <View
@@ -1342,7 +1342,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Cloud Data Controls. Invite"
+            accessibilityLabel="Cloud Data Controls. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1424,7 +1424,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                   }
                 }
               >
-                Invite
+                Sign in
               </Text>
             </View>
             <View
@@ -1434,7 +1434,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Email / Phone Number. Invite"
+            accessibilityLabel="Email / Phone Number. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1516,7 +1516,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                   }
                 }
               >
-                Invite
+                Sign in
               </Text>
             </View>
             <View

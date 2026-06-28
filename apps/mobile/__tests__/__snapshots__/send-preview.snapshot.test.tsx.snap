@@ -39,7 +39,7 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
         }
       }
     >
-      Cloud invite required
+      Sign in for AGI Cloud
     </Text>
     <View
       style={
@@ -85,7 +85,7 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
       }
     }
   >
-    Cloud access is available by invite. Join the waitlist or enter an invite code to continue.
+    Sign in to use AGI Cloud chat. Local Mode stays available on this device.
   </Text>
 </View>
 `;

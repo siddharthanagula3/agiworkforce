@@ -121,7 +121,7 @@ function ProviderChip({ presentation }: { presentation: ProjectHeaderPresentatio
       }}
     >
       <Text style={{ fontSize: 11, fontWeight: '500', color: tone.fg }}>
-        {presentation.providerMode === 'DirectByok' ? 'Cloud invite' : presentation.providerLabel}
+        {presentation.providerMode === 'DirectByok' ? 'Cloud sign-in' : presentation.providerLabel}
       </Text>
     </View>
   );

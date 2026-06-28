@@ -158,14 +158,14 @@ describe('Settings page', () => {
     const { getByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getByText('AGI Cloud')).toBeTruthy();
-    expect(getByText('Invite required')).toBeTruthy();
+    expect(getByText('Sign in required')).toBeTruthy();
     expect(queryByText('Sid')).toBeNull();
     expect(queryByText('Founder')).toBeNull();
     expect(getByText('Cloud Personalization')).toBeTruthy();
     expect(getByText('Cloud Memory')).toBeTruthy();
   });
 
-  it('shows cloud rows as invite-gated instead of live account controls', () => {
+  it('shows cloud rows as sign-in-gated instead of live account controls', () => {
     const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
@@ -173,7 +173,7 @@ describe('Settings page', () => {
     expect(getByText('Billing')).toBeTruthy();
     expect(getByText('Connectors')).toBeTruthy();
     // (Skills/Plugins rows removed in MOB-6 — they were unbuilt dead-ends.)
-    expect(getAllByText('Invite').length).toBeGreaterThan(0);
+    expect(getAllByText('Sign in').length).toBeGreaterThan(0);
     expect(queryByText('Log Out')).toBeNull();
   });
 
@@ -204,7 +204,7 @@ describe('Settings page', () => {
   it('opens invite modal from a cloud row', () => {
     const { getByLabelText, getByTestId } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Email / Phone Number. Invite'));
+    fireEvent.press(getByLabelText('Email / Phone Number. Sign in'));
 
     expect(getByTestId('invite-code-modal')).toBeTruthy();
   });

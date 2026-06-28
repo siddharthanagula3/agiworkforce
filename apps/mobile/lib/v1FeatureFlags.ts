@@ -1,9 +1,12 @@
 /**
  * v1 Feature Flags — master switch for cloud-only features.
  *
- * AGI Mobile v1 ships Local plus Cloud Managed invite/waitlist. Cloud features
- * are preserved in the codebase but hidden at runtime via this module until the
- * invite path is explicitly enabled.
+ * AGI Mobile v1 ships Local plus Managed Cloud. Managed Cloud is PUBLIC ALPHA and
+ * open by default (founder decision 2026-06-27/28): a signed-in user IS the gate —
+ * no invite, no waitlist, no private beta. The server-side kill-switch
+ * `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is the instant rollback if cloud must be
+ * re-gated. Other cloud features below stay hidden at runtime until their own flag
+ * flips — those flags are about feature readiness, not a cloud-access gate.
  *
  * Usage pattern:
  *   import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -23,7 +26,8 @@
 export const FEATURES = {
   /**
    * Compatibility flag: when true, cloud chat is always blocked regardless of
-   * `cloudChat`. Set to false once AGI Cloud invite flow is fully active.
+   * `cloudChat`. Stays false in public alpha — Managed Cloud is open by default
+   * and gated only by the signed-in entitlement.
    *
    * HARD RULE: setting this to true while `cloudChat` is also true creates a
    * dual-flag deadlock — `isCloudChatEnabled()` (chatMessageStore) always
@@ -38,15 +42,18 @@ export const FEATURES = {
   projects: true,
 
   /** Cloud chat / conversation sync through Clerk-authenticated Web/API.
-   *  2026-06-13: enabled — Clerk session token now bridged into the cloud stream
-   *  path (services/authSession.ts → services/streaming.ts). Server enforces the
-   *  free Hobby tier (3-prompt cap) for signed-in free users. */
+   *  PUBLIC ALPHA (open by default): any signed-in user reaches Managed Cloud chat —
+   *  no invite, no waitlist. The Clerk session token is bridged into the cloud stream
+   *  path (services/authSession.ts → services/streaming.ts). The server enforces the
+   *  free Hobby tier (3-prompt cap) for signed-in free users and honors the
+   *  `AGI_MANAGED_COMPUTE_PRIVATE_BETA` kill-switch for incident rollback. */
   cloudChat: true,
 
   /** Billing / subscription / Stripe portal. */
   billing: false,
 
-  /** Auth (login, OAuth, password reset). Cloud account flows open through invite access.
+  /** Auth (login, OAuth, password reset). Signing in IS the Managed Cloud entitlement
+   *  in public alpha — Mobile keeps a real auth gate (no demo bypass; user must sign in).
    *  2026-06-13: enabled — Clerk Expo native auth (AuthView) wired in app/_layout.tsx. */
   auth: true,
 
@@ -68,7 +75,8 @@ export const FEATURES = {
   /** External messaging integrations (WhatsApp, Telegram, Slack). */
   messaging: false,
 
-  /** Server-OAuth connectors. Disabled until AGI Cloud invite access enables them. */
+  /** Server-OAuth connectors. Disabled until the connectors feature ships (not a
+   *  cloud-access gate — signing in does not unlock connectors). */
   connectors: false,
 
   /** Web search via server-side API.

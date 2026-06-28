@@ -41,10 +41,7 @@ export default function DataControlsScreen() {
    */
   const handleSyncToCloud = () => {
     if (!cloudUnlocked) {
-      Alert.alert(
-        'AGI Cloud required',
-        'You need an AGI Cloud invite to sync local chats to the cloud.',
-      );
+      Alert.alert('AGI Cloud required', 'Sign in to AGI Cloud to sync local chats to the cloud.');
       return;
     }
 
@@ -164,7 +161,7 @@ export default function DataControlsScreen() {
             </Text>
             {!cloudUnlocked ? (
               <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-                Requires AGI Cloud invite
+                Requires AGI Cloud sign-in
               </Text>
             ) : null}
           </View>

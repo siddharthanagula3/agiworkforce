@@ -87,11 +87,11 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         disabled={disabled}
-        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, invite required, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}`}
+        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, sign in required, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}`}
         accessibilityRole="button"
         accessibilityHint={
           isLocked
-            ? 'Opens AGI Cloud invite access'
+            ? 'Opens AGI Cloud sign-in'
             : isUnavailable
               ? unavailableHint
               : isDownloading
@@ -171,7 +171,7 @@ export function ModelRow({
           {isLocal && isUnavailable ? <Badge label="Device" color="gray" /> : null}
           {isLocked ? (
             <>
-              <Badge label="Invite" color="yellow" />
+              <Badge label="Sign in" color="yellow" />
               <Lock size={14} color={colors.agentWarning} />
             </>
           ) : null}
@@ -195,7 +195,7 @@ export function ModelRow({
         >
           <Cloud size={13} color={colors.agentWarning} />
           <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
-            {model.lockReason ?? 'AGI Cloud is invite-only on mobile.'}
+            {model.lockReason ?? 'Sign in to use AGI Cloud chat.'}
           </Text>
         </View>
       ) : null}

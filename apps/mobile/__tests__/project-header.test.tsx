@@ -92,7 +92,7 @@ describe('Mobile ProjectHeader', () => {
       <ProjectHeader presentation={presentation} />,
     );
     expect(getAllByTestId('icon-cloud').length).toBeGreaterThanOrEqual(1);
-    expect(getByText('Cloud invite')).toBeTruthy();
+    expect(getByText('Cloud sign-in')).toBeTruthy();
     expect(queryByText(/byok/i)).toBeNull();
   });
 

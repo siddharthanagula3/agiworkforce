@@ -43,7 +43,7 @@ describe('L1 Security - Provider Routing (No Hardcoding)', () => {
     expect(isSelectableModelIdForCloudAccess(cloud.id, true)).toBe(true);
   });
 
-  test('SECURITY: locked cloud models carry the invite-only lock reason', () => {
+  test('SECURITY: locked cloud models carry the sign-in lock reason', () => {
     const cloud = LOCKED_CLOUD_MODELS[0];
     const def = getModelById(cloud.id);
     expect(def?.availability).toBe('locked');

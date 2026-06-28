@@ -79,7 +79,7 @@ export default function ProfileScreen() {
     ? 'AGI Cloud'
     : personalization.nickname || personalization.fullName || 'Local profile';
   const subtitle = isCloudMode
-    ? cloudEmail || (cloudUnlocked ? 'Cloud access unlocked' : 'Invite required')
+    ? cloudEmail || (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Private on this device';
   const initial = displayName.charAt(0).toUpperCase();
   // Gate cloud account section on the real Clerk signal, not on useAuthStore.user

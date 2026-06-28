@@ -182,7 +182,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
           }
         }
       >
-        Cloud invite
+        Cloud sign-in
       </Text>
     </View>
   </View>
