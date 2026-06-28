@@ -28,7 +28,9 @@ export async function buildNonStreamResponse(
   },
   processed: ProcessedRequest,
   userId: string,
-  token: string,
+  // Auth token is passed for signature parity / future authenticated calls;
+  // deduction is keyed on userId, so the token is not read in this builder.
+  _token: string,
 ): Promise<NextResponse> {
   const {
     requestId,

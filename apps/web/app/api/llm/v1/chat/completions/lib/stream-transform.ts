@@ -17,7 +17,10 @@ export async function buildStreamResponse(
   stream: ReadableStream,
   processed: ProcessedRequest,
   userId: string,
-  token: string,
+  // Auth token flows through the request pipeline (auth-gate → route) and is
+  // passed here for signature parity with buildNonStreamResponse; deduction is
+  // keyed on userId, so the token itself is not read in this builder.
+  _token: string,
 ): Promise<NextResponse> {
   const {
     requestId,
