@@ -95,11 +95,11 @@ export default function EnterprisePage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Bring your security review."
-          body="A real human answers, on a real contract. Evaluate Local and BYOK today. Managed compute opens by invite only."
+          body="A real human answers, on a real contract. Evaluate Local, BYOK, and public-alpha managed cloud today. Enterprise controls (org seats, SSO, admin) are rolling out — request access."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/download', label: 'Download AGI' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Request Enterprise Access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />
