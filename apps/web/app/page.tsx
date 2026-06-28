@@ -109,13 +109,13 @@ export default function Home() {
               index: '02',
               name: 'AGI Web',
               tagline: 'Zero install.',
-              body: 'Chat in the browser. Projects, artifacts, web search, and shared links. Your account and waitlist live here.',
+              body: 'Chat in the browser. Projects, artifacts, web search, and shared links. Your account and managed cloud live here.',
               capabilities: [
                 'Chat with projects & memory',
                 'Artifact sidecar',
                 'Web search',
                 'Shared conversations',
-                'Account & Cloud waitlist',
+                'Account & managed cloud',
               ],
               platforms: 'Any modern browser',
               status: 'Available in browser',
@@ -226,15 +226,15 @@ export default function Home() {
             {
               mode: 'AGI Cloud',
               glyph: '●',
-              title: 'By invite.',
-              body: 'Hosted capacity, opened carefully.',
+              title: 'Public alpha.',
+              body: 'Hosted capacity, open by default.',
               points: [
-                'Private beta via waitlist and invite codes',
+                'Public alpha — sign in and start, no waitlist',
                 'Shared across Web, Mobile & Desktop',
                 'AGI-owned routing with clear labels',
-                'One email when your access opens',
+                'Usage metered and transparent',
               ],
-              cta: { label: 'Join the Waitlist', waitlist: true },
+              cta: { href: '/get-started', label: 'Get Started' },
             },
           ]}
         />
