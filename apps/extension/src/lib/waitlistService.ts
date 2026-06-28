@@ -7,10 +7,10 @@ export interface WaitlistEntry {
 }
 
 const WEB_API_NOT_WIRED_ERROR =
-  'AGI web API base URL is not configured for the extension. Cloud waitlist and invite-code calls are not wired.';
+  'AGI web API base URL is not configured for the extension. Code-redemption and product-update calls are not wired.';
 
 const WEB_API_INVALID_CONFIG_ERROR =
-  'AGI web API base URL is invalid for the extension. Cloud waitlist and invite-code calls are not wired.';
+  'AGI web API base URL is invalid for the extension. Code-redemption and product-update calls are not wired.';
 
 class WebApiConfigError extends Error {}
 
