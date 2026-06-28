@@ -13,7 +13,10 @@
  *     facts, dedupes, and inserts. Never throws (memory must never break a turn).
  */
 import * as Crypto from 'expo-crypto';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { insertMemoryFact, listMemoryFacts } from '@/storage/memory';
+import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
+import { markMemoryForSync } from '@/services/cloudSyncEngine';
 import type { MemoryFact } from '@/storage/types';
 import { extractCandidateFacts } from './factExtractor';
 
@@ -51,19 +54,67 @@ const MAX_PER_TURN = 5;
  * Never throws; on any failure returns zeros so the caller's turn is unaffected.
  *
  * `enabled` lets the caller skip work entirely (e.g. incognito / temporary chat).
+ *
+ * `executionMode` routes persistence to the correct memory namespace, mirroring
+ * `useMemoryStore.addMemory`:
+ *   - 'local' → on-device SQLite (`memory_facts`).
+ *   - 'cloud' → the cloud memory store + sync queue (pushed via cloudSyncEngine,
+ *     so facts learned in a cloud chat sync across devices like web/desktop).
+ * TRUST BOUNDARY: a cloud turn NEVER writes to local SQLite, and a local turn
+ * never writes to the cloud store — the two namespaces stay physically separate.
  */
 export async function consolidateFactsFromTurn(params: {
   message: string;
   conversationId: string | null;
   enabled?: boolean;
+  executionMode?: 'local' | 'cloud';
 }): Promise<ConsolidationResult> {
-  const { message, conversationId, enabled = true } = params;
+  const { message, conversationId, enabled = true, executionMode = 'local' } = params;
   if (!enabled) return { extracted: 0, inserted: 0 };
 
   try {
     const candidates = extractCandidateFacts(message);
     if (candidates.length === 0) return { extracted: 0, inserted: 0 };
 
+    if (executionMode === 'cloud') {
+      // Dedupe against the (synced) cloud memory store, then write fresh facts
+      // there and queue them for the next push. No local SQLite write.
+      const existing: MemoryFact[] = useCloudMemoryStore
+        .getState()
+        .entries.filter((e) => !e.isDeleted)
+        .map((e) => ({
+          id: e.id,
+          fact: e.content,
+          source_conversation_id: null,
+          pinned: false,
+          created_at: new Date(e.createdAt).getTime(),
+        }));
+      const fresh = dedupeAgainstExisting(candidates, existing).slice(0, MAX_PER_TURN);
+
+      let inserted = 0;
+      for (const fact of fresh) {
+        try {
+          const id = uuidv7();
+          const now = new Date().toISOString();
+          useCloudMemoryStore.getState().upsertCloudMemory({
+            id,
+            content: fact,
+            category: null,
+            source: 'mobile',
+            createdAt: now,
+            updatedAt: now,
+            isDeleted: false,
+          });
+          markMemoryForSync(id);
+          inserted += 1;
+        } catch {
+          // Skip a single failed insert; keep going.
+        }
+      }
+      return { extracted: candidates.length, inserted };
+    }
+
+    // Local path: on-device SQLite (unchanged).
     const existing = await listMemoryFacts({ limit: 500 });
     const fresh = dedupeAgainstExisting(candidates, existing).slice(0, MAX_PER_TURN);
 

@@ -18,15 +18,17 @@ export interface ChatFeatures {
   health: boolean;
 }
 
+export interface ConversationSearchResult {
+  conversationId: string;
+  messageId: string;
+  snippet: string;
+  matchStart?: number;
+  matchLength?: number;
+}
+
 interface ViewState {
   searchQuery: string;
-  searchResults: Array<{
-    conversationId: string;
-    messageId: string;
-    snippet: string;
-    matchStart?: number;
-    matchLength?: number;
-  }>;
+  searchResults: ConversationSearchResult[];
   isSearching: boolean;
   chatMode: ChatMode;
   chatStyle: ChatStyle;
@@ -41,6 +43,125 @@ interface ViewState {
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Build a highlighted snippet + match offsets from a piece of text. */
+function buildSnippet(
+  text: string,
+  query: string,
+): { snippet: string; matchStart: number; matchLength: number } {
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(query.toLowerCase());
+  if (idx === -1) {
+    return { snippet: text.slice(0, 60), matchStart: 0, matchLength: 0 };
+  }
+  const start = Math.max(0, idx - 30);
+  const end = Math.min(text.length, idx + query.length + 30);
+  const prefix = start > 0 ? '...' : '';
+  return {
+    snippet: prefix + text.slice(start, end) + (end < text.length ? '...' : ''),
+    matchStart: idx - start + prefix.length,
+    matchLength: query.length,
+  };
+}
+
+/** Server search result row shape from `GET /api/search` (apps/web/app/api/search/route.ts). */
+interface ServerSearchRow {
+  type: 'session' | 'message';
+  sessionId: string;
+  messageId?: string;
+  matchedText?: string;
+  contextBefore?: string;
+  contextAfter?: string;
+}
+
+/**
+ * Run a conversation search for the current app mode and write results.
+ *
+ * TRUST BOUNDARY:
+ *   - Local mode → in-memory search over the on-device message store ONLY. Local
+ *     chats never existed on the server, so no network call is made.
+ *   - Cloud mode (signed in) → the server full-text search `GET /api/search`,
+ *     which covers messages synced across devices. `api.get` routes through
+ *     guardedFetch, so a Local-mode call could never leak — but we don't make one.
+ * Any failure falls back to the local in-memory search so search never dead-ends.
+ */
+async function runSearch(
+  trimmed: string,
+  set: (partial: Partial<ViewState>) => void,
+  _get: () => ViewState,
+): Promise<void> {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { useChatAppModeStore } =
+    require('@/src/features/chat/store/appModeStore') as typeof import('@/src/features/chat/store/appModeStore');
+  const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+
+  if (isCloud) {
+    try {
+      const { useAuthStore } =
+        require('@/src/features/auth/store') as typeof import('@/src/features/auth/store');
+      if (useAuthStore.getState().isClerkSignedIn) {
+        const { api } = require('@/services/api') as typeof import('@/services/api');
+        const data = await api.get<{ results: ServerSearchRow[] }>(
+          `/api/search?q=${encodeURIComponent(trimmed)}&limit=50`,
+        );
+        const results: ConversationSearchResult[] = (data.results ?? []).map((r) => {
+          const text = (r.contextBefore ?? '') + (r.matchedText ?? '') + (r.contextAfter ?? '');
+          const prefix = r.contextBefore ? '...' : '';
+          return {
+            conversationId: r.sessionId,
+            messageId: r.messageId ?? '',
+            snippet: prefix + text + (r.contextAfter ? '...' : ''),
+            matchStart: prefix.length + (r.contextBefore?.length ?? 0),
+            matchLength: r.matchedText?.length ?? trimmed.length,
+          };
+        });
+        set({ searchResults: results, isSearching: false });
+        return;
+      }
+    } catch {
+      // Network/auth failure → fall through to local in-memory search.
+    }
+  }
+
+  // Local in-memory search over the on-device message store.
+  const { useChatMessageStore } =
+    require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  const msgState = useChatMessageStore.getState();
+  const lower = trimmed.toLowerCase();
+  const results: ConversationSearchResult[] = [];
+
+  for (const [convId, msgs] of Object.entries(msgState.messages)) {
+    for (const msg of msgs) {
+      if ((msg.content ?? '').toLowerCase().includes(lower)) {
+        const { snippet, matchStart, matchLength } = buildSnippet(msg.content ?? '', trimmed);
+        results.push({
+          conversationId: convId,
+          messageId: msg.id,
+          snippet,
+          matchStart,
+          matchLength,
+        });
+        break;
+      }
+    }
+  }
+
+  for (const conv of msgState.conversations) {
+    const idx = conv.title.toLowerCase().indexOf(lower);
+    if (idx !== -1 && !results.some((r) => r.conversationId === conv.id)) {
+      results.push({
+        conversationId: conv.id,
+        messageId: '',
+        snippet: conv.title,
+        matchStart: idx,
+        matchLength: trimmed.length,
+      });
+    }
+  }
+
+  set({ searchResults: results, isSearching: false });
+}
 
 export const useChatViewStore = create<ViewState>()(
   persist(
@@ -72,62 +193,7 @@ export const useChatViewStore = create<ViewState>()(
 
         searchDebounceTimer = setTimeout(() => {
           searchDebounceTimer = undefined;
-          // Import lazily at call-time to avoid circular dep at module load
-          /* eslint-disable @typescript-eslint/no-require-imports */
-          const { useChatMessageStore } =
-            require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
-          /* eslint-enable @typescript-eslint/no-require-imports */
-          const msgState = useChatMessageStore.getState();
-
-          const lower = trimmed.toLowerCase();
-          const results: Array<{
-            conversationId: string;
-            messageId: string;
-            snippet: string;
-            matchStart?: number;
-            matchLength?: number;
-          }> = [];
-
-          for (const [convId, msgs] of Object.entries(msgState.messages)) {
-            for (const msg of msgs) {
-              const contentLower = (msg.content ?? '').toLowerCase();
-              const idx = contentLower.indexOf(lower);
-              if (idx !== -1) {
-                const start = Math.max(0, idx - 30);
-                const end = Math.min(msg.content.length, idx + lower.length + 30);
-                const snippet =
-                  (start > 0 ? '...' : '') +
-                  msg.content.slice(start, end) +
-                  (end < msg.content.length ? '...' : '');
-                results.push({
-                  conversationId: convId,
-                  messageId: msg.id,
-                  snippet,
-                  matchStart: idx - start + (start > 0 ? 3 : 0),
-                  matchLength: trimmed.length,
-                });
-                break;
-              }
-            }
-          }
-
-          for (const conv of msgState.conversations) {
-            const titleLower = conv.title.toLowerCase();
-            const idx = titleLower.indexOf(lower);
-            if (idx !== -1 && !results.some((r) => r.conversationId === conv.id)) {
-              results.push({
-                conversationId: conv.id,
-                messageId: '',
-                snippet: conv.title,
-                matchStart: idx,
-                matchLength: trimmed.length,
-              });
-            }
-          }
-
-          // Re-read current state after async gap
-          void get();
-          set({ searchResults: results, isSearching: false });
+          void runSearch(trimmed, set, get);
         }, 300);
       },
 

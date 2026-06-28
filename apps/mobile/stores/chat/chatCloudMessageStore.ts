@@ -16,6 +16,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { providerForExecutionMode } from '@/src/features/chat/utils/conversationMode';
+import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 interface CloudMessageState {
@@ -45,12 +46,28 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       messages: {},
 
       setCloudConversations: (cloudConversations) => {
-        const normalized = cloudConversations.map((c) => ({
-          ...c,
-          provider: c.provider ?? providerForExecutionMode('cloud'),
-          executionMode: c.executionMode ?? ('cloud' as const),
-        }));
-        set({ conversations: normalized });
+        // DATA-LOSS FIX: preserve any locally-dirty (un-pushed) conversation
+        // title so a server snapshot fetched before the next push does not
+        // revert the user's rename. Scoped to dirty ids that appear in the
+        // snapshot — a merge, not a union (a dirty id ABSENT from the snapshot
+        // is the separate create-race case, intentionally not handled here).
+        const dirtyIds = useCloudSyncStateStore.getState().dirtyConversationIds;
+        set((state) => {
+          const localById = new Map(state.conversations.map((c) => [c.id, c]));
+          const normalized = cloudConversations.map((c) => {
+            const base: ConversationSummary = {
+              ...c,
+              provider: c.provider ?? providerForExecutionMode('cloud'),
+              executionMode: c.executionMode ?? ('cloud' as const),
+            };
+            if (dirtyIds.includes(c.id)) {
+              const local = localById.get(c.id);
+              if (local) return { ...base, title: local.title };
+            }
+            return base;
+          });
+          return { conversations: normalized };
+        });
       },
 
       setCloudMessages: (conversationId, messages) => {

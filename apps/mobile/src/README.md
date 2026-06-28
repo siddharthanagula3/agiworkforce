@@ -50,7 +50,7 @@ Completed feature moves:
 
 - `features/waitlist/` callers use the canonical `src/features/waitlist` barrel.
 - `features/projects/` owns `ProjectCard`.
-- `features/billing/` owns `UpsellCard`.
+- `features/billing/` owns the tier store and Stripe-portal service.
 - `features/schedules/` owns schedule components, schedule API calls, and schedule state.
 
 Feature ownership READMEs are required for every top-level folder under this

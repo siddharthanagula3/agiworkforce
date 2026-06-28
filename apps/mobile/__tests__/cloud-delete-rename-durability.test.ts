@@ -1,0 +1,203 @@
+/**
+ * Mobile cloud conversation delete + rename durability (P2 silent-data-loss fix).
+ *
+ * Logic-level (not cross-device integration): only services/api and MMKV are
+ * mocked; the real chat/cloud/sync-state stores run.
+ *
+ * Delete: a swallowed failure used to hide a conversation that still existed
+ * server-side (privacy loss) and let it resurrect on the next pull. The fix
+ * confirms the server delete (with retry) BEFORE hiding it locally, and
+ * surfaces a hard failure instead of silently hiding it.
+ *
+ * Rename: a swallowed PUT failure used to strand the new title in this device's
+ * cache, where the next list-replace/pull reverted it. The fix marks the
+ * conversation dirty (sync-engine retry) and preserves the dirty title against
+ * setCloudConversations / applyConversationDeltas until the push lands — while a
+ * remote DELETE still always wins.
+ */
+import { Alert } from 'react-native';
+
+jest.mock('../lib/mmkv', () => ({
+  whenMmkvReady: jest.fn((cb: () => void) => cb()),
+  rehydrateWhenMmkvReady: jest.fn(),
+  mmkvStorage: {
+    getItem: jest.fn().mockReturnValue(null),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
+}));
+jest.mock('../services/api', () => ({
+  api: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
+}));
+
+import { api } from '../services/api';
+import { useChatMessageStore } from '../stores/chat/chatMessageStore';
+import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
+import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { applyConversationDeltas } from '../services/cloudSyncEngine';
+
+const mockDelete = api.delete as jest.MockedFunction<typeof api.delete>;
+const mockPut = api.put as jest.MockedFunction<typeof api.put>;
+const T = '2026-06-20T00:00:00.000Z';
+
+function seedCloud(id: string, title = `Chat ${id}`): void {
+  useChatCloudMessageStore.getState().addCloudConversation({
+    id,
+    title,
+    createdAt: T,
+    updatedAt: T,
+    messageCount: 0,
+    pinned: false,
+  });
+}
+
+function convTitle(id: string): string | undefined {
+  return useChatCloudMessageStore.getState().conversations.find((c) => c.id === id)?.title;
+}
+function convExists(id: string): boolean {
+  return useChatCloudMessageStore.getState().conversations.some((c) => c.id === id);
+}
+function convDelta(id: string, title: string, deletedAt: string | null) {
+  return {
+    id,
+    title,
+    model: null,
+    project_id: null,
+    pinned: false,
+    created_at: T,
+    updated_at: T,
+    deleted_at: deletedAt,
+    server_version: '5',
+  };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  useCloudSyncStateStore.getState().reset();
+  useChatCloudMessageStore.getState().clearCloudData();
+  useChatMessageStore.setState({ conversations: [], messages: {}, currentConversationId: null });
+  useChatAppModeStore.getState().setAppMode('cloud');
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);
+});
+
+describe('cloud conversation delete durability', () => {
+  it('removes locally only after the server acknowledges the delete', async () => {
+    seedCloud('c1');
+    mockDelete.mockResolvedValueOnce(undefined as never);
+
+    await useChatMessageStore.getState().deleteConversation('c1');
+
+    expect(convExists('c1')).toBe(false);
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('keeps the conversation visible and alerts when the delete keeps failing (no silent privacy loss)', async () => {
+    seedCloud('c1');
+    mockDelete.mockRejectedValue(new Error('HTTP 500: boom'));
+
+    await useChatMessageStore.getState().deleteConversation('c1');
+
+    // Still present — the user is NOT told it is gone while it persists server-side.
+    expect(convExists('c1')).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(mockDelete).toHaveBeenCalledTimes(3); // retried transient failures
+  });
+
+  it('treats a 404 as an already-deleted success (idempotent, no retry)', async () => {
+    seedCloud('c1');
+    mockDelete.mockRejectedValue(new Error('HTTP 404: not found'));
+
+    await useChatMessageStore.getState().deleteConversation('c1');
+
+    expect(convExists('c1')).toBe(false);
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers from a transient failure via retry', async () => {
+    seedCloud('c1');
+    mockDelete
+      .mockRejectedValueOnce(new Error('HTTP 503: down'))
+      .mockResolvedValueOnce(undefined as never);
+
+    await useChatMessageStore.getState().deleteConversation('c1');
+
+    expect(convExists('c1')).toBe(false);
+    expect(mockDelete).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('cloud conversation rename durability', () => {
+  it('marks the conversation dirty so the sync engine retries the rename', async () => {
+    seedCloud('c1', 'Old');
+    mockPut.mockResolvedValueOnce(undefined as never);
+
+    await useChatMessageStore.getState().renameConversation('c1', 'New');
+
+    expect(convTitle('c1')).toBe('New');
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
+  });
+
+  it('keeps the rename locally and dirty when the PUT fails', async () => {
+    seedCloud('c1', 'Old');
+    mockPut.mockRejectedValue(new Error('HTTP 500'));
+
+    await useChatMessageStore.getState().renameConversation('c1', 'New');
+
+    expect(convTitle('c1')).toBe('New');
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
+  });
+
+  it('setCloudConversations does NOT revert a locally-dirty rename (loadConversations clobber guard)', async () => {
+    seedCloud('c1', 'Old');
+    mockPut.mockRejectedValue(new Error('HTTP 500'));
+    await useChatMessageStore.getState().renameConversation('c1', 'New'); // dirty, local title 'New'
+
+    // loadConversations replaces the cache with a stale server snapshot (old title).
+    useChatCloudMessageStore
+      .getState()
+      .setCloudConversations([
+        { id: 'c1', title: 'Old', createdAt: T, updatedAt: T, messageCount: 0, pinned: false },
+      ]);
+
+    expect(convTitle('c1')).toBe('New');
+  });
+
+  it('setCloudConversations adopts the server title once the conversation is no longer dirty', async () => {
+    seedCloud('c1', 'Old');
+    mockPut.mockResolvedValueOnce(undefined as never);
+    await useChatMessageStore.getState().renameConversation('c1', 'New');
+
+    // A successful push clears the dirty flag.
+    useCloudSyncStateStore.getState().clearDirty(['c1'], []);
+    useChatCloudMessageStore
+      .getState()
+      .setCloudConversations([
+        {
+          id: 'c1',
+          title: 'Server-Renamed',
+          createdAt: T,
+          updatedAt: T,
+          messageCount: 0,
+          pinned: false,
+        },
+      ]);
+
+    expect(convTitle('c1')).toBe('Server-Renamed');
+  });
+
+  it('applyConversationDeltas preserves a dirty rename, but a remote DELETE still wins', () => {
+    seedCloud('c1', 'Old');
+    useCloudSyncStateStore.getState().markConversationDirty('c1');
+    useChatCloudMessageStore.getState().patchCloudConversation('c1', { title: 'New' });
+
+    // Stale non-deleted delta with the old title must NOT revert the dirty rename.
+    applyConversationDeltas([convDelta('c1', 'Old', null)]);
+    expect(convTitle('c1')).toBe('New');
+
+    // A tombstone delta MUST remove it even though it is dirty (delete wins).
+    applyConversationDeltas([convDelta('c1', 'Old', T)]);
+    expect(convExists('c1')).toBe(false);
+  });
+});

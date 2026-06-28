@@ -251,9 +251,12 @@ describe('StreamingIndicator', () => {
     expect(getByLabelText('Generating response')).toBeTruthy();
   });
 
-  it('has "text" accessibility role', () => {
+  it('has "progressbar" accessibility role', () => {
+    // The indicator wraps an animated SVG mark, so it must be a <View> (a <Text>
+    // wrapper renders nothing on iOS). "progressbar" is the correct role for a
+    // loading spinner — matching the sibling TypingIndicator.
     const { getByRole } = render(<StreamingIndicator />);
 
-    expect(getByRole('text')).toBeTruthy();
+    expect(getByRole('progressbar')).toBeTruthy();
   });
 });

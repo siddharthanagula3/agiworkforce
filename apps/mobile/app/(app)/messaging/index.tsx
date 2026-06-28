@@ -11,6 +11,7 @@ import { PlatformSetupSheet } from '@/src/features/messaging/components/Platform
 import { useMessagingStore, type MessagingPlatform } from '@/src/features/messaging/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 export default function MessagingScreen() {
   const colors = useThemeColors();
@@ -73,7 +74,7 @@ export default function MessagingScreen() {
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  if (!FEATURES.messaging) return null;
+  if (!FEATURES.messaging) return <FeatureUnavailable feature="Messaging" />;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

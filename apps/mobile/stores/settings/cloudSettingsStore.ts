@@ -10,13 +10,15 @@
  * engine when pushing to POST /api/settings/sync. It is cloud-only by design:
  * local-mode preferences never sync and therefore have no need for an updatedAt.
  *
- * Cloud store starts from defaults on first install. The first successful pull
- * from the server populates it with the user's existing cloud preferences.
+ * MIGRATION: On first run (when the MMKV key doesn't exist yet), this store
+ * seeds its fields from the legacy 'settings-store' to prevent a flash-of-defaults
+ * before the first server pull. settingsUpdatedAt is left null so the seeded state
+ * is not treated as a local edit — the next pull reconciles via LWW.
  */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, storage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type {
   ThemeMode,
   AccentColor,
@@ -122,10 +124,36 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       name: 'settings-store-cloud',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
-      onRehydrateStorage: () => (_state, error) => {
-        if (error) console.warn('[cloudSettingsStore] Hydration failed:', error);
-        // Cloud store starts from defaults; first server pull populates it.
-        // No migration needed — the server has the ground truth.
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.warn('[cloudSettingsStore] Hydration failed:', error);
+          return;
+        }
+        // state is undefined when the MMKV key doesn't exist (first run of the
+        // split store). Seed from the legacy 'settings-store' to prevent a flash
+        // of defaults before the first server pull. settingsUpdatedAt stays null
+        // so the sync engine skips the push path and pulls instead.
+        if (state === undefined) {
+          try {
+            const legacyRaw = storage.getString('settings-store');
+            if (legacyRaw) {
+              const parsed = JSON.parse(legacyRaw) as { state?: Partial<CloudSettingsState> };
+              const s = parsed?.state ?? {};
+              useCloudSettingsStore.setState({
+                themeMode: s.themeMode ?? 'system',
+                accentColor: s.accentColor ?? 'neutral',
+                fontPreference: s.fontPreference ?? 'default',
+                notificationsEnabled: s.notificationsEnabled ?? true,
+                speechLanguage: s.speechLanguage ?? 'en',
+                autoListenEnabled: s.autoListenEnabled ?? true,
+                personalization: s.personalization ?? defaultPersonalization,
+                // settingsUpdatedAt left null — seeded state is not a local edit.
+              });
+            }
+          } catch (e) {
+            console.warn('[cloudSettingsStore] Migration from legacy store failed:', e);
+          }
+        }
       },
     },
   ),

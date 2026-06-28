@@ -8,7 +8,12 @@
  */
 
 import { getClerkInstance } from '@clerk/expo';
-import { getClerkToken, getClerkUserId, CLERK_PUBLISHABLE_KEY } from '@/src/integrations/clerk';
+import {
+  getClerkToken,
+  getClerkTokenFresh,
+  getClerkUserId,
+  CLERK_PUBLISHABLE_KEY,
+} from '@/src/integrations/clerk';
 
 export interface MobileAuthUser {
   id: string;
@@ -36,10 +41,16 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-/** Force a fresh Clerk session token; returns true if a session exists. */
+/**
+ * Force a fresh Clerk session token, bypassing the in-memory cache.
+ * Called by the 401-retry path in api.ts — using the cache here would hand
+ * back the same rejected token, making the retry useless. `skipCache: true`
+ * triggers a FAPI call so the retry carries a freshly-issued JWT.
+ * Returns true if a live session exists after the refresh attempt.
+ */
 export async function refreshAuthSession(): Promise<boolean> {
   try {
-    const token = await getClerkToken();
+    const token = await getClerkTokenFresh();
     return token !== null;
   } catch {
     return false;

@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { ScheduleForm, useScheduleStore, type Schedule } from '@/src/features/schedules';
 import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 export default function CreateScheduleScreen() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function CreateScheduleScreen() {
     );
   }, [existingSchedule, deleteSchedule, router]);
 
-  if (!FEATURES.schedules) return null;
+  if (!FEATURES.schedules) return <FeatureUnavailable feature="Scheduled tasks" />;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

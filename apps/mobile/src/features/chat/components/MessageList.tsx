@@ -12,7 +12,6 @@ import { Reply, ChevronDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { MessageBubble } from './MessageBubble';
 import { ChatEmptyState } from './ChatEmptyState';
-import { TypingIndicator } from './TypingIndicator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import type { ChatMessage } from '@/types/chat';
@@ -118,10 +117,6 @@ export function MessageList({
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
-  const typingFooter = useCallback(() => {
-    return null;
-  }, []);
-
   if (messages.length === 0) {
     return <ChatEmptyState onPairDesktop={onPairDesktop} />;
   }
@@ -135,6 +130,15 @@ export function MessageList({
         keyExtractor={keyExtractor}
         contentContainerStyle={{ paddingVertical: 8 }}
         showsVerticalScrollIndicator={false}
+        // Scroll restoration (FlashList v2): keep the visible message anchored when
+        // content height changes — so streaming tokens, late-arriving synced turns,
+        // or keyboard show/hide don't jump the scroll position. Auto-follow the
+        // bottom only when the user is already near it; open the thread at the
+        // latest message rather than the top.
+        maintainVisibleContentPosition={{
+          autoscrollToBottomThreshold: NEAR_BOTTOM_THRESHOLD,
+          startRenderingFromBottom: true,
+        }}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         onScroll={(event) => {
@@ -151,7 +155,6 @@ export function MessageList({
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.teal} />
           ) : undefined
         }
-        ListFooterComponent={typingFooter}
       />
 
       {/* Scroll-to-bottom floating chevron. */}

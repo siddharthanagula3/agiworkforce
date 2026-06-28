@@ -12,6 +12,7 @@ import { ScheduleCard, QuickSchedule, useScheduleStore } from '@/src/features/sc
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 export default function SchedulesScreen() {
   const router = useRouter();
@@ -81,7 +82,7 @@ export default function SchedulesScreen() {
     [schedules, deleteSchedule],
   );
 
-  if (!FEATURES.schedules) return null;
+  if (!FEATURES.schedules) return <FeatureUnavailable feature="Scheduled tasks" />;
 
   // Loading skeleton
   if (loading && schedules.length === 0) {

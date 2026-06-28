@@ -16,6 +16,7 @@ import { useTheme } from '@/src/ui/theme';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { getDraft, setDraft, clearDraft } from '@/lib/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
 
@@ -49,6 +50,12 @@ interface ChatInputProps {
    * this prop are ignored after mount.
    */
   initialText?: string;
+  /**
+   * When set, the composer text is persisted under this key (per conversation,
+   * or "new-chat" for the home composer) and restored on remount, so a
+   * half-typed message survives navigation / backgrounding. Cleared on send.
+   */
+  draftKey?: string;
 }
 
 export function ChatInput({
@@ -67,8 +74,10 @@ export function ChatInput({
   attachmentPrivacyShortLabel,
   isThreadActive = false,
   initialText,
+  draftKey,
 }: ChatInputProps) {
-  const [text, setText] = useState(initialText ?? '');
+  // Seed from a saved draft (if any) first, else the one-time initialText prop.
+  const [text, setText] = useState(() => getDraft(draftKey) || (initialText ?? ''));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
@@ -122,6 +131,12 @@ export function ChatInput({
     };
   }, []);
 
+  // Persist the in-progress draft so it survives unmount / backgrounding.
+  // MMKV writes are synchronous + memory-mapped, so per-change persistence is cheap.
+  useEffect(() => {
+    setDraft(draftKey, text);
+  }, [text, draftKey]);
+
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed && attachments.length === 0) return;
@@ -131,7 +146,8 @@ export function ChatInput({
     onSend(trimmed, attachments.length > 0 ? attachments : undefined);
     setText('');
     setAttachments([]);
-  }, [text, attachments, onSend, hapticsEnabled]);
+    clearDraft(draftKey);
+  }, [text, attachments, onSend, hapticsEnabled, draftKey]);
 
   const handleAttach = useCallback((newAttachments: Attachment[]) => {
     setAttachments((prev) => [...prev, ...newAttachments]);

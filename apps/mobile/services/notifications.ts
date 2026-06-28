@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import type { MobileAuthSession } from './authSession';
 import { api } from './api';
 import { getDeviceId } from '@/lib/deviceId';
+import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 
 // LOW-MOB-3 fix (red-team 2026-05): the notification handler used to
 // `safeNavigate` to `/(app)/*` regardless of auth state — a notification
@@ -291,17 +292,25 @@ function isValidAgentId(value: unknown): value is string {
 // Route allowlist — only navigate to known safe app routes
 // ---------------------------------------------------------------------------
 
-const ALLOWED_ROUTE_PREFIXES = [
-  '/(app)/companion',
-  '/(app)/(tabs)/chat',
-  '/(app)/settings',
-  '/(app)/notifications',
-  '/(app)/schedules',
-  '/(app)/agents',
-] as const;
+// Each prefix may carry a feature gate: a push can only navigate to it when the
+// underlying feature is enabled in this build. Without the gate, a stray push
+// for a disabled feature (companion / schedules / agents are OFF in v1) would
+// route the user to a screen that is gated off. Always-available prefixes use
+// `null`. (Defence-in-depth: those screens now render <FeatureUnavailable/>
+// rather than a blank, but we still avoid navigating to them.)
+const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey | null }> = [
+  { prefix: '/(app)/companion', flag: 'companion' },
+  { prefix: '/(app)/(tabs)/chat', flag: null },
+  { prefix: '/(app)/settings', flag: null },
+  { prefix: '/(app)/notifications', flag: 'cloudChat' },
+  { prefix: '/(app)/schedules', flag: 'schedules' },
+  { prefix: '/(app)/agents', flag: 'agents' },
+];
 
 function isAllowedRoute(route: string): boolean {
-  return ALLOWED_ROUTE_PREFIXES.some((prefix) => route.startsWith(prefix));
+  return ALLOWED_ROUTE_PREFIXES.some(
+    ({ prefix, flag }) => route.startsWith(prefix) && (flag === null || FEATURES[flag]),
+  );
 }
 
 // ---------------------------------------------------------------------------

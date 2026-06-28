@@ -1,7 +1,10 @@
 import { Pressable, View } from 'react-native';
 import { Check, Palette } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useSettingsStore, type AccentColor } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import type { AccentColor } from '@/stores/settingsStore';
 import { getAccentSwatch, useTheme } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
@@ -16,8 +19,15 @@ const ACCENTS: Array<{ value: AccentColor; label: string }> = [
 
 export default function AccentColorScreen() {
   const { colors, isDark } = useTheme();
-  const accentColor = useSettingsStore((s) => s.accentColor);
-  const setAccentColor = useSettingsStore((s) => s.setAccentColor);
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+
+  const localAccentColor = useLocalSettingsStore((s) => s.accentColor);
+  const localSetAccentColor = useLocalSettingsStore((s) => s.setAccentColor);
+  const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
+  const cloudSetAccentColor = useCloudSettingsStore((s) => s.setAccentColor);
+
+  const accentColor = isCloud ? cloudAccentColor : localAccentColor;
+  const setAccentColor = isCloud ? cloudSetAccentColor : localSetAccentColor;
 
   return (
     <SettingsScreenShell title="Accent Color">

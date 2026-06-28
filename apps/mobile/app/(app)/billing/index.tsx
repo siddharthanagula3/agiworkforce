@@ -10,6 +10,7 @@ import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import type { BillingPlanTier, BillingInterval } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 // ---------------------------------------------------------------------------
 // Tier display config (feature bullets read at render time, not hardcoded prices)
@@ -222,7 +223,7 @@ export default function PricingScreen() {
     setInviteModalOpen(true);
   }, []);
 
-  if (!FEATURES.billing) return null;
+  if (!FEATURES.billing) return <FeatureUnavailable feature="Billing" />;
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>

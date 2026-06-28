@@ -8,6 +8,8 @@ import { summarizeProjectHeader } from '@agiworkforce/types';
 import type { ProjectRecord } from '@agiworkforce/types';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { ProjectHeader } from '@/src/features/projects/components/ProjectHeader';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
 import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSourcesTab';
 import { Text } from '@/components/ui/text';
@@ -52,6 +54,42 @@ function LocalOnlyFallback({
       </Text>
       <Text style={{ fontSize: 13, color: colors.textSecondary }}>
         Local project. Details, chats, and sources stay on this device.
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Cloud project header. The cross-device `fetchProject` REST detail call is
+ * gated off in v1 (FEATURES.crossDeviceSync=false), but synced cloud projects
+ * still live in `cloudProjectStore`. Without this, a cloud project fell through
+ * to LocalOnlyFallback and rendered a "Local project" label + the raw UUID (no
+ * local row exists). Drive the header from the cloud store so the name is
+ * correct and the (mode-aware) Chats/Sources tabs render below.
+ */
+function CloudProjectHeader({
+  name,
+  colors,
+}: {
+  name: string;
+  colors: ReturnType<typeof useThemeColors>;
+}) {
+  return (
+    <View
+      style={{
+        margin: 16,
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        backgroundColor: colors.surfaceElevated,
+        borderColor: colors.border,
+        gap: 12,
+      }}
+      testID="project-detail-cloud-header"
+    >
+      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>{name}</Text>
+      <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+        Cloud project · synced across your devices.
       </Text>
     </View>
   );
@@ -130,6 +168,15 @@ export default function ProjectDetailScreen() {
 
   const localProject = useProjectStore((s) => s.projects.find((p) => p.id === id));
 
+  // In cloud mode, a synced cloud project lives in cloudProjectStore (the
+  // crossDeviceSync-gated REST fetch is off in v1). Detect it so the header +
+  // title come from real cloud data instead of the "Local"/raw-UUID fallback.
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const cloudProject = useCloudProjectStore((s) =>
+    s.projects.find((p) => p.id === id && p.deletedAt === null),
+  );
+  const isCloudProject = appMode === 'cloud' && !!cloudProject;
+
   const [fetchState, setFetchState] = useState<FetchState>({ kind: 'idle' });
 
   const loadProject = useCallback(async () => {
@@ -179,10 +226,16 @@ export default function ProjectDetailScreen() {
     );
   }
 
-  const screenTitle =
-    fetchState.kind === 'success' ? fetchState.project.name : (localProject?.name ?? 'Project');
+  const screenTitle = isCloudProject
+    ? (cloudProject?.name ?? 'Project')
+    : fetchState.kind === 'success'
+      ? fetchState.project.name
+      : (localProject?.name ?? 'Project');
 
   const renderHeader = () => {
+    if (isCloudProject) {
+      return <CloudProjectHeader name={cloudProject?.name ?? 'Project'} colors={colors} />;
+    }
     if (fetchState.kind === 'loading') {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

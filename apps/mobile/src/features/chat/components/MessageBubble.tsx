@@ -7,7 +7,7 @@ import {
   Platform,
 } from 'react-native';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { Clock } from 'lucide-react-native';
+import { Clock, FileText, Download } from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
@@ -318,31 +318,61 @@ export const MessageBubble = memo(function MessageBubble({
               )}
             </View>
 
-            {/* User attachments (images sent with the message) */}
+            {/* User attachments: images and files sent with the message */}
             {isUser && message.attachments && message.attachments.length > 0 && (
-              <View className="flex-row flex-wrap gap-2 mt-1">
-                {message.attachments
-                  .filter((a) => a.mimeType.startsWith('image/'))
-                  .map((attachment, idx) => (
-                    <Pressable
-                      key={`att-${idx}`}
-                      onPress={() => handleImagePress(attachment.url)}
-                      className="rounded-lg overflow-hidden"
-                      accessibilityLabel={`Attached image: ${attachment.fileName}`}
-                      accessibilityRole="image"
-                    >
-                      <Image
-                        source={{ uri: attachment.url }}
-                        style={{
-                          width: Math.min(imageWidth, 200),
-                          height: Math.min(imageWidth, 200),
-                          borderRadius: 8,
-                        }}
-                        contentFit="cover"
-                        transition={200}
-                      />
-                    </Pressable>
-                  ))}
+              <View className="mt-1">
+                {/* Image attachments */}
+                <View className="flex-row flex-wrap gap-2">
+                  {message.attachments
+                    .filter((a) => a.mimeType.startsWith('image/'))
+                    .map((attachment, idx) => (
+                      <Pressable
+                        key={`att-${idx}`}
+                        onPress={() => handleImagePress(attachment.url)}
+                        className="rounded-lg overflow-hidden"
+                        accessibilityLabel={`Attached image: ${attachment.fileName}`}
+                        accessibilityRole="image"
+                      >
+                        <Image
+                          source={{ uri: attachment.url }}
+                          style={{
+                            width: Math.min(imageWidth, 200),
+                            height: Math.min(imageWidth, 200),
+                            borderRadius: 8,
+                          }}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      </Pressable>
+                    ))}
+                </View>
+
+                {/* File attachments (non-image) */}
+                {message.attachments.filter((a) => !a.mimeType.startsWith('image/')).length > 0 && (
+                  <View className="gap-1 mt-2">
+                    {message.attachments
+                      .filter((a) => !a.mimeType.startsWith('image/'))
+                      .map((attachment, idx) => (
+                        <View
+                          key={`file-att-${idx}`}
+                          className="flex-row items-center gap-2 px-3 py-2 rounded-lg"
+                          style={{ backgroundColor: themeColors.accentSurface }}
+                          accessible={true}
+                          accessibilityLabel={`File attachment: ${attachment.fileName}`}
+                          accessibilityRole="button"
+                        >
+                          <FileText size={16} color={themeColors.agentActive} />
+                          <Text
+                            className="flex-1 text-sm"
+                            numberOfLines={1}
+                            style={{ color: themeColors.textPrimary }}
+                          >
+                            {attachment.fileName}
+                          </Text>
+                        </View>
+                      ))}
+                  </View>
+                )}
               </View>
             )}
 
