@@ -54,7 +54,6 @@ export const LEGACY_TAB_MAP: Partial<Record<SettingsTab, SettingsTab>> = {
   themes: 'appearance',
   'apps-integrations': 'connectors',
   customize: 'capabilities',
-  billing: 'account',
 };
 
 interface SettingsDialogState {
