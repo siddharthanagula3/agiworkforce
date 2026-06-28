@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28",
+  "invariants": [
+    {
+      "id": "INV-1",
+      "severity": "release-blocker",
+      "statement": "Cloud Mode is one logical product. Desktop Cloud, Web, and Mobile Cloud share identical backend behavior — fix shared backend once; never fork behavior per surface."
+    },
+    {
+      "id": "INV-2",
+      "severity": "release-blocker",
+      "statement": "Local Mode is completely isolated and never talks to AGI Cloud (no telemetry, sync, or provider proxy)."
+    },
+    {
+      "id": "INV-3",
+      "severity": "release-blocker",
+      "statement": "BYOK exists only in Local Mode, with no markup. Web/Mobile v1 expose no BYOK."
+    },
+    {
+      "id": "INV-4",
+      "severity": "release-blocker",
+      "statement": "Desktop Local and Mobile Local store everything locally. Local data leaves the device only via an explicit, consented transfer."
+    },
+    {
+      "id": "INV-5",
+      "severity": "release-blocker",
+      "statement": "Stacks are fixed: Desktop = Rust/Tauri; Mobile = Expo/React Native; Web = Next.js; backend = Neon + Clerk."
+    },
+    {
+      "id": "INV-6",
+      "severity": "release-blocker",
+      "statement": "Shared packages/ and crates/ are the preferred implementation point. Platform-specific code is the justified exception."
+    },
+    {
+      "id": "INV-7",
+      "severity": "release-blocker",
+      "statement": "Billing is subscription-first. Tokens pass through at cost; monetize the software/governance layer."
+    },
+    {
+      "id": "INV-8",
+      "severity": "release-blocker",
+      "statement": "Multi-provider is core; no provider lock-in. Model IDs/capabilities come from packages/types/src/models.json."
+    },
+    {
+      "id": "INV-9",
+      "severity": "P0",
+      "statement": "Trust boundaries are a product invariant. Local->BYOK->Managed is never crossed silently; a violation is P0."
+    }
+  ],
+  "rules": [
+    {
+      "id": "RULE-1",
+      "statement": "Never duplicate business logic. Prefer shared packages/ and crates/; a second copy needs an explicit removal plan.",
+      "rationale": "Six surfaces re-implementing similar flows causes surface drift; defining behavior once is also the scaling strategy.",
+      "enforced_by": "check:boundaries, check:service-layer, dependency_graph.json"
+    },
+    {
+      "id": "RULE-2",
+      "statement": "Fix the shared backend before platform-specific code. Platform code adapts to the shared contract, not vice versa.",
+      "rationale": "Cloud Mode is one logical product (INV-1); forking behavior per surface breaks parity.",
+      "enforced_by": "code review, dependency_graph.json verification_rules"
+    },
+    {
+      "id": "RULE-3",
+      "statement": "Cross-surface verification: if Mobile Cloud changes a shared API, verify Desktop Cloud + Web; if the backend changes, verify all Cloud surfaces.",
+      "rationale": "Shared backend behavior must stay identical across Cloud surfaces (INV-1).",
+      "enforced_by": "dependency_graph.json verification_rules, per-surface checks in commands.json"
+    },
+    {
+      "id": "RULE-4",
+      "statement": "Every feature has runtime validation — validate all tool/LLM/API/IPC inputs (Zod/serde); no unvalidated external input.",
+      "rationale": "Unvalidated external input is a recurring LLM-failure class and a security exposure.",
+      "enforced_by": "check:llm-failures, Zod/serde schemas in packages/types"
+    },
+    {
+      "id": "RULE-5",
+      "statement": "Every bug requires reproduction -> root cause -> fix -> regression test -> verification. No fix lands without a regression test.",
+      "rationale": "Prevents silent regressions; regression tests caught the AutoEconomy routing regression.",
+      "enforced_by": "per-increment test gate, CI"
+    },
+    {
+      "id": "RULE-6",
+      "statement": "No speculative refactors during Alpha stabilization. Refactor only what the active increment touches.",
+      "rationale": "Stabilization phase prioritizes shipping the active surface over breadth.",
+      "enforced_by": "execution-playbook loop protocol, code review"
+    },
+    {
+      "id": "RULE-7",
+      "statement": "Adapt, never copy proprietary (Operating Law 3); verify before done (Operating Law 4); no theater (Operating Law 5).",
+      "rationale": "Study claude-code for intent; port only from license-clean donors; no feature is complete on build success alone; no fake tests or claims beyond shipped scope.",
+      "enforced_by": "check:licenses, PORTING-TRACKER.md, check:llm-operability, surface checks"
+    }
+  ]
+}
