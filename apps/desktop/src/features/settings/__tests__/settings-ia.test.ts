@@ -24,10 +24,26 @@ describe('desktop settings IA · nav ↔ render consistency', () => {
     }
   });
 
-  it('keeps the core locked sections present (General/Account/Privacy/Connectors)', () => {
-    const keys = new Set(SETTINGS_NAV.map((e) => e.key));
-    for (const required of ['general', 'account', 'privacy', 'connectors'] as const) {
-      expect(keys, `settings IA must include "${required}"`).toContain(required);
+  it('includes all 11 locked source-of-truth sections (DESK-1 "settings IA to spec")', () => {
+    // docs/current/source-of-truth.md §"Settings must converge on these sections".
+    // Each must be a real, reachable top-level nav entry (render case enforced by
+    // the test above) — so this pins the IA AT SPEC and fails if any regresses.
+    const byLabel = new Map(SETTINGS_NAV.map((e) => [e.label, e.key]));
+    const SPEC_SECTIONS = [
+      'General',
+      'Account',
+      'Privacy',
+      'Billing',
+      'Usage',
+      'Capabilities',
+      'Connectors',
+      'AGI Code',
+      'AGI in Chrome',
+      'Extensions',
+      'Developer',
+    ];
+    for (const label of SPEC_SECTIONS) {
+      expect(byLabel.has(label), `settings IA must include the "${label}" section`).toBe(true);
     }
   });
 
