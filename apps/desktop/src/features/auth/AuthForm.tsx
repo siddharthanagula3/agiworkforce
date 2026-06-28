@@ -478,7 +478,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
       case 'signup':
         return {
           title: 'Create account',
-          subtitle: 'Join the AGI cloud waitlist',
+          subtitle: 'Create your AGI account for Web & Mobile cloud',
           buttonText: 'Continue',
           formId: 'auth-signup-form',
         };

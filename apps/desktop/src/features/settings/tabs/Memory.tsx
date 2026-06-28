@@ -7,8 +7,8 @@ import { MemoryEditor } from '@agiworkforce/unified-chat';
  *
  * Round-2 audit P0 #8 (2026-05-21). v1 LOCAL-ONLY POSTURE: memory facts
  * persist via unified-chat's memoryStore (zustand/persist) on this device.
- * Cloud sync of memory arrives with the Cloud Managed waitlist and is NOT
- * wired here.
+ * Cloud sync of memory arrives with desktop managed-cloud support (coming
+ * soon; public alpha on Web & Mobile today) and is NOT wired here.
  */
 export function MemoryTab() {
   return (

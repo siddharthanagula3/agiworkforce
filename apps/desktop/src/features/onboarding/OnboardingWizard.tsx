@@ -291,10 +291,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Cloud Mode</p>
-                <p className="text-xs text-blue-400 font-medium">Cloud storage and compute</p>
+                <p className="text-xs text-blue-400 font-medium">Coming soon to desktop</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  Use AGI subscriptions, top-ups, hosted storage, and synced chats. This mode
-                  requires an AGI account before anything is stored in the cloud.
+                  AGI Cloud (subscriptions, hosted storage, synced chats) is in public alpha on Web
+                  &amp; Mobile today. Desktop cloud support is coming soon — continue with Local or
+                  BYOK for now.
                 </p>
               </div>
               <button
@@ -305,7 +306,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   'bg-primary text-white hover:bg-primary/90',
                 )}
               >
-                Continue to sign in
+                Continue with Local for now
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

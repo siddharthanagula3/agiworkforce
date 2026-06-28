@@ -56,7 +56,7 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
       'Priority support',
       'Early access to new providers',
     ],
-    ctaLabel: 'Join waitlist',
+    ctaLabel: 'Coming soon',
     ctaVariant: 'waitlist',
   },
   pro_plus: {

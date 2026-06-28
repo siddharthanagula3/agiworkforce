@@ -8,8 +8,9 @@
  *   2. Settings → Billing tab (future — wire via openPlansModal() helper below)
  *
  * CTA routing:
- *   - Paid/cloud tiers are v1 waitlist-gated.
- *   - "Upgrade" / "Join waitlist" opens the in-app Cloud Bridge invite/waitlist modal.
+ *   - Managed cloud is public alpha on Web & Mobile; desktop support is coming soon.
+ *   - Paid-tier CTAs open the in-app Cloud Bridge modal, which explains that
+ *     cloud is available on Web & Mobile today and desktop is on the way.
  */
 import { X } from 'lucide-react';
 import {
@@ -127,8 +128,8 @@ export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansMod
 
           {/* Footer note */}
           <p className="mt-6 text-center text-[11px] text-muted-foreground">
-            Managed cloud is private beta. Join the waitlist or enter an invitation code to unlock
-            cloud routing when your workspace is approved.
+            AGI Cloud is in public alpha on Web &amp; Mobile — no invite needed. Desktop cloud
+            support is coming soon; Local and BYOK work on desktop today.
           </p>
         </div>
       </DialogContent>

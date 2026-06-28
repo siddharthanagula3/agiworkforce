@@ -10,7 +10,6 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { toast } from 'sonner';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import type { PrivacyMode } from '@agiworkforce/types';
 import { storageFallback } from '../lib/storageFallback';
 // Import directly from the zero-import leaf module, not the heavy `tauri-mock`
@@ -18,6 +17,7 @@ import { storageFallback } from '../lib/storageFallback';
 // is read (in the zustand initializer below) before the barrel finishes
 // initializing → "Cannot access 'supportsLocalAppMode' before initialization".
 import { supportsLocalAppMode } from '../lib/runtimeEnvironment';
+import { DESKTOP_CLOUD_COMING_SOON } from '../constants/cloudAvailability';
 import { useAuthStore } from './auth';
 import { isChatStoreStreaming } from './chat/chatStoreRef';
 
@@ -39,7 +39,11 @@ interface AppModeState {
   setOnline: (online: boolean) => void;
 }
 
-const APP_MODE_STORE_VERSION = 1;
+// v2 (PA-3): force the desktop runtime out of any stale persisted Cloud mode.
+// Desktop managed cloud is not implemented yet, so a Cloud mode persisted by an
+// earlier build must not survive a reload (it would route chat persistence into
+// the unimplemented Rust command). See migrate() below.
+const APP_MODE_STORE_VERSION = 2;
 const CLOUD_MANAGED_TIERS: ReadonlySet<PlanTier> = new Set([
   'hobby',
   'pro',
@@ -70,14 +74,26 @@ export const useAppModeStore = create<AppModeState>()(
             toast.error('Finish the current response before switching modes');
             return;
           }
-          // Managed mode requires authentication
           if (mode === 'cloud') {
+            // PA-3 / DESK-CLOUD-COPY-01: desktop managed cloud is NOT implemented
+            // yet. The Rust cloud persistence commands fail closed with
+            // ERR_CLOUD_NOT_IMPLEMENTED; the shared-backend wiring is a
+            // fast-follow (DCL-1..4). On the desktop/local runtime we refuse to
+            // enter Cloud mode at all — otherwise chatStore.isCloudMode() would
+            // route chat persistence into the unimplemented command. Surface the
+            // honest interim message instead. Local + BYOK both live in Local
+            // mode on desktop and are unaffected. Managed cloud itself is PUBLIC
+            // ALPHA on Web & Mobile (not invite/waitlist-gated).
+            if (supportsLocalAppMode) {
+              toast.info(DESKTOP_CLOUD_COMING_SOON);
+              return;
+            }
+            // Non-desktop (web-preview) runtime: managed cloud is served
+            // elsewhere; keep the auth + entitlement gate.
             const authState = useAuthStore.getState();
             const hasCloudSession = authState.isAuthenticated && !!authState.accessToken;
             if (!hasCloudSession) {
-              toast.error(
-                `Sign in to join the ${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
-              );
+              toast.error('Sign in to use AGI Cloud.');
               return;
             }
             if (!CLOUD_MANAGED_TIERS.has(get().planTier)) {
@@ -124,6 +140,12 @@ export const useAppModeStore = create<AppModeState>()(
           if (!supportsLocalAppMode && state.mode === 'local') {
             return { ...state, mode: 'cloud' };
           }
+          // PA-3 / DESK-CLOUD-COPY-01: desktop managed cloud is not implemented;
+          // drop any stale persisted Cloud mode so the desktop runtime never
+          // reaches the unimplemented Rust cloud commands on reload.
+          if (supportsLocalAppMode && state.mode === 'cloud') {
+            return { ...state, mode: 'local' };
+          }
           return state;
         },
       },
@@ -163,7 +185,8 @@ export const selectHasOnboarded = (state: AppModeState): boolean => state.hasOnb
  * Mapping:
  *   'local'  → 'local'    (device-only; no egress at any layer)
  *   'cloud'  + BYOK keys configured → 'byok'   (user-supplied keys, no AGI compute)
- *   'cloud'  + no BYOK keys         → 'managed' (AGI-managed compute — waitlist-gated)
+ *   'cloud'  + no BYOK keys         → 'managed' (AGI-managed compute — public alpha
+ *                                                on Web & Mobile; desktop coming soon)
  *
  * BYOK detection: reads llmConfig.providerMode from settingsStore. When the
  * user has selected external provider keys ('cloud' providerMode in settings),

@@ -36,8 +36,8 @@ const trustPoints = [
   },
   {
     icon: Sparkles,
-    label: 'Cloud by invite',
-    description: 'Cloud workspace is invite-only. Sign up to join the waitlist.',
+    label: 'Cloud on Web & Mobile',
+    description: 'AGI Cloud is in public alpha on Web & Mobile. Desktop support is coming soon.',
   },
 ];
 
