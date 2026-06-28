@@ -5370,13 +5370,15 @@ function buildUI(): void {
   cloudSection.appendChild(cloudAccountEl);
   drawerBody.appendChild(cloudSection);
 
-  // ── "Unlock AGI Cloud" button (invite-code path, kept below sign-in) ────
+  // ── "Redeem a code" button — secondary to sign-in. AGI Cloud is public alpha
+  // (open by default once signed in); this drawer only redeems an optional promo/
+  // invite code for plan credits and offers a product-updates opt-in. ─────────────
   let drawerCloudModal: ReturnType<typeof mountInviteCodeModal> | null = null;
   const inviteCodeSection = el('div', { class: 'sp-drawer-section' });
   const drawerCloudBtn = el(
     'button',
     { class: 'sp-drawer-cloud-btn', id: 'sp-drawer-cloud-btn' },
-    'Enter invite code',
+    'Redeem a code',
   );
   drawerCloudBtn.addEventListener('click', () => {
     if (!drawerCloudModal) {

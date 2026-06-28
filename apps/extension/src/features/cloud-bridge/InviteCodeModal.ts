@@ -18,19 +18,19 @@ function friendlyInviteError(code?: InviteCodeError): string {
     case 'invalid_code':
       return "That code doesn't look right. Double-check and try again.";
     case 'expired':
-      return 'That code has expired. Join the waitlist to get a fresh one.';
+      return "That code has expired. You can still use AGI Cloud — just sign in; it's open in public alpha.";
     case 'fully_redeemed':
-      return 'That code is fully redeemed. Try another or join the waitlist.';
+      return "That code is fully redeemed. You can still use AGI Cloud — just sign in; it's open in public alpha.";
     case 'already_redeemed_by_user':
-      return "You've already used this code. Cloud should be unlocked.";
+      return "You've already redeemed this code.";
     case 'anon_signin_failed':
       return "Couldn't create your session. Try again in a moment.";
     case 'not_wired':
-      return 'Cloud unlock is not wired in this extension build.';
+      return 'Code redemption is not wired in this extension build.';
     case 'rpc_error':
       return 'Something went wrong on our end. Try again.';
     default:
-      return 'Something went wrong. Try again or join the waitlist.';
+      return 'Something went wrong. Try again.';
   }
 }
 
@@ -296,15 +296,14 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   const title = document.createElement('p');
   title.className = 'agi-modal-title';
   title.id = 'agi-modal-title';
-  title.textContent = 'Cloud features';
+  title.textContent = 'AGI Cloud';
 
   const desc = document.createElement('p');
   desc.className = 'agi-modal-desc';
   desc.textContent =
-    'Cloud features are gated for v1. Join the waitlist, or enter your invitation code ' +
-    'below to unlock cloud routing. AGI will route your requests through one of: BYOK ' +
-    '(your provider key), Groq (free tier, US-routed), OpenRouter, or DeepSeek (with ' +
-    'explicit data-residency disclosure).';
+    'AGI Cloud is in public alpha — sign in to start using it, no invite needed. Have a ' +
+    'promo or invite code? Redeem it below for plan credits. You can also get product ' +
+    'updates by email.';
 
   titleGroup.appendChild(title);
   titleGroup.appendChild(desc);
@@ -330,14 +329,14 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   tabInviteBtn.setAttribute('type', 'button');
   tabInviteBtn.setAttribute('role', 'tab');
   tabInviteBtn.setAttribute('aria-selected', 'true');
-  tabInviteBtn.textContent = 'Enter invitation code';
+  tabInviteBtn.textContent = 'Redeem a code';
 
   const tabWaitlistBtn = document.createElement('button');
   tabWaitlistBtn.className = 'agi-tab-btn';
   tabWaitlistBtn.setAttribute('type', 'button');
   tabWaitlistBtn.setAttribute('role', 'tab');
   tabWaitlistBtn.setAttribute('aria-selected', 'false');
-  tabWaitlistBtn.textContent = 'Join waitlist';
+  tabWaitlistBtn.textContent = 'Product updates';
 
   tabs.appendChild(tabInviteBtn);
   tabs.appendChild(tabWaitlistBtn);
@@ -355,7 +354,7 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   inviteSuccess.className = 'agi-success';
   inviteSuccess.innerHTML =
     '<div class="agi-success-icon">✓</div>' +
-    '<p class="agi-success-title">Cloud unlocked!</p>' +
+    '<p class="agi-success-title">Code redeemed!</p>' +
     '<p class="agi-success-sub">Closing in a moment…</p>';
 
   const inviteFormFields = document.createElement('div');
@@ -366,7 +365,7 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
 
   const inviteLabel = document.createElement('label');
   inviteLabel.className = 'agi-label';
-  inviteLabel.textContent = 'Invitation code';
+  inviteLabel.textContent = 'Promo or invite code';
 
   const inviteInput = document.createElement('input');
   inviteInput.type = 'text';
@@ -395,18 +394,20 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   inviteSpinner.style.display = 'none';
 
   const inviteSubmitLabel = document.createElement('span');
-  inviteSubmitLabel.textContent = 'Unlock cloud';
+  inviteSubmitLabel.textContent = 'Redeem';
 
   inviteSubmitBtn.appendChild(inviteSpinner);
   inviteSubmitBtn.appendChild(inviteSubmitLabel);
 
   const inviteSwitchRow = document.createElement('p');
   inviteSwitchRow.className = 'agi-switch-link';
-  inviteSwitchRow.appendChild(document.createTextNode("Don't have a code? "));
+  inviteSwitchRow.appendChild(
+    document.createTextNode('No code needed for AGI Cloud — just sign in. '),
+  );
 
   const inviteSwitchBtn = document.createElement('button');
   inviteSwitchBtn.type = 'button';
-  inviteSwitchBtn.textContent = 'Join the waitlist';
+  inviteSwitchBtn.textContent = 'Get product updates';
   inviteSwitchRow.appendChild(inviteSwitchBtn);
 
   inviteFormFields.appendChild(inviteFormGroup);
@@ -425,8 +426,8 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   waitlistSuccess.className = 'agi-success';
   waitlistSuccess.innerHTML =
     '<div class="agi-success-icon">✓</div>' +
-    '<p class="agi-success-title">You\'re on the list!</p>' +
-    '<p class="agi-success-sub">We\'ll email when invite codes open.</p>';
+    '<p class="agi-success-title">You\'re subscribed!</p>' +
+    '<p class="agi-success-sub">We\'ll email you occasional product updates.</p>';
 
   const waitlistFormFields = document.createElement('div');
   waitlistFormFields.className = 'agi-form-fields';
@@ -480,14 +481,15 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   waitlistSpinner.style.display = 'none';
 
   const waitlistSubmitLabel = document.createElement('span');
-  waitlistSubmitLabel.textContent = 'Join waitlist';
+  waitlistSubmitLabel.textContent = 'Get updates';
 
   waitlistSubmitBtn.appendChild(waitlistSpinner);
   waitlistSubmitBtn.appendChild(waitlistSubmitLabel);
 
   const privacyNote = document.createElement('p');
   privacyNote.className = 'agi-switch-link';
-  privacyNote.textContent = 'No account created. Email used only to notify you.';
+  privacyNote.textContent =
+    'Optional — AGI Cloud is already open in public alpha. Email used only for product updates.';
 
   waitlistFormFields.appendChild(emailFormGroup);
   waitlistFormFields.appendChild(nameFormGroup);
@@ -646,7 +648,7 @@ export class InviteCodeModal {
   private setInviteLoading(loading: boolean): void {
     this.inviteLoading = loading;
     this.els.inviteSpinner.style.display = loading ? 'block' : 'none';
-    this.els.inviteSubmitLabel.textContent = loading ? 'Validating…' : 'Unlock cloud';
+    this.els.inviteSubmitLabel.textContent = loading ? 'Validating…' : 'Redeem';
     this.els.inviteInput.disabled = loading;
     this.updateInviteSubmitState();
   }
@@ -654,7 +656,7 @@ export class InviteCodeModal {
   private setWaitlistLoading(loading: boolean): void {
     this.waitlistLoading = loading;
     this.els.waitlistSpinner.style.display = loading ? 'block' : 'none';
-    this.els.waitlistSubmitLabel.textContent = loading ? 'Joining…' : 'Join waitlist';
+    this.els.waitlistSubmitLabel.textContent = loading ? 'Subscribing…' : 'Get updates';
     this.els.waitlistEmailInput.disabled = loading;
     this.els.waitlistNameInput.disabled = loading;
     this.updateWaitlistSubmitState();
