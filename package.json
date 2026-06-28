@@ -98,6 +98,8 @@
     "check:llm-failures:changed": "node scripts/check-llm-failure-guardrails.mjs --changed",
     "check:llm-failures:strict": "node scripts/check-llm-failure-guardrails.mjs --strict",
     "check:licenses": "node scripts/check-licenses.mjs",
+    "check:trust-boundaries": "node scripts/check-trust-boundaries.mjs",
+    "check:spec-artifacts": "node scripts/check-spec-artifacts.mjs",
     "sync:models": "node scripts/sync-models.mjs",
     "sync:models:check": "node scripts/sync-models.mjs --check",
     "sync:models:refresh": "node scripts/sync-models.mjs --refresh",
