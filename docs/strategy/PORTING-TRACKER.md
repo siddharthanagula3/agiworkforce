@@ -63,15 +63,20 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | INC-1.5  | Secret-scan at Local→BYOK fork       | ⬜     | —         |
 | INC-1.6  | SkillSpector install gate + rug-pull | ⬜     | —         |
 | INC-1.7  | Mobile TLS pins enforced             | ⬜     | —         |
-| INC-1.8  | Audit-log immutability migration     | ⬜     | —         |
+| INC-1.8  | Audit-log immutability migration     | ⏸      | partial   |
 | INC-1.9  | Marketing-vs-reality copy alignment  | ⬜     | —         |
 | INC-1.10 | Global search                        | ⬜     | —         |
 | INC-1.11 | Settings IA to spec                  | ⬜     | —         |
 | INC-1.12 | Artifacts polish                     | ⬜     | —         |
 | INC-1.13 | Provider robustness port             | ⬜     | —         |
-| INC-1.14 | Website public alpha deploy          | ⬜     | —         |
-| INC-1.15 | Desktop alpha (signed)               | ⬜     | —         |
-| INC-1.16 | Mobile alpha (stores)                | ⬜     | —         |
+| INC-1.14 | Website public alpha deploy          | ⏸      | blocked   |
+| INC-1.15 | Desktop alpha (signed)               | ⏸      | blocked   |
+| INC-1.16 | Mobile alpha (stores)                | ⏸      | blocked   |
+
+**BLOCKED-with-evidence (done-condition #7 allows recording blocked):**
+
+- **INC-1.8** ⏸ partial — `apps/web/db/neon/0043_audit_log_immutability.sql` ships the append-only REVOKE (app_rls loses UPDATE/DELETE; purge fns made SECURITY DEFINER). The author DELIBERATELY deferred the durable, re-grant-proof `BEFORE UPDATE OR DELETE` trigger pending verification on a throwaway Neon branch. Completing it requires applying + testing SQL against a real Postgres/Neon branch — no DB is reachable from this autonomous session, so writing the trigger untested would be theater. Remaining: add trigger migration + verify on a Neon branch.
+- **INC-1.14 / 1.15 / 1.16** ⏸ blocked — public-alpha DEPLOY (Vercel prod creds), SIGNED desktop build (Apple Developer ID + notarization / Windows code-sign cert), and STORE builds (App Store Connect + Google Play accounts, EAS submit). All require production credentials, signing certificates, paid developer accounts, and money-spending actions explicitly outside autonomous scope. Code/config is in-tree; the gated step is the credentialed release action.
 
 ### Phase 2 — Production for 1M
 
