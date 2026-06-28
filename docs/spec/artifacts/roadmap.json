@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28",
+  "now": [
+    {
+      "id": "NOW-1",
+      "item": "Provision real TLS pins + enable enforcement (mobile)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NOW; R2; INC-1.7"
+    },
+    {
+      "id": "NOW-2",
+      "item": "Apply audit-log immutability migration",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NOW; R1; INC-1.8"
+    },
+    {
+      "id": "NOW-3",
+      "item": "Confirm Rust-egress path stays gated; add trust-boundary contract tests",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NOW; R3; INC-0.3"
+    },
+    {
+      "id": "NOW-4",
+      "item": "Finish Mobile v1 to App Store submission (active surface, serial-by-surface)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NOW; source-of-truth"
+    },
+    {
+      "id": "NOW-5",
+      "item": "Align all marketing copy to shipped scope (mobile vision/translation, parity)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NOW; R5/R6; INC-1.9"
+    },
+    {
+      "id": "NOW-6",
+      "item": "Sweep dead code (Vite/Netlify leftovers, orphaned components)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NOW; R13"
+    },
+    {
+      "id": "NOW-7",
+      "item": "Sharpen the sovereign-AI narrative + one-pager",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NOW; strategy/05, /08"
+    }
+  ],
+  "next": [
+    {
+      "id": "NEXT-1",
+      "item": "Global search (chats/projects/artifacts/files)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; INC-1.10"
+    },
+    {
+      "id": "NEXT-2",
+      "item": "Settings IA to the locked spec (Desktop + Web)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; INC-1.11"
+    },
+    {
+      "id": "NEXT-3",
+      "item": "Connectors/apps directory (categories, search, per-tool permissions)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; INC-2.6"
+    },
+    {
+      "id": "NEXT-4",
+      "item": "Artifacts polish (versioning, publish/share, error-fix loop)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; INC-1.12"
+    },
+    {
+      "id": "NEXT-5",
+      "item": "Mount or cleanly gate AGI Code in Desktop V3",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; R12"
+    },
+    {
+      "id": "NEXT-6",
+      "item": "Land first 2-3 design partners (legal/health/finance)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; strategy/05, /06"
+    },
+    {
+      "id": "NEXT-7",
+      "item": "Exactly-once metering + drift audit (BILL-01)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; INC-2.3"
+    },
+    {
+      "id": "NEXT-8",
+      "item": "Pre-seed/angel raise on the repositioned story",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 NEXT; strategy/06"
+    }
+  ],
+  "later": [
+    {
+      "id": "LATER-1",
+      "item": "Projects + Memory completeness (RAG, isolation, import/export)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER; INC-2.5"
+    },
+    {
+      "id": "LATER-2",
+      "item": "Deep research flow (on the existing agent loop + web search)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER"
+    },
+    {
+      "id": "LATER-3",
+      "item": "Enterprise controls: SCIM, audit API, RBAC, data residency, on-prem/VPC deploy",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER; R11; INC-2.11"
+    },
+    {
+      "id": "LATER-4",
+      "item": "Routing-as-a-service (capability/cost/health/trust aware)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER; ADR-2"
+    },
+    {
+      "id": "LATER-5",
+      "item": "Harden Managed Cloud (abuse/fraud, refund/chargeback, retention)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER; INC-2.4"
+    },
+    {
+      "id": "LATER-6",
+      "item": "Sync engine completeness (one conflict model, app-chat scoped)",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER; INC-2.7"
+    },
+    {
+      "id": "LATER-7",
+      "item": "Stricter CLI/IDE/Chrome parity passes",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER; INC-2.8"
+    },
+    {
+      "id": "LATER-8",
+      "item": "Series A on $1-3M ARR / 50%+ margin / NRR >120%",
+      "source": "docs/strategy/07-roadmap-12-month.md §2 LATER; strategy/06"
+    }
+  ]
+}

@@ -1,0 +1,357 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28",
+  "surfaces": ["web", "desktop", "mobile", "cli", "vscode", "chrome"],
+  "features": [
+    {
+      "domain": "Providers",
+      "feature": "Multi-provider model selection (catalog-driven)",
+      "status_by_surface": {
+        "web": "present",
+        "desktop": "present",
+        "mobile": "partial",
+        "cli": "present",
+        "vscode": "present",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "byok", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Differentiator); models.json"
+    },
+    {
+      "domain": "Providers",
+      "feature": "Local LLM runtime",
+      "status_by_surface": {
+        "web": "na",
+        "desktop": "present",
+        "mobile": "present",
+        "cli": "present",
+        "vscode": "missing",
+        "chrome": "na"
+      },
+      "trust_modes": ["local"],
+      "source": "docs/strategy/02-gap-analysis.md §3 (mobile tier-1->2->3 ladder; CLI Ollama/LM Studio)"
+    },
+    {
+      "domain": "Providers",
+      "feature": "BYOK (bring your own key, no markup)",
+      "status_by_surface": {
+        "web": "na",
+        "desktop": "present",
+        "mobile": "na",
+        "cli": "present",
+        "vscode": "partial",
+        "chrome": "na"
+      },
+      "trust_modes": ["byok"],
+      "source": "docs/current/source-of-truth.md Trust Modes; INV-3 (Web/Mobile v1 expose no BYOK)"
+    },
+    {
+      "domain": "Providers",
+      "feature": "Managed cloud access (public alpha)",
+      "status_by_surface": {
+        "web": "present",
+        "desktop": "present",
+        "mobile": "gated",
+        "cli": "gated",
+        "vscode": "partial",
+        "chrome": "gated"
+      },
+      "trust_modes": ["managed"],
+      "source": "docs/current/source-of-truth.md (public alpha, open by default 2026-06-27)"
+    },
+    {
+      "domain": "Conversation",
+      "feature": "One-chat with files/reference/project/tools/artifacts",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "present",
+        "mobile": "partial",
+        "cli": "present",
+        "vscode": "partial",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "byok", "managed"],
+      "source": "docs/current/source-of-truth.md Launch Lock + P0 Gap #3"
+    },
+    {
+      "domain": "Conversation",
+      "feature": "Global search (chats/projects/artifacts/files)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "missing",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Partial/Missing); source-of-truth P0 Gap #9"
+    },
+    {
+      "domain": "Conversation",
+      "feature": "Temporary/incognito conversation (no pre-send persist)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "partial",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/03-code-reality-and-tech-debt.md F11; volumes/09"
+    },
+    {
+      "domain": "Projects",
+      "feature": "Projects + per-project memory/knowledge",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "missing",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Projects + Memory Partial)"
+    },
+    {
+      "domain": "Memory",
+      "feature": "Memory (RAG + distilled facts, view/manage/import)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "gated",
+        "cli": "partial",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/current/source-of-truth.md P0 Gap #6; volumes/12"
+    },
+    {
+      "domain": "Artifacts",
+      "feature": "Artifacts (create/version/publish/AI-powered)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "missing",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Artifacts Partial); volumes/14"
+    },
+    {
+      "domain": "Connectors",
+      "feature": "Connectors / apps directory (categories, search, per-tool permissions)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "missing",
+        "cli": "partial",
+        "vscode": "partial",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Connectors Partial); source-of-truth P0 Gap #7"
+    },
+    {
+      "domain": "MCP",
+      "feature": "MCP client (deferred tools, per-tool permission UI)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "present",
+        "mobile": "missing",
+        "cli": "present",
+        "vscode": "partial",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "byok", "managed"],
+      "source": "docs/spec/volumes/19-mcp.md; docs/strategy/02-gap-analysis.md"
+    },
+    {
+      "domain": "AI Features",
+      "feature": "Deep research (multi-step, cited report)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "missing",
+        "cli": "partial",
+        "vscode": "na",
+        "chrome": "partial"
+      },
+      "trust_modes": ["managed", "byok"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Deep research Partial/Missing)"
+    },
+    {
+      "domain": "AI Features",
+      "feature": "Voice (dictation + live conversation)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "partial",
+        "cli": "partial",
+        "vscode": "missing",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Voice Partial)"
+    },
+    {
+      "domain": "AI Features",
+      "feature": "Vision / image understanding",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "partial",
+        "cli": "partial",
+        "vscode": "na",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "managed", "byok"],
+      "source": "docs/strategy/03-code-reality-and-tech-debt.md R5 (mobile vision OCR-only)"
+    },
+    {
+      "domain": "Agent System",
+      "feature": "Agent runtime (tool loop, subagents, approvals)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "present",
+        "mobile": "partial",
+        "cli": "present",
+        "vscode": "partial",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "byok", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Partial->Present; CLI strong)"
+    },
+    {
+      "domain": "Skills",
+      "feature": "Skills (SKILL.md, progressive disclosure, vetting)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "missing",
+        "cli": "present",
+        "vscode": "partial",
+        "chrome": "missing"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/spec/volumes/21-skills.md; source-of-truth (mobile Skills dead-end R16)"
+    },
+    {
+      "domain": "Plugins",
+      "feature": "Plugins (bundle skills+agents+hooks+commands+MCP/LSP)",
+      "status_by_surface": {
+        "web": "missing",
+        "desktop": "partial",
+        "mobile": "missing",
+        "cli": "present",
+        "vscode": "partial",
+        "chrome": "missing"
+      },
+      "trust_modes": ["local"],
+      "source": "docs/spec/volumes/22-plugins.md; crates/agiworkforce-plugin-runtime"
+    },
+    {
+      "domain": "UI System",
+      "feature": "Settings IA (locked sections)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "partial",
+        "cli": "na",
+        "vscode": "partial",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "byok", "managed"],
+      "source": "docs/current/source-of-truth.md UX Lock + P0 Gap #2"
+    },
+    {
+      "domain": "Files",
+      "feature": "Non-image attachment ingestion (PDF/doc/code on-device)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "present",
+        "mobile": "partial",
+        "cli": "present",
+        "vscode": "partial",
+        "chrome": "partial"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/12-website-production-plan.md WEB-3; volumes/15"
+    },
+    {
+      "domain": "Synchronization",
+      "feature": "App-chat sync (server-side, app-chat boundary only)",
+      "status_by_surface": {
+        "web": "present",
+        "desktop": "partial",
+        "mobile": "gated",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["managed"],
+      "source": "docs/current/source-of-truth.md Surface Roles + P0 Gap #10 (CLI/VSC/Chrome explicit handoff only)"
+    },
+    {
+      "domain": "Billing",
+      "feature": "Billing/usage UI (invoices, plan, spend limits)",
+      "status_by_surface": {
+        "web": "partial",
+        "desktop": "partial",
+        "mobile": "partial",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["managed"],
+      "source": "docs/strategy/03-code-reality-and-tech-debt.md R10; volumes/28"
+    },
+    {
+      "domain": "Security",
+      "feature": "Local->BYOK fork (context select, secret scan, payload preview, consent)",
+      "status_by_surface": {
+        "web": "na",
+        "desktop": "partial",
+        "mobile": "na",
+        "cli": "partial",
+        "vscode": "partial",
+        "chrome": "na"
+      },
+      "trust_modes": ["local", "byok"],
+      "source": "docs/current/source-of-truth.md P0 Gap #4; INV-9"
+    },
+    {
+      "domain": "Enterprise",
+      "feature": "Enterprise controls (SCIM, audit API, RBAC, data residency)",
+      "status_by_surface": {
+        "web": "missing",
+        "desktop": "na",
+        "mobile": "na",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["managed"],
+      "source": "docs/strategy/03-code-reality-and-tech-debt.md R11 (SCIM/directory-sync not implemented)"
+    },
+    {
+      "domain": "Visual Design",
+      "feature": "Visual design workspace (canvas/artboards/decks)",
+      "status_by_surface": {
+        "web": "missing",
+        "desktop": "missing",
+        "mobile": "na",
+        "cli": "na",
+        "vscode": "na",
+        "chrome": "na"
+      },
+      "trust_modes": ["local", "managed"],
+      "source": "docs/strategy/02-gap-analysis.md §2 (Missing/Gated, net-new scope); source-of-truth P0 Gap #13"
+    }
+  ]
+}
