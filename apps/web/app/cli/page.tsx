@@ -237,7 +237,7 @@ $ agi auth-status`}</pre>
           ctas={[
             { href: '/download', label: 'Go to Downloads' },
             { href: '/agi-code', label: 'Explore AGI Code' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

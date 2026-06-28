@@ -32,10 +32,14 @@ export const LAUNCH = {
 } as const;
 
 export const POSITIONING = {
-  wedge: 'Hosted web trial. Local and BYOK for serious work. Cloud by invite.',
+  wedge:
+    'Try AGI on the web. Local and BYOK for serious work. Managed cloud, open in public alpha.',
   trustBoundary:
-    'Website users can try AGI managed Auto Economy with a small free cap. Local and BYOK are supported on desktop and developer surfaces. Higher hosted cloud is invite-only.',
-  cloudInvite: 'Cloud by invite after web trial, Local, and BYOK demand prove scale.',
+    'Website users can use AGI managed cloud in public alpha, with a small free Auto Economy cap and higher-capacity paid plans rolling out. Local and BYOK are supported on desktop and developer surfaces. Managed cloud is open by default, not invite-only.',
+  // Retained for any future managed-cloud positioning callouts. Managed cloud is
+  // public alpha and open; higher capacity is a paid subscription, not an invite.
+  cloudInvite:
+    'Managed cloud is open in public alpha; higher capacity is a paid subscription, not an invite.',
 } as const;
 
 export type PricingTabId = 'individual' | 'team' | 'api';

@@ -176,7 +176,7 @@ export default function LocalPage() {
               Set Up BYOK
             </Link>
             <WaitlistTrigger
-              label="Join Cloud Waitlist"
+              label="Team & Enterprise access"
               source="website"
               className="agi-fl-cta agi-fl-cta--ghost"
             />

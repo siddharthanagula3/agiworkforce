@@ -40,7 +40,12 @@ const PRICING_TABS: { id: PricingTabId; labelKey: string }[] = [
   { id: 'api', labelKey: 'tabApi' },
 ];
 
-/** Hosted plans shown on the Team tab. Waitlist-gated; never purchasable today. */
+/**
+ * Higher-capacity hosted plans shown on the Team tab. Managed cloud itself is
+ * public-alpha-open (free hobby web access needs no waitlist); these paid tiers
+ * add capacity and roll out via early access while STRIPE_CHECKOUT_ENABLED and
+ * billing controls are proven (see app/api/checkout/route.ts).
+ */
 const TEAM_PLAN_IDS = ['pro', 'max'] as const;
 
 /**
@@ -273,7 +278,7 @@ export default function PricingPage() {
             </div>
           )}
 
-          {/* Team tab: hosted tiers, waitlist-gated · never purchasable today */}
+          {/* Team tab: higher-capacity hosted tiers, rolling out via early access */}
           {activeTab === 'team' && (
             <div className="agi-tier-grid">
               {TEAM_PLAN_IDS.map((planId, i) => {
@@ -342,7 +347,7 @@ export default function PricingPage() {
           )}
         </section>
 
-        {/* ──────────────── Hosted cloud waitlist (anchor target) ─────────────── */}
+        {/* ──────────── Higher-capacity plans early access (anchor target) ──────────── */}
         <section
           id="waitlist"
           className="agi-fl-section"

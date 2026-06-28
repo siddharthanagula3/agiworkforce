@@ -129,7 +129,7 @@ GOOGLE_API_KEY=AIza...
             href="/waitlist"
             style={{ fontSize: 14, color: 'var(--agi-amber)', textDecoration: 'underline' }}
           >
-            Join the Cloud Managed waitlist &rarr;
+            Join Team &amp; Enterprise early access &rarr;
           </Link>
         </section>
 

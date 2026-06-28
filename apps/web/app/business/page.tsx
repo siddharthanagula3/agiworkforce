@@ -28,7 +28,7 @@ export default function BusinessPage() {
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/download', label: 'Download AGI' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -90,7 +90,7 @@ export default function BusinessPage() {
             },
             {
               k: 'Data boundary',
-              v: 'Local work never silently leaves the device. BYOK traffic goes to the provider you choose. Cloud work is labeled and invite-gated.',
+              v: 'Local work never silently leaves the device. BYOK traffic goes to the provider you choose. Cloud work is labeled and open in public alpha.',
             },
             {
               k: 'Surfaces',
@@ -141,7 +141,7 @@ export default function BusinessPage() {
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/download', label: 'Download AGI' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

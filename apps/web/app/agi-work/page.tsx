@@ -100,7 +100,7 @@ export default function AgiWorkPage() {
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/desktop', label: 'See AGI Desktop' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

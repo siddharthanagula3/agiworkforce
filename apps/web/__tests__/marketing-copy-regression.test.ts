@@ -257,4 +257,54 @@ describe('public marketing copy regressions', () => {
     // FAQ states the public-alpha reality.
     expect(readWebFile('app/faq/page.tsx')).toContain('public alpha and open by default');
   });
+
+  it('reframes marketing-constants POSITIONING away from cloud-by-invite (PA-5)', () => {
+    // Managed cloud is public-alpha-open (founder decision 2026-06-27/28). The
+    // shared POSITIONING constants must not present it as invite-only/by-invite.
+    const matrix = readWebFile('lib/marketing-constants.ts');
+
+    expect(matrix).not.toContain('Cloud by invite');
+    expect(matrix).not.toContain('Higher hosted cloud is invite-only');
+    expect(matrix).not.toContain('Hosted web trial. Local and BYOK for serious work.');
+    // Trust boundary now states the public-alpha reality.
+    expect(matrix).toContain('public alpha');
+    expect(matrix).toContain('open by default, not invite-only');
+  });
+
+  it('keeps the teams page metadata on public-alpha managed cloud (PA-5)', () => {
+    const teams = readWebFile('app/teams/page.tsx');
+
+    expect(teams).not.toContain('invite-only managed cloud');
+    expect(teams).not.toContain('Cloud · by invite');
+    expect(teams).not.toContain('AGI Cloud invite');
+    expect(teams).toContain('public-alpha managed cloud');
+    expect(teams).toContain('Cloud · public alpha');
+  });
+
+  it('does not call managed cloud private-beta/waitlist-to-use on the pricing page (PA-5)', () => {
+    const en = readWebFile('app/i18n/locales/en/pricing.json');
+    const es = readWebFile('app/i18n/locales/es/pricing.json');
+    const layout = readWebFile('app/pricing/layout.tsx');
+
+    // EN: no private-beta or by-invite framing for managed cloud access.
+    expect(en).not.toContain('AGI Cloud, private beta');
+    expect(en).not.toContain('private beta');
+    expect(en).not.toContain('Scale by invite');
+    expect(en).not.toContain('open by waitlist invite');
+    expect(en).toContain('public alpha');
+    // ES stays in parity and also drops the private-beta framing.
+    expect(es).not.toContain('beta privada');
+    expect(es).not.toContain('por invitación');
+    expect(es).toContain('alfa pública');
+    // Pricing metadata no longer claims cloud plans open by waitlist invite.
+    expect(layout).not.toContain('open by waitlist invite');
+    expect(layout).toContain('public alpha');
+  });
+
+  it('reframes the web InviteCodeModal away from invite-only cloud access (PA-5)', () => {
+    const modal = readWebFile('components/cloud-bridge/InviteCodeModal.tsx');
+
+    expect(modal).not.toContain('Cloud access is currently invite-only');
+    expect(modal).toContain('Managed cloud is open in public alpha');
+  });
 });

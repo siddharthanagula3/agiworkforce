@@ -71,7 +71,7 @@ export interface CampaignHeroProps {
 
 const DEFAULT_PANEL_ROWS: LedgerRow[] = [
   { k: 'Launch', v: LAUNCH.date },
-  { k: 'Modes', v: 'Local, BYOK, Cloud invite' },
+  { k: 'Modes', v: 'Local, BYOK, Cloud (public alpha)' },
   { k: 'Surfaces', v: 'Web, Mobile, Desktop, CLI, Chrome, VS Code' },
   { k: 'Boundary', v: POSITIONING.trustBoundary },
 ];
@@ -201,7 +201,7 @@ export function CampaignHero({
   lede,
   primaryCta = { href: '/download', label: LAUNCH.ctaLabel },
   secondaryCta = { href: '/providers', label: 'Explore providers' },
-  chips = ['Local', 'BYOK', 'Cloud invite', 'Multi-provider'],
+  chips = ['Local', 'BYOK', 'Cloud (public alpha)', 'Multi-provider'],
   stats = DEFAULT_STATS,
   panelTitle = 'Launch control',
   panelRows = DEFAULT_PANEL_ROWS,

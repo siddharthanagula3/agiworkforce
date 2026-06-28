@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { buyTokenPack } from '@features/billing/services/token-pack-purchase';
 
-// Cloud/billing is waitlist-gated. Set NEXT_PUBLIC_CHECKOUT_ENABLED=true in env
-// to open live checkout for invite-only beta (mirrors server AGI_MANAGED_CREDITS_PRIVATE_BETA).
-// Defaults to off so free users are routed to the waitlist, not a live purchase flow.
+// Managed cloud is public-alpha-open; paid top-up checkout is env-gated. Set
+// NEXT_PUBLIC_CHECKOUT_ENABLED=true to open live checkout (mirrors server
+// AGI_MANAGED_CREDITS_PRIVATE_BETA). Defaults to off so free users are routed
+// to the early-access list, not a live purchase flow.
 const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
 
 export interface CreditAlertModalProps {
@@ -46,7 +47,7 @@ export function CreditAlertModal({
   };
 
   const handleBuyTopUp = async () => {
-    // Gate top-up behind the managed-credits waitlist.
+    // Gate top-up behind the managed-credits env flag (early-access).
     // When checkout is not enabled, redirect to the waitlist instead of hitting
     // a live Stripe flow. The old raw fetch also had no CSRF header (403) and
     // a hardcoded amount_cents -- replaced by the proper buyTokenPack service.

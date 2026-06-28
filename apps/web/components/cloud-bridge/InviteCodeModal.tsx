@@ -310,8 +310,9 @@ export function InviteCodeModal({
                 id="invite-code-modal-desc"
                 className="text-xs text-muted-foreground leading-relaxed"
               >
-                Cloud access is currently invite-only. Join the waitlist, or enter your invitation
-                code if you already have one.
+                Managed cloud is open in public alpha; sign in to start. Have a promo or invitation
+                code? Enter it to apply your credit, or join the early-access list for
+                higher-capacity plans.
               </DialogDescription>
             </div>
           </div>

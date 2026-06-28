@@ -47,7 +47,7 @@ export default function DesktopPage() {
                   Run AGI Locally
                 </Link>
                 <WaitlistTrigger
-                  label="Join Cloud Waitlist"
+                  label="Team & Enterprise access"
                   source="website"
                   className="agi-fl-cta agi-fl-cta--ghost"
                 />
@@ -201,7 +201,7 @@ export default function DesktopPage() {
           ctas={[
             { href: '/download', label: 'Get Launch Access' },
             { href: '/byok', label: 'Set Up BYOK' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

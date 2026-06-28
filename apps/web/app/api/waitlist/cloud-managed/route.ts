@@ -13,7 +13,8 @@ import { requireCurrentUserId } from '@/lib/server/neon-chat';
 /**
  * POST /api/waitlist/cloud-managed
  *
- * Account-bound waitlist signup for the Cloud Managed private beta.
+ * Account-bound early-access signup for higher-capacity / Team & Enterprise
+ * plans. Managed cloud itself is public-alpha-open, not gated by this list.
  * Persists to the `cloud_managed_waitlist` table (see apps/web/db/neon/).
  * Fails closed if persistence is unavailable; waitlist signups must never be
  * acknowledged without durable storage.
@@ -26,9 +27,9 @@ import { requireCurrentUserId } from '@/lib/server/neon-chat';
  * by the database policy.
  */
 
-// 'mobile' is a separate AGI Cloud invite source that still rolls up into the
+// 'mobile' is a separate early-access source that still rolls up into the
 // countable cloud_managed_waitlist total. Keep the route account-bound across
-// all sources; mobile anonymous invite capture belongs in a separate endpoint.
+// all sources; mobile anonymous early-access capture belongs in a separate endpoint.
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
 
 const VALID_SOURCES = new Set<WaitlistSource>(['byok', 'sync', 'billing', 'mobile', 'other']);

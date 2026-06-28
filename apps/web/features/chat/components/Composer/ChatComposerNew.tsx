@@ -103,7 +103,7 @@ interface ChatComposerProps {
    * presentation. PLAN.md section 5: "Add per-file privacy labels".
    */
   attachmentPrivacyShortLabel?: string;
-  /** Opens the Cloud Managed waitlist modal from locked model/usage upgrade affordances. */
+  /** Opens the upgrade plan dialog from locked model/usage upgrade affordances. */
   onUpgradeRequest?: () => void;
   /**
    * Called when the user submits in image-generation mode.

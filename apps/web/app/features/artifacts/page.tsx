@@ -90,7 +90,7 @@ export default function ArtifactsFeaturePage() {
             },
             {
               k: 'Publish',
-              v: 'Managed publishing stays behind the AGI Cloud waitlist until sharing controls are proven.',
+              v: 'Managed publishing is rolling out as sharing controls are proven.',
             },
           ]}
         />

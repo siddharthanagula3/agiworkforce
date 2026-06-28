@@ -17,7 +17,7 @@ const QUICK_FACTS: { k: string; v: string }[] = [
   { k: 'Product surfaces', v: 'Desktop · Web · Mobile · CLI · Chrome ext · VS Code ext' },
   {
     k: 'Provider posture',
-    v: 'Visible provider choice across Local, BYOK, and invite-gated Cloud routes',
+    v: 'Visible provider choice across Local, BYOK, and public-alpha Cloud routes',
   },
   {
     k: 'Differentiators',
@@ -74,7 +74,7 @@ export default function PressPage() {
           <p className="agi-fl-section-lede">
             AGI is a multi-surface AI workspace for chat, code, research, files, projects,
             artifacts, tools, connectors, memory, and automation. It gives users clear Local, BYOK,
-            and invite-gated Cloud routes so they can see where work runs before it leaves a device.
+            and public-alpha Cloud routes so they can see where work runs before it leaves a device.
             AGI is built by AGI Automation LLC, an independent company based in the United States.
           </p>
         </section>

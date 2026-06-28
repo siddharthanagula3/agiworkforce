@@ -43,7 +43,7 @@ export default function DownloadPage() {
               See AGI Desktop
             </Link>
             <WaitlistTrigger
-              label="Join Cloud Waitlist"
+              label="Team & Enterprise access"
               source="website"
               className="agi-fl-cta agi-fl-cta--ghost"
             />
@@ -83,12 +83,12 @@ export default function DownloadPage() {
               index: '01',
               name: 'AGI Web',
               tagline: 'No install. Start in the browser.',
-              body: 'Hosted chat with projects, an artifact sidecar, web search, and shared conversations. Your account, waitlist status, and settings live here.',
+              body: 'Hosted chat with projects, an artifact sidecar, web search, and shared conversations. Managed cloud is open in public alpha; your account and settings live here.',
               capabilities: [
                 'Chat with projects & memory',
                 'Artifact sidecar',
                 'Web search',
-                'Account & Cloud waitlist',
+                'Account & cloud sync',
               ],
               platforms: 'Any modern browser',
               status: 'Available in browser',
@@ -133,7 +133,7 @@ export default function DownloadPage() {
                 'Cloud · public alpha',
               ],
               platforms: 'iPhone · Android',
-              status: 'Local + Cloud invite',
+              status: 'Local + Cloud (public alpha)',
               href: '/mobile',
               frame: { variant: 'phone', title: 'AGI Mobile' },
             },
@@ -254,7 +254,7 @@ export default function DownloadPage() {
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
             { href: '/desktop', label: 'See AGI Desktop' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

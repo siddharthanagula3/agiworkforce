@@ -3,8 +3,9 @@
  *
  * Web publish boundary:
  *
- * Web has no local filesystem. Cloud publish is waitlist-gated because managed
- * artifact publishing is not proven for public use yet.
+ * Web has no local filesystem. Managed cloud access is public-alpha-open, but
+ * cloud publish is still rolling out because managed artifact publishing is not
+ * proven for public use yet.
  *
  * This adapter always returns a clean {@link WaitlistPublishResult} instead of
  * attempting any network call or DB upsert. The previous implementation threw
@@ -76,7 +77,7 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
     );
   }
 
-  // Web has no local filesystem; cloud publish is waitlist-gated.
+  // Web has no local filesystem; managed cloud publish is still rolling out.
   // Return clean discriminated union · no DB upsert, no network call.
   const result: WaitlistPublishResult = {
     kind: 'waitlist',
