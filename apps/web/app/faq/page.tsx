@@ -7,7 +7,7 @@ import { MARKETING, POSITIONING } from '../../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'FAQ',
   description:
-    'Frequently asked questions about providers, BYOK, Local mode, the AGI Cloud waitlist, and security.',
+    'Frequently asked questions about providers, BYOK, Local mode, AGI managed cloud, and security.',
   alternates: { canonical: 'https://agiworkforce.com/faq' },
 };
 
@@ -30,7 +30,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'What does AGI Cloud cost?',
-    a: 'Managed cloud plans are a waitlist-gated private beta. Nothing is generally available yet. Current plan details live on the pricing page. Local and BYOK are free and are the supported paths today.',
+    a: 'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Team & Enterprise (org seats, SSO, admin controls) are the only waitlisted tiers.',
   },
   {
     q: 'Do you train on my data?',
@@ -73,7 +73,7 @@ export default function FaqPage() {
             <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
               <li>Local · on-device</li>
               <li>BYOK · your keys</li>
-              <li>Cloud · by invite</li>
+              <li>Cloud · public alpha</li>
             </ul>
           </div>
         </section>
@@ -84,8 +84,8 @@ export default function FaqPage() {
             Nine questions, nine straight answers.
           </h2>
           <p className="agi-fl-section-lede">
-            Providers, trust modes, the Cloud waitlist, and what happens to your data. The short
-            version of everything the rest of the site covers at length.
+            Providers, trust modes, managed cloud, and what happens to your data. The short version
+            of everything the rest of the site covers at length.
           </p>
           <ul className="agi-reasons" style={{ marginTop: 40 }}>
             {QA.map((item) => (

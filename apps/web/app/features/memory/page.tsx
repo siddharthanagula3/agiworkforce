@@ -8,7 +8,7 @@ import { Reveal } from '../../../components/marketing/Reveal';
 export const metadata: Metadata = {
   title: 'AGI Memory | Plain-Language Facts You Control',
   description:
-    'AGI Memory is a readable list of facts you can view, add to, edit, and delete. Device-local by default. Hosted sync reserved for AGI Cloud by invite.',
+    'AGI Memory is a readable list of facts you can view, add to, edit, and delete. Device-local by default. Hosted sync available with AGI managed cloud (public alpha).',
   alternates: { canonical: 'https://agiworkforce.com/features/memory' },
 };
 

@@ -5,7 +5,6 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { FinalCta } from '../../components/marketing/FlagshipSections';
 import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { Reveal } from '../../components/marketing/Reveal';
-import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -106,11 +105,9 @@ export default function ChromeExtensionPage() {
                 <Link href="/desktop" className="agi-fl-cta agi-fl-cta--primary">
                   Pair with AGI Desktop
                 </Link>
-                <WaitlistTrigger
-                  label="Join Cloud Waitlist"
-                  source="website"
-                  className="agi-fl-cta agi-fl-cta--secondary"
-                />
+                <Link href="/get-started" className="agi-fl-cta agi-fl-cta--secondary">
+                  Get Started
+                </Link>
               </div>
               <ul className="agi-fl-mode-ribbon" aria-label="Bridge guarantees">
                 <li>Capture · on request</li>
@@ -196,10 +193,10 @@ export default function ChromeExtensionPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Put AGI beside the page."
-          body="Start with AGI Desktop. The extension hands every job to it across one paired, signed bridge. AGI Cloud stays invite-only. Join the waitlist and you'll get one email when access opens."
+          body="Start with AGI Desktop. The extension hands every job to it across one paired, signed bridge. AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist."
           ctas={[
             { href: '/desktop', label: 'Pair with AGI Desktop' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { href: '/get-started', label: 'Get Started' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

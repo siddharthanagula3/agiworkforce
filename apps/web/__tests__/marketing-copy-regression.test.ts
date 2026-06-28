@@ -189,4 +189,31 @@ describe('public marketing copy regressions', () => {
     expect(waitlist).toContain('open by default');
     expect(waitlist).toContain('Team');
   });
+
+  it('does not claim managed cloud is invite-only/unavailable across product pages (WEB-12)', () => {
+    // Sweep the public pages that previously asserted managed cloud was
+    // waitlist/invite-gated. None may state it is unavailable or invite-only.
+    const pages = [
+      'app/faq/page.tsx',
+      'app/chrome-extension/page.tsx',
+      'app/press/page.tsx',
+      'app/signup/page.tsx',
+      'app/agi-code/page.tsx',
+    ];
+    for (const page of pages) {
+      const src = readWebFile(page);
+      expect(src, `${page} must not say cloud is invite-only`).not.toContain('Cloud by invite');
+      expect(src, `${page} must not say cloud stays invite-only`).not.toContain(
+        'AGI Cloud stays invite-only',
+      );
+      expect(src, `${page} must not claim nothing is GA`).not.toContain(
+        'Nothing is generally available yet',
+      );
+      expect(src, `${page} must not say managed compute is invite-only`).not.toContain(
+        'Managed compute opens by invite only',
+      );
+    }
+    // FAQ states the public-alpha reality.
+    expect(readWebFile('app/faq/page.tsx')).toContain('public alpha and open by default');
+  });
 });

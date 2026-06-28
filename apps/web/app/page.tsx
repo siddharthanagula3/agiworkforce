@@ -23,7 +23,7 @@ const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 export const metadata: Metadata = {
   title: 'AGI | One AI Workspace. Six Surfaces. Your Rules.',
   description:
-    'The AI application suite for six surfaces. Local models, your own keys, or AGI Cloud by invite. You see the route before anything leaves your device.',
+    'The AI application suite for six surfaces. Local models, your own keys, or AGI managed cloud (public alpha). You see the route before anything leaves your device.',
   keywords: [
     'AI workspace',
     'multi-provider AI',
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'AGI | One AI Workspace. Six Surfaces. Your Rules.',
-    description: 'One workspace on six surfaces. Local, BYOK, or AGI Cloud by invite. Your rules.',
+    description: 'One workspace on six surfaces. Local, BYOK, or AGI managed cloud. Your rules.',
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [{ url: '/app-preview.png', width: 1024, height: 665, alt: 'AGI Web composer' }],
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AGI | One AI Workspace. Six Surfaces. Your Rules.',
-    description: 'One workspace on six surfaces. Local, BYOK, or AGI Cloud by invite. Your rules.',
+    description: 'One workspace on six surfaces. Local, BYOK, or AGI managed cloud. Your rules.',
     images: ['/app-preview.png'],
   },
 };
@@ -71,7 +71,7 @@ export default function Home() {
             { href: '/vscode-extension', label: 'VS Code Extension' },
             { href: '/chrome-extension', label: 'Chrome Extension' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
           visual={<MobileHeroVisual />}
         />
 
@@ -177,12 +177,12 @@ export default function Home() {
               index: '06',
               name: 'AGI Mobile',
               tagline: 'Private by default.',
-              body: 'Local Mode out of the box. Conversations and memory stay on the phone until you say otherwise. Cloud arrives by invite.',
+              body: 'Local Mode out of the box. Conversations and memory stay on the phone until you say otherwise. Managed cloud is in public alpha.',
               capabilities: [
                 'On-device Local chat',
                 'Local data stays local',
                 'Projects & recents drawer',
-                'Cloud by invite',
+                'Cloud · public alpha',
               ],
               platforms: 'iPhone · Android',
               status: 'Local + Cloud invite',

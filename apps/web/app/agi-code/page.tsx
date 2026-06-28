@@ -14,7 +14,7 @@ import { LAUNCH } from '../../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'AGI Code | CLI + VS Code developer stack',
   description:
-    'AGI Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or AGI Cloud by invite.',
+    'AGI Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or AGI managed cloud (public alpha).',
   alternates: { canonical: 'https://agiworkforce.com/agi-code' },
 };
 
@@ -28,13 +28,13 @@ export default function AgiCodePage() {
           eyebrow="AGI Code · for developers"
           titleLines={['Your terminal.', 'Your editor.', 'One agent.']}
           em="One agent."
-          lede="AGI Code spans the agi CLI and the VS Code extension. Resume and fork sessions. Review diffs before they land. Run commands in an OS sandbox. Extend the agent with hooks, skills, and MCP. Local models, your own keys, or AGI Cloud by invite."
+          lede="AGI Code spans the agi CLI and the VS Code extension. Resume and fork sessions. Review diffs before they land. Run commands in an OS sandbox. Extend the agent with hooks, skills, and MCP. Local models, your own keys, or AGI managed cloud (public alpha)."
           ctas={[
             { href: '/cli', label: 'See the CLI' },
             { href: '/vscode-extension', label: 'Get the VS Code Extension' },
             { href: '/download', label: 'Download AGI' },
           ]}
-          modeRibbon={['Local · offline-capable', 'BYOK · your keys', 'Cloud · by invite']}
+          modeRibbon={['Local · offline-capable', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <SurfaceIndex
@@ -154,11 +154,11 @@ export default function AgiCodePage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Bring the agent to your repo."
-          body="Install the CLI, request the VS Code extension preview, and choose the route for every task: local models, your own keys, or AGI Cloud by invite."
+          body="Install the CLI, request the VS Code extension preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/cli', label: 'See the CLI' },
-            { label: 'Join Cloud Waitlist', waitlist: true },
+            { href: '/get-started', label: 'Get Started' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />
