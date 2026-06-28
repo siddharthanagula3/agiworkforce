@@ -56,8 +56,8 @@ export default function MobileLegalPage() {
 
           <div className="agi-callout" style={{ marginBottom: 32 }}>
             <h3 className="agi-callout-h">
-              <span className="agi-callout-amber">Core fact.</span> Mobile has Local and invite-only
-              Cloud modes.
+              <span className="agi-callout-amber">Core fact.</span> Mobile has Local and
+              public-alpha Cloud modes.
             </h3>
             <p className="agi-callout-p">
               In Local mode, the AI model runs on your device or a local model route and is not

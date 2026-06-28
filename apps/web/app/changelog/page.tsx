@@ -68,7 +68,7 @@ const FORTHCOMING: { item: string; detail: string; quarter: string }[] = [
   },
   {
     item: 'VS Code extension',
-    detail: 'Marketplace listing once private beta clears.',
+    detail: 'Marketplace listing planned for public launch.',
     quarter: LAUNCH.date,
   },
   { item: 'Pro tier', detail: 'Opens after security audit closes.', quarter: 'TBD' },
