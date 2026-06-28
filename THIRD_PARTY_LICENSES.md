@@ -75,6 +75,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## SkillSpector
+
+- **Upstream**: [NVIDIA/skillspector](https://github.com/NVIDIA/skillspector)
+- **License**: Apache-2.0
+- **Copyright**: © NVIDIA Corporation
+- **Imported into**: `services/skill-vetting/`
+- **Adoption**: Vendored the runnable scanner package (`src/skillspector/**`, 57 modules + YARA rules) plus `pyproject.toml`. Upstream `LICENSE` and `THIRD_PARTY_NOTICES.md` are preserved verbatim at `services/skill-vetting/LICENSE` and `services/skill-vetting/THIRD_PARTY_NOTICES.md`.
+- **Local changes**: trimmed upstream `tests/`, `docs/`, `Dockerfile`, `extensions/`, `uv.lock` (kept only the two sample fixtures under `samples/`); added our `README.md` and `verify.sh`; rewrote `model_registry.yaml` to AGI catalog model IDs sourced from `packages/types/src/models.json`. No upstream source files were modified.
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:
