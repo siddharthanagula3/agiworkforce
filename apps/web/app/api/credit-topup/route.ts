@@ -75,7 +75,7 @@ async function handleCreditTopup(request: NextRequest) {
 
   if (!isManagedCreditPrivateBetaEnabled()) {
     throw createError.forbidden(
-      'Managed credit top-ups are private beta only. Join the Cloud Managed waitlist.',
+      'Managed credit top-ups are not currently available. Manage your plan from billing.',
     );
   }
 
