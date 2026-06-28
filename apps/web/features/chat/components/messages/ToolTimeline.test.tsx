@@ -79,7 +79,9 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
 
     render(<ToolTimeline tools={tools} />);
 
-    expect(screen.getByText('Running tools...')).toBeInTheDocument();
+    // Running header shows the running tool's statusPhrase, or the "Working..."
+    // fallback when none is set (per the playful per-tool status phrase change).
+    expect(screen.getByText('Working...')).toBeInTheDocument();
     expect(screen.getByText('running-tool')).toBeInTheDocument();
   });
 
@@ -155,9 +157,17 @@ describe('ToolTimeline · header metadata', () => {
     expect(screen.getByText(/1 failed/)).toBeInTheDocument();
   });
 
-  it('shows "Running tools..." header when a tool is running', () => {
+  it('shows the running status phrase (statusPhrase, else "Working...") when a tool is running', () => {
     render(<ToolTimeline tools={[{ name: 'tool', status: 'running' as const }]} />);
-    expect(screen.getByText('Running tools...')).toBeInTheDocument();
+    expect(screen.getByText('Working...')).toBeInTheDocument();
+
+    // When the running tool carries a statusPhrase, the header surfaces it.
+    render(
+      <ToolTimeline
+        tools={[{ name: 'tool', status: 'running' as const, statusPhrase: 'Searching…' }]}
+      />,
+    );
+    expect(screen.getByText('Searching…')).toBeInTheDocument();
   });
 
   it('omits duration from header (duration no longer shown in Claude-style header)', () => {
