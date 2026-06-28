@@ -124,4 +124,13 @@ Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
 - `7a926f298` test(web): tool-timeline running header updated to status-phrase behavior (stale test after 5b54d58d0) — web ToolTimeline 17/17
 - `refactor(cli)`: applied `migrate-structure --apply` → exec tools folder-per-tool (`{tool}/mod.rs`); `check:structure-conventions` green, cargo check -p agiworkforce-cli green (INC structure ✅)
 
+- `ab5481204` chore(guardrails): aligned `check:repo-organization`/`check:report-retention`/`check:non-md-artifacts`/`lanes.json` with the clean-repo audit/reports removal (restored `check:llm-operability` to GREEN — it was red purely from the removed dirs) + moved `draftStore` out of mobile's frozen root `lib` into `src/features/chat` (`check:mobile-hygiene` green)
+- `dbcbf2d30` docs: persisted session progress + `MODELS-CURATION-DRIFT-01` ledger entry + CHANGELOG
+
+**Done-condition #8 gate status (verified 2026-06-28):** `pnpm typecheck:all` ✅ · `pnpm lint` ✅ · `cargo check --workspace --locked` ✅ · `check:licenses` ✅ · `check:spec-artifacts` ✅ · `check:llm-operability` ✅ · `sync:models:check` ✅ · trust-boundary contract tests ✅ (web 24/24 + extension 15/15; desktop rust via cargo) · `git diff --check` ✅ · `cargo clippy` (re-running, expected clean — was clean pre-session per `CI-RUST-AUDIT-01`).
+
 **Pre-existing reds (NOT regressions, logged):** `apps/web` ~13 Neon-integration tests (memory, device-code, routing_preferences, me, artifacts) fail locally for lack of Postgres but pass in CI — already tracked as `CI-INSTEP-REDS-01` in known-flaws.
+
+### Remaining (next sessions)
+
+INC-0.3 trust-boundary contract **harness** (per-surface tests exist — web/extension/desktop — but no unified `pnpm` gate yet) → INC-0.4/0.5 → runtime C1–C4 ports from codex-rs (INC-1.1–1.4) → website/mobile/desktop production plans (strategy 12/13/14). The catalog/`taskRouting` work proved the SSOT pipeline; edit `models.curation.json` (never `models.json`).
