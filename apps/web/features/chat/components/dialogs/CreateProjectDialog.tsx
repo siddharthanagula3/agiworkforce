@@ -134,23 +134,19 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
               Project name
             </Label>
 
-            {/* Input with leading emoji-picker affordance */}
+            {/* Input with a leading decorative icon. (Not a button — an emoji
+                picker is not implemented, so a clickable no-op would be a dead
+                control; this is a non-interactive affordance instead.) */}
             <div className="relative">
-              <button
-                type="button"
-                aria-label="Choose emoji (coming soon)"
-                tabIndex={-1}
+              <span
+                aria-hidden="true"
                 className={cn(
-                  'absolute left-3 top-1/2 -translate-y-1/2',
-                  'flex h-6 w-6 items-center justify-center rounded-md',
-                  'text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+                  'pointer-events-none absolute left-3 top-1/2 -translate-y-1/2',
+                  'flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground',
                 )}
-                onClick={() => {
-                  /* emoji picker placeholder */
-                }}
               >
-                <Smile className="h-4 w-4" aria-hidden="true" />
-              </button>
+                <Smile className="h-4 w-4" />
+              </span>
               <Input
                 ref={inputRef}
                 id="create-project-name"
