@@ -8,7 +8,8 @@
  *
  * Current product rules:
  *   - Local mode is free and demo-ready first.
- *   - Cloud exists behind invite/waitlist access, not as a public branch here.
+ *   - Managed Cloud is public alpha (open by default); signing in is the entitlement.
+ *     Onboarding stays local-first — Cloud sign-in happens after setup.
  *   - Device tier and model name/size come from the catalog.
  *   - Compliance disclosure fires before screen 2.
  */
@@ -287,9 +288,9 @@ export default function OnboardingScreen() {
       ledger: mmkvDisclosureLedger,
       copy: disclosureCopy,
       surface: 'mobile',
-      // The first-run disclosure is not the Cloud invite consent step. We keep
+      // The first-run disclosure is not the Cloud sign-in consent step. We keep
       // managedCloudAccepted true here so returning users are not blocked by a
-      // disclosure they already accepted before the separate Cloud gate appears.
+      // disclosure they already accepted before the separate Cloud sign-in appears.
       managedCloudAccepted: true,
       chineseHqProvidersAccepted: [],
     });

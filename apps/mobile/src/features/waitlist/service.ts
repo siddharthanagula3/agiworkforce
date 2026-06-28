@@ -127,11 +127,11 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
 }
 
 /**
- * Redeem the Mobile Cloud private-beta invite.
+ * Legacy: redeem the Mobile Cloud alpha invite code.
  *
- * The public Cloud path remains closed by feature flags, but alpha testers can
- * unlock the gated auth/cloud surface locally with the launch invite code.
- * Authenticated server-side subscription claiming happens after sign-in.
+ * Managed Cloud is now public alpha (open by default) — signing in is the
+ * entitlement, so this invite path is no longer required. It is retained only for
+ * backward-compat with existing launch alpha codes; new access comes from sign-in.
  */
 export async function redeemInviteCode(
   code: string,

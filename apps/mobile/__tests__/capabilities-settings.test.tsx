@@ -80,7 +80,7 @@ describe('Capabilities settings screen', () => {
     expect(getByText('On this device')).toBeTruthy();
     expect(getByLabelText('Local Mode. Private chat runs on this device. Active')).toBeTruthy();
     expect(
-      getByLabelText('Web search. Search current web information in Cloud sessions. Invite'),
+      getByLabelText('Web search. Search current web information in Cloud sessions. Sign in'),
     ).toBeTruthy();
     expect(
       getByLabelText('AGI Code. Review mobile code sessions and Desktop handoff. Desktop'),
@@ -101,7 +101,7 @@ describe('Capabilities settings screen', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
   });
 
-  it('shows Cloud instead of Invite after local alpha access is unlocked', () => {
+  it('shows Cloud instead of Sign in after cloud access is unlocked', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
 
     const { getByLabelText } = render(<CapabilitiesScreen />);

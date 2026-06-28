@@ -45,7 +45,7 @@ function getAccent(
 }
 
 function getMobileDestinationLabel(presentation: SendPreviewPresentation): string {
-  if (presentation.providerMode === 'DirectByok') return 'Cloud invite required';
+  if (presentation.providerMode === 'DirectByok') return 'Sign in for AGI Cloud';
   return presentation.destinationLabel;
 }
 
@@ -56,7 +56,7 @@ function getMobilePrivacyLabel(presentation: SendPreviewPresentation): string {
 
 function getMobileBannerCopy(presentation: SendPreviewPresentation): string {
   if (presentation.providerMode === 'DirectByok') {
-    return 'Cloud access is available by invite. Join the waitlist or enter an invite code to continue.';
+    return 'Sign in to use AGI Cloud chat. Local Mode stays available on this device.';
   }
   if (presentation.staysLocal) {
     return 'The model runs on your device. Nothing is uploaded unless you choose Cloud.';

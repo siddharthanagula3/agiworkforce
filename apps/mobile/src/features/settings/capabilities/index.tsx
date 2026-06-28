@@ -38,7 +38,7 @@ interface CapabilitySection {
 }
 
 function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
-  const cloudValue = cloudUnlocked ? 'Cloud' : 'Invite';
+  const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const codeSessionsEnabled = FEATURES.companion || FEATURES.cloudChat;
 
   return [

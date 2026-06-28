@@ -99,7 +99,7 @@ export default function ChatTabScreen() {
       ? 'Continue with AGI Cloud. Use the sidebar for recents and projects.'
       : 'Start privately on this device. Use the sidebar for recents and projects.';
 
-  // SendPreview disclosure data: Mobile supports Local and invite-gated AGI Cloud.
+  // SendPreview disclosure data: Mobile supports Local and sign-in-gated AGI Cloud.
   const sendPreviewPresentation = useMemo(() => {
     const providerMode: ProviderMode =
       selectedProvider === 'cloud_managed' ? 'ManagedGateway' : 'Local';

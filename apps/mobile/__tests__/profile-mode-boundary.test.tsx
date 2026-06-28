@@ -168,7 +168,7 @@ describe('Profile mode boundary', () => {
     const { getByText, queryByText } = render(<ProfileScreen />);
 
     expect(getByText('AGI Cloud')).toBeTruthy();
-    expect(getByText('Invite required')).toBeTruthy();
+    expect(getByText('Sign in required')).toBeTruthy();
     expect(getByText('AGI Cloud profile')).toBeTruthy();
     expect(getByText('7')).toBeTruthy();
     expect(queryByText('Sid')).toBeNull();

@@ -31,19 +31,19 @@ jest.mock('lucide-react-native', () => {
 import { ModeToggle } from '../src/features/chat/components/ModeToggle';
 
 describe('ModeToggle', () => {
-  it('defaults to local mode and exposes the cloud waitlist affordance', () => {
+  it('defaults to local mode and prompts sign-in for the locked cloud side', () => {
     const { getByTestId, getByText } = render(<ModeToggle />);
 
     expect(getByTestId('chat.mode-toggle')).toBeTruthy();
     expect(getByText('Local')).toBeTruthy();
     expect(getByText('Cloud')).toBeTruthy();
     expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityLabel).toBe(
-      'AGI Cloud, invite required',
+      'AGI Cloud, sign in required',
     );
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
   });
 
-  it('opens the waitlist when the locked cloud side is tapped', () => {
+  it('opens the cloud access prompt when the locked cloud side is tapped', () => {
     const onTapCloud = jest.fn();
     const { getByTestId } = render(<ModeToggle onTapCloud={onTapCloud} />);
 
@@ -52,11 +52,13 @@ describe('ModeToggle', () => {
     expect(onTapCloud).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a joined waitlist rank without selecting cloud as the active mode', () => {
+  it('does not frame locked cloud access with a waitlist rank (public alpha = sign in)', () => {
+    // Legacy cloudJoined / waitlistRank props no longer drive the label: a signed-out
+    // user is prompted to sign in, not to join a list.
     const { getByTestId } = render(<ModeToggle cloudJoined waitlistRank={42} />);
 
     expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityLabel).toBe(
-      'AGI Cloud waitlist number 42',
+      'AGI Cloud, sign in required',
     );
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
   });

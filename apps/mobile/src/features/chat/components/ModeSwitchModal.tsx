@@ -38,7 +38,7 @@ export function ModeSwitchModal({
   const targetsCloud = toMode === 'cloud';
 
   const title = useMemo(() => {
-    if (targetsCloud) return 'AGI Cloud is invite-only';
+    if (targetsCloud) return 'Switch to AGI Cloud?';
     return `Switch from ${modeLabel(fromMode)} to ${modeLabel(toMode)}?`;
   }, [fromMode, targetsCloud, toMode]);
 
@@ -79,7 +79,7 @@ export function ModeSwitchModal({
           </Text>
           <Text style={{ marginTop: 8, color: colors.textSecondary, fontSize: 13, lineHeight: 20 }}>
             {targetsCloud
-              ? 'Cloud is available by invite. Your local chat stays on this device unless you choose to start a Cloud session.'
+              ? 'Sign in to use AGI Cloud chat. Your local chat stays on this device unless you choose to start a Cloud session.'
               : 'This changes the active model path for the conversation.'}
           </Text>
 
@@ -112,7 +112,7 @@ export function ModeSwitchModal({
               }}
             >
               <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>
-                {targetsCloud ? 'Open invite' : 'Switch'}
+                {targetsCloud ? 'Continue' : 'Switch'}
               </Text>
             </Pressable>
           </View>

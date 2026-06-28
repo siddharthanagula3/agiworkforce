@@ -28,13 +28,12 @@ export function ModeToggle({
   const colors = useThemeColors();
   const cloudLabel = 'Cloud';
   const cloudActive = mode === 'cloud';
-  const cloudAccessibilityLabel = cloudUnlocked
-    ? 'AGI Cloud'
-    : cloudJoined
-      ? waitlistRank
-        ? `AGI Cloud waitlist number ${waitlistRank}`
-        : 'AGI Cloud waitlist joined'
-      : 'AGI Cloud, invite required';
+  // Public alpha: cloud access is the signed-in entitlement (cloudUnlocked). The
+  // cloudJoined / waitlistRank props are retained for call-site compatibility but no
+  // longer frame access — a signed-out user is prompted to sign in, not to join a list.
+  void cloudJoined;
+  void waitlistRank;
+  const cloudAccessibilityLabel = cloudUnlocked ? 'AGI Cloud' : 'AGI Cloud, sign in required';
   const toggleWidth = compact ? 172 : 216;
   const selectedBackground = colors.charcoal700;
   const selectedBorderColor = colors.borderLight;
