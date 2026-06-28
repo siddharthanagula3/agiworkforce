@@ -13,6 +13,7 @@ import {
   Mic,
   Gauge,
   Blocks,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -41,7 +42,8 @@ export type SettingsNavKey =
   | 'memory'
   | 'notifications'
   | 'voice'
-  | 'extensions';
+  | 'extensions'
+  | 'developer';
 
 export interface SettingsNavEntry {
   key: SettingsNavKey;
@@ -119,6 +121,12 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
     icon: Blocks,
     keywords: ['mcp extension', 'install', 'uninstall', 'enable', 'disable'],
   },
+  {
+    key: 'developer',
+    label: 'Developer',
+    icon: Terminal,
+    keywords: ['config', 'dotfile', 'config.toml', 'logs', 'advanced', 'agent execution'],
+  },
 ];
 
 export interface SettingsNavGroup {
@@ -133,4 +141,5 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   { keys: ['general', 'account', 'usage', 'appearance', 'privacy', 'models-keys', 'capabilities'] },
   { label: 'Tools', keys: ['connectors', 'plugins', 'agents', 'memory'] },
   { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
+  { label: 'Advanced', keys: ['developer'] },
 ];
