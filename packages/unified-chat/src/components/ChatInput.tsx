@@ -75,7 +75,11 @@ export function ChatInput({
   const [isDragOver, setIsDragOver] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
+  // UI-WEBSEARCH-TOGGLE-01: read + write the REAL chatStore web-search state (not
+  // a local useState that diverged from the send path). Default is OFF (chatStore
+  // `webSearchEnabled: false`) — the user must explicitly enable web search.
+  const webSearchEnabled = useChatStore((s) => s.webSearchEnabled);
+  const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<
     'formal' | 'casual' | 'concise' | 'detailed' | null
@@ -400,7 +404,7 @@ export function ChatInput({
                   onOpenChange={setAttachmentMenuOpen}
                   onAddFiles={() => fileInputRef.current?.click()}
                   webSearchEnabled={webSearchEnabled}
-                  onWebSearchToggle={() => setWebSearchEnabled((v) => !v)}
+                  onWebSearchToggle={() => setWebSearchEnabled(!webSearchEnabled)}
                   researchEnabled={researchEnabled}
                   onResearchToggle={() => setResearchEnabled((v) => !v)}
                   activeStyle={activeStyle}

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
+import { useCapability } from '../lib/capabilities';
 
 export type StyleOption = 'formal' | 'casual' | 'concise' | 'detailed';
 
@@ -101,6 +102,18 @@ const STYLE_OPTIONS: { value: StyleOption; label: string }[] = [
   { value: 'detailed', label: 'Detailed' },
 ];
 
+/**
+ * Shared, capability-aware composer menu — the REFERENCE implementation for how
+ * surfaces should gate platform actions (it render-gates "Take a screenshot" via
+ * `useCapability('canTakeScreenshot')`).
+ *
+ * STATUS: not yet mounted by any live shell. The live composers are surface-local
+ * today — web `ChatComposerNew`, desktop `v3/PlusMenu`, mobile `AddToChatSheet`.
+ * Real capability adoption is therefore proven on those live composers (and on
+ * the live web slash menu), NOT here. Converging the three live composers onto
+ * this shared component is tracked as a Strong-Improvement; until then this is a
+ * reference/SSOT exemplar, not the production path.
+ */
 export function AttachmentMenu({
   open,
   onOpenChange,
@@ -116,6 +129,11 @@ export function AttachmentMenu({
 }: AttachmentMenuProps): React.ReactElement {
   const [styleOpen, setStyleOpen] = useState(false);
   const [screenshotting, setScreenshotting] = useState(false);
+
+  // PLATFORM gate: screen capture (getDisplayMedia) is a desktop-class
+  // affordance. Render-gate so the item is ABSENT on web/mobile rather than
+  // relying on the optional `onScreenshot` prop being omitted.
+  const canTakeScreenshot = useCapability('canTakeScreenshot');
 
   const handleScreenshot = async () => {
     if (!onScreenshot) {
@@ -191,12 +209,14 @@ export function AttachmentMenu({
               onOpenChange(false);
             }}
           />
-          <MenuItem
-            icon={<Camera size={15} />}
-            label={screenshotting ? 'Capturing…' : 'Take a screenshot'}
-            onClick={handleScreenshot}
-            className={screenshotting ? 'opacity-60 pointer-events-none' : undefined}
-          />
+          {canTakeScreenshot && (
+            <MenuItem
+              icon={<Camera size={15} />}
+              label={screenshotting ? 'Capturing…' : 'Take a screenshot'}
+              onClick={handleScreenshot}
+              className={screenshotting ? 'opacity-60 pointer-events-none' : undefined}
+            />
+          )}
 
           <Divider />
 

@@ -455,3 +455,21 @@ describe('useChatStore — persist v1 -> v2 migration', () => {
     expect(out['activeConversationId']).toBe('c1');
   });
 });
+
+// UI-WEBSEARCH-TOGGLE-01 (founder decision): web search defaults OFF and is
+// controlled honestly through the store, so the composer toggle actually affects
+// the send path (useChat reads store.webSearchEnabled). Previously the composer
+// held a divergent local useState(true) that never reached the send.
+describe('web search toggle (UI-WEBSEARCH-TOGGLE-01)', () => {
+  it('the store default is OFF — the user must explicitly enable web search', () => {
+    expect(useChatStore.getInitialState().webSearchEnabled).toBe(false);
+  });
+
+  it('setWebSearchEnabled controls the real state the send path reads', () => {
+    useChatStore.setState({ webSearchEnabled: false });
+    useChatStore.getState().setWebSearchEnabled(true);
+    expect(useChatStore.getState().webSearchEnabled).toBe(true);
+    useChatStore.getState().setWebSearchEnabled(false);
+    expect(useChatStore.getState().webSearchEnabled).toBe(false);
+  });
+});

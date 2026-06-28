@@ -21,7 +21,11 @@ import type { AgentControlState, AgentMode, Effort } from '@agiworkforce/types';
 // ---------------------------------------------------------------------------
 
 const GLOBAL_DEFAULT: AgentControlState = {
-  mode: 'auto',
+  // UI-AGENTMODE-DEFAULT-01 (founder decision): default to 'ask' ("Confirm every
+  // edit before it runs"), NOT 'auto'. Agent edits must always require explicit
+  // user intent; a fresh conversation must never auto-apply edits without
+  // confirmation. Users opt into 'auto'/'bypass' explicitly.
+  mode: 'ask',
   effort: 'medium',
   temporaryChat: false,
   source: 'project-default',
