@@ -388,12 +388,18 @@ export default function RootLayout() {
         });
       } else if (onboardingDone && inOnboarding) {
         router.replace({ pathname: '/(app)' as const });
-      } else if (onboardingDone) {
-        // Signed out (or session expired) while inside the app — route to login so
-        // the user can sign in again rather than silently landing on cloud screens
-        // with no session.
-        router.replace({ pathname: '/(auth)/login' as const });
       }
+      // LOCKED RULE (Local-first): a user who is NOT signed in but has completed
+      // onboarding must land in the app in LOCAL mode — never on a forced Clerk
+      // sign-in wall. This covers both the account-less Local user (the free hook)
+      // and a previously-signed-in user whose Cloud session expired: in both cases
+      // Local stays fully usable and Cloud sign-in is reached ON DEMAND via the
+      // Cloud mode toggle. Previously this branch did
+      // `router.replace('/(auth)/login')`, which (with login.tsx's dismissible
+      // AuthView routing back to /(app)) trapped Local users in an inescapable
+      // login loop after onboarding — a locked-rule / trust-boundary violation.
+      // Root index (app/index.tsx) already routes onboarding-done users to /(app),
+      // so we intentionally do nothing here and let them stay in Local.
     } else if (isClerkSignedIn && inAuthGroup) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding) {
