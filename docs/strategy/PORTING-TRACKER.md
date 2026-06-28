@@ -57,7 +57,7 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | ID       | Increment                            | Status | Commit    |
 | -------- | ------------------------------------ | ------ | --------- |
 | INC-1.1  | C3 wire execpolicy into loop         | ✅     | 4994ff605 |
-| INC-1.2  | C1 Tool trait                        | ⬜     | —         |
+| INC-1.2  | C1 Tool trait                        | ✅     | 0112594ca |
 | INC-1.3  | C2 LLM compaction                    | ⬜     | —         |
 | INC-1.4  | C4 streaming exec + recover          | ⬜     | —         |
 | INC-1.5  | Secret-scan at Local→BYOK fork       | ⬜     | —         |
@@ -130,6 +130,12 @@ Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
 **Done-condition #8 gate status (verified 2026-06-28):** `pnpm typecheck:all` ✅ · `pnpm lint` ✅ · `cargo check --workspace --locked` ✅ · `check:licenses` ✅ · `check:spec-artifacts` ✅ · `check:llm-operability` ✅ · `sync:models:check` ✅ · trust-boundary contract tests ✅ (web 24/24 + extension 15/15; desktop rust via cargo) · `git diff --check` ✅ · `cargo clippy` (re-running, expected clean — was clean pre-session per `CI-RUST-AUDIT-01`).
 
 **Pre-existing reds (NOT regressions, logged):** `apps/web` ~13 Neon-integration tests (memory, device-code, routing_preferences, me, artifacts) fail locally for lack of Postgres but pass in CI — already tracked as `CI-INSTEP-REDS-01` in known-flaws.
+
+### 2026-06-28 — Phase 0 complete + runtime C1/C3
+
+- Phase 0 DONE: INC-0.1 license gate, 0.2 tracker, 0.3 trust-boundary gate (`scripts/check-trust-boundaries.mjs`, 5 surfaces), 0.4 provider-contract harness (`check:provider-contracts`), 0.5 SkillSpector vetting service (`services/skill-vetting/`, verify.sh proves malicious→DO_NOT_INSTALL).
+- `4994ff605` INC-1.1 (C3): execpolicy gate wired into CLI bash tool — `Forbidden` commands hard-blocked before exec; 5 tests; 1705 CLI tests green; clippy clean.
+- `0112594ca` INC-1.2 (C1): `Tool` trait + `ToolRegistry` (`apps/cli/src/features/exec/tools/registry.rs`); read-only cluster (read_file/search_files/list_directory/glob/grep_files) migrated through the registry, dispatch consults it first. Mutating tools (write/run/edit/patch/etc.) still use the match and migrate incrementally — same pattern, add a `Tool` impl + `register` call. 1707 CLI tests green; clippy clean.
 
 ### Remaining (next sessions)
 
