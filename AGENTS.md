@@ -1,45 +1,10 @@
-# AGENTS.md
+# AGENTS.md — AI Agent Entry Point
 
-Status: Current
-Owner: Platform lead
-Last updated: 2026-06-03
+**Version:** 1.0 · **Owner:** Platform lead · **Last updated:** 2026-06-24 · **Status:** Canonical
 
-Canonical tool-neutral agent entry point for AGI Workforce.
+This is THE entry point for every AI coding agent (Claude, Codex, Cursor, Gemini, etc.) working on AGI. Read this before touching any code, before reading deeper docs, and before making changes.
 
-This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravity-style agents, and future coding agents. Tool-specific files must point back here instead of duplicating repo truth. They may mirror the critical rules below so agents do not miss safety/product invariants.
-
-Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the nearest one before editing.
-
-## After This File
-
-Core read order:
-
-1. `docs/current/source-of-truth.md` - product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
-2. `docs/current/agi-product-requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
-3. `docs/current/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
-4. `docs/current/byok-open-model-provider-strategy.md` when touching model/provider/BYOK work.
-5. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
-6. `docs/agent-context/known-flaws.md` - open bugs, stale claims, and cleanup debt.
-7. `docs/agent-context/commands.json` - canonical commands by surface.
-8. `docs/agent-context/local-reference-lessons.md` - distilled lessons from local-only Claude/Codex/Gemini/opencode/Hermes references for cloud agents that cannot read `/Users/siddhartha/Desktop/reference`.
-9. Nearest path-scoped `AGENTS.md` before editing a high-risk surface.
-10. `docs/decisions/CURRENT_DECISIONS.md` when a decision conflict appears.
-11. `PLAN.md` and `TODO.md` when planning or queueing work.
-
-On-demand context:
-
-- `docs/agent-context/README.md` - full agent context map and rules.
-- `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
-- `docs/agent-context/shared-files.md` - shared-file and collision policy.
-- `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
-- `docs/agent-context/local-reference-lessons.md` - local-reference patterns that must survive cloud-only work.
-- `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
-- `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
-- `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
-- `docs/engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
-- `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
-
-When these files conflict with older plans, prefer the list above.
+**The core contract:** You are building a world-class AI application suite. The repository is agent-native by design. Code wins over docs. Trust boundaries are non-negotiable. Capability honesty is sacred. Every line you write should bring us closer to the vision or fix a tracked gap.
 
 ## Critical Rules
 
@@ -51,7 +16,7 @@ These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-c
 - Local, BYOK, and Managed Cloud are separate trust boundaries.
 - Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.
 - Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label.
-- Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta until ledgering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls are proven.
+- Managed cloud is in public alpha and open by default — the private-beta/waitlist launch gate has been removed (founder decision, 2026-06-27). The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains ONLY as an incident-response kill-switch (set to `0`/`false`/`off` to re-gate). Billing, metering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls must keep pace with public usage, but they no longer gate access.
 - Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
 - Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
 - Treat unusual product behavior as a bug, not as background noise: unreadable UI, dead or duplicate controls, unexpected redirects, visible console/network errors, stale provider/model labels, fake availability badges, and confusing auth or upgrade gates must be fixed immediately when reproducible, or recorded as a concrete blocker with evidence.
@@ -88,7 +53,7 @@ Locked differentiation:
 - Multi-provider routing.
 - Privacy-controlled managed compute.
 
-Managed cloud/credits remain metered, access-gated, or private beta until metering, fraud, refunds, chargebacks, abuse controls, provider terms, retention, and deletion are proven. Do not label every signed-in feature as waitlist: Local and BYOK flows stay usable, plan-entitled hosted features should be presented as available, and only unavailable hosted capacity or upgrades should route to a waitlist/request-access flow.
+Managed cloud is in public alpha and open by default (founder decision, 2026-06-27): the private-beta/waitlist launch gate has been removed and signed-in users can use managed compute. Credits/usage stay metered and billing, fraud, refunds, chargebacks, abuse controls, provider terms, retention, and deletion must keep pace, but they no longer gate access. Local and BYOK flows stay usable; plan-entitled hosted features are available. Only genuinely unavailable hosted capacity should route to a request-access flow — do not present managed cloud itself as waitlist-only.
 
 ## Repo Map
 
@@ -164,6 +129,8 @@ Hook policy is part of repo organization and is enforced by `pnpm check:hooks`.
 ## Agent Harness
 
 Harness order is locked in `docs/engineering/agent-harness-rollout.md`: lean context files, deterministic hooks, on-demand skills, distributable plugins, LSP/MCP integrations, then subagents for separated exploration and editing.
+
+For the agent-native development workflow and verification loop, see `docs/engineering/agent-native-development.md`. Parallel-agent write lanes — the only write paths for feature agents — are defined in `docs/agent-context/lanes.json`.
 
 ## Bug-Finding Workflow
 

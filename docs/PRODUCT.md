@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-25
+Last updated: 2026-06-27
 
 AGI Workforce is **Ollama + Claude combined** — a full AI application platform across 6 user-facing surfaces. Local-first is the user acquisition hook; the real product is a multi-provider AI suite rivaling Claude and ChatGPT with cross-surface continuity.
 
@@ -223,6 +223,6 @@ IDE integration with chat participant and commands.
 - **CSRF**: All state-changing POST/PUT/DELETE endpoints require CSRF token. Desktop-token endpoint protected (added this session).
 - **Rate Limiting**: Upstash Redis-backed. Per-endpoint limits. Sensitive endpoints (auth, checkout, 2FA) have strict limits.
 - **Sandbox Isolation**: Artifacts render in cross-origin iframe. CSP blocks exfiltration.
-- **Trust Boundaries**: Local → BYOK requires explicit fork with consent. Managed Cloud is waitlist-gated.
+- **Trust Boundaries**: Local → BYOK requires explicit fork with consent. Local, BYOK, and Managed Cloud are separate trust boundaries; Local/BYOK are never silently routed into Managed Cloud. Managed Cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta/waitlist launch gate has been removed. The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains only as an incident-response kill-switch.
 - **Data at Rest**: TOTP secrets encrypted with AES-256-GCM. Waitlist emails hashed with SHA-256. API keys stored as SHA-256 hashes with prefix display.
 - **SQL Injection**: Zero instances found in audit. All queries use parameterized placeholders ($1, $2).

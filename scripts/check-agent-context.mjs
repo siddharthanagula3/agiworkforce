@@ -159,7 +159,7 @@ const agentCriticalRules = [
   'Local, BYOK, and Managed Cloud are separate trust boundaries.',
   'Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.',
   'Local to BYOK must be an explicit fork/continuation',
-  'Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta',
+  'Managed cloud is in public alpha and open by default',
   'Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status.',
   'Do not mark work complete from build success alone.',
   'Use the nearest path-scoped `AGENTS.md`',

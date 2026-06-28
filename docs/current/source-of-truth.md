@@ -25,7 +25,7 @@ AGI is a leading AI application suite across six first-class surfaces:
 - Chrome extension
 - VS Code extension
 
-The v1 product target is practical parity with current leading AI application ecosystems, with one major differentiation: users can choose Local models, Bring Your Own Key provider access, or private-beta AGI managed cloud instead of being locked into one model lab.
+The v1 product target is practical parity with current leading AI application ecosystems, with one major differentiation: users can choose Local models, Bring Your Own Key provider access, or AGI managed cloud (public alpha, open by default) instead of being locked into one model lab.
 
 Parity means user-capability parity and workflow parity, not copying proprietary code, private assets, or protected branding. Claude and ChatGPT are competitive references; AGI must implement its own design system, names, contracts, providers, and trust-boundary UX.
 
@@ -38,7 +38,7 @@ Public v1 launches with:
 - Multi-provider model selection: model IDs and capability metadata come from `packages/types/src/models.json`.
 - One normal chat surface that can also work with selected files, reference files, project context, generated files, artifacts, tools, connectors, and images.
 
-Public v1 does not launch broad managed cloud by default.
+Managed cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta launch gate has been removed.
 
 Development is serial by surface:
 
@@ -53,7 +53,7 @@ The active surface is Mobile. Mobile v1 is not considered done until it is publi
 
 The parity ledger may track all six surfaces at all times, but tracking is not authorization to implement non-active surfaces.
 
-Managed Cloud is developed behind waitlist/private beta and invite codes until AGI proves:
+Managed Cloud is in public alpha and open by default (founder decision, 2026-06-27). The private-beta/waitlist launch gate has been removed; signed-in users can use managed compute. The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains only as an incident-response kill-switch. The following controls must keep pace with public usage, but they no longer gate access:
 
 - metering and usage ledgering,
 - provider price/cost snapshots,
@@ -66,11 +66,11 @@ Managed Cloud is developed behind waitlist/private beta and invite codes until A
 
 ## Trust Modes
 
-| User mode     | Internal mode                                         | Product meaning                                     | Non-negotiable rule                                                                                                          |
-| ------------- | ----------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Local         | `local_only` / `Local`                                | Runs locally or through local host/runtime.         | Never silently routes chats, files, tools, or developer sessions to BYOK or managed cloud.                                   |
-| BYOK          | `byok` / `DirectByok`                                 | Uses the user's provider key directly.              | Local to BYOK is an explicit fork with context selection, secret scan, payload preview, visible provider label, and consent. |
-| Managed Cloud | `cloud_managed` / `ManagedGateway` or `ManagedNative` | Uses AGI-managed provider access or hosted compute. | Waitlist/private beta until commercial, abuse, retention, deletion, and provider-term controls are proven.                   |
+| User mode     | Internal mode                                         | Product meaning                                     | Non-negotiable rule                                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local         | `local_only` / `Local`                                | Runs locally or through local host/runtime.         | Never silently routes chats, files, tools, or developer sessions to BYOK or managed cloud.                                                                                                                            |
+| BYOK          | `byok` / `DirectByok`                                 | Uses the user's provider key directly.              | Local to BYOK is an explicit fork with context selection, secret scan, payload preview, visible provider label, and consent.                                                                                          |
+| Managed Cloud | `cloud_managed` / `ManagedGateway` or `ManagedNative` | Uses AGI-managed provider access or hosted compute. | Public alpha, open by default. Commercial, abuse, retention, deletion, and provider-term controls must keep pace but no longer gate access. Still a distinct trust boundary: never silently route Local/BYOK into it. |
 
 The original Local thread remains Local forever. A BYOK continuation is a new reviewed branch, not a hidden mode flip.
 
@@ -144,7 +144,7 @@ Desktop must expose:
 
 - Local Mode,
 - BYOK Local Mode,
-- Cloud Managed waitlist/private-beta mode.
+- Cloud Managed (public alpha, open by default) mode.
 
 Desktop sidebar must expose:
 
@@ -205,7 +205,7 @@ Web:
 
 - The Web typecheck now passes after fixing a stale default-model helper import and a temporary-conversation array lookup bug.
 - Web has chat, model/provider plumbing, artifacts/tool timelines, settings hooks, integrations, and admin/account direction, but product parity is partial. Web runtime data must be Neon-backed; no Web BYOK/free env-key chat.
-- Remaining Web gaps include settings parity, connector/app directory parity, global search, complete projects/files/memory parity, and Cloud Managed invite/waitlist UX that is not allowed to imply public availability.
+- Remaining Web gaps include settings parity, connector/app directory parity, global search, and complete projects/files/memory parity. Cloud Managed is public alpha and should be presented as available (no longer waitlist-gated).
 
 Desktop:
 
@@ -225,7 +225,7 @@ Mobile:
 
 - Mobile currently prioritizes Local Mode and keeps hosted sends gated unless Cloud access is explicitly unlocked.
 - `apps/mobile/services/remoteChatGate.ts` fails closed when Cloud sends are disabled.
-- Mobile v1 has small on-device Local LLM chat plus Cloud invite/waitlist only. Mobile BYOK is not a v1 product path.
+- Mobile v1 has small on-device Local LLM chat plus public-alpha Cloud (open by default). Mobile BYOK is not a v1 product path.
 - Mobile should not be the first heavy local PDF/PPTX/DOCX generation surface.
 
 CLI:
@@ -248,7 +248,7 @@ VS Code:
 
 Services:
 
-- Managed compute is not a public launch claim. Services can keep building API gateway, signaling, enterprise controls, billing/usage scaffolding, and waitlist/invite flows behind gates.
+- Managed compute is in public alpha (open by default). Services can keep building API gateway, signaling, enterprise controls, and billing/usage scaffolding; any remaining request-access flows are only for genuinely unavailable hosted capacity, not for managed cloud itself.
 
 ## P0 Gap List
 
@@ -267,7 +267,7 @@ These are the highest-risk gaps before calling v1 competitive.
 8. Artifacts must support creation, side panel, source/preview switch, versions/history, copy/download/export, multi-artifact selection, error-fix loop, publish/share controls, and AI-powered/MCP-backed artifact gating.
 9. Global search must cover chats, projects, artifacts, files, connectors, settings, and developer sessions where allowed.
 10. Web/Mobile/Desktop sync must be complete only inside app-chat boundary; CLI/VS Code/Chrome require explicit handoff.
-11. Cloud Managed must stay invite/waitlist/private beta until metering, billing, abuse, retention, deletion, and provider-term controls are verified.
+11. Cloud Managed is public alpha and open by default (founder decision, 2026-06-27). Metering, billing, abuse, retention, deletion, and provider-term controls must keep pace with public usage but no longer gate access. The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains only as an incident-response kill-switch.
 12. All six surfaces need screenshot/e2e-style UI verification for the launch-critical flows, not only typecheck/build.
 13. Visual artifact/design workspace parity is not yet specified in code:
     canvas, artboards, layers/assets/files, properties panel, prototype/deck

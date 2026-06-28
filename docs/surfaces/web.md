@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder/platform
-Last updated: 2026-05-28
+Last updated: 2026-06-27
 
 ## Mission
 
@@ -23,10 +23,10 @@ Web is a managed cloud surface. It uses Clerk for identity and Neon for durable 
 
 ## Trust Boundary
 
-- Web cloud chat requires Clerk identity and a valid subscription or private-beta invite.
+- Web cloud chat requires Clerk identity and a valid subscription/entitlement (managed cloud is public alpha, open by default since 2026-06-27 — no private-beta invite required).
 - Web settings persist to Neon where the setting affects cloud behavior.
 - Local-only and BYOK-local state belong to Desktop local storage or Mobile local storage, not Web.
-- Managed cloud, credits, cloud execution, and public cloud launches remain gated until metering, abuse, refunds, retention, deletion, and provider terms are proven.
+- Managed cloud, credits, and cloud execution are public alpha and open by default (2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. Metering, abuse, refunds, retention, deletion, and provider-term controls must keep pace with public usage but no longer gate access; managed access stays subscription/entitlement-gated.
 
 ## File Layout
 
@@ -69,7 +69,7 @@ pnpm lint
 
 - Settings must stay backed by Clerk and Neon, not local mock state, when the setting affects account, billing, privacy, usage, memory, or cloud capabilities.
 - Chat has to stay on a single canonical `/chat` route. Historical `/chats` and query-flag variants should redirect or be retired as implementation work lands.
-- Download and marketing claims must match actual release gates: public release is locked for July 12, 2026, but managed cloud access remains invite-only until the operational controls are proven.
+- Download and marketing claims must match actual release gates: public release is locked for July 12, 2026; managed cloud access is public alpha and open by default (2026-06-27, subscription/entitlement-gated), with operational controls keeping pace as GA-hardening rather than gating access.
 - Provider model IDs must be read from `packages/types/src/models.json`; do not hardcode weekly model releases in Web code.
 
 ## References

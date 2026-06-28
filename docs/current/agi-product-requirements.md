@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-28
+Last updated: 2026-06-27
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -44,7 +44,7 @@ AGI's core differentiation is:
 - BYOK, meaning Bring Your Own Key.
 - Multi-provider routing.
 - Hosted open-model and local model support.
-- Invite-gated AGI Managed Cloud.
+- Public-alpha AGI Managed Cloud (open by default; subscription/entitlement-gated).
 - One unified chat that can handle normal chat, files, reference material,
   images, artifacts, tools, connectors, and developer workflows without splitting
   users into separate chat products.
@@ -101,11 +101,11 @@ focus to Website.
 
 AGI has three user-visible trust modes:
 
-| User label | Internal meaning                                           | User promise                                                                                              |
-| ---------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Local      | Local runtime, local storage, local tools where available. | AGI does not silently send chats, files, tools, or developer sessions to BYOK or managed cloud.           |
-| BYOK       | User-owned provider key and direct provider route.         | AGI uses the selected provider/model with visible provider labels and disclosure.                         |
-| Cloud      | AGI-managed compute and provider access.                   | Waitlist/private beta until metering, abuse, billing, retention, deletion, and provider terms are proven. |
+| User label | Internal meaning                                           | User promise                                                                                                                                                                                                                                |
+| ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local      | Local runtime, local storage, local tools where available. | AGI does not silently send chats, files, tools, or developer sessions to BYOK or managed cloud.                                                                                                                                             |
+| BYOK       | User-owned provider key and direct provider route.         | AGI uses the selected provider/model with visible provider labels and disclosure.                                                                                                                                                           |
+| Cloud      | AGI-managed compute and provider access.                   | Public alpha, open by default (2026-06-27); metering, abuse, billing, retention, deletion, and provider-term controls keep pace but no longer gate access. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env is an incident-response kill-switch only. |
 
 The original Local thread remains Local forever. Local to BYOK or Cloud is a
 fork/continuation with selected context, secret scan, payload preview, provider
@@ -453,10 +453,12 @@ Cloud mode means:
 - AGI-managed provider access or AGI-managed compute.
 - AGI pays or meters costs.
 - User may need account, invite, billing, and abuse controls.
-- Cloud remains waitlist/private beta until proven.
+- Cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. The account/invite/billing/abuse controls keep pace with public usage but no longer gate access.
 
-Public UI can show waitlist and invite-code entry. It must not imply that broad
-Cloud Managed compute is generally available.
+Public UI presents managed cloud as public alpha (open by default) and may still
+offer waitlist/invite entry for genuinely unavailable hosted capacity. It should
+label managed cloud as public alpha and must not over-claim full general
+availability or SLA guarantees it cannot yet honor.
 
 ### 7.4 Trust Boundary Crossing
 
@@ -550,7 +552,7 @@ The long-term provider setup should group routes as:
    - Text Generation Inference.
    - MLX/Apple Silicon routes.
 4. AGI Managed Cloud:
-   - Waitlist/private beta/invite only.
+   - Public alpha, open by default (2026-06-27); subscription/entitlement-gated, no longer waitlist-gated. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env is a kill-switch only.
 
 ### 8.4 OpenAI-Specific Requirements
 
@@ -1489,8 +1491,9 @@ Plugins requirements:
 
 ## 20. Scheduled Tasks, Dispatch, And Automations
 
-AGI should support recurring and long-running work across the suite, but public
-Cloud execution remains gated.
+AGI should support recurring and long-running work across the suite. Public
+Cloud execution is public alpha and open by default (2026-06-27),
+subscription/entitlement-gated rather than waitlist-gated.
 
 Required concepts:
 
@@ -1669,22 +1672,22 @@ Until resolved, these stay as tracked gaps rather than hidden assumptions.
 
 ## 26. Glossary
 
-| Term                    | Meaning                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| AGI                     | Public product brand.                                                                                               |
-| AGI Workforce           | Formal platform and repo name.                                                                                      |
-| Surface                 | One of Mobile, Website, Desktop, CLI, Chrome Extension, VS Code Extension.                                          |
-| Local                   | Local-first mode with no silent provider/cloud routing.                                                             |
-| BYOK                    | Bring Your Own Key, direct user-owned provider route.                                                               |
-| Cloud                   | AGI-managed compute/provider route, invite-gated until proven.                                                      |
-| Provider route          | Provider plus endpoint class plus model id plus capabilities and privacy/cost metadata.                             |
-| Native tool             | Tool executed by the model provider's infrastructure/API.                                                           |
-| AGI local tool          | Tool executed by AGI on local device/host/runtime.                                                                  |
-| Connector               | Integration that exposes external data/actions, preferably through MCP.                                             |
-| Artifact                | Generated or editable output shown outside the normal message stream.                                               |
-| Visual design workspace | Canvas/artboard-based artifact workspace for generated designs, prototypes, slide-like flows, and visual documents. |
-| Memory                  | Saved context AGI may use in future conversations.                                                                  |
-| Dispatch                | Task handoff from one surface, especially Mobile, into Desktop/local or Cloud/private-beta work.                    |
+| Term                    | Meaning                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| AGI                     | Public product brand.                                                                                                      |
+| AGI Workforce           | Formal platform and repo name.                                                                                             |
+| Surface                 | One of Mobile, Website, Desktop, CLI, Chrome Extension, VS Code Extension.                                                 |
+| Local                   | Local-first mode with no silent provider/cloud routing.                                                                    |
+| BYOK                    | Bring Your Own Key, direct user-owned provider route.                                                                      |
+| Cloud                   | AGI-managed compute/provider route, public alpha and open by default; subscription/entitlement-gated (not waitlist-gated). |
+| Provider route          | Provider plus endpoint class plus model id plus capabilities and privacy/cost metadata.                                    |
+| Native tool             | Tool executed by the model provider's infrastructure/API.                                                                  |
+| AGI local tool          | Tool executed by AGI on local device/host/runtime.                                                                         |
+| Connector               | Integration that exposes external data/actions, preferably through MCP.                                                    |
+| Artifact                | Generated or editable output shown outside the normal message stream.                                                      |
+| Visual design workspace | Canvas/artboard-based artifact workspace for generated designs, prototypes, slide-like flows, and visual documents.        |
+| Memory                  | Saved context AGI may use in future conversations.                                                                         |
+| Dispatch                | Task handoff from one surface, especially Mobile, into Desktop/local or Cloud/private-beta work.                           |
 
 ## 27. PRD Maintenance Rule
 

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-06-20
+Last updated: 2026-06-27
 
 The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines `source-of-truth.md` (Local / BYOK / Managed Cloud) into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
 
@@ -10,7 +10,7 @@ Vocabulary:
 
 - **Local** = on-device local LLMs; data never leaves the device.
 - **BYOK** = user-owned provider API keys; requests go **directly to the user's provider**, never through AGI cloud; provider is labeled. (From AGI's trust view this is a _private_ path, not the AGI-cloud path.)
-- **Managed Cloud / Subscription** = AGI-hosted access to API providers, metered against the user's AGI subscription. The only path that crosses into AGI cloud. (Private beta / waitlist until metering+billing controls proven — CLOUD-01.)
+- **Managed Cloud / Subscription** = AGI-hosted access to API providers, metered against the user's AGI subscription. The only path that crosses into AGI cloud. (Public alpha, open by default since 2026-06-27 — CLOUD-01; subscription/entitlement-gated, not waitlist-gated. Metering+billing controls keep pace but no longer gate access; `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env is an incident-response kill-switch only.)
 
 ## The matrix
 

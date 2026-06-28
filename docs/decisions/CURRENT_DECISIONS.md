@@ -42,7 +42,7 @@ Archived source material:
 4. Normal synced app chat is only for Web, Mobile, and Desktop. CLI, VS Code, and Chrome stay local/workspace/task scoped unless the user explicitly hands off selected, redacted context into a synced app chat.
    Evidence: `docs/current/product-suite.md`, `PLAN.md`, `TODO.md`.
 
-5. Mobile v1 should ship as Local + explicit BYOK, not broad AGI-managed cloud. Managed Cloud / AGI Compute Credits / subscriptions remain waitlist or private beta until ledgering, payment rails, fraud, refund, chargeback, and provider-term risk are designed and verified.
+5. Mobile v1 should ship as Local + explicit BYOK, not broad AGI-managed cloud. Managed Cloud / AGI Compute Credits / subscriptions are in public alpha and open by default (founder decision 2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. Ledgering, payment rails, fraud, refund, chargeback, and provider-term controls must keep pace with public usage but no longer gate access; managed access stays subscription/entitlement-gated, and Local/BYOK are never silently routed into managed cloud. (Updated 2026-06-27: superseded the prior "remain waitlist or private beta until ... verified" wording.)
    Evidence: `docs/current/commercial-and-launch.md`, `docs/current/product-suite.md`, `docs/enterprise/profit-first-enterprise-readiness.md`.
 
 6. Local to BYOK is a fork, not a silent transfer or mode flip. The original Local thread remains local forever. The required flow is context selection, secret redaction, payload preview, provider label, and explicit consent.
@@ -67,7 +67,7 @@ Archived source material:
     Evidence: `AGI_WORKFORCE.md`, `packages/llm-normalize/`, `docs/current/technical-architecture.md`.
 
 13. Enterprise managed compute requires organization policy, audit logs, support workflow, usage ledger, provider cost snapshots, managed-credit controls, and release-fix traceability before public claims.
-    Evidence: `docs/current/commercial-and-launch.md`, `docs/enterprise/control-plane.md`, `packages/types/src/enterprise/`, `supabase/migrations/20260521100000_enterprise_control_plane_foundation.sql`.
+    Evidence: `docs/current/commercial-and-launch.md`, `docs/enterprise/control-plane.md`, `packages/types/src/enterprise/`, `apps/web/db/neon/`.
 
 14. Current docs live in `docs/current/`; historical docs live in `docs/archive`. If they conflict, current docs win.
     Evidence: `docs/current/README.md`, `docs/current/agent-and-repo-operability.md`.
@@ -78,8 +78,8 @@ Archived source material:
 16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy, `TODO.md` for active work, `CHANGELOG.md` for completed work, current docs in `docs/current`, plans in `docs/plans`, evidence in `audit`, generated reports in `reports`, and historical material in `docs/archive`.
     Evidence: `docs/engineering/naming-conventions.md`, `docs/current/agent-and-repo-operability.md`, `scripts/check-structure-conventions.mjs`.
 
-17. The preferred new cloud foundation is Clerk for managed identity and Neon for Postgres, but production stays on the existing Supabase path until Clerk web/mobile session flows, Neon schema/RLS migration, storage/realtime replacements, and rollback runbooks are verified. Do not expose broken OAuth buttons or switch providers by docs-only claims.
-    Evidence: `packages/data-layer/src/adapters/clerk.ts`, `packages/data-layer/src/adapters/neon.ts`, `packages/data-layer/README.md`, `apps/web/.env.example`.
+17. The cloud foundation is Clerk for managed identity and Neon for Postgres. The migration off Supabase is complete: no `@supabase`/Supabase client usage remains in app/package/service code, there is no root `supabase/` directory, and the canonical migrations live in `apps/web/db/neon`. Do not reintroduce Supabase or switch providers by docs-only claims. (Updated 2026-06-27: superseded the prior "production stays on Supabase until verified" wording, which was stale.)
+    Evidence: `packages/data-layer/src/adapters/clerk.ts`, `packages/data-layer/src/adapters/neon.ts`, `apps/web/db/neon/`, `packages/data-layer/README.md`, `apps/web/.env.example`.
 
 18. `docs/current/source-of-truth.md` is the first product read for agents and humans, and `docs/current/parity-implementation-matrix.md` is the first implementation read for feature/component parity. Older PRDs, generated parity reports, `tasks/**`, `reports/**`, `docs/archive/**`, and local screenshot/reference corpora are evidence or working notes unless current docs explicitly promote a conclusion.
     Evidence: `docs/current/source-of-truth.md`, `docs/current/parity-implementation-matrix.md`, `docs/current/README.md`, `docs/agent-context/doc-status.json`.
