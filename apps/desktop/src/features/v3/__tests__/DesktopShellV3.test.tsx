@@ -68,6 +68,10 @@ vi.mock('react-i18next', () => ({
 vi.mock('@agiworkforce/unified-chat', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   return {
+    // Passthrough provider — the shell wraps its tree in <CapabilityProvider
+    // platform="desktop">. The mock just renders children so the shell mounts.
+    CapabilityProvider: (props: { children?: ReactNode }) =>
+      React.createElement(React.Fragment, null, props.children),
     ChatInterface: (props: Record<string, unknown>) => {
       unifiedChatMock.chatInterfaceProps.push(props);
       return React.createElement(
