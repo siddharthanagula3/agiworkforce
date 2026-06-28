@@ -34,8 +34,8 @@ export type SettingsNavKey =
   | 'appearance'
   | 'privacy'
   | 'models-keys'
+  | 'capabilities'
   | 'agents'
-  | 'skills'
   | 'connectors'
   | 'plugins'
   | 'memory'
@@ -101,8 +101,13 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
     icon: Server,
     keywords: ['api', 'api key', 'byok', 'provider', 'ollama', 'openai', 'anthropic'],
   },
+  {
+    key: 'capabilities',
+    label: 'Capabilities',
+    icon: BookOpen,
+    keywords: ['skills', 'computer use', 'tool access', 'permissions', 'code execution'],
+  },
   { key: 'agents', label: 'Agents', icon: Zap },
-  { key: 'skills', label: 'Skills', icon: BookOpen },
   { key: 'connectors', label: 'Connectors', icon: Plug, keywords: ['mcp', 'integration'] },
   { key: 'plugins', label: 'Plugins', icon: Puzzle },
   { key: 'memory', label: 'Memory', icon: Brain },
@@ -125,7 +130,7 @@ export interface SettingsNavGroup {
 
 /** Grouped navigation — the section structure both surfaces render. */
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
-  { keys: ['general', 'account', 'usage', 'appearance', 'privacy', 'models-keys'] },
-  { label: 'Tools', keys: ['skills', 'connectors', 'plugins', 'agents', 'memory'] },
+  { keys: ['general', 'account', 'usage', 'appearance', 'privacy', 'models-keys', 'capabilities'] },
+  { label: 'Tools', keys: ['connectors', 'plugins', 'agents', 'memory'] },
   { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
 ];

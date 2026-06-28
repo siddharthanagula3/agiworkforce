@@ -43,7 +43,7 @@ import { AppearanceTab } from './tabs/Appearance';
 import { PrivacyTab } from './tabs/Privacy';
 import { ModelsKeysTab } from './tabs/ModelsKeys';
 import { AgentsTab } from './tabs/Agents';
-import { SkillsTab } from './tabs/Skills';
+import { CapabilitiesTab } from './tabs/Capabilities';
 import { ConnectorsTab } from './tabs/Connectors';
 import { PluginsTab } from './tabs/Plugins';
 import { NotificationsTab } from './tabs/Notifications';
@@ -86,7 +86,7 @@ function canPersistNotificationSettings(): boolean {
   return isTauri || isCloudWeb;
 }
 
-const SELF_SAVING_TABS = new Set<CanonicalTab>(['skills', 'connectors', 'plugins']);
+const SELF_SAVING_TABS = new Set<CanonicalTab>(['capabilities', 'connectors', 'plugins']);
 const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
 const visibleNav = isCloudWeb
   ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
@@ -586,8 +586,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         );
       case 'agents':
         return <AgentsTab />;
-      case 'skills':
-        return <SkillsTab />;
+      case 'capabilities':
+        return <CapabilitiesTab />;
       case 'connectors':
         return <ConnectorsTab />;
       case 'plugins':
