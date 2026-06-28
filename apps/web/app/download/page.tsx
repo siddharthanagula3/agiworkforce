@@ -250,7 +250,7 @@ export default function DownloadPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Pick a surface and go."
-          body="Try AGI Web in the browser now. Follow the Desktop and CLI pages for Local and BYOK work as releases open. Join the waitlist for AGI Cloud. The route your work takes stays visible on every surface."
+          body="Try AGI Web in the browser now. Follow the Desktop and CLI pages for Local and BYOK work as releases open. AGI managed cloud is in public alpha — open by default. The route your work takes stays visible on every surface."
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
             { href: '/desktop', label: 'See AGI Desktop' },
