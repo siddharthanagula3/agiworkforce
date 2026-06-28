@@ -88,6 +88,12 @@ interface ChatState {
   archiveConversation: (id: string) => void;
   getGroupedConversations: () => Record<string, Conversation[]>;
   setActiveMode: (mode: ActiveMode) => void;
+  /**
+   * UI-WEBSEARCH-TOGGLE-01: direct, honest control of the web-search toggle.
+   * The composer reads + writes this so the menu reflects the REAL send state
+   * (default OFF — the user must explicitly enable web search).
+   */
+  setWebSearchEnabled: (enabled: boolean) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -191,6 +197,8 @@ export const useChatStore = create<ChatState>()(
           activeMode: mode,
           webSearchEnabled: mode === 'web',
         }),
+
+      setWebSearchEnabled: (enabled) => set({ webSearchEnabled: enabled }),
 
       pinConversation: (id, pinned) =>
         set((state) => {
