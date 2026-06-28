@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-23 (post R27-PARITY Phase D complete — 5 stages shipped).
+Last updated: 2026-06-21 (post R27-PARITY Phase D complete — 5 stages shipped).
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 

@@ -2,9 +2,11 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-06-28
 
 This is the locked naming policy for AGI Workforce. New files, docs, packages, branches, commands, and release notes should follow this unless a current decision doc explicitly overrides it.
+
+As of 2026-06-28 this policy also mandates the structural / file-granularity conventions in the "Structural & File-Granularity Conventions" section below (folder-per-tool, co-located prompt/UI/logic, barrels, one concern per file), adapted from best-in-class agent codebases. All new code follows them immediately; existing code migrates opportunistically per `docs/strategy/15-structure-and-granularity-conventions.md` and `scripts/migrate-structure.mjs`.
 
 ## External Standards
 
@@ -78,6 +80,23 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - TypeScript/React source files should follow the local app's existing convention; new domain feature files should prefer kebab-case filenames and PascalCase exported React components.
 - Rust source files and modules use snake_case.
 - Tests stay near the code unless the local package already centralizes tests.
+
+## Structural And File-Granularity Conventions
+
+Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-structure-and-granularity-conventions.md`.
+
+- **Folder-per-feature.** Every tool, command, agent, and major UI feature is a folder, not a loose file.
+- **Co-locate by feature.** A tool's logic, `prompt`, `UI`, `constants`, validators, and `types` live in the same folder — never split across `prompts/`, `ui/`, `logic/`.
+- **Barrels.** Each folder exposes one public surface via `index.ts` (TS) / `mod.rs` (Rust); consumers import the folder, not deep paths.
+- **One concern per file.** One tool/hook/migration per file; soft cap ~300 lines, split beyond.
+- **Tool layout (TS):** `tools/<Name>Tool/{<Name>Tool.ts, prompt.ts, UI.tsx, constants.ts, <helpers>.ts, index.ts}`.
+- **Tool layout (Rust):** `tools/<tool>/{mod.rs, prompt.rs, validation.rs, ui.rs}` implementing the `Tool` trait.
+- **Command layout:** `commands/<name>/{<name>.tsx, index.ts}`.
+- **Hooks:** one per file, `use` + PascalCase (`useToolPermission.ts`); sub-group when many.
+- **utils/ discipline:** multi-file domains get a subfolder (`utils/bash/`); cross-cutting one-offs stay flat (`utils/uuid.ts`). Banned inside a feature: `helpers.ts`, `misc.ts`, `common.ts`, catch-all `utils.ts`.
+- **Casing:** PascalCase for React components/classes and `.tsx`; camelCase for TS utility modules; snake_case for Rust files/modules; co-located prompts `prompt.ts`/`prompt.rs`; per-feature `constants.ts`/`types.ts`.
+- **Generated/vendored isolation:** codegen under `*/generated/` (never hand-edited); ported third-party attributed in `THIRD_PARTY_LICENSES.md` + `PORTING-TRACKER.md`.
+- **Migration is opportunistic** (no big-bang): new code complies now; existing code converts via `scripts/migrate-structure.mjs` (import-transparent moves) as each subsystem is touched.
 
 ## Package And Module Names
 

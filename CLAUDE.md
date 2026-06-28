@@ -31,7 +31,7 @@ These rules must stay mirrored in `AGENTS.md` and guarded by `pnpm check:agent-c
 - Local, BYOK, and Managed Cloud are separate trust boundaries.
 - Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.
 - Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label.
-- Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta until ledgering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls are proven.
+- Managed cloud is in public alpha and open by default — the private-beta/waitlist launch gate has been removed (founder decision, 2026-06-27). The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains ONLY as an incident-response kill-switch (set to `0`/`false`/`off` to re-gate). Billing, metering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls must keep pace with public usage, but they no longer gate access.
 - Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
 - Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
 - Treat unusual product behavior as a bug, not as background noise: unreadable UI, dead or duplicate controls, unexpected redirects, visible console/network errors, stale provider/model labels, fake availability badges, and confusing auth or upgrade gates must be fixed immediately when reproducible, or recorded as a concrete blocker with evidence.

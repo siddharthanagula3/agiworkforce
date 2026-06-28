@@ -129,7 +129,7 @@
         "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
         "pnpm --filter @agiworkforce/web typecheck"
       ],
-      "rule": "Managed compute remains private beta until ledger, caps, fraud, refund, dispute, and provider-term gates are proven."
+      "rule": "Managed compute is public alpha and open by default (founder decision 2026-06-27); the private-beta/waitlist launch gate is removed and AGI_MANAGED_COMPUTE_PRIVATE_BETA is an incident-response kill-switch only. Ledger, caps, fraud, refund, dispute, and provider-term controls must keep pace with public usage but no longer gate access; managed access stays subscription/entitlement-gated and Local/BYOK are never silently routed into managed cloud."
     }
   ]
 }

@@ -1,10 +1,10 @@
 # Mobile surface (lead launch surface)
 
-> **Path:** `apps/mobile/` · **Stack:** Expo SDK 55 + React Native 0.84.0 + native modules · **Owner:** founder · **Status:** M0 spike running this week (May 17-23); M3 public launch target **Aug 6-16, 2026**. **Updated:** 2026-05-21.
+> **Path:** `apps/mobile/` · **Stack:** Expo SDK 55 + React Native 0.84.0 + native modules · **Owner:** founder · **Status:** M0 spike running this week (May 17-23); M3 public launch target **Aug 6-16, 2026**. **Updated:** 2026-06-27.
 
 ## Mission
 
-The lead launch surface. A single iOS + Android app where someone gets free private AI on their phone (Local mode: works offline, no account, on-device LLM) or explicitly continues selected context with their own keys for 10+ providers (BYOK mode). AGI-managed cloud credits stay waitlisted. The "AI on a plane" demo is the most viral artifact we'll ever ship.
+The lead launch surface. A single iOS + Android app where someone gets free private AI on their phone (Local mode: works offline, no account, on-device LLM) or explicitly continues selected context with their own keys for 10+ providers (BYOK mode). AGI-managed cloud credits are public alpha and open by default (2026-06-27; subscription/entitlement-gated, env kill-switch only), no longer waitlist-gated. The "AI on a plane" demo is the most viral artifact we'll ever ship.
 
 **Mobile is FIRST IN TIME, not ONLY IN SCOPE** — per PRD V5 §20 lock #17. Mobile leads the App Store / Play submission cycle because Apple Review is the hardest gate. Web parity ships same week; desktop must be W6-stable before mobile launches.
 
