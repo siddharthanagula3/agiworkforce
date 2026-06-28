@@ -149,6 +149,12 @@ Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
 
 **→ Done-condition #3 (RUNTIME C1–C4) COMPLETE.**
 
+### 2026-06-28 — Phase-1 surface increments (web)
+
+- `a412dc512` INC-1.9 (WEB-12, 🔄 partial): homepage AGI Cloud card no longer claims waitlist/invite-only — now "Public alpha — sign in and start, no waitlist" (matches source-of-truth: managed cloud public-alpha-open since 2026-06-27). Regression test added. Remaining: `/waitlist` route copy still says "waitlist-only" — repurposing/removing that route is a product decision (left for owner input, not unilaterally changed).
+- `4121eabe6` fix(web): dead `_token` param in both response builders (`stream-transform.ts`, `response-builder.ts`) cleared a latent `noUnusedParameters` typecheck error a fresh `tsc` surfaced (earlier incremental tsbuildinfo had masked it). Web typecheck green.
+- **WEB-1 verified essentially complete**: no Vite/Netlify config artifacts in `apps/web` (no netlify.toml / vite.config / \_redirects); google-veo/imagen are ACTIVE services (imported by media-generation-handler), not dead leftovers; `agi.workforce` brand drift only survives in one dev-demo example string (not header/footer). No action needed.
+
 ### Remaining (next sessions)
 
 INC-0.3 trust-boundary contract **harness** (per-surface tests exist — web/extension/desktop — but no unified `pnpm` gate yet) → INC-0.4/0.5 → runtime C1–C4 ports from codex-rs (INC-1.1–1.4) → website/mobile/desktop production plans (strategy 12/13/14). The catalog/`taskRouting` work proved the SSOT pipeline; edit `models.curation.json` (never `models.json`).
