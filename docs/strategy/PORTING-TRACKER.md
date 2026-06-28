@@ -58,8 +58,8 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | -------- | ------------------------------------ | ------ | --------- |
 | INC-1.1  | C3 wire execpolicy into loop         | ✅     | 4994ff605 |
 | INC-1.2  | C1 Tool trait                        | ✅     | 0112594ca |
-| INC-1.3  | C2 LLM compaction                    | ⬜     | —         |
-| INC-1.4  | C4 streaming exec + recover          | ⬜     | —         |
+| INC-1.3  | C2 LLM compaction                    | ✅     | pre-exist |
+| INC-1.4  | C4 streaming exec + recover          | ✅     | pre-exist |
 | INC-1.5  | Secret-scan at Local→BYOK fork       | ⬜     | —         |
 | INC-1.6  | SkillSpector install gate + rug-pull | ⬜     | —         |
 | INC-1.7  | Mobile TLS pins enforced             | ⬜     | —         |
@@ -136,6 +136,13 @@ Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
 - Phase 0 DONE: INC-0.1 license gate, 0.2 tracker, 0.3 trust-boundary gate (`scripts/check-trust-boundaries.mjs`, 5 surfaces), 0.4 provider-contract harness (`check:provider-contracts`), 0.5 SkillSpector vetting service (`services/skill-vetting/`, verify.sh proves malicious→DO_NOT_INSTALL).
 - `4994ff605` INC-1.1 (C3): execpolicy gate wired into CLI bash tool — `Forbidden` commands hard-blocked before exec; 5 tests; 1705 CLI tests green; clippy clean.
 - `0112594ca` INC-1.2 (C1): `Tool` trait + `ToolRegistry` (`apps/cli/src/features/exec/tools/registry.rs`); read-only cluster (read_file/search_files/list_directory/glob/grep_files) migrated through the registry, dispatch consults it first. Mutating tools (write/run/edit/patch/etc.) still use the match and migrate incrementally — same pattern, add a `Tool` impl + `register` call. 1707 CLI tests green; clippy clean.
+
+**INC-1.3 (C2) + INC-1.4 (C4) verified pre-existing, NOT re-ported** (re-porting working/tested code would be a forbidden speculative rewrite):
+
+- C2 compaction: `apps/cli/src/compaction.rs` (1356 lines, 37 tests green) — wired manually (`/compact`) AND automatically in the agent loop (`agent/chat.rs:186`, compacts at >90%→70% with PreCompact hooks).
+- C4 streaming+recover: `apps/cli/src/agent/chat.rs` (~388–530) — streaming `stream_completion` + retryable-error recovery with backoff + provider/model fallback rotation that RESPECTS the privacy boundary (`local_session_cloud_fallback_blocked_by_privacy_boundary` test). 44+ retry/recover/fallback tests + `json_events_jsonl` integration green.
+
+**→ Done-condition #3 (RUNTIME C1–C4) COMPLETE.**
 
 ### Remaining (next sessions)
 
