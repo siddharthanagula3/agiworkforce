@@ -1,0 +1,177 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-28",
+  "surfaces": {
+    "web": [
+      {
+        "id": "WEB-1",
+        "item": "Delete dead code (Vite/Netlify imagen/veo leftovers); fix brand drift (agi.workforce -> AGI)",
+        "gate": "grep shows leftovers gone; header/footer render AGI; typecheck green"
+      },
+      {
+        "id": "WEB-2",
+        "item": "Normalize search-citations metadata to one shape (writer + renderer)",
+        "gate": "citations persist + render; Playwright asserts sources visible after reload"
+      },
+      {
+        "id": "WEB-3",
+        "item": "Non-image attachment ingestion (text/PDF/code -> context)",
+        "gate": "upload a PDF -> content reaches the model; e2e covers upload->answer"
+      },
+      {
+        "id": "WEB-6",
+        "item": "Global search across chats/projects/artifacts/files (trust-scoped)",
+        "gate": "search returns ranked results; e2e + Chrome-MCP screenshot"
+      },
+      {
+        "id": "WEB-7",
+        "item": "Settings IA to locked spec (General/Account/Privacy/Billing/Usage/Capabilities/Connectors/AGI Code/AGI in Chrome/Extensions/Developer)",
+        "gate": "all sections present + wired; e2e navigates each"
+      },
+      {
+        "id": "WEB-8",
+        "item": "Connectors/apps directory (categories, search, per-tool permissions, OAuth/custom MCP)",
+        "gate": "install + permission flow e2e; admin controls"
+      },
+      {
+        "id": "WEB-9",
+        "item": "Artifacts polish (versioning, publish/share, error-fix loop, source/preview)",
+        "gate": "artifact lifecycle e2e green"
+      },
+      {
+        "id": "WEB-10",
+        "item": "Billing-history UI wired (invoices/usage/plan correct)",
+        "gate": "billing page shows real data; e2e with test account"
+      },
+      {
+        "id": "WEB-11",
+        "item": "Managed cloud presented as public alpha (open by default); fix waitlist auth wiring",
+        "gate": "signed-in users can use managed; no stale waitlist copy"
+      },
+      {
+        "id": "WEB-12",
+        "item": "Marketing-vs-shipped copy alignment (no unshipped claim in present tense)",
+        "gate": "a claims-vs-parity check passes"
+      },
+      {
+        "id": "WEB-13",
+        "item": "Hardening: CSP/HSTS headers, error boundaries, 404/500, SEO/meta/OG, WCAG 2.1 AA, perf budget (LCP < 2.5s)",
+        "gate": "Lighthouse + axe pass thresholds; headers verified"
+      },
+      {
+        "id": "WEB-14",
+        "item": "Full Playwright e2e for all launch-critical flows + CI gate (e2e-tests.yml)",
+        "gate": "suite green in CI; flake < 1%"
+      },
+      {
+        "id": "WEB-15",
+        "item": "Production deploy (Vercel) + smoke tests on prod URL + rollback plan",
+        "gate": "prod smoke e2e green; trust-boundary tests green"
+      }
+    ],
+    "mobile": [
+      {
+        "id": "MOB-1",
+        "item": "Launch blocker: provision real SPKI TLS pins + enable enforcement",
+        "gate": "check:tls-pins green; pinned host connects, bad cert fails closed (Detox + Xcode-MCP)"
+      },
+      {
+        "id": "MOB-2",
+        "item": "Align app + web copy to shipped scope (vision=OCR, translation=en<->hi, Foundation Models stub) — relabel or hide",
+        "gate": "claims-vs-parity check passes; no overclaim in UI"
+      },
+      {
+        "id": "MOB-3",
+        "item": "On-device LLM UX: model picker + fits-this-device + download/resume + first-token + thermal",
+        "gate": "first-token e2e on sim + device; download resumes"
+      },
+      {
+        "id": "MOB-4",
+        "item": "Cloud public-alpha path (open by default): sign-in, entitlement gate, cloud-chat sync only; Local stays fail-closed",
+        "gate": "entitled cloud send works; Local never auto-sends (Jest + Detox)"
+      },
+      {
+        "id": "MOB-5",
+        "item": "Core chat completeness: attachments, streaming states, message actions, temporary chat",
+        "gate": "each flow Detox-covered"
+      },
+      {
+        "id": "MOB-6",
+        "item": "Mobile settings: real sections; implement or remove Skills/Plugins dead-ends",
+        "gate": "settings navigable; no dead-ends"
+      },
+      {
+        "id": "MOB-8",
+        "item": "Production hardening: crash reporting, offline behavior, deep links, push notifications, accessibility",
+        "gate": "crash-free instrumentation live; a11y audit"
+      },
+      {
+        "id": "MOB-9",
+        "item": "Store readiness: screenshots pipeline, privacy/data-safety labels, review notes (on-device privacy), age rating",
+        "gate": "store listings complete; assets generated"
+      },
+      {
+        "id": "MOB-10",
+        "item": "Beta: TestFlight + Play internal",
+        "gate": "builds submitted; review feedback resolved"
+      },
+      {
+        "id": "MOB-11",
+        "item": "Public alpha release",
+        "gate": "live on stores; crash-free > 99.5% in beta; both stores approve; smoke pass on real devices"
+      }
+    ],
+    "desktop": [
+      {
+        "id": "DESK-1",
+        "item": "Settings IA to locked spec (General/Account/Privacy/Billing/Usage/Capabilities/Connectors/AGI Code/AGI in Chrome/Extensions/Developer)",
+        "gate": "all sections present + wired; e2e nav"
+      },
+      {
+        "id": "DESK-2",
+        "item": "Mount AGI Code into V3 shell or cleanly gate it (no orphaned mode)",
+        "gate": "Code mode reachable or hidden; no dead entry"
+      },
+      {
+        "id": "DESK-3",
+        "item": "Finish office-doc editing or scope the claim to create + limited edit",
+        "gate": "edit ops work or claim matches; cargo test"
+      },
+      {
+        "id": "DESK-4",
+        "item": "Research email/calendar agents: wire to connectors or hide",
+        "gate": "real results or hidden; no empty-stub UI"
+      },
+      {
+        "id": "DESK-5",
+        "item": "Cross-platform speech: local Whisper STT + non-mac TTS, or document support honestly",
+        "gate": "works on target OSes or scoped"
+      },
+      {
+        "id": "DESK-6",
+        "item": "Trust boundary: keep dormant Rust cloud-sync gated; add egress contract tests",
+        "gate": "Local never emits non-local calls (tests)"
+      },
+      {
+        "id": "DESK-9",
+        "item": "MCP/connectors directory + per-tool permissions + skill vetting gate (shared w/ web)",
+        "gate": "install/permission flow; poisoned skill blocked"
+      },
+      {
+        "id": "DESK-10",
+        "item": "Production hardening: in-app updater, error handling, crash reporting, performance, computer/browser-use approval gates",
+        "gate": "updater works; approvals gate native actions"
+      },
+      {
+        "id": "DESK-11",
+        "item": "Signed/notarized builds: macOS DMG (sign + notarize) + Windows installer (code-signed)",
+        "gate": "signed artifacts; Gatekeeper/SmartScreen pass"
+      },
+      {
+        "id": "DESK-12",
+        "item": "Release + smoke on installed build; rollback plan",
+        "gate": "installed-app smoke green on macOS + Windows via computer-use MCP; Local/BYOK/Managed all work with correct trust labels"
+      }
+    ]
+  }
+}
