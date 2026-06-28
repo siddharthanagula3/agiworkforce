@@ -5,9 +5,9 @@ import { PublicWaitlistForm } from '../../components/marketing/PublicWaitlistFor
 import { Reveal } from '../../components/marketing/Reveal';
 
 export const metadata: Metadata = {
-  title: 'Join the AGI Cloud Waitlist',
+  title: 'AGI Cloud is open — Team & Enterprise early access',
   description:
-    'Request invite access for AGI Cloud. Managed cloud remains waitlist-only while subscription, usage, abuse, retention, and provider-cost controls are proven.',
+    'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Join the list for Team & Enterprise early access (org seats, admin controls, SSO).',
   alternates: { canonical: 'https://agiworkforce.com/waitlist' },
 };
 
@@ -37,22 +37,26 @@ export default function WaitlistPage() {
 
         <section className="agi-fl-hero" aria-labelledby="agi-waitlist-h1">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">AGI Cloud · private beta</p>
-          <h1 id="agi-waitlist-h1" className="agi-fl-h1" style={{ maxWidth: '14ch' }}>
+          <p className="agi-fl-eyebrow">AGI Cloud · public alpha</p>
+          <h1 id="agi-waitlist-h1" className="agi-fl-h1" style={{ maxWidth: '16ch' }}>
             <span className="agi-fl-h1-line">Managed compute,</span>
             <span className="agi-fl-h1-line">
-              <em className="agi-fl-h1-em">opened carefully.</em>
+              <em className="agi-fl-h1-em">open today.</em>
             </span>
           </h1>
           <p className="agi-fl-lede">
-            AGI Cloud is rolling out by invite while metering, abuse, retention, and provider-cost
-            controls are proven. Leave your email. No account required. We will notify you the
-            moment your access opens.
+            AGI managed cloud is in public alpha and open by default —{' '}
+            <a href="/get-started" className="agi-fl-surface-link">
+              sign in and start
+            </a>
+            , no waitlist. This list is for <strong>Team &amp; Enterprise</strong> early access: org
+            seats, admin controls, SSO, and centralized billing. Leave your email and we will reach
+            out as those land.
           </p>
           <div style={{ maxWidth: 560, marginTop: 34, paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
-            <PublicWaitlistForm source="website" ctaLabel="Join Waitlist" />
+            <PublicWaitlistForm source="website" ctaLabel="Request Team Access" />
             <p className="agi-fl-final-stamp" style={{ marginTop: 18, textTransform: 'none' }}>
-              One email when access opens. No marketing drip, unsubscribe anytime.
+              One email when Team &amp; Enterprise opens. No marketing drip, unsubscribe anytime.
             </p>
           </div>
         </section>

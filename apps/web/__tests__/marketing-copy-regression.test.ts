@@ -79,7 +79,8 @@ describe('public marketing copy regressions', () => {
     const normalizedWaitlist = waitlist.replace(/\s+/g, ' ');
 
     expect(waitlist).not.toContain('Cloud Managed is invite-only across Web, Mobile, Desktop, CLI');
-    expect(normalizedWaitlist).toContain('rolling out by invite');
+    // Managed cloud is public-alpha-open (not invite-only); the page reflects that.
+    expect(normalizedWaitlist).toContain('public alpha');
     expect(normalizedWaitlist).toContain('Use your provider accounts on Desktop and CLI');
     expect(waitlistForm).not.toContain('var(--teal, #2eb88a)');
     expect(waitlistForm).toContain('var(--agi-success)');
@@ -174,5 +175,18 @@ describe('public marketing copy regressions', () => {
     expect(home).not.toContain('Account & Cloud waitlist');
     // The AGI Cloud mode card presents the public-alpha reality.
     expect(home).toContain('Public alpha — sign in and start, no waitlist');
+  });
+
+  it('does not claim managed cloud is waitlist/invite-only on the waitlist page (WEB-12)', () => {
+    // The /waitlist page is reframed for Team & Enterprise early access — managed
+    // cloud itself is public-alpha-open, so the page must not assert it is gated.
+    const waitlist = readWebFile('app/waitlist/page.tsx');
+
+    expect(waitlist).not.toContain('Managed cloud remains waitlist-only');
+    expect(waitlist).not.toContain('rolling out by invite');
+    expect(waitlist).not.toContain('private beta');
+    // Reframed truthfully: managed cloud open, list is for Team & Enterprise.
+    expect(waitlist).toContain('open by default');
+    expect(waitlist).toContain('Team');
   });
 });
