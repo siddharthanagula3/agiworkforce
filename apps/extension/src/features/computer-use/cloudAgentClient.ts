@@ -389,8 +389,11 @@ export async function callCloud(
       Authorization: `Bearer ${token}`,
       // Gateway validateCsrf requires this header on every POST (rejects 403 CSRF_ERROR otherwise).
       'X-Requested-With': 'XMLHttpRequest',
-      // Managed-compute gate needs BOTH the server env AGI_MANAGED_COMPUTE_PRIVATE_BETA=1 AND
-      // this request header; without it the gate returns 403 not_private_beta even when env is set.
+      // Legacy no-op: managed cloud is public alpha (open by default). The server gate
+      // (apps/web/lib/managed-compute-gate.ts) is now purely env-based — it ignores this
+      // header and only 403s when the AGI_MANAGED_COMPUTE_PRIVATE_BETA kill-switch is
+      // explicitly set to 0/false/off. We keep sending it for backward-compat with any
+      // older gateway deployment that still inspects it; it is harmless when ignored.
       'x-agi-managed-compute-beta': '1',
     },
     body,
@@ -398,11 +401,12 @@ export async function callCloud(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    // Detect the managed-compute private-beta gate (403 with public_launch_blocked).
-    // This gate is controlled by the AGI_MANAGED_COMPUTE_PRIVATE_BETA=1 server env
-    // var and is not account-specific — the server must have it set for ANY account
-    // to use the computer-use agent. When the founder's demo server has the env var
-    // set, this 403 will not occur. Providing a clear error here avoids confusion.
+    // Managed cloud is public alpha (open by default). A 403 here means one of two things,
+    // NOT that an operator must turn an env var on:
+    //   1. The AGI_MANAGED_COMPUTE_PRIVATE_BETA kill-switch is explicitly set to 0/false/off
+    //      on the server, temporarily re-gating managed cloud (incident rollback), OR
+    //   2. The signed-in account lacks the paid tier required for this model
+    //      (computer-use needs a paid plan).
     if (
       response.status === 403 &&
       (errText.includes('public_launch_blocked') ||
@@ -410,10 +414,11 @@ export async function callCloud(
         errText.includes('not_private_beta'))
     ) {
       throw new Error(
-        'callCloud: managed-compute private-beta gate active (403). ' +
-          'The server requires AGI_MANAGED_COMPUTE_PRIVATE_BETA=1 (env) and this client now ' +
-          'sends the x-agi-managed-compute-beta:1 header. If still 403, the account is not on a ' +
-          'paid (Pro) plan — gpt-5.4-mini computer-use requires Pro.',
+        'callCloud: AGI Cloud is unavailable (403). Managed cloud is public alpha and open ' +
+          'by default, so this is either a temporary incident gate (the ' +
+          'AGI_MANAGED_COMPUTE_PRIVATE_BETA kill-switch is set off on the server) or your ' +
+          'account is not on a paid plan, which computer-use requires. Sign in with a paid ' +
+          'account, or try again later if the service is temporarily gated.',
       );
     }
     if (response.status === 401) {
