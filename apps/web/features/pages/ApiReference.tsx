@@ -38,7 +38,7 @@ const ApiReferencePage: React.FC = () => {
   -H "Content-Type: application/json" \\
   -d '{
     "message": "Hello, how can you help me?",
-    "model": "gpt-4",
+    "model": "gpt-5.4-mini",
     "session_id": "optional-session-id"
   }'`,
     },
@@ -302,7 +302,7 @@ const ApiReferencePage: React.FC = () => {
   },
   body: JSON.stringify({
     message: 'Hello, how can you help me?',
-    model: 'gpt-4',
+    model: 'gpt-5.4-mini',
   }),
 });
 
@@ -323,7 +323,7 @@ console.log(data);`}</code>
   },
   body: JSON.stringify({
     message: 'Hello, how can you help me?',
-    model: 'gpt-4',
+    model: 'gpt-5.4-mini',
   }),
 });
 
@@ -356,7 +356,7 @@ response = requests.post(
     },
     json={
         'message': 'Hello, how can you help me?',
-        'model': 'gpt-4',
+        'model': 'gpt-5.4-mini',
     }
 )
 
@@ -379,7 +379,7 @@ response = requests.post(
     },
     json={
         'message': 'Hello, how can you help me?',
-        'model': 'gpt-4',
+        'model': 'gpt-5.4-mini',
     }
 )
 
