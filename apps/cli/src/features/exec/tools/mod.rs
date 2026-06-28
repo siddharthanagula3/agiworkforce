@@ -16,6 +16,7 @@ mod common;
 mod dir_ops;
 mod file_ops;
 mod git;
+pub mod registry;
 mod task_registry;
 mod web;
 
@@ -87,6 +88,96 @@ pub struct ToolExecOptions {
 // Public API
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// C1 Tool-trait registry — read-only cluster
+// ---------------------------------------------------------------------------
+// Each read-only tool is a `registry::Tool` adapter over its existing executor.
+// `build_read_only_registry()` assembles them so the dispatch can resolve these
+// tools through the trait instead of a hard-coded match arm. Mutating tools
+// (write/run/edit/patch) keep their bespoke approval-callback signatures and
+// migrate in follow-on increments.
+
+struct ReadFileTool;
+#[async_trait::async_trait]
+impl registry::Tool for ReadFileTool {
+    fn name(&self) -> &'static str {
+        "read_file"
+    }
+    fn read_only(&self) -> bool {
+        true
+    }
+    async fn invoke(&self, args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult> {
+        execute_read_file_with_opts(args, quiet).await
+    }
+}
+
+struct SearchFilesTool;
+#[async_trait::async_trait]
+impl registry::Tool for SearchFilesTool {
+    fn name(&self) -> &'static str {
+        "search_files"
+    }
+    fn read_only(&self) -> bool {
+        true
+    }
+    async fn invoke(&self, args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult> {
+        execute_search_files_with_opts(args, quiet).await
+    }
+}
+
+struct ListDirectoryTool;
+#[async_trait::async_trait]
+impl registry::Tool for ListDirectoryTool {
+    fn name(&self) -> &'static str {
+        "list_directory"
+    }
+    fn read_only(&self) -> bool {
+        true
+    }
+    async fn invoke(&self, args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult> {
+        execute_list_directory_with_opts(args, quiet).await
+    }
+}
+
+struct GlobTool;
+#[async_trait::async_trait]
+impl registry::Tool for GlobTool {
+    fn name(&self) -> &'static str {
+        "glob"
+    }
+    fn read_only(&self) -> bool {
+        true
+    }
+    async fn invoke(&self, args: &HashMap<String, String>, _quiet: bool) -> Result<ToolResult> {
+        execute_glob(args).await
+    }
+}
+
+struct GrepFilesTool;
+#[async_trait::async_trait]
+impl registry::Tool for GrepFilesTool {
+    fn name(&self) -> &'static str {
+        "grep_files"
+    }
+    fn read_only(&self) -> bool {
+        true
+    }
+    async fn invoke(&self, args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult> {
+        execute_grep_files(args, quiet).await
+    }
+}
+
+/// Build the registry of read-only tools migrated to the [`registry::Tool`] trait.
+pub fn build_read_only_registry() -> registry::ToolRegistry {
+    let mut reg = registry::ToolRegistry::new();
+    reg.register(Box::new(ReadFileTool));
+    reg.register(Box::new(SearchFilesTool));
+    reg.register(Box::new(ListDirectoryTool));
+    reg.register(Box::new(GlobTool));
+    reg.register(Box::new(GrepFilesTool));
+    reg
+}
+
 #[allow(dead_code)]
 pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result<ToolResult> {
     let opts = ToolExecOptions {
@@ -103,16 +194,26 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     let is_safe_tool = is_catalog_read_only_tool(canonical_name);
     let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
 
+    // C1: read-only tools resolve through the Tool-trait registry first. They are
+    // side-effect-free, so they bypass the confirmation flow regardless.
+    static READ_ONLY_REGISTRY: std::sync::OnceLock<registry::ToolRegistry> =
+        std::sync::OnceLock::new();
+    if let Some(tool) = READ_ONLY_REGISTRY
+        .get_or_init(build_read_only_registry)
+        .get(canonical_name)
+    {
+        return tool.invoke(&call.args, opts.quiet).await;
+    }
+
     let result = match canonical_name {
-        "read_file" => execute_read_file_with_opts(&call.args, opts.quiet).await,
         "write_file" => {
             execute_write_file(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
         "run_command" => {
             execute_run_command(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
-        "search_files" => execute_search_files_with_opts(&call.args, opts.quiet).await,
-        "list_directory" => execute_list_directory_with_opts(&call.args, opts.quiet).await,
+        // read_file / search_files / list_directory / glob / grep_files are
+        // resolved earlier via the C1 read-only registry.
         "edit_file" => {
             file_ops::execute_edit_file(
                 &call.args,
@@ -126,9 +227,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "apply_patch" => {
             execute_apply_patch(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
-        "grep_files" => execute_grep_files(&call.args, opts.quiet).await,
         "tool_search" => execute_tool_search(&call.args).await,
-        "glob" => execute_glob(&call.args).await,
         "batch" => Box::pin(execute_batch(call, opts)).await,
         "multiedit" => {
             execute_multiedit(&call.args, require_confirm, opts.approval_callback.as_ref()).await
@@ -738,7 +837,10 @@ mod tests {
                 .into_iter()
                 .map(|tool| tool.name)
                 .collect();
-        let dispatched_names = dispatched_tool_names_from_source();
+        let mut dispatched_names = dispatched_tool_names_from_source();
+        // Read-only tools dispatch through the C1 Tool-trait registry rather than a
+        // source match arm, so include the registry's names as dispatched too.
+        dispatched_names.extend(super::build_read_only_registry().names().map(String::from));
         let agent_runtime_tools = BTreeSet::from(["task".to_string(), "update_plan".to_string()]);
 
         for dispatched_name in &dispatched_names {
@@ -1451,5 +1553,27 @@ mod private_ip_classifier_tests {
         assert!(!is_private_or_internal_ip(&IpAddr::V6(
             "2001:4860:4860::8888".parse().unwrap()
         )));
+    }
+
+    // ── C1 Tool-trait registry ──────────────────────────────────────────────
+    #[test]
+    fn read_only_registry_registers_the_read_only_cluster() {
+        let reg = super::build_read_only_registry();
+        assert_eq!(reg.len(), 5);
+        for name in ["read_file", "search_files", "list_directory", "glob", "grep_files"] {
+            let tool = reg.get(name).unwrap_or_else(|| panic!("missing {name}"));
+            assert_eq!(tool.name(), name);
+            assert!(tool.read_only(), "{name} must be read-only");
+        }
+    }
+
+    #[test]
+    fn read_only_registry_excludes_mutating_tools() {
+        // Mutating tools (write/run/edit) are NOT in the read-only registry — they
+        // must keep flowing through the confirmation-aware dispatch match.
+        let reg = super::build_read_only_registry();
+        assert!(reg.get("write_file").is_none());
+        assert!(reg.get("run_command").is_none());
+        assert!(reg.get("edit_file").is_none());
     }
 }
