@@ -6,8 +6,8 @@
  * HTTP request. On Article50DisclosureRequiredError, route the user back to
  * the onboarding disclosure screen.
  *
- * Mobile has three product modes: Local Mode + Local LLMs, future lightweight
- * Local Mode on Mobile and Cloud Managed after explicit invite unlock.
+ * Mobile has two product modes: Local Mode + Local LLMs, and Managed Cloud,
+ * which any signed-in user reaches in public alpha (no invite, no waitlist).
  * This wrapper is only for outbound provider/API requests after a
  * mode-specific gate allows them. Local-LLM requests and heavy
  * generated-file/browser/code environments should never reach this path.

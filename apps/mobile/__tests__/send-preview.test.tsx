@@ -58,7 +58,7 @@ describe('Mobile SendPreview', () => {
     expect(queryByTestId('icon-hard-drive')).toBeTruthy();
   });
 
-  it('maps legacy direct-provider preview to Cloud invite on Mobile', () => {
+  it('maps legacy direct-provider preview to Cloud sign-in on Mobile', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'DirectByok',
       destinationHost: 'api.anthropic.com',
@@ -66,9 +66,9 @@ describe('Mobile SendPreview', () => {
     const { getByText, getAllByText, queryByText, queryByTestId } = render(
       <SendPreview presentation={presentation} />,
     );
-    expect(getByText('Cloud invite required')).toBeTruthy();
+    expect(getByText('Sign in for AGI Cloud')).toBeTruthy();
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
-    expect(getByText(/Cloud access is available by invite/i)).toBeTruthy();
+    expect(getByText(/Sign in to use AGI Cloud chat/i)).toBeTruthy();
     expect(queryByText(/byok/i)).toBeNull();
     expect(queryByTestId('icon-cloud')).toBeTruthy();
   });

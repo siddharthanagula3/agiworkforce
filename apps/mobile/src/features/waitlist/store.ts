@@ -27,8 +27,17 @@ interface WaitlistState {
     result: JoinWaitlistResult,
   ) => void;
 
-  /** Called after invite-code redemption unlocks Cloud Managed private beta access. */
+  /** Called after invite-code redemption unlocks Cloud Managed access. Legacy alpha
+   *  path kept for backward-compat; public-alpha access comes from `setCloudAccess`. */
   markInviteRedeemed: (redemption: { code: string; inviteId?: string }) => void;
+
+  /**
+   * Public alpha: Managed Cloud access is granted by the signed-in entitlement
+   * (no invite, no waitlist). ClerkTokenBridge calls this when the Clerk session
+   * changes so every `cloudUnlocked` consumer reflects the real sign-in state.
+   * Signing out flips it back to false, closing any stale invite-redeemed unlock.
+   */
+  setCloudAccess: (unlocked: boolean) => void;
 
   /** Clears all waitlist state (e.g. when switching accounts or resetting app). */
   clear: () => void;
@@ -61,6 +70,16 @@ export const useWaitlistStore = create<WaitlistState>()(
           inviteCode: redemption.code.trim().toUpperCase(),
           cloudUnlockedAt: new Date().toISOString(),
         }),
+
+      setCloudAccess: (unlocked) =>
+        set((state) =>
+          state.cloudUnlocked === unlocked
+            ? state
+            : {
+                cloudUnlocked: unlocked,
+                cloudUnlockedAt: unlocked ? new Date().toISOString() : undefined,
+              },
+        ),
 
       clear: () =>
         set({

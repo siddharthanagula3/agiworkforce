@@ -1,5 +1,5 @@
 /**
- * Selectable onboarding mode card for local demo and invite-gated Cloud paths.
+ * Selectable onboarding mode card for local setup and sign-in-gated Cloud paths.
  */
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
@@ -27,8 +27,8 @@ const MODE_META: Record<
     testIdPrefix: 'mode-local',
   },
   cloud: {
-    title: 'AGI Cloud waitlist',
-    body: 'Cloud adds hosted models, sync, connected sources, generated files, and larger tool workflows when access is available.',
+    title: 'AGI Cloud',
+    body: 'Cloud adds hosted models, sync, connected sources, generated files, and larger tool workflows. Sign in after setup to start a Cloud session.',
     privacy: 'Cloud sessions use AGI infrastructure only after you choose to start one.',
     testIdPrefix: 'mode-cloud',
   },
@@ -99,7 +99,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
             }}
           >
             <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-              WAITLIST
+              SIGN IN
             </Text>
           </View>
         )}

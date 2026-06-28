@@ -102,7 +102,7 @@ describe('applyEnvironmentGate', () => {
     const lockedBase = {
       ...baseModel,
       availability: 'locked' as const,
-      lockReason: 'AGI Cloud is invite-only on mobile.',
+      lockReason: 'Sign in to use AGI Cloud chat.',
     };
     const result = applyEnvironmentGate(lockedBase, undefined);
     expect(result).toBe(lockedBase);
@@ -223,7 +223,7 @@ describe('CRITICAL SAFETY: no current model availability is altered by Phase A e
     const models = getModelListForCloudAccess(false);
 
     // Every model should either be 'ready'/'download_required' (local) or
-    // 'locked' with the cloud invite reason (cloud). No model should have an
+    // 'locked' with the cloud sign-in reason (cloud). No model should have an
     // env-gate reason.
     for (const model of models) {
       if (model.lockReason !== undefined) {
@@ -245,14 +245,14 @@ describe('CRITICAL SAFETY: no current model availability is altered by Phase A e
     }
   });
 
-  it('cloud models retain their invite-locked state unchanged', () => {
+  it('cloud models retain their sign-in-locked state unchanged', () => {
     const models = getModelListForCloudAccess(false);
     const cloudModels = models.filter((m) => m.surface === 'cloud_managed');
 
     expect(cloudModels.length).toBeGreaterThan(0);
     for (const m of cloudModels) {
       expect(m.availability).toBe('locked');
-      expect(m.lockReason).toBe('AGI Cloud is invite-only on mobile.');
+      expect(m.lockReason).toBe('Sign in to use AGI Cloud chat.');
     }
   });
 });

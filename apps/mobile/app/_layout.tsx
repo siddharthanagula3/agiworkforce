@@ -23,6 +23,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/src/features/auth/store';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
@@ -76,6 +77,7 @@ function ClerkTokenBridge() {
   const { getToken, userId, isSignedIn, isLoaded } = useAuth();
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
   const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
+  const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
 
   // Propagate Clerk's loaded state first so auth guards never fire during
   // the cold-start window where isSignedIn is false even for signed-in users.
@@ -96,16 +98,23 @@ function ClerkTokenBridge() {
         () => getToken({ skipCache: true }),
       );
       setClerkSignedIn(true);
+      // Public alpha: the signed-in entitlement IS the Managed Cloud gate. Reflect it
+      // in cloudUnlocked so every UI consumer (mode toggle, model picker, settings)
+      // opens Cloud for a signed-in user — no invite, no waitlist.
+      setCloudAccess(true);
     } else {
       setClerkTokenGetter(null, null, null);
       setClerkSignedIn(false);
+      // Signing out re-locks Cloud access, closing any stale invite-redeemed unlock.
+      setCloudAccess(false);
     }
-  }, [getToken, userId, isSignedIn, setClerkSignedIn]);
+  }, [getToken, userId, isSignedIn, setClerkSignedIn, setCloudAccess]);
 
   useEffect(() => {
     return () => {
       setClerkTokenGetter(null, null, null);
       useAuthStore.getState().setClerkSignedIn(false);
+      useWaitlistStore.getState().setCloudAccess(false);
     };
   }, []);
 
@@ -344,8 +353,8 @@ export default function RootLayout() {
     const inOnboarding = (segments[0] as string) === '(public)';
     const inLegal = segments[0] === 'legal';
 
-    // Public v1 keeps auth hidden. Invite-redeemed alpha testers are allowed
-    // through the existing auth group after Cloud Managed unlock.
+    // When auth is disabled (legacy local-only build), keep the auth group hidden.
+    // In public alpha auth is enabled and signing in is the Managed Cloud entitlement.
     if (!authEnabled) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding && !inLegal) {

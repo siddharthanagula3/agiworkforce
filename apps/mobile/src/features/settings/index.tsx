@@ -57,7 +57,7 @@ interface SettingsSection {
 }
 
 function tagStyle(tag: string, colors: ReturnType<typeof useThemeColors>) {
-  if (tag === 'Invite' || tag === 'Cloud') {
+  if (tag === 'Sign in' || tag === 'Cloud') {
     return {
       color: colors.agentWarning,
       backgroundColor: `${colors.agentWarning}14`,
@@ -184,7 +184,7 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
       user?.email?.split('@')[0] ||
       'Local profile';
   const subtitle = isCloudMode
-    ? user?.email || (cloudUnlocked ? 'Cloud access unlocked' : 'Invite required')
+    ? user?.email || (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Local mode active';
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -289,7 +289,7 @@ export default function SettingsTabScreen() {
     ]);
   }, [signOut]);
 
-  const cloudAccessTag = cloudUnlocked ? 'Cloud' : 'Invite';
+  const cloudAccessTag = cloudUnlocked ? 'Cloud' : 'Sign in';
 
   const sections = useMemo<SettingsSection[]>(
     () => [

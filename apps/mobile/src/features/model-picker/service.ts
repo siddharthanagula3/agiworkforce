@@ -1,10 +1,10 @@
 /**
- * Local + invite-gated cloud model catalog for Mobile.
+ * Local + sign-in-gated Managed Cloud model catalog for Mobile.
  *
  * Active/selectable rows come from @agiworkforce/local-llm. Cloud provider
- * models are included as gated rows and become selectable only when the
- * waitlist/invite store proves AGI Cloud access. This service never fetches
- * `/api/models`.
+ * models are included as gated rows and become selectable once the signed-in
+ * entitlement proves AGI Cloud access (public alpha — no invite, no waitlist).
+ * This service never fetches `/api/models`.
  */
 
 import {
@@ -68,7 +68,7 @@ export interface AutoModeDef {
 }
 
 const LOCAL_PROVIDER_ID = 'local';
-export const CLOUD_LOCK_REASON = 'AGI Cloud is invite-only on mobile.';
+export const CLOUD_LOCK_REASON = 'Sign in to use AGI Cloud chat.';
 
 // ---------------------------------------------------------------------------
 // P3 Phase A: Environment-gating helpers
@@ -395,7 +395,7 @@ function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef
     surface: 'cloud_managed',
     availability: cloudUnlocked ? 'ready' : 'locked',
     runtimeLabel: 'AGI Cloud',
-    detailLabel: cloudUnlocked ? `${providerLabel} provider` : 'Invite required',
+    detailLabel: cloudUnlocked ? `${providerLabel} provider` : 'Sign in required',
     description: `${providerLabel} model in AGI Cloud`,
     lockReason: cloudUnlocked ? undefined : CLOUD_LOCK_REASON,
   };
