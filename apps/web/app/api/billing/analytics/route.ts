@@ -82,8 +82,8 @@ async function handleGetBillingAnalytics(request: NextRequest) {
       db.query<TrendRow>(
         `select
            date_trunc('day', created_at)::date::text as date,
-           coalesce(sum((metadata->>'tokens')::bigint), 0)::text as total_tokens,
-           sum(abs(amount_cents))::text as total_cost_cents,
+           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
+           sum(amount_cents)::text as total_cost_cents,
            count(distinct metadata->>'session_id')::text as session_count
          from public.credit_transactions
          where user_id = $1
@@ -97,22 +97,22 @@ async function handleGetBillingAnalytics(request: NextRequest) {
       db.query<ProviderBreakdownRow>(
         `select
            coalesce(metadata->>'provider', 'unknown') as provider,
-           coalesce(sum((metadata->>'tokens')::bigint), 0)::text as total_tokens,
-           sum(abs(amount_cents))::text as total_cost_cents,
+           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
+           sum(amount_cents)::text as total_cost_cents,
            count(distinct metadata->>'session_id')::text as session_count
          from public.credit_transactions
          where user_id = $1
            and transaction_type = 'deduction'
            ${currentFilter}
          group by metadata->>'provider'
-         order by sum(abs(amount_cents)) desc`,
+         order by sum(amount_cents) desc`,
         [userId],
       ),
 
       db.query<OverviewRow>(
         `select
-           sum(abs(amount_cents))::text as total_spent_cents,
-           coalesce(sum((metadata->>'tokens')::bigint), 0)::text as total_tokens,
+           sum(amount_cents)::text as total_spent_cents,
+           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
            greatest(extract(epoch from (max(created_at) - min(created_at))) / 86400, 1)::text as days_in_range,
            count(distinct metadata->>'session_id')::text as session_count
          from public.credit_transactions
@@ -124,8 +124,8 @@ async function handleGetBillingAnalytics(request: NextRequest) {
 
       db.query<PeriodRow>(
         `select
-           coalesce(sum((metadata->>'tokens')::bigint), 0)::text as tokens,
-           sum(abs(amount_cents))::text as cost_cents,
+           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as tokens,
+           sum(amount_cents)::text as cost_cents,
            count(distinct metadata->>'session_id')::text as sessions
          from public.credit_transactions
          where user_id = $1
@@ -136,8 +136,8 @@ async function handleGetBillingAnalytics(request: NextRequest) {
 
       db.query<PeriodRow>(
         `select
-           coalesce(sum((metadata->>'tokens')::bigint), 0)::text as tokens,
-           sum(abs(amount_cents))::text as cost_cents,
+           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as tokens,
+           sum(amount_cents)::text as cost_cents,
            count(distinct metadata->>'session_id')::text as sessions
          from public.credit_transactions
          where user_id = $1
@@ -147,21 +147,27 @@ async function handleGetBillingAnalytics(request: NextRequest) {
       ),
     ]);
 
-    const totalSpent = parseInt(overview[0]?.total_spent_cents ?? '0', 10);
+    // Costs are NET signed sums now (reservation + reconciliation = actual).
+    // Clamp to >= 0 (BILLING FIX 0044: was sum(abs(...)), which counted refunds
+    // as charges). A retroactive correction landing in-window can't show negative.
+    const totalSpent = Math.max(0, parseInt(overview[0]?.total_spent_cents ?? '0', 10));
     const totalTokens = parseInt(overview[0]?.total_tokens ?? '0', 10);
     const daysInRange = parseFloat(overview[0]?.days_in_range ?? '1');
 
     const curTokens = parseInt(currentPeriod[0]?.tokens ?? '0', 10);
-    const curCost = parseInt(currentPeriod[0]?.cost_cents ?? '0', 10);
+    const curCost = Math.max(0, parseInt(currentPeriod[0]?.cost_cents ?? '0', 10));
     const curSessions = parseInt(currentPeriod[0]?.sessions ?? '0', 10);
     const prevTokens = parseInt(previousPeriod[0]?.tokens ?? '0', 10);
-    const prevCost = parseInt(previousPeriod[0]?.cost_cents ?? '0', 10);
+    const prevCost = Math.max(0, parseInt(previousPeriod[0]?.cost_cents ?? '0', 10));
     const prevSessions = parseInt(previousPeriod[0]?.sessions ?? '0', 10);
 
     const pctChange = (cur: number, prev: number) =>
       prev === 0 ? (cur > 0 ? 100 : 0) : Math.round(((cur - prev) / prev) * 100 * 10) / 10;
 
-    const totalProviderCost = providers.reduce((s, p) => s + parseInt(p.total_cost_cents, 10), 0);
+    const totalProviderCost = providers.reduce(
+      (s, p) => s + Math.max(0, parseInt(p.total_cost_cents, 10)),
+      0,
+    );
 
     return NextResponse.json({
       overview: {
@@ -175,11 +181,11 @@ async function handleGetBillingAnalytics(request: NextRequest) {
       trends: trends.map((t) => ({
         date: t.date,
         tokens: parseInt(t.total_tokens, 10),
-        cost: parseInt(t.total_cost_cents, 10),
+        cost: Math.max(0, parseInt(t.total_cost_cents, 10)),
         sessions: parseInt(t.session_count, 10),
       })),
       provider_breakdown: providers.map((p) => {
-        const pCost = parseInt(p.total_cost_cents, 10);
+        const pCost = Math.max(0, parseInt(p.total_cost_cents, 10));
         return {
           provider: p.provider,
           tokens: parseInt(p.total_tokens, 10),

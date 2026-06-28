@@ -80,8 +80,8 @@ async function handleGetAnalytics(request: NextRequest) {
     const dailyRows = await db.query<DailyUsageRow>(
       `select
          date_trunc('day', created_at)::date::text as date,
-         coalesce(sum((metadata->>'tokens')::bigint), 0)::text as total_tokens,
-         sum(abs(amount_cents))::text as total_cost_cents,
+         coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
+         sum(amount_cents)::text as total_cost_cents,
          count(distinct coalesce(metadata->>'session_id', id::text))::text as session_count
        from public.credit_transactions
        where user_id = $1
@@ -94,15 +94,15 @@ async function handleGetAnalytics(request: NextRequest) {
 
     const [stats] = await db.query<StatsRow>(
       `select
-         coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then (metadata->>'tokens')::bigint else 0 end), 0)::text as total_tokens,
-         coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then abs(amount_cents) else 0 end), 0)::text as total_cost_cents,
+         coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as total_tokens,
+         coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then amount_cents else 0 end), 0)::text as total_cost_cents,
          count(distinct case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then coalesce(metadata->>'session_id', id::text) else null end)::text as session_count,
-         coalesce(sum(case when created_at >= now() - interval '1 day' then (metadata->>'tokens')::bigint else 0 end), 0)::text as today_tokens,
-         coalesce(sum(case when created_at >= now() - interval '1 day' then abs(amount_cents) else 0 end), 0)::text as today_cost_cents,
-         coalesce(sum(case when created_at >= now() - interval '7 days' then (metadata->>'tokens')::bigint else 0 end), 0)::text as week_tokens,
-         coalesce(sum(case when created_at >= now() - interval '7 days' then abs(amount_cents) else 0 end), 0)::text as week_cost_cents,
-         coalesce(sum(case when created_at >= now() - interval '30 days' then (metadata->>'tokens')::bigint else 0 end), 0)::text as month_tokens,
-         coalesce(sum(case when created_at >= now() - interval '30 days' then abs(amount_cents) else 0 end), 0)::text as month_cost_cents
+         coalesce(sum(case when created_at >= now() - interval '1 day' then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as today_tokens,
+         coalesce(sum(case when created_at >= now() - interval '1 day' then amount_cents else 0 end), 0)::text as today_cost_cents,
+         coalesce(sum(case when created_at >= now() - interval '7 days' then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as week_tokens,
+         coalesce(sum(case when created_at >= now() - interval '7 days' then amount_cents else 0 end), 0)::text as week_cost_cents,
+         coalesce(sum(case when created_at >= now() - interval '30 days' then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as month_tokens,
+         coalesce(sum(case when created_at >= now() - interval '30 days' then amount_cents else 0 end), 0)::text as month_cost_cents
        from public.credit_transactions
        where user_id = $1
          and transaction_type = 'deduction'`,
@@ -112,24 +112,28 @@ async function handleGetAnalytics(request: NextRequest) {
     const totalTokens = parseInt(stats?.total_tokens ?? '0', 10);
     const sessionCount = parseInt(stats?.session_count ?? '0', 10);
 
+    // Costs are NET signed sums now (reservation + reconciliation = actual cost).
+    // Clamp to >= 0 so a retroactive correction landing inside a window can't show
+    // a negative cost. (BILLING FIX 0044: was sum(abs(...)), which counted
+    // reconciliation refunds as charges and inflated every figure.)
     return NextResponse.json({
       daily_usage: dailyRows.map((r) => ({
         date: r.date,
         tokens: parseInt(r.total_tokens, 10),
-        cost: parseInt(r.total_cost_cents, 10),
+        cost: Math.max(0, parseInt(r.total_cost_cents, 10)),
         sessions: parseInt(r.session_count, 10),
       })),
       stats: {
         total_tokens: totalTokens,
-        total_cost: parseInt(stats?.total_cost_cents ?? '0', 10),
+        total_cost: Math.max(0, parseInt(stats?.total_cost_cents ?? '0', 10)),
         avg_tokens_per_session: sessionCount > 0 ? Math.round(totalTokens / sessionCount) : 0,
         sessions_count: sessionCount,
         today_tokens: parseInt(stats?.today_tokens ?? '0', 10),
-        today_cost: parseInt(stats?.today_cost_cents ?? '0', 10),
+        today_cost: Math.max(0, parseInt(stats?.today_cost_cents ?? '0', 10)),
         week_tokens: parseInt(stats?.week_tokens ?? '0', 10),
-        week_cost: parseInt(stats?.week_cost_cents ?? '0', 10),
+        week_cost: Math.max(0, parseInt(stats?.week_cost_cents ?? '0', 10)),
         month_tokens: parseInt(stats?.month_tokens ?? '0', 10),
-        month_cost: parseInt(stats?.month_cost_cents ?? '0', 10),
+        month_cost: Math.max(0, parseInt(stats?.month_cost_cents ?? '0', 10)),
       },
       time_range: timeRange,
     });

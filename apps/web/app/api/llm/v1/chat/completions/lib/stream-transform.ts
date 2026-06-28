@@ -5,7 +5,6 @@ import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { reconcileUsage } from '@/lib/assert-quota';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import type { ProcessedRequest } from './request-processor';
 // ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. · no extra imports needed
@@ -27,8 +26,6 @@ export async function buildStreamResponse(
     provider,
     estimatedCostCents,
     quotaWarningHeader,
-    quotaFeature,
-    isFlagshipRequest,
     usedFallback,
     freeTrial,
   } = processed;
@@ -460,21 +457,10 @@ export async function buildStreamResponse(
         );
       }
 
-      const finalTotalTokens = inputTokens + outputTokens;
-      if (!freeTrial && finalTotalTokens > 0) {
-        void reconcileUsage({
-          userId,
-          token,
-          actualTokens: finalTotalTokens,
-          feature: quotaFeature,
-          isFlagship: isFlagshipRequest,
-        }).catch((err) => {
-          logger.warn(
-            { userId, requestId, error: err instanceof Error ? err.message : err },
-            '[reconcileUsage] streaming counter update failed',
-          );
-        });
-      }
+      // BILLING FIX (0044): reconcileUsage/increment_usage double-charged by
+      // adding the raw token count to credits_used_cents (cents). The
+      // deduct_credits reconciliation above is the authoritative cost path.
+      // Removed to stop the double charge.
 
       // Fire-and-forget cost tracking + OTel attribute emit (must not block the stream flush).
       try {

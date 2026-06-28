@@ -8,9 +8,28 @@ import React, {
   useMemo,
   useEffect,
 } from 'react';
-import { Globe, Brain, Image, FileText, Code, Terminal, Sparkles } from 'lucide-react';
+import {
+  Globe,
+  Brain,
+  Image,
+  FileText,
+  Code,
+  Terminal,
+  Database,
+  MonitorPlay,
+  Undo2,
+  Minimize2,
+  Sparkles,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { isCapabilityEnabled } from '@agiworkforce/types';
+import { usePlatform } from '@agiworkforce/unified-chat';
+import {
+  BUILT_IN_SLASH_COMMANDS,
+  filterSlashCommandsByCapability,
+  type SlashCommandIconName,
+} from '../../commands/slash-command-registry';
 
 interface SlashCommand {
   id: string;
@@ -22,13 +41,22 @@ interface SlashCommand {
   isSkill?: boolean;
 }
 
-const BUILT_IN_COMMANDS: SlashCommand[] = [
-  { id: 'search', label: '/search', description: 'Search the web', icon: Globe },
-  { id: 'think', label: '/think', description: 'Extended reasoning', icon: Brain },
-  { id: 'image', label: '/image', description: 'Generate an image', icon: Image },
-  { id: 'doc', label: '/doc', description: 'Create a document', icon: FileText },
-  { id: 'code', label: '/code', description: 'Write or explain code', icon: Code },
-];
+// Resolve the registry's framework-agnostic icon names to Lucide components.
+// Built-in commands themselves come from the canonical registry (single source
+// of truth), NOT a hardcoded subset — see COMMANDS below.
+const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
+  Globe,
+  Brain,
+  Image,
+  FileText,
+  Code,
+  MonitorPlay,
+  Terminal,
+  Database,
+  Undo2,
+  Minimize2,
+  Sparkles,
+};
 
 /** Shape returned by GET /api/skills (metadata only, no body). */
 interface SkillMeta {
@@ -91,9 +119,23 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
       };
     }, []);
 
+    const platform = usePlatform();
+
     const COMMANDS = useMemo<SlashCommand[]>(
       () => [
-        ...BUILT_IN_COMMANDS,
+        // Built-ins come from the canonical slash-command registry, filtered by
+        // PLATFORM capability — so /terminal, /browser, /database never render on
+        // web/mobile. Single source of truth; no hardcoded subset to drift.
+        ...filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, (capability) =>
+          isCapabilityEnabled(platform, capability),
+        ).map(
+          (c): SlashCommand => ({
+            id: c.id,
+            label: c.label,
+            description: c.description,
+            icon: SLASH_ICONS[c.iconName],
+          }),
+        ),
         ...customCommands.map((c) => ({
           id: c.id,
           label: `/${c.name}`,
@@ -103,7 +145,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
         })),
         ...skillCommands,
       ],
-      [customCommands, skillCommands],
+      [platform, customCommands, skillCommands],
     );
 
     const filtered = COMMANDS.filter(

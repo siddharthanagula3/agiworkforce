@@ -1,15 +1,20 @@
 /**
  * Canonical slash command registry for the web chat surface.
  *
- * This is the single source of truth for all slash commands. Both the
- * autocomplete hooks (apps/web/hooks/) and the visual SlashCommandMenu
- * component import from here so the command sets stay in sync.
+ * This is the single source of truth for all slash commands. The live web
+ * SlashCommandMenu consumes BUILT_IN_SLASH_COMMANDS + filterSlashCommandsByCapability
+ * from here (so platform-gated commands like /terminal, /browser, /database are
+ * filtered per surface). The desktop autocomplete
+ * (apps/desktop/src/hooks/useSlashCommandAutocomplete.ts) still maintains its own
+ * list and is tracked as pending adoption by the capability-boundary guard.
  *
  * Built-in commands cover UI tools (search, think, image, doc, code) and
  * desktop/agentic actions (browser, terminal, database, undo, compact).
  * Custom user-defined commands are appended at runtime by SlashCommandMenu
  * by reading from the settings store.
  */
+
+import type { PlatformCapability } from '@agiworkforce/types';
 
 // Icon names are Lucide identifiers so this file stays framework-agnostic
 // (the component layer is responsible for resolving them to React elements).
@@ -36,6 +41,13 @@ export interface SlashCommandDefinition {
   isCustom?: boolean;
   /** True for skill-sourced commands fetched from /api/skills. */
   isSkill?: boolean;
+  /**
+   * Platform capability this command requires to be visible. When set, the
+   * command is filtered out on surfaces that don't expose the capability (e.g.
+   * /terminal, /browser, /database are desktop-local and must not appear on web
+   * or mobile). Commands without this field are universal.
+   */
+  requiredCapability?: PlatformCapability;
 }
 
 /**
@@ -85,6 +97,7 @@ export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
     description: 'Automate browser actions',
     example: '/browser https://example.com',
     iconName: 'MonitorPlay',
+    requiredCapability: 'canUseBrowserAutomation',
   },
   {
     id: 'terminal',
@@ -92,6 +105,7 @@ export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
     description: 'Execute shell commands',
     example: '/terminal ls -la',
     iconName: 'Terminal',
+    requiredCapability: 'canUseTerminal',
   },
   {
     id: 'database',
@@ -99,6 +113,7 @@ export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
     description: 'Run database queries',
     example: '/database SELECT * FROM users',
     iconName: 'Database',
+    requiredCapability: 'canUseLocalDatabase',
   },
   {
     id: 'undo',
@@ -118,6 +133,22 @@ export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
 
 /** Stable set of all valid command IDs, used for fast O(1) lookup. */
 export const BUILT_IN_COMMAND_IDS = new Set(BUILT_IN_SLASH_COMMANDS.map((c) => c.id));
+
+/**
+ * Filter slash commands by platform capability. Commands tagged with a
+ * `requiredCapability` are dropped on surfaces that don't expose it (so
+ * /terminal, /browser, /database never reach web/mobile). Framework-agnostic:
+ * the caller supplies the capability predicate (e.g. backed by the shared
+ * `isCapabilityEnabled` matrix / `useCapability`).
+ */
+export function filterSlashCommandsByCapability(
+  commands: SlashCommandDefinition[],
+  isCapabilityEnabled: (capability: PlatformCapability) => boolean,
+): SlashCommandDefinition[] {
+  return commands.filter(
+    (command) => !command.requiredCapability || isCapabilityEnabled(command.requiredCapability),
+  );
+}
 
 /**
  * Filter the built-in command list against a partial query string.

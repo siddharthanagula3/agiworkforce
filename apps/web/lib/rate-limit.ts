@@ -77,6 +77,11 @@ export const rateLimitConfigs = {
     window: '1 s', // 10 requests per second
     failClosed: false,
   },
+  'mobile-push-token': {
+    limit: 30,
+    window: '1 m', // 30 push-token updates per minute (mirrors api-gateway limiter)
+    failClosed: false,
+  },
   'claim-offer': {
     limit: 3,
     window: '1 h', // 3 requests per hour
@@ -523,11 +528,20 @@ function getRateLimiter(key: RateLimitKey): Ratelimit {
     throw new Error('Redis not configured for rate limiting');
   }
 
-  // Create new instance and cache it
+  // Create new instance and cache it.
+  //
+  // BUGFIX (QA-2026-06): namespace each endpoint's bucket via `prefix`. Upstash
+  // defaults every Ratelimit instance to the same prefix ('@upstash/ratelimit'),
+  // so two configs sharing an identifier (e.g. the same IP hitting both `me` and
+  // `chat-message`) collide on ONE Redis key. The endpoint with the smallest
+  // limit then 429s during normal multi-endpoint usage even though its own
+  // traffic is well under budget. Keying by config name gives each endpoint the
+  // independent bucket its distinct limit/window already implies.
   const rateLimiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(config.limit, config.window),
     analytics: true,
+    prefix: `agi-rl:${key}`,
   });
 
   rateLimiterCache.set(key, rateLimiter);
@@ -630,7 +644,15 @@ export async function checkRateLimit(
     }
 
     const windowMs = parseWindow(config.window);
-    const result = inMemoryRateLimit(id, config.limit, windowMs);
+    // BUGFIX (QA-2026-06): namespace the in-memory bucket by endpoint key. The
+    // store was keyed by identifier alone, so every rate-limited endpoint
+    // sharing an identifier (e.g. `ip:unknown` on localhost, or one IP behind a
+    // proxy) incremented a SINGLE counter. The lowest-limit endpoint
+    // (chat-message: 20/min) then spuriously 429'd once unrelated traffic
+    // (me/connectors/projects/conversations) exhausted the shared counter —
+    // dropping the assistant-message persist POST and losing the reply on
+    // reload. Mirror the Redis-path `prefix` so both stores bucket identically.
+    const result = inMemoryRateLimit(`${key}:${id}`, config.limit, windowMs);
 
     const headers: Record<string, string> = {
       'X-RateLimit-Limit': config.limit.toString(),

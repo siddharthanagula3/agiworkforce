@@ -132,7 +132,8 @@ export function TokenBalanceDisplay({ compact = false, className }: TokenBalance
         )}
       >
         {isCritical ? <AlertTriangle className="h-3.5 w-3.5" /> : <Coins className="h-3.5 w-3.5" />}
-        <span className="font-medium">${remainingDollars.toFixed(2)}</span>
+        {/* Subscription-usage framing (PART 7): show % used, not internal $ balance. */}
+        <span className="font-medium">{Math.min(100, Math.round(usagePercentage))}% used</span>
         <span className="text-xs opacity-70 capitalize">{planTier}</span>
         {isCritical && (
           <Link href="/pricing">

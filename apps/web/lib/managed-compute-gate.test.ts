@@ -15,19 +15,18 @@ describe('web managed compute gate', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
   });
 
-  it('fails closed when managed compute private beta is disabled', async () => {
+  it('is open by default (public alpha — no private-beta gate)', () => {
+    // Public Alpha (2026-06-27): the private-beta launch gate was removed.
+    // With the env var unset, managed compute is GA/open and the gate allows.
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
       model: 'gpt-test',
     });
 
-    expect(response?.status).toBe(403);
-    const body = await response!.json();
-    expect(body.error.code).toBe('public_launch_blocked');
-    expect(body.managed_compute.allowed).toBe(false);
+    expect(response).toBeNull();
   });
 
-  it('allows requests when the server private-beta flag is enabled', () => {
+  it('allows requests when the env is explicitly enabled (1)', () => {
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
     const response = buildManagedComputeGateResponse(
       request({ [MANAGED_COMPUTE_ORG_HEADER]: 'org-1' }),
@@ -40,12 +39,24 @@ describe('web managed compute gate', () => {
     expect(response).toBeNull();
   });
 
-  it('allows a free-trial request through even when the private-beta flag is disabled', () => {
-    // This is the path the free-tier/demo chat relies on: gpt-5.4-mini is a
-    // managed-compute model, the prod private-beta flag is NOT set, yet free
-    // users must still be able to chat. The route sets isFreeTrial=true for
-    // free/no-subscription users (route.ts), which must bypass the gate.
-    delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
+  it('re-gates (403) when the kill-switch env is set to 0', async () => {
+    // The env var is retained as an incident-response kill-switch. Setting it to
+    // '0'/'false'/'off' re-closes the gate.
+    process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
+    const response = buildManagedComputeGateResponse(request(), {
+      provider: 'openai',
+      model: 'gpt-test',
+    });
+
+    expect(response?.status).toBe(403);
+    const body = await response!.json();
+    expect(body.error.code).toBe('public_launch_blocked');
+    expect(body.managed_compute.allowed).toBe(false);
+  });
+
+  it('allows a free-trial request through even when the kill-switch is engaged', () => {
+    // Free-tier chat must work even if an operator re-engages the kill-switch.
+    process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
       model: 'gpt-5.4-mini',

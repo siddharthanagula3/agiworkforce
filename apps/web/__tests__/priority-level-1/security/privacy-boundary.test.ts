@@ -65,25 +65,31 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
     }
   });
 
-  test('SECURITY: managed compute is blocked (403) when private-beta flag is off', () => {
+  test('PUBLIC_ALPHA: managed compute is open by default (no private-beta gate)', () => {
+    // Public Alpha (2026-06-27): the private-beta launch gate was removed.
+    // Unset env => managed compute is GA/open and the gate returns null.
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
-    expect(isManagedComputePrivateBetaEnabled()).toBe(false);
+    expect(isManagedComputePrivateBetaEnabled()).toBe(true);
 
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
       model: 'claude-opus-4-8',
       feature: 'chat',
     });
-    expect(res).not.toBeNull();
-    expect(res!.status).toBe(403);
+    expect(res).toBeNull();
   });
 
-  test('SECURITY: blocked response carries the public-launch-blocked code (no silent route)', async () => {
-    delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
+  test('KILL_SWITCH: managed compute re-gates (403, public-launch-blocked) when env set to 0', async () => {
+    // The env var is retained as an incident-response kill-switch.
+    process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
+    expect(isManagedComputePrivateBetaEnabled()).toBe(false);
+
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'openai',
       model: 'gpt-5.5',
     });
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(403);
     const json = await res!.json();
     expect(json.error.code).toBe('public_launch_blocked');
     expect(json.managed_compute.allowed).toBe(false);
@@ -101,8 +107,8 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
     expect(res).toBeNull();
   });
 
-  test('SECURITY: free-trial economy prompt is the only opt-in exception when flag is off', () => {
-    delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
+  test('SECURITY: free-trial economy prompt is allowed even when the kill-switch is engaged', () => {
+    process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
       model: 'claude-haiku-4-5-20251001',

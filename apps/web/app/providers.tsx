@@ -9,6 +9,7 @@ import { CommandPaletteProvider } from '@/components/CommandPalette/CommandPalet
 import { WaitlistModalProvider } from '@/components/marketing/WaitlistModal';
 import { SettingsModalProvider } from '@/features/settings/components/SettingsModalProvider';
 import { ThemeProvider } from '@shared/components/ThemeProvider';
+import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { seoService } from '@core/monitoring/seo-optimizer';
 
@@ -30,17 +31,19 @@ export default function Providers({
   }, []);
 
   return (
-    <QueryProvider>
-      <ThemeProvider nonce={nonce}>
-        <I18nextProvider i18n={i18n}>
-          <WaitlistModalProvider>
-            <SettingsModalProvider>{children}</SettingsModalProvider>
-            <CommandPaletteProvider />
-            <OfflineIndicator position="bottom" />
-            <Toaster position="top-center" richColors closeButton />
-          </WaitlistModalProvider>
-        </I18nextProvider>
-      </ThemeProvider>
-    </QueryProvider>
+    <CapabilityProvider platform="web">
+      <QueryProvider>
+        <ThemeProvider nonce={nonce}>
+          <I18nextProvider i18n={i18n}>
+            <WaitlistModalProvider>
+              <SettingsModalProvider>{children}</SettingsModalProvider>
+              <CommandPaletteProvider />
+              <OfflineIndicator position="bottom" />
+              <Toaster position="top-center" richColors closeButton />
+            </WaitlistModalProvider>
+          </I18nextProvider>
+        </ThemeProvider>
+      </QueryProvider>
+    </CapabilityProvider>
   );
 }
