@@ -14,6 +14,7 @@ import {
   Gauge,
   Blocks,
   Terminal,
+  Code2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -38,6 +39,7 @@ export type SettingsNavKey =
   | 'capabilities'
   | 'agents'
   | 'connectors'
+  | 'agi-code'
   | 'plugins'
   | 'memory'
   | 'notifications'
@@ -111,6 +113,12 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   },
   { key: 'agents', label: 'Agents', icon: Zap },
   { key: 'connectors', label: 'Connectors', icon: Plug, keywords: ['mcp', 'integration'] },
+  {
+    key: 'agi-code',
+    label: 'AGI Code',
+    icon: Code2,
+    keywords: ['cli', 'claude.md', 'agents.md', 'instructions', 'code agent', 'vs code'],
+  },
   { key: 'plugins', label: 'Plugins', icon: Puzzle },
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
@@ -139,7 +147,7 @@ export interface SettingsNavGroup {
 /** Grouped navigation — the section structure both surfaces render. */
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   { keys: ['general', 'account', 'usage', 'appearance', 'privacy', 'models-keys', 'capabilities'] },
-  { label: 'Tools', keys: ['connectors', 'plugins', 'agents', 'memory'] },
+  { label: 'Tools', keys: ['connectors', 'agi-code', 'plugins', 'agents', 'memory'] },
   { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
   { label: 'Advanced', keys: ['developer'] },
 ];
