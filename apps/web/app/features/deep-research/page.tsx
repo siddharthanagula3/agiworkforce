@@ -132,8 +132,8 @@ export default function DeepResearchPage() {
               <tr>
                 <td>Cloud</td>
                 <td>
-                  Managed compute stays invite-only. Nothing routes to AGI Cloud without a visible
-                  label.
+                  Managed compute is public alpha, open by default. Nothing routes to AGI Cloud
+                  without a visible label.
                 </td>
               </tr>
             </tbody>

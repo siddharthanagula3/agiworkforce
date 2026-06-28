@@ -55,7 +55,7 @@ export default function DesktopPage() {
               <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
                 <li>Local · on-device</li>
                 <li>BYOK · your keys</li>
-                <li>Cloud · by invite</li>
+                <li>Cloud · public alpha</li>
               </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
@@ -139,14 +139,14 @@ export default function DesktopPage() {
             {
               mode: 'AGI Cloud',
               glyph: '●',
-              title: 'By invite.',
-              body: 'Hosted capacity, opened carefully.',
+              title: 'Public alpha.',
+              body: 'Hosted capacity, open by default.',
               points: [
-                'Private beta via waitlist and invite codes',
+                'Public alpha — sign in and start, no waitlist',
                 'Separate from Local by design',
-                'One email when your access opens',
+                'Usage metered and transparent',
               ],
-              cta: { label: 'Join the Waitlist', waitlist: true },
+              cta: { href: '/get-started', label: 'Get Started' },
             },
           ]}
         />
@@ -181,7 +181,7 @@ export default function DesktopPage() {
           title="What's inside."
           rows={[
             { k: 'Engine', v: 'Tauri 2 · Rust backend · React frontend' },
-            { k: 'Modes', v: 'Local · BYOK · Cloud by invite' },
+            { k: 'Modes', v: 'Local · BYOK · Cloud (public alpha)' },
             { k: 'Local runtimes', v: 'Ollama · LM Studio' },
             { k: 'BYOK keys', v: 'Encrypted at rest, on your machine' },
             { k: 'Storage', v: 'SQLite, local to your machine' },

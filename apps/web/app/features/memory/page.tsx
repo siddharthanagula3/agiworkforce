@@ -39,7 +39,7 @@ const CONTROLS = [
     body: 'In the current release, memory lives on the device that created it.',
     points: [
       'Facts persist locally on each device',
-      'Hosted memory sync belongs to AGI Cloud, opening by invite',
+      'Hosted memory sync belongs to AGI managed cloud (public alpha)',
       "Incognito conversations aren't saved to disk",
     ],
   },

@@ -83,7 +83,7 @@ export default async function StatusPage() {
             <ul className="agi-fl-mode-ribbon" aria-label="Where AGI runs">
               <li>Local · your device</li>
               <li>BYOK · provider-direct</li>
-              <li>Cloud · hosted, by invite</li>
+              <li>Cloud · hosted, public alpha</li>
             </ul>
           </div>
         </section>
@@ -152,10 +152,10 @@ export default async function StatusPage() {
               <p className="agi-fl-trust-mode">
                 <span aria-hidden="true">●</span> AGI Cloud
               </p>
-              <h3 className="agi-fl-trust-title">Private beta, by invite.</h3>
+              <h3 className="agi-fl-trust-title">Public alpha, open by default.</h3>
               <p className="agi-fl-trust-body">
-                Managed compute is rolling out through the waitlist. Invited users are contacted by
-                email about anything that affects their access.
+                Managed compute is in public alpha — signed-in users can use it now, with metered
+                usage and visible provider labels. Team &amp; Enterprise controls are rolling out.
               </p>
             </div>
           </div>
