@@ -1,6 +1,6 @@
 import {
   MOBILE_REMOTE_CHAT_DISABLED_MESSAGE,
-  MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE,
+  MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE,
   RemoteChatDisabledError,
   assertRemoteChatAllowed,
   getRemoteChatDisabledReason,
@@ -20,13 +20,13 @@ describe('remoteChatGate', () => {
     ).toBe(MOBILE_REMOTE_CHAT_DISABLED_MESSAGE);
   });
 
-  it('requires invite access when Cloud chat is enabled but still gated', () => {
+  it('requires sign-in when Cloud chat is enabled but the user is not signed in', () => {
     expect(
       getRemoteChatDisabledReason({ v1LocalOnly: true, cloudChat: true, byokKeys: false }),
-    ).toBe(MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE);
+    ).toBe(MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE);
   });
 
-  it('allows remote chat when Cloud chat is enabled and invite access is present', () => {
+  it('allows remote chat when Cloud chat is enabled and the user is signed in', () => {
     expect(
       getRemoteChatDisabledReason(
         { v1LocalOnly: true, cloudChat: true, byokKeys: false },
@@ -35,7 +35,7 @@ describe('remoteChatGate', () => {
     ).toBeNull();
   });
 
-  it('does not allow invite access to bypass a disabled Cloud chat build', () => {
+  it('does not allow a signed-in session to bypass a disabled Cloud chat build', () => {
     expect(
       getRemoteChatDisabledReason(
         { v1LocalOnly: true, cloudChat: false, byokKeys: false },
