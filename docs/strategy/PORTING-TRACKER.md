@@ -102,4 +102,26 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 
 ## 4. Next action
 
-**INC-0.1** (license-gate CI) is the next increment. Run it per the loop protocol in `11-execution-playbook.md` §1, on integration branch `feat/agi-alpha`. After it commits + verifies green, mark it ✅ here and proceed to INC-0.2.
+**INC-0.3** (trust-boundary contract tests) is the next increment, per the loop in
+`11-execution-playbook.md`. INC-0.1 (license gate) is ✅. INC-0.2 (tracker) is now tracked + maintained.
+
+## 5. Session progress log
+
+### 2026-06-28 — setup + working-tree reconciliation
+
+Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
+
+- `b1972485f` ci(licenses): license-gate check + `check:licenses`/`check:capability-boundaries` scripts (INC-0.1 ✅)
+- `b871804b2` chore(scripts): add clean-repo, migrate-structure, spec-artifacts, capability-boundary checks
+- `5effdd333` chore(repo): applied `clean-repo --apply` (git-rm 932 stale audit/reports/tasks/archive files); doc-status.json pruned to match
+- `33ae51130` fix(mobile): stream-error copy stays clean — `[DIAG]` diagnostic string no longer leaks into the assistant bubble/retry banner (console-only now); mobile suite 144/144 green
+- `15e129f10` fix(models): reconciled `models.curation.json` + `models.synced.json` via `extract` round-trip so the generator reproduces the committed catalog. Pre-existing drift: curation lagged hand-edits to `models.json` (missing gpt-5-nano/gpt-4.1-nano, stale canonicalization + managed_cloud.taskRouting). `sync:models:check` was RED at HEAD; now GREEN with **zero** per-model data loss (verified field-level vs HEAD). types tests 256/256.
+- `385e47737` feat(packages): platform capability matrix + unified-chat consumers (unified-chat 467/467)
+- canonical docs commit: added `docs/spec` (master spec + 40 volumes), `docs/strategy`, `docs/00-foundation`
+- `c2dddae7f` docs: refreshed current docs + root guides
+- web group commit: capability provider, mobile API, neon 0043/0044, new tests (web typecheck green; new tests green)
+- `05fdf0f6c` fix(desktop): clearer Local-mode routing errors (respects `local_only`, no BYOK/Managed leak), deterministic AC-19 skill ranking, cloudRollback test (cargo check + desktop typecheck green)
+- `7a926f298` test(web): tool-timeline running header updated to status-phrase behavior (stale test after 5b54d58d0) — web ToolTimeline 17/17
+- `refactor(cli)`: applied `migrate-structure --apply` → exec tools folder-per-tool (`{tool}/mod.rs`); `check:structure-conventions` green, cargo check -p agiworkforce-cli green (INC structure ✅)
+
+**Pre-existing reds (NOT regressions, logged):** `apps/web` ~13 Neon-integration tests (memory, device-code, routing_preferences, me, artifacts) fail locally for lack of Postgres but pass in CI — already tracked as `CI-INSTEP-REDS-01` in known-flaws.
