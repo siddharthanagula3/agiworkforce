@@ -70,4 +70,32 @@ describe('MessageContentRenderer', () => {
 
     expect(() => fireEvent.press(getByText('Source'))).not.toThrow();
   });
+
+  it('renders markdown table with interior empty cells correctly', () => {
+    const tableContent = `| Name | Age | City |
+|---|---|---|
+| Alice | 30 | NYC |
+| Bob | | LA |`;
+
+    const { getByText, getAllByText } = render(
+      <View>{renderMarkdownContent(tableContent, lightColors)}</View>,
+    );
+
+    // Verify header cells are present
+    expect(getByText('Name')).toHaveStyle({ fontWeight: '500' });
+    expect(getByText('Age')).toHaveStyle({ fontWeight: '500' });
+    expect(getByText('City')).toHaveStyle({ fontWeight: '500' });
+
+    // Verify body rows have correct values
+    expect(getByText('Alice')).toHaveStyle({ color: lightColors.textSecondary });
+    expect(getByText('30')).toHaveStyle({ color: lightColors.textSecondary });
+    expect(getByText('NYC')).toHaveStyle({ color: lightColors.textSecondary });
+    expect(getByText('Bob')).toHaveStyle({ color: lightColors.textSecondary });
+    expect(getByText('LA')).toHaveStyle({ color: lightColors.textSecondary });
+
+    // Verify we have 3 instances of empty cell content (one per row with missing value)
+    // Bob's age is empty, so we should render the empty string placeholder
+    const allEmptyTexts = getAllByText('');
+    expect(allEmptyTexts.length).toBeGreaterThan(0);
+  });
 });

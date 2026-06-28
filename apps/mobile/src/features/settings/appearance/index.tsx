@@ -1,7 +1,10 @@
 import { Pressable, View } from 'react-native';
 import { Check, Monitor, Moon, Sun } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import type { ThemeMode } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 
@@ -13,8 +16,15 @@ const OPTIONS: Array<{ mode: ThemeMode; label: string; description: string; icon
 
 export default function AppearanceScreen() {
   const colors = useThemeColors();
-  const themeMode = useSettingsStore((s) => s.themeMode);
-  const setThemeMode = useSettingsStore((s) => s.setThemeMode);
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+
+  const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
+  const localSetThemeMode = useLocalSettingsStore((s) => s.setThemeMode);
+  const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
+  const cloudSetThemeMode = useCloudSettingsStore((s) => s.setThemeMode);
+
+  const themeMode = isCloud ? cloudThemeMode : localThemeMode;
+  const setThemeMode = isCloud ? cloudSetThemeMode : localSetThemeMode;
 
   return (
     <SettingsScreenShell title="Appearance">

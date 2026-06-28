@@ -60,6 +60,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 jest.mock('../services/authSession', () => ({
@@ -76,24 +81,32 @@ jest.mock('../services/authSession', () => ({
 // ---------------------------------------------------------------------------
 
 import PersonalizationScreen from '../app/(app)/settings/personalization';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+const defaultPersonalization = {
+  fullName: '',
+  nickname: '',
+  occupation: '',
+  instructions: '',
+  warmth: 50,
+  enthusiasm: 50,
+  headersLists: 50,
+  emoji: 50,
+};
+
+// PersonalizationScreen reads from the active mode's store.
+// Tests run in local mode (appModeStore defaults to 'local'), so seed both
+// but primary reads come from useLocalSettingsStore.
 function resetSettingsStore() {
-  useSettingsStore.setState({
-    personalization: {
-      fullName: '',
-      nickname: '',
-      occupation: '',
-      instructions: '',
-      warmth: 50,
-      enthusiasm: 50,
-      headersLists: 50,
-      emoji: 50,
-    },
+  useLocalSettingsStore.setState({ personalization: defaultPersonalization });
+  useCloudSettingsStore.setState({
+    personalization: defaultPersonalization,
+    settingsUpdatedAt: null,
   });
 }
 
@@ -151,7 +164,7 @@ describe('Personalization page', () => {
   });
 
   it('pre-fills text inputs from settingsStore', () => {
-    useSettingsStore.setState({
+    useLocalSettingsStore.setState({
       personalization: {
         fullName: 'John Doe',
         nickname: 'JD',
@@ -182,8 +195,8 @@ describe('Personalization page', () => {
     // Tap Save
     fireEvent.press(getByLabelText('Save personalization settings'));
 
-    // Verify the store was updated
-    const { personalization } = useSettingsStore.getState();
+    // Verify the store was updated (local mode → useLocalSettingsStore)
+    const { personalization } = useLocalSettingsStore.getState();
     expect(personalization.fullName).toBe('Alice Wonder');
   });
 

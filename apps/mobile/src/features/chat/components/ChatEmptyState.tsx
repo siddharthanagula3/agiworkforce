@@ -4,7 +4,9 @@ import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-rea
 import { Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { storage } from '@/lib/mmkv';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useThemeColors } from '@/src/ui/theme';
 
@@ -18,8 +20,13 @@ interface ChatEmptyStateProps {
 
 export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptyStateProps) {
   const colors = useThemeColors();
-  const nickname = useSettingsStore((s) => s.personalization.nickname);
-  const fullName = useSettingsStore((s) => s.personalization.fullName);
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const localNickname = useLocalSettingsStore((s) => s.personalization.nickname);
+  const localFullName = useLocalSettingsStore((s) => s.personalization.fullName);
+  const cloudNickname = useCloudSettingsStore((s) => s.personalization.nickname);
+  const cloudFullName = useCloudSettingsStore((s) => s.personalization.fullName);
+  const nickname = isCloud ? cloudNickname : localNickname;
+  const fullName = isCloud ? cloudFullName : localFullName;
   const displayName = nickname || fullName?.split(' ')[0] || '';
 
   const reducedMotion = useReducedMotion();

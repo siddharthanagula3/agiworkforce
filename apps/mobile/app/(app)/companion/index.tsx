@@ -36,6 +36,7 @@ import { startMobileHeartbeat, logApprovalDecision } from '@/services/heartbeat'
 import { getCurrentUserId } from '@/services/authSession';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 export default function CompanionScreen() {
   const colors = useThemeColors();
@@ -171,7 +172,7 @@ export default function CompanionScreen() {
     [approvalModalReject, currentApproval],
   );
 
-  if (!FEATURES.companion) return null;
+  if (!FEATURES.companion) return <FeatureUnavailable feature="Desktop companion" />;
 
   if (showScanner) {
     return <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />;

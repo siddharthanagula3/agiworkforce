@@ -40,5 +40,4 @@ export * from './components/TemporaryChatToggle';
 export * from './components/ThinkingBottomSheet';
 export * from './components/ThinkingChip';
 export * from './components/ThinkingLine';
-export * from './components/ToolCallCard';
 export * from './components/TypingIndicator';

@@ -32,6 +32,7 @@ import {
 import { api } from '@/services/api';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -348,7 +349,7 @@ export default function UsageScreen() {
     );
   }, []);
 
-  if (!FEATURES.billing) return null;
+  if (!FEATURES.billing) return <FeatureUnavailable feature="Usage" />;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

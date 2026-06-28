@@ -17,7 +17,7 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { useAuthStore } from '@/src/features/auth/store';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { api } from '@/services/api';
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
@@ -30,6 +30,7 @@ export default function CloudAccountScreen() {
 
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const handleCopyId = useCallback(() => {
     if (!userId) return;
@@ -59,16 +60,49 @@ export default function CloudAccountScreen() {
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
       'Delete Account',
-      'To delete your account, cancel your subscription first, then visit the profile page on agiworkforce.com.',
+      'This permanently deletes your AGI Cloud account and all cloud data (chats, projects, ' +
+        'memory, artifacts) within 24 hours. This cannot be undone, and you will be signed out ' +
+        'on this device.\n\n' +
+        'On-device Local Mode data stays on this device — remove it separately from ' +
+        'Settings → Data Controls if you want a full wipe.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Open Website',
-          onPress: () => void openExternalUrl('https://agiworkforce.com/settings/profile'),
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            setDeleting(true);
+            // Server derives the user from the Clerk Bearer token; no body needed.
+            // CSRF is bypassed for Bearer-authenticated requests server-side.
+            api
+              .delete<{ message?: string }>('/api/user/delete-account')
+              .then(async (res) => {
+                // Sign out to clear cloud-scoped local state on this device.
+                // (Local Mode on-device data is intentionally preserved — it is
+                // not tied to the deleted cloud account.)
+                await signOut().catch(() => {});
+                Alert.alert(
+                  'Account deletion scheduled',
+                  res?.message ??
+                    'Your account and all cloud data will be permanently deleted within 24 hours.',
+                );
+              })
+              .catch((err: unknown) => {
+                const is401 = err instanceof Error && err.message.includes('401');
+                Alert.alert(
+                  'Could not delete account',
+                  is401
+                    ? 'Your session expired. Please sign in again and retry.'
+                    : 'We could not delete your account. Check your connection and try again, ' +
+                        'or contact support@agiworkforce.com.',
+                );
+              })
+              .finally(() => setDeleting(false));
+          },
         },
       ],
     );
-  }, []);
+  }, [signOut]);
 
   return (
     <SettingsScreenShell title="Account">
@@ -141,7 +175,12 @@ export default function CloudAccountScreen() {
             Danger Zone
           </Text>
         </View>
-        <SettingsRow label="Delete Account" icon={Trash2} onPress={handleDeleteAccount} isLast />
+        <SettingsRow
+          label={deleting ? 'Deleting…' : 'Delete Account'}
+          icon={Trash2}
+          onPress={deleting ? undefined : handleDeleteAccount}
+          isLast
+        />
       </View>
     </SettingsScreenShell>
   );

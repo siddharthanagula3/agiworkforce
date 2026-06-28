@@ -34,7 +34,8 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -171,8 +172,10 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
   const user = useAuthStore((s) => s.user);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
-  const personalization = useSettingsStore((s) => s.personalization);
   const isCloudMode = appMode === 'cloud';
+  const localPersonalization = useLocalSettingsStore((s) => s.personalization);
+  const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
+  const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
   const displayName = isCloudMode
     ? 'AGI Cloud'
     : personalization.nickname ||
@@ -247,8 +250,14 @@ export default function SettingsTabScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const [inviteOpen, setInviteOpen] = useState(false);
-  const themeMode = useSettingsStore((s) => s.themeMode);
-  const accentColor = useSettingsStore((s) => s.accentColor);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const isCloud = appMode === 'cloud';
+  const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
+  const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
+  const themeMode = isCloud ? cloudThemeMode : localThemeMode;
+  const localAccentColor = useLocalSettingsStore((s) => s.accentColor);
+  const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
+  const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const selectedModel = useModelStore((s) => s.selectedModel);
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);

@@ -71,14 +71,21 @@ export const FEATURES = {
   /** Server-OAuth connectors. Disabled until AGI Cloud invite access enables them. */
   connectors: false,
 
-  /** Web search via server-side API. */
-  webSearch: false,
+  /** Web search via server-side API.
+   *  2026-06-27: enabled — the chat-completions body now carries `web_search:true`
+   *  (chatExecutionStore → streaming.ts) when the AddToChatSheet toggle is on; the
+   *  server injects its built-in web_search tool and streams `x_search_results`,
+   *  which the tool-call accumulator already renders. */
+  webSearch: true,
 
   /** Computer use (cloud execution). */
   computerUse: false,
 
-  /** Image generation via cloud API. */
-  imageGen: false,
+  /** Image generation via cloud API.
+   *  2026-06-27: enabled — `/image` and the AddToChatSheet toggle call
+   *  `POST /api/media/image/generate` (image/services/imagegen.ts). Pro+ gating is
+   *  enforced server-side and surfaced via ApiPaywallError → PaywallBottomSheet. */
+  imageGen: true,
 
   /** Cross-device sync of conversation threads. */
   crossDeviceSync: false,

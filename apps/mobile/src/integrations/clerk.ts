@@ -24,13 +24,21 @@ export const CLERK_PUBLISHABLE_KEY = 'pk_test_aGFuZHktamF3ZmlzaC03My5jbGVyay5hY2
 
 let tokenGetter: (() => Promise<string | null>) | null = null;
 let userIdGetter: (() => string | null) | null = null;
+/**
+ * Force-refresh getter: calls `getToken({ skipCache: true })` so the 401-retry
+ * path in api.ts gets a fresh JWT rather than the same cached token that just
+ * failed. Registered by <ClerkTokenBridge> alongside the normal tokenGetter.
+ */
+let tokenRefreshGetter: (() => Promise<string | null>) | null = null;
 
 export function setClerkTokenGetter(
   getToken: (() => Promise<string | null>) | null,
   getUserId: (() => string | null) | null = null,
+  getTokenFresh: (() => Promise<string | null>) | null = null,
 ): void {
   tokenGetter = getToken;
   userIdGetter = getUserId;
+  tokenRefreshGetter = getTokenFresh;
 }
 
 /**
@@ -49,6 +57,29 @@ export async function getClerkToken(): Promise<string | null> {
   try {
     const clerk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
     return (await clerk.session?.getToken()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Force a fresh Clerk session JWT, bypassing the in-memory cache.
+ * Use this in the 401 retry path so the re-request carries a newly-issued
+ * token rather than the same expired/revoked one that was just rejected.
+ */
+export async function getClerkTokenFresh(): Promise<string | null> {
+  if (tokenRefreshGetter) {
+    try {
+      return await tokenRefreshGetter();
+    } catch (err) {
+      console.warn('[clerk] force-refresh token error:', err);
+      return null;
+    }
+  }
+  // Fallback: non-React Clerk singleton with skipCache (works for JS-layer sessions).
+  try {
+    const clerk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
+    return (await clerk.session?.getToken({ skipCache: true })) ?? null;
   } catch {
     return null;
   }

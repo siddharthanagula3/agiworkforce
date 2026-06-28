@@ -25,6 +25,7 @@ import { useDispatchStore } from '@/stores/dispatchStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { DispatchMessage } from '@/stores/dispatchStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 // ---------------------------------------------------------------------------
 // DispatchHeader — shows desktop connection status
@@ -496,7 +497,7 @@ export default function DispatchScreen() {
     clearThread();
   }, [clearThread]);
 
-  if (!FEATURES.dispatch) return null;
+  if (!FEATURES.dispatch) return <FeatureUnavailable feature="Desktop dispatch" />;
 
   // Show pairing prompt if never paired
   if (showPairingPrompt) {

@@ -45,6 +45,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
 import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 // ---------------------------------------------------------------------------
 // Status helpers
@@ -124,7 +125,7 @@ export default function AgentDetailScreen() {
     requestAgentRefresh();
   }, []);
 
-  if (!FEATURES.agents) return null;
+  if (!FEATURES.agents) return <FeatureUnavailable feature="Agents" />;
 
   // Agent not found — may have been removed
   if (!agent) {

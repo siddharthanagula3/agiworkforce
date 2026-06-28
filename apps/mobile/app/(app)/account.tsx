@@ -3,7 +3,7 @@ import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   ArrowLeft,
@@ -24,17 +24,6 @@ import { useChatStore } from '@/stores/chatStore';
 import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
-
-const TIER_LABELS: Record<string, string> = {
-  free: 'Free',
-  byok: formatPrivacyModeLabel('local'),
-  'local-only': formatPrivacyModeLabel('local'),
-  hobby: 'Hobby',
-  pro: 'Pro',
-  pro_plus: 'Pro+',
-  max: 'Max',
-  enterprise: 'Enterprise',
-};
 
 export default function AccountScreen() {
   const c = useThemeColors();
@@ -82,7 +71,9 @@ export default function AccountScreen() {
     ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : null;
 
-  const tierLabel = TIER_LABELS[tier] ?? tier;
+  // Single source of truth for plan labels (@agiworkforce/types) — avoids the
+  // per-screen label drift (e.g. pro_plus → "Pro+" here vs "Pro Max" elsewhere).
+  const tierLabel = getBillingPlanPricing(tier).label;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

@@ -1,10 +1,8 @@
 /**
- * Theme preference tests — C10
+ * Theme preference tests — C10 (post mode-split)
  *
  * Covers:
- *   - settingsStore: default is 'system'
- *   - settingsStore: setThemeMode cycles through all three modes
- *   - settingsStore: round-trip through all modes
+ *   - localSettingsStore: themeMode defaults to 'system' and cycles correctly
  *   - lib/theme getColors: dark mode returns dark palette
  *   - lib/theme getColors: light mode returns light palette
  *   - lib/theme getColors: system follows systemScheme
@@ -26,6 +24,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 jest.mock('../services/authSession', () => ({
@@ -42,7 +45,7 @@ jest.mock('../services/authSession', () => ({
 // ---------------------------------------------------------------------------
 
 import { act } from '@testing-library/react-native';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { getColors, colors, lightColors } from '../src/ui/theme';
 
 // ---------------------------------------------------------------------------
@@ -50,42 +53,42 @@ import { getColors, colors, lightColors } from '../src/ui/theme';
 // ---------------------------------------------------------------------------
 
 function resetStore() {
-  useSettingsStore.setState({ themeMode: 'system' });
+  useLocalSettingsStore.setState({ themeMode: 'system' });
 }
 
 // ---------------------------------------------------------------------------
-// settingsStore — themeMode
+// localSettingsStore — themeMode
 // ---------------------------------------------------------------------------
 
 describe('settingsStore themeMode', () => {
   beforeEach(resetStore);
 
   it('defaults to system', () => {
-    expect(useSettingsStore.getState().themeMode).toBe('system');
+    expect(useLocalSettingsStore.getState().themeMode).toBe('system');
   });
 
   it('setThemeMode switches to light', () => {
     act(() => {
-      useSettingsStore.getState().setThemeMode('light');
+      useLocalSettingsStore.getState().setThemeMode('light');
     });
-    expect(useSettingsStore.getState().themeMode).toBe('light');
+    expect(useLocalSettingsStore.getState().themeMode).toBe('light');
   });
 
   it('setThemeMode switches to system', () => {
     act(() => {
-      useSettingsStore.getState().setThemeMode('system');
+      useLocalSettingsStore.getState().setThemeMode('system');
     });
-    expect(useSettingsStore.getState().themeMode).toBe('system');
+    expect(useLocalSettingsStore.getState().themeMode).toBe('system');
   });
 
   it('round-trips through all three modes without corruption', () => {
-    const { setThemeMode } = useSettingsStore.getState();
+    const { setThemeMode } = useLocalSettingsStore.getState();
     act(() => setThemeMode('light'));
-    expect(useSettingsStore.getState().themeMode).toBe('light');
+    expect(useLocalSettingsStore.getState().themeMode).toBe('light');
     act(() => setThemeMode('system'));
-    expect(useSettingsStore.getState().themeMode).toBe('system');
+    expect(useLocalSettingsStore.getState().themeMode).toBe('system');
     act(() => setThemeMode('dark'));
-    expect(useSettingsStore.getState().themeMode).toBe('dark');
+    expect(useLocalSettingsStore.getState().themeMode).toBe('dark');
   });
 });
 

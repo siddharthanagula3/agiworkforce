@@ -3,6 +3,7 @@ import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { FlashList } from '@shopify/flash-list';
 import { ArrowLeft, Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -47,7 +48,7 @@ export default function AgentsScreen() {
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  if (!FEATURES.agents) return null;
+  if (!FEATURES.agents) return <FeatureUnavailable feature="Agents" />;
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">

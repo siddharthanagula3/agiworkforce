@@ -19,7 +19,6 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
-import { FEATURES } from '@/lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -84,7 +83,14 @@ export const useTierStore = create<TierState>()(
       currentConversationProvider: null,
 
       refreshTier: async () => {
-        if (!FEATURES.billing) return;
+        // NOTE: tier is READ-ONLY plan metadata and is intentionally NOT gated by
+        // `FEATURES.billing`. The billing flag gates the in-app *paid-upgrade* UI
+        // (Stripe portal/checkout), which stays deflected to the web while it's
+        // off — but a paying user must still see their real plan (Pro/Max), not a
+        // permanent "Free". Trust boundary is preserved: `api.get('/api/me')`
+        // routes through guardedFetch, so a Local-mode call is blocked before any
+        // network I/O (the catch below keeps the cached tier). The call sites in
+        // `app/_layout.tsx` already gate on `isClerkSignedIn`.
         // js-early-exit: skip if already refreshing
         if (get().isRefreshing) return;
 

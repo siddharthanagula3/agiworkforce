@@ -118,16 +118,21 @@ export async function* streamFromProvider(
   let res: Response;
 
   try {
-    res = await guardedFetch(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${params.authToken}`,
-        'x-requested-with': 'agiworkforce-mobile',
+    res = await guardedFetch(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${params.authToken}`,
+          'x-requested-with': 'agiworkforce-mobile',
+        },
+        body: JSON.stringify(params.request),
+        signal: watchdog.signal,
       },
-      body: JSON.stringify(params.request),
-      signal: watchdog.signal,
-    });
+      // Stream via expo/fetch so `res.body` is a real ReadableStream (token-by-token).
+      { stream: true },
+    );
   } catch (error) {
     watchdog.dispose();
     yield {

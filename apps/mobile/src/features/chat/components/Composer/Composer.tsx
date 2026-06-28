@@ -26,6 +26,8 @@ interface ComposerProps {
    * starter prompt or URL param). Only applied at mount.
    */
   initialText?: string;
+  /** Per-conversation draft key, forwarded to the composer for draft restore. */
+  draftKey?: string;
 }
 
 export function Composer({
@@ -44,6 +46,7 @@ export function Composer({
   showChips = false,
   isThreadActive,
   initialText,
+  draftKey,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
 
@@ -76,6 +79,7 @@ export function Composer({
         attachRef={attachRef}
         isThreadActive={isThreadActive ?? !showChips}
         initialText={initialText}
+        draftKey={draftKey}
       />
     </View>
   );

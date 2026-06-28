@@ -170,13 +170,25 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
 
   updateMemory: async (id, fact) => {
     set({ error: null });
-    // Optimistic update in the local entries list (shared by both modes for display).
+    const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+
+    // In cloud mode, validate the entry exists BEFORE applying optimistic update.
+    if (isCloud) {
+      const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
+      if (!existing) {
+        // Entry doesn't exist in cloud store — don't apply optimistic update or attempt push
+        set({ error: 'Memory entry not found in cloud store' });
+        return;
+      }
+    }
+
+    // Optimistic update: only applies after cloud validation (or always in local mode).
     set((state) => ({
       entries: state.entries.map((e) => (e.id === id ? { ...e, fact } : e)),
       filteredEntries: state.filteredEntries.map((e) => (e.id === id ? { ...e, fact } : e)),
     }));
+
     try {
-      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
       if (isCloud) {
         // ── Cloud path ────────────────────────────────────────────────────────
         const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
@@ -338,6 +350,26 @@ export async function retrieveMemoryContext(
   k = 5,
   embedding?: Float32Array,
 ): Promise<MemoryFact[]> {
+  // TRUST BOUNDARY: in cloud mode, retrieve ONLY from the (synced) cloud memory
+  // store — never read on-device SQLite, or local-only memories would leak into a
+  // cloud turn. In local mode, read on-device SQLite only (below). This mirrors
+  // the mode split in fetchMemories / addMemory.
+  if (useChatAppModeStore.getState().appMode === 'cloud') {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return useCloudMemoryStore
+      .getState()
+      .entries.filter((e) => !e.isDeleted && e.content.toLowerCase().includes(q))
+      .slice(0, k)
+      .map((e) => ({
+        id: e.id,
+        fact: e.content,
+        source_conversation_id: null,
+        pinned: false,
+        created_at: new Date(e.createdAt).getTime(),
+      }));
+  }
+
   if (embedding) {
     try {
       const ids = await searchMemoryByEmbedding(embedding, k);

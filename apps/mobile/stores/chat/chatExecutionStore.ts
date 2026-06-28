@@ -14,6 +14,8 @@ import {
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
 import { checkContentFilter } from '@/lib/contentFilter';
 import { isMinorMode } from '@/src/features/auth/services/ageGate';
+import { useAuthStore } from '@/src/features/auth/store';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   markLocalModelRefUsed,
   resolveLocalModelRef,
@@ -23,6 +25,8 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useChatViewStore, type ChatMode, type ChatStyle } from './chatViewStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
@@ -307,6 +311,20 @@ function getCloudStore() {
 }
 
 /**
+ * Deterministic transcript ordering for cloud conversations: by `createdAt`,
+ * then by the stable server `id` for equal timestamps. Shared by the cloud
+ * mirror + LLM-history paths below, and identical to the cross-device puller in
+ * cloudSyncEngine.ts — so the SAME transcript renders/feeds in ONE order no
+ * matter which path last wrote `setCloudMessages`. (`createdAt` is a free-form
+ * ISO string with no uniqueness constraint, so ties are reachable.)
+ */
+export function compareCloudMessagesByCreatedAtThenId(a: ChatMessage, b: ChatMessage): number {
+  const at = a.createdAt ?? '';
+  const bt = b.createdAt ?? '';
+  return at === bt ? a.id.localeCompare(b.id) : at.localeCompare(bt);
+}
+
+/**
  * Additive write-through for CLOUD conversations (P2 sync).
  *
  * The live send/stream path writes messages to the LOCAL message store (which feeds
@@ -328,9 +346,7 @@ function mirrorCloudTurn(
   const current = cloud.messages[conversationId] ?? [];
   const byId = new Map(current.map((m) => [m.id, m]));
   for (const m of messages) byId.set(m.id, { ...byId.get(m.id), ...m });
-  const ordered = Array.from(byId.values()).sort((a, b) =>
-    (a.createdAt ?? '').localeCompare(b.createdAt ?? ''),
-  );
+  const ordered = Array.from(byId.values()).sort(compareCloudMessagesByCreatedAtThenId);
   cloud.setCloudMessages(conversationId, ordered);
   cloud.patchCloudConversation(conversationId, { ...convPatch, messageCount: ordered.length });
 
@@ -366,9 +382,7 @@ function historyMessagesForConversation(
   const byId = new Map<string, ChatMessage>();
   for (const m of local) byId.set(m.id, m);
   for (const m of cloud) byId.set(m.id, m);
-  return Array.from(byId.values()).sort((a, b) =>
-    (a.createdAt ?? '').localeCompare(b.createdAt ?? ''),
-  );
+  return Array.from(byId.values()).sort(compareCloudMessagesByCreatedAtThenId);
 }
 
 /**
@@ -489,6 +503,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return;
     }
+    // C1: Cloud auth gate — checked before invite/paywall gates so "sign in"
+    // takes priority. isClerkLoaded guard prevents false-rejection during the
+    // ~200ms cold-start window where isClerkSignedIn is false for signed-in users.
+    if (FEATURES.auth && executionMode === 'cloud') {
+      const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
+      if (isClerkLoaded && !isClerkSignedIn) {
+        set({
+          error: 'Sign in to use AGI Cloud.',
+          paywallError: null,
+          isStreaming: streamingConversations.size > 0,
+        });
+        return;
+      }
+    }
     if (executionMode === 'cloud' && remoteDisabledReason) {
       set({
         error: remoteDisabledReason,
@@ -552,8 +580,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             fileName: attachment.fileName,
           }));
         }
-      } catch {
-        // 401 / session-expired errors — continue without attachments
+      } catch (err) {
+        // AUTH-ERROR-FIX: 401 / session-expired errors must be surfaced to user, not silently swallowed.
+        // uploadWithRetry intentionally throws on auth errors so we can distinguish them from
+        // transient network errors (which return null after retries). User must be notified that
+        // attachments failed to upload due to auth, not connection issues.
+        const error = err instanceof Error ? err : new Error(String(err));
+        if (error.message.includes('session expired') || error.message.includes('401')) {
+          set({
+            error: 'Session expired. Please sign in again to upload files.',
+            paywallError: null,
+            isStreaming: streamingConversations.size > 0,
+          });
+          return;
+        }
+        // For other errors, continue without attachments (transient network errors already
+        // showed an Alert via uploadWithRetry). This allows the message to be sent even if
+        // some files couldn't upload.
       }
     }
 
@@ -666,28 +709,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       .getState()
       .resolve(conversationId, executionMode === 'local' ? localProjectId : null);
 
-    if (executionMode === 'local') {
-      // Inject personalization + top-K relevant memories as system context.
-      // A pure composer decides block content + order ([persona, memory]); any
-      // failure here must never block a chat turn (graceful, on-device).
-      try {
-        const memFacts = await retrieveMemoryContext(content, 5);
-        const { personalization } = useSettingsStore.getState();
-        const blocks = buildPersonalContextBlocks({ personalization, memories: memFacts });
-        // Unshift in reverse so the final order is [persona, memory, ...existing].
-        for (let i = blocks.length - 1; i >= 0; i -= 1) {
-          historyMessages.unshift(blocks[i]);
-        }
-      } catch {
-        // Non-fatal: memory/personalization injection must never block a local chat turn.
+    // Inject personalization + top-K relevant memories as system context, in BOTH
+    // modes (parity with web/desktop cloud chat). The sources are mode-scoped so
+    // the trust boundary holds: `retrieveMemoryContext` reads the cloud memory
+    // store in cloud mode and on-device SQLite in local mode, and personalization
+    // comes from the matching settings store. A pure composer decides block content
+    // + order ([persona, memory]); any failure here must never block a chat turn.
+    try {
+      const memFacts = await retrieveMemoryContext(content, 5);
+      const personalization =
+        executionMode === 'cloud'
+          ? useCloudSettingsStore.getState().personalization
+          : useLocalSettingsStore.getState().personalization;
+      const blocks = buildPersonalContextBlocks({ personalization, memories: memFacts });
+      // Unshift in reverse so the final order is [persona, memory, ...existing].
+      for (let i = blocks.length - 1; i >= 0; i -= 1) {
+        historyMessages.unshift(blocks[i]);
       }
+    } catch {
+      // Non-fatal: memory/personalization injection must never block a chat turn.
     }
 
     // Learn from this turn: extract durable facts from the user's message and
-    // persist new ones (deduped). Fire-and-forget — never await, never block the
-    // turn — and skip entirely in temporary/incognito chats.
-    if (executionMode === 'local' && !useSettingsStore.getState().isTemporaryChat) {
-      void consolidateFactsFromTurn({ message: content, conversationId });
+    // persist new ones (deduped) into the mode-matching memory namespace
+    // (cloud-synced in cloud mode, on-device SQLite in local mode). Fire-and-forget
+    // — never await, never block the turn — and skip in temporary/incognito chats.
+    if (!useSettingsStore.getState().isTemporaryChat) {
+      void consolidateFactsFromTurn({ message: content, conversationId, executionMode });
     }
 
     msgStore.setState((state) => {
@@ -897,6 +945,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // assistant message's toolCalls so InlineToolCall renders them live.
       const toolAcc = createToolCallAccumulator();
 
+      // Per-turn web search: when the user has the web-search feature enabled
+      // (AddToChatSheet toggle, gated by FEATURES.webSearch), ask the server to
+      // inject its built-in web_search tool. The server streams results back as
+      // x_search_results deltas, which the tool-call accumulator already renders.
+      const webSearchEnabled = FEATURES.webSearch && useChatViewStore.getState().features.webSearch;
+
       await streamChat(
         {
           model,
@@ -904,6 +958,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           stream: true,
           thinking: true,
           effort: agentControl.effort,
+          ...(webSearchEnabled ? { web_search: true } : {}),
         },
         {
           onDelta: (delta: StreamDelta) => {
@@ -1042,6 +1097,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               return;
             }
 
+            // Diagnostics go to the console only — never into the user-facing
+            // assistant bubble or retry banner. Rendering `error.message`/`[DIAG]`
+            // to the UI leaks internal strings (e.g. "The request timed out…") and
+            // breaks the clean, consistent failure copy users expect.
+            if (__DEV__) {
+              console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
+            }
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
@@ -1058,6 +1120,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               isStreaming: streamingConversations.size > 0,
               streamingContent: '',
               streamingReasoning: '',
+              // Surface the prominent one-tap retry (SendErrorBanner) for stream /
+              // timeout failures too — not just pre-flight errors. Every failed cloud
+              // send now gets an obvious Retry affordance, consistent with the
+              // in-thread "Something went wrong" bubble. Cleared on the next send
+              // (error: null at turn start) or via the banner's dismiss/retry.
+              error: 'Something went wrong. Please try again.',
             });
           },
         },

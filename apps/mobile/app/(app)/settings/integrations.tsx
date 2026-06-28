@@ -47,6 +47,7 @@ import { useIntegrationStore } from '@/src/features/integrations/store';
 import { PlatformSetupSheet } from '@/src/features/messaging/components/PlatformSetupSheet';
 import type { MessagingPlatform } from '@/src/features/messaging/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 // ---------------------------------------------------------------------------
 // Helpers (unchanged from original)
@@ -294,7 +295,7 @@ export default function IntegrationsScreen() {
     [platforms, disconnectPlatform],
   );
 
-  if (!FEATURES.connectors) return null;
+  if (!FEATURES.connectors) return <FeatureUnavailable feature="Connectors" />;
 
   const connectedCount = platforms.filter((p) => p.connected).length;
 

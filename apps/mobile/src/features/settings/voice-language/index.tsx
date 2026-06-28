@@ -3,6 +3,9 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Check, Play, Volume2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
 import * as TTS from '@/src/features/voice/services/tts';
@@ -158,7 +161,9 @@ export default function VoiceLanguageScreen() {
   const colors = useThemeColors();
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
+  // Device-global voice hardware settings (same across modes)
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useSettingsStore((s) => s.setSelectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
@@ -167,7 +172,11 @@ export default function VoiceLanguageScreen() {
   const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
-  const speechLanguage = useSettingsStore((s) => s.speechLanguage);
+
+  // Mode-specific: speech language is a cloud-synced preference
+  const localSpeechLanguage = useLocalSettingsStore((s) => s.speechLanguage);
+  const cloudSpeechLanguage = useCloudSettingsStore((s) => s.speechLanguage);
+  const speechLanguage = isCloud ? cloudSpeechLanguage : localSpeechLanguage;
 
   useEffect(() => {
     let cancelled = false;

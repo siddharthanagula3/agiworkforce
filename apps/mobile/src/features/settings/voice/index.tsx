@@ -8,6 +8,9 @@ import { ArrowLeft, Check, Headphones, Lock, Mic, Play, Volume2 } from 'lucide-r
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useSettingsStore, type TTSProvider } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/common';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
@@ -152,11 +155,11 @@ function VoiceSlider({
 export default function VoiceSettingsScreen() {
   const router = useRouter();
   const { colors, statusBarStyle } = useTheme();
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
+  // Device-global voice settings (same across modes)
   const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
   const setVoiceEnabled = useSettingsStore((s) => s.setVoiceEnabled);
-  const autoListenEnabled = useSettingsStore((s) => s.autoListenEnabled);
-  const setAutoListenEnabled = useSettingsStore((s) => s.setAutoListenEnabled);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const ttsProvider = useSettingsStore((s) => s.ttsProvider);
@@ -165,6 +168,14 @@ export default function VoiceSettingsScreen() {
   const setSpeechRate = useSettingsStore((s) => s.setSpeechRate);
   const speechPitch = useSettingsStore((s) => s.speechPitch);
   const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
+
+  // Mode-specific: autoListen is a cloud-synced preference
+  const localAutoListenEnabled = useLocalSettingsStore((s) => s.autoListenEnabled);
+  const localSetAutoListenEnabled = useLocalSettingsStore((s) => s.setAutoListenEnabled);
+  const cloudAutoListenEnabled = useCloudSettingsStore((s) => s.autoListenEnabled);
+  const cloudSetAutoListenEnabled = useCloudSettingsStore((s) => s.setAutoListenEnabled);
+  const autoListenEnabled = isCloud ? cloudAutoListenEnabled : localAutoListenEnabled;
+  const setAutoListenEnabled = isCloud ? cloudSetAutoListenEnabled : localSetAutoListenEnabled;
 
   const handleBack = useCallback(() => {
     router.navigate('/(app)/(tabs)/settings' as Parameters<typeof router.navigate>[0]);
