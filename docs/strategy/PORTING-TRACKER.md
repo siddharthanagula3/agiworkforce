@@ -50,7 +50,7 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | INC-0.2 | Pin reference SHAs + this tracker     | ✅     | (tracked) |
 | INC-0.3 | Trust-boundary contract tests         | ✅     | d84bbf8d8 |
 | INC-0.4 | Provider-contract test harness        | ✅     | 2897b2b30 |
-| INC-0.5 | SkillSpector vetting service stand-up | ✅     | (pending) |
+| INC-0.5 | SkillSpector vetting service stand-up | ✅     | 9afc3f066 |
 
 ### Phase 1 — Public Alpha (web/mobile/desktop)
 
