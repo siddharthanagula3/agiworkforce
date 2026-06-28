@@ -25,7 +25,7 @@ const QUICK_FACTS: { k: string; v: string }[] = [
   },
   {
     k: 'Pricing posture',
-    v: 'Local mode is free. Managed Cloud subscriptions and usage top-ups remain waitlist and invite gated.',
+    v: 'Local mode is free. Managed Cloud is public alpha, open by default (metered usage). Team & Enterprise are waitlisted.',
   },
 ];
 
