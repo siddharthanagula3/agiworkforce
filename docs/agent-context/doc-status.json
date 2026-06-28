@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastUpdated": "2026-06-05",
+  "lastUpdated": "2026-06-25",
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "AGI_WORKFORCE.md",
@@ -13,19 +13,35 @@
     "docs/current/parity-implementation-matrix.md",
     "docs/current/byok-open-model-provider-strategy.md",
     "docs/current/provider-capability-matrix.md",
+    "docs/current/trust-mode-surface-matrix.md",
     "docs/current/product-suite.md",
     "docs/current/technical-architecture.md",
     "docs/current/commercial-and-launch.md",
     "docs/current/agent-and-repo-operability.md",
     "docs/decisions/CURRENT_DECISIONS.md",
     "docs/agent-context/README.md",
-    "docs/agent-context/known-flaws.md"
+    "docs/agent-context/known-flaws.md",
+    "docs/00-foundation/README.md",
+    "docs/00-foundation/documentation-constitution.md",
+    "docs/00-foundation/architecture-manifest.md",
+    "docs/00-foundation/canonical-glossary.md",
+    "docs/00-foundation/requirement-id-system.md",
+    "docs/00-foundation/documentation-standards.md",
+    "docs/00-foundation/cross-reference-system.md",
+    "docs/00-foundation/documentation-compiler.md",
+    "docs/00-foundation/master-documentation-index.md",
+    "docs/00-foundation/adr-index.md",
+    "docs/00-foundation/documentation-status-inventory.md",
+    "docs/00-foundation/documentation-migration-plan.md",
+    "docs/00-foundation/platform-constitution.md",
+    "docs/00-foundation/architecture-constitution.md",
+    "docs/00-foundation/owner-decision-register.md",
+    "docs/00-foundation/master-documentation-roadmap.md",
+    "docs/00-foundation/engineering-constitution-authority-map.md",
+    "docs/03-runtimes/context-runtime/bk-11.01-deterministic-context-assembly.md",
+    "docs/implementation-backlog.md"
   ],
   "currentEvidence": [
-    "audit/INDEX.md",
-    "audit/tool-parity/desktop-tool-parity-ledger.md",
-    "audit/desktop-ui-computer-use/README.md",
-    "audit/reports/README.md",
     "docs/intentional-divergences.md",
     "docs/reference/REFERENCE_INDEX.md",
     "docs/reference/REFERENCE_STRUCTURE.md"
@@ -44,61 +60,6 @@
     "docs/engineering/parallel-agent-playbook.md"
   ],
   "historicalOrCaution": [
-    {
-      "path": "docs/archive",
-      "status": "historical",
-      "rule": "Do not cite as current unless a current doc explicitly references it."
-    },
-    {
-      "path": "docs/archive/2026-05-21-docs-consolidation",
-      "status": "historical-source-material",
-      "rule": "Former top-level PRD/roadmap/pricing/architecture corpus; use docs/current for present decisions."
-    },
-    {
-      "path": "docs/archive/2026-05-20-planning",
-      "status": "historical",
-      "rule": "Archived planning specs; current plans belong in docs/plans."
-    },
-    {
-      "path": "tasks/research",
-      "status": "working-notes",
-      "rule": "Promote durable conclusions to docs/current, docs/decisions, or audit before using as source of truth."
-    },
-    {
-      "path": "docs/archive/2026-06-05-doc-reset/docs-hardening",
-      "status": "historical-working-notes",
-      "rule": "Former hardening working notes. Use only as rebuild input; promote verified durable conclusions to docs/current, docs/decisions, or audit."
-    },
-    {
-      "path": "audit",
-      "status": "evidence",
-      "rule": "Use only audit/INDEX.md and explicitly listed current audit ledgers as current evidence. Dated audit reports must be re-verified against source before reuse."
-    },
-    {
-      "path": "docs/archive/2026-06-05-doc-reset/audit",
-      "status": "historical-audit-inputs",
-      "rule": "Former May 2026 audit corpus. Use only as rebuild input after re-verifying against current implementation files."
-    },
-    {
-      "path": "docs/archive/2026-06-05-doc-reset/reports/root-scratch-archive",
-      "status": "historical-evidence",
-      "rule": "Archived root scratch markdown/images/downloads are evidence only, not current source."
-    },
-    {
-      "path": "docs/archive/2026-06-05-doc-reset/reports/frontend-reference-comparison",
-      "status": "historical-evidence",
-      "rule": "Archived frontend reference screenshots and comparison notes. Use only as visual evidence after re-verifying against current code."
-    },
-    {
-      "path": "docs/archive/2026-06-05-doc-reset/reports/playwright-mcp-archive",
-      "status": "historical-evidence",
-      "rule": "Archived Playwright MCP captures. Use only as historical evidence."
-    },
-    {
-      "path": "docs/archive/2026-06-05-doc-reset/audit/reports",
-      "status": "historical-raw-scans",
-      "rule": "Archived raw audit scans. Use compact current audit indexes first."
-    },
     {
       "path": "/Users/siddhartha/Desktop/claude_reference",
       "status": "external-reference-evidence",
