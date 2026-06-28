@@ -3,6 +3,7 @@ export * from './lib/tokens';
 export * from './lib/types';
 export * from './lib/runtime';
 export * from './lib/hostBridge';
+export * from './lib/capabilities';
 export * from './lib/utils';
 export * from './lib/greetings';
 export { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from './lib/artifact-sandbox';

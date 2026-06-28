@@ -138,6 +138,10 @@ export * from './on-device-models';
 // Cross-surface application-suite contracts
 export * from './suite-contracts';
 
+// Platform capability matrix — single source of truth for which user-facing
+// capabilities each surface (web/desktop/mobile) exposes (platform axis).
+export * from './capabilities';
+
 // Cross-surface tool-call display registry (icon names + categories; pure TS,
 // shared by desktop/web via lucide-react and mobile via lucide-react-native)
 export * from './tool-display';
