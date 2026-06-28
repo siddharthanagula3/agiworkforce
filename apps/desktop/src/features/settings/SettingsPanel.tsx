@@ -52,6 +52,7 @@ import { MemoryTab } from './tabs/Memory';
 import { UsageTab } from './tabs/Usage';
 import { ExtensionsTab } from './tabs/Extensions';
 import { DeveloperTab } from './tabs/Developer';
+import { AgiCodeTab } from './tabs/AgiCode';
 
 // Canonical settings tab keys — single source of truth in @agiworkforce/ui.
 type CanonicalTab = SettingsNavKey;
@@ -591,6 +592,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return <CapabilitiesTab />;
       case 'connectors':
         return <ConnectorsTab />;
+      case 'agi-code':
+        return <AgiCodeTab />;
       case 'plugins':
         return <PluginsTab />;
       case 'notifications':
