@@ -9,6 +9,7 @@ import {
   RegisterData,
 } from '@core/auth/authentication-manager';
 import { logger } from '@shared/lib/logger';
+import { hasClerkSessionCookie } from '@/lib/clerk-session';
 
 /**
  * Central cleanup function to reset all stores on logout
@@ -185,6 +186,15 @@ export const useAuthStore = create<AuthState>()(
 
       initialize: async () => {
         if (get().initialized) return;
+        // Signed-out fast path: skip the guaranteed-401 /api/me probe (which the
+        // browser logs to the console on every route that runs this bootstrap).
+        // Clerk's __client_uat cookie is 0/absent when signed out. A signed-in
+        // user always has it > 0 by the time client JS runs, so their init is
+        // unchanged. Regression: e2e/public-auth-clean.spec.ts.
+        if (!hasClerkSessionCookie()) {
+          set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+          return;
+        }
         // Prevent concurrent initializations (race condition guard)
         if (_initializingPromise) return _initializingPromise;
 

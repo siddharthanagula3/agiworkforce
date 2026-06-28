@@ -93,6 +93,12 @@ describe('Authentication Store', () => {
     // Reset the store state
     useAuthStore.getState().reset();
 
+    // Default to a signed-IN Clerk cookie so the existing initialize() tests
+    // exercise the /api/me path. `initialize()` now short-circuits when the
+    // Clerk `__client_uat` cookie indicates signed-out (see clerk-session.ts);
+    // individual tests override this to assert the signed-out fast path.
+    document.cookie = '__client_uat=9999999999';
+
     // Import the mocked auth service
     const authModule = await import('@core/auth/authentication-manager');
     mockAuthService = authModule.authService;
@@ -516,6 +522,26 @@ describe('Authentication Store', () => {
       const state = useAuthStore.getState();
       expect(state.isAuthenticated).toBe(true);
       expect(state.user?.id).toBe('user-1');
+      expect(state.initialized).toBe(true);
+      expect(state.isLoading).toBe(false);
+    });
+
+    it('skips getCurrentUser when signed out (no Clerk session cookie)', async () => {
+      // Signed-out fast path: with __client_uat cleared, initialize() must NOT
+      // probe /api/me (which would 401 + spam the console) and must resolve to
+      // the cleared, initialized state. Regression: public-auth-clean e2e.
+      document.cookie = '__client_uat=0';
+      vi.mocked(mockAuthService.getCurrentUser).mockResolvedValue({
+        user: { id: 'user-1', email: 'test@example.com', name: 'Test', role: 'user', plan: 'free' },
+        error: null,
+      });
+
+      await useAuthStore.getState().initialize();
+
+      expect(mockAuthService.getCurrentUser).not.toHaveBeenCalled();
+      const state = useAuthStore.getState();
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.user).toBeNull();
       expect(state.initialized).toBe(true);
       expect(state.isLoading).toBe(false);
     });
