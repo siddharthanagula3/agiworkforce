@@ -158,12 +158,16 @@ describe('SettingsPanel render stability', () => {
     expect(screen.queryByRole('button', { name: /^Appearance$/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Customize')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Directory/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Skills$/i })).toBeInTheDocument();
+    // Skills now lives UNDER Capabilities (source-of-truth IA), so the top-level
+    // nav exposes Capabilities, not a standalone Skills entry.
+    expect(screen.getByRole('button', { name: /^Capabilities$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Skills$/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Connectors$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Plugins$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Agents$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Memory$/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Usage$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Extensions$/i })).toBeInTheDocument();
   });
 
   it('keeps cloud account deletion out of Local Mode privacy settings', async () => {
@@ -208,7 +212,7 @@ describe('SettingsPanel render stability', () => {
 
     expect(await screen.findByText('Agent Configuration')).toBeInTheDocument();
     expect(screen.getByText('Custom Agents')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Capabilities$/i })).toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
   });
 
@@ -216,16 +220,18 @@ describe('SettingsPanel render stability', () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="memory" />);
 
     expect(await screen.findByText('Local memory editor')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Capabilities$/i })).toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
   });
 
-  it('maps legacy Capabilities settings links to Agents instead of the archived surface', async () => {
+  it('renders Capabilities as a real section housing Skills + tool/computer-use (DESK-1)', async () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="capabilities" />);
 
-    expect(await screen.findByText('Agent Configuration')).toBeInTheDocument();
-    expect(screen.getByText('Custom Agents')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
+    // Capabilities is now a canonical settings section (source-of-truth IA), not a
+    // legacy alias for Agents. It composes the (previously orphaned) computer-use
+    // controls + the Skill Marketplace.
+    expect(await screen.findByText('Skill Marketplace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Capabilities$/i })).toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
   });
 
