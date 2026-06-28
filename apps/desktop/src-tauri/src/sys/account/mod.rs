@@ -849,3 +849,42 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 
     Err("[ERR_NOT_IMPLEMENTED] Remote device revocation requires the device-management API. It is pending; sign out on the target device for now.".to_string())
 }
+
+#[cfg(test)]
+mod ssrf_allowlist_tests {
+    use super::validate_api_base_url;
+
+    // Regression guard for the SSRF allowlist that BYOK-RUST-EGRESS-01 relies on
+    // as the trust boundary for the only non-dormant Rust egress path. The
+    // function is currently correct but one edit (e.g. `ends_with(".agiworkforce.com")`
+    // → `contains("agiworkforce.com")`, or dropping the userinfo check) away from a
+    // silent SSRF/allowlist bypass. These lock the invariant.
+
+    #[test]
+    fn allows_agiworkforce_apex_subdomains_and_loopback() {
+        assert!(validate_api_base_url("https://agiworkforce.com").is_ok());
+        assert!(validate_api_base_url("https://www.agiworkforce.com").is_ok());
+        assert!(validate_api_base_url("https://api.agiworkforce.com").is_ok());
+        assert!(validate_api_base_url("http://localhost").is_ok());
+        assert!(validate_api_base_url("http://127.0.0.1").is_ok());
+    }
+
+    #[test]
+    fn rejects_substring_lookalike_hosts_not_true_subdomains() {
+        // The allowlist is a suffix/apex match, NOT a substring match.
+        assert!(validate_api_base_url("https://api.agiworkforce.com.evil.com").is_err());
+        assert!(validate_api_base_url("https://notagiworkforce.com").is_err());
+        assert!(validate_api_base_url("https://evil-agiworkforce.com").is_err());
+        assert!(validate_api_base_url("https://evil.com").is_err());
+    }
+
+    #[test]
+    fn rejects_userinfo_non_loopback_http_and_bad_scheme() {
+        // Userinfo (an SSRF-bypass vector) is rejected even on an allowlisted host.
+        assert!(validate_api_base_url("https://user:pass@api.agiworkforce.com").is_err());
+        // http:// is allowed ONLY for loopback hosts.
+        assert!(validate_api_base_url("http://api.agiworkforce.com").is_err());
+        // Non-http(s) schemes are rejected.
+        assert!(validate_api_base_url("ftp://api.agiworkforce.com").is_err());
+    }
+}

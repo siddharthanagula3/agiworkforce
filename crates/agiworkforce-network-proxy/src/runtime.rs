@@ -389,7 +389,7 @@ impl NetworkProxyState {
                 if !is_explicit_local_allowlisted(&allowed_domains, &host) {
                     return Ok(HostBlockDecision::Blocked(HostBlockReason::NotAllowedLocal));
                 }
-            } else if host_resolves_to_non_public_ip(host_str, port).await {
+            } else if hostname_resolution_is_unsafe(host_str, port).await {
                 return Ok(HostBlockDecision::Blocked(HostBlockReason::NotAllowedLocal));
             }
         }
@@ -699,17 +699,25 @@ pub(crate) fn unix_socket_permissions_supported() -> bool {
     cfg!(target_os = "macos")
 }
 
-async fn host_resolves_to_non_public_ip(host: &str, port: u16) -> bool {
+/// Returns `true` when connecting to `host` is UNSAFE in strict mode
+/// (`allow_local_binding == false`) and the request must be rejected.
+///
+/// A hostname is unsafe if it resolves to ANY non-public IP (SSRF / DNS-rebinding
+/// defense), OR — per SSRF-DNS-01, **fail-closed** — if resolution cannot be proven
+/// safe (DNS lookup failed or timed out). Security takes precedence over
+/// availability: an unresolvable host could resolve to a private IP at connect
+/// time, so we reject rather than allow. A bare public-IP literal is safe.
+async fn hostname_resolution_is_unsafe(host: &str, port: u16) -> bool {
     if let Ok(ip) = host.parse::<IpAddr>() {
         return is_non_public_ip(ip);
     }
 
-    // If DNS lookup fails, default to "not local/private" rather than blocking. In practice, the
-    // subsequent connect attempt will fail anyway, and blocking on transient resolver issues would
-    // make the proxy fragile. The allowlist/denylist remains the primary control plane.
     let addrs = match timeout(DNS_LOOKUP_TIMEOUT, lookup_host((host, port))).await {
         Ok(Ok(addrs)) => addrs,
-        Ok(Err(_)) | Err(_) => return false,
+        // SSRF-DNS-01 (fail-closed): a resolution that cannot be proven safe is
+        // rejected. A host unresolvable now could resolve to a private IP at
+        // connect time (DNS rebinding), so we treat the failure as unsafe.
+        Ok(Err(_)) | Err(_) => return true,
     };
 
     for addr in addrs {
@@ -833,6 +841,30 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
+    async fn ssrf_dns_resolution_fails_closed() {
+        // SSRF-DNS-01 (fail-closed): a host that cannot be proven public-safe must be
+        // treated as unsafe and rejected. Loopback/private literals → unsafe; a public
+        // IP literal → safe; an UNRESOLVABLE hostname → unsafe (fail-CLOSED — it could
+        // resolve to a private IP at connect time; we reject rather than allow).
+        assert!(
+            hostname_resolution_is_unsafe("127.0.0.1", 80).await,
+            "loopback literal is unsafe"
+        );
+        assert!(
+            hostname_resolution_is_unsafe("10.0.0.1", 80).await,
+            "private literal is unsafe"
+        );
+        assert!(
+            !hostname_resolution_is_unsafe("8.8.8.8", 80).await,
+            "public IP literal is safe"
+        );
+        assert!(
+            hostname_resolution_is_unsafe("nonexistent-host.invalid", 443).await,
+            "an unresolvable hostname must fail CLOSED (rejected), not fail open"
+        );
+    }
+
+    #[tokio::test]
     async fn host_blocked_denied_wins_over_allowed() {
         let state = network_proxy_state_for_policy(NetworkProxySettings {
             allowed_domains: vec!["example.com".to_string()],
@@ -908,9 +940,12 @@ mod tests {
             ..NetworkProxySettings::default()
         });
 
+        // SSRF-DNS-01 (fail-closed): `evil.example` is a reserved TLD that does not
+        // resolve, so in strict mode it cannot be proven public-safe and is rejected
+        // as NotAllowedLocal even under the `*` wildcard allowlist — before any deny.
         assert_eq!(
             state.host_blocked("evil.example", 80).await.unwrap(),
-            HostBlockDecision::Allowed
+            HostBlockDecision::Blocked(HostBlockReason::NotAllowedLocal)
         );
 
         state.add_denied_domain("evil.example").await.unwrap();
