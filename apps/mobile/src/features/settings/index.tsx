@@ -18,7 +18,6 @@ import {
   MessageCircleWarning,
   Mic,
   Palette,
-  Plug,
   RotateCcw,
   Shield,
   SlidersHorizontal,
@@ -443,24 +442,10 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: push('/(app)/settings/cloud-connectors'),
           },
-          {
-            // Skills screen not yet built — honest stub via invite/waitlist gate
-            key: 'skills',
-            label: 'Skills',
-            icon: Zap,
-            tag: 'Cloud',
-            tone: 'cloud',
-            onPress: openCloudAccess,
-          },
-          {
-            // Plugins screen not yet built — honest stub via invite/waitlist gate
-            key: 'plugins',
-            label: 'Plugins',
-            icon: Plug,
-            tag: 'Cloud',
-            tone: 'cloud',
-            onPress: openCloudAccess,
-          },
+          // MOB-6: Skills and Plugins settings entries removed — the screens were
+          // never built and only opened a cloud gate (a dead-end). Per "implement
+          // or remove dead-ends", they are removed until a real mobile Skills /
+          // Plugins management surface exists.
           ...(user
             ? [
                 {

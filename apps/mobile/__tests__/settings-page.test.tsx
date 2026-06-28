@@ -131,6 +131,15 @@ describe('Settings page', () => {
     expect(queryByText(/byok/i)).toBeNull();
   });
 
+  it('has no dead-end settings entries — unbuilt Skills/Plugins removed (MOB-6)', () => {
+    // MOB-6: Skills and Plugins were stub entries whose screens were never built
+    // (they only opened a cloud gate — a dead-end). They are removed until a real
+    // mobile management surface exists, so the settings nav has no dead-ends.
+    const { queryByText } = render(<SettingsTabScreen />);
+    expect(queryByText('Skills')).toBeNull();
+    expect(queryByText('Plugins')).toBeNull();
+  });
+
   it('does not use local personalization as the Cloud settings identity', () => {
     useSettingsStore.setState({
       personalization: {
@@ -163,8 +172,7 @@ describe('Settings page', () => {
     expect(getByText('Email / Phone Number')).toBeTruthy();
     expect(getByText('Billing')).toBeTruthy();
     expect(getByText('Connectors')).toBeTruthy();
-    expect(getByText('Plugins')).toBeTruthy();
-    expect(getByText('Skills')).toBeTruthy();
+    // (Skills/Plugins rows removed in MOB-6 — they were unbuilt dead-ends.)
     expect(getAllByText('Invite').length).toBeGreaterThan(0);
     expect(queryByText('Log Out')).toBeNull();
   });
