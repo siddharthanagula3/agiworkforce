@@ -139,7 +139,7 @@ export function RouteFlow({
         <ul className="agi-rf-modes" aria-hidden="true">
           <li>Local · on-device</li>
           <li>BYOK · direct to provider</li>
-          <li>Cloud · by invite</li>
+          <li>Cloud · public alpha</li>
         </ul>
       </div>
     </section>

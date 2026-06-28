@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Pricing | Free Local & BYOK, AGI Cloud by Invite',
+  title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
   description:
     'AGI pricing: Local and BYOK are free forever on Desktop and CLI, the web trial includes a small Auto Economy cap, and hosted AGI Cloud plans open by waitlist invite.',
   keywords: [
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     'AI subscription',
   ],
   openGraph: {
-    title: 'Pricing | Free Local & BYOK, AGI Cloud by Invite',
+    title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
     description:
       'Local and BYOK stay free forever, the hosted web trial is capped, and AGI Cloud plans open by waitlist invite.',
     type: 'website',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pricing | Free Local & BYOK, AGI Cloud by Invite',
+    title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
     description:
       'Local and BYOK stay free forever, the hosted web trial is capped, and AGI Cloud plans open by waitlist invite.',
     images: ['/app-preview.png'],
