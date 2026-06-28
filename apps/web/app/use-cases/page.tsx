@@ -28,7 +28,7 @@ export default function UseCasesPage() {
             { href: '/solutions', label: 'See the Solutions Map' },
             { label: 'Join Cloud Waitlist', waitlist: true },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <RouteMap
@@ -97,8 +97,8 @@ export default function UseCasesPage() {
             },
             {
               meta: 'Scale',
-              title: 'Cloud by invite',
-              body: 'Managed compute opens by invite. Join the waitlist and keep working in Local and BYOK meanwhile.',
+              title: 'Managed cloud',
+              body: 'Managed compute is in public alpha — sign in and start, no waitlist. Local and BYOK stay available too.',
             },
           ]}
         />

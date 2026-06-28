@@ -166,9 +166,9 @@ export default function LocalPage() {
               Reach past your hardware, deliberately.
             </h2>
             <p className="agi-callout-p">
-              Bring your own provider keys on Desktop and CLI, or join the AGI Cloud waitlist for
-              managed compute by invite. Either way, the move out of Local is an explicit choice
-              with the provider label visible before anything is sent.
+              Bring your own provider keys on Desktop and CLI, or use AGI managed cloud — public
+              alpha, open by default — for hosted compute. Either way, the move out of Local is an
+              explicit choice with the provider label visible before anything is sent.
             </p>
           </div>
           <div className="agi-fl-cta-row">

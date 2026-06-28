@@ -45,7 +45,7 @@ export default function ConsultingPage() {
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
             <li>Local · sensitive engagements</li>
             <li>BYOK · Desktop &amp; CLI</li>
-            <li>Cloud · by invite</li>
+            <li>Cloud · public alpha</li>
           </ul>
           <div className="agi-fl-hero-console" aria-hidden="true">
             <ProductFrame

@@ -11,7 +11,7 @@ const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
 export const metadata: Metadata = {
   title: 'Download AGI: Apps for Every Surface',
-  description: `Get AGI on six surfaces: Web in the browser today, Desktop and CLI for Local and BYOK, Mobile with Cloud by invite, plus Chrome and VS Code extensions. ${LAUNCH.publicLabel}.`,
+  description: `Get AGI on six surfaces: Web in the browser today, Desktop and CLI for Local and BYOK, Mobile with managed cloud (public alpha), plus Chrome and VS Code extensions. ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/download' },
 };
 
@@ -32,8 +32,8 @@ export default function DownloadPage() {
           </h1>
           <p className="agi-fl-lede">
             AGI Web runs in your browser today. No install. Desktop and the CLI bring Local models
-            and BYOK to your machine. Mobile starts in on-device Local Mode with Cloud by invite.
-            The Chrome and VS Code extensions meet you in the browser and the editor.
+            and BYOK to your machine. Mobile starts in on-device Local Mode; managed cloud is public
+            alpha. The Chrome and VS Code extensions meet you in the browser and the editor.
           </p>
           <div className="agi-fl-cta-row">
             <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
@@ -51,7 +51,7 @@ export default function DownloadPage() {
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
             <li>Local · on-device</li>
             <li>BYOK · your keys</li>
-            <li>Cloud · by invite</li>
+            <li>Cloud · public alpha</li>
           </ul>
 
           <div className="agi-fl-hero-console" aria-hidden="true">
@@ -77,7 +77,7 @@ export default function DownloadPage() {
         <SurfaceIndex
           eyebrow="Pick your surface"
           title="Six surfaces, honestly labeled."
-          lede="Each surface carries its real status: what runs in your browser today, what installs now, and what opens by invite or developer preview. Nothing is marked available until it is."
+          lede="Each surface carries its real status: what runs in your browser today, what installs now, and what is in public alpha or developer preview. Nothing is marked available until it is."
           items={[
             {
               index: '01',
@@ -125,12 +125,12 @@ export default function DownloadPage() {
               index: '03',
               name: 'AGI Mobile',
               tagline: 'Private AI in your pocket.',
-              body: 'On-device chat in Local Mode by default. Your conversations, memory, and files stay on the phone unless you explicitly choose otherwise. AGI Cloud arrives by invite.',
+              body: 'On-device chat in Local Mode by default. Your conversations, memory, and files stay on the phone unless you explicitly choose otherwise. AGI managed cloud is in public alpha.',
               capabilities: [
                 'On-device Local chat',
                 'Local data stays local',
                 'Projects & recents drawer',
-                'Cloud by invite',
+                'Cloud · public alpha',
               ],
               platforms: 'iPhone · Android',
               status: 'Local + Cloud invite',
