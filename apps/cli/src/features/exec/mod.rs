@@ -9,6 +9,7 @@
 //! defined in tools/mod.rs: ToolResult, ToolExecOptions,
 //! execute_tool_with_opts, session_task_summaries.
 
+pub mod exec_policy;
 pub mod tools;
 
 // Re-export the tools submodule so `crate::features::exec` gives access

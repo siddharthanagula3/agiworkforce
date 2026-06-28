@@ -39,9 +39,11 @@ await_holding_lock = "warn"
 agiworkforce-app-server = { path = "../../crates/agiworkforce-app-server" }
 agiworkforce-protocol = { path = "../../crates/agiworkforce-protocol" }
 agiworkforce-sandbox-policy = { path = "../../crates/sandbox-policy" }
+agiworkforce-execpolicy = { path = "../../crates/agiworkforce-execpolicy" }
 agiworkforce-command-registry = { path = "../../crates/agiworkforce-command-registry" }
 agiworkforce-utils-image = { path = "../../crates/agiworkforce-utils-image" }
 async-trait = "0.1.89"
+shlex = "1.3.0"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 tokio = { version = "1", features = ["full"] }
