@@ -47,9 +47,9 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | ID      | Increment                             | Status | Commit    |
 | ------- | ------------------------------------- | ------ | --------- |
 | INC-0.1 | License-gate CI + THIRD_PARTY_NOTICES | ✅     | b1972485f |
-| INC-0.2 | Pin reference SHAs + this tracker     | 🔄     | —         |
-| INC-0.3 | Trust-boundary contract tests         | ⬜     | —         |
-| INC-0.4 | Provider-contract test harness        | ⬜     | —         |
+| INC-0.2 | Pin reference SHAs + this tracker     | ✅     | (tracked) |
+| INC-0.3 | Trust-boundary contract tests         | ✅     | d84bbf8d8 |
+| INC-0.4 | Provider-contract test harness        | ✅     | 2897b2b30 |
 | INC-0.5 | SkillSpector vetting service stand-up | ⬜     | —         |
 
 ### Phase 1 — Public Alpha (web/mobile/desktop)
