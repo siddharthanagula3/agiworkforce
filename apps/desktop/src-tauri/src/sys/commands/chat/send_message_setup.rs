@@ -741,10 +741,42 @@ fn maybe_inject_matching_skills(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_routing_strategy, resolve_thinking_parameter};
+    use super::{derive_cloud_sync_enabled, resolve_routing_strategy, resolve_thinking_parameter};
     use crate::core::llm::llm_router::RoutingStrategy;
     use crate::core::llm::ThinkingParameter;
     use crate::sys::commands::chat::types::ChatSendMessageRequest;
+
+    // ── DESK-6 trust-boundary egress contract ────────────────────────────────
+    // `derive_cloud_sync_enabled` is the SINGLE gate that decides whether a turn's
+    // data (chat, projects, memory) syncs to AGI Cloud. P0 invariant: a Local
+    // session must NEVER sync, regardless of the user's stored storage preference.
+
+    #[test]
+    fn local_mode_never_syncs_even_when_storage_pref_is_cloud() {
+        // The critical case: Local active mode overrides a "cloud" storage pref.
+        assert!(!derive_cloud_sync_enabled(Some("local"), true));
+        assert!(!derive_cloud_sync_enabled(Some("local"), false));
+    }
+
+    #[test]
+    fn non_local_modes_follow_the_storage_preference() {
+        // Managed/BYOK/None defer to the storage preference (no silent override).
+        assert!(derive_cloud_sync_enabled(Some("cloud"), true));
+        assert!(!derive_cloud_sync_enabled(Some("cloud"), false));
+        assert!(derive_cloud_sync_enabled(Some("byok"), true));
+        assert!(!derive_cloud_sync_enabled(Some("byok"), false));
+        assert!(derive_cloud_sync_enabled(None, true));
+        assert!(!derive_cloud_sync_enabled(None, false));
+    }
+
+    #[test]
+    fn unknown_active_mode_is_not_treated_as_local() {
+        // Only the exact "local" sentinel forces no-sync; an unexpected value must
+        // NOT silently enable cloud (it follows storage), and must NOT be coerced
+        // to local either. This pins the exact-match semantics.
+        assert!(derive_cloud_sync_enabled(Some("Local"), true)); // case-sensitive: not the sentinel
+        assert!(!derive_cloud_sync_enabled(Some("Local"), false));
+    }
 
     // Regression guard for CTX-005 / AGI-DOC-0018 BK-11.01 (AC-19): equal-score
     // skill matches must rank deterministically by name, independent of the skill
