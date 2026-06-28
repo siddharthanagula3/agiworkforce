@@ -339,8 +339,9 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
    * Publish via the canonical artifact-publish service.
    *
    * Wires @agiworkforce/services publishArtifact with the Tauri localFileWriter
-   * adapter. Cloud publish is waitlist-gated until managed artifact publishing is
-   * proven. Versioning and inline edit-in-place remain open product gaps.
+   * adapter. Cloud artifact publishing is not built yet (no waitlist for it);
+   * the toast says "coming soon". Versioning and inline edit-in-place remain
+   * open product gaps.
    */
   const handlePublish = useCallback(async () => {
     if (!activeArtifactId) return;
@@ -377,15 +378,9 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
           duration: 6000,
         });
       } else {
-        // waitlist-gated
-        toast.info('Cloud publish is coming soon. Join the waitlist to be notified.', {
-          action: {
-            label: 'Join waitlist',
-            onClick: () => {
-              window.open('https://agi.engineer/waitlist', '_blank', 'noopener,noreferrer');
-            },
-          },
-          duration: 8000,
+        // Cloud artifact publishing is not built yet (no waitlist exists for it).
+        toast.info('Cloud publish is coming soon for the desktop app.', {
+          duration: 6000,
         });
       }
     } catch (err) {
