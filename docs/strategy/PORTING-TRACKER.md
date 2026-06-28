@@ -165,6 +165,11 @@ Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
 - `4121eabe6` fix(web): dead `_token` param in both response builders (`stream-transform.ts`, `response-builder.ts`) cleared a latent `noUnusedParameters` typecheck error a fresh `tsc` surfaced (earlier incremental tsbuildinfo had masked it). Web typecheck green.
 - **WEB-1 verified essentially complete**: no Vite/Netlify config artifacts in `apps/web` (no netlify.toml / vite.config / \_redirects); google-veo/imagen are ACTIVE services (imported by media-generation-handler), not dead leftovers; `agi.workforce` brand drift only survives in one dev-demo example string (not header/footer). No action needed.
 
+### 2026-06-28 — verifiable WEB/DESK increments (no infra needed)
+
+- **WEB-13 (partial) ✅ guarded** (`test(web): lock production security-header set`): the full prod security-header set (HSTS preload, X-Frame-Options DENY, X-Content-Type-Options, Referrer-Policy, restrictive Permissions-Policy, COOP/CORP/COEP — `next.config.ts`) + CSP-with-nonce (`proxy.ts`) were implemented but UNGUARDED. Added `security-headers.test.ts` (4 tests) pinning every header value so a weakening edit fails CI. (Lighthouse/axe/full-e2e still need a running app.)
+- **DESK-6 ✅** (`test(desktop): cloud-sync egress contract` `6874c625b` + `8c37e955f`): `derive_cloud_sync_enabled` is the SINGLE trust-boundary gate for ALL desktop cloud sync (chat + projects×3 + memory) — it had **zero direct tests** despite being P0. Added 3 contract tests (Local NEVER syncs even when storage pref is cloud; non-local follows storage; exact-match sentinel) and wired them into the unified `check:trust-boundaries` gate (now 6 surfaces). Confirmed `SyncManager` stays `#[cfg(test)]`-dormant in production. 21/21 module tests pass.
+
 ### Remaining (next sessions)
 
 INC-0.3 trust-boundary contract **harness** (per-surface tests exist — web/extension/desktop — but no unified `pnpm` gate yet) → INC-0.4/0.5 → runtime C1–C4 ports from codex-rs (INC-1.1–1.4) → website/mobile/desktop production plans (strategy 12/13/14). The catalog/`taskRouting` work proved the SSOT pipeline; edit `models.curation.json` (never `models.json`).
