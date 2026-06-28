@@ -65,7 +65,9 @@ export default function ProjectsTabScreen() {
     [isCloud, cloudProjects, localProjects],
   );
 
-  const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const localActiveId = useProjectStore((s) => s.activeProjectId);
+  const cloudActiveId = useCloudProjectStore((s) => s.activeProjectId);
+  const activeProjectId = isCloud ? cloudActiveId : localActiveId;
   const createProject = useProjectStore((s) => s.createProject);
   const updateProject = useProjectStore((s) => s.updateProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);

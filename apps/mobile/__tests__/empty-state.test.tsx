@@ -52,8 +52,9 @@ jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store) => store.persist.rehydrate()),
   storage: {
-    getString: (...args: unknown[]) => mockStorageGetString(...args),
-    set: (...args: unknown[]) => mockStorageSet(...args),
+    getString: (...args) => mockStorageGetString(...args),
+    set: (...args) => mockStorageSet(...args),
+    delete: jest.fn(),
   },
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
@@ -86,25 +87,28 @@ jest.mock('react-native-safe-area-context', () => {
 // ---------------------------------------------------------------------------
 
 import { ChatEmptyState } from '../src/features/chat/components/ChatEmptyState';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+const defaultPersonalization = {
+  fullName: '',
+  nickname: '',
+  occupation: '',
+  instructions: '',
+  warmth: 50,
+  enthusiasm: 50,
+  headersLists: 50,
+  emoji: 50,
+};
+
+// ChatEmptyState reads personalization from the active mode's store.
+// Tests run in local mode (useChatAppModeStore defaults to 'local'), so
+// seed useLocalSettingsStore.
 function resetSettingsStore() {
-  useSettingsStore.setState({
-    personalization: {
-      fullName: '',
-      nickname: '',
-      occupation: '',
-      instructions: '',
-      warmth: 50,
-      enthusiasm: 50,
-      headersLists: 50,
-      emoji: 50,
-    },
-  });
+  useLocalSettingsStore.setState({ personalization: defaultPersonalization });
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +129,7 @@ describe('ChatEmptyState', () => {
     });
 
     it('shows personalized greeting when nickname is set', () => {
-      useSettingsStore.setState({
+      useLocalSettingsStore.setState({
         personalization: {
           fullName: '',
           nickname: 'Alex',
@@ -143,7 +147,7 @@ describe('ChatEmptyState', () => {
     });
 
     it('uses first name from fullName when nickname is empty', () => {
-      useSettingsStore.setState({
+      useLocalSettingsStore.setState({
         personalization: {
           fullName: 'Jane Smith',
           nickname: '',
@@ -168,7 +172,7 @@ describe('ChatEmptyState', () => {
     });
 
     it('does NOT show subtitle when display name is set', () => {
-      useSettingsStore.setState({
+      useLocalSettingsStore.setState({
         personalization: {
           fullName: '',
           nickname: 'Alex',

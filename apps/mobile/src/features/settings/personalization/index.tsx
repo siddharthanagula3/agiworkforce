@@ -12,7 +12,10 @@ import Slider from '@react-native-community/slider';
 import { ArrowLeft, Check, Sun, Moon, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import type { ThemeMode } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
@@ -186,10 +189,21 @@ function ThemeSegmentedControl({
 export default function PersonalizationScreen() {
   const router = useRouter();
   const c = useThemeColors();
-  const personalization = useSettingsStore((s) => s.personalization);
-  const setPersonalization = useSettingsStore((s) => s.setPersonalization);
-  const themeMode = useSettingsStore((s) => s.themeMode);
-  const setThemeMode = useSettingsStore((s) => s.setThemeMode);
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+
+  const localPersonalization = useLocalSettingsStore((s) => s.personalization);
+  const localSetPersonalization = useLocalSettingsStore((s) => s.setPersonalization);
+  const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
+  const localSetThemeMode = useLocalSettingsStore((s) => s.setThemeMode);
+  const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
+  const cloudSetPersonalization = useCloudSettingsStore((s) => s.setPersonalization);
+  const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
+  const cloudSetThemeMode = useCloudSettingsStore((s) => s.setThemeMode);
+
+  const personalization = isCloud ? cloudPersonalization : localPersonalization;
+  const setPersonalization = isCloud ? cloudSetPersonalization : localSetPersonalization;
+  const themeMode = isCloud ? cloudThemeMode : localThemeMode;
+  const setThemeMode = isCloud ? cloudSetThemeMode : localSetThemeMode;
 
   // Local editing state — commit on Save
   const [fullName, setFullName] = useState(personalization.fullName);

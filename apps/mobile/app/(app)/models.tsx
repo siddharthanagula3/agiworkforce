@@ -229,7 +229,11 @@ export default function ModelsScreen() {
         </Pressable>
       </View>
 
-      <ModelPickerSheet sheetRef={pickerRef} onOpenCloudAccess={handleOpenCloudAccess} />
+      <ModelPickerSheet
+        sheetRef={pickerRef}
+        modelScope={cloudUnlocked ? 'all' : 'local'}
+        onOpenCloudAccess={handleOpenCloudAccess}
+      />
       <InviteCodeModal
         open={cloudAccessVisible}
         onClose={() => setCloudAccessVisible(false)}

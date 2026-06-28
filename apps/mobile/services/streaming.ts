@@ -87,34 +87,6 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAYS = [1_000, 2_500, 5_000];
 
 /**
- * Returns true if the error looks like a transient network interruption
- * (as opposed to a deliberate abort or an application-level HTTP error).
- */
-function isNetworkError(err: unknown): boolean {
-  if (err instanceof TypeError) {
-    // fetch throws TypeError on network failure, but also for malformed requests.
-    // Only treat network-specific messages as transient (worth retrying).
-    const msg = err.message.toLowerCase();
-    return (
-      msg.includes('network') ||
-      msg.includes('fetch') ||
-      msg.includes('load failed') ||
-      msg.includes('cancelled')
-    );
-  }
-  if (
-    err instanceof AbortError ||
-    (typeof DOMException !== 'undefined' &&
-      err instanceof DOMException &&
-      err.name === 'AbortError')
-  ) {
-    // AbortError from the user or timeout controller — not a network error
-    return false;
-  }
-  return false;
-}
-
-/**
  * Attempt a single streaming fetch and consume the SSE stream.
  * Returns true when the stream ends cleanly (onDone was called),
  * or throws on network-level errors so the caller can retry.
@@ -157,6 +129,8 @@ async function attemptStream(
     stream: true;
     thinking?: boolean;
     effort?: Effort;
+    /** When true, the server injects its built-in web_search tool for this turn. */
+    web_search?: boolean;
   },
   callbacks: StreamCallbacks,
   signal: AbortSignal,
@@ -174,16 +148,22 @@ async function attemptStream(
     ...(typeof thinking === 'boolean' ? { thinking_mode: thinking } : {}),
   };
 
-  const response = await guardedFetch(`${API_URL}/api/llm/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  const response = await guardedFetch(
+    `${API_URL}/api/llm/v1/chat/completions`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal,
     },
-    body: JSON.stringify(payload),
-    signal,
-  });
+    // Stream via expo/fetch so `response.body` is a real ReadableStream and the
+    // reply renders token-by-token (RN's global fetch exposes no readable body).
+    { stream: true },
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -214,14 +194,13 @@ async function attemptStream(
 
   const reader = response.body?.getReader();
 
-  // React Native's global `fetch` (whatwg-fetch) does NOT expose a streaming
-  // response body — `response.body` is null, so `getReader()` is unavailable.
-  // This silently broke EVERY cloud reply: the request 200s, but with no reader
-  // the old code called onError('No response body'). Fall back to reading the
-  // full SSE buffer at once via `response.text()` and run it through the same
-  // line parser. Non-incremental (the reply appears all at once when the stream
-  // closes after [DONE]) but correct — a working reply beats a streamed nothing.
-  // (True token-by-token streaming needs expo/fetch, handled separately.)
+  // The streaming request is dispatched through expo/fetch (see guardedFetch
+  // `{ stream: true }` above), whose `response.body` IS a real ReadableStream —
+  // so `getReader()` succeeds and the reply renders token-by-token below.
+  // This fallback remains as defence-in-depth: if a runtime ever returns a null
+  // body (RN's global whatwg-fetch, or a mocked Response in tests), read the
+  // whole SSE buffer at once via `response.text()` through the same line parser.
+  // Non-incremental but correct — a working reply beats a streamed nothing.
   if (!reader) {
     const full = await response.text();
     for (const line of full.split('\n')) {
@@ -408,6 +387,42 @@ async function attemptProviderStream(
 }
 
 /**
+ * Returns true if the error looks like a transient network interruption
+ * (as opposed to a deliberate abort or an application-level HTTP error).
+ *
+ * NOTE: mobile intentionally does NOT use `@agiworkforce/llm-runtime`'s
+ * `classifyError` here. That classifier is tuned for provider-SDK error objects
+ * (Anthropic/OpenAI shapes) and marks a bare RN `fetch` `TypeError` as
+ * non-retryable — but on mobile a fetch `TypeError` IS the common transient
+ * failure (cellular drop / NAT timeout) and must be retried. The error shapes
+ * differ by surface, so this local predicate is the correct fit, not a
+ * duplication to consolidate.
+ */
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof TypeError) {
+    // fetch throws TypeError on network failure, but also for malformed requests.
+    // Only treat network-specific messages as transient (worth retrying).
+    const msg = err.message.toLowerCase();
+    return (
+      msg.includes('network') ||
+      msg.includes('fetch') ||
+      msg.includes('load failed') ||
+      msg.includes('cancelled')
+    );
+  }
+  if (
+    err instanceof AbortError ||
+    (typeof DOMException !== 'undefined' &&
+      err instanceof DOMException &&
+      err.name === 'AbortError')
+  ) {
+    // AbortError from the user or timeout controller — not a network error
+    return false;
+  }
+  return false;
+}
+
+/**
  * SSE streaming consumer for `/api/llm/v1/chat/completions`.
  * Uses fetch + ReadableStream (RN 0.76+ supports this natively).
  *
@@ -425,6 +440,8 @@ export async function streamChat(
     stream: true;
     thinking?: boolean;
     effort?: Effort;
+    /** When true, the server injects its built-in web_search tool for this turn. */
+    web_search?: boolean;
   },
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
@@ -451,6 +468,19 @@ export async function streamChat(
     ? combineAbortSignals([signal, timeoutController.signal])
     : timeoutController.signal;
 
+  // Once the first token arrives the connection is proven alive, so cancel the
+  // per-attempt response timeout — it exists to catch a backend that never
+  // responds, NOT a backend that is slow to finish a long (but healthy) reply.
+  // Without this, a generation longer than TIMEOUTS.STREAMING would be aborted
+  // mid-stream; with it, the timeout only guards time-to-first-token.
+  const timedCallbacks: StreamCallbacks = {
+    ...callbacks,
+    onDelta: (delta) => {
+      clearTimeout(timeoutId);
+      callbacks.onDelta(delta);
+    },
+  };
+
   // Feature-flagged: route through the api-gateway provider-stream endpoint
   // first. Falls through to the legacy chat-completions path on failure so a
   // misconfigured gateway never strands the user.
@@ -462,7 +492,7 @@ export async function streamChat(
           messages: body.messages,
           ...(body.effort ? { effort: body.effort } : {}),
         },
-        callbacks,
+        timedCallbacks,
         combinedSignal,
       );
       if (ok) {
@@ -536,7 +566,7 @@ export async function streamChat(
     }
 
     try {
-      const completed = await attemptStream(body, callbacks, combinedSignal);
+      const completed = await attemptStream(body, timedCallbacks, combinedSignal);
       if (completed) {
         clearTimeout(timeoutId);
         return;
@@ -545,9 +575,19 @@ export async function streamChat(
       clearTimeout(timeoutId);
       return;
     } catch (err) {
-      if (combinedSignal.aborted || signal?.aborted) {
-        // Intentional abort — do not retry
+      // A user-initiated cancel is silent (no error UI). A timeout is NOT: it must
+      // surface an error, or the request hangs with the assistant message stuck
+      // "streaming" forever and zero feedback — the exact silent failure this path
+      // used to produce. Distinguish the two by which signal actually aborted.
+      if (signal?.aborted) {
         clearTimeout(timeoutId);
+        return;
+      }
+      if (timeoutController.signal.aborted) {
+        clearTimeout(timeoutId);
+        callbacks.onError(
+          new Error('The request timed out. Please check your connection and try again.'),
+        );
         return;
       }
 
@@ -557,7 +597,9 @@ export async function streamChat(
         continue;
       }
 
-      // Non-network error — surface immediately, no retry
+      // Non-network error — surface immediately, no retry. Preserve the original
+      // error instance so callers can pattern-match (e.g. ApiPaywallError → the
+      // execution store renders the PaywallBottomSheet).
       callbacks.onError(err instanceof Error ? err : new Error(String(err)));
       clearTimeout(timeoutId);
       return;

@@ -12,13 +12,11 @@
 // ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
-  whenMmkvReady: jest.fn((cb: () => void) => cb()),
-  rehydrateWhenMmkvReady: jest.fn(
-    (store: { persist: { rehydrate: () => void } }, _name: string) => {
-      if (store && store.persist && typeof store.persist.rehydrate === 'function')
-        store.persist.rehydrate();
-    },
-  ),
+  whenMmkvReady: jest.fn((cb) => cb()),
+  rehydrateWhenMmkvReady: jest.fn((store, _name) => {
+    if (store && store.persist && typeof store.persist.rehydrate === 'function')
+      store.persist.rehydrate();
+  }),
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),

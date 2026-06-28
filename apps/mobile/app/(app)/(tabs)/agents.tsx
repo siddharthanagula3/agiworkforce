@@ -12,6 +12,7 @@ import { useAgentStore } from '@/stores/agentStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 /**
  * Agents tab -- redirects to Dispatch when no agents are active.
@@ -59,7 +60,7 @@ export default function AgentsTabScreen() {
     setTimeout(() => setRefreshing(false), 1500);
   }, [connectionStatus, sendControl]);
 
-  if (!FEATURES.agents) return null;
+  if (!FEATURES.agents) return <FeatureUnavailable feature="Agents" />;
 
   return (
     <SafeAreaView

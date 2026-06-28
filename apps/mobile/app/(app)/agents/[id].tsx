@@ -32,6 +32,7 @@ import { colors } from '@/src/ui/theme';
 import { sendAgentCommand, sendApprovalResponse, getRiskBadgeColor } from '@/services/companion';
 import type { ApprovalRequest, StatusStep, ToolCall } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 // ---------------------------------------------------------------------------
 // Progress Bar
@@ -294,7 +295,7 @@ export default function AgentDetailScreen() {
     }
   }, [agent, createConversation, sendMessage, selectedModel, router, hapticsEnabled]);
 
-  if (!FEATURES.agents) return null;
+  if (!FEATURES.agents) return <FeatureUnavailable feature="Agents" />;
 
   if (!agent) {
     return (

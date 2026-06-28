@@ -3,7 +3,7 @@
  * No state, no hooks — these are deterministic render functions.
  */
 
-import { View, Linking } from 'react-native';
+import { View, Linking, ScrollView } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
@@ -323,6 +323,116 @@ function renderTextSegment(
       continue;
     }
 
+    // --- Markdown table: | cell | cell | (with header separator line) ---
+    // Helper: parse table row, preserving interior empty cells
+    // Input: "| a | | c |" → split → ['', ' a ', ' ', ' c ', '']
+    // Drop first/last if empty (outer pipe artifacts) → [' a ', ' ', ' c ']
+    // Trim each → ['a', '', 'c']
+    const parseTableRow = (rowLine: string): string[] => {
+      let cells = rowLine.split('|');
+      // Remove first element if it's empty (leading pipe artifact)
+      if (cells[0] === '' || (cells[0] && cells[0]!.trim() === '')) {
+        cells = cells.slice(1);
+      }
+      // Remove last element if it's empty (trailing pipe artifact)
+      if (
+        cells.length > 0 &&
+        (cells[cells.length - 1] === '' || cells[cells.length - 1]!.trim() === '')
+      ) {
+        cells = cells.slice(0, -1);
+      }
+      // Trim each cell but keep empty strings (interior empty cells)
+      return cells.map((cell) => cell.trim());
+    };
+
+    if (line.includes('|') && !line.startsWith('>')) {
+      // Check if this looks like a table header (contains pipes and content)
+      const headerCells = parseTableRow(line);
+      if (headerCells.length > 0 && idx + 1 < lines.length) {
+        const separatorLine = lines[idx + 1];
+        // Check if next line is a table separator: |---|---|--- format
+        if (
+          separatorLine &&
+          /^\s*\|?[\s\-|:]+\|?[\s\-|:]*$/.test(separatorLine) &&
+          separatorLine.includes('-')
+        ) {
+          // This is a table! Collect all rows until we hit a non-table line
+          const tableRows: string[][] = [];
+
+          // Parse header row
+          const headerRow = parseTableRow(line);
+          tableRows.push(headerRow);
+          idx += 2; // Skip header and separator
+
+          // Parse body rows
+          while (idx < lines.length && lines[idx]!.includes('|') && !lines[idx]!.startsWith('>')) {
+            const bodyRow = parseTableRow(lines[idx]!);
+            if (bodyRow.length > 0) {
+              tableRows.push(bodyRow);
+            }
+            idx++;
+          }
+
+          // Render table
+          if (tableRows.length > 0) {
+            const numCols = Math.max(...tableRows.map((row) => row.length));
+            nodes.push(
+              <View
+                key={`${keyBase}-table-${idx}`}
+                style={{
+                  borderWidth: 1,
+                  borderColor: renderColors.border,
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                  marginVertical: 8,
+                }}
+              >
+                {tableRows.map((row, rowIdx) => (
+                  <View
+                    key={`${keyBase}-tr-${idx}-${rowIdx}`}
+                    style={{
+                      flexDirection: 'row',
+                      borderBottomWidth: rowIdx === 0 ? 1 : 0,
+                      borderBottomColor: renderColors.border,
+                      backgroundColor: rowIdx === 0 ? renderColors.surfaceHover : undefined,
+                    }}
+                  >
+                    {Array.from({ length: numCols }).map((_, colIdx) => (
+                      <View
+                        key={`${keyBase}-td-${idx}-${rowIdx}-${colIdx}`}
+                        style={{
+                          flex: 1,
+                          borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
+                          borderRightColor: renderColors.border,
+                          paddingHorizontal: 8,
+                          paddingVertical: 6,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            color:
+                              rowIdx === 0 ? renderColors.textPrimary : renderColors.textSecondary,
+                            fontWeight: rowIdx === 0 ? '500' : '400',
+                            lineHeight: 19,
+                          }}
+                          selectable
+                        >
+                          {row[colIdx] || ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>,
+            );
+          }
+          continue;
+        }
+      }
+    }
+
     // --- Horizontal rule: --- or *** or ___ ---
     if (/^(---|\*\*\*|___)$/.test(line.trim())) {
       nodes.push(
@@ -403,25 +513,35 @@ export function renderMarkdownContent(
           style={{
             backgroundColor: renderColors.surfaceHover,
             borderRadius: 8,
-            padding: 10,
-            paddingTop: 28,
             marginVertical: 6,
             borderWidth: 1,
             borderColor: renderColors.border,
+            overflow: 'hidden',
           }}
         >
           <CodeBlockCopyButton code={codeContent} />
-          <Text
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={true}
+            scrollEventThrottle={16}
             style={{
-              fontSize: 13,
-              lineHeight: 19,
-              fontFamily: 'Menlo',
-              color: renderColors.textPrimary,
+              paddingTop: 28,
+              paddingBottom: 10,
+              paddingHorizontal: 10,
             }}
-            selectable
           >
-            {codeContent}
-          </Text>
+            <Text
+              style={{
+                fontSize: 13,
+                lineHeight: 19,
+                fontFamily: 'Menlo',
+                color: renderColors.textPrimary,
+              }}
+              selectable
+            >
+              {codeContent}
+            </Text>
+          </ScrollView>
         </View>,
       );
     }

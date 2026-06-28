@@ -30,11 +30,7 @@ import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import {
-  CLERK_PUBLISHABLE_KEY,
-  setClerkTokenGetter,
-  getClerkUserId,
-} from '@/src/integrations/clerk';
+import { CLERK_PUBLISHABLE_KEY, setClerkTokenGetter } from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
@@ -51,7 +47,6 @@ import {
   setNavigatorReady,
   setSignedIn,
 } from '@/services/notifications';
-import { getMobileSyncService } from '@/services/conversationSync';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtime';
 import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatchRealtime';
@@ -335,42 +330,9 @@ export default function RootLayout() {
     return cleanup;
   }, [isClerkSignedIn]);
 
-  // 3-device conversation sync — sync on app resume
-  // #386: gated on isClerkSignedIn; user_id sourced from Clerk (session is null).
-  useEffect(() => {
-    if (!isClerkSignedIn || !FEATURES.crossDeviceSync) return;
-
-    const syncService = getMobileSyncService();
-    syncService.startBackgroundSync(
-      () => {
-        // Convert local conversations to SyncedConversation shape for merge.
-        // User ID comes from the Clerk bridge — session.user.id is always null
-        // in v1 because useAuthStore.initialize() never sets it.
-        const state = useChatStore.getState();
-        const userId = getClerkUserId() ?? 'unknown';
-        return state.conversations.map((c) => ({
-          id: c.id,
-          user_id: userId,
-          title: c.title,
-          model: null,
-          is_active: true,
-          synced_from: 'mobile' as const,
-          metadata: null,
-          created_at: c.createdAt,
-          updated_at: c.updatedAt,
-          deleted_at: null,
-        }));
-      },
-      () => {
-        // Refresh local conversation list after sync completes
-        useChatStore.getState().loadConversations();
-      },
-    );
-
-    return () => {
-      syncService.stopBackgroundSync();
-    };
-  }, [isClerkSignedIn]);
+  // NOTE: cross-device conversation sync runs through `cloudSyncEngine`
+  // (`startCloudSyncLoop`, wired above). The legacy `conversationSync` facade
+  // was a flag-gated dead path and has been removed.
 
   // Auth guard + onboarding check
   // P1-8: gate on isMmkvReady so cold start never force-redirects to

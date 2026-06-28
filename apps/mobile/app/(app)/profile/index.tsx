@@ -18,11 +18,14 @@ import {
   UserRound,
   type LucideIcon,
 } from 'lucide-react-native';
+import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatStore } from '@/stores/chatStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -42,34 +45,46 @@ interface ProfileRowProps {
 export default function ProfileScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  const { user, signOut } = useAuthStore();
-  const conversations = useChatStore((s) => s.conversations);
-  const personalization = useSettingsStore((s) => s.personalization);
+  // isClerkSignedIn is the real v1 auth signal; `user` from useAuthStore is
+  // always null in v1 (initialize() sets it to null and nothing else writes it).
+  const { isClerkSignedIn, signOut } = useAuthStore();
+  // Clerk user exposes the actual email for the cloud profile header.
+  const { user: clerkUser } = useUser();
+  const localConversations = useChatStore((s) => s.conversations);
+  const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const isCloudMode = appMode === 'cloud';
+  const localPersonalization = useLocalSettingsStore((s) => s.personalization);
+  const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
+  const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
 
+  // In cloud mode, cloudConversations is authoritative (cloud store only holds
+  // cloud conversations). In local mode, filter by executionMode.
   const modeConversations = useMemo(
     () =>
-      conversations.filter(
-        (conversation) => executionModeForConversation(conversation) === appMode,
-      ),
-    [appMode, conversations],
+      isCloudMode
+        ? cloudConversations
+        : localConversations.filter(
+            (conversation) => executionModeForConversation(conversation) === appMode,
+          ),
+    [appMode, isCloudMode, localConversations, cloudConversations],
   );
   const totalMessages = modeConversations.reduce((sum, conversation) => {
     return sum + (conversation.messageCount ?? 0);
   }, 0);
-  const isCloudMode = appMode === 'cloud';
+
+  const cloudEmail = clerkUser?.primaryEmailAddress?.emailAddress;
   const displayName = isCloudMode
     ? 'AGI Cloud'
-    : personalization.nickname ||
-      personalization.fullName ||
-      user?.email?.split('@')[0] ||
-      'Local profile';
+    : personalization.nickname || personalization.fullName || 'Local profile';
   const subtitle = isCloudMode
-    ? user?.email || (cloudUnlocked ? 'Cloud access unlocked' : 'Invite required')
+    ? cloudEmail || (cloudUnlocked ? 'Cloud access unlocked' : 'Invite required')
     : personalization.occupation || 'Private on this device';
   const initial = displayName.charAt(0).toUpperCase();
-  const hasCloudAccount = FEATURES.auth && Boolean(user);
+  // Gate cloud account section on the real Clerk signal, not on useAuthStore.user
+  // which is permanently null in v1.
+  const hasCloudAccount = FEATURES.auth && isClerkSignedIn;
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();

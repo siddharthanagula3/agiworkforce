@@ -80,6 +80,8 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
+import { useChatStore } from '../stores/chatStore';
+import type { ChatMessage } from '../types/chat';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import { syncNow } from '../services/cloudSyncEngine';
 
@@ -121,6 +123,61 @@ beforeEach(() => {
     },
     cursor: '1',
   })) as never);
+});
+
+describe('cloud in-flight visibility (merged view)', () => {
+  it('surfaces a local in-flight assistant the cloud store does not yet hold', () => {
+    // Regression for the split-brain bug behind "cloud chat shows no feedback".
+    // The live stream path writes the assistant placeholder / streamed content /
+    // timeout error to the LOCAL store, while the cloud store only receives the
+    // mirrored USER message until the turn COMPLETES. A blind {...local, ...cloud}
+    // merge let the cloud copy win and HID the in-flight assistant — so the typing
+    // indicator, streamed reply, and timeout error were all invisible. The merged
+    // view the chat screen reads must include the local-only assistant turn.
+    const userMsg: ChatMessage = {
+      id: 'msg-user-1',
+      conversationId: CONV_ID,
+      role: 'user',
+      content: 'hi there',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const assistantInFlight: ChatMessage = {
+      id: 'msg-asst-1',
+      conversationId: CONV_ID,
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+      createdAt: '2026-01-01T00:00:01.000Z',
+    };
+
+    // Cloud store owns the conversation but holds only the mirrored user message.
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: CONV_ID,
+      title: 'Cloud Chat',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      messageCount: 1,
+      pinned: false,
+      model: CLOUD_MODEL,
+      executionMode: 'cloud',
+    });
+    useChatCloudMessageStore.getState().setCloudMessages(CONV_ID, [userMsg]);
+
+    // The live send/stream path wrote the in-flight assistant into the LOCAL store.
+    useChatMessageStore.setState({ messages: { [CONV_ID]: [userMsg, assistantInFlight] } });
+
+    // The cloud store alone would hide the assistant (only the user is mirrored
+    // before completion)...
+    expect(useChatCloudMessageStore.getState().messages[CONV_ID]?.map((m) => m.role)).toEqual([
+      'user',
+    ]);
+
+    // ...but the merged view the chat screen reads includes the in-flight assistant,
+    // ordered by createdAt.
+    const merged = useChatStore.getState().messages[CONV_ID] ?? [];
+    expect(merged.map((m) => m.role)).toEqual(['user', 'assistant']);
+    expect(merged.find((m) => m.role === 'assistant')?.isStreaming).toBe(true);
+  });
 });
 
 describe('cloud send → sync write-through', () => {

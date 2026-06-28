@@ -258,6 +258,54 @@ describe('chatStore — streaming state', () => {
       );
     });
 
+    it('sends web_search:true to the remote stream when the web-search feature is enabled', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useChatStore.setState({ features: { webSearch: true, imageGen: true, health: false } });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'searched' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'what is the weather today', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.web_search).toBe(true);
+    });
+
+    it('omits web_search when the web-search feature is disabled', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useChatStore.setState({ features: { webSearch: false, imageGen: true, health: false } });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'no search' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'just chat normally', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.web_search).toBeUndefined();
+    });
+
     it('uses per-send task options over persisted chat mode', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       useChatStore.setState({ chatMode: 'chat', chatStyle: 'normal' });
@@ -725,6 +773,40 @@ describe('chatStore — streaming state', () => {
 
       expect(getState().streamingContent).toBe('');
       expect(getState().streamingReasoning).toBe('');
+    });
+
+    it('paints a visible error in the assistant bubble when the stream errors with no content', async () => {
+      // End-to-end guarantee behind the streaming-timeout fix: a stream that errors
+      // before any token (e.g. a timed-out request that never responded) must leave
+      // the user with visible feedback in the assistant message — NOT a blank,
+      // forever-"streaming" placeholder. This pins the path PAST the service
+      // boundary: streamChat's onError → the assistant message the user actually
+      // sees. Without the placeholder (created before streaming) this would be a
+      // no-op and the user would be stranded.
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              callbacks.onError(
+                new Error('The request timed out. Please check your connection and try again.'),
+              );
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'question', MODEL);
+      });
+
+      const msgs = getState().messages[CONV_ID] ?? [];
+      const assistantMsg = msgs.find((m) => m.role === 'assistant');
+      expect(assistantMsg).toBeDefined();
+      expect(assistantMsg?.isStreaming).toBe(false);
+      expect(assistantMsg?.content).toBe('Something went wrong. Please try again.');
+      // And the prominent one-tap retry banner fires for stream/timeout errors too
+      // (store.error), not just pre-flight failures.
+      expect(getState().error).toBe('Something went wrong. Please try again.');
     });
 
     it('marks the assistant message as non-streaming on error', async () => {

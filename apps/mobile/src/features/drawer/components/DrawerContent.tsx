@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { View, Pressable, TextInput, ScrollView } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Pressable, TextInput, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import {
@@ -7,6 +7,7 @@ import {
   Cloud,
   FolderOpen,
   HelpCircle,
+  Pin,
   Search,
   Settings,
   Sparkles,
@@ -29,6 +30,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { DEFAULT_CLOUD_MODEL_ID } from '@/src/features/model-picker/service';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { ModeSwitchModal } from '@/src/features/chat/components/ModeSwitchModal';
 
 type RoutePath =
@@ -239,6 +241,36 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const pathname = usePathname();
   const conversations = useChatStore((s) => s.conversations);
+  const pinConversation = useChatStore((s) => s.pinConversation);
+  const deleteConversation = useChatStore((s) => s.deleteConversation);
+
+  // Long-press a recent chat → pin/unpin or delete. Surfaces the pin/delete store
+  // actions (previously only reachable from the unused sidebar) in the live drawer.
+  const handleConversationLongPress = useCallback(
+    (id: string, title: string, pinned: boolean) => {
+      Alert.alert(title || 'Chat', undefined, [
+        {
+          text: pinned ? 'Unpin' : 'Pin',
+          onPress: () => void pinConversation(id),
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert('Delete chat?', 'This cannot be undone.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => void deleteConversation(id),
+              },
+            ]),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    },
+    [pinConversation, deleteConversation],
+  );
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
@@ -253,6 +285,20 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const [modeSwitchVisible, setModeSwitchVisible] = useState(false);
   const query = searchQuery.trim().toLowerCase();
   const isSearching = query.length > 0;
+
+  // Drive the shared (mode-aware) search: cloud mode runs the server full-text
+  // search via chatViewStore.searchConversations; local mode searches on-device.
+  // We surface conversations that matched by message *content* (not just title)
+  // alongside the title filter below.
+  const searchConversations = useChatViewStore((s) => s.searchConversations);
+  const searchResults = useChatViewStore((s) => s.searchResults);
+  useEffect(() => {
+    searchConversations(searchQuery);
+  }, [searchQuery, searchConversations]);
+  const contentMatchIds = useMemo(
+    () => new Set(searchResults.map((r) => r.conversationId)),
+    [searchResults],
+  );
 
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
@@ -301,14 +347,23 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   const displayedConversations = useMemo(() => {
     const source = isSearching
-      ? conversations.filter((conversation) =>
-          (conversation.title || '').toLowerCase().includes(query),
+      ? conversations.filter(
+          (conversation) =>
+            (conversation.title || '').toLowerCase().includes(query) ||
+            // Include conversations matched by message content / server full-text
+            // search (chatViewStore.searchResults), not just by title.
+            contentMatchIds.has(conversation.id),
         )
       : conversations;
-    return source
-      .filter((conversation) => executionModeForConversation(conversation) === appMode)
-      .slice(0, DRAWER_RECENT_LIMIT);
-  }, [appMode, conversations, isSearching, query]);
+    return (
+      source
+        .filter((conversation) => executionModeForConversation(conversation) === appMode)
+        // Pinned chats first; preserve the existing recency order within each group.
+        .slice()
+        .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+        .slice(0, DRAWER_RECENT_LIMIT)
+    );
+  }, [appMode, conversations, isSearching, query, contentMatchIds]);
 
   const displayedProjects = useMemo(() => {
     if (!FEATURES.projects) return [];
@@ -463,20 +518,34 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                     <Pressable
                       key={conversation.id}
                       onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
+                      onLongPress={() =>
+                        handleConversationLongPress(
+                          conversation.id,
+                          conversation.title || 'Untitled chat',
+                          Boolean(conversation.pinned),
+                        )
+                      }
                       accessibilityRole="button"
                       accessibilityLabel={`Open conversation: ${conversation.title}`}
+                      accessibilityHint="Long press to pin or delete"
                       accessibilityState={{ selected: active }}
                       style={{
                         minHeight: 34,
                         borderRadius: 8,
                         paddingHorizontal: 10,
-                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
                         backgroundColor: active ? colors.surfaceHover : colors.transparent,
                       }}
                     >
+                      {conversation.pinned ? (
+                        <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
+                      ) : null}
                       <Text
                         numberOfLines={1}
                         style={{
+                          flex: 1,
                           color: active ? colors.textPrimary : colors.textSecondary,
                           fontSize: 14,
                           fontWeight: active ? '600' : '400',

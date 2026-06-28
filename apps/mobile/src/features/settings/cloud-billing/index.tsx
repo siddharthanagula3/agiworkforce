@@ -24,19 +24,11 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-
-// Plan display names
-const TIER_LABELS: Record<string, string> = {
-  free: 'Free',
-  hobby: 'Hobby',
-  pro: 'Pro',
-  pro_plus: 'Pro Max',
-  max: 'Max',
-};
 
 // Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
@@ -73,7 +65,9 @@ export default function CloudBillingScreen() {
 
   const [portalLoading, setPortalLoading] = useState(false);
 
-  const tierLabel = TIER_LABELS[tier] ?? 'Free';
+  // Single source of truth for plan labels (@agiworkforce/types) — keeps this
+  // screen's label in lock-step with account.tsx / web (no "Pro+" vs "Pro Max" drift).
+  const tierLabel = getBillingPlanPricing(tier).label;
   const isFreeTier = tier === 'free';
 
   const handleUpgrade = useCallback(() => {

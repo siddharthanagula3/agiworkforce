@@ -212,12 +212,15 @@ describe('AddToChatSheet', () => {
   // ---- Section 3: Feature Rows ----
 
   describe('feature toggles', () => {
-    it('hides unavailable tool rows while feature flags are disabled', () => {
+    it('shows the enabled tool rows and hides the disabled ones', () => {
       const { getByText, queryByText } = renderSheet();
 
       expect(getByText('Temporary chat')).toBeTruthy();
-      expect(queryByText('Web search')).toBeNull();
-      expect(queryByText('Image generation')).toBeNull();
+      // M2: web search + image generation are enabled feature flags (FEATURES.webSearch /
+      // FEATURES.imageGen), so their rows render.
+      expect(getByText('Web search')).toBeTruthy();
+      expect(getByText('Image generation')).toBeTruthy();
+      // Still gated off in this build.
       expect(queryByText('Computer use')).toBeNull();
       expect(queryByText('Health')).toBeNull();
       expect(queryByText('Beta')).toBeNull();

@@ -163,19 +163,27 @@ export const useProjectStore = create<ProjectState>()(
 
       setActiveProject: (id) => {
         // Validate that the project exists (or allow null to clear)
+        const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
         if (id !== null) {
-          const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
           if (isCloud) {
             const exists = useCloudProjectStore
               .getState()
               .projects.some((p) => p.id === id && p.deletedAt === null);
             if (!exists) return;
+            // In cloud mode, use the cloud store's setter
+            useCloudProjectStore.getState().setActiveCloudProject(id);
+            return;
           } else {
             const exists = get().projects.some((p) => p.id === id);
             if (!exists) return;
           }
         }
-        set({ activeProjectId: id });
+        // Local mode: write to local store (or clear project when id is null)
+        if (isCloud) {
+          useCloudProjectStore.getState().setActiveCloudProject(null);
+        } else {
+          set({ activeProjectId: id });
+        }
       },
 
       addSource: (projectId, source) => {

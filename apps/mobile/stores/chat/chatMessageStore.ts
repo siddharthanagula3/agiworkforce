@@ -1,8 +1,10 @@
+import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/src/features/auth/store';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -205,12 +207,23 @@ export const useChatMessageStore = create<MessageState>()(
           const cloudStore = getCloudStore();
           const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
           if (cloudConversation && shouldSyncConversationRemote(cloudConversation)) {
-            cloudStore.getState().removeCloudConversation(id);
-            try {
-              await api.delete(`/api/chat/conversations/${id}`);
-            } catch {
-              // Optimistic delete stands — offline resilience
+            // PRIVACY/DATA-LOSS FIX: confirm the server delete BEFORE hiding the
+            // conversation locally. The previous optimistic remove + swallowed
+            // catch hid a conversation that still existed server-side (so the
+            // user believed sensitive content was gone while it persisted) and
+            // let it resurrect on the next pull. Retry transient failures; only
+            // remove locally once the server has acknowledged the delete. On a
+            // hard failure, surface it and leave the conversation visible so the
+            // user knows it was NOT deleted.
+            const deleted = await deleteCloudConversationWithRetry(id);
+            if (!deleted) {
+              Alert.alert(
+                'Could not delete conversation',
+                'We could not delete this conversation from the cloud. Check your connection and try again.',
+              );
+              return;
             }
+            cloudStore.getState().removeCloudConversation(id);
           } else {
             cloudStore.getState().removeCloudConversation(id);
           }
@@ -284,10 +297,17 @@ export const useChatMessageStore = create<MessageState>()(
               cloudStore.getState().conversations.find((c) => c.id === id),
             )
           ) {
+            // DATA-LOSS FIX: enqueue the rename so the sync engine push() re-sends
+            // the cached (renamed) title even if the immediate PUT fails. Without
+            // this, a failed PUT left the new title only in this device's cache,
+            // where the next pull/list-replace reverted it. The clobber-guard in
+            // setCloudConversations / applyConversationDeltas preserves this
+            // locally-dirty title until the push lands.
+            markConversationForSync(id);
             try {
               await api.put(`/api/chat/conversations/${id}`, { title });
             } catch {
-              // Optimistic rename stands
+              // Optimistic rename stands; the dirty-queue retry (push) persists it.
             }
           }
           return;
@@ -577,8 +597,49 @@ function generateMessageId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Extract the HTTP status from an api-client error (it throws `HTTP <status>: …`). */
+function httpStatusFromError(error: unknown): number | null {
+  const match = error instanceof Error ? error.message.match(/HTTP (\d{3})/) : null;
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Delete a cloud conversation server-side, retrying transient failures.
+ * Returns true only when the server has acknowledged the delete (a 404 counts
+ * as success — the row is already gone, so the delete is idempotently
+ * satisfied). Returns false on a non-transient 4xx or after exhausting retries,
+ * so the caller can keep the conversation visible and surface the failure
+ * instead of silently hiding content that still lives in the cloud.
+ */
+async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await api.delete(`/api/chat/conversations/${id}`);
+      return true;
+    } catch (error) {
+      const status = httpStatusFromError(error);
+      // 404 = already deleted server-side → idempotently satisfied.
+      if (status === 404) return true;
+      // Other 4xx (e.g. 403) are not transient — stop and report failure.
+      if (status !== null && status >= 400 && status < 500) return false;
+      // 5xx / network error — retry with backoff.
+      if (attempt >= maxAttempts) return false;
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
+  }
+  return false;
+}
+
 function shouldLoadCloudConversationList(): boolean {
-  return isCloudChatEnabled() && useChatAppModeStore.getState().appMode === 'cloud';
+  // Gate on isClerkSignedIn to prevent unauthenticated api.get('/api/chat/conversations')
+  // calls that trigger the "Session Expired" alert in handleUnrecoverableAuth when
+  // appMode is 'cloud' but no real Clerk session exists (e.g. demo build with
+  // cloudUnlocked=true persisted from a prior session).
+  return (
+    isCloudChatEnabled() &&
+    useChatAppModeStore.getState().appMode === 'cloud' &&
+    useAuthStore.getState().isClerkSignedIn
+  );
 }
 
 /**

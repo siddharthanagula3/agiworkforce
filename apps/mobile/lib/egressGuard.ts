@@ -24,7 +24,7 @@
  * Allowed requests keep all of secureFetch's behaviour.
  */
 import { API_URL, WS_URL } from '@/lib/constants';
-import { secureFetch } from '@/services/secureFetch';
+import { secureFetch, type SecureFetchOptions } from '@/services/secureFetch';
 
 /**
  * Error thrown when an our-cloud request is attempted while the app is in
@@ -161,10 +161,14 @@ function resolveAppMode(): 'local' | 'cloud' {
  *   - Cloud mode → all hosts allowed, delegated to `secureFetch`.
  *
  * Use this for every our-cloud-capable call site instead of `fetch`/`secureFetch`.
+ *
+ * `opts.stream` opts the request into the streaming-capable fetch (expo/fetch)
+ * so SSE replies can be read token-by-token; see {@link SecureFetchOptions}.
  */
 export async function guardedFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
+  opts?: SecureFetchOptions,
 ): Promise<Response> {
   const mode = resolveAppMode();
   if (mode === 'local') {
@@ -173,5 +177,5 @@ export async function guardedFetch(
       throw new EgressBlockedError(host || '(unparseable)');
     }
   }
-  return secureFetch(input, init);
+  return secureFetch(input, init, opts);
 }

@@ -1,0 +1,30 @@
+# Maestro smoke flow — cloud chat send path (no pixel-tapping, real text input).
+# Run: maestro test apps/mobile/.maestro/cloud-chat-smoke.yaml
+#
+# Taps elements by testID/accessibility (immune to the dev "Open debugger" toast
+# overlay that blocks coordinate taps), and uses real keyboard input (no iOS-sim
+# accent-picker fight). Verifies: cloud mode → type → send → the user message
+# renders in the conversation (the send path works end-to-end).
+appId: com.agiworkforce.app
+---
+- launchApp
+# Ensure Cloud mode (no-op if already selected / not on this screen).
+- tapOn:
+    text: 'Cloud'
+    optional: true
+# Focus the composer and type a real message.
+- tapOn:
+    id: 'chat.composer.input'
+- inputText: 'hello from maestro'
+- assertVisible: 'hello from maestro'
+# Dismiss the keyboard so it can't sit over the send button, then tap the real
+# send button by its accessibilityLabel (the testID is on a wrapper <View>).
+- hideKeyboard
+- tapOn: 'Send message'
+# A successful send clears the composer and navigates into the conversation, so
+# the home greeting must disappear and the user turn must render.
+- extendedWaitUntil:
+    notVisible: 'How can I help you'
+    timeout: 10000
+- assertVisible: 'hello from maestro'
+- takeScreenshot: cloud-chat-after-send

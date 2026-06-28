@@ -4,6 +4,9 @@ import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { Play, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import * as TTS from '@/src/features/voice/services/tts';
 import { useThemeColors } from '@/src/ui/theme';
 import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
@@ -30,6 +33,9 @@ export const VoiceSelector = forwardRef<
     { code: string; label: string; locale: string }[]
   >([]);
 
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+
+  // Device-global voice hardware settings (same across modes)
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useSettingsStore((s) => s.setSelectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
@@ -37,8 +43,14 @@ export const VoiceSelector = forwardRef<
   const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
-  const speechLanguage = useSettingsStore((s) => s.speechLanguage);
-  const setSpeechLanguage = useSettingsStore((s) => s.setSpeechLanguage);
+
+  // Mode-specific: speech language is a cloud-synced preference
+  const localSpeechLanguage = useLocalSettingsStore((s) => s.speechLanguage);
+  const localSetSpeechLanguage = useLocalSettingsStore((s) => s.setSpeechLanguage);
+  const cloudSpeechLanguage = useCloudSettingsStore((s) => s.speechLanguage);
+  const cloudSetSpeechLanguage = useCloudSettingsStore((s) => s.setSpeechLanguage);
+  const speechLanguage = isCloud ? cloudSpeechLanguage : localSpeechLanguage;
+  const setSpeechLanguage = isCloud ? cloudSetSpeechLanguage : localSetSpeechLanguage;
 
   const loadVoices = useCallback(async (lang: string) => {
     setLoading(true);

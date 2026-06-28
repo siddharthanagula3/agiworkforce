@@ -922,6 +922,7 @@ export default function ChatScreen() {
           attachRef={chatInputAttachRef}
           showChips={conversationMessages.length === 0}
           initialText={initialPrompt || undefined}
+          draftKey={id}
         />
 
         {/* Add to Chat bottom sheet */}

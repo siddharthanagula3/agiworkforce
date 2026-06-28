@@ -3,6 +3,9 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { api } from './api';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 
 const BACKGROUND_FETCH_TASK = 'agent-status-check';
 
@@ -34,7 +37,14 @@ function approvalNotificationKey(approvals: AgentStatusResponse['pendingApproval
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   const settings = useSettingsStore.getState?.();
-  if (!settings?.backgroundFetchEnabled || !settings.notificationsEnabled) {
+  if (!settings?.backgroundFetchEnabled) {
+    return BackgroundFetch.BackgroundFetchResult.NoData;
+  }
+  // notificationsEnabled is mode-specific: check the active mode's store.
+  const appMode = useChatAppModeStore.getState?.()?.appMode ?? 'local';
+  const modeSettings =
+    appMode === 'cloud' ? useCloudSettingsStore.getState?.() : useLocalSettingsStore.getState?.();
+  if (!modeSettings?.notificationsEnabled) {
     return BackgroundFetch.BackgroundFetchResult.NoData;
   }
 

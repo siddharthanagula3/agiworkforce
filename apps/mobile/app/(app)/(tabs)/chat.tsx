@@ -453,6 +453,7 @@ export default function ChatTabScreen() {
         onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
         attachRef={chatInputAttachRef}
         attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+        draftKey="new-chat"
       />
 
       {/* Add to Chat bottom sheet */}
