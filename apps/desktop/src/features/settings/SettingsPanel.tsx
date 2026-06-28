@@ -53,6 +53,7 @@ import { UsageTab } from './tabs/Usage';
 import { ExtensionsTab } from './tabs/Extensions';
 import { DeveloperTab } from './tabs/Developer';
 import { AgiCodeTab } from './tabs/AgiCode';
+import { BillingTab } from './tabs/Billing';
 
 // Canonical settings tab keys — single source of truth in @agiworkforce/ui.
 type CanonicalTab = SettingsNavKey;
@@ -559,6 +560,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         );
       case 'account':
         return <AccountTab />;
+      case 'billing':
+        return <BillingTab />;
       case 'usage':
         return <UsageTab />;
       case 'appearance':
