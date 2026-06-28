@@ -28,7 +28,7 @@ export default function AgiWorkPage() {
             { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/mobile', label: 'See Mobile Dispatch' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <FeatureGrid
@@ -88,7 +88,7 @@ export default function AgiWorkPage() {
             },
             {
               k: 'Hosted AGI Work',
-              v: 'Managed cloud execution stays invite-only until metering, fraud, and data controls are proven.',
+              v: 'Managed cloud execution is public alpha, open by default; metering, fraud, and data controls keep pace with usage.',
             },
           ]}
         />
