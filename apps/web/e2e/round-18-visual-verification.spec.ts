@@ -12,14 +12,10 @@
  */
 
 import { test } from '@playwright/test';
-import { dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 import { writeFileSync, mkdirSync } from 'fs';
 
-const SCREENSHOT_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../docs/visual-verification/web',
-);
+const SCREENSHOT_DIR = resolve(__dirname, '../../../docs/visual-verification/web');
 
 interface RouteCapture {
   route: string;

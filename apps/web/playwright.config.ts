@@ -1,13 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /**
  * Load environment variables from .env.local
+ *
+ * NOTE: apps/web is a CommonJS package (no "type":"module" in package.json), so
+ * Playwright loads this config in a CJS context where `__dirname` is available
+ * directly. Do NOT reintroduce `import.meta.url`/`fileURLToPath` here — that is
+ * ESM-only syntax and makes Playwright's config loader treat the compiled file
+ * as an ES module while it still emits `exports`, throwing "exports is not
+ * defined in ES module scope" and breaking the entire e2e suite.
  */
 const envPath = path.resolve(__dirname, '.env.local');
 if (fs.existsSync(envPath)) {
