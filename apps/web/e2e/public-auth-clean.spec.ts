@@ -36,3 +36,25 @@ test.describe('public auth pages stay quiet', () => {
     await assertNoSignedOutMeCalls(page, '/signup');
   });
 });
+
+test.describe('authenticated routes stay quiet when signed out', () => {
+  // Regression: the project-detail route (/projects/[id]) fired
+  // `/api/projects` on mount unconditionally, emitting 401 console spam for a
+  // signed-out visitor. It must now wait for Clerk auth and skip the fetch when
+  // there is no session, falling back to the local project store.
+  test('project detail does not emit 401s as a signed-out user', async ({ page }) => {
+    const unauthorized: string[] = [];
+    page.on('response', (response) => {
+      if (response.status() === 401 && response.url().includes('/api/')) {
+        unauthorized.push(`${response.status()} ${response.url()}`);
+      }
+    });
+
+    await page.goto('/projects/empty-id');
+    await page.waitForLoadState('networkidle');
+
+    // The not-found / signed-out state still renders its back control.
+    await expect(page.getByTestId('project-detail-back').first()).toBeVisible();
+    expect(unauthorized).toEqual([]);
+  });
+});

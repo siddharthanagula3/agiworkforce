@@ -13,6 +13,7 @@
 
 import React from 'react';
 import { create } from 'zustand';
+import { hasClerkSessionCookie } from '@/lib/clerk-session';
 
 // Minimal user shape retained for backward compatibility with components reading user.email/id.
 export interface User {
@@ -239,16 +240,22 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
 // ---------------------------------------------------------------------------
 
 if (typeof window !== 'undefined') {
-  // Bootstrap using /api/me. Clerk session state is managed by middleware.
-  useBillingStore
-    .getState()
-    .refreshUser()
-    .then(() => {
-      const isInit = useBillingStore.getState().initialized;
-      if (!isInit) {
-        useBillingStore.setState({ isLoading: false, initialized: true });
-      }
-    });
+  if (hasClerkSessionCookie()) {
+    // Signed in — load the real user/subscription/credit state via /api/me.
+    useBillingStore
+      .getState()
+      .refreshUser()
+      .then(() => {
+        const isInit = useBillingStore.getState().initialized;
+        if (!isInit) {
+          useBillingStore.setState({ isLoading: false, initialized: true });
+        }
+      });
+  } else {
+    // Signed out — resolve to the cleared, initialized state without probing
+    // /api/me (which would 401 and log a console error on every page load).
+    useBillingStore.getState()._reset();
+  }
 }
 
 // ---------------------------------------------------------------------------
