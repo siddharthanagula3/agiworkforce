@@ -326,7 +326,6 @@
         "CHANGELOG.md",
         "docs/agent-context/**",
         "docs/engineering/**",
-        "audit/**",
         "scripts/check-*.mjs"
       ],
       "readOnlyContextPaths": ["apps/**", "packages/**", "crates/**", "services/**"],

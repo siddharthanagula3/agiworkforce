@@ -99,27 +99,14 @@ for (const file of listFilesRecursive('tasks/team-status')) {
   }
 }
 
-const requiredArchivePaths = [
-  'docs/archive/2026-06-05-doc-reset/docs/audit/AI_AUDIT_STATE.json',
-  'docs/archive/2026-06-05-doc-reset/docs/audit/r26-parity-r-desktop-screenshots',
-  'docs/archive/2026-06-05-doc-reset/docs/audit/r26-parity-v-web-screenshots',
-  'docs/archive/2026-06-05-doc-reset/docs/screenshots',
-  'docs/archive/2026-06-05-doc-reset/docs/brand-mark-proposals',
-  'docs/archive/2026-06-05-doc-reset/docs/mobile-wireframes-2026-05-18',
-  'docs/archive/2026-06-05-doc-reset/audit/repo-organization/reference-index',
-  'docs/archive/2026-06-05-doc-reset/tasks/research/_evidence.csv',
-  'docs/archive/2026-06-05-doc-reset/tasks/team-status/phase4-baseline-web-errors.txt',
-];
-
-for (const archivePath of requiredArchivePaths) {
-  if (!exists(archivePath)) {
-    errors.push(`Missing archived artifact: ${archivePath}`);
-  }
-}
+// Note: the former docs/archive/2026-06-05-doc-reset/** archived-artifact
+// existence checks were removed — scripts/clean-repo.mjs deletes docs/archive/**
+// under the agi-alpha policy, so requiring those paths is obsolete.
 
 const allowedLiveNonMarkdownPrefixes = [
   'docs/agent-context/',
   'docs/api/',
+  'docs/spec/artifacts/',
   'docs/visual-verification/',
   'audit/desktop-ui-computer-use/screenshots/',
   'audit/demo-readiness/screenshots/',
