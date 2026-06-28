@@ -4,6 +4,9 @@ import { Loader2 } from 'lucide-react';
 const LazyComputerUseSettings = lazy(() =>
   import('../../ComputerUseSettings').then((m) => ({ default: m.ComputerUseSettings })),
 );
+const LazyResearchSettings = lazy(() =>
+  import('../../ResearchSettings').then((m) => ({ default: m.ResearchSettings })),
+);
 const LazySkillMarketplace = lazy(() =>
   import('@/features/skill-marketplace/SkillMarketplace').then((m) => ({
     default: m.SkillMarketplace,
@@ -31,6 +34,11 @@ export function CapabilitiesTab() {
     <Suspense fallback={<Fallback label="Loading capabilities..." />}>
       <>
         <LazyComputerUseSettings />
+        <div className="pt-6 border-t border-border">
+          <Suspense fallback={<Fallback label="Loading research..." />}>
+            <LazyResearchSettings />
+          </Suspense>
+        </div>
         <div className="pt-6 border-t border-border">
           <Suspense fallback={<Fallback label="Loading skills..." />}>
             <LazySkillMarketplace />
