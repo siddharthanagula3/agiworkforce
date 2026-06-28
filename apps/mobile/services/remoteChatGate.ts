@@ -13,8 +13,8 @@ export interface RemoteChatAccessState {
 export const MOBILE_REMOTE_CHAT_DISABLED_MESSAGE =
   'AGI Cloud chat is not enabled in this mobile build yet. Local Mode stays on this device.';
 
-export const MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE =
-  'AGI Cloud chat requires invite access. Local Mode stays available on this device.';
+export const MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE =
+  'Sign in to use AGI Cloud chat. Local Mode stays available on this device.';
 
 export class RemoteChatDisabledError extends Error {
   readonly code = 'MOBILE_REMOTE_CHAT_DISABLED';
@@ -34,7 +34,7 @@ export function getRemoteChatDisabledReason(
   if (!flags.cloudChat) {
     return MOBILE_REMOTE_CHAT_DISABLED_MESSAGE;
   }
-  if (flags.v1LocalOnly && !access.cloudUnlocked) return MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE;
+  if (flags.v1LocalOnly && !access.cloudUnlocked) return MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE;
   return null;
 }
 

@@ -9,7 +9,7 @@
  */
 import {
   MOBILE_REMOTE_CHAT_DISABLED_MESSAGE,
-  MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE,
+  MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE,
   RemoteChatDisabledError,
   assertRemoteChatAllowed,
   getRemoteChatDisabledReason,
@@ -34,13 +34,13 @@ describe('L1 Security - Privacy Boundaries', () => {
     ).toBe(MOBILE_REMOTE_CHAT_DISABLED_MESSAGE);
   });
 
-  test('SECURITY: Cloud chat enabled still requires invite access (no open routing)', () => {
+  test('SECURITY: Cloud chat enabled still requires sign-in (no open routing)', () => {
     expect(
       getRemoteChatDisabledReason(
         { v1LocalOnly: true, cloudChat: true, byokKeys: false },
         { cloudUnlocked: false },
       ),
-    ).toBe(MOBILE_REMOTE_CHAT_INVITE_REQUIRED_MESSAGE);
+    ).toBe(MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE);
   });
 
   test('SECURITY: remote chat allowed only with explicit Cloud unlock', () => {
