@@ -54,24 +54,24 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 
 ### Phase 1 — Public Alpha (web/mobile/desktop)
 
-| ID       | Increment                            | Status | Commit |
-| -------- | ------------------------------------ | ------ | ------ |
-| INC-1.1  | C3 wire execpolicy into loop         | ⬜     | —      |
-| INC-1.2  | C1 Tool trait                        | ⬜     | —      |
-| INC-1.3  | C2 LLM compaction                    | ⬜     | —      |
-| INC-1.4  | C4 streaming exec + recover          | ⬜     | —      |
-| INC-1.5  | Secret-scan at Local→BYOK fork       | ⬜     | —      |
-| INC-1.6  | SkillSpector install gate + rug-pull | ⬜     | —      |
-| INC-1.7  | Mobile TLS pins enforced             | ⬜     | —      |
-| INC-1.8  | Audit-log immutability migration     | ⬜     | —      |
-| INC-1.9  | Marketing-vs-reality copy alignment  | ⬜     | —      |
-| INC-1.10 | Global search                        | ⬜     | —      |
-| INC-1.11 | Settings IA to spec                  | ⬜     | —      |
-| INC-1.12 | Artifacts polish                     | ⬜     | —      |
-| INC-1.13 | Provider robustness port             | ⬜     | —      |
-| INC-1.14 | Website public alpha deploy          | ⬜     | —      |
-| INC-1.15 | Desktop alpha (signed)               | ⬜     | —      |
-| INC-1.16 | Mobile alpha (stores)                | ⬜     | —      |
+| ID       | Increment                            | Status | Commit    |
+| -------- | ------------------------------------ | ------ | --------- |
+| INC-1.1  | C3 wire execpolicy into loop         | ✅     | 4994ff605 |
+| INC-1.2  | C1 Tool trait                        | ⬜     | —         |
+| INC-1.3  | C2 LLM compaction                    | ⬜     | —         |
+| INC-1.4  | C4 streaming exec + recover          | ⬜     | —         |
+| INC-1.5  | Secret-scan at Local→BYOK fork       | ⬜     | —         |
+| INC-1.6  | SkillSpector install gate + rug-pull | ⬜     | —         |
+| INC-1.7  | Mobile TLS pins enforced             | ⬜     | —         |
+| INC-1.8  | Audit-log immutability migration     | ⬜     | —         |
+| INC-1.9  | Marketing-vs-reality copy alignment  | ⬜     | —         |
+| INC-1.10 | Global search                        | ⬜     | —         |
+| INC-1.11 | Settings IA to spec                  | ⬜     | —         |
+| INC-1.12 | Artifacts polish                     | ⬜     | —         |
+| INC-1.13 | Provider robustness port             | ⬜     | —         |
+| INC-1.14 | Website public alpha deploy          | ⬜     | —         |
+| INC-1.15 | Desktop alpha (signed)               | ⬜     | —         |
+| INC-1.16 | Mobile alpha (stores)                | ⬜     | —         |
 
 ### Phase 2 — Production for 1M
 
