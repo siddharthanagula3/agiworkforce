@@ -1,0 +1,160 @@
+/**
+ * DCL-2 — desktop managed-cloud chat persistence seam (wiring unit test).
+ *
+ * Proves:
+ *  - In MANAGED Cloud mode the client is constructed with the ABSOLUTE cloud
+ *    origin (`WEB_APP_URL`), `guardedFetch` as the egress seam, and the desktop
+ *    Clerk session-token getter.
+ *  - In LOCAL and BYOK the seam refuses to instantiate (those boundaries route
+ *    to the Rust runtime, never the shared cloud backend).
+ *  - PA-3's coming-soon gate still protects users: on the desktop runtime
+ *    `setMode('cloud')` is refused, so `privacyMode` never becomes 'managed' and
+ *    the seam stays unreachable through the user-facing path.
+ *
+ * The shared client factory is mocked so we assert the CONFIG the desktop seam
+ * passes (base URL / fetch seam / token getter) without making a network call.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Simulate the real desktop (Tauri) runtime: Local mode is supported, so the
+// PA-3 coming-soon gate in appModeStore.setMode is the one that runs.
+vi.mock('../../lib/runtimeEnvironment', () => ({
+  isTauri: true,
+  isTestEnvironment: true,
+  isDesktopUiDevLocal: false,
+  supportsLocalAppMode: true,
+  isCloudWeb: false,
+}));
+
+const { toastInfo, toastError } = vi.hoisted(() => ({
+  toastInfo: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock('sonner', () => ({
+  toast: { info: toastInfo, error: toastError },
+}));
+
+// Capture the config the desktop seam hands to the shared client factory.
+const { createClientMock } = vi.hoisted(() => ({
+  createClientMock: vi.fn((_config?: unknown) => ({})),
+}));
+vi.mock('@agiworkforce/unified-chat', () => ({
+  createCloudChatPersistenceClient: createClientMock,
+}));
+
+interface CapturedConfig {
+  baseUrl: string;
+  fetchImpl: unknown;
+  decorateHeaders?: unknown;
+  getAuthToken: () => Promise<string | null>;
+}
+
+/** The config the desktop seam handed the shared client factory on its last call. */
+function lastClientConfig(): CapturedConfig {
+  const call = createClientMock.mock.calls.at(-1);
+  if (!call) throw new Error('shared client factory was not called');
+  return call[0] as CapturedConfig;
+}
+
+import {
+  getDesktopCloudChatPersistenceClient,
+  isManagedCloudPersistenceActive,
+} from '../../lib/cloudChatPersistence';
+import { guardedFetch } from '../../lib/egressGuard';
+import { WEB_APP_URL } from '../../api/config';
+import { useAppModeStore } from '../../stores/appModeStore';
+import { useAuthStore } from '../../stores/auth';
+
+const SETTINGS_KEY = 'agiworkforce-settings';
+
+/** Force a BYOK trust boundary by persisting a 'cloud' providerMode. */
+function setByokSettings(): void {
+  window.localStorage.setItem(
+    SETTINGS_KEY,
+    JSON.stringify({ state: { llmConfig: { providerMode: 'cloud' } } }),
+  );
+}
+
+beforeEach(() => {
+  createClientMock.mockClear();
+  toastInfo.mockClear();
+  toastError.mockClear();
+  window.localStorage.removeItem(SETTINGS_KEY);
+  useAppModeStore.setState({ mode: 'local' });
+  useAuthStore.setState({ accessToken: 'desktop-clerk-token', isAuthenticated: true });
+});
+
+afterEach(() => {
+  window.localStorage.removeItem(SETTINGS_KEY);
+});
+
+describe('DCL-2 managed-cloud construction', () => {
+  beforeEach(() => {
+    // Managed = Cloud mode with no BYOK provider keys. We force the post-DCL-4
+    // managed state directly (bypassing the gated setMode) to exercise the seam.
+    useAppModeStore.setState({ mode: 'cloud' });
+  });
+
+  it('constructs the shared client with the absolute origin, guardedFetch, and the token getter', async () => {
+    expect(isManagedCloudPersistenceActive()).toBe(true);
+
+    getDesktopCloudChatPersistenceClient();
+
+    expect(createClientMock).toHaveBeenCalledTimes(1);
+    const config = lastClientConfig();
+
+    // Absolute cloud origin — never a web-relative path on desktop.
+    expect(config.baseUrl).toBe(WEB_APP_URL);
+    expect(config.baseUrl).toMatch(/^https:\/\//);
+    // The egress seam is guardedFetch itself (same module instance).
+    expect(config.fetchImpl).toBe(guardedFetch);
+    // Desktop has no CSRF: no header decoration.
+    expect(config.decorateHeaders).toBeUndefined();
+    // The auth token getter returns the desktop Clerk session token.
+    await expect(config.getAuthToken()).resolves.toBe('desktop-clerk-token');
+  });
+
+  it('auth getter returns null when there is no session token', async () => {
+    useAuthStore.setState({ accessToken: null });
+    getDesktopCloudChatPersistenceClient();
+    const config = lastClientConfig();
+    await expect(config.getAuthToken()).resolves.toBeNull();
+  });
+});
+
+describe('DCL-2 Local + BYOK never instantiate the cloud client', () => {
+  it('refuses in Local mode (routes to the Rust runtime instead)', () => {
+    useAppModeStore.setState({ mode: 'local' });
+    expect(isManagedCloudPersistenceActive()).toBe(false);
+    expect(() => getDesktopCloudChatPersistenceClient()).toThrow(
+      /managed-cloud persistence is unavailable/i,
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses in BYOK mode (user keys go client-direct, not via shared cloud)', () => {
+    setByokSettings();
+    useAppModeStore.setState({ mode: 'cloud' });
+    expect(isManagedCloudPersistenceActive()).toBe(false);
+    expect(() => getDesktopCloudChatPersistenceClient()).toThrow(
+      /managed-cloud persistence is unavailable/i,
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('DCL-2 PA-3 coming-soon gate still protects users', () => {
+  it('setMode(cloud) is refused on the desktop runtime, so the seam stays unreachable', () => {
+    // Real user-facing path: the desktop runtime refuses Cloud mode.
+    useAppModeStore.getState().setMode('cloud');
+
+    expect(useAppModeStore.getState().mode).toBe('local');
+    expect(toastInfo).toHaveBeenCalled();
+    // The seam is therefore never reachable for a user today.
+    expect(isManagedCloudPersistenceActive()).toBe(false);
+    expect(() => getDesktopCloudChatPersistenceClient()).toThrow(
+      /managed-cloud persistence is unavailable/i,
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+});
