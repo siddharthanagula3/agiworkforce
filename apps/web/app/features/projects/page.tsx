@@ -39,7 +39,7 @@ const ANATOMY = [
     points: [
       'Add knowledge files and preview them in place',
       'Remove a file the moment it no longer belongs',
-      'Hosted project files are part of AGI Cloud, opening by invite',
+      'Hosted project files are part of AGI managed cloud (public alpha)',
     ],
   },
 ];

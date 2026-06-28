@@ -32,7 +32,7 @@ export default function SolutionsPage() {
             { href: '/business', label: 'See AGI for Business' },
             { label: 'Join Cloud Waitlist', waitlist: true },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · by invite']}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
 
         <RouteMap
@@ -118,7 +118,7 @@ export default function SolutionsPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Pick a door. The workspace is the same inside."
-          body="Whichever page brings you in, you land in one product with visible routes, your choice of providers, and a cloud that opens by invite."
+          body="Whichever page brings you in, you land in one product with visible routes, your choice of providers, and a managed cloud in public alpha, open by default."
           ctas={[
             { href: '/download', label: 'Download AGI' },
             { href: '/use-cases', label: 'Browse Use Cases' },
