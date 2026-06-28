@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { Cloud, Check, X, Loader2 } from 'lucide-react';
+import { Cloud, X, ExternalLink, Laptop } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -7,296 +6,28 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/Dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { waitlistService } from '../../services/waitlistService';
-import type { InviteCodeError, InviteCodeModalProps } from './types';
+import { openExternalUrl } from '@/utils/navigation';
+import { DESKTOP_CLOUD_COMING_SOON } from '../../constants/cloudAvailability';
+import type { InviteCodeModalProps } from './types';
 
 // ---------------------------------------------------------------------------
-// Helpers
+// InviteCodeModal — honest interim "Cloud coming soon to desktop" surface.
+//
+// PA-3 / DESK-CLOUD-COPY-01: AGI managed cloud is PUBLIC ALPHA on Web & Mobile.
+// Desktop managed-cloud persistence is not implemented yet (the Rust cloud
+// commands fail closed; shared-backend wiring is a fast-follow, runbook
+// DCL-1..4). There is NO invite/waitlist gate — the product is public alpha,
+// not invite-only — so this modal no longer collects invite codes or waitlist
+// emails. It tells the truth: cloud is available on Web & Mobile today, desktop
+// is coming soon, and Local + BYOK work on desktop right now.
+//
+// The exported name and props interface are unchanged so existing callers
+// (App.tsx) keep working; the `source` / `defaultTab` / `onRedeemed` /
+// `onWaitlisted` props are accepted for compatibility and intentionally unused.
 // ---------------------------------------------------------------------------
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function friendlyInviteError(code?: InviteCodeError): string {
-  switch (code) {
-    case 'invalid_code':
-      return "That code doesn't look right. Double-check and try again.";
-    case 'expired':
-      return 'That code has expired. Join the waitlist to get a fresh one.';
-    case 'fully_redeemed':
-      return 'That code is fully redeemed. Try another or join the waitlist.';
-    case 'already_redeemed_by_user':
-      return "You've already used this code. Cloud should be unlocked.";
-    case 'anon_signin_failed':
-      return "Couldn't create your session. Try again in a moment.";
-    case 'rpc_error':
-      return 'Something went wrong on our end. Try again.';
-    default:
-      return 'Something went wrong. Try again or join the waitlist.';
-  }
-}
-
-// ---------------------------------------------------------------------------
-// InviteTab
-// ---------------------------------------------------------------------------
-
-type InviteState = 'idle' | 'loading' | 'success' | 'error';
-
-interface InviteTabProps {
-  source: InviteCodeModalProps['source'];
-  onSwitchToWaitlist: () => void;
-  onRedeemed?: (inviteId: string) => void;
-  onClose: () => void;
-}
-
-function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTabProps) {
-  const [code, setCode] = useState('');
-  const [state, setState] = useState<InviteState>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  const trimmedCode = code.trim().toUpperCase();
-  const canSubmit = trimmedCode.length >= 6 && state !== 'loading';
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-    setError(null);
-    setState('loading');
-
-    const result = await waitlistService.redeemInviteCode(trimmedCode, source);
-
-    if (!result.success) {
-      setError(friendlyInviteError(result.error));
-      setState('error');
-      return;
-    }
-
-    setState('success');
-    if (result.inviteId) onRedeemed?.(result.inviteId);
-    setTimeout(() => {
-      onClose();
-    }, 1500);
-  };
-
-  return (
-    <div className="space-y-5">
-      {state === 'success' ? (
-        <div className="flex flex-col items-center gap-3 py-4 text-center animate-fade-in">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-agent-success">
-            <Check className="h-6 w-6 text-primary-foreground" strokeWidth={2.5} />
-          </div>
-          <p className="text-base font-semibold text-foreground">Cloud unlocked!</p>
-          <p className="text-sm text-muted-foreground">Closing in a moment…</p>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-2">
-            <label
-              htmlFor="invite-code-input"
-              className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-            >
-              Invitation code
-            </label>
-            <Input
-              id="invite-code-input"
-              type="text"
-              autoFocus
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="characters"
-              spellCheck={false}
-              placeholder="XXXXXXXX"
-              value={code}
-              disabled={state === 'loading'}
-              className="font-mono tracking-widest uppercase"
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSubmit();
-              }}
-            />
-            {error && (
-              <p className="text-xs text-destructive" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <Button onClick={() => void handleSubmit()} disabled={!canSubmit} className="w-full">
-            {state === 'loading' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Validating…
-              </>
-            ) : (
-              'Unlock cloud'
-            )}
-          </Button>
-
-          <p className="text-center text-xs text-muted-foreground">
-            Don't have a code?{' '}
-            <button
-              type="button"
-              onClick={onSwitchToWaitlist}
-              className="underline underline-offset-2 hover:text-foreground transition-colors"
-            >
-              Join the waitlist
-            </button>
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// WaitlistTab
-// ---------------------------------------------------------------------------
-
-type WaitlistState = 'idle' | 'loading' | 'success' | 'error';
-
-interface WaitlistTabProps {
-  source: InviteCodeModalProps['source'];
-  onWaitlisted?: (email: string) => void;
-  onClose: () => void;
-}
-
-function WaitlistTab({ source, onWaitlisted, onClose }: WaitlistTabProps) {
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [state, setState] = useState<WaitlistState>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  const isValidEmail = EMAIL_RE.test(email.trim());
-  const canSubmit = isValidEmail && state !== 'loading';
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-    setError(null);
-    setState('loading');
-
-    const result = await waitlistService.joinWaitlist({
-      email: email.trim().toLowerCase(),
-      name: name.trim() || undefined,
-      referralSource: source,
-    });
-
-    if (!result.success) {
-      setError(result.error ?? 'Something went wrong. Try again.');
-      setState('error');
-      return;
-    }
-
-    setState('success');
-    onWaitlisted?.(email.trim().toLowerCase());
-    setTimeout(() => {
-      onClose();
-    }, 2000);
-  };
-
-  return (
-    <div className="space-y-5">
-      {state === 'success' ? (
-        <div className="flex flex-col items-center gap-3 py-4 text-center animate-fade-in">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-agent-success">
-            <Check className="h-6 w-6 text-primary-foreground" strokeWidth={2.5} />
-          </div>
-          <p className="text-base font-semibold text-foreground">You're on the list!</p>
-          <p className="text-sm text-muted-foreground">We'll email when invite codes open.</p>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-2">
-            <label
-              htmlFor="waitlist-email-input"
-              className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-            >
-              Email · required
-            </label>
-            <Input
-              id="waitlist-email-input"
-              type="email"
-              autoFocus
-              autoComplete="email"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="you@example.com"
-              value={email}
-              disabled={state === 'loading'}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSubmit();
-              }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label
-              htmlFor="waitlist-name-input"
-              className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground"
-            >
-              Name · optional
-            </label>
-            <Input
-              id="waitlist-name-input"
-              type="text"
-              autoComplete="name"
-              placeholder="Your name"
-              value={name}
-              disabled={state === 'loading'}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSubmit();
-              }}
-            />
-          </div>
-
-          {error && (
-            <p className="text-xs text-destructive" role="alert">
-              {error}
-            </p>
-          )}
-
-          <Button onClick={() => void handleSubmit()} disabled={!canSubmit} className="w-full">
-            {state === 'loading' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Joining…
-              </>
-            ) : (
-              'Join waitlist'
-            )}
-          </Button>
-
-          <p className="text-center text-xs text-muted-foreground">
-            No account created. Email used only to notify you.
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// InviteCodeModal
-// ---------------------------------------------------------------------------
-
-export function InviteCodeModal({
-  open,
-  onClose,
-  source,
-  defaultTab = 'invite',
-  onRedeemed,
-  onWaitlisted,
-}: InviteCodeModalProps) {
-  const [activeTab, setActiveTab] = useState<'invite' | 'waitlist'>(defaultTab);
-
-  // Reset to defaultTab each time the modal opens.
-  useEffect(() => {
-    if (open) setActiveTab(defaultTab);
-  }, [open, defaultTab]);
-
+export function InviteCodeModal({ open, onClose }: InviteCodeModalProps) {
   return (
     <Dialog
       open={open}
@@ -306,8 +37,8 @@ export function InviteCodeModal({
     >
       <DialogContent
         className="sm:max-w-md w-full gap-0 p-0 overflow-hidden"
-        aria-labelledby="invite-code-modal-title"
-        aria-describedby="invite-code-modal-desc"
+        aria-labelledby="cloud-coming-soon-title"
+        aria-describedby="cloud-coming-soon-desc"
       >
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
@@ -317,19 +48,16 @@ export function InviteCodeModal({
             </div>
             <div className="space-y-1 min-w-0">
               <DialogTitle
-                id="invite-code-modal-title"
+                id="cloud-coming-soon-title"
                 className="text-base font-semibold text-foreground leading-none"
               >
-                Cloud features
+                AGI Cloud
               </DialogTitle>
               <DialogDescription
-                id="invite-code-modal-desc"
+                id="cloud-coming-soon-desc"
                 className="text-xs text-muted-foreground leading-relaxed"
               >
-                Cloud features are gated for v1. Join the waitlist, or enter your invitation code
-                below to unlock cloud routing. AGI will route your requests through one of: BYOK
-                (your provider key), Groq (free tier, US-routed), OpenRouter, or DeepSeek (with
-                explicit data-residency disclosure).
+                {DESKTOP_CLOUD_COMING_SOON}
               </DialogDescription>
             </div>
             <button
@@ -343,31 +71,28 @@ export function InviteCodeModal({
           </div>
         </DialogHeader>
 
-        {/* Tabs */}
-        <div className="px-6 py-5">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'invite' | 'waitlist')}>
-            <TabsList className="w-full mb-5">
-              <TabsTrigger value="invite" className="flex-1">
-                Enter invitation code
-              </TabsTrigger>
-              <TabsTrigger value="waitlist" className="flex-1">
-                Join waitlist
-              </TabsTrigger>
-            </TabsList>
+        {/* Body */}
+        <div className="px-6 py-5 space-y-5">
+          <div className="flex items-start gap-3 rounded-lg border border-border bg-card/60 px-4 py-3">
+            <Laptop className="h-4 w-4 mt-0.5 shrink-0 text-emerald-400" />
+            <p className="text-sm text-muted-foreground">
+              Local Mode and BYOK (your own provider keys) work on the desktop app today — nothing
+              leaves your device unless you choose a provider.
+            </p>
+          </div>
 
-            <TabsContent value="invite">
-              <InviteTab
-                source={source}
-                onSwitchToWaitlist={() => setActiveTab('waitlist')}
-                onRedeemed={onRedeemed}
-                onClose={onClose}
-              />
-            </TabsContent>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => void openExternalUrl('https://agiworkforce.com')}
+          >
+            <ExternalLink className="h-4 w-4" />
+            Use AGI Cloud on the web
+          </Button>
 
-            <TabsContent value="waitlist">
-              <WaitlistTab source={source} onWaitlisted={onWaitlisted} onClose={onClose} />
-            </TabsContent>
-          </Tabs>
+          <p className="text-center text-xs text-muted-foreground">
+            Cloud chats sync across web and mobile. Desktop cloud sync is on the way.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

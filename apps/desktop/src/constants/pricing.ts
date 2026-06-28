@@ -14,7 +14,7 @@ export const STRIPE_PRICE_IDS = {
 
 /**
  * Canonical tier IDs per platform spec:
- *   local-only / byok / hobby / pro (waitlist) / max (waitlist) / enterprise
+ *   local-only / byok / hobby / pro / max / enterprise
  *
  * `free` is retained as an alias for `local-only` to keep legacy persisted
  * subscriptions and feature-gate code working until they are migrated.
@@ -128,7 +128,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    description: 'Released after security audit clears — join the waitlist.',
+    description: 'Released after security audit clears.',
     monthlyPrice: getPlanPriceUsd('pro', 'monthly'),
     yearlyPrice: getPlanPriceUsd('pro', 'yearly'),
     stripePriceId: {
@@ -182,7 +182,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'max',
     name: 'Max',
-    description: 'Released after security audit clears — join the waitlist.',
+    description: 'Released after security audit clears.',
     monthlyPrice: getPlanPriceUsd('max', 'monthly'),
     yearlyPrice: getPlanPriceUsd('max', 'yearly'),
     stripePriceId: {

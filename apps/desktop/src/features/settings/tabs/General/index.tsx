@@ -17,7 +17,7 @@ import { useAuthStore } from '../../../../stores/auth';
 import { useSimpleModeStore } from '../../../../stores/ui';
 import { SUPPORTED_LANGUAGES } from '../../../../i18n';
 import { cn } from '@/lib/utils';
-import { openExternalUrl } from '@/utils/navigation';
+import { DESKTOP_CLOUD_COMING_SOON } from '../../../../constants/cloudAvailability';
 import type { Language, GlobalHotkeyPreferences } from '../../../../stores/settingsStore';
 
 const LazyResourceMonitor = lazy(() =>
@@ -55,7 +55,7 @@ function AppModeSection() {
     <div>
       <h3 className="text-lg font-semibold mb-1">Mode</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Choose local execution or join the Cloud Managed path when hosted compute is enabled.
+        Run models locally or with your own provider keys (BYOK). {DESKTOP_CLOUD_COMING_SOON}
       </p>
       <div className="flex gap-2 mb-4">
         <button
@@ -74,7 +74,7 @@ function AppModeSection() {
         </button>
         <button
           type="button"
-          onClick={() => void openExternalUrl('https://agiworkforce.com/waitlist')}
+          onClick={() => useAppModeStore.getState().setMode('cloud')}
           className={cn(
             'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
             mode === 'cloud'
@@ -96,10 +96,7 @@ function AppModeSection() {
       {isCloud && sessionValidated && !isAuthenticated && (
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
-          <p className="text-sm text-blue-400 flex-1">
-            Sign in to join the {formatChatExecutionModeLabel('cloud_managed')} waitlist and sync
-            conversations when hosted compute is enabled.
-          </p>
+          <p className="text-sm text-blue-400 flex-1">{DESKTOP_CLOUD_COMING_SOON}</p>
           <button
             type="button"
             onClick={() =>
@@ -111,7 +108,7 @@ function AppModeSection() {
             }
             className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50 hover:bg-blue-500/30 transition-colors"
           >
-            Sign in for waitlist
+            Account
           </button>
         </div>
       )}

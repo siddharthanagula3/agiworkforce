@@ -74,7 +74,10 @@ import { invoke, isTauri } from '../../lib/tauri-mock';
 import { useBillingUsageStore, selectBudgetPercentage } from '../../stores/billingUsage';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
-import { openExternalUrl } from '../../utils/navigation';
+import {
+  DESKTOP_CLOUD_COMING_SOON,
+  DESKTOP_CLOUD_COMING_SOON_SHORT,
+} from '../../constants/cloudAvailability';
 
 interface SidebarProps {
   className?: string;
@@ -753,9 +756,22 @@ export function Sidebar({
     setShareDialog({ open: true, conversationId: id, conversationTitle: title });
   }, []);
 
-  const handleTransfer = useCallback((id: string, title: string) => {
-    setTransferTarget({ id, title, localDbId: uuidToDbId(id) });
-  }, []);
+  const handleTransfer = useCallback(
+    (id: string, title: string) => {
+      // PA-3 / DESK-CLOUD-COPY-01: transferring a local conversation "to cloud"
+      // would call transfer_local_to_cloud → cloud_create_conversation, which
+      // fails closed with ERR_CLOUD_NOT_IMPLEMENTED. Desktop managed cloud is
+      // not implemented yet, so block the local→cloud transfer with the honest
+      // interim message instead of opening the dialog. (On desktop the runtime
+      // is always Local mode, so this is the only reachable transfer direction.)
+      if (isTauri && mode === 'local') {
+        toast.info(DESKTOP_CLOUD_COMING_SOON);
+        return;
+      }
+      setTransferTarget({ id, title, localDbId: uuidToDbId(id) });
+    },
+    [mode],
+  );
 
   const handleForkToByok = useCallback((id: string, title: string) => {
     setHandoffTarget({ id, title });
@@ -1393,14 +1409,17 @@ export function Sidebar({
                 type="button"
                 onClick={() => {
                   if (mode === 'local') {
-                    void openExternalUrl('https://agiworkforce.com/waitlist');
+                    // Desktop managed cloud is not implemented yet; setMode
+                    // surfaces the honest "coming soon" toast and never enters
+                    // Cloud mode (PA-3 / DESK-CLOUD-COPY-01).
+                    setMode('cloud');
                     return;
                   }
                   setMode('local');
                 }}
                 title={
                   mode === 'local'
-                    ? 'Join Cloud Managed waitlist'
+                    ? DESKTOP_CLOUD_COMING_SOON_SHORT
                     : `Switch to ${formatChatExecutionModeLabel('local_only')}`
                 }
                 className={cn(
