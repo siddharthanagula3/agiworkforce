@@ -60,9 +60,10 @@ import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
-import { CloudUpgradeWaitlistDialog } from '../components/dialogs/CloudUpgradeWaitlistDialog';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { UpgradePlanDialog } from '../components/dialogs/UpgradePlanDialog';
+import { toast } from 'sonner';
+import { upgradeToProPlan, upgradeToMaxPlan } from '@features/billing/services/stripe-payments';
 import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
@@ -318,7 +319,6 @@ export default function WebChatPage() {
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
   const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
-  const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
 
@@ -446,15 +446,41 @@ export default function WebChatPage() {
     setShowNotifBanner(false);
   }, []);
 
-  const handleOpenCloudWaitlist = useCallback(() => {
-    // Open the richer plan-comparison modal first; its "Join waitlist" CTA
-    // chains to the existing CloudUpgradeWaitlistDialog.
+  // Managed cloud is public-alpha-open: a signed-in user already reaches it.
+  // The upgrade dialog only sells higher hosted capacity, it is not an access
+  // gate, so opening it simply shows the plan comparison (no waitlist).
+  const handleOpenUpgradeDialog = useCallback(() => {
     setUpgradePlanOpen(true);
   }, []);
 
-  const handleOpenWaitlistDirect = useCallback(() => {
-    setCloudWaitlistOpen(true);
-  }, []);
+  // Route the upgrade CTA to the real Stripe checkout flow (same service the
+  // billing dashboard uses). No waitlist email capture.
+  const handleUpgradePlan = useCallback(
+    async (plan: 'pro' | 'max', annual: boolean) => {
+      if (!user) {
+        toast.error('Please sign in to upgrade.');
+        return;
+      }
+      setUpgradePlanOpen(false);
+      const billingPeriod = annual ? 'yearly' : 'monthly';
+      const toastId = toast.loading('Redirecting to checkout...');
+      try {
+        const args = { userId: user.id, userEmail: user.email || '', billingPeriod } as const;
+        if (plan === 'pro') {
+          await upgradeToProPlan(args);
+        } else {
+          await upgradeToMaxPlan(args);
+        }
+        // On success the service redirects to Stripe; the dismiss below only
+        // runs if navigation has not yet replaced the page.
+        toast.dismiss(toastId);
+      } catch (err) {
+        toast.dismiss(toastId);
+        toast.error(err instanceof Error ? err.message : 'Failed to start checkout.');
+      }
+    },
+    [user],
+  );
 
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -829,7 +855,7 @@ export default function WebChatPage() {
       }
 
       if (attachments?.some((file) => !file.type.startsWith('image/'))) {
-        handleOpenCloudWaitlist();
+        handleOpenUpgradeDialog();
         return false;
       }
 
@@ -840,7 +866,7 @@ export default function WebChatPage() {
       displayedConversationId,
       displayedMessages,
       activeModelId,
-      handleOpenCloudWaitlist,
+      handleOpenUpgradeDialog,
       sendContent,
     ],
   );
@@ -1286,7 +1312,7 @@ export default function WebChatPage() {
       const msg = idx >= 0 ? displayedMessages[idx] : undefined;
       if (!msg || msg.role !== 'user') return;
       if (isTrialExhausted) {
-        handleOpenCloudWaitlist();
+        handleOpenUpgradeDialog();
         return;
       }
       // DATA-LOSS FIX: stash the rollback and prefill the composer, but do NOT
@@ -1304,7 +1330,7 @@ export default function WebChatPage() {
       displayedMessages,
       isStreaming,
       isTrialExhausted,
-      handleOpenCloudWaitlist,
+      handleOpenUpgradeDialog,
     ],
   );
 
@@ -1320,7 +1346,7 @@ export default function WebChatPage() {
       const userMsg = displayedMessages[plan.userIndex];
       if (!userMsg) return;
       if (isTrialExhausted) {
-        handleOpenCloudWaitlist();
+        handleOpenUpgradeDialog();
         return;
       }
       const replayDecision = getRegenerateReplayDecision({
@@ -1351,7 +1377,7 @@ export default function WebChatPage() {
       sendMessage,
       activeModelId,
       isTrialExhausted,
-      handleOpenCloudWaitlist,
+      handleOpenUpgradeDialog,
       setChatError,
     ],
   );
@@ -1515,7 +1541,7 @@ export default function WebChatPage() {
             <span>Free plan</span>
             <button
               type="button"
-              onClick={handleOpenCloudWaitlist}
+              onClick={handleOpenUpgradeDialog}
               className="font-medium text-primary hover:underline"
             >
               Upgrade
@@ -1577,7 +1603,7 @@ export default function WebChatPage() {
             Get help
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleOpenCloudWaitlist}>
+          <DropdownMenuItem onClick={handleOpenUpgradeDialog}>
             <CreditCard className="mr-2 h-4 w-4" />
             Upgrade
           </DropdownMenuItem>
@@ -1753,7 +1779,7 @@ export default function WebChatPage() {
                     clearSignal={composerClearSignal}
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                    onUpgradeRequest={handleOpenCloudWaitlist}
+                    onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
@@ -1777,7 +1803,7 @@ export default function WebChatPage() {
                   onReact={handleReactMessage}
                   onRegenerateImage={handleRegenerateImageInPlace}
                   onSendMessage={setComposerPrefill}
-                  onPaywallUpgrade={handleOpenCloudWaitlist}
+                  onPaywallUpgrade={handleOpenUpgradeDialog}
                   onPaywallDismiss={handlePaywallDismiss}
                 />
               </div>
@@ -1803,7 +1829,7 @@ export default function WebChatPage() {
                     onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                    onUpgradeRequest={handleOpenCloudWaitlist}
+                    onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
@@ -1819,13 +1845,12 @@ export default function WebChatPage() {
         <ResearchPanel />
         <ArtifactsPanel />
       </div>
-      <CloudUpgradeWaitlistDialog open={cloudWaitlistOpen} onOpenChange={setCloudWaitlistOpen} />
       <CreateProjectDialog open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
       <UpgradePlanDialog
         open={upgradePlanOpen}
         onOpenChange={setUpgradePlanOpen}
         currentTier={currentTier}
-        onOpenWaitlist={handleOpenWaitlistDirect}
+        onUpgrade={(plan, annual) => void handleUpgradePlan(plan, annual)}
       />
       {/* Project settings dialog — opened from the sidebar project row context menu */}
       {projectForSettings && (

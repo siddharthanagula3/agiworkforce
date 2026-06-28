@@ -18,12 +18,19 @@ import { FREE_TRIAL_PROMPT_LIMIT } from '@/lib/free-trial-config';
 // Types
 // ---------------------------------------------------------------------------
 
+/** Paid tiers a user can purchase from this dialog (free is never a target). */
+type UpgradeTarget = 'pro' | 'max';
+
 interface UpgradePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentTier?: string;
-  /** Called to open the waitlist flow (the existing CloudUpgradeWaitlistDialog). */
-  onOpenWaitlist: () => void;
+  /**
+   * Called when the user picks a paid tier. Wires to the real Stripe checkout
+   * flow on the parent. Managed cloud itself is public-alpha-open; this upgrade
+   * only buys higher hosted capacity, it is not an access gate.
+   */
+  onUpgrade: (plan: UpgradeTarget, annual: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,8 +47,6 @@ interface PlanCard {
   tagline: string;
   features: string[];
   popular?: boolean;
-  /** Tiers that use the waitlist CTA rather than a checkout. */
-  waitlist: boolean;
 }
 
 const PLAN_CARDS: PlanCard[] = [
@@ -51,7 +56,6 @@ const PLAN_CARDS: PlanCard[] = [
     monthlyPrice: BILLING_PLAN_PRICING.free.monthlyPriceUsd,
     yearlyPrice: BILLING_PLAN_PRICING.free.yearlyPriceUsd,
     tagline: `${FREE_TRIAL_PROMPT_LIMIT} free prompts to try AGI in your browser.`,
-    waitlist: false,
     features: [
       'Auto Economy model routing',
       `${FREE_TRIAL_PROMPT_LIMIT} hosted prompts (free cap)`,
@@ -66,7 +70,6 @@ const PLAN_CARDS: PlanCard[] = [
     yearlyPrice: BILLING_PLAN_PRICING.pro.yearlyPriceUsd,
     tagline: 'Higher capacity and advanced routing for professionals.',
     popular: true,
-    waitlist: false,
     features: [
       'Everything in Free',
       'Larger hosted capacity per month',
@@ -82,7 +85,6 @@ const PLAN_CARDS: PlanCard[] = [
     monthlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd,
     yearlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd, // monthly-only
     tagline: 'Highest capacity for intensive multi-agent workloads.',
-    waitlist: false,
     features: [
       'Everything in Pro',
       'Highest hosted capacity',
@@ -134,10 +136,11 @@ interface PlanCardProps {
   plan: PlanCard;
   annual: boolean;
   isCurrent: boolean;
-  onJoinWaitlist: () => void;
+  isUpgrade: boolean;
+  onUpgrade: (plan: UpgradeTarget, annual: boolean) => void;
 }
 
-function PlanCardView({ plan, annual, isCurrent, onJoinWaitlist }: PlanCardProps) {
+function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) {
   const displayPrice =
     annual && plan.monthlyPrice > 0
       ? annualPerMonth(plan.yearlyPrice)
@@ -187,19 +190,17 @@ function PlanCardView({ plan, annual, isCurrent, onJoinWaitlist }: PlanCardProps
           <Button className="h-9 w-full rounded-xl text-sm" variant="outline" disabled>
             Your current plan
           </Button>
-        ) : plan.waitlist ? (
-          <Button className="h-9 w-full rounded-xl text-sm" onClick={onJoinWaitlist}>
-            Join waitlist
+        ) : isUpgrade ? (
+          <Button
+            className="h-9 w-full rounded-xl text-sm"
+            onClick={() => onUpgrade(plan.id as UpgradeTarget, annual)}
+          >
+            Upgrade to {plan.name}
           </Button>
         ) : (
           <Button className="h-9 w-full rounded-xl text-sm" variant="outline" disabled>
-            Current plan
+            Included
           </Button>
-        )}
-        {plan.waitlist && (
-          <p className="mt-2 text-center text-[10px] text-muted-foreground">
-            Cloud plans are invite-only while metering and fraud controls are being proven.
-          </p>
         )}
       </div>
     </div>
@@ -214,7 +215,7 @@ export function UpgradePlanDialog({
   open,
   onOpenChange,
   currentTier = 'free',
-  onOpenWaitlist,
+  onUpgrade,
 }: UpgradePlanDialogProps) {
   const [annual, setAnnual] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -233,16 +234,8 @@ export function UpgradePlanDialog({
     [onOpenChange],
   );
 
-  const handleJoinWaitlist = useCallback(() => {
-    onOpenChange(false);
-    // Small delay so the close animation finishes before the next modal opens
-    window.setTimeout(() => {
-      onOpenWaitlist();
-    }, 150);
-  }, [onOpenChange, onOpenWaitlist]);
-
   // Default view: show the current plan card + the next recommended tier.
-  // Expanded: show all 4 tiers.
+  // Expanded: show all tiers.
   const tierOrder: PlanCardId[] = ['free', 'pro', 'max'];
   const currentIdx = tierOrder.indexOf(currentTier as PlanCardId);
   const safeIdx = currentIdx >= 0 ? currentIdx : 0;
@@ -259,7 +252,7 @@ export function UpgradePlanDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
-          // Cap the height so the expanded 4-tier view never grows past the
+          // Cap the height so the expanded multi-tier view never grows past the
           // viewport (which pushed the title off-screen); scroll inside instead.
           'max-h-[90vh] overflow-hidden border-border/70 bg-background p-0 sm:rounded-2xl',
           expanded ? 'w-[min(98vw,56rem)]' : 'w-[min(94vw,38rem)]',
@@ -269,7 +262,7 @@ export function UpgradePlanDialog({
         <DialogHeader className="sr-only">
           <DialogTitle>Upgrade your plan</DialogTitle>
           <DialogDescription>
-            Compare AGI plans and join the waitlist for hosted cloud access.
+            Compare AGI plans and upgrade for higher managed-cloud capacity.
           </DialogDescription>
         </DialogHeader>
 
@@ -279,7 +272,8 @@ export function UpgradePlanDialog({
             <div>
               <h2 className="text-xl font-semibold text-foreground">Upgrade your plan</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Local and BYOK are always free. Cloud plans open by waitlist invite.
+                Managed cloud is open in public alpha; sign in and start now. Upgrade for higher
+                hosted capacity. Local and BYOK stay free on Desktop and CLI.
               </p>
             </div>
             {/* Billing toggle (only meaningful for paid plans) */}
@@ -327,11 +321,9 @@ export function UpgradePlanDialog({
                 key={plan.id}
                 plan={plan}
                 annual={annual}
-                isCurrent={
-                  plan.id === (currentTier as PlanCardId) ||
-                  (!isTierUpgrade(currentTier, plan.id) && currentTier === plan.id)
-                }
-                onJoinWaitlist={handleJoinWaitlist}
+                isCurrent={plan.id === (currentTier as PlanCardId)}
+                isUpgrade={isTierUpgrade(currentTier, plan.id)}
+                onUpgrade={onUpgrade}
               />
             ))}
           </div>
@@ -351,8 +343,8 @@ export function UpgradePlanDialog({
         {/* Footer note */}
         <div className="border-t border-border/60 px-6 py-4">
           <p className="text-center text-[11px] text-muted-foreground">
-            Hosted compute is account-gated while usage metering, refunds, and provider terms are
-            proven. Local and BYOK always remain free on Desktop and CLI.
+            Managed cloud is in public alpha and open by default. Paid tiers add higher hosted
+            capacity. Local and BYOK always remain free on Desktop and CLI.
           </p>
         </div>
       </DialogContent>

@@ -190,6 +190,37 @@ describe('public marketing copy regressions', () => {
     expect(waitlist).toContain('Team');
   });
 
+  it('chat upgrade dialog presents managed cloud as public-alpha-open, not waitlist-gated (WEB-12 / PA-1)', () => {
+    // The in-chat UpgradePlanDialog previously claimed cloud plans were
+    // "invite-only"/"open by waitlist invite" and rendered a DEAD disabled
+    // "Current plan" button for non-current upgrade tiers (pro/max could not be
+    // purchased). After PA-1 it must wire to real checkout with no waitlist copy.
+    const dialog = readWebFile('features/chat/components/dialogs/UpgradePlanDialog.tsx');
+
+    // No invite/waitlist framing for managed cloud.
+    expect(dialog).not.toContain('open by waitlist invite');
+    expect(dialog).not.toContain('invite-only');
+    expect(dialog).not.toContain('Join waitlist');
+    expect(dialog).not.toContain('account-gated');
+    // No dead disabled "Current plan" CTA on a tier that is not the current one.
+    expect(dialog).not.toContain('Current plan');
+    // Real upgrade CTA + public-alpha truth.
+    expect(dialog).toContain('Upgrade to');
+    expect(dialog).toContain('public alpha');
+    expect(dialog).toContain('onUpgrade');
+  });
+
+  it('retires the cloud-upgrade waitlist email-capture dialog from the chat flow (PA-1)', () => {
+    // The email-capture "Request upgrade access" dialog implied managed cloud
+    // was invite/waitlist-gated. It is removed; the chat page no longer wires it.
+    expect(() =>
+      readWebFile('features/chat/components/dialogs/CloudUpgradeWaitlistDialog.tsx'),
+    ).toThrow();
+    const chatPage = readWebFile('features/chat/pages/WebChatPage.tsx');
+    expect(chatPage).not.toContain('CloudUpgradeWaitlistDialog');
+    expect(chatPage).not.toContain('onOpenWaitlist');
+  });
+
   it('API reference examples use a real catalog model id, not a stale one (WEB-0)', () => {
     // Invariant: model IDs come only from packages/types/src/models.json. The
     // public API docs previously showed "gpt-4" (not in the catalog) — a user
