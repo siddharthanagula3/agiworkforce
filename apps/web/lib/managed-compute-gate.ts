@@ -64,7 +64,7 @@ export function buildManagedComputeGateResponse(
       {
         error: {
           message:
-            'Managed compute is not yet available. Join the waitlist at agiworkforce.com/pricing.',
+            'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
           type: 'managed_compute_private_beta',
           code: 'public_launch_blocked',
         },
