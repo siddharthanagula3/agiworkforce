@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   ChatInterface,
+  CapabilityProvider,
   type ChatHostBridge,
   type ChatInterfaceProps,
 } from '@agiworkforce/unified-chat';
@@ -118,70 +119,72 @@ export function DesktopShellV3({
   );
 
   return (
-    <div
-      className={className}
-      data-v3-shell=""
-      style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}
-    >
-      <Sidebar
-        mode={mode}
-        onNewChat={handleNewChat}
-        onOpenSearch={onOpenSearch}
-        onNavigateView={handleNavigateView}
-        onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
-        accountMenuOpen={accountMenuOpen}
-        onJumpConversation={(id) => {
-          setActivePanel('chat');
-          hostBridge?.selectConversation?.(id);
-        }}
-      />
+    <CapabilityProvider platform="desktop">
+      <div
+        className={className}
+        data-v3-shell=""
+        style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}
+      >
+        <Sidebar
+          mode={mode}
+          onNewChat={handleNewChat}
+          onOpenSearch={onOpenSearch}
+          onNavigateView={handleNavigateView}
+          onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
+          accountMenuOpen={accountMenuOpen}
+          onJumpConversation={(id) => {
+            setActivePanel('chat');
+            hostBridge?.selectConversation?.(id);
+          }}
+        />
 
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
-        {activePanel === 'chat' ? (
-          <ChatInterface
-            runtime={runtime}
-            className="h-full w-full"
-            manageTheme={false}
-            enableShortcuts={true}
-            hostBridge={hostBridge}
-            onModelSelectorClick={onModelSelectorClick}
-            onVoiceClick={onVoiceClick}
-            onNavigateView={handleNavigateView}
-            sidebarSlot={null}
-            emptyStateSlot={<EmptyChat />}
-            enableSearchOverlay={false}
-            showProvenanceFooter={true}
-          />
-        ) : activePanel === 'projects' ? (
-          <AgiWorkProjects />
-        ) : activePanel === 'artifacts' ? (
-          <AgiWorkArtifacts />
-        ) : activePanel === 'scheduled' ? (
-          <AgiWorkScheduled />
-        ) : (
-          <AgiWorkDispatch />
-        )}
-        <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
+        <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
+          {activePanel === 'chat' ? (
+            <ChatInterface
+              runtime={runtime}
+              className="h-full w-full"
+              manageTheme={false}
+              enableShortcuts={true}
+              hostBridge={hostBridge}
+              onModelSelectorClick={onModelSelectorClick}
+              onVoiceClick={onVoiceClick}
+              onNavigateView={handleNavigateView}
+              sidebarSlot={null}
+              emptyStateSlot={<EmptyChat />}
+              enableSearchOverlay={false}
+              showProvenanceFooter={true}
+            />
+          ) : activePanel === 'projects' ? (
+            <AgiWorkProjects />
+          ) : activePanel === 'artifacts' ? (
+            <AgiWorkArtifacts />
+          ) : activePanel === 'scheduled' ? (
+            <AgiWorkScheduled />
+          ) : (
+            <AgiWorkDispatch />
+          )}
+          <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
 
-        {/* Artifact viewer panel — mounts when the artifact store requests it open.
+          {/* Artifact viewer panel — mounts when the artifact store requests it open.
             Shares the same artifactStore instance that AgiWorkArtifacts writes,
             so setActiveArtifact + openPanel in the grid card opens this panel. */}
-        {artifactPanelOpen && (
-          <div
-            data-testid="v3-artifact-panel"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 20,
-              display: 'flex',
-              flexDirection: 'column',
-              background: 'var(--chat-surface-base, #0a0c17)',
-            }}
-          >
-            <ArtifactPanel onClose={closeArtifactPanel} />
-          </div>
-        )}
+          {artifactPanelOpen && (
+            <div
+              data-testid="v3-artifact-panel"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 20,
+                display: 'flex',
+                flexDirection: 'column',
+                background: 'var(--chat-surface-base, #0a0c17)',
+              }}
+            >
+              <ArtifactPanel onClose={closeArtifactPanel} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </CapabilityProvider>
   );
 }

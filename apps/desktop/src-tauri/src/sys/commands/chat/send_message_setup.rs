@@ -627,6 +627,16 @@ async fn resolve_effective_folder(
     }
 }
 
+/// Deterministic ranking for auto-injected skill matches (AC-19 — context
+/// assembly MUST be deterministic). Primary key: relevance score, descending.
+/// Tiebreaker: skill name, ascending — so equal-scoring skills are selected in a
+/// stable, reproducible order independent of the skill manager's iteration order.
+fn cmp_skill_match_desc(a: &(String, String, f64), b: &(String, String, f64)) -> std::cmp::Ordering {
+    b.2.partial_cmp(&a.2)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| a.0.cmp(&b.0))
+}
+
 fn maybe_inject_matching_skills(
     app_handle: &tauri::AppHandle,
     conversation: &Conversation,
@@ -689,7 +699,7 @@ fn maybe_inject_matching_skills(
         })
         .collect();
 
-    skill_matches.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    skill_matches.sort_by(cmp_skill_match_desc); // score desc, name asc (deterministic, AC-19)
     skill_matches.truncate(2);
 
     if skill_matches.is_empty() {
@@ -735,6 +745,46 @@ mod tests {
     use crate::core::llm::llm_router::RoutingStrategy;
     use crate::core::llm::ThinkingParameter;
     use crate::sys::commands::chat::types::ChatSendMessageRequest;
+
+    // Regression guard for CTX-005 / AGI-DOC-0018 BK-11.01 (AC-19): equal-score
+    // skill matches must rank deterministically by name, independent of the skill
+    // manager's iteration order, so auto-injection selects a stable top-2.
+    #[test]
+    fn skill_match_ranking_is_deterministic() {
+        use super::cmp_skill_match_desc;
+        let mk = |name: &str, score: f64| (name.to_string(), String::new(), score);
+        let names = |mut v: Vec<(String, String, f64)>| {
+            v.sort_by(cmp_skill_match_desc);
+            v.into_iter().map(|(n, _, _)| n).collect::<Vec<_>>()
+        };
+        // "middle" (0.9) outranks the tied 0.5 pair; ties break by ascending name.
+        let expected = vec!["middle".to_string(), "alpha".to_string(), "zebra".to_string()];
+        assert_eq!(names(vec![mk("zebra", 0.5), mk("alpha", 0.5), mk("middle", 0.9)]), expected);
+        assert_eq!(names(vec![mk("alpha", 0.5), mk("middle", 0.9), mk("zebra", 0.5)]), expected);
+    }
+
+    // Regression guard for LOCAL-CHAT-NOINVOKE-01 (Critical): a dynamically
+    // discovered local model (absent from the static models.json catalog) must
+    // resolve provider="ollama" to Some(Provider::Ollama) with the model passed
+    // through unchanged. If this returns None, chat_send_message takes the Auto
+    // routing path instead of building the explicit Ollama candidate, and a Local
+    // Ollama send is silently dropped before /api/chat (no response, no error).
+    // The frontend (useChat.ts) forwards `provider` precisely so this resolves.
+    #[test]
+    fn local_ollama_dynamic_model_resolves_to_ollama_provider() {
+        use super::resolve_provider_and_model;
+        use crate::core::llm::Provider;
+        let mut req = minimal_request_with_mode(Some("local"), false);
+        req.provider = Some("ollama".to_string());
+        req.model_override = Some("gemma4:e4b".to_string()); // dynamic, not in catalog
+        let (provider, model) = resolve_provider_and_model(&req);
+        assert!(
+            matches!(provider, Some(Provider::Ollama)),
+            "a Local send forwarding provider='ollama' must resolve to Some(Ollama); \
+             None forces the Auto path and silently drops the Ollama send (LOCAL-CHAT-NOINVOKE-01)"
+        );
+        assert_eq!(model, "gemma4:e4b", "the dynamic model id must pass through unchanged");
+    }
 
     // ---------------------------------------------------------------------------
     // Mode-routing guard tests (trust-boundary: Local/Cloud separation)

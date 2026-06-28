@@ -472,15 +472,24 @@ fn format_agent_validation(agents: &[AgentDefinition]) -> String {
         }
     }
 
-    for (name, matches) in names {
-        if matches.len() > 1 {
-            let paths = matches
-                .iter()
-                .map(|agent| agent.path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            issues.push(format!("duplicate agent name `{name}`: {paths}"));
-        }
+    // Deterministic ordering (AC-19): HashMap iteration is randomized per process,
+    // so emit duplicate-name issues sorted by name. Without this, `agents
+    // validate|doctor|check` prints the duplicate lines in a different order across
+    // runs. The per-agent issues above already iterate the input slice in order, and
+    // each group's `matches` preserves input order, so this makes the output fully
+    // deterministic.
+    let mut duplicate_groups: Vec<(String, Vec<&AgentDefinition>)> = names
+        .into_iter()
+        .filter(|(_, matches)| matches.len() > 1)
+        .collect();
+    duplicate_groups.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, matches) in duplicate_groups {
+        let paths = matches
+            .iter()
+            .map(|agent| agent.path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        issues.push(format!("duplicate agent name `{name}`: {paths}"));
     }
 
     if issues.is_empty() {
@@ -1040,6 +1049,43 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         assert!(out.contains("missing `description`"));
         assert!(out.contains("empty prompt body"));
         assert!(out.contains("unknown permission_mode `wild`"));
+    }
+
+    #[test]
+    fn test_format_agent_validation_orders_duplicate_names_deterministically() {
+        // Regression guard: duplicate-name issues must be emitted in a stable,
+        // name-sorted order — not HashMap iteration order, which is randomized per
+        // process. Input order is zebra-before-alpha; output must still list alpha
+        // before zebra so `agents validate|doctor|check` is reproducible across runs.
+        let mk = |name: &str, path: &str| AgentDefinition {
+            name: name.to_string(),
+            description: "d".to_string(),
+            model: None,
+            tools: None,
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            system_prompt: "Body".to_string(),
+            path: PathBuf::from(path),
+        };
+        let agents = vec![
+            mk("zebra", "/tmp/z1.md"),
+            mk("zebra", "/tmp/z2.md"),
+            mk("alpha", "/tmp/a1.md"),
+            mk("alpha", "/tmp/a2.md"),
+        ];
+
+        let out = format_agent_validation(&agents);
+        let alpha_idx = out
+            .find("duplicate agent name `alpha`")
+            .expect("alpha duplicate line present");
+        let zebra_idx = out
+            .find("duplicate agent name `zebra`")
+            .expect("zebra duplicate line present");
+        assert!(
+            alpha_idx < zebra_idx,
+            "duplicate-name issues must be name-sorted (alpha before zebra) for deterministic CLI output; got:\n{out}"
+        );
     }
 
     #[test]

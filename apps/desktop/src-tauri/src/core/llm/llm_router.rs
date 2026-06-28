@@ -997,6 +997,19 @@ impl LLMRouter {
             order.retain(|c| c.provider != Provider::ManagedCloud);
         }
 
+        // LOCAL-CHAT-NOINVOKE-01 diagnostics: an empty list here (especially with
+        // preferred=Some(Ollama) and local_only=true) means the send is dropped before
+        // any /api/chat. `preferred=Some(Ollama)` + count=0 => has_provider(Ollama) was
+        // false at routing time; `preferred=None` + count=0 => provider was not forwarded
+        // and the Auto path found no local candidate.
+        tracing::info!(
+            target: "chat",
+            candidate_count = order.len(),
+            preferred = ?preferences.provider,
+            local_only = preferences.local_only,
+            "router candidates assembled"
+        );
+
         order
     }
 
@@ -1340,7 +1353,18 @@ impl LLMRouter {
         }
 
         if candidates.is_empty() {
-            return Err(anyhow!("No LLM providers configured"));
+            // LOCAL-CHAT-NOINVOKE-01 defense-in-depth: in Local mode the user DOES
+            // have a provider configured (Ollama), so the generic message is
+            // misleading and hides the real cause (the local runtime is unreachable
+            // or no local model is installed/selected). Surface that specifically so
+            // the failure is diagnosable instead of a silent/confusing drop.
+            let message = if preferences.local_only {
+                "No local model provider is reachable. Ensure your local runtime (e.g. Ollama) is \
+                 running and a local model is installed and selected, then try again."
+            } else {
+                "No LLM providers configured"
+            };
+            return Err(anyhow!(message));
         }
 
         let max_candidates = if config.try_fallback_candidates {
@@ -2090,7 +2114,18 @@ impl LLMRouter {
         }
 
         if candidates.is_empty() {
-            return Err(anyhow!("No LLM providers configured"));
+            // LOCAL-CHAT-NOINVOKE-01 defense-in-depth: in Local mode the user DOES
+            // have a provider configured (Ollama), so the generic message is
+            // misleading and hides the real cause (the local runtime is unreachable
+            // or no local model is installed/selected). Surface that specifically so
+            // the failure is diagnosable instead of a silent/confusing drop.
+            let message = if preferences.local_only {
+                "No local model provider is reachable. Ensure your local runtime (e.g. Ollama) is \
+                 running and a local model is installed and selected, then try again."
+            } else {
+                "No LLM providers configured"
+            };
+            return Err(anyhow!(message));
         }
 
         let max_candidates = if config.try_fallback_candidates {
