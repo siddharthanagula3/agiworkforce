@@ -6,6 +6,16 @@ Last updated: 2026-05-22
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — agi-alpha setup: clean + structure + SSOT reconciliation] — 2026-06-28
+
+Phase A of the `feat/agi-alpha` execution loop. Done-conditions **CLEAN ✅** and **STRUCTURE ✅** met.
+
+- **Repo hygiene:** applied `scripts/clean-repo.mjs` (git-rm'd 932 stale audit/reports/tasks/archive files) and `scripts/migrate-structure.mjs` (CLI exec tools → folder-per-tool `mod.rs`). License gate (`scripts/check-licenses.mjs`) added and wired (INC-0.1 ✅).
+- **Models SSOT fixed:** reconciled `models.curation.json`/`models.synced.json` so the generator reproduces `models.json` with zero data loss; `pnpm sync:models:check` now GREEN (was a pre-existing red). See `MODELS-CURATION-DRIFT-01`.
+- **Bug fix (mobile):** stream-error copy no longer leaks the `[DIAG]` diagnostic string into the user-facing assistant bubble/retry banner; diagnostics are console-only.
+- **Bug fix (web):** tool-timeline running header test updated to the status-phrase behavior.
+- **Committed accumulated multi-surface work** (mobile cloud-mode, web capability provider + neon 0043/0044, desktop Local-mode routing diagnostics + AC-19 deterministic skill ranking, shared capability matrix) in verified per-surface groups.
+
 ## [Unreleased — R27-PARITY phase D, per-image claude parity + v1 cloud-bridge implementation] — 2026-05-23
 
 Round 27 closed the per-image verdict gap left by R26 (7% prior coverage)
