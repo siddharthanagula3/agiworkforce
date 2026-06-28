@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { FolderOpen, MoreHorizontal, Settings2, Pin, PinOff } from 'lucide-react';
 import {
   ProjectHeader,
@@ -91,9 +92,20 @@ export default function ProjectDetailPage() {
 
   // Hydrate the project store from the server so a server-created project (in
   // user_projects) resolves here even when it isn't in this device's local
-  // store yet.
+  // store yet. Gate on Clerk auth: `/api/projects` requires a session, so a
+  // signed-out visit must NOT fire it (otherwise the route emits 401 console
+  // spam — the same signed-out-API-quiet rule enforced by
+  // e2e/public-auth-clean.spec.ts for /login and /signup). Signed-out users
+  // fall back to the local project store, which is the documented behavior.
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const [hydratingProjects, setHydratingProjects] = useState(true);
   useEffect(() => {
+    if (!authLoaded) return; // wait until Clerk resolves auth state
+    if (!isSignedIn) {
+      // No session → skip the authenticated fetch and resolve to local store.
+      setHydratingProjects(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -118,7 +130,7 @@ export default function ProjectDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [setProjects]);
+  }, [setProjects, authLoaded, isSignedIn]);
 
   // Per-project model selection.
   const globalModelId = useChatModelStore((s) => s.selectedModelId);
