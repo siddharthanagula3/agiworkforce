@@ -11,6 +11,8 @@ import {
   Brain,
   Bell,
   Mic,
+  Gauge,
+  Blocks,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,6 +30,7 @@ import {
 export type SettingsNavKey =
   | 'general'
   | 'account'
+  | 'usage'
   | 'appearance'
   | 'privacy'
   | 'models-keys'
@@ -37,7 +40,8 @@ export type SettingsNavKey =
   | 'plugins'
   | 'memory'
   | 'notifications'
-  | 'voice';
+  | 'voice'
+  | 'extensions';
 
 export interface SettingsNavEntry {
   key: SettingsNavKey;
@@ -65,6 +69,12 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
     label: 'Account',
     icon: CreditCard,
     keywords: ['billing', 'subscription', 'plan'],
+  },
+  {
+    key: 'usage',
+    label: 'Usage',
+    icon: Gauge,
+    keywords: ['tokens', 'budget', 'cost', 'limits', 'spend'],
   },
   {
     key: 'appearance',
@@ -98,6 +108,12 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic, keywords: ['speech', 'tts', 'microphone', 'audio'] },
+  {
+    key: 'extensions',
+    label: 'Extensions',
+    icon: Blocks,
+    keywords: ['mcp extension', 'install', 'uninstall', 'enable', 'disable'],
+  },
 ];
 
 export interface SettingsNavGroup {
@@ -109,7 +125,7 @@ export interface SettingsNavGroup {
 
 /** Grouped navigation — the section structure both surfaces render. */
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
-  { keys: ['general', 'account', 'appearance', 'privacy', 'models-keys'] },
+  { keys: ['general', 'account', 'usage', 'appearance', 'privacy', 'models-keys'] },
   { label: 'Tools', keys: ['skills', 'connectors', 'plugins', 'agents', 'memory'] },
-  { label: 'Desktop app', keys: ['notifications', 'voice'] },
+  { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
 ];

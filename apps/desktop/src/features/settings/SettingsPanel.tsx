@@ -49,6 +49,8 @@ import { PluginsTab } from './tabs/Plugins';
 import { NotificationsTab } from './tabs/Notifications';
 import { VoiceTab } from './tabs/Voice';
 import { MemoryTab } from './tabs/Memory';
+import { UsageTab } from './tabs/Usage';
+import { ExtensionsTab } from './tabs/Extensions';
 
 // Canonical settings tab keys — single source of truth in @agiworkforce/ui.
 type CanonicalTab = SettingsNavKey;
@@ -555,6 +557,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         );
       case 'account':
         return <AccountTab />;
+      case 'usage':
+        return <UsageTab />;
       case 'appearance':
         return <AppearanceTab />;
       case 'privacy':
@@ -601,6 +605,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return <VoiceTab />;
       case 'memory':
         return <MemoryTab />;
+      case 'extensions':
+        return <ExtensionsTab />;
       default:
         return null;
     }
