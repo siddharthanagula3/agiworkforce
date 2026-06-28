@@ -64,7 +64,7 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | INC-1.6  | SkillSpector install gate + rug-pull | ⏸      | blocked     |
 | INC-1.7  | Mobile TLS pins enforced             | ⏸      | blocked     |
 | INC-1.8  | Audit-log immutability migration     | ⏸      | partial     |
-| INC-1.9  | Marketing-vs-reality copy alignment  | 🔄     | a412dc512   |
+| INC-1.9  | Marketing-vs-reality copy alignment  | ✅     | 9445468b2   |
 | INC-1.10 | Global search                        | ⏸      | infra-gated |
 | INC-1.11 | Settings IA to spec                  | ⏸      | infra-gated |
 | INC-1.12 | Artifacts polish                     | ⏸      | infra-gated |
@@ -161,7 +161,7 @@ Done-condition progress: **#1 CLEAN ✅** and **#2 STRUCTURE ✅** met.
 
 ### 2026-06-28 — Phase-1 surface increments (web)
 
-- `a412dc512` INC-1.9 (WEB-12, 🔄 partial): homepage AGI Cloud card no longer claims waitlist/invite-only — now "Public alpha — sign in and start, no waitlist" (matches source-of-truth: managed cloud public-alpha-open since 2026-06-27). Regression test added. Remaining: `/waitlist` route copy still says "waitlist-only" — repurposing/removing that route is a product decision (left for owner input, not unilaterally changed).
+- INC-1.9 (WEB-12) ✅ — **site-wide marketing-vs-reality sweep** (commits a412dc512, afedae2e5, 005659ab1, 088ae0a36, 481b72604, a2ed582e8, 83a271cac, eea00af12, 9a0fe9f54, 9445468b2). Corrected the systemic managed-cloud overclaim across ~32 files: homepage, /waitlist (reframed for Team & Enterprise), faq, chrome-extension, press, signup, agi-code, enterprise, providers, memory, desktop, cli, about, status, business, solutions, mobile, use-cases, local, byok, support, download, pricing, help, agi-work, RouteFlow, WaitlistModal — plus functional gate copy (managed-compute-gate, credit-topup, checkout). Managed cloud now correctly presented as **public alpha, open by default**; Team & Enterprise are the genuinely-waitlisted tiers. Trust-boundary statements preserved. Regression guards added in `marketing-copy-regression.test.ts` (12 tests). Left intact (correct): the invite-code redemption component, the Web-MCP beta gate, and internal code comments.
 - `4121eabe6` fix(web): dead `_token` param in both response builders (`stream-transform.ts`, `response-builder.ts`) cleared a latent `noUnusedParameters` typecheck error a fresh `tsc` surfaced (earlier incremental tsbuildinfo had masked it). Web typecheck green.
 - **WEB-1 verified essentially complete**: no Vite/Netlify config artifacts in `apps/web` (no netlify.toml / vite.config / \_redirects); google-veo/imagen are ACTIVE services (imported by media-generation-handler), not dead leftovers; `agi.workforce` brand drift only survives in one dev-demo example string (not header/footer). No action needed.
 
