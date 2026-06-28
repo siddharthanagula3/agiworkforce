@@ -58,9 +58,16 @@ const SURFACES = [
   {
     // Desktop's P0 invariant: pure Local mode must never yield a ManagedCloud
     // routing candidate (apps/desktop/src-tauri/src/core/llm/tests/routing_logic_tests.rs).
-    name: 'desktop',
+    name: 'desktop-routing',
     proof: 'apps/desktop/src-tauri/src/core/llm/tests/routing_logic_tests.rs',
     cmd: ['cargo', ['test', '-p', 'agiworkforce-desktop', '--lib', 'routing_logic_tests']],
+  },
+  {
+    // Desktop's P0 egress gate: a Local session must NEVER sync data to AGI Cloud,
+    // regardless of stored storage preference (derive_cloud_sync_enabled — DESK-6).
+    name: 'desktop-cloud-sync',
+    proof: 'apps/desktop/src-tauri/src/sys/commands/chat/send_message_setup.rs',
+    cmd: ['cargo', ['test', '-p', 'agiworkforce-desktop', '--lib', 'send_message_setup::tests']],
   },
 ];
 
