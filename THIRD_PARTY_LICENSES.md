@@ -74,3 +74,37 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Porting policy
+
+`scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:
+every `## Heading` that declares a `**License**:` line is validated against the
+allowed-license set, and its `**Upstream**:` is checked against the study-only
+denylist. Add a port block here before merging any adapted third-party code.
+
+### Approved donor repositories (porting allowlist)
+
+| Repository   | License           | Use                                                 |
+| ------------ | ----------------- | --------------------------------------------------- |
+| codex-rs     | Apache-2.0        | Runtime: tool trait, compaction, exec-policy wiring |
+| continue     | Apache-2.0        | VS Code surface: IDE host, autocomplete, lazy-apply |
+| opencode     | MIT               | Agent patterns                                      |
+| odysseus     | MIT               | Workspace patterns (provider detect, tool parsing)  |
+| SkillSpector | Apache-2.0        | Skill/plugin/MCP pre-install vetting                |
+| gemini-cli   | Apache-2.0        | Compaction prompt, sandbox profiles                 |
+| supermemory  | MIT (schema only) | Memory data model                                   |
+| LMCache      | Apache-2.0        | Managed-cloud KV-cache (service)                    |
+| liteparse    | Apache-2.0        | On-device document parsing                          |
+| VoxCPM       | Apache-2.0        | Text-to-speech                                      |
+| supervision  | MIT               | Vision utilities (pair with a permissive VLM)       |
+
+### Study-only / forbidden (never ported)
+
+| Source              | Reason                                 |
+| ------------------- | -------------------------------------- |
+| claude-code         | Anthropic proprietary — no license     |
+| crush               | FSL-1.1 — competing-use ban            |
+| auto-code-rover     | SONAR source-available — competing-use |
+| Devon               | AGPL-3.0 — copyleft                    |
+| Ultralytics YOLO    | AGPL-3.0 — use a permissive detector   |
+| init, chat-template | No license — all rights reserved       |
