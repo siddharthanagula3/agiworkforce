@@ -3,8 +3,9 @@
  * Manages database integration for multi-agent chat sessions
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { createCloudChatPersistenceClient } from '@agiworkforce/unified-chat';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useMissionStore, type MissionMessage } from '@shared/stores/mission-control-store';
@@ -59,84 +60,75 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
 
+  // Framework-agnostic cloud persistence client (shared with desktop in DCL-2).
+  // baseUrl '' keeps the web call sites byte-identical to the prior relative
+  // `/api/chat/conversations` requests. CSRF + auth + fetch are the web seams.
+  const client = useMemo(
+    () =>
+      createCloudChatPersistenceClient({
+        baseUrl: '',
+        getAuthToken,
+        decorateHeaders: addCsrfHeaders,
+        fetchImpl: (input, init) => fetch(input, init),
+      }),
+    [],
+  );
+
   // Load session from database
   // Defined before useEffect that depends on it
-  const loadSession = useCallback(async (sid: string) => {
-    setIsLoading(true);
-    setError(null);
+  const loadSession = useCallback(
+    async (sid: string) => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const token = await getAuthToken();
-      const res = await fetch(`/api/chat/conversations/${sid}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      try {
+        const { conversation, messages: messagesData } = await client.getConversation(sid);
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+        // CloudConversation is structurally identical to ChatSession.
+        const session: ChatSession = conversation;
+
+        setCurrentSession(session);
+
+        // Restore messages to mission store
+        if (messagesData.length > 0) {
+          const restoredMessages = messagesData.map((rawMsg) => {
+            const msg = rawMsg as Record<string, unknown>;
+            const md = msg['metadata'] as Record<string, unknown> | undefined;
+            return {
+              id: msg['id'] as string,
+              from: (md?.['from'] as string) || (msg['role'] === 'user' ? 'user' : 'assistant'),
+              type:
+                (md?.['type'] as string) ||
+                ((msg['role'] === 'user' ? 'user' : 'assistant') as
+                  | 'user'
+                  | 'assistant'
+                  | 'system'
+                  | 'employee'
+                  | 'agent'
+                  | 'status'
+                  | 'task_update'
+                  | 'plan'
+                  | 'error'),
+              content: msg['content'] as string,
+              timestamp: new Date((msg['created_at'] as string) ?? Date.now()),
+              metadata: md || {},
+            };
+          });
+
+          useMissionStore.getState().setMessages(restoredMessages as unknown as MissionMessage[]);
+        }
+
+        toast.success('Session loaded');
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to load session';
+        setError(errorMsg);
+        toast.error(errorMsg);
+      } finally {
+        setIsLoading(false);
       }
-
-      const result = (await res.json()) as {
-        conversation: Record<string, unknown>;
-        messages: Record<string, unknown>[];
-      };
-
-      const sd = result.conversation;
-      const session: ChatSession = {
-        id: sd['id'] as string,
-        userId: sd['user_id'] as string,
-        title: (sd['title'] as string) ?? 'Untitled',
-        mode: (sd['mode'] as ChatSession['mode']) || 'chat',
-        createdAt: new Date((sd['created_at'] as string) ?? Date.now()),
-        updatedAt: new Date((sd['updated_at'] as string) ?? Date.now()),
-        metadata: (sd['metadata'] as ChatSession['metadata']) ?? {
-          messageCount: 0,
-          agentsInvolved: [],
-          lastActivity: new Date(),
-        },
-      };
-
-      setCurrentSession(session);
-
-      // Restore messages to mission store
-      const messagesData = result.messages ?? [];
-      if (messagesData.length > 0) {
-        const restoredMessages = messagesData.map((rawMsg) => {
-          const msg = rawMsg as Record<string, unknown>;
-          const md = msg['metadata'] as Record<string, unknown> | undefined;
-          return {
-            id: msg['id'] as string,
-            from: (md?.['from'] as string) || (msg['role'] === 'user' ? 'user' : 'assistant'),
-            type:
-              (md?.['type'] as string) ||
-              ((msg['role'] === 'user' ? 'user' : 'assistant') as
-                | 'user'
-                | 'assistant'
-                | 'system'
-                | 'employee'
-                | 'agent'
-                | 'status'
-                | 'task_update'
-                | 'plan'
-                | 'error'),
-            content: msg['content'] as string,
-            timestamp: new Date((msg['created_at'] as string) ?? Date.now()),
-            metadata: md || {},
-          };
-        });
-
-        useMissionStore.getState().setMessages(restoredMessages as unknown as MissionMessage[]);
-      }
-
-      toast.success('Session loaded');
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to load session';
-      setError(errorMsg);
-      toast.error(errorMsg);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    [client],
+  );
 
   // Save messages to database
   // TODO: Add /api/chat/conversations/[id]/messages/bulk route for batch message upsert.
@@ -183,42 +175,16 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       setError(null);
 
       try {
-        const token = await getAuthToken();
-        const res = await fetch('/api/chat/conversations', {
-          method: 'POST',
-          headers: await addCsrfHeaders({
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          }),
-          body: JSON.stringify({ title, mode }),
-        });
+        const conversation = await client.createConversation({ title, mode });
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
-        }
-
-        const result = (await res.json()) as { conversation: Record<string, unknown> };
-        const d = result.conversation;
-
-        const newSession: ChatSession = {
-          id: d['id'] as string,
-          userId: uid,
-          title: (d['title'] as string) ?? 'Untitled',
-          mode: (d['mode'] as ChatSession['mode']) || 'chat',
-          createdAt: new Date((d['created_at'] as string) ?? Date.now()),
-          updatedAt: new Date((d['updated_at'] as string) ?? Date.now()),
-          metadata: (d['metadata'] as ChatSession['metadata']) ?? {
-            messageCount: 0,
-            agentsInvolved: [],
-            lastActivity: new Date(),
-          },
-        };
+        // Preserve the original behavior: userId comes from the caller, not the
+        // server response (the create endpoint does not echo user_id).
+        const newSession: ChatSession = { ...conversation, userId: uid };
 
         setCurrentSession(newSession);
         toast.success('Chat session created');
 
-        return d['id'] as string;
+        return newSession.id;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to create session';
         setError(errorMsg);
@@ -228,7 +194,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         setIsLoading(false);
       }
     },
-    [mode],
+    [mode, client],
   );
 
   // Update session title
@@ -237,20 +203,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       if (!currentSession) return;
 
       try {
-        const token = await getAuthToken();
-        const res = await fetch(`/api/chat/conversations/${currentSession.id}`, {
-          method: 'PUT',
-          headers: await addCsrfHeaders({
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          }),
-          body: JSON.stringify({ title }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
-        }
+        await client.updateConversationTitle(currentSession.id, title);
 
         setCurrentSession((prev) => (prev ? { ...prev, title, updatedAt: new Date() } : null));
 
@@ -260,25 +213,14 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         toast.error(errorMsg);
       }
     },
-    [currentSession],
+    [currentSession, client],
   );
 
   // Delete session
   const deleteSession = useCallback(
     async (sid: string) => {
       try {
-        const token = await getAuthToken();
-        const res = await fetch(`/api/chat/conversations/${sid}`, {
-          method: 'DELETE',
-          headers: await addCsrfHeaders({
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
-        }
+        await client.deleteConversation(sid);
 
         if (currentSession?.id === sid) {
           setCurrentSession(null);
@@ -291,7 +233,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         throw err;
       }
     },
-    [currentSession],
+    [currentSession, client],
   );
 
   // Toggle auto-save
@@ -304,36 +246,14 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
   const getRecentSessions = useCallback(
     async (_uid: string, _limit = 10): Promise<ChatSession[]> => {
       try {
-        const token = await getAuthToken();
-        const res = await fetch('/api/chat/conversations', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-
-        if (!res.ok) return [];
-
-        const result = (await res.json()) as { conversations: Record<string, unknown>[] };
-        return (result.conversations ?? []).map((rawSession) => {
-          const session = rawSession as Record<string, unknown>;
-          return {
-            id: session['id'] as string,
-            userId: session['user_id'] as string,
-            title: (session['title'] as string) ?? 'Untitled',
-            mode: (session['mode'] as ChatSession['mode']) || 'chat',
-            createdAt: new Date((session['created_at'] as string) ?? Date.now()),
-            updatedAt: new Date((session['updated_at'] as string) ?? Date.now()),
-            metadata: (session['metadata'] as ChatSession['metadata']) ?? {
-              messageCount: 0,
-              agentsInvolved: [],
-              lastActivity: new Date(),
-            },
-          };
-        });
+        // CloudConversation is structurally identical to ChatSession.
+        return await client.listConversations();
       } catch (err) {
         console.error('Failed to get recent sessions:', err);
         return [];
       }
     },
-    [],
+    [client],
   );
 
   // Search sessions

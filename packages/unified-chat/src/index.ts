@@ -11,6 +11,21 @@ export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
 export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
 export { classifyPrompt, buildRoutingDecision, TASK_LABEL } from './lib/promptClassifier';
 export type { ClassifiedTask, ClassificationResult, ClassifyOptions } from './lib/promptClassifier';
+export {
+  createCloudChatPersistenceClient,
+  mapRawConversation,
+} from './lib/cloud-chat-persistence-client';
+export type {
+  CloudChatPersistenceClient,
+  CloudChatPersistenceClientConfig,
+  CloudConversation,
+  CloudConversationMode,
+  CloudConversationMetadata,
+  CloudConversationMessageRaw,
+  CloudConversationWithMessages,
+  CloudChatHeaders,
+  CreateConversationInput,
+} from './lib/cloud-chat-persistence-client';
 
 // Stores — prefixed to avoid collisions with host-app store names
 export { useChatStore } from './stores/chatStore';
