@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/nextjs';
+import { toast } from 'sonner';
 import {
   useChatStore,
   type Message,
@@ -115,8 +116,36 @@ function buildAssistantErrorContent(message: string): string {
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
+const DEFAULT_SAVE_MAX_ATTEMPTS = 3;
+const DEFAULT_SAVE_RETRY_DELAY_MS = 350;
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+interface SaveRetryOptions {
+  /** Total attempts including the first try. Default 3 (1 + 2 retries). */
+  maxAttempts?: number;
+  /** Base backoff between attempts; multiplied by attempt number. Default 350ms. */
+  retryDelayMs?: number;
+}
+
 /**
- * Save a message to the database
+ * Persist a chat message to the database, returning the saved row id.
+ *
+ * Durability contract (P1 silent-data-loss fix): the previous implementation
+ * swallowed every non-OK response and returned null, so a transient 500 /
+ * network blip silently lost the assistant (and sometimes the paired user)
+ * turn on reload — the store does not persist messages. This version:
+ *   - retries transient failures (5xx / network) with backoff, since most
+ *     persistence blips self-heal on a second attempt;
+ *   - THROWS on a hard, non-recoverable failure (any non-retryable 4xx
+ *     INCLUDING 429, or 5xx / network after exhausting retries) so the caller
+ *     surfaces it to the user instead of dropping the turn silently. A 429 here
+ *     means the persist write was rate-limited and the turn is NOT saved — there
+ *     is no automatic re-save, so it is surfaced like any other failure rather
+ *     than swallowed. (Retrying a 429 in-request is futile: the rate-limit
+ *     window outlasts the request, so 429 is not retried, only surfaced.)
+ * The POST route is idempotent on the client-supplied id (ON CONFLICT), so a
+ * retry of an already-committed message cannot create a duplicate.
  */
 async function saveMessageToDb(
   conversationId: string,
@@ -128,45 +157,94 @@ async function saveMessageToDb(
     metadata?: MessageMetadata;
   },
   authToken: string,
-): Promise<{ id: string } | null> {
-  try {
-    const headers = await addCsrfHeaders({
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    });
-    const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        model: message.model,
-        metadata: message.metadata,
-        skipLlm: true, // Flag to save message without triggering LLM call
-      }),
-    });
+  options: SaveRetryOptions = {},
+): Promise<{ id: string }> {
+  const maxAttempts = options.maxAttempts ?? DEFAULT_SAVE_MAX_ATTEMPTS;
+  const retryDelayMs = options.retryDelayMs ?? DEFAULT_SAVE_RETRY_DELAY_MS;
+  let lastError: unknown;
 
-    if (!response.ok) {
-      // A 429 here is a transient rate-limit on a best-effort persistence write: the
-      // message is already rendered and the turn proceeds (we return null and move on),
-      // so surfacing it as a hard error trips the dev error overlay for a non-fatal,
-      // expected condition. Log it as a warning; treat genuine failures as errors.
-      if (response.status === 429) {
-        console.warn('[useChatStream] Message persistence rate-limited (429); chat unaffected');
-      } else {
-        console.error('[useChatStream] Failed to save message to DB:', response.status);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response: Response;
+    try {
+      const headers = await addCsrfHeaders({
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      });
+      response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          model: message.model,
+          metadata: message.metadata,
+          skipLlm: true, // Flag to save message without triggering LLM call
+        }),
+      });
+    } catch (networkError) {
+      // Network-level failure (offline, DNS, connection reset) — transient.
+      lastError = networkError;
+      if (attempt < maxAttempts) {
+        await delay(retryDelayMs * attempt);
+        continue;
       }
-      return null;
+      throw networkError instanceof Error
+        ? networkError
+        : new Error('Network error while saving message');
     }
 
-    const data = await response.json();
-    return data.message || data.userMessage || { id: crypto.randomUUID() };
-  } catch (error) {
-    console.error('[useChatStream] Error saving message to DB:', error);
-    return null;
+    if (response.ok) {
+      const data = await response.json().catch(() => ({}) as Record<string, unknown>);
+      // On a 200 with no body we still know the row was saved; fall back to the
+      // id we sent (the route uses it via coalesce) so the store id stays in
+      // sync — never invent a random id that won't match the DB.
+      return (
+        (data as { message?: { id: string } }).message ||
+        (data as { userMessage?: { id: string } }).userMessage ||
+        (message.id ? { id: message.id } : { id: crypto.randomUUID() })
+      );
+    }
+
+    // A 429 means the persist write was rate-limited, so the turn was NOT saved.
+    // It is not retried (the rate-limit window outlasts the request) — fall
+    // through to the throw below so the caller surfaces it instead of silently
+    // dropping the turn. Logged distinctly for diagnostics.
+    if (response.status === 429) {
+      console.warn('[useChatStream] Message persistence rate-limited (429); turn not saved');
+    }
+
+    // 5xx is transient — retry before giving up.
+    if (response.status >= 500 && attempt < maxAttempts) {
+      lastError = new Error(`Save failed: ${response.status}`);
+      await delay(retryDelayMs * attempt);
+      continue;
+    }
+
+    // Non-retryable 4xx, or a 5xx after exhausting retries: a real failure the
+    // caller must surface so the turn is not silently lost.
+    throw new Error(`Failed to save message to DB: ${response.status}`);
   }
+
+  throw lastError instanceof Error ? lastError : new Error('Failed to save message to DB');
 }
+
+/**
+ * Surface a message-persistence failure to the user instead of dropping the
+ * turn silently. Called from the save callers' catch handlers (a quiet 429
+ * returns null and never reaches here).
+ */
+function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): void {
+  console.error(`[useChatStream] Failed to save ${kind} message:`, error);
+  toast.error(
+    kind === 'assistant'
+      ? "Couldn't save this response — it may not appear after you reload."
+      : "Couldn't save your message — it may not appear after you reload.",
+    { duration: 6000 },
+  );
+}
+
+export { saveMessageToDb, notifyPersistenceFailure };
 
 /**
  * Hook for handling SSE streaming chat with the LLM API
@@ -275,7 +353,7 @@ export function useChatStream(): UseChatStreamReturn {
               updateMessage(userMessageId, { id: saved.id });
             }
           })
-          .catch((err) => console.error('[useChatStream] Failed to save user message:', err));
+          .catch((err) => notifyPersistenceFailure('user', err));
       }
 
       // Create assistant message placeholder
@@ -654,9 +732,7 @@ export function useChatStream(): UseChatStreamReturn {
                       updateMessage(assistantMessageId, { id: saved.id });
                     }
                   })
-                  .catch((err) =>
-                    console.error('[useChatStream] Failed to save assistant message:', err),
-                  );
+                  .catch((err) => notifyPersistenceFailure('assistant', err));
               }
               stopStreaming();
               setLoading(false);
@@ -842,9 +918,7 @@ export function useChatStream(): UseChatStreamReturn {
                 updateMessage(assistantMessageId, { id: saved.id });
               }
             })
-            .catch((err) =>
-              console.error('[useChatStream] Failed to save assistant message:', err),
-            );
+            .catch((err) => notifyPersistenceFailure('assistant', err));
         }
 
         // Ensure streaming is stopped

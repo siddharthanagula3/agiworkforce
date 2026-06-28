@@ -8,7 +8,6 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { reconcileUsage } from '@/lib/assert-quota';
 import type { ProcessedRequest } from './request-processor';
 
 export async function buildNonStreamResponse(
@@ -38,8 +37,6 @@ export async function buildNonStreamResponse(
     provider,
     estimatedCostCents,
     quotaWarningHeader,
-    quotaFeature,
-    isFlagshipRequest,
     usedFallback,
     resolvedTaskType,
     classifierConfidence,
@@ -142,21 +139,11 @@ export async function buildNonStreamResponse(
     logger.warn({ error: trackingError, userId, requestId }, 'Cost tracking failed');
   }
 
-  // Tier-quota counter update (fire-and-forget)
-  if (!freeTrial && llmResponse.totalTokens > 0) {
-    void reconcileUsage({
-      userId,
-      token,
-      actualTokens: llmResponse.totalTokens,
-      feature: quotaFeature,
-      isFlagship: isFlagshipRequest,
-    }).catch((err) => {
-      logger.warn(
-        { userId, requestId, error: err instanceof Error ? err.message : err },
-        '[reconcileUsage] non-stream counter update failed',
-      );
-    });
-  }
+  // BILLING FIX (0044): reconcileUsage/increment_usage was a SECOND, buggy
+  // charge path that added the raw token count to credits_used_cents (a cents
+  // ledger), double-charging on top of the authoritative deduct_credits()
+  // reservation/reconciliation below. Removed — deduct_credits is the single
+  // source of truth for credits_used_cents.
 
   // WEB-13 (audit 2026-05-19): switched from Math.random to a CSPRNG token.
   // chatcmpl-* ids are not secrets but downstream observability tools dedupe

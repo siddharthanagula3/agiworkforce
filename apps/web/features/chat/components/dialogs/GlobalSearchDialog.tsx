@@ -5,7 +5,13 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@shared/ui/dialog';
 import { Input } from '@shared/ui/input';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
@@ -268,6 +274,16 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
       fallback={
         <Dialog open={open} onOpenChange={onOpenChange}>
           <DialogContent className="max-h-[80vh] max-w-3xl p-0">
+            {/* a11y: a Radix DialogContent requires a DialogTitle (and benefits
+                from a DialogDescription) for an accessible name even on the
+                error path. Visually hidden so the centered message stays the
+                only visible content. */}
+            <DialogHeader className="sr-only">
+              <DialogTitle>Search unavailable</DialogTitle>
+              <DialogDescription>
+                Something went wrong. Please close and try again.
+              </DialogDescription>
+            </DialogHeader>
             <div className="flex flex-col items-center justify-center p-8 text-center">
               <Search className="mb-3 h-12 w-12 text-muted-foreground opacity-30" />
               <p className="text-sm font-medium">Search unavailable</p>
@@ -286,6 +302,12 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
               <Search className="h-5 w-5" />
               Search Conversations
             </DialogTitle>
+            {/* a11y: gives Radix DialogContent an aria-describedby target and
+                describes the dialog for assistive tech (silences the Radix
+                "Missing Description" warning). */}
+            <DialogDescription className="sr-only">
+              Search across your conversations and messages.
+            </DialogDescription>
           </DialogHeader>
 
           {/* Search Input */}
@@ -294,6 +316,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  aria-label="Search messages and conversations"
                   placeholder="Search messages and conversations..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}

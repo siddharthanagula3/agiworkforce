@@ -530,7 +530,7 @@ function buildAnthropicContentBlocks(
   });
 }
 
-function mapMessagesToAnthropic(
+export function mapMessagesToAnthropic(
   messages: Array<{
     role: string;
     content: string;
@@ -593,13 +593,18 @@ function mapMessagesToAnthropic(
         contentBlocks.push({ type: 'text', text: msg.content });
       }
       // Convert each tool_call to a tool_use block
-      for (const tc of msg.tool_calls as Array<{
-        id?: string;
-        function?: { name?: string; arguments?: string };
-      }>) {
+      for (const [ti, tc] of (
+        msg.tool_calls as Array<{
+          id?: string;
+          function?: { name?: string; arguments?: string };
+        }>
+      ).entries()) {
         contentBlocks.push({
           type: 'tool_use',
-          id: tc.id || `call_${Date.now()}`,
+          // Deterministic fallback id (AC-19): when an upstream tool call omits
+          // its id, derive a stable, request-unique id from the message + tool
+          // index instead of the wall clock, so identical inputs map identically.
+          id: tc.id || `call_${i}_${ti}`,
           name: tc.function?.name || 'unknown',
           input: tc.function?.arguments
             ? (() => {

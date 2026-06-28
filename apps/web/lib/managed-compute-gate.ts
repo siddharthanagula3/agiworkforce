@@ -25,8 +25,14 @@ function headerValue(request: NextRequest, name: string): string | null {
   return request.headers.get(name);
 }
 
+// Public Alpha (2026-06-27): managed compute is GA/open by default — the
+// private-beta launch gate has been removed. The env var is retained ONLY as an
+// optional kill-switch for incident response: set
+// AGI_MANAGED_COMPUTE_PRIVATE_BETA=0 (or 'false'/'off') to re-gate. Any other
+// value (including unset or '1') keeps managed compute open.
 export function isManagedComputePrivateBetaEnabled(): boolean {
-  return process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] === '1';
+  const raw = process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV]?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }
 
 export function buildManagedComputeGateResponse(
