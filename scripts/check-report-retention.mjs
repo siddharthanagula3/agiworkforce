@@ -56,7 +56,9 @@ function childEntries(relativeRoot) {
 
 for (const reportRoot of reportRoots) {
   if (!exists(reportRoot.path)) {
-    errors.push(`Missing report root: ${reportRoot.path}`);
+    // Report roots are removed by scripts/clean-repo.mjs and treated as disposable
+    // evidence per the agi-alpha policy. When absent there is nothing to retain, so
+    // skip rather than fail; retention rules still apply if the root is recreated.
     continue;
   }
 

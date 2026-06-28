@@ -153,15 +153,16 @@ for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
   errors.push(`Unclassified root file: ${entry.name}`);
 }
 
+// Note: audit/, tasks/, and reports/ are intentionally NOT required. They are
+// removed by scripts/clean-repo.mjs and treated as disposable evidence/triage
+// per the agi-alpha clean-repo policy; durable conclusions live in
+// docs/agent-context/known-flaws.md and docs/current. Do not re-add them here.
 const requiredDirs = [
   'apps',
   'packages',
   'crates',
   'services',
   'docs',
-  'audit',
-  'tasks',
-  'reports',
   'examples',
   'scripts',
   'docs/agent-context',
@@ -171,10 +172,6 @@ for (const dir of requiredDirs) {
   if (!fs.existsSync(path.join(root, dir))) {
     errors.push(`Missing required directory: ${dir}`);
   }
-}
-
-if (!fs.existsSync(path.join(root, 'audit/INDEX.md'))) {
-  errors.push('Missing required audit index: audit/INDEX.md');
 }
 
 for (const staleConfig of ['app.json', 'apps/mobile/app.json']) {

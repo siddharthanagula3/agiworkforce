@@ -16,7 +16,7 @@ import { useTheme } from '@/src/ui/theme';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { getDraft, setDraft, clearDraft } from '@/lib/draftStore';
+import { getDraft, setDraft, clearDraft } from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
 
