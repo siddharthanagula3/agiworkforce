@@ -64,7 +64,7 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 | INC-1.6  | SkillSpector install gate + rug-pull | ⬜     | —         |
 | INC-1.7  | Mobile TLS pins enforced             | ⬜     | —         |
 | INC-1.8  | Audit-log immutability migration     | ⏸      | partial   |
-| INC-1.9  | Marketing-vs-reality copy alignment  | ⬜     | —         |
+| INC-1.9  | Marketing-vs-reality copy alignment  | 🔄     | a412dc512 |
 | INC-1.10 | Global search                        | ⬜     | —         |
 | INC-1.11 | Settings IA to spec                  | ⬜     | —         |
 | INC-1.12 | Artifacts polish                     | ⬜     | —         |
