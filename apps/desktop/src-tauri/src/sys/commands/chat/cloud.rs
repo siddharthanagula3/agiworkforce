@@ -3,6 +3,23 @@
 //! Desktop local chats remain local by default. Shared cloud chat persistence
 //! must go through an explicit Web API boundary and fails closed here until
 //! that contract is implemented.
+//!
+//! DCL-3 — INTENTIONAL ABSENCE (do not "implement" these in Rust).
+//!
+//! Desktop managed-cloud chat persistence is the ONE logical cloud product and is
+//! served through the shared web API boundary, NOT this local Tauri runtime. The
+//! desktop seam lives entirely in TypeScript:
+//!
+//! - client: `packages/unified-chat` `createCloudChatPersistenceClient`.
+//! - wiring: `apps/desktop/src/lib/cloudChatPersistence.ts` (managed-cloud only).
+//! - egress: `apps/desktop/src/lib/egressGuard.ts` `guardedFetch` allows the call
+//!   ONLY in managed mode and BLOCKS it in Local/BYOK.
+//!
+//! These `cloud_*` commands are an orphaned placeholder kept ONLY as a fail-closed
+//! backstop. They have no caller (the TS path never invokes them); adding a caller
+//! here would breach the trust boundary by routing cloud through the local runtime.
+//! If you think you need a Rust cloud command, you do not — wire the TS seam.
+//! Tracked in `docs/strategy/PORTING-TRACKER.md` (DCL-3).
 
 use serde::{Deserialize, Serialize};
 
