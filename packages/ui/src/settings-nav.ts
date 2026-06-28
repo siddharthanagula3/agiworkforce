@@ -15,6 +15,7 @@ import {
   Blocks,
   Terminal,
   Code2,
+  Globe,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -41,6 +42,7 @@ export type SettingsNavKey =
   | 'agents'
   | 'connectors'
   | 'agi-code'
+  | 'agi-in-chrome'
   | 'plugins'
   | 'memory'
   | 'notifications'
@@ -126,6 +128,12 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
     icon: Code2,
     keywords: ['cli', 'claude.md', 'agents.md', 'instructions', 'code agent', 'vs code'],
   },
+  {
+    key: 'agi-in-chrome',
+    label: 'AGI in Chrome',
+    icon: Globe,
+    keywords: ['browser', 'extension', 'bridge', 'native messaging', 'pairing'],
+  },
   { key: 'plugins', label: 'Plugins', icon: Puzzle },
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
@@ -165,7 +173,10 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       'capabilities',
     ],
   },
-  { label: 'Tools', keys: ['connectors', 'agi-code', 'plugins', 'agents', 'memory'] },
+  {
+    label: 'Tools',
+    keys: ['connectors', 'agi-code', 'agi-in-chrome', 'plugins', 'agents', 'memory'],
+  },
   { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
   { label: 'Advanced', keys: ['developer'] },
 ];
