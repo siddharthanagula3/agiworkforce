@@ -114,11 +114,14 @@ function WaitlistDialog({
           </div>
         ) : (
           <>
-            <p className="agi-waitlist-eyebrow">AGI Cloud · private beta</p>
-            <DialogTitle className="agi-waitlist-title">Join the Cloud waitlist</DialogTitle>
+            <p className="agi-waitlist-eyebrow">Team &amp; Enterprise · early access</p>
+            <DialogTitle className="agi-waitlist-title">
+              Request Team &amp; Enterprise access
+            </DialogTitle>
             <DialogDescription className="agi-waitlist-lede">
-              Managed cloud compute is rolling out by invite. Leave your email and we&rsquo;ll
-              notify you when your access opens · no account required.
+              Managed cloud is already open in public alpha — sign in to start. This list is for
+              Team &amp; Enterprise (org seats, SSO, admin controls). Leave your email and
+              we&rsquo;ll reach out as those land · no account required.
             </DialogDescription>
 
             <form onSubmit={handleSubmit} noValidate className="agi-waitlist-form">
