@@ -32,6 +32,7 @@ import {
 export type SettingsNavKey =
   | 'general'
   | 'account'
+  | 'billing'
   | 'usage'
   | 'appearance'
   | 'privacy'
@@ -73,6 +74,12 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
     label: 'Account',
     icon: CreditCard,
     keywords: ['billing', 'subscription', 'plan'],
+  },
+  {
+    key: 'billing',
+    label: 'Billing',
+    icon: CreditCard,
+    keywords: ['subscription', 'plan', 'invoice', 'payment', 'stripe', 'portal'],
   },
   {
     key: 'usage',
@@ -146,7 +153,18 @@ export interface SettingsNavGroup {
 
 /** Grouped navigation — the section structure both surfaces render. */
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
-  { keys: ['general', 'account', 'usage', 'appearance', 'privacy', 'models-keys', 'capabilities'] },
+  {
+    keys: [
+      'general',
+      'account',
+      'billing',
+      'usage',
+      'appearance',
+      'privacy',
+      'models-keys',
+      'capabilities',
+    ],
+  },
   { label: 'Tools', keys: ['connectors', 'agi-code', 'plugins', 'agents', 'memory'] },
   { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
   { label: 'Advanced', keys: ['developer'] },
