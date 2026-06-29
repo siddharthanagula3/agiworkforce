@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -6,7 +6,6 @@ import { ArrowLeft, ChevronRight, Cloud, Cpu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
   useModelInstallStore,
@@ -43,10 +42,6 @@ export default function ModelsScreen() {
   const c = useThemeColors();
   const router = useRouter();
   const pickerRef = useRef<BottomSheet>(null);
-  const [cloudAccessVisible, setCloudAccessVisible] = useState(false);
-  const [cloudAccessDefaultTab, setCloudAccessDefaultTab] = useState<'invite' | 'waitlist'>(
-    'invite',
-  );
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
@@ -70,10 +65,13 @@ export default function ModelsScreen() {
     pickerRef.current?.snapToIndex(0);
   }, []);
 
-  const handleOpenCloudAccess = useCallback((defaultTab: 'invite' | 'waitlist' = 'invite') => {
-    setCloudAccessDefaultTab(defaultTab);
-    setCloudAccessVisible(true);
-  }, []);
+  const handleOpenCloudAccess = useCallback(() => {
+    // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
+    // unlocking Cloud means signing in, not redeeming an invite or joining a
+    // waitlist. Route to Clerk sign-in; ClerkTokenBridge flips cloudUnlocked on
+    // success and cloud models become selectable.
+    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const resolvedLabel = getDisplayName(selectedModel);
   const selectedAutoMode = AUTO_MODES.find((m) => m.id === selectedModel);
@@ -233,12 +231,6 @@ export default function ModelsScreen() {
         sheetRef={pickerRef}
         modelScope={cloudUnlocked ? 'all' : 'local'}
         onOpenCloudAccess={handleOpenCloudAccess}
-      />
-      <InviteCodeModal
-        open={cloudAccessVisible}
-        onClose={() => setCloudAccessVisible(false)}
-        source="other"
-        defaultTab={cloudAccessDefaultTab}
       />
     </SafeAreaView>
   );

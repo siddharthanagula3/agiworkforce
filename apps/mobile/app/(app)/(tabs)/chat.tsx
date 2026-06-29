@@ -23,7 +23,6 @@ import {
   createMessageIdSet,
   findNewAssistantResponse,
 } from '@/src/features/voice/utils/assistantResponse';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -73,10 +72,6 @@ export default function ChatTabScreen() {
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
-  const [cloudAccessVisible, setCloudAccessVisible] = useState(false);
-  const [cloudAccessDefaultTab, setCloudAccessDefaultTab] = useState<'invite' | 'waitlist'>(
-    'waitlist',
-  );
 
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
@@ -193,10 +188,13 @@ export default function ChatTabScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
-  const handleOpenCloudAccess = useCallback((defaultTab: 'invite' | 'waitlist' = 'waitlist') => {
-    setCloudAccessDefaultTab(defaultTab);
-    setCloudAccessVisible(true);
-  }, []);
+  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
+  // signing in IS the entitlement (no invite, no waitlist). Every cloud-gated entry
+  // point routes a signed-out user to Clerk sign-in; ClerkTokenBridge flips
+  // cloudUnlocked on success. Local stays the free, account-less default.
+  const handleOpenCloudAccess = useCallback(() => {
+    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleTapLocalMode = useCallback(() => {
     setAppMode('local');
@@ -204,8 +202,19 @@ export default function ChatTabScreen() {
   }, [setAppMode, setModel]);
 
   const handleTapCloudMode = useCallback(() => {
-    if (!cloudChatAvailable || !cloudUnlocked || !DEFAULT_CLOUD_MODEL_ID) {
-      handleOpenCloudAccess('invite');
+    // Fail closed: if managed cloud chat isn't wired (feature off / no cloud model),
+    // stay in Local rather than dangling a dead toggle.
+    if (!cloudChatAvailable || !DEFAULT_CLOUD_MODEL_ID) {
+      setAppMode('local');
+      return;
+    }
+    // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
+    // the signed-in entitlement IS the gate. No invite code, no waitlist. A not-yet-
+    // unlocked (signed-out) user is routed to Clerk sign-in; signing in flips
+    // cloudUnlocked via ClerkTokenBridge and Cloud becomes usable. Local stays the
+    // free, account-less default.
+    if (!cloudUnlocked) {
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
       return;
     }
     setAppMode('cloud');
@@ -218,15 +227,16 @@ export default function ChatTabScreen() {
     activeMode,
     cloudChatAvailable,
     cloudUnlocked,
-    handleOpenCloudAccess,
     handleOpenModelPicker,
+    router,
     setAppMode,
     setModel,
   ]);
 
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
-      handleOpenCloudAccess('invite');
+      // Connectors are a managed-cloud feature; gate behind sign-in (public alpha).
+      handleOpenCloudAccess();
       return;
     }
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
@@ -481,13 +491,6 @@ export default function ChatTabScreen() {
         visible={voiceModeVisible}
         onClose={handleCloseVoiceMode}
         onSendMessage={handleVoiceSendMessage}
-      />
-
-      <InviteCodeModal
-        open={cloudAccessVisible}
-        onClose={() => setCloudAccessVisible(false)}
-        source="other"
-        defaultTab={cloudAccessDefaultTab}
       />
     </SafeAreaView>
   );
