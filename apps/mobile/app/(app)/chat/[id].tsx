@@ -41,7 +41,6 @@ import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { useWaitlistStore } from '@/src/features/waitlist';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
@@ -347,8 +346,6 @@ export default function ChatScreen() {
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
-  const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
-  const [waitlistDefaultTab, setWaitlistDefaultTab] = useState<'invite' | 'waitlist'>('waitlist');
 
   useEffect(() => {
     if (!conversation) return;
@@ -369,10 +366,14 @@ export default function ChatScreen() {
     }
   }, [cloudUnlocked, conversation, conversationExecutionMode, setAppMode]);
 
-  const handleOpenWaitlist = useCallback((defaultTab: 'invite' | 'waitlist' = 'waitlist') => {
-    setWaitlistDefaultTab(defaultTab);
-    setWaitlistSheetVisible(true);
-  }, []);
+  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
+  // signing in IS the entitlement (no invite, no waitlist). Every cloud-gated
+  // entry point (mode toggle, locked cloud model in the picker, connectors) routes
+  // a signed-out user to Clerk sign-in; ClerkTokenBridge flips cloudUnlocked on
+  // success. Local stays the free, account-less default.
+  const handleOpenCloudSignIn = useCallback(() => {
+    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleModelSelect = useCallback(
     (newModelId: string) => {
@@ -386,18 +387,6 @@ export default function ChatScreen() {
 
       const currentMode = conversationExecutionMode;
       const nextMode = resolveAppMode(newModelId);
-
-      if (nextMode === 'cloud' && !FEATURES.cloudChat) {
-        modelPickerRef.current?.close();
-        if (!cloudUnlocked) setWaitlistSheetVisible(true);
-        else {
-          Alert.alert(
-            'AGI Cloud is not ready on mobile',
-            'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
-          );
-        }
-        return;
-      }
 
       if (currentMode !== nextMode) {
         modelPickerRef.current?.close();
@@ -413,35 +402,17 @@ export default function ChatScreen() {
       useModelStore.getState().setModel(newModelId);
       modelPickerRef.current?.close();
     },
-    [
-      conversationExecutionMode,
-      conversationMessages.length,
-      resolveAppMode,
-      cloudUnlocked,
-      setAppMode,
-    ],
+    [conversationExecutionMode, conversationMessages.length, resolveAppMode, setAppMode],
   );
 
   const handleModeSwitchConfirm = useCallback(async () => {
     const nextModelId = modeSwitchState.pendingModelId;
     if (!nextModelId) return;
 
-    if (modeSwitchState.toMode === 'cloud' && !FEATURES.cloudChat) {
-      setModeSwitchState((s) => ({ ...s, visible: false }));
-      if (!cloudUnlocked) setWaitlistSheetVisible(true);
-      else {
-        Alert.alert(
-          'AGI Cloud is not ready on mobile',
-          'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
-        );
-      }
-      return;
-    }
-
     useModelStore.getState().setModel(nextModelId);
     setAppMode(modeSwitchState.toMode === 'cloud' ? 'cloud' : 'local');
     setModeSwitchState((s) => ({ ...s, visible: false }));
-  }, [modeSwitchState.pendingModelId, modeSwitchState.toMode, cloudUnlocked, setAppMode]);
+  }, [modeSwitchState.pendingModelId, modeSwitchState.toMode, setAppMode]);
 
   const handleModeSwitchCancel = useCallback(() => {
     setModeSwitchState((s) => ({ ...s, visible: false }));
@@ -460,11 +431,11 @@ export default function ChatScreen() {
 
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
-      handleOpenWaitlist('invite');
+      handleOpenCloudSignIn();
       return;
     }
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [handleOpenWaitlist, router]);
+  }, [handleOpenCloudSignIn, router]);
 
   // Attachment handlers lifted from AttachmentButton for AddToChatSheet
   const handleSheetCamera = useCallback(async () => {
@@ -547,8 +518,16 @@ export default function ChatScreen() {
   const [renameText, setRenameText] = useState('');
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleTapCloudMode = useCallback(() => {
-    if (!cloudUnlocked || !DEFAULT_CLOUD_MODEL_ID) {
-      handleOpenWaitlist('invite');
+    // Fail closed: no cloud model wired → stay Local rather than dangle a dead toggle.
+    if (!DEFAULT_CLOUD_MODEL_ID) {
+      setAppMode('local');
+      return;
+    }
+    // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
+    // signing in IS the entitlement (no invite, no waitlist). Route a signed-out user
+    // to Clerk sign-in; ClerkTokenBridge flips cloudUnlocked on success.
+    if (!cloudUnlocked) {
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
       return;
     }
     setAppMode('cloud');
@@ -558,14 +537,7 @@ export default function ChatScreen() {
       return;
     }
     router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-  }, [
-    cloudUnlocked,
-    conversationExecutionMode,
-    handleOpenModelPicker,
-    handleOpenWaitlist,
-    router,
-    setAppMode,
-  ]);
+  }, [cloudUnlocked, conversationExecutionMode, handleOpenModelPicker, router, setAppMode]);
 
   const handleTapLocalMode = useCallback(() => {
     setAppMode('local');
@@ -931,7 +903,7 @@ export default function ChatScreen() {
           onCamera={handleSheetCamera}
           onPhotos={handleSheetPhotos}
           onFile={handleSheetFile}
-          onOpenCloudAccess={handleOpenWaitlist}
+          onOpenCloudAccess={handleOpenCloudSignIn}
           onOpenStyleSelector={handleOpenStyleSelector}
         />
 
@@ -943,7 +915,7 @@ export default function ChatScreen() {
           openSignal={modelPickerOpenSignal}
           modelScope={modelPickerScope}
           onSelect={handleModelSelect}
-          onOpenCloudAccess={handleOpenWaitlist}
+          onOpenCloudAccess={handleOpenCloudSignIn}
         />
 
         {/* Voice conversation full-screen overlay */}
@@ -967,14 +939,6 @@ export default function ChatScreen() {
           requiredTier={paywallError?.requiredTier ?? 'hobby'}
           reason={paywallError?.reason}
           onDismiss={clearPaywallError}
-        />
-
-        {/* Cloud gate modal — shown when user taps locked Cloud in ModeToggle */}
-        <InviteCodeModal
-          open={waitlistSheetVisible}
-          onClose={() => setWaitlistSheetVisible(false)}
-          source="other"
-          defaultTab={waitlistDefaultTab}
         />
 
         {/* Mid-conversation mode-switch confirmation */}
