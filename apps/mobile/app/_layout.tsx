@@ -61,6 +61,12 @@ import '../global.css';
 LogBox.ignoreLogs([
   '[React Native ExecuTorch] No content-length header for ',
   'InteractionManager has been deprecated and will be removed in a future release',
+  // Dev-only noise: these are expected in development builds and ship correctly
+  // (release uses Clerk pk_live). Suppressing the LogBox banner only — the
+  // warnings still print to the Metro console for triage. The banner otherwise
+  // overlaps the bottom composer/CTA, hiding a real control during dev/QA.
+  'Clerk: Clerk has been loaded with development keys',
+  'Ignoring DevTools app debug target',
 ]);
 
 /**
