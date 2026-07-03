@@ -10,16 +10,19 @@
  */
 import { useState } from 'react';
 import { CreditCard } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '../../stores/auth';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 
 export function BillingSettings() {
-  const { subscriptionStatus, currentPeriodEnd, planDisplayName } = useAuthStore((s) => ({
-    subscriptionStatus: s.subscriptionStatus,
-    currentPeriodEnd: s.currentPeriodEnd,
-    planDisplayName: s.planDisplayName,
-  }));
+  const { subscriptionStatus, currentPeriodEnd, planDisplayName } = useAuthStore(
+    useShallow((s) => ({
+      subscriptionStatus: s.subscriptionStatus,
+      currentPeriodEnd: s.currentPeriodEnd,
+      planDisplayName: s.planDisplayName,
+    })),
+  );
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

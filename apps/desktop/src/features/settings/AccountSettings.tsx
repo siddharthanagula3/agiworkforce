@@ -6,6 +6,7 @@
  */
 import { useState } from 'react';
 import { CreditCard, PauseCircle, ArrowDown, XCircle } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/Button';
 import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance } from '../../stores/auth';
@@ -19,12 +20,14 @@ type BillingModal = 'pause' | 'downgrade' | 'cancel' | null;
 
 export function AccountSettings() {
   const accountData = useAccountStore((state) => state.account);
-  const { subscriptionStatus, currentPeriodEnd, planDisplayName, plan } = useAuthStore((s) => ({
-    subscriptionStatus: s.subscriptionStatus,
-    currentPeriodEnd: s.currentPeriodEnd,
-    planDisplayName: s.planDisplayName,
-    plan: s.plan as BillingPlanTier | undefined,
-  }));
+  const { subscriptionStatus, currentPeriodEnd, planDisplayName, plan } = useAuthStore(
+    useShallow((s) => ({
+      subscriptionStatus: s.subscriptionStatus,
+      currentPeriodEnd: s.currentPeriodEnd,
+      planDisplayName: s.planDisplayName,
+      plan: s.plan as BillingPlanTier | undefined,
+    })),
+  );
   const [billingModal, setBillingModal] = useState<BillingModal>(null);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
