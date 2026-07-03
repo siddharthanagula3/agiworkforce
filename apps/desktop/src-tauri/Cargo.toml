@@ -36,6 +36,18 @@ tauri-plugin-process = "2.3.1"
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-updater = { version = "2.10.0", optional = true }
+# Embedded WebDriver server for WebdriverIO E2E testing (https://webdriver.io/docs/desktop-testing/tauri).
+# Cargo has no supported way to gate a *dependency* on cfg(debug_assertions) — only
+# target-family cfgs are allowed there (confirmed: using it emits "will not work as
+# expected" and the crate is linked regardless). So the crate is always a dependency
+# (keeps its permission schema valid for capabilities/default.json in every profile);
+# the plugin is only ever *registered* — and its HTTP server only ever starts — behind
+# #[cfg(debug_assertions)] in lib.rs, which is release-safe.
+tauri-plugin-wdio-webdriver = "1"
+# Companion plugin (distinct crate from the one above) adding browser.tauri.execute()
+# and IPC command mocking to the same @wdio/tauri-service test harness -- same
+# always-a-dependency / debug-only-registration rationale as above.
+tauri-plugin-wdio = "1"
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-window-state = "2.4.1"
@@ -251,7 +263,6 @@ core-foundation = "0.9"
 core-graphics = "0.24"
 objc = "0.2"
 cocoa = "0.25"
-
 
 [features]
 default = ["shell", "updater", "billing", "vad"]

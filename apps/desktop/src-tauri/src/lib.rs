@@ -203,6 +203,9 @@ pub fn run() {
     #[cfg(debug_assertions)]
     {
         builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+        // Companion plugin adding browser.tauri.execute()/mock() to the same
+        // @wdio/tauri-service harness — same debug-only rationale as above.
+        builder = builder.plugin(tauri_plugin_wdio::init());
     }
 
     builder
