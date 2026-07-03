@@ -101,6 +101,7 @@ export function ModeToggle({
           <Cpu size={13} color={mode === 'local' ? selectedTextColor : inactiveTextColor} />
           <Text
             numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
             style={{
               fontSize: 12,
               lineHeight: 14,
@@ -137,6 +138,7 @@ export function ModeToggle({
           <Cloud size={13} color={cloudActive ? selectedTextColor : inactiveTextColor} />
           <Text
             numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
             style={{
               fontSize: 12,
               lineHeight: 14,
