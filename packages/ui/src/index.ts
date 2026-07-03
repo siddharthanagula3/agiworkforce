@@ -16,6 +16,8 @@ export {
   AlertTitle,
   AlertDescription,
   type AlertProps,
+  AccessibleDialog,
+  type AccessibleDialogProps,
   Card,
   CardHeader,
   CardFooter,
