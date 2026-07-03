@@ -313,4 +313,62 @@ describe('TauriRuntime', () => {
 
     expect(events.find((event) => event.type === 'artifact')).toBeUndefined();
   });
+
+  // DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01 regression: `options.attachments`
+  // (real `File` objects held by ChatInput) must be base64-encoded and
+  // forwarded to `chat_send_message` in the shape the Rust `ChatAttachment`
+  // struct expects (`apps/desktop/src-tauri/src/sys/commands/chat/types.rs`)
+  // — previously this was hardcoded to `undefined` regardless of input.
+  it('encodes attachments to base64 and forwards them on chat_send_message', async () => {
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    const textFile = new File(['hello world file contents'], 'notes.txt', {
+      type: 'text/plain',
+    });
+    const imageFile = new File(['fake-png-bytes'], 'screenshot.png', {
+      type: 'image/png',
+    });
+
+    await runtime.sendMessage('frontend-conversation-id', 'What does the file say?', {
+      model: 'tinyllama:latest',
+      provider: 'ollama',
+      attachments: [textFile, imageFile],
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    expect(sendCall).toBeDefined();
+    const request = sendCall?.[1] as { request: Record<string, unknown> };
+    const attachments = request.request['attachments'] as Array<Record<string, unknown>>;
+
+    expect(attachments).toHaveLength(2);
+
+    expect(attachments[0]).toMatchObject({
+      type: 'file',
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+    });
+    expect(attachments[0]?.['id']).toEqual(expect.any(String));
+    expect(attachments[0]?.['content']).toMatch(/^data:text\/plain;base64,/);
+
+    expect(attachments[1]).toMatchObject({
+      type: 'image',
+      name: 'screenshot.png',
+      mimeType: 'image/png',
+    });
+    expect(attachments[1]?.['content']).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it('omits attachments entirely when none were attached', async () => {
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
+      model: 'tinyllama:latest',
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    const request = sendCall?.[1] as { request: Record<string, unknown> };
+    expect(request.request['attachments']).toEqual([]);
+  });
 });

@@ -112,7 +112,7 @@ export interface SendMessageParams {
   content: string;
   model?: string;
   provider?: string;
-  attachments?: FileRef[];
+  attachments?: TauriAttachmentPayload[];
   signal?: AbortSignal;
   /** Forwarded composer controls — the desktop TauriRuntime maps these onto the
    *  chat_send_message request so the toggles stop being inert facade. */
@@ -158,6 +158,32 @@ export interface FileRef {
   url: string;
   mimeType: string;
   size: number;
+}
+
+/**
+ * Wire shape for a single attachment sent to the Tauri backend's
+ * `chat_send_message` command. Mirrors `ChatAttachment` in
+ * `apps/desktop/src-tauri/src/sys/commands/chat/types.rs`
+ * (`#[serde(rename_all = "camelCase")]` with `type` renamed from
+ * `attachment_type`). `File` objects cannot cross the Tauri IPC boundary, so
+ * `TauriRuntime` reads each `File` into a base64 data URL before invoking —
+ * see `TauriRuntime.sendMessage`.
+ *
+ * - `type` must be one of the backend's `valid_types`: only `'image'` routes
+ *   through the vision/multimodal path (`process_multimodal_attachments`);
+ *   everything else (`'file'`) routes through document text extraction
+ *   (`process_document_attachments` / `extract_text_from_attachments`).
+ * - `content` is a full `data:<mime>;base64,<data>` URL — the backend strips
+ *   the `data:` prefix itself before decoding.
+ * - `name` must not contain `/`, `\`, or `..` (backend path-traversal guard).
+ */
+export interface TauriAttachmentPayload {
+  id: string;
+  type: 'image' | 'file' | 'document' | 'code' | 'url';
+  name: string;
+  mimeType?: string;
+  content?: string;
+  path?: string;
 }
 
 export type StreamEvent =

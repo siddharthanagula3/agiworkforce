@@ -376,8 +376,8 @@ export function ChatInterface({
 
   // Handlers — all stable via useCallback
   const handleSend = useCallback(
-    (content: string, agentMode?: string, effort?: string) => {
-      sendMessage(content, agentMode, effort);
+    (content: string, agentMode?: string, effort?: string, attachments?: File[]) => {
+      sendMessage(content, agentMode, effort, attachments);
     },
     [sendMessage],
   );

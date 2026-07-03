@@ -355,7 +355,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   }, [runtime, addMsg]);
 
   const sendMessage = useCallback(
-    (content: string, agentMode?: string, effort?: string) => {
+    (content: string, agentMode?: string, effort?: string, attachments?: File[]) => {
       if (!runtime || isStreamingRef.current) return;
 
       // Route the prompt through the priority send queue first. This is the
@@ -447,6 +447,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           messageHistory,
           ...(agentMode ? { agentMode } : {}),
           ...(effort ? { effort } : {}),
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
