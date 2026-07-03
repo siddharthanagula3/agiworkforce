@@ -1,4 +1,5 @@
 export { Alert, AlertTitle, AlertDescription, type AlertProps } from './Alert';
+export { AccessibleDialog, type AccessibleDialogProps } from './AccessibleDialog';
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './Card';
 export {
   ContextMenu,
