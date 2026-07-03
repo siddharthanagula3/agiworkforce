@@ -87,7 +87,7 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         disabled={disabled}
-        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, sign in required, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}`}
+        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, sign in required, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
         accessibilityRole="button"
         accessibilityHint={
           isLocked
