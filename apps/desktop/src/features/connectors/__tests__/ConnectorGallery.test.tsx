@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/Tooltip';
 vi.mock('@/api/mcp', () => ({
   McpClient: {
     listConnectedProviders: vi.fn(),
+    listTools: vi.fn(),
     oauthStatus: vi.fn(),
     oauthRefresh: vi.fn(),
     oauthStartRaw: vi.fn(),
@@ -36,6 +37,7 @@ describe('ConnectorGallery', () => {
     vi.clearAllMocks();
     resetConnectorsStore();
     vi.mocked(McpClient.listConnectedProviders).mockResolvedValue([]);
+    vi.mocked(McpClient.listTools).mockResolvedValue([]);
     vi.mocked(McpClient.oauthStatus).mockResolvedValue({
       connected: true,
       userInfo: null,
@@ -110,5 +112,65 @@ describe('ConnectorGallery', () => {
       expect(screen.getByRole('button', { name: /back to connectors/i })).toBeInTheDocument();
       expect(screen.getByText(/no live tool schema available/i)).toBeInTheDocument();
     });
+  });
+
+  it('wires real MCP tool discovery into the per-tool permission view (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01)', async () => {
+    vi.mocked(McpClient.listConnectedProviders).mockResolvedValue(['gmail']);
+    // Server name follows the `connector-<id>` convention used by
+    // get_connector_mcp_mapping (apps/desktop-tauri sys/commands/mcp_oauth.rs)
+    // when a connector is actually activated.
+    vi.mocked(McpClient.listTools).mockResolvedValue([
+      {
+        id: 'mcp__connector-gmail__search_emails__',
+        name: 'search_emails',
+        description: 'Search the inbox',
+        server: 'connector-gmail',
+        parameters: [],
+      },
+      {
+        id: 'mcp__connector-gmail__delete_email__',
+        name: 'delete_email',
+        description: 'Delete an email',
+        server: 'connector-gmail',
+        parameters: [],
+      },
+      {
+        id: 'mcp__other-server__unrelated_tool__',
+        name: 'unrelated_tool',
+        description: 'Belongs to a different server',
+        server: 'other-server',
+        parameters: [],
+      },
+    ]);
+
+    render(
+      <TooltipProvider>
+        <ConnectorGallery />
+      </TooltipProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Gmail').length).toBeGreaterThan(0);
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /configure/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('search_emails')).toBeInTheDocument();
+      expect(screen.getByText('delete_email')).toBeInTheDocument();
+    });
+
+    // Tools from an unrelated server must not leak into this connector's view.
+    expect(screen.queryByText('unrelated_tool')).not.toBeInTheDocument();
+    expect(screen.queryByText(/no live tool schema available/i)).not.toBeInTheDocument();
+
+    // The destructive tool (name contains "delete") defaults to Blocked;
+    // the non-destructive one defaults to Needs approval.
+    expect(
+      screen.getByRole('combobox', { name: /permission for delete_email/i }),
+    ).toHaveTextContent(/blocked/i);
+    expect(
+      screen.getByRole('combobox', { name: /permission for search_emails/i }),
+    ).toHaveTextContent(/needs approval/i);
   });
 });

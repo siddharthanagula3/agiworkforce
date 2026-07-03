@@ -159,7 +159,7 @@ impl McpState {
         let config_path = McpServersConfig::default_config_path()
             .map_err(|e| format!("Failed to get config path: {}", e))?;
 
-        let raw_config = if config_path.exists() {
+        let mut raw_config = if config_path.exists() {
             McpServersConfig::from_file(&config_path)
                 .await
                 .map_err(|e| format!("Failed to load MCP config: {}", e))?
@@ -171,6 +171,13 @@ impl McpState {
                 .map_err(|e| format!("Failed to save default config: {}", e))?;
             seed_config
         };
+
+        // Merge in any servers declared in the shared CLI dotfile
+        // (~/.agiworkforce/mcp.json), e.g. added via Settings → Developer's
+        // DotfileSettings.tsx. See McpServersConfig::merge_dotfile_servers
+        // for why this is a real, intentional cross-surface config file and
+        // not dead scaffolding (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01).
+        raw_config.merge_dotfile_servers();
 
         let runtime_config = build_runtime_config(&raw_config).await?;
         *self.config.lock() = raw_config;

@@ -4,9 +4,11 @@
 //! Tauri commands for the frontend to read and write that shared config,
 //! enabling unified settings across all AGI Workforce surfaces.
 
+use crate::sys::commands::mcp::McpState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tauri::State;
 
 /// Mirrors the CLI's `CliConfig` struct for deserialization from TOML.
 /// We intentionally duplicate the shape here rather than sharing the crate,
@@ -176,8 +178,20 @@ pub async fn dotfile_list_mcp_servers() -> Result<serde_json::Value, String> {
 /// Add a server entry to `~/.agiworkforce/mcp.json`.
 ///
 /// Creates the file with a `{ "mcpServers": {} }` skeleton when missing.
+///
+/// After writing, reloads the live MCP client so the new server actually
+/// connects immediately instead of only existing on disk until the next app
+/// restart — fixes DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01, where this
+/// command previously reported success without the server ever being
+/// reachable by the running MCP client (`core::mcp::config::McpServersConfig`,
+/// which never read this file before `merge_dotfile_servers` was added).
 #[tauri::command]
-pub async fn dotfile_add_mcp_server(name: String, config: serde_json::Value) -> Result<(), String> {
+pub async fn dotfile_add_mcp_server(
+    mcp_state: State<'_, McpState>,
+    app: tauri::AppHandle,
+    name: String,
+    config: serde_json::Value,
+) -> Result<(), String> {
     let path = mcp_json_path()?;
 
     // Ensure the directory exists.
@@ -210,12 +224,22 @@ pub async fn dotfile_add_mcp_server(name: String, config: serde_json::Value) -> 
     let output = serde_json::to_string_pretty(&root)
         .map_err(|e| format!("Failed to serialize mcp.json: {}", e))?;
     std::fs::write(&path, output).map_err(|e| format!("Failed to write mcp.json: {}", e))?;
+
+    mcp_state.reload_active_config(&app).await?;
     Ok(())
 }
 
 /// Remove a server from `~/.agiworkforce/mcp.json`.
+///
+/// After removing, reloads the live MCP client so a server that was only
+/// declared in the dotfile is disconnected immediately (see
+/// `dotfile_add_mcp_server` for why this reload is necessary).
 #[tauri::command]
-pub async fn dotfile_remove_mcp_server(name: String) -> Result<(), String> {
+pub async fn dotfile_remove_mcp_server(
+    mcp_state: State<'_, McpState>,
+    app: tauri::AppHandle,
+    name: String,
+) -> Result<(), String> {
     let path = mcp_json_path()?;
     if !path.exists() {
         return Ok(());
@@ -233,6 +257,8 @@ pub async fn dotfile_remove_mcp_server(name: String) -> Result<(), String> {
     let output = serde_json::to_string_pretty(&root)
         .map_err(|e| format!("Failed to serialize mcp.json: {}", e))?;
     std::fs::write(&path, output).map_err(|e| format!("Failed to write mcp.json: {}", e))?;
+
+    mcp_state.reload_active_config(&app).await?;
     Ok(())
 }
 

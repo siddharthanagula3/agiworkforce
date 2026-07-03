@@ -341,6 +341,115 @@ impl McpServersConfig {
         Ok(app_data.join(GLOBAL_MCP_CONFIG_FILENAME))
     }
 
+    /// Returns the path to the shared CLI dotfile MCP config,
+    /// `~/.agiworkforce/mcp.json`, or `None` if the home directory can't be
+    /// resolved.
+    ///
+    /// This is a genuinely separate, intentional cross-surface config file —
+    /// not a duplicate of [`Self::default_config_path`]. `apps/cli` reads it
+    /// directly as one of its default global MCP config locations
+    /// (`apps/cli/src/mcp/mod.rs::load_default_mcp_configs`), `agi init`
+    /// creates it by default (`apps/cli/src/init.rs`), and
+    /// `apps/cli/src/sync.rs` treats it as one of the files synced across
+    /// surfaces. See [`Self::merge_dotfile_servers`] for why the desktop MCP
+    /// client also needs to honor it.
+    pub fn dotfile_config_path() -> Option<PathBuf> {
+        let home = dirs::home_dir()?;
+        Some(home.join(".agiworkforce").join("mcp.json"))
+    }
+
+    /// Merge any servers declared in the shared CLI dotfile
+    /// (`~/.agiworkforce/mcp.json`, see [`Self::dotfile_config_path`]) into
+    /// `self`, without overwriting a server name already defined in the
+    /// primary desktop config (primary config wins on name collisions).
+    ///
+    /// Fixes DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01: Settings → Developer
+    /// (`DotfileSettings.tsx`) writes servers to this dotfile via the
+    /// `dotfile_add_mcp_server` Tauri command, which used to show a success
+    /// toast even though the live MCP client (this struct, loaded from
+    /// [`Self::default_config_path`]) never read the file — the server was
+    /// persisted but never actually connected or exposed tools. Call this on
+    /// every config (re)load so dotfile-declared servers behave the same as
+    /// servers added through the "Advanced MCP configuration" UI
+    /// (`ConnectorGallery.tsx` → `mcp_update_config`).
+    ///
+    /// Best-effort: any I/O or parse failure is logged and treated as "no
+    /// dotfile servers to merge" rather than propagated, since this file is
+    /// optional and mainly written by other surfaces (CLI, this app's own
+    /// Settings → Developer panel).
+    pub fn merge_dotfile_servers(&mut self) {
+        let Some(path) = Self::dotfile_config_path() else {
+            return;
+        };
+        if !path.exists() {
+            return;
+        }
+
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) => {
+                tracing::warn!(
+                    "[MCP] Failed to read dotfile MCP config '{}': {}",
+                    path.display(),
+                    error
+                );
+                return;
+            }
+        };
+
+        let parsed: serde_json::Value = match serde_json::from_str(&content) {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(
+                    "[MCP] Failed to parse dotfile MCP config '{}': {}",
+                    path.display(),
+                    error
+                );
+                return;
+            }
+        };
+
+        let Some(servers) = parsed.get("mcpServers").and_then(|v| v.as_object()) else {
+            return;
+        };
+
+        let mut merged_count = 0usize;
+        for (name, value) in servers {
+            if self.mcp_servers.contains_key(name) {
+                // Primary config wins on name collisions.
+                continue;
+            }
+
+            match serde_json::from_value::<McpServerConfig>(value.clone()) {
+                Ok(server_config) => {
+                    if server_config.command.is_empty() && server_config.transport.is_none() {
+                        tracing::warn!(
+                            "[MCP] Skipping dotfile MCP server '{}': no command or transport configured",
+                            name
+                        );
+                        continue;
+                    }
+                    self.mcp_servers.insert(name.clone(), server_config);
+                    merged_count += 1;
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        "[MCP] Skipping invalid dotfile MCP server '{}': {}",
+                        name,
+                        error
+                    );
+                }
+            }
+        }
+
+        if merged_count > 0 {
+            tracing::info!(
+                "[MCP] Merged {} server(s) from ~/.agiworkforce/mcp.json",
+                merged_count
+            );
+        }
+    }
+
     pub fn default() -> Self {
         serde_json::from_str(DEFAULT_CONFIG_JSON).unwrap_or_else(|error| {
             tracing::error!(
@@ -1542,7 +1651,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // llm-guardrail-allow: pre-existing reasoned skip predating this change and unrelated
+    // to DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01 — not touched or introduced here.
     fn test_default_config() {
         let config = McpServersConfig::default();
         assert!(config.mcp_servers.contains_key("filesystem"));
@@ -1915,5 +2025,116 @@ mod tests {
         let json = r#"{"name":"No-Magic Bundle","version":"0.1.0","servers":{}}"#;
         let bundle: McpBundle = serde_json::from_str(json).unwrap();
         assert_eq!(bundle.magic, "mcpb/1");
+    }
+
+    // ── merge_dotfile_servers (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01) ──
+
+    /// Guards tests that mutate the process-global `HOME` env var so they
+    /// don't race each other when `cargo test` runs this module's tests in
+    /// parallel (same pattern as
+    /// `integrations::native_messaging::manifest::tests::ENV_LOCK`).
+    static DOTFILE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Runs `body` with `HOME` pointed at a fresh tempdir, restoring the
+    /// original `HOME` afterwards.
+    fn with_temp_home<F: FnOnce(&std::path::Path)>(body: F) {
+        let _guard = DOTFILE_ENV_LOCK.lock().unwrap();
+        let original = std::env::var("HOME").ok();
+        let temp = tempfile::tempdir().expect("failed to create tempdir");
+        std::env::set_var("HOME", temp.path());
+
+        body(temp.path());
+
+        match original {
+            Some(val) => std::env::set_var("HOME", val),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+
+    fn write_dotfile_mcp_json(home: &std::path::Path, json: &str) {
+        let dir = home.join(".agiworkforce");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("mcp.json"), json).unwrap();
+    }
+
+    #[test]
+    fn merge_dotfile_servers_adds_new_server() {
+        with_temp_home(|home| {
+            write_dotfile_mcp_json(
+                home,
+                r#"{"mcpServers":{"my-tool":{"command":"npx","args":["-y","some-pkg"]}}}"#,
+            );
+
+            let mut config = McpServersConfig {
+                mcp_servers: HashMap::new(),
+            };
+            config.merge_dotfile_servers();
+
+            let server = config
+                .mcp_servers
+                .get("my-tool")
+                .expect("dotfile server should be merged in");
+            assert_eq!(server.command, "npx");
+            assert_eq!(server.args, vec!["-y".to_string(), "some-pkg".to_string()]);
+            assert!(server.enabled, "servers default to enabled");
+        });
+    }
+
+    #[test]
+    fn merge_dotfile_servers_primary_config_wins_on_name_collision() {
+        with_temp_home(|home| {
+            write_dotfile_mcp_json(
+                home,
+                r#"{"mcpServers":{"shared":{"command":"dotfile-cmd","args":[]}}}"#,
+            );
+
+            let mut mcp_servers = HashMap::new();
+            mcp_servers.insert(
+                "shared".to_string(),
+                McpServerConfig {
+                    command: "primary-cmd".to_string(),
+                    args: vec![],
+                    env: HashMap::new(),
+                    enabled: true,
+                    transport: None,
+                },
+            );
+            let mut config = McpServersConfig { mcp_servers };
+            config.merge_dotfile_servers();
+
+            assert_eq!(
+                config.mcp_servers.get("shared").unwrap().command,
+                "primary-cmd",
+                "primary config must win on name collisions"
+            );
+        });
+    }
+
+    #[test]
+    fn merge_dotfile_servers_skips_entry_without_command_or_transport() {
+        with_temp_home(|home| {
+            write_dotfile_mcp_json(home, r#"{"mcpServers":{"broken":{"env":{}}}}"#);
+
+            let mut config = McpServersConfig {
+                mcp_servers: HashMap::new(),
+            };
+            config.merge_dotfile_servers();
+
+            assert!(
+                !config.mcp_servers.contains_key("broken"),
+                "entries with no command or transport must not be merged in"
+            );
+        });
+    }
+
+    #[test]
+    fn merge_dotfile_servers_noop_when_file_missing() {
+        with_temp_home(|_home| {
+            let mut config = McpServersConfig {
+                mcp_servers: HashMap::new(),
+            };
+            config.merge_dotfile_servers();
+            assert!(config.mcp_servers.is_empty());
+        });
     }
 }
