@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { View, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -82,6 +83,7 @@ export function RecordingOverlay({
   onSend,
 }: RecordingOverlayProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const insets = useSafeAreaInsets();
 
   const handleCancel = () => {
     if (hapticsEnabled) {
@@ -103,8 +105,23 @@ export function RecordingOverlay({
     <Animated.View
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(150)}
-      className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-3"
-      style={{ backgroundColor: 'rgba(15, 15, 15, 0.95)' }}
+      className="absolute inset-x-0 bottom-0 px-4 pt-3"
+      style={{
+        backgroundColor: 'rgba(15, 15, 15, 0.95)',
+        // Fixed pb-4 (16dp) put the Cancel/Send buttons partly under the home
+        // indicator on devices with a safe-area inset — this overlay is
+        // absolutely positioned flush to the composer's outer edge, so it
+        // needs its own inset-aware bottom padding rather than relying on
+        // the parent's paddingBottom (which absolute positioning ignores).
+        paddingBottom: Math.max(insets.bottom + 8, 16),
+        // This is declared before its composer-row siblings in ChatInput.tsx,
+        // so without an explicit stacking order those siblings render on top
+        // of it (RN's default is JSX declaration order, not visual overlay
+        // intent) — only the portion below the composer's own bottom edge
+        // was visible, hiding the "Recording"/timer/waveform rows entirely.
+        zIndex: 50,
+        elevation: 50,
+      }}
       accessibilityRole="alert"
       accessibilityLabel="Recording in progress"
     >
