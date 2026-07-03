@@ -290,4 +290,179 @@ describe('createCloudChatPersistenceClient', () => {
       await expect(client.deleteConversation('id')).rejects.toThrow('denied');
     });
   });
+
+  // Mirrors apps/web/lib/hooks/useChatStream.ts's saveMessageToDb() request
+  // shape and retry/error contract exactly (see docs/strategy/PUBLIC-ALPHA-CUTOVER.md
+  // DCL-1 correction note). Uses retryDelayMs: 0 so retry tests stay fast.
+  describe('saveMessage', () => {
+    it('POSTs to /api/chat/conversations/:id/messages with the message body and skipLlm:true', async () => {
+      const fetchImpl = mockFetch({ message: { id: 'm1' } });
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      const result = await client.saveMessage('conv_1', {
+        id: 'client-id',
+        role: 'user',
+        content: 'hi',
+        model: 'auto',
+        metadata: { foo: 'bar' },
+      });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      const { url, init } = nthCall(fetchImpl);
+      expect(url).toBe('/api/chat/conversations/conv_1/messages');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({
+        id: 'client-id',
+        role: 'user',
+        content: 'hi',
+        model: 'auto',
+        metadata: { foo: 'bar' },
+        skipLlm: true,
+      });
+      expect((init.headers as CloudChatHeaders)['Content-Type']).toBe('application/json');
+      expect(result).toEqual({ id: 'm1' });
+    });
+
+    it('returns the userMessage id when the message field is absent', async () => {
+      const fetchImpl = mockFetch({ userMessage: { id: 'm2' } });
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+      const result = await client.saveMessage('conv_1', { role: 'user', content: 'hi' });
+      expect(result).toEqual({ id: 'm2' });
+    });
+
+    it('falls back to the client-supplied id when the response body has neither field', async () => {
+      const fetchImpl = mockFetch({});
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+      const result = await client.saveMessage('conv_1', {
+        id: 'client-id',
+        role: 'user',
+        content: 'hi',
+      });
+      expect(result).toEqual({ id: 'client-id' });
+    });
+
+    it('generates a fallback id when there is no client id and no body id', async () => {
+      const fetchImpl = mockFetch({});
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+      const result = await client.saveMessage('conv_1', { role: 'user', content: 'hi' });
+      expect(result.id).toEqual(expect.any(String));
+      expect(result.id.length).toBeGreaterThan(0);
+    });
+
+    it('applies decorateHeaders and injects the auth token (mutating request)', async () => {
+      const decorateHeaders = vi.fn((h: CloudChatHeaders) => ({ ...h, 'X-CSRF-Token': 'csrf_1' }));
+      const fetchImpl = mockFetch({ message: { id: 'm1' } });
+      const client = createCloudChatPersistenceClient({
+        fetchImpl,
+        decorateHeaders,
+        getAuthToken: async () => 'tok_123',
+      });
+
+      await client.saveMessage('conv_1', { role: 'user', content: 'hi' });
+
+      const headers = nthCall(fetchImpl).init.headers as CloudChatHeaders;
+      expect(headers['X-CSRF-Token']).toBe('csrf_1');
+      expect(headers['Authorization']).toBe('Bearer tok_123');
+    });
+
+    it('prefixes an absolute base URL (desktop)', async () => {
+      const fetchImpl = mockFetch({ message: { id: 'm1' } });
+      const client = createCloudChatPersistenceClient({
+        baseUrl: 'https://agiworkforce.com',
+        fetchImpl,
+      });
+      await client.saveMessage('conv_1', { role: 'user', content: 'hi' });
+      expect(nthCall(fetchImpl).url).toBe(
+        'https://agiworkforce.com/api/chat/conversations/conv_1/messages',
+      );
+    });
+
+    it('retries a network error with backoff, then succeeds', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ message: { id: 'm1' } }),
+        } as unknown as Response);
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      const result = await client.saveMessage(
+        'conv_1',
+        { role: 'user', content: 'hi' },
+        { retryDelayMs: 0 },
+      );
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ id: 'm1' });
+    });
+
+    it('throws the network error after exhausting retries', async () => {
+      const fetchImpl = vi.fn().mockRejectedValue(new Error('network down'));
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      await expect(
+        client.saveMessage('conv_1', { role: 'user', content: 'hi' }, { retryDelayMs: 0 }),
+      ).rejects.toThrow('network down');
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    });
+
+    it('retries a 5xx with backoff, then succeeds', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ message: { id: 'm1' } }),
+        } as unknown as Response);
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      const result = await client.saveMessage(
+        'conv_1',
+        { role: 'user', content: 'hi' },
+        { retryDelayMs: 0 },
+      );
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ id: 'm1' });
+    });
+
+    it('throws Failed to save message to DB: <status> after exhausting 5xx retries', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 500, json: async () => ({}) } as Response);
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      await expect(
+        client.saveMessage('conv_1', { role: 'user', content: 'hi' }, { retryDelayMs: 0 }),
+      ).rejects.toThrow('Failed to save message to DB: 500');
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    });
+
+    it('does NOT retry a 429 (rate limit) — throws on the first attempt', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 429, json: async () => ({}) } as Response);
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      await expect(
+        client.saveMessage('conv_1', { role: 'user', content: 'hi' }, { retryDelayMs: 0 }),
+      ).rejects.toThrow('Failed to save message to DB: 429');
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT retry a non-retryable 4xx — throws on the first attempt', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 400, json: async () => ({}) } as Response);
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      await expect(
+        client.saveMessage('conv_1', { role: 'user', content: 'hi' }, { retryDelayMs: 0 }),
+      ).rejects.toThrow('Failed to save message to DB: 400');
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+  });
 });
