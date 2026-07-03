@@ -622,26 +622,39 @@ const DesktopShell = () => {
         }
         const rawRustModels = await invoke<unknown>('llm_get_available_models');
         let rustModels = Array.isArray(rawRustModels) ? (rawRustModels as RustModelInfo[]) : [];
-        if (
-          currentMode === 'local' &&
-          !rustModels.some((model) => model.provider.toLowerCase() === 'ollama')
-        ) {
-          try {
-            const rawDirectOllamaModels = await invoke<unknown>('llm_list_ollama_models');
-            const directOllamaModels = Array.isArray(rawDirectOllamaModels)
-              ? (rawDirectOllamaModels as RustModelInfo[])
-              : [];
-            const seenModelIds = new Set(rustModels.map((model) => model.id));
-            rustModels = [
-              ...rustModels,
-              ...directOllamaModels.filter((model) => {
-                if (seenModelIds.has(model.id)) return false;
-                seenModelIds.add(model.id);
-                return true;
-              }),
-            ];
-          } catch (error) {
-            console.warn('Failed to directly load Ollama models for local picker:', error);
+        if (currentMode === 'local') {
+          // Defensive direct-fetch fallback: `llm_get_available_models` only appends a
+          // local runtime's models when the router already has it registered
+          // (`has_provider`), which can race with app startup before the settings
+          // rehydration callback (or the lazy chat-send registration) has run. Bypass
+          // that gate here for each local runtime the same way, so a running server is
+          // never hidden from the picker just because of registration timing.
+          const localRuntimeFetches: Array<{ provider: string; command: string }> = [
+            { provider: 'ollama', command: 'llm_list_ollama_models' },
+            { provider: 'lmstudio', command: 'llm_list_lmstudio_models' },
+            { provider: 'llamacpp', command: 'llm_list_llamacpp_models' },
+          ];
+          const seenModelIds = new Set(rustModels.map((model) => model.id));
+          for (const { provider, command } of localRuntimeFetches) {
+            if (rustModels.some((model) => model.provider.toLowerCase() === provider)) {
+              continue;
+            }
+            try {
+              const rawDirectModels = await invoke<unknown>(command);
+              const directModels = Array.isArray(rawDirectModels)
+                ? (rawDirectModels as RustModelInfo[])
+                : [];
+              rustModels = [
+                ...rustModels,
+                ...directModels.filter((model) => {
+                  if (seenModelIds.has(model.id)) return false;
+                  seenModelIds.add(model.id);
+                  return true;
+                }),
+              ];
+            } catch (error) {
+              console.warn(`Failed to directly load ${provider} models for local picker:`, error);
+            }
           }
         }
         const validProviders = new Set([
@@ -670,13 +683,17 @@ const DesktopShell = () => {
           'azure',
           'bedrock',
           'lmstudio',
+          'llamacpp',
           'local',
           'ollama',
         ]);
         const visibleModels = rustModels.filter((model) => {
           const provider = model.provider.toLowerCase();
           const isLocalProvider =
-            provider === 'ollama' || provider === 'local' || provider === 'lmstudio';
+            provider === 'ollama' ||
+            provider === 'local' ||
+            provider === 'lmstudio' ||
+            provider === 'llamacpp';
           const isManagedProvider = provider === 'managed_cloud' || provider === 'managed-cloud';
           const isConfiguredByok = model.available && !isLocalProvider && !isManagedProvider;
 
@@ -707,11 +724,11 @@ const DesktopShell = () => {
           supportsVision: true,
           supportsTools: true,
           contextWindow: 128000,
-          isLocal: m.provider.toLowerCase() === 'ollama' || m.provider.toLowerCase() === 'local',
+          isLocal: ['ollama', 'local', 'lmstudio', 'llamacpp'].includes(m.provider.toLowerCase()),
           isByok:
             currentMode === 'local' &&
             m.available &&
-            !['ollama', 'local', 'lmstudio', 'managed_cloud', 'managed-cloud'].includes(
+            !['ollama', 'local', 'lmstudio', 'llamacpp', 'managed_cloud', 'managed-cloud'].includes(
               m.provider.toLowerCase(),
             ),
         }));

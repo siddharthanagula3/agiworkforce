@@ -155,6 +155,63 @@ pub(super) async fn ensure_ollama_provider(
     );
 }
 
+/// Ensure the LM Studio provider is registered on the router before a Local-mode
+/// chat is routed. Mirrors `ensure_ollama_provider` exactly: LM Studio's built-in
+/// server is an OpenAI-compatible HTTP API served via `DirectApiProvider`, so this
+/// is a no-op once registered and safe to call unconditionally in Local mode. No
+/// network call happens until first use (`is_available()` pre-filters the router's
+/// candidate list when the local server isn't running).
+pub(super) async fn ensure_lmstudio_provider(
+    router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
+) {
+    use crate::core::llm::providers::direct_api_provider::DirectApiProvider;
+
+    let has_lmstudio = {
+        let router = router.read().await;
+        router.has_provider(Provider::LmStudio)
+    };
+
+    if !has_lmstudio {
+        match DirectApiProvider::new(Provider::LmStudio, String::new(), None) {
+            Ok(provider) => {
+                let mut router = router.write().await;
+                router.set_provider(Provider::LmStudio, Box::new(provider));
+                info!("[Chat] Lazily registered LM Studio provider for Local-mode chat");
+            }
+            Err(error) => {
+                warn!("[Chat] Failed to create LM Studio provider: {}", error);
+            }
+        }
+    }
+}
+
+/// Ensure the llama.cpp provider is registered on the router before a Local-mode
+/// chat is routed. Mirrors `ensure_ollama_provider`/`ensure_lmstudio_provider`:
+/// llama.cpp's built-in `llama-server` exposes an OpenAI-compatible HTTP API.
+pub(super) async fn ensure_llamacpp_provider(
+    router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
+) {
+    use crate::core::llm::providers::direct_api_provider::DirectApiProvider;
+
+    let has_llamacpp = {
+        let router = router.read().await;
+        router.has_provider(Provider::LlamaCpp)
+    };
+
+    if !has_llamacpp {
+        match DirectApiProvider::new(Provider::LlamaCpp, String::new(), None) {
+            Ok(provider) => {
+                let mut router = router.write().await;
+                router.set_provider(Provider::LlamaCpp, Box::new(provider));
+                info!("[Chat] Lazily registered llama.cpp provider for Local-mode chat");
+            }
+            Err(error) => {
+                warn!("[Chat] Failed to create llama.cpp provider: {}", error);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
