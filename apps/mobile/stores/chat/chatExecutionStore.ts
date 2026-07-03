@@ -781,7 +781,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return;
     }
 
-    set({ isStreaming: true, streamingContent: '', streamingReasoning: '' });
+    // Clear any stale error from a previous turn/conversation/mode — `error` is
+    // a single shared field, not scoped per-conversation, so without this a
+    // banner like "Local Mode is active, but no on-device model is ready yet"
+    // survives a New Chat + mode switch and shows on top of a message that just
+    // streamed successfully in Cloud mode.
+    set({ isStreaming: true, streamingContent: '', streamingReasoning: '', error: null });
 
     const controller = new AbortController();
     if (abortControllers.size >= MAX_ABORT_CONTROLLERS) {
