@@ -45,11 +45,6 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'agi',
-      testMatch: '**/agi.spec.ts',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
       name: 'onboarding',
       testMatch: '**/onboarding.spec.ts',
       use: { ...devices['Desktop Chrome'] },
@@ -82,11 +77,6 @@ export default defineConfig({
     {
       name: 'gdpr',
       testMatch: '**/gdpr.spec.ts',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'agi-safety',
-      testMatch: '**/agi-safety.spec.ts',
       use: { ...devices['Desktop Chrome'] },
     },
     {
