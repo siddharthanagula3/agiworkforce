@@ -37,15 +37,19 @@ pub(super) async fn handle_streaming_message(
         }),
     );
 
-    // Ensure the mode-appropriate provider is registered BEFORE any routing.
+    // Ensure the mode-appropriate provider(s) are registered BEFORE any routing.
     // The streaming path otherwise relies entirely on the best-effort frontend
     // settings-rehydration callback to have registered providers; if it never
     // fired, `candidates()` returns empty and the send is silently dropped
     // (no `/api/chat`; the resulting error is filtered out client-side).
-    // Local mode => Ollama; cloud mode => ManagedCloud. Both are no-ops when the
-    // provider is already present, and Local mode must never touch ManagedCloud.
+    // Local mode => Ollama + LM Studio + llama.cpp (all three coexist; the actual
+    // send routes to whichever the user selected via `preferences.provider`, and
+    // unreachable ones are pre-filtered by `is_available()` before invocation).
+    // Cloud mode => ManagedCloud. Local mode must never touch ManagedCloud.
     if prepared.flags.is_local_mode {
         ensure_ollama_provider(&runtime.router).await;
+        ensure_lmstudio_provider(&runtime.router).await;
+        ensure_llamacpp_provider(&runtime.router).await;
     } else {
         ensure_managed_cloud_provider(&runtime.router).await;
     }
@@ -86,12 +90,16 @@ pub(super) async fn handle_nonstreaming_message(
 
     // Only attempt to initialize ManagedCloud when the request is explicitly
     // in cloud mode. Local-mode requests must never touch ManagedCloud even
-    // for provider-initialization purposes — they lazily register Ollama
-    // instead so a fresh session isn't silently dropped before `/api/chat`.
+    // for provider-initialization purposes — they lazily register Ollama, LM
+    // Studio, and llama.cpp instead so a fresh session isn't silently dropped
+    // before `/api/chat`, and so any of the three local runtimes the user has
+    // configured/selected can be routed to (not just Ollama).
     if !prepared.flags.is_local_mode {
         ensure_managed_cloud_provider(&runtime.router).await;
     } else {
         ensure_ollama_provider(&runtime.router).await;
+        ensure_lmstudio_provider(&runtime.router).await;
+        ensure_llamacpp_provider(&runtime.router).await;
     }
     run_nonstreaming_chat(runtime, prepared).await
 }

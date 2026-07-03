@@ -968,6 +968,8 @@ impl LLMRouter {
             Provider::Moonshot,
             Provider::Perplexity,
             Provider::Ollama,
+            Provider::LmStudio,
+            Provider::LlamaCpp,
             Provider::Zhipu,
         ] {
             if order.iter().any(|c| c.provider == provider) {

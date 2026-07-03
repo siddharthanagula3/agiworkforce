@@ -124,6 +124,10 @@ impl DirectApiProvider {
             Provider::Google => builder.header("x-goog-api-key", &self.api_key),
             // Azure uses api-key header (not Bearer auth)
             Provider::Azure => builder.header("api-key", &self.api_key),
+            // Local runtimes (LM Studio, llama.cpp) don't require an API key. Skip the
+            // Authorization header entirely when no key was configured rather than sending
+            // an empty Bearer token — some local servers reject malformed auth headers.
+            Provider::LmStudio | Provider::LlamaCpp if self.api_key.is_empty() => builder,
             // All other providers use Bearer token auth
             _ => builder.bearer_auth(&self.api_key),
         }
@@ -377,6 +381,10 @@ fn default_base_url(provider: Provider) -> Option<&'static str> {
         Provider::NvidiaNim => Some("https://integrate.api.nvidia.com/v1"),
         Provider::OpenRouter => Some("https://openrouter.ai/api/v1"),
         Provider::OllamaCloud => Some("https://api.ollama.com/v1"),
+        // Local OpenAI-compatible runtimes. HTTP-on-loopback is explicitly allowed for
+        // these ports by `ALLOWED_LOOPBACK_PORTS` above.
+        Provider::LmStudio => Some("http://localhost:1234/v1"),
+        Provider::LlamaCpp => Some("http://localhost:8080/v1"),
         Provider::Azure | Provider::Bedrock | Provider::Ollama | Provider::ManagedCloud => None,
     }
 }
@@ -483,7 +491,48 @@ impl LLMProvider for DirectApiProvider {
     }
 
     fn is_configured(&self) -> bool {
-        !self.api_key.is_empty()
+        match self.provider {
+            // Local runtimes never require an API key — presence of a registered
+            // instance (always constructed with a valid base_url) is sufficient,
+            // mirroring OllamaProvider::is_configured().
+            Provider::LmStudio | Provider::LlamaCpp => true,
+            _ => !self.api_key.is_empty(),
+        }
+    }
+
+    /// Whether this provider is currently reachable.
+    ///
+    /// Cloud BYOK providers are assumed reachable (default trait behavior) until a
+    /// network error occurs at request time. Local runtimes (LM Studio, llama.cpp)
+    /// get a lightweight `/v1/models` health-ping so the router can pre-filter them
+    /// out of the candidate list when the local server isn't running, instead of
+    /// burning retry budget on a doomed request. Mirrors `OllamaProvider::is_available()`.
+    async fn is_available(&self) -> bool {
+        if !matches!(self.provider, Provider::LmStudio | Provider::LlamaCpp) {
+            return true;
+        }
+
+        // Validate the base_url up front so a malformed value produces a clear,
+        // traceable log line instead of an opaque reqwest builder error collapsing
+        // into a plain `false` with no indication of why the provider looks unreachable.
+        if let Err(e) = self.base_url.parse::<reqwest::Url>() {
+            tracing::warn!(
+                "{} base_url '{}' is not a valid URL, treating server as unavailable: {}",
+                self.provider.as_string(),
+                self.base_url,
+                e
+            );
+            return false;
+        }
+
+        let url = format!("{}/models", self.base_url);
+        self.client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(2))
+            .send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false)
     }
 
     fn name(&self) -> &str {
@@ -513,6 +562,8 @@ impl LLMProvider for DirectApiProvider {
             Provider::NvidiaNim => "DirectNvidiaNim",
             Provider::OpenRouter => "DirectOpenRouter",
             Provider::OllamaCloud => "DirectOllamaCloud",
+            Provider::LmStudio => "DirectLmStudio",
+            Provider::LlamaCpp => "DirectLlamaCpp",
         }
     }
 
@@ -679,6 +730,107 @@ mod tests {
         let p = DirectApiProvider::new(Provider::Perplexity, "key".to_string(), None)
             .expect("should create");
         assert!(!p.supports_function_calling());
+    }
+
+    // --- LM Studio / llama.cpp (local OpenAI-compatible runtimes) tests ---
+
+    #[test]
+    fn lmstudio_default_base_url_is_http_loopback() {
+        let url = default_base_url(Provider::LmStudio).expect("LM Studio should have a default");
+        assert_eq!(url, "http://localhost:1234/v1");
+    }
+
+    #[test]
+    fn llamacpp_default_base_url_is_http_loopback() {
+        let url = default_base_url(Provider::LlamaCpp).expect("llama.cpp should have a default");
+        assert_eq!(url, "http://localhost:8080/v1");
+    }
+
+    #[test]
+    fn lmstudio_is_configured_without_api_key() {
+        let p = DirectApiProvider::new(Provider::LmStudio, String::new(), None)
+            .expect("should create without an API key");
+        assert!(p.is_configured());
+    }
+
+    #[test]
+    fn llamacpp_is_configured_without_api_key() {
+        let p = DirectApiProvider::new(Provider::LlamaCpp, String::new(), None)
+            .expect("should create without an API key");
+        assert!(p.is_configured());
+    }
+
+    #[test]
+    fn lmstudio_chat_endpoint_is_openai_compat() {
+        let p = DirectApiProvider::new(Provider::LmStudio, String::new(), None)
+            .expect("should create");
+        assert_eq!(
+            p.chat_endpoint(),
+            "http://localhost:1234/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn llamacpp_chat_endpoint_is_openai_compat() {
+        let p = DirectApiProvider::new(Provider::LlamaCpp, String::new(), None)
+            .expect("should create");
+        assert_eq!(
+            p.chat_endpoint(),
+            "http://localhost:8080/v1/chat/completions"
+        );
+    }
+
+    /// Unlike `OllamaProvider::new()`, `DirectApiProvider::new()` validates the base
+    /// URL eagerly at construction time (`validate_provider_base_url`), so a malformed
+    /// URL can never reach `is_available()` in the first place — it fails fast here.
+    #[test]
+    fn lmstudio_rejects_malformed_base_url_at_construction() {
+        let result = DirectApiProvider::new(
+            Provider::LmStudio,
+            String::new(),
+            Some("not-a-valid-url".to_string()),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn llamacpp_rejects_malformed_base_url_at_construction() {
+        let result = DirectApiProvider::new(
+            Provider::LlamaCpp,
+            String::new(),
+            Some("not-a-valid-url".to_string()),
+        );
+        assert!(result.is_err());
+    }
+
+    /// `is_available()` must complete quickly (bounded by its internal 2s timeout)
+    /// and never panic regardless of whether a local server actually answers on the
+    /// default port. Not asserting the specific boolean here — unlike the malformed-URL
+    /// tests above, this exercises a real network call, and asserting "not running"
+    /// would be flaky on a dev machine that happens to have LM Studio/llama.cpp open
+    /// or something else bound to that port. Live "not running" behavior is verified
+    /// manually (see PR notes) against this sandbox's actual absence of both runtimes.
+    #[tokio::test]
+    async fn lmstudio_is_available_completes_without_panicking() {
+        let p = DirectApiProvider::new(Provider::LmStudio, String::new(), None)
+            .expect("should create with default URL");
+        let _ = p.is_available().await;
+    }
+
+    #[tokio::test]
+    async fn llamacpp_is_available_completes_without_panicking() {
+        let p = DirectApiProvider::new(Provider::LlamaCpp, String::new(), None)
+            .expect("should create with default URL");
+        let _ = p.is_available().await;
+    }
+
+    /// Cloud BYOK providers must keep the default "assumed available" behavior —
+    /// the local-runtime health-ping override must not affect them.
+    #[tokio::test]
+    async fn openai_is_available_defaults_to_true() {
+        let p = DirectApiProvider::new(Provider::OpenAI, "sk-test".to_string(), None)
+            .expect("should create");
+        assert!(p.is_available().await);
     }
 
     // --- validate_provider_base_url tests ---

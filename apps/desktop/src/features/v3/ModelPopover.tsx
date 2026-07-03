@@ -149,7 +149,8 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
       model.isByok ||
       provider === 'ollama' ||
       provider === 'local' ||
-      provider === 'lmstudio'
+      provider === 'lmstudio' ||
+      provider === 'llamacpp'
     );
   });
 
