@@ -51,4 +51,48 @@ describe('dom-helpers', () => {
     expect(child.className).toBe('note');
     expect(child.textContent).toBe('done');
   });
+
+  // SECURITY (audit batch-221 [HIGH] insecure output handling, fixed
+  // 2026-06-13): createElementWith's `attrs` option must drop event-handler
+  // attributes and javascript:/data:/vbscript: URL schemes, so a caller can
+  // never turn this helper into an XSS primitive. Regression coverage
+  // against the LIVE module — this hardening previously existed only in an
+  // orphaned, unimported duplicate at src/features/content/dom-helpers.ts.
+  describe('createElementWith attrs hardening', () => {
+    it('drops on* event-handler attributes', () => {
+      const el = createElementWith({ tag: 'div', attrs: { onclick: 'alert(1)' } });
+      expect(el.hasAttribute('onclick')).toBe(false);
+      expect(el.getAttribute('onclick')).toBeNull();
+    });
+
+    it('drops onerror regardless of case', () => {
+      const el = createElementWith({ tag: 'img', attrs: { OnError: 'alert(1)' } });
+      expect(el.hasAttribute('onerror')).toBe(false);
+      expect(el.hasAttribute('OnError')).toBe(false);
+    });
+
+    it('drops a javascript: scheme on href', () => {
+      const el = createElementWith({ tag: 'a', attrs: { href: 'javascript:alert(1)' } });
+      expect(el.hasAttribute('href')).toBe(false);
+    });
+
+    it('drops a data: scheme on src', () => {
+      const el = createElementWith({
+        tag: 'img',
+        attrs: { src: 'data:text/html,<script>alert(1)</script>' },
+      });
+      expect(el.hasAttribute('src')).toBe(false);
+    });
+
+    it('keeps a static https href intact', () => {
+      const el = createElementWith({ tag: 'a', attrs: { href: 'https://example.com' } });
+      expect(el.getAttribute('href')).toBe('https://example.com');
+    });
+
+    it('keeps a non-url, non-event static attribute intact', () => {
+      const el = createElementWith({ tag: 'div', attrs: { 'data-x': '1', title: 'hello' } });
+      expect(el.getAttribute('data-x')).toBe('1');
+      expect(el.getAttribute('title')).toBe('hello');
+    });
+  });
 });
