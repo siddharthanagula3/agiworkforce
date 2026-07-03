@@ -15,7 +15,7 @@ import {
   ChevronDown,
   Settings,
 } from 'lucide-react';
-import { useChatStore } from '../../stores/chat';
+import { useChatStore, useSidecarStore, selectSidebarCollapsed } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
 import { useProjectStore, type Project } from '../../stores/projectStore';
 import { ConversationRow } from './ConversationRow';
@@ -170,7 +170,11 @@ export function Sidebar({
   accountMenuOpen = false,
 }: SidebarProps) {
   const { t } = useTranslation('v3');
-  const [collapsed, setCollapsed] = useState(false);
+  // Persisted via useUIStore (localStorage key `agiworkforce-ui`) — the same
+  // store the legacy chat sidebar already uses for this, so the collapse
+  // state now survives a reload/restart instead of resetting to expanded.
+  const collapsed = useSidecarStore(selectSidebarCollapsed);
+  const setCollapsed = useSidecarStore((s) => s.setSidebarCollapsed);
   const [showAll, setShowAll] = useState(false);
 
   const conversations = useChatStore((s: ChatState) => s.conversations);
@@ -185,6 +189,7 @@ export function Sidebar({
   const createProject = useProjectStore((s) => s.createProject);
   const updateProject = useProjectStore((s) => s.updateProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
+  const archiveProject = useProjectStore((s) => s.archiveProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
@@ -280,6 +285,13 @@ export function Sidebar({
     [deleteProject],
   );
 
+  const handleArchiveProject = useCallback(
+    (id: string) => {
+      void archiveProject(id);
+    },
+    [archiveProject],
+  );
+
   const handleFooterPrimaryClick = useCallback(() => {
     if (isSignedIn) {
       onOpenAccountMenu?.();
@@ -330,7 +342,7 @@ export function Sidebar({
           {!collapsed && 'AGI'}
         </span>
         <button
-          onClick={() => setCollapsed((c) => !c)}
+          onClick={() => setCollapsed(!collapsed)}
           title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
           style={{
             background: 'none',
@@ -521,6 +533,7 @@ export function Sidebar({
               onNewChat={handleProjectNewChat}
               onRename={handleRenameProject}
               onDelete={handleDeleteProject}
+              onArchive={handleArchiveProject}
             />
           ))}
         </div>
