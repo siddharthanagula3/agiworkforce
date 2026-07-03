@@ -79,6 +79,21 @@ impl OllamaProvider {
     /// Returns `true` when the server responds with a success status, `false` otherwise.
     /// This is intentionally a lightweight probe (no model load) suitable for pre-routing checks.
     pub async fn is_available(&self) -> bool {
+        // Validate `base_url` up front so a malformed value (e.g. a stray partial
+        // string left over from an in-progress settings edit, or a future caller
+        // that bypasses the `llm_configure_provider` validation gate) produces a
+        // clear, traceable log line instead of an opaque
+        // `reqwest::Error{Builder, RelativeUrlWithoutBase}` that collapses into a
+        // plain `false` with no indication of *why* Ollama looks unreachable.
+        if let Err(e) = self.base_url.parse::<reqwest::Url>() {
+            tracing::warn!(
+                "Ollama base_url '{}' is not a valid URL, treating server as unavailable: {}",
+                self.base_url,
+                e
+            );
+            return false;
+        }
+
         let url = format!("{}/api/version", self.base_url);
         self.client
             .get(&url)
@@ -623,5 +638,26 @@ mod tests {
         assert_eq!(request.model, "tinyllama");
         assert_eq!(request.max_tokens, Some(10));
         assert!(!request.stream);
+    }
+
+    /// A malformed `base_url` (e.g. a partial string with no scheme) must make
+    /// `is_available()` return `false` quickly, without panicking or hanging on
+    /// an opaque `reqwest::Error{Builder, RelativeUrlWithoutBase}`. This is a
+    /// defense-in-depth check for callers that construct `OllamaProvider`
+    /// without going through the `llm_configure_provider` validation gate.
+    #[tokio::test]
+    async fn test_is_available_returns_false_for_malformed_base_url() {
+        let provider = OllamaProvider::new(Some("not-a-valid-url".to_string()))
+            .expect("Failed to create provider");
+
+        assert!(!provider.is_available().await);
+    }
+
+    #[tokio::test]
+    async fn test_is_available_returns_false_for_empty_base_url() {
+        let provider =
+            OllamaProvider::new(Some(String::new())).expect("Failed to create provider");
+
+        assert!(!provider.is_available().await);
     }
 }
