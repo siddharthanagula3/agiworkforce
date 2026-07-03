@@ -2241,6 +2241,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_session_info':
     case 'reset_session_cost':
     case 'update_session_activity':
+    case 'project_context_set_folder':
     case 'project_context_get_folder':
     case 'project_context_get_summary':
     case 'project_context_list_files':

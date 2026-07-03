@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChatHostBridge } from '@agiworkforce/unified-chat';
+import { CapabilityProvider } from '@agiworkforce/unified-chat';
+import { useFolderSelection } from './hooks/useFolderSelection';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
@@ -1274,6 +1276,7 @@ const DesktopShell = () => {
   const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
 
   const isV3DesktopChatEnabled = useFeatureFlag(FeatureFlagName.DESKTOP_CHAT_V3);
+  const { selectFolder, currentFolderLabel } = useFolderSelection();
 
   const handleDismissTimeoutWarning = useCallback(() => {
     setIsTimeoutWarningOpen(false);
@@ -1544,30 +1547,34 @@ const DesktopShell = () => {
                   onBuyTopUp={() => openSettingsDialog('billing')}
                 />
               ) : (
-                <ChatInterface
-                  runtime={tauriRuntime}
-                  className="h-full w-full"
-                  manageTheme={false}
-                  enableShortcuts={true}
-                  hostBridge={chatHostBridge}
-                  onModelSelectorClick={() => openSettingsDialog('models-keys')}
-                  onVoiceClick={() => {
-                    // Toggle voice input overlay
-                    const event = new CustomEvent('toggle-voice-input');
-                    window.dispatchEvent(event);
-                  }}
-                  onNavigateView={(view) => {
-                    if (view === 'connectors') {
-                      openSettingsDialog('connectors');
-                    } else if (view === 'skills') {
-                      openSettingsDialog('skills');
-                    } else if (view === 'projects') {
-                      openSettingsDialog('account');
-                    } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
-                      setPlansModalOpen(true);
-                    }
-                  }}
-                />
+                <CapabilityProvider platform="desktop">
+                  <ChatInterface
+                    runtime={tauriRuntime}
+                    className="h-full w-full"
+                    manageTheme={false}
+                    enableShortcuts={true}
+                    hostBridge={chatHostBridge}
+                    onModelSelectorClick={() => openSettingsDialog('models-keys')}
+                    onVoiceClick={() => {
+                      // Toggle voice input overlay
+                      const event = new CustomEvent('toggle-voice-input');
+                      window.dispatchEvent(event);
+                    }}
+                    onSelectFolder={selectFolder}
+                    currentFolderLabel={currentFolderLabel}
+                    onNavigateView={(view) => {
+                      if (view === 'connectors') {
+                        openSettingsDialog('connectors');
+                      } else if (view === 'skills') {
+                        openSettingsDialog('skills');
+                      } else if (view === 'projects') {
+                        openSettingsDialog('account');
+                      } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
+                        setPlansModalOpen(true);
+                      }
+                    }}
+                  />
+                </CapabilityProvider>
               )}
             </ErrorBoundary>
           </div>

@@ -33,6 +33,15 @@ export interface ChatInputProps {
   onModelSelectorClick: () => void;
   allowModelFallbackModels?: boolean;
   onVoiceClick?: () => void;
+  /**
+   * Called when the user picks "Select folder" from the attachment menu.
+   * Host apps that expose `canUseWorkingDirectory` (desktop) should provide
+   * this to open a native folder dialog and sync it to the backend; the menu
+   * item is capability-gated so this is only reachable on desktop.
+   */
+  onSelectFolder?: () => void;
+  /** Display label for the currently scoped project folder, if any. */
+  currentFolderLabel?: string | null;
   hasMessages: boolean;
   className?: string;
   /**
@@ -60,6 +69,8 @@ export function ChatInput({
   onModelSelectorClick,
   allowModelFallbackModels = true,
   onVoiceClick: _onVoiceClick,
+  onSelectFolder,
+  currentFolderLabel = null,
   hasMessages,
   className,
   disabled = false,
@@ -403,6 +414,8 @@ export function ChatInput({
                   open={attachmentMenuOpen}
                   onOpenChange={setAttachmentMenuOpen}
                   onAddFiles={() => fileInputRef.current?.click()}
+                  onSelectFolder={onSelectFolder}
+                  currentFolderLabel={currentFolderLabel}
                   webSearchEnabled={webSearchEnabled}
                   onWebSearchToggle={() => setWebSearchEnabled(!webSearchEnabled)}
                   researchEnabled={researchEnabled}

@@ -16,6 +16,7 @@ import { AgiWorkDispatch } from './AgiWorkDispatch';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
+import { useFolderSelection } from '../../hooks/useFolderSelection';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -71,6 +72,7 @@ export function DesktopShellV3({
   // conversationId is optional on ArtifactPanel so it works in the gallery context.
   const artifactPanelOpen = useArtifactStore((s) => s.panelOpen);
   const closeArtifactPanel = useArtifactStore((s) => s.closePanel);
+  const { selectFolder, currentFolderLabel } = useFolderSelection();
 
   const handleSwitchModel = useCallback(() => {
     onModelSelectorClick?.();
@@ -148,6 +150,8 @@ export function DesktopShellV3({
               hostBridge={hostBridge}
               onModelSelectorClick={onModelSelectorClick}
               onVoiceClick={onVoiceClick}
+              onSelectFolder={selectFolder}
+              currentFolderLabel={currentFolderLabel}
               onNavigateView={handleNavigateView}
               sidebarSlot={null}
               emptyStateSlot={<EmptyChat />}
