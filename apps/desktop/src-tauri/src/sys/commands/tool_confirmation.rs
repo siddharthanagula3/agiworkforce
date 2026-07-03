@@ -56,6 +56,47 @@ pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
     !NEVER_REMEMBERABLE.contains(&tool_name)
 }
 
+/// `settings_v2` key used to persist [`ToolConfirmationState::agent_mode`]
+/// across app restarts.
+///
+/// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): prior to
+/// this fix `agent_mode` lived only in the in-memory `Arc<Mutex<AgentMode>>`
+/// and was never restored in `new_with_db`, so a user who explicitly set
+/// Safe or Plan mode (expecting that restriction to stick) had it silently
+/// reverted to the permissive `Build` default on every app relaunch — a real
+/// safety regression, not just a UX papercut. Stored via the same
+/// `settings_v2` table / `SettingCategory::Security` category used by the
+/// rest of the app's user-set security preferences (see
+/// `data::settings::service::SettingsService::save_app_settings`).
+const AGENT_MODE_SETTING_KEY: &str = "tool_confirmation.agent_mode";
+
+/// `settings_v2` key used to persist [`ToolConfirmationState::auto_approve_all`]
+/// across app restarts. See [`AGENT_MODE_SETTING_KEY`] for rationale.
+const AUTO_APPROVE_ALL_SETTING_KEY: &str = "tool_confirmation.auto_approve_all";
+
+/// Canonical (de)serialization for [`AgentMode`] as stored in `settings_v2`.
+/// Mirrors the `#[serde(rename_all = "snake_case")]` wire format so a
+/// persisted value round-trips identically to what the frontend/IPC layer
+/// sends and receives.
+fn agent_mode_as_str(mode: AgentMode) -> &'static str {
+    match mode {
+        AgentMode::Safe => "safe",
+        AgentMode::Plan => "plan",
+        AgentMode::Build => "build",
+        AgentMode::Autopilot => "autopilot",
+    }
+}
+
+fn agent_mode_from_str(s: &str) -> Option<AgentMode> {
+    match s {
+        "safe" => Some(AgentMode::Safe),
+        "plan" => Some(AgentMode::Plan),
+        "build" => Some(AgentMode::Build),
+        "autopilot" => Some(AgentMode::Autopilot),
+        _ => None,
+    }
+}
+
 /// Agent execution mode controlling which tools are permitted.
 ///
 /// - **Safe**: Only read-only, non-destructive tools are allowed.
@@ -109,19 +150,115 @@ impl ToolConfirmationState {
         }
     }
 
-    /// Create with SQLite persistence. Loads previously remembered choices on startup.
+    /// Create with SQLite persistence. Loads previously remembered choices,
+    /// the persisted agent mode, and the persisted auto-approve-all flag on
+    /// startup.
+    ///
+    /// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01): `agent_mode` and
+    /// `auto_approve_all` are seeded to their safe, fail-closed defaults
+    /// (`AgentMode::Safe`, `false`) here rather than `AgentMode::default()`
+    /// (`Build`). [`Self::load_persisted_agent_settings`] overwrites these
+    /// with whatever the user last explicitly set, if anything was
+    /// persisted. If persistence is missing (genuine first run) or fails to
+    /// load (DB error / corrupt row), the safe seed values stand — the
+    /// runtime never silently falls back to a permissive mode.
     pub fn new_with_db(db_conn: Arc<StdMutex<Connection>>) -> Self {
         let state = Self {
             pending_confirmations: Arc::new(Mutex::new(HashMap::new())),
             remembered_choices: Arc::new(Mutex::new(HashMap::new())),
             tool_guard: Arc::new(ToolExecutionGuard::new()),
             auto_approve_all: Arc::new(AtomicBool::new(false)),
-            agent_mode: Arc::new(Mutex::new(AgentMode::default())),
+            agent_mode: Arc::new(Mutex::new(AgentMode::Safe)),
             session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
             db_conn: Some(db_conn.clone()),
         };
         state.load_choices_from_db(&db_conn);
+        state.load_persisted_agent_settings(&db_conn);
         state
+    }
+
+    /// Restore `agent_mode` and `auto_approve_all` from `settings_v2`.
+    ///
+    /// Fails closed: any missing row, unrecognized value, or DB error leaves
+    /// (or resets) the in-memory value at the safe default rather than
+    /// propagating an error or falling back to `Build`/`true`.
+    fn load_persisted_agent_settings(&self, db_conn: &Arc<StdMutex<Connection>>) {
+        let Ok(conn) = db_conn.lock() else { return };
+
+        match crate::data::settings::get_setting(&conn, AGENT_MODE_SETTING_KEY)
+            .ok()
+            .and_then(|setting| setting.get_value().ok())
+            .and_then(|value| value.as_string().and_then(agent_mode_from_str))
+        {
+            Some(mode) => {
+                *self.agent_mode.lock() = mode;
+                info!(
+                    "[ToolConfirmation] Restored persisted agent mode: {:?}",
+                    mode
+                );
+            }
+            None => {
+                // No persisted row, malformed value, or DB error — stay on
+                // the safe seed (`AgentMode::Safe`) set in `new_with_db`.
+                warn!(
+                    "[ToolConfirmation] No valid persisted agent mode found; defaulting to Safe"
+                );
+            }
+        }
+
+        match crate::data::settings::get_setting(&conn, AUTO_APPROVE_ALL_SETTING_KEY)
+            .ok()
+            .and_then(|setting| setting.get_value().ok())
+            .and_then(|value| value.as_boolean())
+        {
+            Some(enabled) => {
+                self.auto_approve_all.store(enabled, Ordering::Relaxed);
+                info!(
+                    "[ToolConfirmation] Restored persisted auto-approve-all: {}",
+                    enabled
+                );
+            }
+            None => {
+                // No persisted row / DB error — stay on the safe seed
+                // (`false`) set in `new_with_db`.
+            }
+        }
+    }
+
+    /// Persist the current agent mode to `settings_v2` (best-effort; a write
+    /// failure is logged but does not block the in-memory mode change).
+    fn db_persist_agent_mode(&self, mode: AgentMode) {
+        let Some(ref db) = self.db_conn else { return };
+        let Ok(conn) = db.lock() else { return };
+        if let Err(e) = crate::data::settings::upsert_setting(
+            &conn,
+            AGENT_MODE_SETTING_KEY.to_string(),
+            crate::data::settings::SettingValue::String(agent_mode_as_str(mode).to_string()),
+            crate::data::settings::SettingCategory::Security,
+            false,
+        ) {
+            warn!("[ToolConfirmation] Failed to persist agent mode: {}", e);
+        }
+    }
+
+    /// Persist the current auto-approve-all flag to `settings_v2`
+    /// (best-effort; a write failure is logged but does not block the
+    /// in-memory flag change).
+    fn db_persist_auto_approve_all(&self, enabled: bool) {
+        let Some(ref db) = self.db_conn else { return };
+        let Ok(conn) = db.lock() else { return };
+        if let Err(e) = crate::data::settings::upsert_setting(
+            &conn,
+            AUTO_APPROVE_ALL_SETTING_KEY.to_string(),
+            crate::data::settings::SettingValue::Boolean(enabled),
+            crate::data::settings::SettingCategory::Security,
+            false,
+        ) {
+            warn!(
+                "[ToolConfirmation] Failed to persist auto-approve-all: {}",
+                e
+            );
+        }
     }
 
     fn load_choices_from_db(&self, db_conn: &Arc<StdMutex<Connection>>) {
@@ -168,9 +305,12 @@ impl ToolConfirmationState {
         let _ = conn.execute("DELETE FROM remembered_tool_choices", []);
     }
 
-    /// Set the global auto-approve flag
+    /// Set the global auto-approve flag. Persisted to `settings_v2` so the
+    /// choice survives app restarts (FIX
+    /// DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01).
     pub fn set_auto_approve_all(&self, enabled: bool) {
         self.auto_approve_all.store(enabled, Ordering::Relaxed);
+        self.db_persist_auto_approve_all(enabled);
         info!(
             "[ToolConfirmation] Auto-approve all: {}",
             if enabled { "enabled" } else { "disabled" }
@@ -182,10 +322,17 @@ impl ToolConfirmationState {
         self.auto_approve_all.load(Ordering::Relaxed)
     }
 
-    /// Set the current agent execution mode
+    /// Set the current agent execution mode. Persisted to `settings_v2` so
+    /// the choice survives app restarts (FIX
+    /// DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01) — a user who explicitly
+    /// selects Safe/Plan mode no longer has it silently reverted to Build
+    /// on the next launch.
     pub fn set_agent_mode(&self, mode: AgentMode) {
-        let mut lock = self.agent_mode.lock();
-        *lock = mode;
+        {
+            let mut lock = self.agent_mode.lock();
+            *lock = mode;
+        }
+        self.db_persist_agent_mode(mode);
         info!("[ToolConfirmation] Agent mode set to: {:?}", mode);
     }
 
@@ -1766,6 +1913,142 @@ mod tests {
             "glob_search",
             AgentMode::Plan
         ));
+    }
+}
+
+/// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): pins the
+/// restart-persistence fix for `agent_mode` / `auto_approve_all`. Prior to
+/// this fix both lived only in the in-memory `ToolConfirmationState` and
+/// were silently reset to their `Build` / `false` in-process defaults on
+/// every simulated "relaunch" (i.e. every fresh `ToolConfirmationState`
+/// constructed against the same on-disk DB) — a user who explicitly chose
+/// Safe/Plan mode had that protection silently discarded.
+#[cfg(test)]
+mod agent_mode_persistence_tests {
+    use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex as StdMutexAlias;
+
+    /// Build an in-memory SQLite DB with the full production schema
+    /// (`settings_v2`, `remembered_tool_choices`, etc.) via the real
+    /// migration runner, matching the pattern used by other state
+    /// persistence tests in this codebase (see
+    /// `sys::commands::checkpoints::tests`).
+    fn migrated_db_conn() -> Arc<StdMutexAlias<Connection>> {
+        let conn = Connection::open_in_memory().expect("open in-memory sqlite db");
+        crate::data::db::migrations::run_migrations(&conn).expect("run migrations");
+        Arc::new(StdMutexAlias::new(conn))
+    }
+
+    #[test]
+    fn fresh_db_seeds_safe_mode_and_auto_approve_off() {
+        // First-ever run: no row in `settings_v2` yet. Per the audit's
+        // explicit safe-default-direction requirement, this must land on
+        // the SAFEST mode (Safe), never the permissive `Build` default the
+        // bare `AgentMode::default()` would produce.
+        let db = migrated_db_conn();
+        let state = ToolConfirmationState::new_with_db(db);
+
+        assert_eq!(state.get_agent_mode(), AgentMode::Safe);
+        assert!(!state.is_auto_approve_all());
+    }
+
+    #[test]
+    fn explicit_safe_mode_survives_simulated_restart() {
+        let db = migrated_db_conn();
+
+        // Session 1: user explicitly restricts to Safe mode.
+        {
+            let state = ToolConfirmationState::new_with_db(db.clone());
+            state.set_agent_mode(AgentMode::Safe);
+            assert_eq!(state.get_agent_mode(), AgentMode::Safe);
+        }
+
+        // Session 2 ("relaunch"): a brand-new ToolConfirmationState is
+        // constructed against the same DB, exactly as happens on every
+        // real app restart via `lib.rs`'s `ToolConfirmationState::new_with_db`.
+        // Before the fix this always came back `Build` (permissive),
+        // silently discarding the user's Safe-mode choice.
+        let state2 = ToolConfirmationState::new_with_db(db);
+        assert_eq!(state2.get_agent_mode(), AgentMode::Safe);
+    }
+
+    #[test]
+    fn explicit_plan_mode_survives_simulated_restart() {
+        let db = migrated_db_conn();
+
+        {
+            let state = ToolConfirmationState::new_with_db(db.clone());
+            state.set_agent_mode(AgentMode::Plan);
+        }
+
+        let state2 = ToolConfirmationState::new_with_db(db);
+        assert_eq!(state2.get_agent_mode(), AgentMode::Plan);
+    }
+
+    #[test]
+    fn explicit_autopilot_mode_survives_simulated_restart() {
+        // Autopilot is the most permissive mode — persistence must be
+        // symmetric (it doesn't only persist the "safe" choices), otherwise
+        // a user who legitimately wants Autopilot every session would be
+        // forced to re-select it (and re-click through the elevation
+        // confirmation dialog) on every launch.
+        let db = migrated_db_conn();
+
+        {
+            let state = ToolConfirmationState::new_with_db(db.clone());
+            state.set_agent_mode(AgentMode::Autopilot);
+        }
+
+        let state2 = ToolConfirmationState::new_with_db(db);
+        assert_eq!(state2.get_agent_mode(), AgentMode::Autopilot);
+    }
+
+    #[test]
+    fn auto_approve_all_survives_simulated_restart() {
+        let db = migrated_db_conn();
+
+        {
+            let state = ToolConfirmationState::new_with_db(db.clone());
+            state.set_auto_approve_all(true);
+            assert!(state.is_auto_approve_all());
+        }
+
+        let state2 = ToolConfirmationState::new_with_db(db);
+        assert!(state2.is_auto_approve_all());
+    }
+
+    #[test]
+    fn disabling_auto_approve_all_also_persists() {
+        let db = migrated_db_conn();
+
+        {
+            let state = ToolConfirmationState::new_with_db(db.clone());
+            state.set_auto_approve_all(true);
+            state.set_auto_approve_all(false);
+        }
+
+        let state2 = ToolConfirmationState::new_with_db(db);
+        assert!(!state2.is_auto_approve_all());
+    }
+
+    #[test]
+    fn agent_mode_round_trips_through_settings_v2_as_expected_string() {
+        // Guards the on-disk wire format directly, independent of the
+        // getter/setter round-trip, so a future refactor can't silently
+        // change the persisted string (e.g. break forward/backward
+        // compatibility with older DBs) without a failing test.
+        let db = migrated_db_conn();
+        {
+            let state = ToolConfirmationState::new_with_db(db.clone());
+            state.set_agent_mode(AgentMode::Plan);
+        }
+
+        let conn = db.lock().unwrap();
+        let setting = crate::data::settings::get_setting(&conn, AGENT_MODE_SETTING_KEY)
+            .expect("agent mode setting row should exist");
+        let value = setting.get_value().expect("valid setting value");
+        assert_eq!(value.as_string(), Some("plan"));
     }
 }
 
