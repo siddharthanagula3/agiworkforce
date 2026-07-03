@@ -233,6 +233,25 @@ describe('extractPageMetadata', () => {
       expect(result.schemaTypes).toContain('Article');
       expect(result.schemaTypes).toContain('BlogPosting');
     });
+
+    // SECURITY (audit batch-221 [MEDIUM] resource exhaustion, 2026-06-13):
+    // collectJsonLdTypes must cap recursion depth to match collectSchemaTypes
+    // in nlweb.ts, so a hostile page's deeply-nested JSON-LD can't stack-
+    // overflow / burn CPU inside extractSchemaTypes(). Regression coverage
+    // against the LIVE module (not a mirror) — the recursion-depth fix
+    // previously existed only in an orphaned, unimported duplicate at
+    // src/features/content/page-metadata.ts.
+    it('does not throw or hang on deeply nested JSON-LD (recursion depth cap)', () => {
+      let nested: Record<string, unknown> = { '@type': 'Thing' };
+      for (let i = 0; i < 5000; i++) {
+        nested = { '@type': 'Thing', child: nested };
+      }
+      addJsonLd(nested);
+
+      expect(() => extractPageMetadata()).not.toThrow();
+      const result = extractPageMetadata();
+      expect(result.schemaTypes).toContain('Thing');
+    });
   });
 
   // 5. Multiple JSON-LD blocks
