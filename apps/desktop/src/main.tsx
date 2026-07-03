@@ -14,6 +14,12 @@ import { errorTracking, setupGlobalErrorHandler } from './services/errorTracking
 errorTracking.initialize();
 setupGlobalErrorHandler();
 
+// Dev-only: registers window.wdioTauri for the @wdio/tauri-service E2E harness
+// (browser.tauri.execute()/mock()). Dynamic import keeps it out of production bundles.
+if (import.meta.env.DEV) {
+  void import('@wdio/tauri-plugin');
+}
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error('Root element not found');
