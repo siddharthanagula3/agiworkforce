@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
 
 /**
  * v3 anti-pattern lock suite (@locks).
@@ -13,12 +14,26 @@ import { test, expect } from '@playwright/test';
  * writes — so it exercises the production code path and doesn't need any
  * test-only hatch in `App.tsx`.
  *
+ * Auth-gate note: this suite runs against the plain-browser web-target
+ * bundle (`VITE_BUILD_TARGET=web`, no Tauri). `appModeStore`'s
+ * `supportsLocalAppMode` is `isTauri || isDesktopUiDevLocal`, so without
+ * Tauri the app boots in Cloud mode, and `App.tsx` renders `<AuthPage />`
+ * for `isCloudMode && !hasCloudSession` — before the `desktop_chat_v3`
+ * flag branch ever runs. `visual-verification.spec.ts` documents this same
+ * gate as intentional for the cloud-web bundle ("desktop root (sign-in)
+ * renders"). The flag resolution itself has no Tauri coupling; the fix is
+ * `injectMockCloudAuth`, which seeds the real `unified-auth-storage`
+ * persisted key (the same mechanism `self-healing.spec.ts` already uses)
+ * so `hasCloudSession` is true and the flag-gated branch is reached.
+ *
  * Heads-up: these tests rely on the dev server being up on PLAYWRIGHT_BASE_URL.
  * In CI the workflow starts the server before running playwright; locally,
  * run `pnpm dev:desktop` in a separate terminal first.
  */
 test.describe('@locks v3 shell anti-patterns', () => {
   test.beforeEach(async ({ page }) => {
+    await injectMockCloudAuth(page);
+    await mockCloudAccountEndpoints(page);
     await page.addInitScript(() => {
       try {
         window.localStorage.setItem(
@@ -35,15 +50,17 @@ test.describe('@locks v3 shell anti-patterns', () => {
 
   test('v3 shell mounts when the flag is on', async ({ page }) => {
     const shell = page.locator('[data-v3-shell]');
-    // Only require the shell to be in the DOM — auth gating may keep it
-    // hidden in some environments. The marker proves the lazy chunk loaded
-    // and the flag-gated branch ran.
+    // The marker proves the lazy chunk loaded and the flag-gated branch ran
+    // now that the mock cloud session clears the auth gate above.
     await expect.poll(async () => shell.count(), { timeout: 30000 }).toBeGreaterThan(0);
   });
 
   test('no "AGI Workforce" copy is rendered inside the v3 shell', async ({ page }) => {
     const shell = page.locator('[data-v3-shell]').first();
-    if ((await shell.count()) === 0) test.skip();
+    // The beforeEach's mock cloud session guarantees the shell mounts (see
+    // "v3 shell mounts when the flag is on" above); assert directly rather
+    // than skip so a future regression fails loudly instead of vanishing.
+    await expect(shell).toBeAttached();
     await expect(shell.getByText(/AGI Workforce/i)).toHaveCount(0);
   });
 
