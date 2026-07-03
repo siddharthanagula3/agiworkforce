@@ -98,15 +98,15 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ className }) =
       </div>
 
       {/* Headline */}
-      <h1 className="text-2xl font-semibold text-white/90 tracking-tight leading-tight">
+      <h1 className="text-2xl font-semibold text-foreground/90 tracking-tight leading-tight">
         {headline}
       </h1>
 
       {/* Branded sub-tagline */}
-      <p className="text-sm text-white/40 font-medium">{subline}</p>
+      <p className="text-sm text-muted-foreground font-medium">{subline}</p>
 
       {/* Platform tagline */}
-      <p className="text-xs text-white/30 italic mt-1">
+      <p className="text-xs text-muted-foreground/70 italic mt-1">
         Beyond one model. Beyond one surface. AGI in your hands.
       </p>
     </div>
