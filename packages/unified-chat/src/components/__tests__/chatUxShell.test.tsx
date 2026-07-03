@@ -13,8 +13,10 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createRoot } from 'react-dom/client';
 
 import * as _React from 'react';
+import { act } from 'react';
 
 // ── Components under test ─────────────────────────────────────────────────────
 import { BrandedGreeting } from '../BrandedGreeting';
@@ -43,6 +45,8 @@ import { useMentionStore } from '../../stores/mentionStore';
 import { usePromptStashStore } from '../../stores/promptStashStore';
 import { usePlanModeStore } from '../../stores/planModeStore';
 import { useChatStore } from '../../stores/chatStore';
+import { useArtifactStore } from '../../stores/artifactStore';
+import { useUIStore } from '../../stores/uiStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Store reset helpers
@@ -825,5 +829,144 @@ describe('ChatStream', () => {
     );
     expect(html).toContain('custom-bubble');
     expect(html).toContain('AI says hi');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Artifact panel wiring — DESKTOP-ARTIFACTS-ENTIRELY-UNWIRED-01
+//
+// Proves the frontend half of the fix: once a message carries `artifacts`
+// (populated by useChat's `chat:artifact` handler — see TauriRuntime.test.ts
+// for the event-listener-level proof), the inline chip renders and, once the
+// panel is open, ChatInterface's ArtifactPanel mount actually shows the real
+// content and the Edit affordance (`onSaveEdit`) that was previously always
+// absent.
+//
+// NOTE: these tests render via `react-dom/client`'s `createRoot`, NOT
+// `renderToStaticMarkup` like the rest of this file. `useChatStore` is
+// `persist`-wrapped, and zustand's persist middleware gives
+// `useSyncExternalStore` a `getServerSnapshot` that intentionally returns the
+// pre-hydration default state (to avoid SSR/client hydration mismatches in a
+// real app) — so `renderToStaticMarkup` (a server render) always sees
+// `activeConversationId: null` / empty `messagesByConversation` regardless of
+// `setState()`, even though `useChatStore.getState()` reflects the write
+// correctly. Confirmed empirically: none of the OTHER tests in this file
+// exercise "mutate useChatStore then assert it renders" (they either assert
+// on props or on non-persisted stores), so this divergence went unnoticed
+// until these tests. A real client render exercises `getSnapshot` instead,
+// matching what the actual app sees in the browser.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// React's act() only suppresses "not wrapped in act" warnings when this flag
+// is set — @testing-library/react sets it automatically; since this package
+// has no RTL dependency, set it explicitly for this file's client renders.
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom does not implement scrollIntoView (used by MessageList's
+// auto-scroll-to-bottom effect); stub it so a real client render doesn't
+// throw and fall into ChatErrorBoundary.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
+function renderClient(node: _React.ReactElement): { html: string; unmount: () => void } {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  act(() => {
+    root.render(node);
+  });
+  return {
+    html: container.innerHTML,
+    unmount: () => {
+      act(() => root.unmount());
+      container.remove();
+    },
+  };
+}
+
+describe('ChatInterface artifact panel wiring', () => {
+  beforeEach(() => {
+    resetStores();
+    useArtifactStore.setState({
+      activeArtifact: null,
+      viewMode: 'preview',
+      artifactsByConversation: {},
+    });
+    useUIStore.setState({ activeRightPanel: null });
+  });
+
+  it('renders an inline artifact chip on the message that produced it', () => {
+    useChatStore.setState({
+      activeConversationId: 'conv-1',
+      messagesByConversation: {
+        'conv-1': [
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            content: 'Here is your file.',
+            createdAt: new Date().toISOString(),
+            artifacts: [
+              {
+                id: 'artifact-1',
+                type: 'markdown',
+                title: 'Release Notes',
+                content: '# Hello Artifact',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const { html, unmount } = renderClient(
+      <ChatInterface runtime={null} enableSearchOverlay={false} />,
+    );
+    try {
+      expect(html).toContain('Release Notes');
+    } finally {
+      unmount();
+    }
+  });
+
+  it('opens with the real artifact content and a working Edit affordance once wired', () => {
+    const artifact = {
+      id: 'artifact-1',
+      type: 'markdown' as const,
+      title: 'Release Notes',
+      content: '# Hello Artifact',
+    };
+    useChatStore.setState({
+      activeConversationId: 'conv-1',
+      messagesByConversation: {
+        'conv-1': [
+          {
+            id: 'msg-1',
+            role: 'assistant',
+            content: 'Here is your file.',
+            createdAt: new Date().toISOString(),
+            artifacts: [artifact],
+          },
+        ],
+      },
+    });
+    useArtifactStore.setState({ activeArtifact: artifact, viewMode: 'code' });
+    useUIStore.setState({ activeRightPanel: 'artifact' });
+
+    const { html, unmount } = renderClient(
+      <ChatInterface runtime={null} enableSearchOverlay={false} />,
+    );
+    try {
+      // The panel is mounted and renders the REAL artifact content, not a
+      // "No artifact selected" placeholder.
+      expect(html).not.toContain('No artifact selected');
+      expect(html).toContain('# Hello Artifact');
+
+      // Before the fix, ChatInterface never passed `onSaveEdit` to
+      // ArtifactPanel, so this button never rendered regardless of state.
+      expect(html).toContain('Edit artifact');
+    } finally {
+      unmount();
+    }
   });
 });

@@ -477,6 +477,53 @@ async fn test_background_agent_tools_are_policy_registered() {
     );
 }
 
+#[test]
+fn test_create_artifact_registry_matches_executor_contract() {
+    let registry = create_registry_with_all_tools();
+
+    let tool = registry
+        .get_tool("create_artifact")
+        .expect("create_artifact should be registered");
+    let params: Vec<&str> = tool
+        .parameters
+        .iter()
+        .map(|parameter| parameter.name.as_str())
+        .collect();
+    assert!(params.contains(&"artifact_type"));
+    assert!(params.contains(&"title"));
+    assert!(params.contains(&"content"));
+    assert!(params.contains(&"language"));
+}
+
+#[tokio::test]
+async fn test_create_artifact_is_policy_registered() {
+    // Without a policy entry, ToolExecutionGuard::validate_tool_call rejects
+    // ANY tool call for an unregistered tool name with UnauthorizedTool —
+    // this test guards against that regression (DESKTOP-ARTIFACTS-ENTIRELY-
+    // UNWIRED-01 fix landing without the matching tool_guard.rs policy).
+    let guard = crate::sys::security::ToolExecutionGuard::new();
+
+    guard
+        .validate_tool_call(
+            "create_artifact",
+            &json!({
+                "artifact_type": "markdown",
+                "title": "Notes",
+                "content": "# Hello",
+                "language": null
+            }),
+        )
+        .await
+        .expect("create_artifact canonical parameters should be allowed");
+
+    // Benign, app-owned-store writes shouldn't require user confirmation
+    // (same trust boundary as memory_remember).
+    assert_eq!(
+        guard.get_safety_tier("create_artifact"),
+        crate::sys::security::ToolSafetyTier::Safe
+    );
+}
+
 #[tokio::test]
 async fn test_background_agent_start_requires_real_app_handle() {
     let registry = create_registry_with_all_tools();

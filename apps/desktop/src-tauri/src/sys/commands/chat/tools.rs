@@ -1367,6 +1367,8 @@ pub async fn execute_chat_tool(
     conversation_mode: Option<String>,
     tool_call_id: Option<&str>,
     prebuilt_registry: Option<Arc<ToolRegistry>>,
+    conversation_id: Option<i64>,
+    frontend_message_id: Option<String>,
 ) -> Result<String> {
     use crate::core::llm::tool_executor::ToolExecutor;
     use crate::core::llm::ToolCall;
@@ -1393,6 +1395,8 @@ pub async fn execute_chat_tool(
     let mut executor = ToolExecutor::with_app_handle(registry, handle.clone());
     executor.set_project_folder(project_folder);
     executor.set_conversation_mode(conversation_mode);
+    executor.set_conversation_id(conversation_id);
+    executor.set_frontend_message_id(frontend_message_id);
 
     let tool_call_id = tool_call_id
         .map(str::trim)

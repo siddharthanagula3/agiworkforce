@@ -70,6 +70,44 @@ interface ToolEventPayload {
   duration_ms?: number;
 }
 
+// Raw payload for the `chat:artifact` event, emitted by
+// `core/llm/tool_executor/artifact_tools.rs::execute_create_artifact_tool`
+// when the model calls the `create_artifact` tool during a live turn.
+interface ArtifactEventPayload {
+  conversation_id: string | number | null;
+  message_id?: string | number | null;
+  artifact: {
+    id: string;
+    type: string;
+    title?: string;
+    content: string;
+    language?: string | null;
+    metadata?: Record<string, unknown>;
+  };
+}
+
+// Raw shape of the Rust `ArtifactResponse<T>` wrapper
+// (apps/desktop/src-tauri/src/sys/commands/artifacts.rs).
+interface RawArtifactResponse<T> {
+  success: boolean;
+  data: T | null;
+  error: string | null;
+}
+
+// Raw shape of the Rust `Artifact` struct (core/artifacts/types.rs) as
+// returned by `artifact_update`. Only the fields this runtime reads.
+interface RawArtifact {
+  id: string;
+  content: string;
+}
+
+// Raw shape of the Rust `ArtifactVersion` struct (core/artifacts/types.rs)
+// as returned by `artifact_get_versions`.
+interface RawArtifactVersion {
+  version: number;
+  content: string;
+}
+
 // ---------------------------------------------------------------------------
 // Raw Rust response shapes (snake_case before mapping to ChatRuntime types)
 // ---------------------------------------------------------------------------
@@ -426,6 +464,25 @@ export class TauriRuntime implements ChatRuntime {
       }
     });
 
+    // chat:artifact — emitted when a `create_artifact` tool call completes
+    // during this turn (core/llm/tool_executor/artifact_tools.rs). Mirrors
+    // the chat:stream-chunk conversation-id filter above.
+    await registerListener<ArtifactEventPayload>('chat:artifact', (payload) => {
+      const convId = payload.conversation_id === null ? null : String(payload.conversation_id);
+      if (convId !== null && convId !== String(backendConversationId)) return;
+      push({
+        type: 'artifact',
+        data: {
+          id: payload.artifact.id,
+          type: payload.artifact.type as import('@agiworkforce/unified-chat').Artifact['type'],
+          title: payload.artifact.title,
+          content: payload.artifact.content,
+          language: payload.artifact.language ?? undefined,
+          metadata: payload.artifact.metadata,
+        },
+      });
+    });
+
     // Cleanup helper
     const cleanup = () => {
       for (const unlisten of unlisteners) {
@@ -605,5 +662,53 @@ export class TauriRuntime implements ChatRuntime {
 
   getPlatform(): 'desktop' | 'web' | 'mobile' {
     return 'desktop';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Artifact persistence — backs ArtifactPanel's edit-in-place + version
+  // stepper (packages/unified-chat/src/components/{ChatInterface,ArtifactPanel}.tsx).
+  // ---------------------------------------------------------------------------
+
+  async updateArtifact(
+    artifactId: string,
+    content: string,
+  ): Promise<{ id: string; content: string }> {
+    // Editing a historical version (pseudo-id `<realId>::v<n>`, see
+    // getArtifactVersions below) always writes back to the real artifact —
+    // matching the backend's own rollback() semantics ("rollback creates a
+    // new version with the old content").
+    const realId = artifactId.split('::v')[0] ?? artifactId;
+    const response = await invoke<RawArtifactResponse<RawArtifact>>('artifact_update', {
+      id: realId,
+      content,
+      changeDescription: 'Edited from chat',
+      title: null,
+      metadata: null,
+      tags: null,
+    });
+    if (!response.success || !response.data) {
+      throw new Error(response.error ?? 'Failed to save artifact edit');
+    }
+    return { id: response.data.id, content: response.data.content };
+  }
+
+  async getArtifactVersions(
+    current: import('@agiworkforce/unified-chat').Artifact,
+  ): Promise<import('@agiworkforce/unified-chat').Artifact[]> {
+    const realId = current.id.split('::v')[0] ?? current.id;
+    const response = await invoke<RawArtifactResponse<RawArtifactVersion[]>>(
+      'artifact_get_versions',
+      { id: realId },
+    );
+    if (!response.success || !response.data) {
+      return [];
+    }
+    const versions = [...response.data].sort((a, b) => a.version - b.version);
+    const latest = versions.length > 0 ? versions[versions.length - 1] : undefined;
+    return versions.map((version) => ({
+      ...current,
+      id: latest && version.version === latest.version ? realId : `${realId}::v${version.version}`,
+      content: version.content,
+    }));
   }
 }

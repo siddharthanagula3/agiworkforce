@@ -1068,6 +1068,24 @@ impl ToolExecutionGuard {
             },
         );
 
+        // Artifact creation — writes only to the app-owned artifact store
+        // (same trust boundary as memory_remember below), never the user's
+        // filesystem, so it doesn't need approval.
+        allowed_tools.insert(
+            "create_artifact".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "artifact_type".to_string(),
+                    "title".to_string(),
+                    "content".to_string(),
+                    "language".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
         // Memory tools for persistent cross-session storage
         allowed_tools.insert(
             "memory_remember".to_string(),

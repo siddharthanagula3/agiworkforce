@@ -2254,6 +2254,54 @@ impl ToolRegistry {
             dependencies: vec![],
         })?;
 
+        // Artifact creation — renders substantial/reusable content in a
+        // dedicated side panel instead of inline in the chat reply (mirrors
+        // Claude/ChatGPT-style "artifacts"/"canvas"). See
+        // core/llm/tool_executor/artifact_tools.rs for the implementation
+        // and the frontend-type -> ArtifactType mapping.
+        self.register_tool(Tool {
+            id: "create_artifact".to_string(),
+            name: "Create Artifact".to_string(),
+            description: "Create a rich, standalone artifact (code file, markdown document, HTML page, Mermaid diagram, React component, spreadsheet/table, or presentation) that renders live in a dedicated side panel next to the chat, instead of inline in the reply. Use this for substantial, self-contained, or reusable content — a complete code file, a full document, a diagram, or an interactive HTML/React preview. Do not use it for short snippets, explanations, or conversational text; keep those in the normal reply.".to_string(),
+            capabilities: vec![ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "artifact_type".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "One of: code, markdown, document, html, mermaid, react, svg, table, spreadsheet, presentation.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "title".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Short, descriptive title for the artifact.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "content".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "The full artifact content (source code, markdown text, HTML markup, Mermaid diagram syntax, React component source, CSV/table data, etc.). Provide the complete content — this is not incrementally appended.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "language".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Programming language for code artifacts (e.g. python, typescript, rust). Ignored for non-code artifact types.".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
         // Memory tools for persistent cross-session memory
         self.register_tool(Tool {
             id: "memory_remember".to_string(),

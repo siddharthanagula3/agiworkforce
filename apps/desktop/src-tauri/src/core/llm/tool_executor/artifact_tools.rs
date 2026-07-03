@@ -1,0 +1,284 @@
+//! Artifact creation tool.
+//!
+//! Lets the model create a rich, renderable artifact (code, markdown, HTML,
+//! Mermaid diagram, React component, spreadsheet/table, or presentation)
+//! during a live chat turn. This is the LLM-facing trigger for the
+//! Artifacts/Canvas feature: the model emits a normal tool call (exactly
+//! like `document_create_word`/`document_create_pdf`), we persist it via the
+//! existing `ArtifactState`/`SharedArtifactStore` (core/artifacts/store.rs),
+//! and then emit a `chat:artifact` Tauri event so `TauriRuntime.ts` can push
+//! a `{ type: 'artifact' }` stream chunk to the chat UI — reusing the exact
+//! event -> StreamChunk -> StreamEvent -> message.artifacts pipeline that
+//! already exists and works for tool calls / tool results.
+//!
+//! ## Type mapping
+//!
+//! The frontend's `ArtifactType` (packages/types/src/conversation.ts) is a
+//! richer superset (`react`, `svg`, `table`, `markdown` as distinct from
+//! `document`, etc.) than the backend's persistence-oriented `ArtifactType`
+//! (core/artifacts/types.rs: Code/Document/Spreadsheet/Diagram/Web/Chart/
+//! Presentation/Image). Rather than a lossy round trip, this tool accepts
+//! the frontend-shaped type string directly (so the model — and the emitted
+//! event — always uses the exact type the renderer expects) and maps it to
+//! the closest backend `ArtifactType` + metadata only for persistence via
+//! `ArtifactState` (so the artifact is still versionable/listable through
+//! the existing `artifact_*` Tauri commands). See `map_frontend_type` below
+//! for the table. `react` has no backend analog and is persisted as `Code`;
+//! this is a documented, intentional tradeoff (see known-flaws.md
+//! DESKTOP-ARTIFACTS-ENTIRELY-UNWIRED-01).
+
+use super::*;
+use crate::core::artifacts::{
+    ArtifactMetadata, ArtifactType as BackendArtifactType, CodeMetadata, CreateArtifactRequest,
+    DiagramMetadata, DocumentMetadata, SpreadsheetMetadata, WebMetadata,
+};
+use crate::sys::commands::artifacts::ArtifactState;
+use tauri::{Emitter, Manager};
+
+/// Frontend-facing artifact types this tool accepts, in the exact casing the
+/// `@agiworkforce/unified-chat` `ArtifactType` union and `ArtifactRenderer`/
+/// `ArtifactPanel` dispatch on. Keep in sync with the allow-list in
+/// `packages/unified-chat/src/components/ArtifactRenderer.tsx` and
+/// `ArtifactPanel.tsx` — types outside this list either aren't rendered at
+/// all (e.g. `chart`) or have no backend persistence mapping yet.
+const SUPPORTED_FRONTEND_TYPES: &[&str] = &[
+    "code",
+    "markdown",
+    "document",
+    "html",
+    "mermaid",
+    "react",
+    "svg",
+    "table",
+    "spreadsheet",
+    "presentation",
+];
+
+/// Map a frontend artifact-type string to the closest backend `ArtifactType`
+/// + default metadata for persistence. Returns `None` for unsupported types.
+fn map_frontend_type(
+    frontend_type: &str,
+    language: Option<&str>,
+) -> Option<(BackendArtifactType, ArtifactMetadata)> {
+    match frontend_type {
+        "code" => Some((
+            BackendArtifactType::Code,
+            ArtifactMetadata::Code(CodeMetadata {
+                language: language.unwrap_or("text").to_string(),
+                ..Default::default()
+            }),
+        )),
+        // React has no backend-native type; persist as Code (closest fit)
+        // while the emitted wire event still carries `type: "react"` so the
+        // frontend renders it with ReactPreview.
+        "react" => Some((
+            BackendArtifactType::Code,
+            ArtifactMetadata::Code(CodeMetadata {
+                language: language.unwrap_or("tsx").to_string(),
+                ..Default::default()
+            }),
+        )),
+        "markdown" | "document" => Some((
+            BackendArtifactType::Document,
+            ArtifactMetadata::Document(DocumentMetadata {
+                format: "markdown".to_string(),
+                ..Default::default()
+            }),
+        )),
+        "html" => Some((BackendArtifactType::Web, ArtifactMetadata::Web(WebMetadata::default()))),
+        "mermaid" => Some((
+            BackendArtifactType::Diagram,
+            ArtifactMetadata::Diagram(DiagramMetadata {
+                diagram_type: "mermaid".to_string(),
+                theme: None,
+            }),
+        )),
+        // SVG persists under Image (binary/markup visual content); the wire
+        // event still carries `type: "svg"` for the sanitized inline renderer.
+        "svg" => Some((BackendArtifactType::Image, ArtifactMetadata::default())),
+        "table" | "spreadsheet" => Some((
+            BackendArtifactType::Spreadsheet,
+            ArtifactMetadata::Spreadsheet(SpreadsheetMetadata::default()),
+        )),
+        "presentation" => Some((BackendArtifactType::Presentation, ArtifactMetadata::default())),
+        _ => None,
+    }
+}
+
+impl ToolExecutor {
+    pub(crate) async fn execute_create_artifact_tool(
+        &self,
+        args: &HashMap<String, Value>,
+        tool_id: &str,
+    ) -> Result<ToolResult> {
+        let app = match &self.app_handle {
+            Some(app) => app.clone(),
+            None => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": "App handle not available for artifact creation", "success": false }),
+                    error: Some("App handle not available for artifact creation".to_string()),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+
+        let frontend_type = match args.get("artifact_type").and_then(|v| v.as_str()) {
+            Some(t) if !t.trim().is_empty() => t.trim().to_lowercase(),
+            _ => {
+                let message = "Missing artifact_type parameter".to_string();
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": message, "success": false }),
+                    error: Some(message),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                });
+            }
+        };
+
+        let title = match args.get("title").and_then(|v| v.as_str()) {
+            Some(t) if !t.trim().is_empty() => t.trim().to_string(),
+            _ => {
+                let message = "Missing title parameter".to_string();
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": message, "success": false }),
+                    error: Some(message),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                });
+            }
+        };
+
+        let content = match args.get("content").and_then(|v| v.as_str()) {
+            Some(c) if !c.is_empty() => c.to_string(),
+            _ => {
+                let message = "Missing content parameter".to_string();
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": message, "success": false }),
+                    error: Some(message),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                });
+            }
+        };
+
+        let language = args
+            .get("language")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let Some((backend_type, metadata)) = map_frontend_type(&frontend_type, language.as_deref())
+        else {
+            let message = format!(
+                "Unsupported artifact_type '{}'. Supported types: {}.",
+                frontend_type,
+                SUPPORTED_FRONTEND_TYPES.join(", ")
+            );
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": message, "success": false }),
+                error: Some(message),
+                metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+            });
+        };
+
+        let state = app.state::<ArtifactState>();
+        let request = CreateArtifactRequest {
+            title: title.clone(),
+            artifact_type: backend_type,
+            content: content.clone(),
+            metadata: Some(metadata),
+            conversation_id: self.conversation_id,
+            message_id: None,
+            tags: None,
+        };
+
+        let artifact = match state.0.create(request) {
+            Ok(artifact) => artifact,
+            Err(e) => {
+                let message = format!("Failed to create artifact: {}", e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": message, "success": false }),
+                    error: Some(message),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                });
+            }
+        };
+
+        // Emit the wire event the frontend listens for (TauriRuntime.ts
+        // registers a `chat:artifact` listener mirroring `chat:stream-chunk`).
+        // The `artifact.type` sent over the wire is the ORIGINAL frontend
+        // type string (not the coarser backend enum) so the renderer picks
+        // the right sub-component (ReactPreview, MermaidArtifact, etc.).
+        let payload = json!({
+            "conversation_id": self.conversation_id,
+            "message_id": self.frontend_message_id,
+            "artifact": {
+                "id": artifact.id,
+                "type": frontend_type,
+                "title": title,
+                "content": content,
+                "language": language,
+                "metadata": {},
+            }
+        });
+        let _ = app.emit("chat:artifact", payload);
+
+        Ok(ToolResult {
+            success: true,
+            data: json!({
+                "artifact_id": artifact.id,
+                "artifact_type": frontend_type,
+                "title": title,
+                "status": "created",
+                "success": true,
+            }),
+            error: None,
+            metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_all_supported_frontend_types() {
+        for &frontend_type in SUPPORTED_FRONTEND_TYPES {
+            let mapped = map_frontend_type(frontend_type, None);
+            assert!(
+                mapped.is_some(),
+                "expected a backend mapping for supported type '{frontend_type}'"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_unsupported_frontend_type() {
+        assert!(map_frontend_type("chart", None).is_none());
+        assert!(map_frontend_type("video", None).is_none());
+        assert!(map_frontend_type("", None).is_none());
+    }
+
+    #[test]
+    fn code_type_uses_requested_language() {
+        let (backend_type, metadata) = map_frontend_type("code", Some("python")).unwrap();
+        assert_eq!(backend_type, BackendArtifactType::Code);
+        match metadata {
+            ArtifactMetadata::Code(meta) => assert_eq!(meta.language, "python"),
+            other => panic!("expected Code metadata, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mermaid_type_maps_to_diagram() {
+        let (backend_type, metadata) = map_frontend_type("mermaid", None).unwrap();
+        assert_eq!(backend_type, BackendArtifactType::Diagram);
+        match metadata {
+            ArtifactMetadata::Diagram(meta) => assert_eq!(meta.diagram_type, "mermaid"),
+            other => panic!("expected Diagram metadata, got {other:?}"),
+        }
+    }
+}

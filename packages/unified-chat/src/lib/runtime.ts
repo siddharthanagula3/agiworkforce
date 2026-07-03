@@ -51,6 +51,30 @@ export interface ChatRuntime {
 
   /** Returns the current platform identifier. */
   getPlatform?(): 'desktop' | 'web' | 'mobile';
+
+  /**
+   * Persist an edit to an artifact's content (backs `ArtifactPanel`'s
+   * edit-in-place `onSaveEdit`). Backends that version artifacts (e.g.
+   * desktop's `ArtifactState`) create a new version. Returns only `id` +
+   * `content` (not a full `Artifact`) — the backend's persisted type is a
+   * coarser enum than the frontend `ArtifactType`, so it cannot honestly
+   * reconstruct `type`/`language`/`metadata`; the caller merges this into
+   * its already-known `Artifact` instead. Optional — hosts without artifact
+   * persistence fall back to an in-memory-only edit.
+   */
+  updateArtifact?(artifactId: string, content: string): Promise<{ id: string; content: string }>;
+
+  /**
+   * Fetch version history for an artifact, for `ArtifactPanel`'s version
+   * stepper. `current` is the caller's currently-known `Artifact` and is
+   * used as the template for `type`/`title`/`language`/`metadata` — backend
+   * version rows only carry raw content, and reconstructing `type` from a
+   * coarser backend type enum would be lossy for types like `react`/`svg`.
+   * Returns entries ordered oldest-first; every entry except the latest
+   * uses a `<id>::v<n>` pseudo-id so the stepper can tell versions apart,
+   * while the latest entry keeps `current`'s real id.
+   */
+  getArtifactVersions?(current: Artifact): Promise<Artifact[]>;
 }
 
 export interface SendMessageOptions {
