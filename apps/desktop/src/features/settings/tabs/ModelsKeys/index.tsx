@@ -43,6 +43,10 @@ const BYOK_PROVIDERS: ReadonlyArray<{ id: Provider; name: string; placeholder: s
   { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...' },
   { id: 'open_router', name: 'OpenRouter', placeholder: 'sk-or-...' },
   { id: 'nvidia_nim', name: 'NVIDIA NIM', placeholder: 'nvapi-...' },
+  { id: 'groq', name: 'Groq', placeholder: 'API key...' },
+  { id: 'qwen', name: 'Qwen (Alibaba)', placeholder: 'API key...' },
+  { id: 'moonshot', name: 'Moonshot (Kimi)', placeholder: 'API key...' },
+  { id: 'zhipu', name: 'Zhipu (GLM)', placeholder: 'API key...' },
 ] as const;
 
 type ProviderHealth = {
