@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Pressable, RefreshControl, Alert, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
@@ -453,9 +453,17 @@ interface AgentCardProps {
 function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
-  // Approval requests from the agent store, filtered to pending ones for this context
-  const pendingApprovals = useAgentStore((state) =>
-    state.pendingApprovals.filter((r) => r.status === 'pending'),
+  // Approval requests from the agent store, filtered to pending ones for this
+  // context. Select the raw (stable-reference) array and filter in a memo —
+  // filtering inline inside the selector returns a brand-new array on every
+  // store read, which Zustand's default reference equality treats as
+  // "changed" every render, causing an infinite resubscribe/re-render loop
+  // ("Maximum update depth exceeded"). Especially severe here since AgentCard
+  // renders once per agent in a list.
+  const allApprovals = useAgentStore((state) => state.pendingApprovals);
+  const pendingApprovals = useMemo(
+    () => allApprovals.filter((r) => r.status === 'pending'),
+    [allApprovals],
   );
 
   const handleCommand = useCallback(

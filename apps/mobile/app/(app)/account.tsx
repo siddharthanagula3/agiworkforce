@@ -155,7 +155,9 @@ export default function AccountScreen() {
           </Pressable>
           <Separator />
           <Pressable
-            onPress={() => router.push('/(app)/usage' as Parameters<typeof router.push>[0])}
+            onPress={() =>
+              router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
+            }
             className="flex-row items-center justify-between py-3 active:bg-white/5 rounded-lg -mx-1 px-1"
             accessibilityLabel="View usage"
             accessibilityRole="button"

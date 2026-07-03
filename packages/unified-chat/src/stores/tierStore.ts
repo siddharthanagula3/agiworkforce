@@ -57,8 +57,8 @@ export function selectIsCrossProviderSwitch(state: TierState, nextProvider: stri
 
 /**
  * Gate decision for the in-thread provider switch:
- *  - 'allow'           : user has tier ≥ pro_plus, or no conversation active, or same provider
- *  - 'upgrade-required' : user picked a different provider mid-thread on a non-Pro+ tier
+ *  - 'allow'           : user has tier ≥ max, or no conversation active, or same provider
+ *  - 'upgrade-required' : user picked a different provider mid-thread on a non-Max tier
  */
 export function selectProviderSwitchGate(
   state: TierState,

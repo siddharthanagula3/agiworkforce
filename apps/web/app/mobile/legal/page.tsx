@@ -346,6 +346,20 @@ export default function MobileLegalPage() {
               </span>
             </div>
             <div className="agi-colophon-row">
+              <span className="agi-colophon-key">Siri &amp; Shortcuts</span>
+              <span className="agi-colophon-val">
+                The App supports Siri voice phrases, Spotlight actions, and the Shortcuts app (e.g.
+                &ldquo;Ask AGI&hellip;&rdquo;, &ldquo;Summarize with AGI&rdquo;). When you invoke
+                the App this way, the spoken phrase is processed by Apple for speech recognition and
+                may be used by Apple to improve its products, per Apple&rsquo;s own privacy
+                practices. Any text, image, or audio you provide through a Siri/Shortcuts action is
+                sent to
+                {COMPANY} only to the extent necessary to carry out that request and improve the
+                App&rsquo;s responsiveness to it — never for advertising or for training third-party
+                models.
+              </span>
+            </div>
+            <div className="agi-colophon-row">
               <span className="agi-colophon-key">Disclaimers</span>
               <span className="agi-colophon-val">
                 The App is provided &ldquo;as is&rdquo; without warranty of any kind, express or

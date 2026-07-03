@@ -51,7 +51,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
     <Pressable
       testID={`${meta.testIdPrefix}-card`}
       onPress={disabled ? undefined : onSelect}
-      accessibilityRole="radio"
+      accessibilityRole="button"
       accessibilityState={{ selected: isSelected, disabled }}
       accessibilityLabel={meta.title}
       style={{

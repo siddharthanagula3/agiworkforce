@@ -52,6 +52,16 @@ export const FEATURES = {
   /** Billing / subscription / Stripe portal. */
   billing: false,
 
+  /**
+   * Native in-app purchase (StoreKit 2 / Play Billing) for subscription upgrades.
+   * Stays false until: (1) real product IDs exist in App Store Connect / Play
+   * Console (iapProducts.ts SKUs are placeholders), and (2) the server-side
+   * receipt-verification endpoint exists (see useIapPurchaseFlow.ts). Flipping
+   * this on before both are true would let a real purchase be taken with no
+   * server record of it.
+   */
+  iap: false,
+
   /** Auth (login, OAuth, password reset). Signing in IS the Managed Cloud entitlement
    *  in public alpha — Mobile keeps a real auth gate (no demo bypass; user must sign in).
    *  2026-06-13: enabled — Clerk Expo native auth (AuthView) wired in app/_layout.tsx. */

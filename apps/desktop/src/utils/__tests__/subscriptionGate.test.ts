@@ -129,7 +129,7 @@ describe('subscriptionGate', () => {
           subscription: {
             id: 'sub-1',
             user_id: 'user-1',
-            plan_tier: 'hobby',
+            plan_tier: 'basic',
             status: 'canceled',
             stripe_customer_id: 'cus-1',
             stripe_subscription_id: 'sub-1',
@@ -152,7 +152,7 @@ describe('subscriptionGate', () => {
       expect(result.hasAccess).toBe(false);
       expect(result.reason).toContain('canceled');
       expect(result.requiresUpgrade).toBe(true);
-      expect(result.currentTier).toBe('hobby');
+      expect(result.currentTier).toBe('basic');
       expect(result.currentStatus).toBe('canceled');
     });
 
@@ -168,7 +168,7 @@ describe('subscriptionGate', () => {
           subscription: {
             id: 'sub-1',
             user_id: 'user-1',
-            plan_tier: 'hobby',
+            plan_tier: 'basic',
             status: 'past_due',
             stripe_customer_id: 'cus-1',
             stripe_subscription_id: 'sub-1',
@@ -191,7 +191,7 @@ describe('subscriptionGate', () => {
       expect(result.hasAccess).toBe(false);
       expect(result.reason).toContain('past_due');
       expect(result.requiresUpgrade).toBe(false);
-      expect(result.currentTier).toBe('hobby');
+      expect(result.currentTier).toBe('basic');
       expect(result.currentStatus).toBe('past_due');
     });
 
@@ -207,7 +207,7 @@ describe('subscriptionGate', () => {
           subscription: {
             id: 'sub-1',
             user_id: 'user-1',
-            plan_tier: 'hobby',
+            plan_tier: 'basic',
             status: 'past_due',
             stripe_customer_id: 'cus-1',
             stripe_subscription_id: 'sub-1',
@@ -228,7 +228,7 @@ describe('subscriptionGate', () => {
       const result = checkSubscriptionGate();
 
       expect(result.hasAccess).toBe(true);
-      expect(result.currentTier).toBe('hobby');
+      expect(result.currentTier).toBe('basic');
       expect(result.currentStatus).toBe('past_due');
     });
 
@@ -267,7 +267,7 @@ describe('subscriptionGate', () => {
       expect(result.currentStatus).toBe('active');
     });
 
-    it('should allow access when user has hobby tier with active status', () => {
+    it('should allow access when user has basic tier with active status', () => {
       vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
@@ -276,7 +276,7 @@ describe('subscriptionGate', () => {
           subscription: {
             id: 'sub-1',
             user_id: 'user-1',
-            plan_tier: 'hobby',
+            plan_tier: 'basic',
             status: 'active',
             stripe_customer_id: 'cus-1',
             stripe_subscription_id: 'sub-1',
@@ -297,11 +297,11 @@ describe('subscriptionGate', () => {
       const result = checkSubscriptionGate();
 
       expect(result.hasAccess).toBe(true);
-      expect(result.currentTier).toBe('hobby');
+      expect(result.currentTier).toBe('basic');
       expect(result.currentStatus).toBe('active');
     });
 
-    it('should allow access when user has hobby tier with trialing status', () => {
+    it('should allow access when user has basic tier with trialing status', () => {
       vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
@@ -310,7 +310,7 @@ describe('subscriptionGate', () => {
           subscription: {
             id: 'sub-1',
             user_id: 'user-1',
-            plan_tier: 'hobby',
+            plan_tier: 'basic',
             status: 'trialing',
             stripe_customer_id: 'cus-1',
             stripe_subscription_id: 'sub-1',
@@ -331,7 +331,7 @@ describe('subscriptionGate', () => {
       const result = checkSubscriptionGate();
 
       expect(result.hasAccess).toBe(true);
-      expect(result.currentTier).toBe('hobby');
+      expect(result.currentTier).toBe('basic');
       expect(result.currentStatus).toBe('trialing');
     });
 
@@ -461,7 +461,7 @@ describe('subscriptionGate', () => {
           subscription: {
             id: 'sub-1',
             user_id: 'user-1',
-            plan_tier: 'hobby',
+            plan_tier: 'basic',
             status: 'active',
             stripe_customer_id: 'cus-1',
             stripe_subscription_id: 'sub-1',
@@ -485,16 +485,16 @@ describe('subscriptionGate', () => {
 
   describe('getUpgradeMessage', () => {
     it('should return message for free tier', () => {
-      expect(getUpgradeMessage('free')).toBe('Subscribe to Hobby plan to unlock AGI Workforce');
+      expect(getUpgradeMessage('free')).toBe('Subscribe to Basic plan to unlock AGI Workforce');
     });
 
     it('should return message for no tier', () => {
-      expect(getUpgradeMessage(undefined)).toBe('Subscribe to Hobby plan to unlock AGI Workforce');
+      expect(getUpgradeMessage(undefined)).toBe('Subscribe to Basic plan to unlock AGI Workforce');
     });
 
     it('should return upgrade message for other tiers', () => {
       expect(getUpgradeMessage('pro')).toBe(
-        'Upgrade to Hobby plan or higher to continue using AGI Workforce',
+        'Upgrade to Basic plan or higher to continue using AGI Workforce',
       );
     });
   });

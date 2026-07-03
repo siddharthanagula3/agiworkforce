@@ -73,17 +73,18 @@ export default function SharedLinksScreen() {
             padding: 14,
           }}
           accessible
-          accessibilityLabel="Shared Links requires AGI Cloud access."
+          accessibilityLabel="Shared Links isn't available on mobile yet."
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <Lock size={14} color={c.agentWarning} />
             <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
-              AGI Cloud
+              Coming soon
             </Text>
           </View>
           <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-            Shared Links lets you publish conversations and invite collaborators. Enter an invite
-            code or join the waitlist for AGI Cloud access.
+            Shared Links lets you publish conversations and invite collaborators. This feature isn’t
+            available on mobile yet — join the waitlist to get notified, or enter your invitation
+            code if you have early access.
           </Text>
         </View>
 
@@ -121,7 +122,7 @@ export default function SharedLinksScreen() {
                 maxWidth: 260,
               }}
             >
-              Shared conversations will appear here after AGI Cloud access is enabled.
+              Shared conversations will appear here once this feature ships.
             </Text>
           </View>
         </Card>
@@ -135,14 +136,20 @@ export default function SharedLinksScreen() {
             alignItems: 'center',
             backgroundColor: c.teal,
           }}
-          accessibilityLabel="Enter invite code or join the AGI Cloud waitlist"
+          accessibilityLabel="Join the Shared Links waitlist or enter your invitation code"
           accessibilityRole="button"
         >
-          <Text style={{ color: c.white, fontSize: 16, fontWeight: '600' }}>Open AGI Cloud</Text>
+          <Text style={{ color: c.white, fontSize: 16, fontWeight: '600' }}>Join waitlist</Text>
         </Pressable>
       </ScrollView>
 
-      <InviteCodeModal open={showModal} onClose={() => setShowModal(false)} source="shared-links" />
+      <InviteCodeModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        source="shared-links"
+        title="Shared Links"
+        body="This feature isn’t available on mobile yet. Join the waitlist to get notified, or enter your invitation code if you have early access."
+      />
     </SafeAreaView>
   );
 }

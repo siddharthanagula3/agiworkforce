@@ -77,7 +77,7 @@ export function SubscriptionLockDialog({
                 <span className="font-medium text-sm">Unlock Full Access</span>
               </div>
               <p className="text-xs text-center text-zinc-400">
-                Subscribe to Hobby plan or higher to access all features including API key
+                Subscribe to Basic plan or higher to access all features including API key
                 management and unlimited automations.
               </p>
             </div>

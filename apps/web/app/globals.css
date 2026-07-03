@@ -2768,6 +2768,74 @@
   text-decoration-color: var(--agi-ink);
 }
 
+/* Featured tier grid (Team/Enterprise) — larger cards, amber-accented, given
+   top billing per the product's team/enterprise-first GTM. */
+[data-design='agi'] .agi-tier-grid--featured {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 920px;
+  gap: 20px;
+}
+@media (max-width: 720px) {
+  [data-design='agi'] .agi-tier-grid--featured {
+    grid-template-columns: 1fr;
+  }
+}
+[data-design='agi'] .agi-tier--featured {
+  border-color: var(--agi-amber);
+  background: linear-gradient(180deg, var(--agi-amber-soft), transparent 42%), var(--agi-card);
+  padding: 34px 30px 32px;
+}
+[data-design='agi'] .agi-tier--featured .agi-tier-name {
+  color: var(--agi-amber);
+}
+
+/* Four-up individual cloud grid (Free/Basic/Pro/Max). */
+[data-design='agi'] .agi-tier-grid--four {
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 1100px) {
+  [data-design='agi'] .agi-tier-grid--four {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  [data-design='agi'] .agi-tier-grid--four {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Compact tier grid (Local/BYOK wedge) — smaller cards, lower visual
+   emphasis than Team/Enterprise per the product's local-first-wedge GTM. */
+[data-design='agi'] .agi-tier-grid--compact {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 720px;
+  gap: 16px;
+}
+@media (max-width: 640px) {
+  [data-design='agi'] .agi-tier-grid--compact {
+    grid-template-columns: 1fr;
+  }
+}
+[data-design='agi'] .agi-tier--compact {
+  padding: 22px 22px 24px;
+  gap: 12px;
+}
+[data-design='agi'] .agi-tier--compact .agi-tier-price-num {
+  font-size: 26px;
+}
+[data-design='agi'] .agi-tier-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--agi-amber);
+  background: var(--agi-amber-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+  width: fit-content;
+}
+
 /* providers grid */
 [data-design='agi'] .agi-providers-grid {
   display: grid;

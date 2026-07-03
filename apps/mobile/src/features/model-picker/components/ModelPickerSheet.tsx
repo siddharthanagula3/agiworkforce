@@ -7,8 +7,8 @@ import BottomSheet, {
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import { Check, Cpu, Search, X as XIcon } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
@@ -109,6 +109,7 @@ export function ModelPickerSheet({
   modelScope = 'local',
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
+  const router = useRouter();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -127,7 +128,6 @@ export function ModelPickerSheet({
 
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const completeModelList = useMemo(
     () => getModelListForCloudAccess(cloudUnlocked),
     [cloudUnlocked],
@@ -189,19 +189,20 @@ export function ModelPickerSheet({
     [onSelect, setModel, sheetRef],
   );
 
+  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default — the
+  // signed-in entitlement IS the gate, no invite/waitlist. Callers may still supply
+  // onOpenCloudAccess for screen-specific handling; otherwise route to sign-in
+  // directly, matching chat.tsx / chat/[id].tsx / models.tsx (fix 0fe0598c3).
   const openInvite = useCallback(() => {
-    if (onOpenCloudAccess) {
-      sheetRef.current?.close();
-      requestAnimationFrame(() => {
-        onOpenCloudAccess('invite');
-      });
-      return;
-    }
     sheetRef.current?.close();
     requestAnimationFrame(() => {
-      setInviteOpen(true);
+      if (onOpenCloudAccess) {
+        onOpenCloudAccess('invite');
+        return;
+      }
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
     });
-  }, [onOpenCloudAccess, sheetRef]);
+  }, [onOpenCloudAccess, router, sheetRef]);
 
   const handleSelectModel = useCallback(
     (id: string) => {
@@ -478,13 +479,6 @@ export function ModelPickerSheet({
           ) : null}
         </BottomSheetScrollView>
       </BottomSheet>
-
-      <InviteCodeModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        source="other"
-        defaultTab="invite"
-      />
     </>
   );
 }

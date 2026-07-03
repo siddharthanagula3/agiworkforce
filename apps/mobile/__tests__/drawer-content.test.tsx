@@ -64,14 +64,6 @@ jest.mock('../src/shared/components/DesktopCompanionWidget', () => ({
   DesktopCompanionWidget: jest.fn().mockReturnValue(null),
 }));
 
-jest.mock('../src/features/cloud-bridge', () => {
-  const { View } = require('react-native');
-  return {
-    InviteCodeModal: ({ open }: { open: boolean }) =>
-      open ? <View testID="invite-code-modal" /> : null,
-  };
-});
-
 jest.mock('../src/features/chat/components/ModeSwitchModal', () => {
   const { View, Pressable } = require('react-native');
   return {
@@ -288,15 +280,15 @@ describe('DrawerContent', () => {
     expect(queryByText('Second Chat')).toBeNull();
   });
 
-  it('opens invite flow from AGI Agent while Cloud is locked', () => {
+  it('routes to sign-in from AGI Agent while Cloud is locked (public alpha, no invite/waitlist gate)', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    const { getByLabelText, getByTestId } = renderDrawer();
+    const { getByLabelText } = renderDrawer();
 
     fireEvent.press(getByLabelText('AGI Agent. Cloud'));
 
     expect(mockCloseDrawer).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalledWith('/(app)/agents');
-    expect(getByTestId('invite-code-modal')).toBeTruthy();
+    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
   });
 
   it('shows consent modal then navigates when AGI Agent is pressed with cloud unlocked', () => {
@@ -306,8 +298,8 @@ describe('DrawerContent', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText, getByTestId, queryByTestId } = renderDrawer();
 
-    // Invite modal must not appear (cloud is already unlocked).
-    expect(queryByTestId('invite-code-modal')).toBeNull();
+    // Must not route to sign-in (cloud is already unlocked).
+    expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
     // Mode-switch consent modal must not be visible yet.
     expect(queryByTestId('mode-switch-modal')).toBeNull();
 

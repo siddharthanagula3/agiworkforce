@@ -766,7 +766,7 @@ impl SearchExecutor {
             }
         }
 
-        // Fallback (or Hobby tier): DuckDuckGo
+        // Fallback (or Basic tier): DuckDuckGo
         self.search_with_duckduckgo(query_trimmed, search_type, num_results)
             .await
     }

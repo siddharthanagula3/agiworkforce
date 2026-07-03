@@ -52,6 +52,11 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
       return 'local';
     case 'free':
       return 'local';
+    case 'basic':
+      // Basic has real cloud access but a small credit budget — same
+      // restrictive gate as free for mid-thread provider switching (Pro+
+      // only), not the "no cloud at all" local-only case.
+      return 'local';
     case 'pro':
       return 'pro';
     case 'team':

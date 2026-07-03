@@ -50,10 +50,12 @@ function getAvatarColor(name: string): string {
 function resolvePlanTier(plan: string): UIPlanTier {
   if (plan === 'local') return 'local';
   if (plan === 'byok' || plan === 'free') return 'byok';
-  if (plan === 'hobby') return 'hobby';
+  // 'hobby' is a legacy value from before the 2026-07-02 tier rename.
+  if (plan === 'hobby' || plan === 'basic') return 'basic';
   if (plan === 'pro') return 'pro';
-  if (plan === 'pro_plus' || plan === 'pro+') return 'pro_plus';
-  if (plan === 'max') return 'max';
+  // 'pro_plus' was removed with no successor (never shipped); closest
+  // remaining tier is 'max'.
+  if (plan === 'pro_plus' || plan === 'pro+' || plan === 'max') return 'max';
   // Fallback: treat unknown as byok (free tier)
   return 'byok';
 }
@@ -65,9 +67,8 @@ function deriveUsageMeter(tier: UIPlanTier): UsageMeter {
       return { remaining: null, resetsAt: null, source: 'unbounded' };
     case 'byok':
       return { remaining: null, resetsAt: null, source: 'user-api-key' };
-    case 'hobby':
+    case 'basic':
     case 'pro':
-    case 'pro_plus':
     case 'max':
       return { remaining: null, resetsAt: null, source: 'managed-plan' };
   }
@@ -150,7 +151,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
           {used} / {total} tokens
           {resetLabel ? ` · resets ${resetLabel}` : ''}
         </span>
-        {isLow && tier === 'hobby' && (
+        {isLow && tier === 'basic' && (
           <button
             type="button"
             onClick={onUpgradeClick}
@@ -296,7 +297,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
                   'shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold',
                   tier === 'local' || tier === 'byok'
                     ? 'bg-[var(--chat-border)] text-[var(--chat-text-muted)]'
-                    : tier === 'hobby'
+                    : tier === 'basic'
                       ? 'bg-blue-500/15 text-blue-400'
                       : 'bg-purple-500/15 text-purple-400',
                 )}

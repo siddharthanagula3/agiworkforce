@@ -8,6 +8,7 @@
     "./async": "./src/async.ts",
     "./format": "./src/format.ts",
     "./privacy-handoff": "./src/privacyHandoff.ts",
+    "./reasoning": "./src/reasoning.ts",
     "./signaling": "./src/signaling.ts",
     "./uuidv7": "./src/uuidv7.ts",
     "./voice": "./src/voice.ts"

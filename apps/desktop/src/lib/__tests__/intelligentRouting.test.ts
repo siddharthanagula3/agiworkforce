@@ -16,7 +16,7 @@ import { routeIntelligentlySync } from '../modelRouter';
 
 describe('IntentClassifier', () => {
   const defaultOptions: ClassificationOptions = {
-    tier: 'hobby',
+    tier: 'basic',
     hasAttachments: false,
     attachmentTypes: [],
   };
@@ -109,41 +109,41 @@ describe('IntentClassifier', () => {
 
 describe('MultiModalRouter', () => {
   describe('getAvailableModels', () => {
-    it('should return image models for hobby tier', () => {
-      const models = getAvailableModels('image', 'hobby');
+    it('should return image models for basic tier', () => {
+      const models = getAvailableModels('image', 'basic');
       expect(models.length).toBeGreaterThan(0);
       expect(models.some((m) => m.id === 'imagen-4.0-fast-generate-001')).toBe(true);
     });
 
     it('should return more models for pro tier', () => {
-      const hobbyModels = getAvailableModels('image', 'hobby');
+      const basicModels = getAvailableModels('image', 'basic');
       const proModels = getAvailableModels('image', 'pro');
-      expect(proModels.length).toBeGreaterThanOrEqual(hobbyModels.length);
+      expect(proModels.length).toBeGreaterThanOrEqual(basicModels.length);
     });
 
     it('should return TTS models', () => {
-      const models = getAvailableModels('tts', 'hobby');
+      const models = getAvailableModels('tts', 'basic');
       expect(models.length).toBeGreaterThan(0);
       expect(models.some((m) => m.id === 'tts-1')).toBe(true);
     });
 
     it('should return STT models', () => {
-      const models = getAvailableModels('stt', 'hobby');
+      const models = getAvailableModels('stt', 'basic');
       expect(models.length).toBeGreaterThan(0);
       expect(models.some((m) => m.id === 'whisper-1')).toBe(true);
     });
 
     it('should return search models', () => {
-      const models = getAvailableModels('search', 'hobby');
+      const models = getAvailableModels('search', 'basic');
       expect(models.length).toBeGreaterThan(0);
       expect(models.some((m) => m.id === 'sonar')).toBe(true);
     });
   });
 
   describe('selectModalityModel', () => {
-    it('should select an image model for hobby tier image generation', () => {
-      const result = selectModalityModel('image', 'hobby');
-      // Hobby tier gets access to economy image models
+    it('should select an image model for basic tier image generation', () => {
+      const result = selectModalityModel('image', 'basic');
+      // Basic tier gets access to economy image models
       expect(result.selectedModel).toBe('imagen-4.0-fast-generate-001');
       expect(result.modality).toBe('image');
     });
@@ -153,21 +153,21 @@ describe('MultiModalRouter', () => {
       expect(['gpt-image-2', 'imagen-4.0-ultra-generate-001']).toContain(result.selectedModel);
     });
 
-    it('should select sonar for hobby search', () => {
-      const result = selectModalityModel('search', 'hobby');
+    it('should select sonar for basic search', () => {
+      const result = selectModalityModel('search', 'basic');
       expect(result.selectedModel).toBe('sonar');
     });
   });
 
   describe('routeToModalityModel', () => {
     it('should route image-gen to image model', () => {
-      const result = routeToModalityModel('image-gen', 'hobby');
+      const result = routeToModalityModel('image-gen', 'basic');
       expect(result).not.toBeNull();
       expect(result!.modality).toBe('image');
     });
 
     it('should route search to search model', () => {
-      const result = routeToModalityModel('search', 'hobby');
+      const result = routeToModalityModel('search', 'basic');
       expect(result).not.toBeNull();
       expect(result!.modality).toBe('search');
     });
@@ -179,7 +179,7 @@ describe('MultiModalRouter', () => {
     });
 
     it('should return null for chat intent', () => {
-      const result = routeToModalityModel('chat', 'hobby');
+      const result = routeToModalityModel('chat', 'basic');
       expect(result).toBeNull();
     });
   });
@@ -262,7 +262,7 @@ describe('Intelligent Routing Integration', () => {
     it('should route image generation to image model', () => {
       const result = routeIntelligentlySync('Generate an image of a mountain', 'auto-economy');
       expect(result.modelCategory).toBe('image');
-      // Economy mode routes to the current hobby-tier image model.
+      // Economy mode routes to the current basic-tier image model.
       expect(result.selectedModel).toBe('imagen-4.0-fast-generate-001');
       expect(result.intent.primary).toBe('image-gen');
     });

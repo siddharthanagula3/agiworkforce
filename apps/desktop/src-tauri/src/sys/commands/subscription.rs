@@ -179,10 +179,10 @@ pub struct PricingPlan {
 pub async fn get_pricing_plans() -> Result<Vec<PricingPlan>, String> {
     Ok(vec![
         PricingPlan {
-            id: "price_hobby".to_string(),
-            tier: "hobby".to_string(),
-            name: "hobby".to_string(),
-            display_name: "Hobby".to_string(),
+            id: "price_basic".to_string(),
+            tier: "basic".to_string(),
+            name: "basic".to_string(),
+            display_name: "Basic".to_string(),
             description: "Perfect for getting started with AI automation".to_string(),
             price_monthly_usd: 10.0,
             price_annual_usd: 120.0,

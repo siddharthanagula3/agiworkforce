@@ -1,20 +1,11 @@
-export type PlanTier =
-  | 'local-only'
-  | 'byok'
-  | 'free'
-  | 'hobby'
-  | 'pro'
-  | 'pro_plus'
-  | 'max'
-  | 'enterprise';
+export type PlanTier = 'local-only' | 'byok' | 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
 
 const VALID_PLAN_TIERS: readonly PlanTier[] = [
   'local-only',
   'byok',
   'free',
-  'hobby',
+  'basic',
   'pro',
-  'pro_plus',
   'max',
   'enterprise',
 ] as const;
@@ -31,9 +22,8 @@ export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
   'local-only': 'Local Mode',
   byok: 'Local Mode + BYOK',
   free: 'Free',
-  hobby: 'Hobby',
+  basic: 'Basic',
   pro: 'Pro',
-  pro_plus: 'Pro+',
   max: 'Max',
   enterprise: 'Enterprise',
 };

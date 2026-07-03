@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -11,7 +11,7 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ArrowLeftRight, Check, ChevronDown, Copy, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/text';
@@ -51,6 +51,9 @@ const initialState = (): TranslateState => ({
 export default function TranslateScreen() {
   const colors = useThemeColors();
   const router = useRouter();
+  // Prefill from the Siri/App Intents deep link (agiworkforce://intent/translate)
+  // dispatched via app/_layout.tsx. Both params are optional free text from Siri.
+  const params = useLocalSearchParams<{ text?: string; targetLanguage?: string }>();
 
   const [sourceLang, setSourceLang] = useState(DEFAULT_SOURCE_LANG);
   const [targetLang, setTargetLang] = useState(DEFAULT_TARGET_LANG);
@@ -59,6 +62,24 @@ export default function TranslateScreen() {
   const [langPickerFor, setLangPickerFor] = useState<'source' | 'target' | null>(null);
 
   const abortRef = useRef(false);
+  const prefilledRef = useRef(false);
+
+  useEffect(() => {
+    if (prefilledRef.current) return;
+    const text = typeof params.text === 'string' ? params.text : undefined;
+    const targetLanguage =
+      typeof params.targetLanguage === 'string' ? params.targetLanguage : undefined;
+    if (!text && !targetLanguage) return;
+
+    prefilledRef.current = true;
+    if (text) setSourceText(text);
+    if (targetLanguage) {
+      const match = SUPPORTED_LANGUAGES.find(
+        (l) => l.label.toLowerCase() === targetLanguage.toLowerCase(),
+      );
+      if (match) setTargetLang(match.code);
+    }
+  }, [params.text, params.targetLanguage]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -453,8 +474,8 @@ export default function TranslateScreen() {
                       gap: 12,
                     })}
                     accessibilityLabel={item.label}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: isActive }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isActive }}
                   >
                     <View style={{ flex: 1 }}>
                       <Text

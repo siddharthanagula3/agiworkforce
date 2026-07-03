@@ -112,7 +112,7 @@ const TERMINAL_KEYWORDS = [
  *
  * @param content - User's message content
  * @param attachments - Optional file attachments
- * @param preferredCost - Cost preference ('low' for Hobby, 'balanced' for Pro+)
+ * @param preferredCost - Cost preference ('low' for Basic, 'balanced' for Pro+)
  * @param autoMode - Auto mode from user's selection (affects model pool)
  * @returns TaskMetadata with intelligent routing information
  */

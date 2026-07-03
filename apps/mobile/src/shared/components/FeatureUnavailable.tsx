@@ -10,7 +10,7 @@
  * In-app navigation never links to these routes (they are orphaned while the
  * flag is off); this is purely defence-in-depth for external entry points.
  */
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Sparkles, ArrowLeft } from 'lucide-react-native';
@@ -56,19 +56,20 @@ export function FeatureUnavailable({ feature }: FeatureUnavailableProps) {
         <Text style={{ color: c.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20 }}>
           This feature is coming in a future update. It isn’t enabled in this build.
         </Text>
-        <Text
+        <Pressable
           onPress={goBack}
           accessibilityRole="button"
+          accessibilityLabel="Go back"
           style={{
-            color: c.teal,
-            fontSize: 15,
-            fontWeight: '600',
-            marginTop: 8,
             flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 8,
           }}
         >
-          <ArrowLeft size={15} color={c.teal} /> Go back
-        </Text>
+          <ArrowLeft size={15} color={c.teal} />
+          <Text style={{ color: c.teal, fontSize: 15, fontWeight: '600' }}>Go back</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );

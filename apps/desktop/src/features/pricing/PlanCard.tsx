@@ -37,15 +37,15 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
     ctaLabel: 'Current plan',
     ctaVariant: 'current',
   },
-  hobby: {
-    price: '$10 / mo',
+  basic: {
+    price: '$8 / mo',
     bullets: [
       'Managed cloud entry tier',
       'Access to flagship models',
       'Cross-device sync (desktop + mobile + web)',
       'Priority bug reports',
     ],
-    ctaLabel: 'Upgrade to Hobby',
+    ctaLabel: 'Upgrade to Basic',
     ctaVariant: 'primary',
   },
   pro: {
@@ -59,23 +59,11 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
     ctaLabel: 'Coming soon',
     ctaVariant: 'waitlist',
   },
-  pro_plus: {
-    price: '$49.99 / mo',
-    bullets: [
-      'Multi-provider in-thread switch (Claude → GPT → Llama)',
-      'Cross-provider session continuity',
-      'Every flagship model included',
-      'Higher monthly quotas',
-      'Priority support',
-    ],
-    ctaLabel: 'Upgrade to Pro+',
-    ctaVariant: 'primary',
-  },
   max: {
     price: '$299.99 / mo',
     bullets: [
       'Unlimited managed tokens',
-      'All Pro+ features',
+      'Every flagship model included',
       'Enterprise-grade audit logging',
       'Dedicated Slack channel',
     ],
@@ -222,7 +210,7 @@ function PlanCardCta({ tier, variant, label, onCtaClick }: PlanCardCtaProps) {
     );
   }
 
-  // primary (Upgrade to Hobby)
+  // primary (Upgrade to Basic)
   return (
     <button
       type="button"

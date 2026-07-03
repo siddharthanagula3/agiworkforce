@@ -29,6 +29,8 @@ interface CloudMessageState {
   setCloudConversations: (cloudConversations: ConversationSummary[]) => void;
   /** Set cloud messages for a specific conversation. */
   setCloudMessages: (conversationId: string, messages: ChatMessage[]) => void;
+  /** Remove a single message from a cloud conversation's cached message list. */
+  deleteCloudMessage: (conversationId: string, messageId: string) => void;
   /** Add a new cloud conversation (returned from POST /api/chat/conversations). */
   addCloudConversation: (conversation: ConversationSummary) => void;
   /** Update a cloud conversation's metadata in-place. */
@@ -74,6 +76,19 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
         set((state) => ({
           messages: { ...state.messages, [conversationId]: messages },
         }));
+      },
+
+      deleteCloudMessage: (conversationId, messageId) => {
+        set((state) => {
+          const msgs = state.messages[conversationId];
+          if (!msgs) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: msgs.filter((m) => m.id !== messageId),
+            },
+          };
+        });
       },
 
       addCloudConversation: (conversation) => {

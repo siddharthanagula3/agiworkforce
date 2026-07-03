@@ -19,6 +19,8 @@ interface AddMemorySheetProps {
   onSave: (content: string, category?: string) => void;
   onUpdate: (id: string, content: string) => void;
   open: boolean;
+  /** Cloud memories sync across devices — "removed from this device" is misleading there. */
+  isCloud?: boolean;
 }
 
 export function AddMemorySheet({
@@ -28,6 +30,7 @@ export function AddMemorySheet({
   onSave,
   onUpdate,
   open,
+  isCloud = false,
 }: AddMemorySheetProps) {
   const colors = useThemeColors();
   const [content, setContent] = useState('');
@@ -62,19 +65,25 @@ export function AddMemorySheet({
   const handleDelete = useCallback(() => {
     if (!editingMemory || !onDelete) return;
 
-    Alert.alert('Delete memory?', 'This removes the memory from this device.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          onDelete(editingMemory.id);
-          setContent('');
-          onClose();
+    Alert.alert(
+      'Delete memory?',
+      isCloud
+        ? 'This removes the memory from your account and every synced device.'
+        : 'This removes the memory from this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            onDelete(editingMemory.id);
+            setContent('');
+            onClose();
+          },
         },
-      },
-    ]);
-  }, [editingMemory, onClose, onDelete]);
+      ],
+    );
+  }, [editingMemory, isCloud, onClose, onDelete]);
 
   return (
     <Modal

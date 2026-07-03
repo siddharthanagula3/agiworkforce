@@ -61,6 +61,7 @@ const FEATURE_LABELS: Record<string, string> = {
   token_cap: 'Higher token limits',
   mcp: 'MCP server support',
   web_search: 'Web search',
+  model_access: 'This model',
 };
 
 /** Fallback label when the feature key is unrecognised. */

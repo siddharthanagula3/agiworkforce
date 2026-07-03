@@ -17,12 +17,14 @@ import {
   Lock,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { getModelMetadataById } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -58,6 +60,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const features = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const selectedModel = useModelStore((s) => s.selectedModel);
+  // The server silently strips the web_search tool for models whose provider
+  // adapter can't wire it up yet (e.g. OpenAI models via the chat-completions
+  // endpoint, which rejects the Responses-API-only web_search_preview tool
+  // type) — showing the toggle there promises a working search that quietly
+  // no-ops. Gate on the catalog's own capability flag so the toggle only
+  // appears for a model that can actually honor it.
+  const selectedModelSupportsSearch =
+    getModelMetadataById(selectedModel)?.capabilities?.search ?? false;
 
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projects = useProjectStore((s) => s.projects);
@@ -276,9 +287,11 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
         {/* Section 3: Tool availability */}
-        {FEATURES.webSearch || FEATURES.imageGen || FEATURES.computerUse ? (
+        {(FEATURES.webSearch && selectedModelSupportsSearch) ||
+        FEATURES.imageGen ||
+        FEATURES.computerUse ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
-            {FEATURES.webSearch ? (
+            {FEATURES.webSearch && selectedModelSupportsSearch ? (
               <CapabilityRow
                 icon={<Globe size={18} color={themeColors.teal} />}
                 label="Web search"
@@ -316,7 +329,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         ) : null}
 
         {/* Divider */}
-        {FEATURES.webSearch || FEATURES.imageGen || FEATURES.computerUse ? (
+        {(FEATURES.webSearch && selectedModelSupportsSearch) ||
+        FEATURES.imageGen ||
+        FEATURES.computerUse ? (
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
         ) : null}
 

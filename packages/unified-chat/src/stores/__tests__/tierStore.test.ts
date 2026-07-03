@@ -22,8 +22,8 @@ describe('tierStore', () => {
     });
 
     it('updates tier via setTier', () => {
-      useTierStore.getState().setTier('pro_plus');
-      expect(selectTier(useTierStore.getState())).toBe('pro_plus');
+      useTierStore.getState().setTier('max');
+      expect(selectTier(useTierStore.getState())).toBe('max');
     });
   });
 
@@ -31,9 +31,8 @@ describe('tierStore', () => {
     it.each([
       ['local', true],
       ['byok', true],
-      ['hobby', false],
+      ['basic', false],
       ['pro', false],
-      ['pro_plus', false],
       ['max', false],
     ] as const)('%s → %s', (tier, expected) => {
       useTierStore.getState().setTier(tier);
@@ -45,9 +44,8 @@ describe('tierStore', () => {
     it.each([
       ['local', false],
       ['byok', false],
-      ['hobby', false],
+      ['basic', false],
       ['pro', false],
-      ['pro_plus', true],
       ['max', true],
     ] as const)('%s → %s', (tier, expected) => {
       useTierStore.getState().setTier(tier);
@@ -83,8 +81,8 @@ describe('tierStore', () => {
       expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe('allow');
     });
 
-    it('upgrade-required for cross-provider on free/hobby/pro', () => {
-      for (const tier of ['local', 'byok', 'hobby', 'pro'] as const) {
+    it('upgrade-required for cross-provider on free/basic/pro', () => {
+      for (const tier of ['local', 'byok', 'basic', 'pro'] as const) {
         useTierStore.setState({ tier, currentConversationProvider: 'anthropic' });
         expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe(
           'upgrade-required',
@@ -92,11 +90,9 @@ describe('tierStore', () => {
       }
     });
 
-    it('allows cross-provider on pro_plus / max', () => {
-      for (const tier of ['pro_plus', 'max'] as const) {
-        useTierStore.setState({ tier, currentConversationProvider: 'anthropic' });
-        expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe('allow');
-      }
+    it('allows cross-provider on max', () => {
+      useTierStore.setState({ tier: 'max', currentConversationProvider: 'anthropic' });
+      expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe('allow');
     });
   });
 });

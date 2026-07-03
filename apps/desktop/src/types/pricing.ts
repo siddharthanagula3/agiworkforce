@@ -4,13 +4,13 @@
  *
  * Legacy aliases `'free'` and `'pay_per_result'` are retained so older rows /
  * pricing-plan rows persisted under the previous schema continue to type-check.
- * New code should use the canonical values: `'local-only' | 'byok' | 'hobby' |
+ * New code should use the canonical values: `'local-only' | 'byok' | 'basic' |
  * 'pro' | 'max' | 'enterprise'`.
  */
 export type PricingModel =
   | 'local-only'
   | 'byok'
-  | 'hobby'
+  | 'basic'
   | 'pro'
   | 'max'
   | 'enterprise'

@@ -7,16 +7,23 @@
  *   - Copy to Clipboard
  *   - Share...
  *
- * Uses @gorhom/bottom-sheet for the action sheet and expo-haptics for feedback.
+ * Regression: this previously used @gorhom/bottom-sheet's plain (non-modal)
+ * BottomSheet, which positions itself relative to its nearest ancestor rather
+ * than the screen. Since this component is mounted inside MessageBubble — a
+ * row inside the virtualized message list — the sheet was clipped to that
+ * row's small bounds and never visible, silently no-opping "Export Message...".
+ * No BottomSheetModalProvider exists in this app to fix it the @gorhom way, so
+ * this uses React Native's native Modal instead — the same proven pattern as
+ * MessageEditModal.tsx in this directory, which renders via a native window
+ * layer and is immune to list-item clipping.
  */
 
-import { useCallback, useRef, useState } from 'react';
-import { View, Pressable, ActivityIndicator } from 'react-native';
-import GorhomBottomSheet from '@gorhom/bottom-sheet';
+import { useCallback, useState } from 'react';
+import { View, Pressable, ActivityIndicator, Modal, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native';
 
-import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
@@ -50,8 +57,6 @@ interface ActionItem {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const SNAP_POINTS = ['38%'];
 
 const ACTIONS: ActionItem[] = [
   {
@@ -95,7 +100,6 @@ export function FileExportButton({
   onClose,
 }: FileExportButtonProps) {
   const colors = useThemeColors();
-  const sheetRef = useRef<GorhomBottomSheet>(null);
   const [loading, setLoading] = useState<ExportAction | null>(null);
   const [success, setSuccess] = useState<ExportAction | null>(null);
 
@@ -103,7 +107,6 @@ export function FileExportButton({
   const title = titleProp ?? (content.split('\n')[0].slice(0, 60) || 'Chat Export');
 
   const handleClose = useCallback(() => {
-    sheetRef.current?.close();
     setLoading(null);
     setSuccess(null);
     onClose();
@@ -160,121 +163,153 @@ export function FileExportButton({
     [content, title, loading, showSuccess],
   );
 
-  if (!visible) return null;
-
   return (
-    <BottomSheet
-      ref={sheetRef}
-      snapPoints={SNAP_POINTS}
-      index={0}
-      enablePanDownToClose
-      onChange={(index) => {
-        if (index === -1) {
-          handleClose();
-        }
-      }}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={handleClose}
+      accessibilityViewIsModal
     >
-      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 4 }}>
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 16,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: '600',
-              color: colors.textPrimary,
-            }}
-          >
-            Export Message
-          </Text>
+      <Pressable
+        style={[styles.backdrop, { backgroundColor: colors.scrim }]}
+        onPress={handleClose}
+        accessibilityLabel="Dismiss export menu"
+        accessibilityRole="button"
+        // accessible=false: without this, a Pressable with a label/role becomes a
+        // leaf accessibility element and swallows every descendant — the whole
+        // sheet (all 4 export actions, the close button) would be invisible to
+        // VoiceOver, reachable only as one opaque "Dismiss export menu" node.
+        // The dedicated "Close export menu" X button remains the labeled,
+        // accessible dismiss path; this backdrop only needs to stay tappable for
+        // sighted users, which accessible=false does not affect.
+        accessible={false}
+      >
+        <SafeAreaView edges={['bottom']} style={styles.safeArea}>
           <Pressable
-            onPress={handleClose}
-            hitSlop={12}
-            accessibilityLabel="Close export menu"
-            accessibilityRole="button"
+            style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}
+            onPress={() => undefined}
+            accessible={false}
           >
-            <X size={20} color={colors.textMuted} />
-          </Pressable>
-        </View>
-
-        {/* Action list */}
-        <View style={{ gap: 4 }}>
-          {ACTIONS.map((action) => {
-            const isLoading = loading === action.key;
-            const isSuccess = success === action.key;
-            const ActionIcon = action.icon;
-
-            return (
-              <Pressable
-                key={action.key}
-                onPress={() => handleAction(action.key)}
-                disabled={loading !== null}
-                accessibilityLabel={action.label}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: loading !== null }}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 14,
-                  paddingVertical: 14,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-                  opacity: loading !== null && !isLoading ? 0.4 : 1,
-                })}
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
               >
-                {/* Icon / spinner / check */}
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    backgroundColor: colors.neutralSurface,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color={colors.teal} />
-                  ) : isSuccess ? (
-                    <Check size={20} color={colors.agentSuccess} />
-                  ) : (
-                    <ActionIcon size={20} color={colors[action.iconColorToken]} />
-                  )}
-                </View>
-
-                {/* Label */}
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: '500',
-                      color: isSuccess ? colors.agentSuccess : colors.textPrimary,
-                    }}
-                  >
-                    {isSuccess ? 'Done!' : action.label}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: colors.textMuted,
-                      marginTop: 2,
-                    }}
-                  >
-                    {action.sublabel}
-                  </Text>
-                </View>
+                Export Message
+              </Text>
+              <Pressable
+                onPress={handleClose}
+                hitSlop={12}
+                accessibilityLabel="Close export menu"
+                accessibilityRole="button"
+              >
+                <X size={20} color={colors.textMuted} />
               </Pressable>
-            );
-          })}
-        </View>
-      </View>
-    </BottomSheet>
+            </View>
+
+            {/* Action list */}
+            <View style={{ gap: 4 }}>
+              {ACTIONS.map((action) => {
+                const isLoading = loading === action.key;
+                const isSuccess = success === action.key;
+                const ActionIcon = action.icon;
+
+                return (
+                  <Pressable
+                    key={action.key}
+                    onPress={() => handleAction(action.key)}
+                    disabled={loading !== null}
+                    accessibilityLabel={action.label}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: loading !== null }}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 14,
+                      paddingVertical: 14,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                      opacity: loading !== null && !isLoading ? 0.4 : 1,
+                    })}
+                  >
+                    {/* Icon / spinner / check */}
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        backgroundColor: colors.neutralSurface,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color={colors.teal} />
+                      ) : isSuccess ? (
+                        <Check size={20} color={colors.agentSuccess} />
+                      ) : (
+                        <ActionIcon size={20} color={colors[action.iconColorToken]} />
+                      )}
+                    </View>
+
+                    {/* Label */}
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight: '500',
+                          color: isSuccess ? colors.agentSuccess : colors.textPrimary,
+                        }}
+                      >
+                        {isSuccess ? 'Done!' : action.label}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: colors.textMuted,
+                          marginTop: 2,
+                        }}
+                      >
+                        {action.sublabel}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </SafeAreaView>
+      </Pressable>
+    </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  safeArea: {
+    width: '100%',
+  },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+});

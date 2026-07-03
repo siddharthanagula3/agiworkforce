@@ -16,8 +16,8 @@ function mapPlanTier(plan: BillingPlan | undefined): UIPlanTier {
   switch (plan) {
     case 'free':
       return 'byok';
-    case 'hobby':
-      return 'hobby';
+    case 'basic':
+      return 'basic';
     case 'pro':
       return 'pro';
     case 'max':

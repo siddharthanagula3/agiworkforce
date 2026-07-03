@@ -6,7 +6,7 @@
  * and what tools/capabilities are needed.
  *
  * Architecture:
- * 1. For Hobby tier: Fast keyword-based classification (free, instant)
+ * 1. For Basic tier: Fast keyword-based classification (free, instant)
  * 2. For Pro+ tiers: Uses a fast, cheap classifier model with recent knowledge cutoff
  * 3. Returns structured intent with confidence and required capabilities
  *
@@ -257,7 +257,7 @@ export interface ClassifiedIntent {
  * Options for intent classification
  */
 export interface ClassificationOptions {
-  tier: 'hobby' | 'pro' | 'max' | 'enterprise';
+  tier: 'basic' | 'pro' | 'max' | 'enterprise';
   hasAttachments: boolean;
   attachmentTypes: Array<'image' | 'audio' | 'video' | 'document'>;
   conversationContext?: string; // Previous messages for context
@@ -489,7 +489,7 @@ const INTENT_TOOLS: Record<IntentType, ToolCategory[]> = {
 // ============================================
 
 /**
- * Fast keyword-based classification (used for Hobby tier or as first pass)
+ * Fast keyword-based classification (used for Basic tier or as first pass)
  * Returns null if confidence is too low
  */
 export function classifyIntentLocally(
@@ -576,7 +576,7 @@ export function classifyIntentLocally(
   }
 
   // Return null if confidence is too low for keyword-based (need LLM)
-  if (confidence < 0.6 && options.tier !== 'hobby') {
+  if (confidence < 0.6 && options.tier !== 'basic') {
     return null;
   }
 
@@ -703,7 +703,7 @@ export function parseIntentResponse(response: string, fallbackMessage: string): 
 
   // Fallback to local classification for ambiguous messages
   const localResult = classifyIntentLocally(fallbackMessage, {
-    tier: 'hobby',
+    tier: 'basic',
     hasAttachments: false,
     attachmentTypes: [],
   });
@@ -773,7 +773,7 @@ function validateIntentType(type: string): IntentType {
 /**
  * Classify user intent
  *
- * For Hobby tier: Uses fast keyword-based classification
+ * For Basic tier: Uses fast keyword-based classification
  * For Pro+ tiers: Uses a fast current model for intelligent classification
  *
  * @param message - User's message
@@ -789,8 +789,8 @@ export async function classifyIntent(
   // First, try local classification
   const localResult = classifyIntentLocally(message, options);
 
-  // For Hobby tier, always use local classification
-  if (options.tier === 'hobby') {
+  // For Basic tier, always use local classification
+  if (options.tier === 'basic') {
     return localResult || DEFAULT_CHAT_INTENT;
   }
 

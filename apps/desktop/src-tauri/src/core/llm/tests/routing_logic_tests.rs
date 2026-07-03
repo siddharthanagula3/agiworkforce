@@ -511,7 +511,7 @@ mod tests {
             true, // requires_vision
             100,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
@@ -530,7 +530,7 @@ mod tests {
             false,
             100,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
@@ -542,14 +542,14 @@ mod tests {
 
     #[test]
     fn test_routing_logic_low_cost() {
-        // CostPriority::Low with hobby plan → OpenAI economy default
+        // CostPriority::Low with basic plan → OpenAI economy default
         let router = LLMRouter::new();
         let context = legacy_context(
             vec!["chat".to_string()],
             false,
             100,
             CostPriority::Low,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
@@ -598,7 +598,7 @@ mod tests {
     fn test_infer_provider_gemini_model_prefix() {
         let router = LLMRouter::new();
         let ctx = intelligent_context(
-            "hobby",
+            "basic",
             Some("multimodal"),
             Some("chat"),
             Some("gemini-3.5-flash"),
@@ -611,7 +611,7 @@ mod tests {
     fn test_infer_provider_deepseek_model_prefix() {
         let router = LLMRouter::new();
         let ctx = intelligent_context(
-            "hobby",
+            "basic",
             Some("coding"),
             Some("chat"),
             Some("deepseek-v4-flash"),
@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn test_infer_provider_grok_model_prefix() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("hobby", Some("reasoning"), Some("chat"), Some("grok-4.3"));
+        let ctx = intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.3"));
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -819,7 +819,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
-    fn test_routing_hobby_simple_chat_routes_to_core_budget_model() {
+    fn test_routing_basic_simple_chat_routes_to_core_budget_model() {
         // Budget plans with no special intent default to the current core low-cost stack.
         let router = LLMRouter::new();
         let context = legacy_context(
@@ -827,7 +827,7 @@ mod tests {
             false,
             100,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
@@ -879,14 +879,14 @@ mod tests {
     }
 
     #[test]
-    fn test_routing_code_intent_hobby_uses_openai_mini() {
+    fn test_routing_code_intent_basic_uses_openai_mini() {
         let router = LLMRouter::new();
         let context = legacy_context(
             vec!["code".to_string()],
             false,
             100,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
@@ -945,7 +945,7 @@ mod tests {
     }
 
     #[test]
-    fn test_routing_all_code_intents_hobby() {
+    fn test_routing_all_code_intents_basic() {
         let router = LLMRouter::new();
         for intent in &[
             "code",
@@ -961,13 +961,13 @@ mod tests {
                 false,
                 100,
                 CostPriority::Balanced,
-                "hobby",
+                "basic",
             );
             let suggestion = router.suggest_for_context(&context);
             assert_eq!(
                 suggestion.provider,
                 Provider::OpenAI,
-                "Code intent '{}' + hobby should route to the OpenAI economy model",
+                "Code intent '{}' + basic should route to the OpenAI economy model",
                 intent
             );
         }
@@ -989,7 +989,7 @@ mod tests {
             false,
             100,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
@@ -1004,7 +1004,7 @@ mod tests {
             false,
             100,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
@@ -1019,10 +1019,10 @@ mod tests {
             false,
             100,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
-        // hobby + writing/research -> Google (Gemini Pro, Complex task)
+        // basic + writing/research -> Google (Gemini Pro, Complex task)
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(
             suggestion.model,
@@ -1060,7 +1060,7 @@ mod tests {
     fn test_intelligent_routing_infer_google_provider() {
         let router = router_with_all_providers();
         let context = intelligent_context(
-            "hobby",
+            "basic",
             Some("multimodal"),
             Some("chat"),
             Some("gemini-3.5-flash"),
@@ -1075,7 +1075,7 @@ mod tests {
         let router = router_with_all_providers();
         // Current DeepSeek chat routing uses the catalog default directly.
         let context = intelligent_context(
-            "hobby",
+            "basic",
             Some("coding"),
             Some("chat"),
             Some("deepseek-v4-flash"),
@@ -1100,7 +1100,7 @@ mod tests {
         // models.json canonicalization maps grok-4.3 + siblings
         // → grok-4.3 (the deprecated families all sunset 2026-05-15).
         let context =
-            intelligent_context("hobby", Some("reasoning"), Some("chat"), Some("grok-4.3"));
+            intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.3"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
         assert_eq!(suggestion.model, "grok-4.3");
@@ -1109,9 +1109,9 @@ mod tests {
     // --- Intelligent routing: intent_type-based (no selected_model) ---
 
     #[test]
-    fn test_intelligent_routing_intent_type_coding_hobby() {
+    fn test_intelligent_routing_intent_type_coding_basic() {
         let router = router_with_all_providers();
-        let context = intelligent_context("hobby", Some("coding"), Some("chat"), None);
+        let context = intelligent_context("basic", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
         assert_eq!(suggestion.model, "gpt-5.4-mini");
@@ -1145,9 +1145,9 @@ mod tests {
     }
 
     #[test]
-    fn test_intelligent_routing_intent_type_reasoning_hobby() {
+    fn test_intelligent_routing_intent_type_reasoning_basic() {
         let router = router_with_all_providers();
-        let context = intelligent_context("hobby", Some("reasoning"), Some("chat"), None);
+        let context = intelligent_context("basic", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(
@@ -1166,9 +1166,9 @@ mod tests {
     }
 
     #[test]
-    fn test_intelligent_routing_intent_type_agentic_hobby() {
+    fn test_intelligent_routing_intent_type_agentic_basic() {
         let router = router_with_all_providers();
-        let context = intelligent_context("hobby", Some("agentic"), Some("chat"), None);
+        let context = intelligent_context("basic", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(
@@ -1199,7 +1199,22 @@ mod tests {
     }
 
     #[test]
-    fn test_intelligent_routing_intent_type_chat_hobby() {
+    fn test_intelligent_routing_intent_type_chat_basic() {
+        let router = router_with_all_providers();
+        let context = intelligent_context("basic", Some("chat"), Some("chat"), None);
+        let suggestion = router.suggest_for_context(&context);
+        assert_eq!(suggestion.provider, Provider::Google);
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::FastCompletion)
+        );
+    }
+
+    #[test]
+    fn test_intelligent_routing_intent_type_chat_legacy_hobby_alias_matches_basic() {
+        // Subscription rows persisted before the 2026-07-02 hobby->basic rename may
+        // still carry the literal string "hobby" in plan_tier; the router must keep
+        // routing them as budget-tier identically to "basic".
         let router = router_with_all_providers();
         let context = intelligent_context("hobby", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
@@ -1232,10 +1247,10 @@ mod tests {
             false,
             15_000,
             CostPriority::Balanced,
-            "hobby",
+            "basic",
         );
         let suggestion = router.suggest_for_context(&context);
-        // hobby + writing -> Google (Complex task), large context doesn't change hobby routing
+        // basic + writing -> Google (Complex task), large context doesn't change basic routing
         assert_eq!(suggestion.provider, Provider::Google);
         assert_eq!(
             suggestion.model,

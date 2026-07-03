@@ -96,17 +96,26 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(`Invalid request: ${errorMessages}`);
   }
 
-  const { plan, billingInterval } = validationResult.data;
+  const { plan, billingInterval, currency } = validationResult.data;
 
-  // Lookup Price ID with type safety
-  const planPrices = STRIPE_PRICE_IDS[plan as keyof typeof STRIPE_PRICE_IDS];
-  if (!planPrices) {
-    throw createError.validation(`Invalid plan: ${plan}`);
-  }
-
-  const priceId = planPrices[billingInterval];
-  if (!priceId) {
-    throw createError.validation(`No price configured for ${plan} ${billingInterval}`);
+  // Lookup Price ID with type safety. 'basic' prices by currency (USD/INR),
+  // not by billing interval — every other plan prices by interval.
+  let priceId: string | undefined;
+  if (plan === 'basic') {
+    priceId =
+      currency === 'inr' ? STRIPE_PRICE_IDS.basic.monthlyInr : STRIPE_PRICE_IDS.basic.monthlyUsd;
+    if (!priceId) {
+      throw createError.validation(`No price configured for basic (${currency ?? 'usd'})`);
+    }
+  } else {
+    const planPrices = STRIPE_PRICE_IDS[plan as 'pro' | 'max' | 'team'];
+    if (!planPrices) {
+      throw createError.validation(`Invalid plan: ${plan}`);
+    }
+    priceId = planPrices[billingInterval];
+    if (!priceId) {
+      throw createError.validation(`No price configured for ${plan} ${billingInterval}`);
+    }
   }
 
   // Get or create Stripe customer to prevent duplicate customers

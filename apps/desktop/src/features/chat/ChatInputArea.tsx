@@ -77,7 +77,7 @@ import {
 } from './hooks';
 
 const PLAN_CREDIT_LIMITS = {
-  hobby: { monthly: 1.0, daily: 0.3 },
+  basic: { monthly: 1.0, daily: 0.3 },
   pro: { monthly: 20.0, daily: 6.0 },
   max: { monthly: 250.0, daily: 75.0 },
 };
@@ -325,7 +325,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           return;
         }
         const result = classifyIntentLocally(text, {
-          tier: 'hobby',
+          tier: 'basic',
           hasAttachments: attachments.length > 0,
           attachmentTypes: attachments.map((a) => {
             if (a.type === 'image' || a.type === 'screenshot') return 'image' as const;
@@ -437,7 +437,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
 
   const planName = subscription?.plan_name?.toLowerCase() || '';
   let monthlyLimit = 0;
-  if (planName.includes('hobby')) monthlyLimit = PLAN_CREDIT_LIMITS.hobby.monthly;
+  if (planName.includes('basic')) monthlyLimit = PLAN_CREDIT_LIMITS.basic.monthly;
   else if (planName.includes('pro')) monthlyLimit = PLAN_CREDIT_LIMITS.pro.monthly;
   else if (planName.includes('max')) monthlyLimit = PLAN_CREDIT_LIMITS.max.monthly;
 
@@ -955,12 +955,12 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     if (isAutoModel(selectedModel)) {
       const { account } = useAccountStore.getState();
       const plan = account?.plan || 'free';
-      const hasAccess = ['hobby', 'pro', 'max', 'enterprise'].includes(plan);
+      const hasAccess = ['basic', 'pro', 'max', 'enterprise'].includes(plan);
 
       if (!hasAccess) {
         setLockGateResult({
           hasAccess: false,
-          reason: 'Auto Mode requires a Hobby plan or higher.',
+          reason: 'Auto Mode requires a Basic plan or higher.',
           requiresUpgrade: true,
           currentTier: plan,
           currentStatus: ((account as { subscriptionStatus?: SubscriptionStatus } | null)

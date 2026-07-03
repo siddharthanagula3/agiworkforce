@@ -56,7 +56,8 @@ function toUIPlanTier(plan: string | undefined): UIPlanTier {
   const normalized = (plan ?? 'byok').toLowerCase();
   if (normalized === 'local' || normalized === 'local-only') return 'local';
   if (normalized === 'byok') return 'byok';
-  if (normalized === 'hobby') return 'hobby';
+  // 'hobby' is a legacy value from before the 2026-07-02 tier rename.
+  if (normalized === 'hobby' || normalized === 'basic') return 'basic';
   if (normalized === 'pro') return 'pro';
   if (normalized === 'max') return 'max';
   return 'byok';
@@ -126,7 +127,7 @@ function ProfilePopover() {
             variant="outline"
             className={cn(
               'text-[10px] font-semibold uppercase tracking-wide',
-              tier === 'hobby' && 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+              tier === 'basic' && 'bg-amber-500/20 text-amber-400 border-amber-500/30',
               tier === 'pro' && 'bg-violet-500/20 text-violet-400 border-violet-500/30',
               tier === 'max' && 'bg-blue-500/20 text-blue-400 border-blue-500/30',
               (tier === 'byok' || tier === 'local') &&

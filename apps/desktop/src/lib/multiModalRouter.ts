@@ -34,7 +34,7 @@ const VEO_3_1_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generat
 
 export type ModalityType = 'image' | 'video' | 'tts' | 'stt' | 'music' | 'search';
 
-export type SubscriptionTier = 'hobby' | 'pro' | 'max' | 'enterprise';
+export type SubscriptionTier = 'basic' | 'pro' | 'max' | 'enterprise';
 
 export interface ModalityModel {
   id: string;
@@ -70,12 +70,12 @@ export interface MultiModalRoutingResult {
  * Image generation models from the canonical catalog.
  */
 export const IMAGE_MODELS: ModalityModel[] = [
-  // === BUDGET TIER (Hobby) ===
+  // === BUDGET TIER (Basic) ===
   {
     id: IMAGEN_4_FAST_ID,
     name: 'Imagen 4 Fast',
     provider: 'google',
-    tier: 'hobby',
+    tier: 'basic',
     costPerUnit: 0.02,
     quality: 'standard',
     speed: 'fast',
@@ -88,7 +88,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
     id: GPT_IMAGE_2_ID,
     name: 'GPT Image 2',
     provider: 'openai',
-    tier: 'hobby',
+    tier: 'basic',
     costPerUnit: 0.053,
     quality: 'hd',
     speed: 'normal',
@@ -239,7 +239,7 @@ export const TTS_MODELS: ModalityModel[] = [
     id: 'tts-1',
     name: 'TTS-1',
     provider: 'openai',
-    tier: 'hobby',
+    tier: 'basic',
     costPerUnit: 0.015, // Per 1K characters
     quality: 'standard',
     speed: 'fast',
@@ -271,7 +271,7 @@ export const STT_MODELS: ModalityModel[] = [
     id: 'whisper-1',
     name: 'Whisper-1',
     provider: 'openai',
-    tier: 'hobby',
+    tier: 'basic',
     costPerUnit: 0.006, // Per minute of audio
     quality: 'hd',
     speed: 'fast',
@@ -312,12 +312,12 @@ export const MUSIC_MODELS: ModalityModel[] = [];
  * - ChatGPT Search: Best for complex multi-step analysis
  */
 export const SEARCH_MODELS: ModalityModel[] = [
-  // === HOBBY TIER ===
+  // === BASIC TIER ===
   {
     id: 'sonar',
     name: 'Sonar',
     provider: 'perplexity',
-    tier: 'hobby',
+    tier: 'basic',
     costPerUnit: 0.005, // Per search + $1/1M tokens
     quality: 'standard',
     speed: 'fast',
@@ -329,7 +329,7 @@ export const SEARCH_MODELS: ModalityModel[] = [
     id: 'grok-search',
     name: 'Grok Search',
     provider: 'xai',
-    tier: 'hobby',
+    tier: 'basic',
     costPerUnit: 0.005,
     quality: 'standard',
     speed: 'fast',
@@ -434,7 +434,7 @@ export const MODALITY_MODELS: Record<ModalityType, ModalityModel[]> = {
 // ============================================
 
 const TIER_ORDER: Record<SubscriptionTier, number> = {
-  hobby: 0,
+  basic: 0,
   pro: 1,
   max: 2,
   enterprise: 3,

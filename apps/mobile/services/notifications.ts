@@ -227,6 +227,25 @@ async function sendTokenToBackend(token: string): Promise<void> {
   }
 }
 
+/**
+ * Clear this device's push token on sign-out. Without this, the token
+ * registered by the previous account stays live server-side (mobile_devices
+ * is keyed by deviceId, not by session) — a subsequent different account
+ * signing in on the same physical device would otherwise still receive push
+ * notifications addressed to the prior account. Call from the sign-out
+ * trust-boundary teardown, alongside the other per-account resets.
+ */
+export async function unregisterPushToken(): Promise<void> {
+  try {
+    const deviceId = await getDeviceId();
+    await api.delete(`/api/mobile/push-token?deviceId=${encodeURIComponent(deviceId)}`);
+  } catch {
+    // Non-critical / best-effort — matches sendTokenToBackend's contract.
+    // Worst case a stale token lingers until overwritten by the next sign-in's
+    // registerForPushNotifications() call on this device.
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Local notification dispatch (in-app trigger)
 // ---------------------------------------------------------------------------

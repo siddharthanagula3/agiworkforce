@@ -1,0 +1,61 @@
+/**
+ * Companion to cloud-usage-page.test.tsx, split into its own file because it
+ * needs FEATURES.billing mocked false from module load — mixing that with
+ * the billing-on tests in one file via jest.resetModules() mid-suite breaks
+ * React's module singleton in this test environment.
+ */
+
+/* eslint-disable @typescript-eslint/no-require-imports */
+import React from 'react';
+import { render } from '@testing-library/react-native';
+
+jest.mock('@/src/ui/theme', () => {
+  const actual = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...actual,
+    useThemeColors: () => actual.lightColors,
+  };
+});
+
+jest.mock('@/components/ui/text', () => {
+  const RN = require('react-native');
+  const Text = (props: Record<string, unknown>) => <RN.Text {...props} />;
+  Text.displayName = 'Text';
+  return { Text };
+});
+
+jest.mock('lucide-react-native', () => {
+  const RN = require('react-native');
+  const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
+  return { BarChart3: Icon, RefreshCw: Icon, ChevronDown: Icon, ChevronUp: Icon };
+});
+
+jest.mock('@/src/features/settings/common', () => {
+  const RN = require('react-native');
+  return {
+    SettingsScreenShell: ({ children }: { children: React.ReactNode }) => (
+      <RN.View>{children}</RN.View>
+    ),
+    SettingsInfo: () => <RN.View />,
+  };
+});
+
+jest.mock('@/lib/safeOpenURL', () => ({ openExternalUrl: jest.fn() }));
+
+const mockFetchUsageSnapshot = jest.fn();
+jest.mock('@/services/usage', () => ({
+  fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
+}));
+
+jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { billing: false } }));
+
+import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
+
+describe('Cloud Usage screen — FEATURES.billing off', () => {
+  it('shows the billing-unavailable placeholder, not a fetch attempt', () => {
+    const { getByText } = render(<CloudUsageScreen />);
+
+    expect(getByText('Usage dashboard coming soon')).toBeTruthy();
+    expect(mockFetchUsageSnapshot).not.toHaveBeenCalled();
+  });
+});

@@ -152,7 +152,7 @@ export default function FeedbackScreen() {
                       borderColor: selected ? `${colors.teal}40` : colors.border,
                     }}
                     accessibilityLabel={ft.label}
-                    accessibilityRole="radio"
+                    accessibilityRole="button"
                     accessibilityState={{ selected }}
                   >
                     <Icon size={18} color={selected ? colors.teal : colors.textMuted} />

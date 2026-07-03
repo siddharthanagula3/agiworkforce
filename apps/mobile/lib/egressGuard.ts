@@ -23,6 +23,7 @@
  * delegates the actual network call (and pin enforcement) to `secureFetch`.
  * Allowed requests keep all of secureFetch's behaviour.
  */
+import NetInfo from '@react-native-community/netinfo';
 import { API_URL, WS_URL } from '@/lib/constants';
 import { secureFetch, type SecureFetchOptions } from '@/services/secureFetch';
 
@@ -177,5 +178,15 @@ export async function guardedFetch(
       throw new EgressBlockedError(host || '(unparseable)');
     }
   }
-  return secureFetch(input, init, opts);
+  const response = await secureFetch(input, init, opts);
+  // A response resolving here (regardless of HTTP status — even a 4xx/5xx
+  // proves a real round-trip completed) is stronger evidence of connectivity
+  // than NetInfo's own passive reachability probe, which only re-checks on OS
+  // connectivity-change events and can lag behind reality (most visible on the
+  // iOS Simulator, where it has been observed reporting stale "offline" state
+  // for minutes while real chat/API traffic kept succeeding). Force a refresh
+  // so useNetworkStatus's isOnline corrects itself immediately instead of
+  // showing a false "you're offline" banner during otherwise-working traffic.
+  void NetInfo.refresh().catch(() => {});
+  return response;
 }

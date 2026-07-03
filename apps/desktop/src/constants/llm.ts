@@ -149,7 +149,7 @@ export const TIER_ALLOWED_MODELS: Record<SubscriptionTier, string[]> = {
   'local-only': [...ECONOMY_MODELS],
   byok: [...ECONOMY_MODELS],
   free: [...ECONOMY_MODELS],
-  hobby: [...ECONOMY_MODELS],
+  basic: [...ECONOMY_MODELS],
   pro: Array.from(new Set([...PRO_ADDITIONS, ...ECONOMY_MODELS])),
   max: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
   enterprise: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
@@ -190,7 +190,7 @@ export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): 
   // local-only and byok users only access models through their own keys / Ollama,
   // not through tier-gated managed-cloud lists; treat them like 'free' for any
   // managed-cloud gating logic that calls into this function.
-  if (tier === 'local-only' || tier === 'byok' || tier === 'free' || tier === 'hobby') {
+  if (tier === 'local-only' || tier === 'byok' || tier === 'free' || tier === 'basic') {
     return isCatalogModelAllowedForTier(modelId, 'economy');
   }
   if (tier === 'pro') {

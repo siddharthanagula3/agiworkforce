@@ -137,7 +137,7 @@ export const Usage: React.FC<UsageProps> = ({
                   <CheckCircle className="h-5 w-5" />
                   <span className="font-medium">
                     {normalizePlan(billing?.plan) === 'free' && 'Free Tier Active'}
-                    {normalizePlan(billing?.plan) === 'hobby' && 'Hobby Plan Active'}
+                    {normalizePlan(billing?.plan) === 'basic' && 'Basic Plan Active'}
                     {normalizePlan(billing?.plan) === 'pro' && 'Pro Plan Active'}
                     {normalizePlan(billing?.plan) === 'max' && 'Max Plan Active'}
                     {normalizePlan(billing?.plan) === 'enterprise' && 'Enterprise Plan Active'}

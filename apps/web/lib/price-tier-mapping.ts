@@ -28,6 +28,16 @@ interface PriceMappingEntry {
 function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   const mapping: Record<string, PriceMappingEntry> = {};
 
+  // Basic tier — separate USD and INR prices on the same Stripe product,
+  // both map to the same tier/interval; billing-catalog.ts's monthlyPriceInr
+  // is display-only, Stripe treats each currency as its own Price object.
+  const basicMonthlyUsd = process.env['STRIPE_PRICE_BASIC_MONTHLY_USD'];
+  const basicMonthlyInr = process.env['STRIPE_PRICE_BASIC_MONTHLY_INR'];
+  if (basicMonthlyUsd)
+    mapping[basicMonthlyUsd.toLowerCase()] = { tier: 'basic', interval: 'monthly' };
+  if (basicMonthlyInr)
+    mapping[basicMonthlyInr.toLowerCase()] = { tier: 'basic', interval: 'monthly' };
+
   // Pro tier
   const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
   const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
@@ -152,7 +162,7 @@ export function resolvePlanTier(
  */
 export function isValidPlanTier(tier: string | null | undefined): tier is string {
   if (!tier) return false;
-  return ['free', 'pro', 'max', 'team', 'enterprise'].includes(tier.toLowerCase());
+  return ['free', 'basic', 'pro', 'max', 'team', 'enterprise'].includes(tier.toLowerCase());
 }
 
 export function getBillingDetailsFromPriceId(priceId: string | null | undefined): {
@@ -202,6 +212,7 @@ export function getMappingStatus(): {
 } {
   const mapping = getTierMapping();
   const tiers: Record<string, string[]> = {
+    basic: [],
     pro: [],
     max: [],
     team: [],
