@@ -1,10 +1,119 @@
+import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { test } from './fixtures';
+import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
+
+// Settings has two nested async-loading races that both must clear before a
+// screenshot is meaningful:
+//
+// 1. `DesktopCloudSettingsModal` (src/features/settings/DesktopCloudSettingsModal.tsx)
+//    code-splits each tab — including the General tab shown by default —
+//    behind its own `<Suspense fallback={<SectionSkeleton />}>`. On the
+//    modal's first open in a fresh page, that chunk hasn't been fetched yet,
+//    so the dialog briefly renders `SectionSkeleton`'s `animate-pulse`
+//    placeholder blocks (a title bar + one big blank rounded rect) instead
+//    of real content — easy to mistake for a broken/blank capture if baked
+//    into a baseline. `GeneralTab` always renders a "Keybindings" heading
+//    once it mounts, so waiting for that text confirms the real tab (not
+//    the skeleton) is showing.
+// 2. Within the now-mounted General tab, the Keybindings section itself
+//    lazy-loads its shortcut list behind a second
+//    `<Suspense fallback={<Fallback label="Loading keybindings..." />}>`
+//    (src/features/settings/tabs/General/index.tsx). Wait for that
+//    fallback text to clear too, so the shortcut list is fully rendered
+//    rather than mid-spinner.
+//
+// Both chunks resolve almost immediately in a dev build, but capturing
+// before either settles bakes transient loading UI into the baseline, which
+// then mismatches on every subsequent run whose timing differs slightly.
+async function waitForSettingsToSettle(page: Page): Promise<void> {
+  await page
+    .getByText('Keybindings', { exact: true })
+    .first()
+    .waitFor({ state: 'visible', timeout: 10000 })
+    .catch(() => {});
+  await page
+    .getByText('Loading keybindings...')
+    .waitFor({ state: 'hidden', timeout: 5000 })
+    .catch(() => {});
+}
 
 test.describe('Visual Regression Tests', () => {
   test.beforeEach(async ({ page }) => {
+    // Fix the clock before anything mounts. BrandedGreeting (shown on the
+    // empty-chat screen captured by several baselines below) rotates its
+    // headline/subline by hour-of-day and by `getMinutes() % pool.length`
+    // (src/features/chat/BrandedGreeting.tsx), so an unmocked clock makes
+    // the captured text — and therefore the pixel diff against a
+    // fixed baseline PNG — depend on wall-clock time-of-day. Pin it to a
+    // fixed weekday afternoon (UTC, matching global-setup's TZ=UTC) so the
+    // greeting text is stable across every run.
+    await page.clock.setFixedTime(new Date('2026-01-06T15:00:00Z'));
+
+    // Clear the Cloud auth gate before the app boots. This suite runs
+    // against the plain-browser web-target bundle (`VITE_BUILD_TARGET=web`,
+    // no Tauri). `appModeStore`'s `supportsLocalAppMode` is
+    // `isTauri || isDesktopUiDevLocal`, so without Tauri the app boots in
+    // Cloud mode, and `App.tsx` renders `<AuthPage />` for
+    // `isCloudMode && !hasCloudSession` — every one of these "interface
+    // baseline" tests would otherwise silently screenshot the sign-in page
+    // instead of the chat/AGI/automation/settings surface it claims to check
+    // (confirmed: previously all 9 baselines were being diffed against
+    // sign-in-page captures, with some pairs coincidentally scoring >90%
+    // similarity purely because both are dominated by the same light
+    // background color — a false pass, not a real check).
+    //
+    // `injectMockCloudAuth`/`mockCloudAccountEndpoints` (the same mechanism
+    // `v3-locks.spec.ts`/`v3-reachability.spec.ts`/`v3-smoke.spec.ts` already
+    // use for this identical gate) seed the real `unified-auth-storage`
+    // persisted key so `hasCloudSession` is true and the real v3 shell
+    // mounts. This was chosen over forcing `app-mode-store` to `'local'`
+    // directly: that alternative reaches the shell too, but leaves the app
+    // in a self-contradictory state that cannot occur for a real user —
+    // `src/lib/runtimeEnvironment.ts`'s `isCloudWeb` (`!supportsLocalAppMode`)
+    // is unconditionally true on this build target, so Settings → General
+    // (`src/features/settings/tabs/General/index.tsx`) renders the
+    // "You are using AGI Workforce Cloud Managed" banner even while
+    // `app-mode-store.mode` says `'local'`. Authenticating into Cloud
+    // instead keeps every screen internally consistent, and matches what
+    // this build target actually does for a real signed-in user (desktop
+    // Cloud mode is not implemented; only the web/mobile-facing Cloud
+    // build reaches this code path in production).
+    await injectMockCloudAuth(page);
+    await mockCloudAccountEndpoints(page);
+
+    // Disable CSS/JS entrance animations (e.g. AuthPage's Framer Motion
+    // fade-ins) before the app mounts. Screenshot comparisons must be
+    // deterministic: without this, a screenshot can capture content
+    // mid-animation (partially transparent / translated) depending on
+    // machine speed, producing flaky visual-diff failures unrelated to any
+    // real UI regression.
+    //
+    // NOTE: the equivalent `reducedMotion: 'reduce'` Playwright project/use
+    // config option does not reliably propagate to `window.matchMedia()` in
+    // this Playwright version (verified: context-level option leaves
+    // `matchMedia('(prefers-reduced-motion: reduce)').matches` false, while
+    // `page.emulateMedia()` correctly sets it), so it must be applied
+    // explicitly here, before navigation.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+
+    // `networkidle` only proves requests are quiet — it does not prove the
+    // app has rendered past App.tsx's top-level `LoadingFallback` (the
+    // "AGI / Loading your workspace... [Retry]" `animate-pulse` screen shown
+    // while the lazily-loaded v3 shell chunk is still being fetched/parsed).
+    // With mocked APIs responding instantly, `networkidle` can fire before
+    // that chunk resolves, so a screenshot taken right after it captures the
+    // fallback instead of the real UI — confirmed: this raced intermittently
+    // depending on what ran earlier in the same worker (module-cache
+    // warmth), producing a baseline that matched itself deterministically on
+    // repeat runs but did not reflect real content. Wait for the real shell
+    // to mount before any test proceeds.
+    await page
+      .locator('[data-v3-shell], [data-v3-sidebar]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
   });
 
   test.afterEach(async ({ screenshotHelper }) => {
@@ -36,6 +145,21 @@ test.describe('Visual Regression Tests', () => {
     }
   });
 
+  // KNOWN GAP (found 2026-07-03, out of scope to redesign here): the v3
+  // sidebar's nav items are only artifacts/scheduled/dispatch
+  // (src/features/v3/Sidebar.tsx `navItemsForMode`) — there is no surviving
+  // "AGI"/"goals" nav destination for `agiPage.navigateToAGI()`'s
+  // `/agi|goals/i` locator to match, nor an "automation" destination for
+  // `automationPage.navigateToAutomation()`'s `/automation/i` locator below.
+  // Both silently no-op (same pattern as the rest of this suite's
+  // `.isVisible().catch(() => false)` guards) and this test ends up
+  // re-screenshotting the same default empty-chat view as "should match
+  // chat interface baseline". The baseline still locks in real, valid,
+  // non-broken UI — it just isn't the distinct "AGI"/"automation" surface
+  // the test name implies, because that surface doesn't exist in the v3
+  // shell. Tracked here rather than silently left ambiguous; fixing it
+  // requires deciding what the current product equivalent is (Dispatch?)
+  // which is a product-scope call, not a test-plumbing one.
   test('should match AGI interface baseline', async ({ page, screenshotHelper, agiPage }) => {
     await agiPage.navigateToAGI();
     // Wait for AGI interface content to be ready
@@ -86,6 +210,7 @@ test.describe('Visual Regression Tests', () => {
     await settingsPage.navigateToSettings();
     // Wait for settings interface content to be ready
     await page.waitForLoadState('domcontentloaded');
+    await waitForSettingsToSettle(page);
     const currentPath = await screenshotHelper.captureFullPage('settings-interface');
 
     try {
@@ -101,6 +226,19 @@ test.describe('Visual Regression Tests', () => {
     }
   });
 
+  // KNOWN GAP (found 2026-07-03, environment-inherent, not fixable here): the
+  // Theme `<Select>` (`settingsPage.themeSelect`) lives in GeneralTab's
+  // "Window Preferences" block (src/features/settings/tabs/General/index.tsx),
+  // which is gated behind `{isTauri && (...)}`. `isTauri` is always false
+  // against this Playwright harness (plain-browser `VITE_BUILD_TARGET=web`
+  // dev server, no Tauri runtime), so the selector never renders and
+  // `changeTheme()` below is a guarded no-op in this environment — by
+  // platform design, not a selector bug. Both "light theme" and "dark
+  // theme" baselines below therefore capture the same default General tab
+  // rendering and cannot verify real theme-switching output here. Actually
+  // exercising theme switching would require running against a real Tauri
+  // webview (or exposing an equivalent web-safe theme control), which is a
+  // platform/product decision out of scope for this test-plumbing fix.
   test('should match light theme', async ({ page, screenshotHelper, settingsPage }) => {
     await settingsPage.navigateToSettings();
 
@@ -111,6 +249,7 @@ test.describe('Visual Regression Tests', () => {
         .toHaveAttribute('class', /light|theme/, { timeout: 2000 })
         .catch(() => {});
     }
+    await waitForSettingsToSettle(page);
 
     const currentPath = await screenshotHelper.captureFullPage('theme-light');
 
@@ -137,6 +276,7 @@ test.describe('Visual Regression Tests', () => {
         .toHaveAttribute('class', /dark|theme/, { timeout: 2000 })
         .catch(() => {});
     }
+    await waitForSettingsToSettle(page);
 
     const currentPath = await screenshotHelper.captureFullPage('theme-dark');
 
@@ -159,6 +299,8 @@ test.describe('Visual Regression Tests', () => {
     const newChatVisible = await chatPage.newChatButton
       .isVisible({ timeout: 2000 })
       .catch(() => false);
+    // llm-guardrail-allow: pre-existing reasoned skip (FIX-019 "replace
+    // silent-pass theater with test.skip gates"), not a silent no-op.
     test.skip(!newChatVisible, 'New chat button not available');
 
     await chatPage.newChatButton.click();
@@ -166,6 +308,8 @@ test.describe('Visual Regression Tests', () => {
     const modal = page.locator('[role="dialog"], .modal').first();
     await modal.waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
     const modalVisible = await modal.isVisible({ timeout: 2000 }).catch(() => false);
+    // llm-guardrail-allow: pre-existing reasoned skip (FIX-019), not a
+    // silent no-op.
     test.skip(!modalVisible, 'Modal dialog did not appear after clicking new chat');
 
     const currentPath = await screenshotHelper.captureElement(
@@ -247,6 +391,8 @@ test.describe('Visual Regression Tests', () => {
     const chatInputVisible = await chatPage.chatInput
       .isVisible({ timeout: 2000 })
       .catch(() => false);
+    // llm-guardrail-allow: pre-existing reasoned skip (FIX-019), not a
+    // silent no-op.
     test.skip(!chatInputVisible, 'Chat input not available');
 
     await chatPage.sendMessage('trigger error test');
@@ -273,6 +419,8 @@ test.describe('Visual Regression Tests', () => {
     const goalInputVisible = await agiPage.goalInput
       .isVisible({ timeout: 2000 })
       .catch(() => false);
+    // llm-guardrail-allow: pre-existing reasoned skip (FIX-019), not a
+    // silent no-op.
     test.skip(!goalInputVisible, 'AGI goal input not available');
 
     await agiPage.submitGoal('Test loading state');
