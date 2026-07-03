@@ -1,4 +1,5 @@
 mod api_tools;
+mod artifact_tools;
 mod background_agent_tools;
 mod browser_tools;
 mod code_tools;
@@ -103,7 +104,8 @@ impl ToolTimeoutConfig {
             | "glob_search"
             | "conversation_search"
             | "recent_chats"
-            | "background_agent_get" => self.fast,
+            | "background_agent_get"
+            | "create_artifact" => self.fast,
 
             // Medium tools (60s)
             "file_read"
@@ -215,6 +217,17 @@ pub struct ToolExecutor {
     project_folder: Option<String>,
     /// Per-tool timeout configuration
     timeout_config: ToolTimeoutConfig,
+    /// Backend conversation ID for the live chat turn this executor is
+    /// running under (when known). Used by tools that need to associate
+    /// created resources with the conversation — e.g. `create_artifact`
+    /// (core/llm/tool_executor/artifact_tools.rs) passes this through to
+    /// `CreateArtifactRequest.conversation_id` and the `chat:artifact` event.
+    conversation_id: Option<i64>,
+    /// Frontend message ID for the assistant turn in progress (when known).
+    /// Forwarded on the `chat:artifact` event so `TauriRuntime.ts` can
+    /// correlate the artifact with the streaming message, mirroring how
+    /// `tool:event`/`chat:tool-result` already carry `message_id`.
+    frontend_message_id: Option<String>,
 }
 
 impl ToolExecutor {
@@ -455,6 +468,8 @@ impl ToolExecutor {
             conversation_mode: None,
             project_folder: None,
             timeout_config: ToolTimeoutConfig::default(),
+            conversation_id: None,
+            frontend_message_id: None,
         }
     }
 
@@ -467,6 +482,8 @@ impl ToolExecutor {
             conversation_mode: None,
             project_folder: None,
             timeout_config: ToolTimeoutConfig::default(),
+            conversation_id: None,
+            frontend_message_id: None,
         }
     }
 
@@ -482,6 +499,18 @@ impl ToolExecutor {
 
     pub fn set_conversation_mode(&mut self, mode: Option<String>) {
         self.conversation_mode = mode;
+    }
+
+    /// Set the backend conversation ID for the live chat turn this executor
+    /// is running under. See the `conversation_id` field doc for context.
+    pub fn set_conversation_id(&mut self, conversation_id: Option<i64>) {
+        self.conversation_id = conversation_id;
+    }
+
+    /// Set the frontend message ID for the assistant turn in progress. See
+    /// the `frontend_message_id` field doc for context.
+    pub fn set_frontend_message_id(&mut self, frontend_message_id: Option<String>) {
+        self.frontend_message_id = frontend_message_id;
     }
 
     /// Set the project folder for this executor
@@ -1688,6 +1717,7 @@ impl ToolExecutor {
                     .await
             }
             "document_create_pdf" => self.execute_document_create_pdf_tool(&args, &tool.id).await,
+            "create_artifact" => self.execute_create_artifact_tool(&args, &tool.id).await,
             "image_analyze" => self.execute_image_analyze_tool(&args).await,
             "git_status" => self.execute_git_status_tool(&args).await,
             "git_diff" => self.execute_git_diff_tool(&args).await,

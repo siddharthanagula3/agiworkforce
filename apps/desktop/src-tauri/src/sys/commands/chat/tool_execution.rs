@@ -113,6 +113,7 @@ pub(super) async fn execute_tool_calls_batch(
             &tool_call.arguments,
             app_handle,
             conversation_id,
+            frontend_message_id,
             project_folder.clone(),
             conversation_mode.clone(),
             Some(tool_call.id.as_str()),
@@ -199,6 +200,7 @@ pub(super) async fn execute_chat_tool_with_timeout(
     arguments_json: &str,
     app_handle: &AppHandle,
     conversation_id: i64,
+    frontend_message_id: &str,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
     tool_call_id: Option<&str>,
@@ -235,6 +237,7 @@ pub(super) async fn execute_chat_tool_with_timeout(
     let project_folder_owned = project_folder.clone();
     let conversation_mode_owned = conversation_mode.clone();
     let tool_call_id_owned = normalized_tool_call_id.map(|value| value.to_string());
+    let frontend_message_id_owned = frontend_message_id.to_string();
     let app_handle_clone = app_handle.clone();
 
     let exec_task = tokio::task::spawn(async move {
@@ -246,6 +249,8 @@ pub(super) async fn execute_chat_tool_with_timeout(
             conversation_mode_owned,
             tool_call_id_owned.as_deref(),
             registry,
+            Some(conversation_id),
+            Some(frontend_message_id_owned),
         )
         .await
     });
