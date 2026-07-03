@@ -23,7 +23,11 @@ import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 
 type PolicyValue = 'always_allow' | 'always_deny' | 'ask';
-type AgentMode = 'safe' | 'build' | 'autopilot';
+// FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03): 'plan' was
+// missing here even though it's a real, gate-affecting mode enforced by the
+// Rust backend (`AgentMode::Plan`, tool_confirmation.rs) — this was the only
+// reachable UI control for agent mode and it silently offered 3 of 4 modes.
+type AgentMode = 'safe' | 'plan' | 'build' | 'autopilot';
 
 interface ToolPolicy {
   toolName: string;
@@ -58,6 +62,14 @@ const AGENT_MODE_CONFIG: Record<AgentMode, { label: string; description: string;
       label: 'Safe',
       description: 'Read-only tools only — no destructive operations',
       color: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400',
+    },
+    // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01): added the missing Plan
+    // option so this is a complete, accurate mirror of the backend
+    // `AgentMode` enum (Safe / Plan / Build / Autopilot).
+    plan: {
+      label: 'Plan',
+      description: 'Read-only analysis and planning — never writes or executes',
+      color: 'border-violet-500/40 bg-violet-500/5 text-violet-400',
     },
     build: {
       label: 'Build',
