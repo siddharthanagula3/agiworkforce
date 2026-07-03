@@ -106,6 +106,19 @@ jobs:
             --workers=1
         working-directory: apps/desktop
 
+      - name: Run v3 shell E2E tests
+        # v3-locks/v3-reachability/v3-smoke were dev-local-only until 2026-07-03
+        # (fixed to mount deterministically via mock cloud auth, see git history
+        # on these spec files) — added to CI so v3 shell regressions block the
+        # pipeline instead of only surfacing to whoever happens to run them locally.
+        if: success()
+        run: |
+          pnpm exec playwright test --project=v3-locks \
+            --reporter=html,json \
+            --retries=2 \
+            --workers=1
+        working-directory: apps/desktop
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
