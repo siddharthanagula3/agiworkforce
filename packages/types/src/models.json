@@ -398,6 +398,17 @@
       "taskRouting": {},
       "canonicalization": {}
     },
+    "vllm": {
+      "label": "vLLM (Local)",
+      "sseDelimiter": "\n",
+      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "modelPrefixes": [],
+      "aliases": [],
+      "defaultModel": "",
+      "taskRouting": {},
+      "canonicalization": {}
+    },
     "runway": {
       "label": "Runway",
       "sseDelimiter": "\n\n",
@@ -2330,6 +2341,7 @@
     "ollama": [],
     "lmstudio": [],
     "llamacpp": [],
+    "vllm": [],
     "openai": [
       { "value": "gpt-5.5", "label": "GPT-5.5" },
       { "value": "gpt-5.4-mini", "label": "GPT-5.4 Mini" },

@@ -212,6 +212,34 @@ pub(super) async fn ensure_llamacpp_provider(
     }
 }
 
+/// Ensure the vLLM provider is registered on the router before a Local-mode chat
+/// is routed. Mirrors `ensure_ollama_provider`/`ensure_lmstudio_provider`/
+/// `ensure_llamacpp_provider`: vLLM's OpenAI-compatible server (default
+/// `http://localhost:8000/v1`) is served via `DirectApiProvider`.
+pub(super) async fn ensure_vllm_provider(
+    router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
+) {
+    use crate::core::llm::providers::direct_api_provider::DirectApiProvider;
+
+    let has_vllm = {
+        let router = router.read().await;
+        router.has_provider(Provider::Vllm)
+    };
+
+    if !has_vllm {
+        match DirectApiProvider::new(Provider::Vllm, String::new(), None) {
+            Ok(provider) => {
+                let mut router = router.write().await;
+                router.set_provider(Provider::Vllm, Box::new(provider));
+                info!("[Chat] Lazily registered vLLM provider for Local-mode chat");
+            }
+            Err(error) => {
+                warn!("[Chat] Failed to create vLLM provider: {}", error);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

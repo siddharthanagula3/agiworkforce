@@ -635,6 +635,7 @@ const DesktopShell = () => {
             { provider: 'ollama', command: 'llm_list_ollama_models' },
             { provider: 'lmstudio', command: 'llm_list_lmstudio_models' },
             { provider: 'llamacpp', command: 'llm_list_llamacpp_models' },
+            { provider: 'vllm', command: 'llm_list_vllm_models' },
           ];
           const seenModelIds = new Set(rustModels.map((model) => model.id));
           for (const { provider, command } of localRuntimeFetches) {
@@ -686,6 +687,7 @@ const DesktopShell = () => {
           'bedrock',
           'lmstudio',
           'llamacpp',
+          'vllm',
           'local',
           'ollama',
         ]);
@@ -695,7 +697,8 @@ const DesktopShell = () => {
             provider === 'ollama' ||
             provider === 'local' ||
             provider === 'lmstudio' ||
-            provider === 'llamacpp';
+            provider === 'llamacpp' ||
+            provider === 'vllm';
           const isManagedProvider = provider === 'managed_cloud' || provider === 'managed-cloud';
           const isConfiguredByok = model.available && !isLocalProvider && !isManagedProvider;
 
@@ -726,13 +729,21 @@ const DesktopShell = () => {
           supportsVision: true,
           supportsTools: true,
           contextWindow: 128000,
-          isLocal: ['ollama', 'local', 'lmstudio', 'llamacpp'].includes(m.provider.toLowerCase()),
+          isLocal: ['ollama', 'local', 'lmstudio', 'llamacpp', 'vllm'].includes(
+            m.provider.toLowerCase(),
+          ),
           isByok:
             currentMode === 'local' &&
             m.available &&
-            !['ollama', 'local', 'lmstudio', 'llamacpp', 'managed_cloud', 'managed-cloud'].includes(
-              m.provider.toLowerCase(),
-            ),
+            ![
+              'ollama',
+              'local',
+              'lmstudio',
+              'llamacpp',
+              'vllm',
+              'managed_cloud',
+              'managed-cloud',
+            ].includes(m.provider.toLowerCase()),
         }));
         useChatModelStore.getState().setModels(chatModels);
         // Mode-safe selection: keep the active model consistent with the mode's

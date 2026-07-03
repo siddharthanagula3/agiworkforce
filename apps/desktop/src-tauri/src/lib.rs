@@ -1536,6 +1536,7 @@ pub fn run() {
             crate::sys::commands::llm_get_ollama_models,
             crate::sys::commands::llm_list_lmstudio_models,
             crate::sys::commands::llm_list_llamacpp_models,
+            crate::sys::commands::llm_list_vllm_models,
             crate::sys::commands::llm_list_openrouter_models,
             crate::sys::commands::router_suggestions,
             crate::sys::commands::get_model_capabilities,

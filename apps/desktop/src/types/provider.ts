@@ -4,8 +4,9 @@
  * Logical groups (UI may render these as sections):
  *   - First-party (9): anthropic, openai, google, xai, deepseek, perplexity,
  *                     qwen, moonshot, zhipu
- *   - Local (4):       ollama, lmstudio, llamacpp, managed_cloud (managed_cloud is
- *                     the Basic-tier proxy — local-or-cloud depending on mode)
+ *   - Local (5):       ollama, lmstudio, llamacpp, vllm, managed_cloud
+ *                     (managed_cloud is the Basic-tier proxy — local-or-cloud
+ *                     depending on mode)
  *   - Custom OpenAI-compatible: mistral, groq, together, fireworks, cerebras,
  *                     deepinfra, nvidia_nim, open_router, cohere, ai21,
  *                     sambanova, azure, bedrock
@@ -17,6 +18,7 @@ export type Provider =
   | 'ollama'
   | 'lmstudio'
   | 'llamacpp'
+  | 'vllm'
   | 'xai'
   | 'deepseek'
   | 'qwen'
