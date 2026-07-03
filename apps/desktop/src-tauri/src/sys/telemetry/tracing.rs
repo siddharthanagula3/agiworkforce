@@ -1,18 +1,28 @@
 use anyhow::Result;
+use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use super::logging::{create_file_appender, LogConfig};
 use super::redaction::RedactingWriter;
 
-pub fn init_tracing(config: LogConfig) -> Result<()> {
+/// Both `WorkerGuard`s must be kept alive for the life of the process — dropping
+/// either one shuts down its non-blocking writer's flush thread, and every
+/// `tracing::` call made afterward is silently discarded (not buffered, not
+/// errored — just gone). Previously these were locals inside this function and
+/// dropped the instant it returned, so only the two `info!` calls below —
+/// emitted before the guards went out of scope — ever reached the file or
+/// stdout. Every other `tracing::` call in the app, at any level, from that
+/// point until process exit, was a no-op. Return both guards so the caller
+/// (TelemetryGuard) can hold them for the process lifetime.
+pub fn init_tracing(config: LogConfig) -> Result<(WorkerGuard, WorkerGuard)> {
     let file_appender = create_file_appender(&config)?;
-    let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
+    let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
 
-    let (stdout_writer, _stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
+    let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new(format!(
-            "{}=info,agiworkforce=debug,tauri=info,tao=info",
+            "{}=info,agiworkforce=debug,tauri=info,tao=info,info",
             env!("CARGO_PKG_NAME")
         ))
     });
@@ -43,7 +53,7 @@ pub fn init_tracing(config: LogConfig) -> Result<()> {
     tracing::info!("Telemetry initialized successfully");
     tracing::info!("Log directory: {:?}", config.log_dir);
 
-    Ok(())
+    Ok((file_guard, stdout_guard))
 }
 
 #[cfg(feature = "sentry")]
