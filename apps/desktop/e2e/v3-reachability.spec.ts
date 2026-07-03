@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
 
 /**
  * v3 reachability suite (@reachability).
@@ -9,11 +10,27 @@ import { test, expect, type Page } from '@playwright/test';
  * specific business state matches. The goal is a regression net for
  * route/feature-flag misconfig, not for behaviour.
  *
- * Auth gating can hide certain surfaces; those checks skip rather than
- * fail, matching the v3-locks pattern.
+ * Auth-gate note: this suite runs against the plain-browser web-target
+ * bundle (`VITE_BUILD_TARGET=web`, no Tauri). `appModeStore`'s
+ * `supportsLocalAppMode` is `isTauri || isDesktopUiDevLocal`, so without
+ * Tauri the app boots in Cloud mode and `App.tsx` renders `<AuthPage />`
+ * for `isCloudMode && !hasCloudSession` — before the `desktop_chat_v3`
+ * flag branch ever runs. `visual-verification.spec.ts` documents this same
+ * gate as intentional for the cloud-web bundle ("desktop root (sign-in)
+ * renders"). `injectMockCloudAuth` seeds the real `unified-auth-storage`
+ * persisted key (the same mechanism `self-healing.spec.ts` uses) so
+ * `hasCloudSession` is true and the flag-gated branch is reached — no
+ * change to the flag resolution itself was needed or made.
+ *
+ * Beyond that gate, the mock cloud session in `gotoV3` guarantees the shell
+ * (and its sub-components below) mount deterministically, so per-surface
+ * checks assert directly rather than skip-on-absent — a regression should
+ * fail loudly, not vanish silently.
  */
 
 async function gotoV3(page: Page) {
+  await injectMockCloudAuth(page);
+  await mockCloudAccountEndpoints(page);
   await page.addInitScript(() => {
     try {
       window.localStorage.setItem(
@@ -43,19 +60,16 @@ test.describe('@reachability v3 surface', () => {
 
   test('shell sidebar [data-v3-sidebar] is reachable', async ({ page }) => {
     const el = page.locator('[data-v3-sidebar]');
-    if ((await el.count()) === 0) test.skip();
     await expect(el.first()).toBeAttached();
   });
 
   test('shell sidebar exposes data-mode attr', async ({ page }) => {
     const el = page.locator('[data-v3-sidebar]').first();
-    if ((await el.count()) === 0) test.skip();
     await expect(el).toHaveAttribute('data-mode', /chat|work|code/);
   });
 
   test('shell sidebar exposes data-collapsed attr', async ({ page }) => {
     const el = page.locator('[data-v3-sidebar]').first();
-    if ((await el.count()) === 0) test.skip();
     await expect(el).toHaveAttribute('data-collapsed', /true|false/);
   });
 
@@ -63,33 +77,60 @@ test.describe('@reachability v3 surface', () => {
 
   test('composer textarea reachable by aria-label', async ({ page }) => {
     const el = page.getByRole('textbox', { name: /chat message input/i });
-    if ((await el.count()) === 0) test.skip();
     await expect(el.first()).toBeAttached();
   });
 
+  // NOTE (found 2026-07-03, corrected alongside the auth-gate fix above):
+  // `DesktopShellV3.tsx` renders `ChatInterface` from `@agiworkforce/unified-chat`
+  // (packages/unified-chat/src/components/ChatInput.tsx +
+  // ModelSelector.tsx), not the local `apps/desktop/src/features/v3/Composer.tsx`
+  // these three tests were originally written against. `Composer.tsx` documents
+  // itself as intending to "replace unified-chat's ChatInput for the v3 shell"
+  // but is never imported by `DesktopShellV3.tsx` — it (and the matching
+  // `composer.*` keys in `src/i18n/locales/en/v3.json`) is dead code. The
+  // labels below were previously never exercised against the real DOM (masked
+  // by the same auth-gate bug fixed above, always skip()ing on count===0), so
+  // this drift shipped silently. Updated to match the aria-labels the actual
+  // unified-chat components render; the `Composer.tsx`/stale-i18n-key drift
+  // itself is a separate, out-of-scope architecture question for whoever owns
+  // the v3 chat surface (see CLAUDE.md's "verify current App.tsx and package
+  // imports before changing chat wiring" note).
   test('composer add-button reachable by aria-label', async ({ page }) => {
-    const el = page.getByRole('button', { name: /add files, skills, connectors/i });
-    if ((await el.count()) === 0) test.skip();
+    const el = page.getByRole('button', { name: /add attachment/i });
     await expect(el.first()).toBeAttached();
   });
 
   test('composer model-picker reachable by aria-label', async ({ page }) => {
-    const el = page.getByRole('button', { name: /choose model/i });
-    if ((await el.count()) === 0) test.skip();
+    const el = page.getByRole('button', { name: /select model/i });
     await expect(el.first()).toBeAttached();
   });
 
   test('composer voice-button reachable by aria-label', async ({ page }) => {
-    const el = page.getByRole('button', { name: /voice input settings/i });
-    if ((await el.count()) === 0) test.skip();
+    const el = page.getByRole('button', { name: /voice input|stop recording/i });
     await expect(el.first()).toBeAttached();
   });
 
   // ── empty state ──────────────────────────────────────────────────────────
 
+  // NOTE: the actual empty-state copy comes from
+  // `src/features/chat/BrandedGreeting.tsx`, not the `emptyChat.greet*` keys
+  // in `src/i18n/locales/en/v3.json` this assertion originally targeted
+  // (same drift as the composer labels above). `BrandedGreeting` also
+  // rotates through 2 templates per time-of-day bucket (morning/afternoon/
+  // evening) keyed off `new Date().getMinutes() % 2` in the *browser's*
+  // clock — `global-setup.ts`'s `TZ=UTC` only affects the Node test runner,
+  // not the page's `Date()` — so a narrow regex is inherently flaky
+  // depending on the wall-clock minute the test happens to run in. The
+  // pattern below matches a fragment from every one of the 6 headline/
+  // subline combinations so it's correct at any time of day.
   test('empty state greeting renders when no conversation', async ({ page }) => {
-    const greet = page.getByText(/(good morning|what can i help|late-night)/i);
-    if ((await greet.count()) === 0) test.skip();
+    const greet = page.getByText(
+      /(good morning|good afternoon|good evening|rise and shine|\bhi\b|hello|standing by|ready to start the day|working late|never sleeps|what are we accomplishing|what can we get done|what shall we tackle)/i,
+    );
+    // The greeting interpolates the mocked user's name, which lands a beat
+    // after networkidle (account data hydrates from the mocked /api/me
+    // response); wait for it rather than asserting immediately.
+    await greet.first().waitFor({ state: 'attached', timeout: 5000 });
     await expect(greet.first()).toBeVisible();
   });
 
@@ -137,21 +178,18 @@ test.describe('@reachability v3 surface', () => {
 
   test('sidebar exposes "search" affordance', async ({ page }) => {
     const sidebar = page.locator('[data-v3-sidebar]').first();
-    if ((await sidebar.count()) === 0) test.skip();
     const search = sidebar.getByText(/search/i).first();
     await expect(search).toBeAttached();
   });
 
   test('sidebar exposes a "new chat" or "new session" button', async ({ page }) => {
     const sidebar = page.locator('[data-v3-sidebar]').first();
-    if ((await sidebar.count()) === 0) test.skip();
     const btn = sidebar.getByText(/new (chat|session)/i).first();
     await expect(btn).toBeAttached();
   });
 
   test('sidebar exposes mode-switcher buttons', async ({ page }) => {
     const sidebar = page.locator('[data-v3-sidebar]').first();
-    if ((await sidebar.count()) === 0) test.skip();
     // At least one of the three mode buttons should be in the DOM
     const buttons = sidebar.getByRole('button', { name: /^(chat|agi work|code)$/i });
     expect(await buttons.count()).toBeGreaterThanOrEqual(0);
@@ -159,9 +197,23 @@ test.describe('@reachability v3 surface', () => {
 
   // ── customize hub ────────────────────────────────────────────────────────
 
-  test('"customize" tab is reachable through sidebar nav text', async ({ page }) => {
+  // FIXME (found 2026-07-03, out of scope for the auth-gate fix in this
+  // suite): this assertion has never actually run against a real DOM before
+  // now — the sidebar was always unreachable due to the auth-gate bug fixed
+  // above (see file header), so the guard clause that used to sit here
+  // always short-circuited the test silently. Now that the shell mounts,
+  // it fails for real: `Sidebar.tsx`'s
+  // `navItemsForMode()` (apps/desktop/src/features/v3/Sidebar.tsx) never
+  // includes a `customize` entry in any mode (chat/work/code), even though
+  // the `sidebar.nav.customize` i18n key exists (src/i18n/locales/en/v3.json)
+  // and no `Customize` hub component exists anywhere under
+  // src/features/v3/. This is a real, pre-existing product gap (either the
+  // nav item was dropped without updating this test, or the hub was never
+  // built) — not a test-environment issue. Marked `fixme` rather than
+  // deleted so it stays visible to whoever owns the Customize hub; do not
+  // remove without confirming the intended fix.
+  test.fixme('"customize" tab is reachable through sidebar nav text', async ({ page }) => {
     const sidebar = page.locator('[data-v3-sidebar]').first();
-    if ((await sidebar.count()) === 0) test.skip();
     const text = sidebar.getByText(/customize/i).first();
     await expect(text).toBeAttached();
   });
@@ -170,14 +222,12 @@ test.describe('@reachability v3 surface', () => {
 
   test('i18n: no unresolved {{key}} placeholders render in shell', async ({ page }) => {
     const shell = page.locator('[data-v3-shell]').first();
-    if ((await shell.count()) === 0) test.skip();
     const text = await shell.textContent();
     expect(text ?? '').not.toMatch(/\{\{[a-zA-Z]/);
   });
 
   test('i18n: no "v3." literal keys render in shell', async ({ page }) => {
     const shell = page.locator('[data-v3-shell]').first();
-    if ((await shell.count()) === 0) test.skip();
     const text = await shell.textContent();
     // Catches missing keys that fell back to the dotted key name.
     expect(text ?? '').not.toMatch(/\bv3\.[a-z]+\.[a-z]+/i);
@@ -194,7 +244,6 @@ test.describe('@reachability v3 surface', () => {
 
   test('a11y: composer textarea exposes accessible name', async ({ page }) => {
     const el = page.getByRole('textbox', { name: /chat message input/i });
-    if ((await el.count()) === 0) test.skip();
     // Confirm aria-label rather than placeholder is the accessible name source.
     const ariaLabel = await el.first().getAttribute('aria-label');
     expect(ariaLabel).toBeTruthy();
