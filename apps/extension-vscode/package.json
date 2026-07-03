@@ -916,7 +916,7 @@
       {
         "command": "agi-workforce.cycleAgentMode",
         "key": "shift+tab",
-        "when": "agi-workforce.sidebarFocus || agi-workforce.chatFocus"
+        "when": "focusedView == 'agi-workforce.sidebar' || activeWebviewPanelId == 'agi-workforce.chatPanel'"
       }
     ]
   },
