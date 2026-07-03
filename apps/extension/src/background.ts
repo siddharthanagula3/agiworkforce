@@ -51,7 +51,7 @@ import {
   type ComputerUseAction,
   type BrowserAction,
 } from './browserTool';
-import { migrateAutofillProfile } from './autofill/filler';
+import { migrateAutofillProfile } from './features/content/autofill/filler';
 import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
 import { runAgentLoop } from './features/computer-use/agentLoop';
 import {
