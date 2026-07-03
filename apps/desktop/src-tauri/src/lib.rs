@@ -357,11 +357,16 @@ pub fn run() {
             // injected helper instead of re-doing AES-GCM boilerplate per call.
             // Both states share the same `Arc<Mutex<MasterPasswordManager>>`,
             // so unlock/lock/migration progress is reflected everywhere.
+            // Cloned aside (in addition to being `app.manage()`d below) so BYOK
+            // rehydration further down can decrypt stored provider keys without
+            // re-deriving this from managed state mid-setup.
+            let master_password_encryption_for_rehydration: crate::sys::security::MasterPasswordEncryption;
             match MasterPasswordState::new(db_conn_arc.clone()) {
                 Ok(master_password_state) => {
                     let encryption = crate::sys::security::MasterPasswordEncryption::new(
                         master_password_state.manager.clone(),
                     );
+                    master_password_encryption_for_rehydration = encryption.clone();
                     app.manage(master_password_state);
                     app.manage(encryption);
                     tracing::info!(
@@ -374,6 +379,7 @@ pub fn run() {
                     let encryption = crate::sys::security::MasterPasswordEncryption::new(
                         degraded.manager.clone(),
                     );
+                    master_password_encryption_for_rehydration = encryption.clone();
                     app.manage(degraded);
                     app.manage(encryption);
                 }
@@ -410,8 +416,22 @@ pub fn run() {
             app.manage(TelemetryState::new(telemetry_collector, analytics_metrics));
 
             let llm_state = tauri::async_runtime::block_on(LLMState::with_cache(db_conn_arc.clone()));
+            let llm_router_for_byok_rehydration = llm_state.router.clone();
             app.manage(llm_state);
             app.manage(crate::sys::commands::llm::RateLimitState::default());
+
+            // Restore previously-configured BYOK direct-API providers (OpenRouter,
+            // OpenAI, Anthropic, ...) into the fresh router. `save_api_key`/
+            // `llm_configure_provider` only register a provider at the moment its
+            // key is saved; without this, every BYOK provider silently reports
+            // "not configured" after each restart even though its key is safely
+            // stored (encrypted) in settings_v2. See
+            // `sys::commands::llm::rehydrate_byok_providers` for the full failure
+            // mode this closes.
+            tauri::async_runtime::block_on(crate::sys::commands::llm::rehydrate_byok_providers(
+                &llm_router_for_byok_rehydration,
+                &master_password_encryption_for_rehydration,
+            ));
 
             // Initialize browser automation with graceful degradation.
             // SEV-DESK-02: pass the Tauri AppHandle so ExtensionBridge can
@@ -1516,6 +1536,7 @@ pub fn run() {
             crate::sys::commands::llm_get_ollama_models,
             crate::sys::commands::llm_list_lmstudio_models,
             crate::sys::commands::llm_list_llamacpp_models,
+            crate::sys::commands::llm_list_openrouter_models,
             crate::sys::commands::router_suggestions,
             crate::sys::commands::get_model_capabilities,
 
