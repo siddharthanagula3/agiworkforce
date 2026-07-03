@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-cloud-auth';
 
 /**
  * v3 smoke suite (@smoke).
@@ -10,9 +11,25 @@ import { test, expect } from '@playwright/test';
  * Forces `desktop_chat_v3` on via localStorage using the same key that
  * `FeatureFlagsService.setLocalOverride` writes — production code path
  * matches the v3-locks suite.
+ *
+ * Auth-gate note: this suite runs against the plain-browser web-target
+ * bundle (`VITE_BUILD_TARGET=web`, no Tauri). `appModeStore`'s
+ * `supportsLocalAppMode` is `isTauri || isDesktopUiDevLocal`, so without
+ * Tauri (and without `VITE_DESKTOP_UI_DEV_LOCAL=1` on the dev server) the
+ * app boots in Cloud mode. `App.tsx` renders `<AuthPage />` — not the v3
+ * shell, not the legacy shell — for `isCloudMode && !hasCloudSession`,
+ * before the `desktop_chat_v3` flag branch ever runs. This is the same
+ * gate `visual-verification.spec.ts` documents as intentional ("desktop
+ * root (sign-in) renders" for the cloud-web bundle). The flag itself has
+ * no Tauri coupling — `injectMockCloudAuth` seeds the real
+ * `unified-auth-storage` key (the same mechanism `self-healing.spec.ts`
+ * uses) so `hasCloudSession` is true and the flag-gated branch is
+ * actually reached.
  */
 test.describe('@smoke v3 shell', () => {
   test.beforeEach(async ({ page }) => {
+    await injectMockCloudAuth(page);
+    await mockCloudAccountEndpoints(page);
     await page.addInitScript(() => {
       try {
         window.localStorage.setItem(
@@ -32,9 +49,12 @@ test.describe('@smoke v3 shell', () => {
     await expect.poll(async () => shell.count(), { timeout: 30000 }).toBeGreaterThan(0);
   });
 
+  // The beforeEach's mock cloud session guarantees the shell mounts (see
+  // "v3 shell mounts" above); the sub-component checks below assert
+  // directly rather than skip-on-absent so a regression fails loudly.
+
   test('v3 sidebar is present with mode switcher', async ({ page }) => {
     const sidebar = page.locator('[data-v3-sidebar]');
-    if ((await sidebar.count()) === 0) test.skip();
     await expect(sidebar.first()).toBeVisible();
     // Mode switcher exposes data-mode attribute on the sidebar root
     await expect(sidebar.first()).toHaveAttribute('data-mode', /chat|work|code/);
@@ -42,13 +62,12 @@ test.describe('@smoke v3 shell', () => {
 
   test('composer textarea is reachable via aria-label', async ({ page }) => {
     const composer = page.getByRole('textbox', { name: /chat message input/i });
-    if ((await composer.count()) === 0) test.skip();
     await expect(composer.first()).toBeVisible();
   });
 
   test('account button responds to keyboard focus', async ({ page }) => {
     const sidebar = page.locator('[data-v3-sidebar]').first();
-    if ((await sidebar.count()) === 0) test.skip();
+    await expect(sidebar).toBeAttached();
     // Tab through the sidebar — at least one focusable element should accept focus
     await page.keyboard.press('Tab');
     const active = await page.evaluate(() => document.activeElement?.tagName ?? '');
