@@ -44,6 +44,7 @@
       "pin": "Pin",
       "unpin": "Unpin",
       "rename": "Rename",
+      "archive": "Archive",
       "delete": "Delete",
       "confirmDelete": "Confirm delete"
     },

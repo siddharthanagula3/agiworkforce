@@ -178,6 +178,7 @@ export function Sidebar({
   const renameConversation = useChatStore((s: ChatState) => s.renameConversation);
   const deleteConversation = useChatStore((s: ChatState) => s.deleteConversation);
   const togglePinnedConversation = useChatStore((s: ChatState) => s.togglePinnedConversation);
+  const archiveConversation = useChatStore((s: ChatState) => s.archiveConversation);
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const loadProjects = useProjectStore((s) => s.loadProjects);
@@ -583,6 +584,7 @@ export function Sidebar({
                   onRename={renameConversation}
                   onDelete={deleteConversation}
                   onTogglePin={togglePinnedConversation}
+                  onArchive={archiveConversation}
                 />
               ))}
             </div>

@@ -1,11 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { MoreHorizontal, Pin, PinOff, Pencil, Trash2, type LucideIcon } from 'lucide-react';
+import {
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Pencil,
+  Archive,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import type { ConversationSummary } from '../../stores/chat';
 
 const MENU_WIDTH = 172;
-const MENU_EST_HEIGHT = 120;
+const MENU_EST_HEIGHT = 156;
 
 export interface ConversationRowProps {
   conversation: ConversationSummary;
@@ -14,6 +22,7 @@ export interface ConversationRowProps {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
+  onArchive: (id: string) => void;
 }
 
 // ─── 3-dots menu item ─────────────────────────────────────────────────────────
@@ -64,6 +73,7 @@ export function ConversationRow({
   onRename,
   onDelete,
   onTogglePin,
+  onArchive,
 }: ConversationRowProps) {
   const { t } = useTranslation('v3');
   const [hovered, setHovered] = useState(false);
@@ -136,6 +146,9 @@ export function ConversationRow({
 
   return (
     <div
+      data-testid="conversation-row"
+      data-conversation-id={conversation.id}
+      data-conversation-active={active}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
@@ -272,6 +285,14 @@ export function ConversationRow({
               onClick={() => {
                 setMenuOpen(false);
                 setEditing(true);
+              }}
+            />
+            <MenuItem
+              icon={Archive}
+              label={t('sidebar.actions.archive')}
+              onClick={() => {
+                onArchive(conversation.id);
+                setMenuOpen(false);
               }}
             />
             <MenuItem

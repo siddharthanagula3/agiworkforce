@@ -19,6 +19,7 @@ import {
   getCloudConversations,
   createCloudConversation,
   deleteCloudConversation,
+  updateCloudConversationTitle,
   getCloudMessages,
 } from '../../services/cloudChat';
 import type {
@@ -686,18 +687,42 @@ export const useChatMessageStore = create<ChatMessageState>()(
               'chat/setConversationMessages',
             ),
 
-          renameConversation: (id: string, title: string) =>
+          renameConversation: (id: string, title: string) => {
+            const trimmed = title.trim();
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === id);
                 if (convo) {
-                  convo.title = title.trim() || convo.title;
+                  convo.title = trimmed || convo.title;
                   convo.updatedAt = new Date();
                 }
               },
               undefined,
               'chat/renameConversation',
-            ),
+            );
+            if (!trimmed) return;
+            // DESKTOP-CHAT-CONVO-ACTIONS-PERSIST-01: the local mutation above is
+            // optimistic UI only — without this call the rename is lost on the
+            // next `loadConversations()` (app restart / conversation switch),
+            // same silent-no-persist class as DESKTOP-CHAT-SILENT-FAIL-01.
+            if (isCloudMode()) {
+              updateCloudConversationTitle(id, trimmed).catch((error) => {
+                console.error('[ChatStore] Failed to rename cloud conversation:', error);
+              });
+              return;
+            }
+            const dbId = uuidToDbId(id);
+            if (dbId === undefined) return;
+            const userId = useUnifiedAuthStore.getState().user?.id ?? '';
+            if (!userId) return;
+            void invoke('chat_update_conversation_title', {
+              conversationId: dbId,
+              userId,
+              title: trimmed,
+            }).catch((error) => {
+              console.error('[ChatStore] Failed to rename conversation on backend:', error);
+            });
+          },
 
           setConversationCustomInstructions: (id: string, instructions: string) =>
             set(
@@ -779,7 +804,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
               'chat/togglePinnedConversation',
             ),
 
-          archiveConversation: (id: string) =>
+          archiveConversation: (id: string) => {
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === id);
@@ -796,9 +821,27 @@ export const useChatMessageStore = create<ChatMessageState>()(
               },
               undefined,
               'chat/archiveConversation',
-            ),
+            );
+            // DESKTOP-CHAT-CONVO-ACTIONS-PERSIST-01: local-only mutation above
+            // does not survive `loadConversations()` without this backend call.
+            // Cloud mode has no `cloud_archive_conversation` seam yet (tracked
+            // separately, see DCL-3 in sys/commands/chat/cloud.rs) — archive
+            // stays local-state-only in cloud mode until that seam exists.
+            if (isCloudMode()) return;
+            const dbId = uuidToDbId(id);
+            if (dbId === undefined) return;
+            const userId = useUnifiedAuthStore.getState().user?.id ?? '';
+            if (!userId) return;
+            void invoke('chat_archive_conversation', {
+              conversationId: dbId,
+              userId,
+              archived: true,
+            }).catch((error) => {
+              console.error('[ChatStore] Failed to archive conversation on backend:', error);
+            });
+          },
 
-          restoreConversation: (id: string) =>
+          restoreConversation: (id: string) => {
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === id);
@@ -809,7 +852,20 @@ export const useChatMessageStore = create<ChatMessageState>()(
               },
               undefined,
               'chat/restoreConversation',
-            ),
+            );
+            if (isCloudMode()) return;
+            const dbId = uuidToDbId(id);
+            if (dbId === undefined) return;
+            const userId = useUnifiedAuthStore.getState().user?.id ?? '';
+            if (!userId) return;
+            void invoke('chat_archive_conversation', {
+              conversationId: dbId,
+              userId,
+              archived: false,
+            }).catch((error) => {
+              console.error('[ChatStore] Failed to restore conversation on backend:', error);
+            });
+          },
 
           getArchivedConversations: () => get().conversations.filter((c) => c.archived === true),
 
