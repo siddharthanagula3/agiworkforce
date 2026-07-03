@@ -7,6 +7,7 @@ import {
   SquarePen,
   Pencil,
   FolderOpen,
+  Archive,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ export interface ProjectRowProps {
   onNewChat: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  onArchive: (id: string) => void;
 }
 
 interface MenuItemProps {
@@ -72,6 +74,7 @@ export function ProjectRow({
   onNewChat,
   onRename,
   onDelete,
+  onArchive,
 }: ProjectRowProps) {
   const { t } = useTranslation('v3');
   const [hovered, setHovered] = useState(false);
@@ -142,6 +145,9 @@ export function ProjectRow({
 
   return (
     <div
+      data-testid="project-row"
+      data-project-id={project.id}
+      data-project-active={active}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
@@ -311,6 +317,14 @@ export function ProjectRow({
               onClick={() => {
                 setMenuOpen(false);
                 setEditing(true);
+              }}
+            />
+            <MenuItem
+              icon={Archive}
+              label={t('sidebar.actions.archive')}
+              onClick={() => {
+                onArchive(project.id);
+                setMenuOpen(false);
               }}
             />
             <MenuItem
