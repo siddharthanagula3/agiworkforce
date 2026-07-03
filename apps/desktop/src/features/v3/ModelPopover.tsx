@@ -115,6 +115,7 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
   const [moreOpen, setMoreOpen] = useState(false);
+  const [modelFilter, setModelFilter] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -154,6 +155,20 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
     );
   });
 
+  // A BYOK gateway like OpenRouter can contribute hundreds of models to
+  // `localModeRows` (its live catalog, `llm_list_openrouter_models`, is not
+  // hand-curated). Above a small threshold, show a filter box and cap the
+  // list height with scroll instead of rendering an unbounded flat list of
+  // buttons that would overflow off-screen with no way to find anything.
+  const showModelFilter = localModeRows.length > 8;
+  const filteredLocalModeRows = (() => {
+    const query = modelFilter.trim().toLowerCase();
+    if (!query) return localModeRows;
+    return localModeRows.filter(
+      (model) => model.name.toLowerCase().includes(query) || model.id.toLowerCase().includes(query),
+    );
+  })();
+
   if (isLocalOrByok) {
     return (
       <div
@@ -172,6 +187,24 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
         >
           Local / BYOK
         </div>
+        {showModelFilter && (
+          <div className="px-3 pb-2">
+            <input
+              type="text"
+              value={modelFilter}
+              onChange={(e) => setModelFilter(e.target.value)}
+              placeholder={`Filter ${localModeRows.length} models...`}
+              aria-label="Filter models"
+              autoFocus
+              className="w-full rounded-lg border px-2.5 py-1.5 text-xs focus:outline-none"
+              style={{
+                background: 'var(--chat-surface-primary, transparent)',
+                borderColor: 'var(--chat-border)',
+                color: 'var(--chat-text-primary)',
+              }}
+            />
+          </div>
+        )}
         {localModeRows.length === 0 ? (
           <div className="px-3 py-3">
             <div className="text-sm font-medium" style={{ color: 'var(--chat-text-primary)' }}>
@@ -195,47 +228,53 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
               Open Models & Keys
             </button>
           </div>
+        ) : filteredLocalModeRows.length === 0 ? (
+          <div className="px-3 py-3 text-xs" style={{ color: 'var(--chat-text-muted)' }}>
+            No models match "{modelFilter}".
+          </div>
         ) : (
-          localModeRows.map((model) => {
-            const selected = selectedModelId === model.id;
-            return (
-              <button
-                key={model.id}
-                type="button"
-                className={cn(
-                  'flex w-full items-center gap-3 px-3 py-2.5 transition-colors',
-                  'hover:bg-[var(--chat-surface-hover)]',
-                  selected && 'bg-[var(--chat-surface-hover)]',
-                )}
-                onClick={() => handleSelect(model.id)}
-              >
-                <span
-                  className="flex h-4 w-4 shrink-0 items-center justify-center"
-                  style={{ color: 'var(--chat-text-secondary)' }}
+          <div className="max-h-80 overflow-y-auto">
+            {filteredLocalModeRows.map((model) => {
+              const selected = selectedModelId === model.id;
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  className={cn(
+                    'flex w-full items-center gap-3 px-3 py-2.5 transition-colors',
+                    'hover:bg-[var(--chat-surface-hover)]',
+                    selected && 'bg-[var(--chat-surface-hover)]',
+                  )}
+                  onClick={() => handleSelect(model.id)}
                 >
-                  <ProviderMark providerKey={model.provider} size={16} />
-                </span>
-                <div className="flex-1 text-left">
-                  <div
-                    className="text-sm font-medium"
-                    style={{ color: 'var(--chat-text-primary)' }}
+                  <span
+                    className="flex h-4 w-4 shrink-0 items-center justify-center"
+                    style={{ color: 'var(--chat-text-secondary)' }}
                   >
-                    {model.name}
+                    <ProviderMark providerKey={model.provider} size={16} />
+                  </span>
+                  <div className="flex-1 text-left">
+                    <div
+                      className="text-sm font-medium"
+                      style={{ color: 'var(--chat-text-primary)' }}
+                    >
+                      {model.name}
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--chat-text-muted)' }}>
+                      {model.isLocal ? 'Local model' : 'BYOK provider'}
+                    </div>
                   </div>
-                  <div className="text-xs" style={{ color: 'var(--chat-text-muted)' }}>
-                    {model.isLocal ? 'Local model' : 'BYOK provider'}
-                  </div>
-                </div>
-                {selected && (
-                  <Check
-                    size={14}
-                    strokeWidth={2.4}
-                    style={{ color: 'var(--chat-accent-primary)' }}
-                  />
-                )}
-              </button>
-            );
-          })
+                  {selected && (
+                    <Check
+                      size={14}
+                      strokeWidth={2.4}
+                      style={{ color: 'var(--chat-accent-primary)' }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
     );
