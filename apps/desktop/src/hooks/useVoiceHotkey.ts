@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useVoiceInputStore } from '../stores/voiceInputStore';
+import { useVoiceInputStore } from '../stores/settingsStore';
 
 /**
  * Registers the voice dictation hotkey using keydown/keyup events on document.
@@ -12,6 +12,17 @@ import { useVoiceInputStore } from '../stores/voiceInputStore';
  * starts listening, second Caps Lock press stops listening. Note that browsers
  * expose CapsLock via KeyboardEvent.code === 'CapsLock' on keydown; the
  * actual lock state is readable via KeyboardEvent.getModifierState('CapsLock').
+ *
+ * IMPORTANT: `useVoiceInputStore` here is re-exported from
+ * `stores/settingsStore.ts` (defined in `stores/settings/voice.ts`) —
+ * this is the SAME store instance watched by `VoiceInputOverlay.tsx` and
+ * `VoiceSettings.tsx`, and the one driven by the Quick Query voice request
+ * in `App.tsx`. Do NOT import from the separate, legacy
+ * `stores/voiceInputStore.ts` module — that store has no live UI observer
+ * and previously caused DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01 (hotkey
+ * recorded audio with zero visible feedback because the overlay was
+ * watching a different store instance). See
+ * docs/agent-context/known-flaws.md for details.
  */
 export function useVoiceHotkey() {
   const startListening = useVoiceInputStore((s) => s.startListening);

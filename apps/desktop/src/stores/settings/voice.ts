@@ -966,6 +966,16 @@ export const useVoiceModeStore = create<VoiceModeState>()(
 );
 
 // -- VoiceInput Store --
+//
+// CANONICAL voice-dictation store, persisted under 'agiworkforce-voice-input'.
+// Live consumers: `features/voice/VoiceInputOverlay.tsx` (listening/
+// transcribing/preview feedback UI), `features/settings/VoiceSettings.tsx`
+// (hotkey/provider/language settings), the global dictation hotkey
+// (`hooks/useVoiceHotkey.ts`), and the Quick Query voice request
+// (`App.tsx` `handleVoiceInputRequest`). A separate, legacy
+// `useVoiceInputStore` also exists in `stores/voiceInputStore.ts` — that one
+// has no live UI observer and must not be used for new wiring. See
+// docs/agent-context/known-flaws.md, DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01.
 
 type VoiceInputMode = 'idle' | 'listening' | 'transcribing' | 'processing' | 'preview';
 export type PostProcessingMode = 'ai' | 'basic' | 'none';

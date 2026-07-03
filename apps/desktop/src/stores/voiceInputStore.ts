@@ -1,4 +1,23 @@
 // TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
+//
+// LEGACY / NO LIVE UI OBSERVER — do not wire new consumers to this store.
+//
+// This module defines a second, separate `useVoiceInputStore` instance from
+// the canonical one in `stores/settings/voice.ts` (re-exported via
+// `stores/settingsStore.ts`). The canonical store is the one watched by the
+// live `VoiceInputOverlay.tsx`, `VoiceSettings.tsx`, and the global voice
+// hotkey (`hooks/useVoiceHotkey.ts`). This standalone store's only remaining
+// consumers (`features/chat/ChatInputArea.tsx`, `features/v3/MicSettings.tsx`
+// via `features/v3/Composer.tsx`) are dead code with zero live importers
+// anywhere in the render tree — confirmed via import-graph trace.
+//
+// Its persisted key was renamed below (from the original
+// 'agiworkforce-voice-input', shared with the canonical store) to eliminate
+// a real localStorage clobbering risk: both stores previously persisted to
+// the SAME key with different partialize shapes, so whichever store's
+// `persist` middleware last wrote would silently drop the other's fields on
+// next load. See docs/agent-context/known-flaws.md,
+// DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01, for the full investigation.
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
@@ -313,7 +332,9 @@ Output ONLY the cleaned text. No explanations, no quotes, no markdown. If the in
           set({ transcript: '', pendingTranscript: '', lastTranscriptIsCommand: false }),
       }),
       {
-        name: 'agiworkforce-voice-input',
+        // Renamed from 'agiworkforce-voice-input' — that key belongs to the
+        // canonical store in `stores/settings/voice.ts`. See file header.
+        name: 'agiworkforce-voice-input-legacy-unused',
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
