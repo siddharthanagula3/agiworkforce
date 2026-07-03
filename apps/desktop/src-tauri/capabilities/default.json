@@ -6,6 +6,8 @@
     "main"
   ],
   "permissions": [
+    "wdio-webdriver:default",
+    "wdio:default",
     "core:default",
     "core:window:allow-create",
     "core:window:allow-center",
