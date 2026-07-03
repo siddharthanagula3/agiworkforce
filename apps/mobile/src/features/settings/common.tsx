@@ -141,7 +141,11 @@ export function SettingsRow({
 
   if (!onPress) return content;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={value ? `${label}. ${value}` : label}
+    >
       {content}
     </Pressable>
   );
