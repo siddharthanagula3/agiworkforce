@@ -64,14 +64,14 @@ describe('autofill profile storage — H-04', () => {
     const { local } = installChromeStub();
     const profile: JobApplicationProfile = { firstName: 'Ada', lastName: 'Lovelace' };
     await local.set({ agi_autofill_profile: profile });
-    const { loadAutofillProfile } = await import('../src/autofill/filler');
+    const { loadAutofillProfile } = await import('../src/features/content/autofill/filler');
     expect(await loadAutofillProfile()).toEqual(profile);
   });
 
   it('saveAutofillProfile writes to chrome.storage.local, not sync', async () => {
     const { local, sync } = installChromeStub();
     const profile: JobApplicationProfile = { email: 'a@b.com' };
-    const { saveAutofillProfile } = await import('../src/autofill/filler');
+    const { saveAutofillProfile } = await import('../src/features/content/autofill/filler');
     await saveAutofillProfile(profile);
     expect(local.store['agi_autofill_profile']).toEqual(profile);
     expect(sync.store['agi_autofill_profile']).toBeUndefined();
@@ -79,7 +79,7 @@ describe('autofill profile storage — H-04', () => {
 
   it('returns empty object when no profile is set anywhere', async () => {
     installChromeStub();
-    const { loadAutofillProfile } = await import('../src/autofill/filler');
+    const { loadAutofillProfile } = await import('../src/features/content/autofill/filler');
     expect(await loadAutofillProfile()).toEqual({});
   });
 });
@@ -89,7 +89,7 @@ describe('migrateAutofillProfile — H-04', () => {
     const { local, sync } = installChromeStub();
     const legacy: JobApplicationProfile = { firstName: 'Grace', email: 'gh@x' };
     await sync.set({ agi_autofill_profile: legacy });
-    const { migrateAutofillProfile } = await import('../src/autofill/filler');
+    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
     const copied = await migrateAutofillProfile();
     expect(copied).toBe(true);
     expect(local.store['agi_autofill_profile']).toEqual(legacy);
@@ -99,7 +99,7 @@ describe('migrateAutofillProfile — H-04', () => {
   it('clears the sync key after migration so future syncs do not re-replicate', async () => {
     const { sync } = installChromeStub();
     await sync.set({ agi_autofill_profile: { email: 'g@x' } });
-    const { migrateAutofillProfile } = await import('../src/autofill/filler');
+    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
     await migrateAutofillProfile();
     expect(sync.store['agi_autofill_profile']).toBeUndefined();
   });
@@ -107,7 +107,7 @@ describe('migrateAutofillProfile — H-04', () => {
   it('is idempotent — second call is a no-op', async () => {
     const { local, sync } = installChromeStub();
     await sync.set({ agi_autofill_profile: { email: 'first@x' } });
-    const { migrateAutofillProfile } = await import('../src/autofill/filler');
+    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
     expect(await migrateAutofillProfile()).toBe(true);
 
     // Simulate a stray sync write after migration (e.g. an older client).
@@ -122,7 +122,7 @@ describe('migrateAutofillProfile — H-04', () => {
     const syncProfile: JobApplicationProfile = { email: 'sync@x' };
     await local.set({ agi_autofill_profile: localProfile });
     await sync.set({ agi_autofill_profile: syncProfile });
-    const { migrateAutofillProfile } = await import('../src/autofill/filler');
+    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
     const copied = await migrateAutofillProfile();
     expect(copied).toBe(false); // local non-empty, no copy
     expect(local.store['agi_autofill_profile']).toEqual(localProfile);
@@ -132,7 +132,7 @@ describe('migrateAutofillProfile — H-04', () => {
 
   it('returns false silently when sync has nothing to migrate', async () => {
     installChromeStub();
-    const { migrateAutofillProfile } = await import('../src/autofill/filler');
+    const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
     expect(await migrateAutofillProfile()).toBe(false);
   });
 });

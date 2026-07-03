@@ -15,7 +15,12 @@ import {
   GREENHOUSE_SELECTORS,
   detectGreenhouseCustomFields,
 } from './greenhouse';
-import { resolveAshbySelector, ASHBY_SELECTORS, detectAshbyCustomFields } from './ashby';
+import {
+  resolveAshbySelector,
+  ASHBY_SELECTORS,
+  detectAshbyCustomFields,
+  ASHBY_ALWAYS_ESCALATE_KEYS,
+} from './ashby';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -699,9 +704,6 @@ export async function autofillAshby(
   const filled: FillResult[] = [];
   const errors: string[] = [];
 
-  // Import escalation set inline to avoid a circular dependency
-  const { ASHBY_ALWAYS_ESCALATE_KEYS } = await import('./ashby');
-
   for (const key of Object.keys(ASHBY_SELECTORS)) {
     if (key.startsWith('files.') || ASHBY_ALWAYS_ESCALATE_KEYS.has(key)) {
       filled.push({
@@ -840,4 +842,56 @@ export async function loadAutofillProfile(): Promise<JobApplicationProfile> {
 /** Persists the autofill profile to device-local storage (never synced off-device). */
 export async function saveAutofillProfile(profile: JobApplicationProfile): Promise<void> {
   await chrome.storage.local.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: profile });
+}
+
+/**
+ * Marker key set after a successful sync → local migration so the migrator
+ * runs at most once. Stored alongside the profile in local.
+ */
+const AUTOFILL_MIGRATION_DONE_KEY = 'agi_autofill_profile_migrated';
+
+/**
+ * One-shot migrator: copy autofill profile from `chrome.storage.sync` into
+ * `chrome.storage.local`, then clear sync. Idempotent — guarded by the
+ * AUTOFILL_MIGRATION_DONE_KEY marker. Silent on any storage error so the
+ * extension boot path stays resilient.
+ *
+ * Returns true when a migration write actually occurred, false otherwise.
+ */
+export async function migrateAutofillProfile(): Promise<boolean> {
+  try {
+    const localResult = await chrome.storage.local.get([
+      AUTOFILL_MIGRATION_DONE_KEY,
+      AUTOFILL_PROFILE_STORAGE_KEY,
+    ]);
+    if (localResult[AUTOFILL_MIGRATION_DONE_KEY] === true) {
+      return false; // already migrated
+    }
+
+    const syncResult = await chrome.storage.sync.get(AUTOFILL_PROFILE_STORAGE_KEY);
+    const syncProfile = syncResult[AUTOFILL_PROFILE_STORAGE_KEY];
+    const localProfile = localResult[AUTOFILL_PROFILE_STORAGE_KEY];
+
+    // Only copy from sync into local when local is empty — never clobber a
+    // post-migration write the user has made.
+    let copied = false;
+    if (
+      (!localProfile ||
+        typeof localProfile !== 'object' ||
+        Object.keys(localProfile).length === 0) &&
+      syncProfile &&
+      typeof syncProfile === 'object'
+    ) {
+      await chrome.storage.local.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: syncProfile });
+      copied = true;
+    }
+
+    // Always clear sync and stamp the marker so subsequent boots skip this path.
+    await chrome.storage.sync.remove(AUTOFILL_PROFILE_STORAGE_KEY).catch(() => {});
+    await chrome.storage.local.set({ [AUTOFILL_MIGRATION_DONE_KEY]: true });
+    return copied;
+  } catch {
+    // Storage unavailable (test / SSR / locked profile) — leave state as-is.
+    return false;
+  }
 }
