@@ -138,10 +138,18 @@ export const useAuthStore = create<AuthState>()(
               useSettingsSyncStateStore,
             } = require('@/stores/settings/settingsSyncStateStore');
             const { useCloudSettingsStore } = require('@/stores/settings/cloudSettingsStore');
+            const { useTierStore } = require('@/src/features/billing/store');
+            const { useArtifactStore } = require('@/src/features/artifacts/store');
+            const { unregisterPushToken } = require('@/services/notifications');
             /* eslint-enable @typescript-eslint/no-require-imports */
             stopCloudSyncLoop();
             useCloudSyncStateStore.getState().reset();
             useChatCloudMessageStore.getState().clearCloudData();
+            // Artifacts trust-boundary reset: cloudArtifacts (migration 0039 pulled
+            // artifacts) are scoped to the signed-in user and persisted to MMKV.
+            // clearCloudArtifacts existed for this purpose but was never wired to
+            // sign-out — a subsequent account could inherit a prior user's artifacts.
+            useArtifactStore.getState().clearCloudArtifacts();
             // Memory trust-boundary reset: cloud memories and the memory sync cursor
             // are scoped to the signed-in user and MUST be cleared on sign-out so a
             // subsequent account cannot inherit a prior user's memories.
@@ -171,6 +179,18 @@ export const useAuthStore = create<AuthState>()(
               },
               settingsUpdatedAt: null,
             });
+            // Billing trust-boundary reset: the cached subscription tier is
+            // read-only plan metadata scoped to the signed-in user. Without this,
+            // a previously Pro/Max account's tier survives sign-out in MMKV and
+            // the Billing screen shows a stale "You are on the Pro plan" to a
+            // signed-out (or different) user.
+            useTierStore.getState().setTier('free');
+            // Push-token trust-boundary reset: mobile_devices is keyed by
+            // deviceId, not by session, so an unregistered token survives
+            // sign-out server-side indefinitely — a subsequent different
+            // account signing in on this device would otherwise still
+            // receive push notifications addressed to the prior account.
+            await unregisterPushToken();
           } catch (err) {
             console.warn('[auth] cloud sync teardown on sign-out failed:', err);
           }

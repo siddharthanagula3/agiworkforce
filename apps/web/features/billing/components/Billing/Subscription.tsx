@@ -17,7 +17,7 @@ import {
 import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 import { BillingInfo, normalizePlan, normalizeStatus } from './types';
 
-function formatPlanPrice(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
+function formatPlanPrice(plan: 'basic' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
   if (billingPeriod === 'monthly') {
     return `$${getPlanPriceUsd(plan, 'monthly')}`;
   }
@@ -25,14 +25,14 @@ function formatPlanPrice(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly'
 }
 
 function formatPlanBilledAmount(
-  plan: 'hobby' | 'pro' | 'max',
+  plan: 'basic' | 'pro' | 'max',
   billingPeriod: 'monthly' | 'yearly',
 ) {
   const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
   return `$${getPlanPriceUsd(plan, interval).toFixed(2).replace(/\.00$/, '')}`;
 }
 
-function formatUsageBudgetLine(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
+function formatUsageBudgetLine(plan: 'basic' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
   const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
   const budgetCents = getPlanUsageBudgetCents(plan, interval);
   return `${budgetCents.toLocaleString()} credits/${billingPeriod === 'yearly' ? 'year' : 'month'} ($${(budgetCents / 100).toFixed(2)} in AI usage)`;
@@ -43,7 +43,7 @@ function getPlanIcon(plan: string) {
   switch (normalized) {
     case 'free':
       return <Zap className="h-5 w-5" />;
-    case 'hobby':
+    case 'basic':
       return <Star className="h-5 w-5" />;
     case 'pro':
       return <Crown className="h-5 w-5" />;
@@ -84,7 +84,7 @@ interface SubscriptionProps {
   onBillingPeriodChange: (period: 'monthly' | 'yearly') => void;
   onManageBilling: () => void;
   onUpgrade: (
-    plan: 'hobby' | 'pro' | 'max' | 'enterprise',
+    plan: 'basic' | 'pro' | 'max' | 'enterprise',
     billingPeriod?: 'monthly' | 'yearly',
   ) => void;
   formatCurrency: (amount: number, currency: string) => string;
@@ -246,28 +246,28 @@ export const Subscription: React.FC<SubscriptionProps> = ({
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {/* Hobby Plan */}
+              {/* Basic Plan */}
               {normalizePlan(billing?.plan) === 'free' && (
                 <Card className="border-2 border-muted-foreground/30">
                   <CardHeader>
                     <div className="flex items-center space-x-2">
                       <Zap className="h-5 w-5 text-primary" />
-                      <CardTitle>Hobby</CardTitle>
+                      <CardTitle>Basic</CardTitle>
                     </div>
                     <div className="text-2xl font-bold">
                       {billingPeriod === 'yearly' ? (
                         <>
                           <div className="text-3xl font-bold">
-                            {formatPlanPrice('hobby', 'yearly')}
+                            {formatPlanPrice('basic', 'yearly')}
                             <span className="text-lg text-muted-foreground">/month</span>
                           </div>
                           <div className="mt-1 text-sm text-muted-foreground">
-                            Billed yearly as {formatPlanBilledAmount('hobby', 'yearly')}
+                            Billed yearly as {formatPlanBilledAmount('basic', 'yearly')}
                           </div>
                         </>
                       ) : (
                         <>
-                          {formatPlanPrice('hobby', 'monthly')}
+                          {formatPlanPrice('basic', 'monthly')}
                           <span className="text-sm text-muted-foreground">/month</span>
                         </>
                       )}
@@ -277,7 +277,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                     <ul className="space-y-2 text-sm">
                       <li className="flex items-center space-x-2">
                         <CheckCircle className="h-4 w-4 text-success" />
-                        <span>{formatUsageBudgetLine('hobby', billingPeriod)}</span>
+                        <span>{formatUsageBudgetLine('basic', billingPeriod)}</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <CheckCircle className="h-4 w-4 text-success" />
@@ -295,9 +295,9 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                     <Button
                       className="mt-4 w-full"
                       variant="outline"
-                      onClick={() => onUpgrade('hobby', billingPeriod)}
+                      onClick={() => onUpgrade('basic', billingPeriod)}
                     >
-                      Get Hobby
+                      Get Basic
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </CardContent>
@@ -306,7 +306,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
 
               {/* Pro Plan */}
               {(normalizePlan(billing?.plan) === 'free' ||
-                normalizePlan(billing?.plan) === 'hobby') && (
+                normalizePlan(billing?.plan) === 'basic') && (
                 <Card className="border-2 border-primary">
                   <CardHeader>
                     <div className="flex items-center space-x-2">

@@ -1,7 +1,8 @@
 import React from 'react';
 
-// pro_plus removed: locked tiers are free, hobby, pro, max, team, enterprise.
-export const VALID_PLANS = ['free', 'hobby', 'pro', 'max', 'enterprise'] as const;
+// pro_plus removed 2026-06-20; 'hobby' renamed to 'basic' 2026-07-02.
+// Locked tiers are free, basic, pro, max, team, enterprise.
+export const VALID_PLANS = ['free', 'basic', 'pro', 'max', 'enterprise'] as const;
 export type PlanTier = (typeof VALID_PLANS)[number];
 
 export const VALID_STATUSES = ['active', 'cancelled', 'past_due', 'unpaid'] as const;
@@ -34,7 +35,7 @@ export interface LLMUsage {
 }
 
 export interface BillingInfo {
-  plan: 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+  plan: 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
   status: 'active' | 'cancelled' | 'past_due' | 'unpaid';
   current_period_start: string;
   current_period_end: string;

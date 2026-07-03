@@ -28,8 +28,9 @@ import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 /**
  * Billing plan types
  */
-// pro_plus removed: locked tiers are free, hobby, pro, max, team, enterprise.
-export type BillingPlan = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+// pro_plus removed 2026-06-20; 'hobby' renamed to 'basic' 2026-07-02 (see
+// packages/types/src/billing-catalog.ts). Locked tiers are free, basic, pro, max, team, enterprise.
+export type BillingPlan = 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
 
 /**
  * Subscription status types
@@ -156,12 +157,12 @@ const TIER_CONFIG: Record<
     name: 'Free',
     features: ['Local LLMs only (Ollama, LM Studio)', 'Basic automations', 'Community support'],
   },
-  hobby: {
-    creditLimitCents: getPlanUsageBudgetCents('hobby'),
-    price: getPlanPriceUsd('hobby'),
-    name: 'Hobby',
+  basic: {
+    creditLimitCents: getPlanUsageBudgetCents('basic'),
+    price: getPlanPriceUsd('basic'),
+    name: 'Basic',
     features: [
-      `${getPlanUsageBudgetCents('hobby').toLocaleString()} credits per billing cycle`,
+      `${getPlanUsageBudgetCents('basic').toLocaleString()} credits per billing cycle`,
       'Speed-optimized AI models',
       'Vision & image analysis',
       'Basic computer use',
@@ -291,12 +292,14 @@ async function fetchUserPlan(_userId: string): Promise<UserPlanData> {
       };
     }
     const data = (await res.json()) as UsageApiResponse;
-    // Map plan_tier to BillingPlan · hobby is a valid paid tier
+    // Map plan_tier to BillingPlan · basic is a valid paid tier
     const planTier = (data.plan_tier ?? 'free').toLowerCase();
-    // pro_plus is a legacy value; map it to max as the closest valid tier.
-    const normalizedTier = planTier === 'pro_plus' ? 'max' : planTier;
+    // Legacy values from before the 2026-06-20/2026-07-02 tier restructure:
+    // pro_plus → closest valid tier is max; hobby → renamed to basic.
+    const normalizedTier =
+      planTier === 'pro_plus' ? 'max' : planTier === 'hobby' ? 'basic' : planTier;
     const plan: BillingPlan =
-      normalizedTier === 'hobby' ||
+      normalizedTier === 'basic' ||
       normalizedTier === 'pro' ||
       normalizedTier === 'max' ||
       normalizedTier === 'enterprise'
@@ -548,9 +551,10 @@ export function useSubscription(): UseQueryResult<Subscription | null, Error> {
         const periodStart = new Date(periodEnd);
         periodStart.setMonth(periodStart.getMonth() - 1);
         const planTier = (data.plan_tier ?? 'free').toLowerCase();
-        const normalizedTier = planTier === 'pro_plus' ? 'max' : planTier;
+        const normalizedTier =
+          planTier === 'pro_plus' ? 'max' : planTier === 'hobby' ? 'basic' : planTier;
         const plan: BillingPlan =
-          normalizedTier === 'hobby' ||
+          normalizedTier === 'basic' ||
           normalizedTier === 'pro' ||
           normalizedTier === 'max' ||
           normalizedTier === 'enterprise'

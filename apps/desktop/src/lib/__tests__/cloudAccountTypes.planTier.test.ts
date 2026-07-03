@@ -12,7 +12,7 @@ describe('asPlanTier', () => {
 
   it('preserves the legacy tiers', () => {
     expect(asPlanTier('free')).toBe('free');
-    expect(asPlanTier('hobby')).toBe('hobby');
+    expect(asPlanTier('basic')).toBe('basic');
     expect(asPlanTier('pro')).toBe('pro');
     expect(asPlanTier('max')).toBe('max');
     expect(asPlanTier('enterprise')).toBe('enterprise');
@@ -34,16 +34,7 @@ describe('asPlanTier', () => {
 
 describe('PLAN_DISPLAY_NAMES', () => {
   it('has a display name for every PlanTier value', () => {
-    const tiers: PlanTier[] = [
-      'local-only',
-      'byok',
-      'free',
-      'hobby',
-      'pro',
-      'pro_plus',
-      'max',
-      'enterprise',
-    ];
+    const tiers: PlanTier[] = ['local-only', 'byok', 'free', 'basic', 'pro', 'max', 'enterprise'];
     for (const tier of tiers) {
       expect(PLAN_DISPLAY_NAMES[tier]).toBeTruthy();
     }

@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -35,8 +35,16 @@ export default function AgentsTabScreen() {
 
   const selectAgent = useAgentStore((s) => s.selectAgent);
   const clearCompleted = useAgentStore((s) => s.clearCompleted);
-  const pendingApprovals = useAgentStore((s) =>
-    s.pendingApprovals.filter((r) => r.status === 'pending'),
+  // Select the raw (stable-reference) array and filter in a memo — filtering
+  // inline inside the selector returns a brand-new array on every store read,
+  // which Zustand's default reference equality treats as "changed" every
+  // render, causing an infinite resubscribe/re-render loop ("Maximum update
+  // depth exceeded" — this exact pattern crashed app/(app)/companion/index.tsx
+  // and app/(app)/agents/[id].tsx, fixed the same way there).
+  const allApprovals = useAgentStore((s) => s.pendingApprovals);
+  const pendingApprovals = useMemo(
+    () => allApprovals.filter((r) => r.status === 'pending'),
+    [allApprovals],
   );
 
   const activeCount = agents.filter((a) => a.status === 'running' || a.status === 'waiting').length;

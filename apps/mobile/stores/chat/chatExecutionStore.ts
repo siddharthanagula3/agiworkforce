@@ -23,6 +23,7 @@ import {
 import { isCloudManagedModelId, isSelectableModelId } from '@/src/features/model-picker/service';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -681,10 +682,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       historyMessages.push({ role: 'user', content: messageContent });
     }
 
-    const projectState = executionMode === 'local' ? useProjectStore.getState() : null;
-    const localProjectId = executionMode === 'local' ? (conversation?.projectId ?? null) : null;
-    if (projectState && localProjectId) {
-      const activeProject = projectState.projects.find((p) => p.id === localProjectId);
+    // Project custom instructions — separate stores per trust boundary
+    // (useProjectStore is local-only, useCloudProjectStore is cloud-only;
+    // never cross-read one from the other's conversation.projectId).
+    const activeProjectId = conversation?.projectId ?? null;
+    if (activeProjectId) {
+      const activeProject =
+        executionMode === 'local'
+          ? useProjectStore.getState().projects.find((p) => p.id === activeProjectId)
+          : useCloudProjectStore
+              .getState()
+              .projects.find((p) => p.id === activeProjectId && p.deletedAt === null);
       if (activeProject?.instructions?.trim()) {
         historyMessages.unshift({ role: 'system', content: activeProject.instructions.trim() });
       }
@@ -705,9 +713,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // Resolve per-conversation reasoning effort for the remote API path.
     // Local model execution ignores this value because mobile local runtimes do
     // not expose an equivalent effort axis.
-    const agentControl = useAgentControlStore
-      .getState()
-      .resolve(conversationId, executionMode === 'local' ? localProjectId : null);
+    const agentControl = useAgentControlStore.getState().resolve(conversationId, activeProjectId);
 
     // Inject personalization + top-K relevant memories as system context, in BOTH
     // modes (parity with web/desktop cloud chat). The sources are mode-scoped so
@@ -951,6 +957,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // x_search_results deltas, which the tool-call accumulator already renders.
       const webSearchEnabled = FEATURES.webSearch && useChatViewStore.getState().features.webSearch;
 
+      // Raw content accumulator for cloud streams — separate from streamingContent
+      // (which must hold only display-clean text). The server intentionally emits
+      // Anthropic extended-thinking as literal `<thinking>...</thinking>` markers
+      // inline in delta.content (apps/web .../stream-transform.ts), using the same
+      // tag convention parseLocalThinking already parses for local models. Before
+      // this fix, cloud deltas were appended to streamingContent unparsed, so
+      // Claude thinking-model replies rendered raw `<thinking>` tag soup as the
+      // visible message instead of routing to the reasoning/ThinkingChip UI.
+      let cloudContentRaw = '';
+      // Structured delta.reasoning is a separate, genuinely incremental channel
+      // (e.g. a provider's dedicated reasoning field) from the tag-embedded
+      // thinking parsed out of cloudContentRaw below. Tracked separately because
+      // parseLocalThinking re-parses the FULL raw buffer on every delta (it has
+      // to, to handle a tag straddling two chunks) — accumulating its output
+      // onto itself across deltas would duplicate the reasoning text.
+      let cloudStructuredReasoning = '';
+
       await streamChat(
         {
           model,
@@ -963,16 +986,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         {
           onDelta: (delta: StreamDelta) => {
             const state = get();
-            let newContent = state.streamingContent;
-            let newReasoning = state.streamingReasoning;
 
-            if (delta.content) newContent += delta.content;
+            if (delta.content) cloudContentRaw += delta.content;
+            const parsedTags = parseLocalThinking(cloudContentRaw);
+            const newContent = parsedTags.content;
+
             if (delta.reasoning) {
               if (!thinkingStartTimes.has(conversationId) && !state.streamingReasoning) {
                 thinkingStartTimes.set(conversationId, Date.now());
               }
-              newReasoning += delta.reasoning;
+              cloudStructuredReasoning += delta.reasoning;
             }
+            if (parsedTags.hasReasoning && !thinkingStartTimes.has(conversationId)) {
+              thinkingStartTimes.set(conversationId, Date.now());
+            }
+            const newReasoning = [cloudStructuredReasoning, parsedTags.reasoning]
+              .filter(Boolean)
+              .join('\n\n');
 
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);

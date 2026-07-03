@@ -25,6 +25,18 @@
       "verifiedBy": "screenshot-verified-openai-compare-2026-06-23",
       "status": "PASS",
       "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com): gpt-5-nano = $0.05 input / $0.01 cached / $0.40 output, 400K ctx, reasoning tokens SUPPORTED (released Aug 2025, still served); gpt-4.1-nano = $0.10 input / $0.03 cached / $0.40 output, 1,047,576 ctx, NO reasoning tokens, fine-tuning supported (released Apr 2025, still served). Added to tierAllowedModels.economy and modelPresets.openai. Prior catalog had no nano tier (cheapest OpenAI was gpt-5.4-mini at $0.75/$4.50). For fixed-price cost control prefer gpt-4.1-nano (cannot emit reasoning tokens). Release dates from public launch info (GPT-5 nano Aug 2025, GPT-4.1 nano Apr 2025); the Compare page shows knowledge-cutoff, not release."
+    },
+    {
+      "date": "2026-07-02",
+      "verifiedBy": "bugfix-web-search-anthropic-2026-07-02",
+      "status": "PASS",
+      "notes": "Fixed claude-opus-4.8, claude-sonnet-4.6, claude-haiku-4.5 capabilities.search: false → true. Root-cause of a parity bug where mobile/web's web-search toggle silently no-op'd for every Anthropic model: apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts injects the provider-native Anthropic web_search_20260209 tool only `if (chatRequest.web_search && (resolvedModelCaps?.search ?? true))` — with capabilities.search explicitly false (not undefined) the `??` fallback never applied, so the tool was never injected for any Anthropic model even though the wire-format transform, cache-control stamping, and SSE result streaming for that exact tool were already fully implemented in apps/web/lib/llm-providers/anthropic.ts and documented as '✅ Built' in docs/products/agi-web/volume-15-ai-backend.md. Anthropic Claude models support a server-managed web_search tool via the Messages API (platform.claude.com/docs); this catalog's own provider adapter was already coded against that contract, so the false flag was catalog data drift, not a deliberate disablement. codeExecution and computerUse capabilities are unaffected by this change. OpenAI's equivalent gap (gpt-5.4-mini capabilities.search: true is currently unreachable because apps/web/lib/llm-providers/openai.ts strips Responses-API-only tool types before calling /v1/chat/completions) is a separate, larger, already-tracked architecture gap and was intentionally NOT changed here — see code comment at OPENAI_RESPONSES_ONLY_TOOL_TYPES."
+    },
+    {
+      "date": "2026-07-02",
+      "verifiedBy": "bugfix-web-search-openai-honesty-2026-07-02",
+      "status": "PASS",
+      "notes": "Set gpt-5.5 and gpt-5.4-mini capabilities.search: true → false. Unlike the Anthropic fix above, this is NOT a data-drift correction — both models genuinely support web search at the OpenAI API level, but this product's OpenAI adapter (apps/web/lib/llm-providers/openai.ts, OPENAI_RESPONSES_ONLY_TOOL_TYPES) calls /v1/chat/completions and strips the Responses-API-only web_search_preview tool type before every outbound request, so the capability is currently undeliverable end-to-end regardless of what the raw model supports. Left as capabilities.search: true, gpt-5.4-mini (the default 'AGI Cloud' model) presented mobile/web's Web Search toggle as working while every request silently no-op'd — a 'fake availability badge' (CLAUDE.md-flagged failure class). This flag now reflects actual deliverable capability through THIS product's current adapter, not the underlying model's raw capability, so mobile's AddToChatSheet (apps/mobile/src/features/chat/components/AddToChatSheet.tsx, selectedModelSupportsSearch gate) correctly hides the toggle for these two models instead of the toggle silently promising a search that never happens. Revert to true once the OpenAI adapter migrates to the Responses API (tracked separately, same code comment as the prior entry) — search was never actually broken on OpenAI's side, only on this integration's side."
     }
   ],
   "providers": {
@@ -529,7 +541,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": true,
+        "search": false,
         "research": true,
         "codeExecution": true,
         "caching": true
@@ -563,7 +575,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": true,
         "codeExecution": false,
         "caching": true
@@ -599,7 +611,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": true,
         "codeExecution": false,
         "caching": true
@@ -632,7 +644,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": false,
         "codeExecution": false,
         "caching": true
@@ -1983,7 +1995,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": true,
+        "search": false,
         "research": true,
         "codeExecution": true,
         "caching": true

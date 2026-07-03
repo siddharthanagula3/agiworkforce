@@ -11,7 +11,7 @@ vi.mock('../ModelCard', () => ({
   ),
 }));
 
-function setAuthPlan(plan: 'hobby' | 'pro' | 'free' | 'max' | 'enterprise') {
+function setAuthPlan(plan: 'basic' | 'pro' | 'free' | 'max' | 'enterprise') {
   const current = useUnifiedAuthStore.getState();
   useUnifiedAuthStore.setState({
     plan,
@@ -21,7 +21,7 @@ function setAuthPlan(plan: 'hobby' | 'pro' | 'free' | 'max' | 'enterprise') {
 
 describe('ModelSelector', () => {
   beforeEach(() => {
-    setAuthPlan('hobby');
+    setAuthPlan('basic');
 
     // Force local mode so the component shows tier-filtered models (not cloudModels)
     useAppModeStore.setState({ mode: 'local' });
@@ -34,7 +34,7 @@ describe('ModelSelector', () => {
     });
   });
 
-  it('hides higher-tier managed cloud models for hobby users', () => {
+  it('hides higher-tier managed cloud models for basic users', () => {
     render(<ModelSelector />);
 
     expect(screen.getByText('Auto (Economy)')).toBeInTheDocument();

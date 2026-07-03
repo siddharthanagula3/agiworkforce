@@ -1,16 +1,38 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
-import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
-import { MARKETING_FEATURE_MATRIX, type PricingTabId } from '@/lib/marketing-constants';
-import { FREE_TRIAL_PROMPT_LIMIT } from '@/lib/free-trial-config';
+import { toast } from 'sonner';
+import {
+  BILLING_PLAN_PRICING,
+  formatPrivacyModeLabel,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import {
+  upgradeToBasicPlan,
+  upgradeToProPlan,
+  upgradeToMaxPlan,
+  upgradeToTeamPlan,
+} from '@features/billing/services/stripe-payments';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { Reveal } from '../../components/marketing/Reveal';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { WaitlistForm } from '../byok/WaitlistForm';
+
+// Paid-plan checkout is env-gated while billing controls (metering, refunds,
+// fraud, provider terms) are proven at scale. Managed cloud access itself is
+// public-alpha-open; this only governs whether the CTA hits live Stripe
+// checkout or falls back to the early-access waitlist below. Mirrors
+// STRIPE_CHECKOUT_ENABLED server-side (app/api/checkout/route.ts) and the
+// same client convention already used in features/billing/pages/BillingDashboard.tsx.
+const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
+
+type Currency = 'usd' | 'inr';
+type CheckoutPlan = 'basic' | 'pro' | 'max' | 'team';
 
 function CheckIcon() {
   return (
@@ -34,45 +56,177 @@ function CheckIcon() {
   );
 }
 
-const PRICING_TABS: { id: PricingTabId; labelKey: string }[] = [
-  { id: 'individual', labelKey: 'tabIndividual' },
-  { id: 'team', labelKey: 'tabTeam' },
-  { id: 'api', labelKey: 'tabApi' },
-];
-
-/**
- * Higher-capacity hosted plans shown on the Team tab. Managed cloud itself is
- * public-alpha-open (free hobby web access needs no waitlist); these paid tiers
- * add capacity and roll out via early access while STRIPE_CHECKOUT_ENABLED and
- * billing controls are proven (see app/api/checkout/route.ts).
- */
-const TEAM_PLAN_IDS = ['pro', 'max'] as const;
-
-/**
- * Annual savings vs monthly billing for one plan, from the canonical
- * billing catalog. Per-plan on purpose: Hobby's annual discount differs
- * from Pro/Max, so a single Hobby-derived badge overstated Pro/Max savings.
- */
+/** Annual savings vs monthly billing, from the canonical billing catalog. */
 function annualSavingsPct(plan: { monthlyPriceUsd: number; yearlyPriceUsd: number }): number {
-  // A plan with no annual price (yearlyPriceUsd <= 0, e.g. Max is monthly-only)
-  // is NOT offered annually — return 0 so it never renders a bogus "save 100%".
   if (plan.monthlyPriceUsd <= 0 || plan.yearlyPriceUsd <= 0) return 0;
   return Math.round((1 - plan.yearlyPriceUsd / 12 / plan.monthlyPriceUsd) * 100);
 }
 
-const TEAM_MAX_SAVINGS_PCT = Math.max(
-  ...TEAM_PLAN_IDS.map((id) => annualSavingsPct(BILLING_PLAN_PRICING[id])),
-);
+interface CompareRow {
+  planId: BillingPlanTier;
+  label: string;
+  price: string;
+  billingInterval: string;
+  usageCapacity: string;
+  bestFor: string;
+  highlighted?: boolean;
+}
 
 export default function PricingPage() {
   const { t } = useTranslation('pricing');
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+
   const [annual, setAnnual] = useState(false);
-  const [activeTab, setActiveTab] = useState<PricingTabId>('individual');
+  const [currency, setCurrency] = useState<Currency>('usd');
+  const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
+
+  // Best-effort locale detection for India (₹399/mo Basic), with a manual
+  // toggle so any user can override. No geo-IP dependency by design.
+  useEffect(() => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      const lang = typeof navigator !== 'undefined' ? navigator.language || '' : '';
+      if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta' || lang.toLowerCase().endsWith('-in')) {
+        setCurrency('inr');
+      }
+    } catch {
+      // Intl/navigator unavailable (SSR or unsupported env) - stay on USD default.
+    }
+  }, []);
 
   const localLabel = formatPrivacyModeLabel('local');
   const byokLabel = formatPrivacyModeLabel('byok');
 
-  const comparisonRows = MARKETING_FEATURE_MATRIX[activeTab];
+  const pro = BILLING_PLAN_PRICING.pro;
+  const max = BILLING_PLAN_PRICING.max;
+  const basic = BILLING_PLAN_PRICING.basic;
+  const team = BILLING_PLAN_PRICING.team;
+
+  const proSavingsPct = annualSavingsPct(pro);
+  const teamSavingsPct = annualSavingsPct(team);
+
+  const proPrice =
+    annual && proSavingsPct > 0
+      ? (pro.yearlyPriceUsd / 12).toFixed(2)
+      : pro.monthlyPriceUsd.toFixed(2);
+  const teamPrice =
+    annual && teamSavingsPct > 0
+      ? (team.yearlyPriceUsd / 12).toFixed(2)
+      : team.monthlyPriceUsd.toFixed(2);
+  const basicPrice =
+    currency === 'inr' && basic.monthlyPriceInr
+      ? `₹${basic.monthlyPriceInr}`
+      : `$${basic.monthlyPriceUsd}`;
+
+  async function handleUpgrade(plan: CheckoutPlan) {
+    if (!user) {
+      router.push('/login?redirectTo=%2Fpricing');
+      return;
+    }
+
+    if (!CHECKOUT_ENABLED) {
+      window.location.href = '/pricing#waitlist';
+      return;
+    }
+
+    setPendingPlan(plan);
+    const toastId = toast.loading(t('redirectingToCheckout'));
+    try {
+      const userId = user.id;
+      const userEmail = user.email || '';
+      if (plan === 'basic') {
+        await upgradeToBasicPlan({ userId, userEmail, currency });
+      } else if (plan === 'pro') {
+        await upgradeToProPlan({ userId, userEmail, billingPeriod: annual ? 'yearly' : 'monthly' });
+      } else if (plan === 'max') {
+        await upgradeToMaxPlan({ userId, userEmail });
+      } else if (plan === 'team') {
+        await upgradeToTeamPlan({
+          userId,
+          userEmail,
+          billingPeriod: annual ? 'yearly' : 'monthly',
+        });
+      }
+      toast.dismiss(toastId);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error(err instanceof Error ? err.message : t('checkoutFailed'));
+    } finally {
+      setPendingPlan(null);
+    }
+  }
+
+  const freeHref = user ? '/chat' : '/login?redirectTo=%2Fchat';
+
+  const compareRows: CompareRow[] = [
+    {
+      planId: 'local-only',
+      label: localLabel,
+      price: t('free'),
+      billingInterval: t('foreverLabel'),
+      usageCapacity: t('compareLocalUsage'),
+      bestFor: t('compareLocalBestFor'),
+    },
+    {
+      planId: 'byok',
+      label: byokLabel,
+      price: t('free'),
+      billingInterval: t('foreverLabel'),
+      usageCapacity: t('compareByokUsage'),
+      bestFor: t('compareByokBestFor'),
+    },
+    {
+      planId: 'free',
+      label: BILLING_PLAN_PRICING.free.label,
+      price: t('free'),
+      billingInterval: t('foreverLabel'),
+      usageCapacity: t('compareFreeUsage'),
+      bestFor: t('compareFreeBestFor'),
+    },
+    {
+      planId: 'basic',
+      label: basic.label,
+      price: `$${basic.monthlyPriceUsd}/mo (₹${basic.monthlyPriceInr}/mo ${t('inIndia')})`,
+      billingInterval: t('monthly'),
+      usageCapacity: t('compareBasicUsage'),
+      bestFor: t('compareBasicBestFor'),
+    },
+    {
+      planId: 'pro',
+      label: pro.label,
+      price: `$${pro.monthlyPriceUsd}/mo`,
+      billingInterval: t('compareProInterval', { yearly: (pro.yearlyPriceUsd / 12).toFixed(2) }),
+      usageCapacity: t('compareProUsage'),
+      bestFor: t('compareProBestFor'),
+    },
+    {
+      planId: 'max',
+      label: max.label,
+      price: `$${max.monthlyPriceUsd}/mo`,
+      billingInterval: t('monthlyOnly'),
+      usageCapacity: t('compareMaxUsage'),
+      bestFor: t('compareMaxBestFor'),
+    },
+    {
+      planId: 'team',
+      label: team.label,
+      price: `$${team.monthlyPriceUsd}/seat/mo`,
+      billingInterval: t('compareTeamInterval', { yearly: (team.yearlyPriceUsd / 12).toFixed(2) }),
+      usageCapacity: t('compareTeamUsage'),
+      bestFor: t('compareTeamBestFor'),
+      highlighted: true,
+    },
+    {
+      planId: 'enterprise',
+      label: BILLING_PLAN_PRICING.enterprise.label,
+      price: t('custom'),
+      billingInterval: t('annualContract'),
+      usageCapacity: t('compareEnterpriseUsage'),
+      bestFor: t('compareEnterpriseBestFor'),
+      highlighted: true,
+    },
+  ];
 
   return (
     <div data-design="agi">
@@ -85,269 +239,392 @@ export default function PricingPage() {
           <h1 id="pricing-hero-title" className="agi-fl-h1">
             {t('pageTitle')}
           </h1>
-          <p className="agi-fl-section-lede">
-            {t('pageLedePart1', { localLabel, byokLabel })} {t('pageLedePart2')}{' '}
-            <strong>{t('pageLedePart3')}</strong>
-          </p>
+          <p className="agi-fl-section-lede">{t('heroLedePart1', { localLabel, byokLabel })}</p>
+          <p className="agi-fl-section-lede">{t('heroLedePart2')}</p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
               {t('installCta')}
             </Link>
-            <Link href="/chat" className="agi-fl-cta agi-fl-cta--secondary">
+            <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--secondary">
+              {t('talkToSalesCta')}
+            </Link>
+            <Link href="/chat" className="agi-fl-cta agi-fl-cta--ghost">
               {t('tryAgiCta')}
             </Link>
-            <WaitlistTrigger
-              label={t('joinCloudWaitlistCta')}
-              source="billing"
-              className="agi-fl-cta agi-fl-cta--ghost"
-            />
           </div>
           <ul className="agi-fl-mode-ribbon" aria-label={t('modeRibbonLabel')}>
             <li>{t('ribbonLocal')}</li>
             <li>{t('ribbonByok')}</li>
-            <li>{t('ribbonCloud')}</li>
+            <li>{t('ribbonTeam')}</li>
           </ul>
         </section>
 
-        {/* ───────────────────────────── Plans ──────────────────────────── */}
-        <section className="agi-fl-section" aria-labelledby="pricing-plans-title">
-          <p className="agi-fl-eyebrow">{t('plansEyebrow')}</p>
-          <h2 id="pricing-plans-title" className="agi-fl-h2">
-            {t('plansHeading')}
+        {/* ──────────────────── The wedge: Local + BYOK ─────────────────── */}
+        <section className="agi-fl-section" aria-labelledby="pricing-wedge-title">
+          <p className="agi-fl-eyebrow">{t('wedgeEyebrow')}</p>
+          <h2 id="pricing-wedge-title" className="agi-fl-h2">
+            {t('wedgeHeading')}
           </h2>
-          <p className="agi-fl-section-lede">{t('plansLede')}</p>
+          <p className="agi-fl-section-lede">{t('wedgeLede')}</p>
+
+          <div className="agi-tier-grid agi-tier-grid--compact" style={{ marginTop: 32 }}>
+            <Reveal as="article" className="agi-tier agi-tier--compact">
+              <h3 className="agi-tier-name">{localLabel}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{t('free')}</span>
+                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
+              </p>
+              <p className="agi-tier-body">{t('localTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('localFeature1', { localLabel })}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('localFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('localFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('localFeature4')}
+                </li>
+              </ul>
+              <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
+                {t('installCta')}
+              </Link>
+            </Reveal>
+
+            <Reveal as="article" delay={60} className="agi-tier agi-tier--compact">
+              <h3 className="agi-tier-name">{byokLabel}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{t('free')}</span>
+                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
+              </p>
+              <p className="agi-tier-body">{t('byokTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('byokFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('byokFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('byokFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('byokFeature4')}
+                </li>
+              </ul>
+              <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
+                {t('installCta')}
+              </Link>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ─────────────────── Team & Enterprise (centerpiece) ──────────── */}
+        <section className="agi-fl-section" aria-labelledby="pricing-team-title">
+          <p className="agi-fl-eyebrow">{t('teamEyebrow')}</p>
+          <h2 id="pricing-team-title" className="agi-fl-h2">
+            {t('teamHeading')}
+          </h2>
+          <p className="agi-fl-section-lede">{t('teamLede')}</p>
 
           <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 12,
-              alignItems: 'center',
-              marginTop: 40,
-            }}
+            className="agi-tier-toggle"
+            role="group"
+            aria-label={t('billingCadenceLabel')}
+            style={{ marginTop: 32 }}
           >
-            <div className="agi-tier-toggle" role="group" aria-label={t('planTabsLabel')}>
-              {PRICING_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  aria-pressed={activeTab === tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={
-                    activeTab === tab.id
-                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                      : 'agi-tier-toggle-btn'
-                  }
-                >
-                  {t(tab.labelKey)}
-                </button>
-              ))}
-            </div>
-
-            {/* Billing cadence toggle for hosted team tiers. */}
-            {activeTab === 'team' && (
-              <div className="agi-tier-toggle" role="group" aria-label={t('billingCadenceLabel')}>
-                <button
-                  type="button"
-                  aria-pressed={!annual}
-                  onClick={() => setAnnual(false)}
-                  className={
-                    annual
-                      ? 'agi-tier-toggle-btn'
-                      : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                  }
-                >
-                  {t('monthly')}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={annual}
-                  onClick={() => setAnnual(true)}
-                  className={
-                    annual
-                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                      : 'agi-tier-toggle-btn'
-                  }
-                >
-                  {t('annual')}{' '}
-                  <span className="agi-tier-toggle-save">
-                    {t('annualSaveUpTo', { pct: TEAM_MAX_SAVINGS_PCT })}
-                  </span>
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              aria-pressed={!annual}
+              onClick={() => setAnnual(false)}
+              className={
+                annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+              }
+            >
+              {t('monthly')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={annual}
+              onClick={() => setAnnual(true)}
+              className={
+                annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('annual')}{' '}
+              <span className="agi-tier-toggle-save">
+                {t('annualSave', { pct: teamSavingsPct })}
+              </span>
+            </button>
           </div>
 
-          {/* Individual tab: Local + BYOK free forever, Hobby web trial */}
-          {activeTab === 'individual' && (
-            <div className="agi-tier-grid">
-              <Reveal as="article" className="agi-tier">
-                <h3 className="agi-tier-name">{localLabel}</h3>
-                <p className="agi-tier-price">
-                  <span className="agi-tier-price-num">{t('free')}</span>
-                  <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
-                </p>
-                <p className="agi-tier-body">{t('localTierBody')}</p>
-                <ul className="agi-tier-features">
-                  <li>
-                    <CheckIcon />
-                    {t('localFeature1', { localLabel })}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('localFeature2')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('localFeature3')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('localFeature4')}
-                  </li>
-                </ul>
-                <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                  {t('installCta')}
-                </Link>
-              </Reveal>
-
-              <Reveal as="article" delay={60} className="agi-tier">
-                <h3 className="agi-tier-name">{byokLabel}</h3>
-                <p className="agi-tier-price">
-                  <span className="agi-tier-price-num">{t('free')}</span>
-                  <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
-                </p>
-                <p className="agi-tier-body">{t('byokTierBody')}</p>
-                <ul className="agi-tier-features">
-                  <li>
-                    <CheckIcon />
-                    {t('byokFeature1')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('byokFeature2')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('byokFeature3')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('byokFeature4')}
-                  </li>
-                </ul>
-                <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                  {t('installCta')}
-                </Link>
-              </Reveal>
-
-              <Reveal as="article" delay={120} className="agi-tier">
-                <h3 className="agi-tier-name">{t('hobby')}</h3>
-                <p className="agi-tier-price">
-                  <span className="agi-tier-price-num">{t('free')}</span>
-                  <span className="agi-tier-price-sub">
-                    {t('webTrialSub', { cap: FREE_TRIAL_PROMPT_LIMIT })}
-                  </span>
-                </p>
-                <p className="agi-tier-body">{t('hobbyTierBody')}</p>
-                <ul className="agi-tier-features">
-                  <li>
-                    <CheckIcon />
-                    {t('hobbyFeature1', { cap: FREE_TRIAL_PROMPT_LIMIT })}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('hobbyFeature2')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('hobbyFeature3')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('hobbyFeature4')}
-                  </li>
-                </ul>
-                <div className="agi-tier-cta-group">
-                  <Link href="/chat" className="agi-tier-cta">
-                    {t('tryAgiCta')}
-                  </Link>
-                  <p className="agi-tier-cta-note">{t('managedWaitlistNote')}</p>
-                </div>
-              </Reveal>
-            </div>
-          )}
-
-          {/* Team tab: higher-capacity hosted tiers, rolling out via early access */}
-          {activeTab === 'team' && (
-            <div className="agi-tier-grid">
-              {TEAM_PLAN_IDS.map((planId, i) => {
-                const plan = BILLING_PLAN_PRICING[planId];
-                const planSavingsPct = annualSavingsPct(plan);
-                // Plans with no annual price fall back to their monthly price even
-                // when Annual is toggled, instead of rendering "$0.00 / save 100%".
-                const annualOffered = plan.yearlyPriceUsd > 0;
-                const displayPrice =
-                  annual && annualOffered
-                    ? `$${(plan.yearlyPriceUsd / 12).toFixed(2)}`
-                    : `$${plan.monthlyPriceUsd.toFixed(2)}`;
-                const sub =
-                  annual && annualOffered
-                    ? t('perMonthBilledAnnually')
-                    : t('perMonthBilledMonthly');
-
-                return (
-                  <Reveal as="article" key={planId} delay={i * 60} className="agi-tier">
-                    <h3 className="agi-tier-name">
-                      {plan.label} <span className="agi-chip">{t('waitlistChip')}</span>
-                    </h3>
-                    <p className="agi-tier-price">
-                      <span className="agi-tier-price-num">{displayPrice}</span>
-                      <span className="agi-tier-price-sub">
-                        {sub}
-                        {annual && planSavingsPct > 0 ? (
-                          <>
-                            {' · '}
-                            <span className="agi-tier-toggle-save">
-                              {t('annualSave', { pct: planSavingsPct })}
-                            </span>
-                          </>
-                        ) : null}
+          <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
+            <Reveal as="article" className="agi-tier agi-tier--featured">
+              <span className="agi-tier-badge">{t('teamBadge')}</span>
+              <h3 className="agi-tier-name">{team.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">${teamPrice}</span>
+                <span className="agi-tier-price-sub">
+                  {t('perSeatPerMonth')}
+                  {annual && teamSavingsPct > 0 ? (
+                    <>
+                      {' · '}
+                      <span className="agi-tier-toggle-save">
+                        {t('annualSave', { pct: teamSavingsPct })}
                       </span>
-                    </p>
-                    <p className="agi-tier-body">
-                      {t(`${planId}TierBody`, { defaultValue: t('waitlistTierBody') })}
-                    </p>
-                    <div className="agi-tier-cta-group">
-                      <WaitlistTrigger
-                        label={t('joinPlanWaitlistCta', { plan: plan.label })}
-                        source="billing"
-                        className="agi-fl-cta agi-fl-cta--primary"
-                      />
-                      <p className="agi-tier-cta-note">{t('waitlistNote')}</p>
-                    </div>
-                  </Reveal>
-                );
-              })}
-            </div>
-          )}
+                    </>
+                  ) : null}
+                </span>
+              </p>
+              <p className="agi-tier-body">{t('teamTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('teamFeature4')}
+                </li>
+              </ul>
+              <div className="agi-tier-cta-group">
+                <button
+                  type="button"
+                  className="agi-tier-cta"
+                  disabled={pendingPlan === 'team'}
+                  onClick={() => void handleUpgrade('team')}
+                >
+                  {t('teamCta')}
+                </button>
+                <WaitlistTrigger
+                  label={t('talkToSalesCta')}
+                  source="billing"
+                  className="agi-tier-cta agi-tier-cta--ghost"
+                />
+              </div>
+            </Reveal>
 
-          {/* API tab: Enterprise, contact sales */}
-          {activeTab === 'api' && (
-            <Reveal className="agi-tier" as="div">
-              <p className="agi-fl-eyebrow">{t('enterpriseEyebrow')}</p>
-              <h3 className="agi-fl-h2">{t('enterpriseHeading')}</h3>
-              <p className="agi-fl-section-lede">{t('enterpriseBody')}</p>
-              <div className="agi-fl-cta-row">
-                <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--primary">
+            <Reveal as="article" delay={60} className="agi-tier agi-tier--featured">
+              <span className="agi-tier-badge">{t('enterpriseBadge')}</span>
+              <h3 className="agi-tier-name">{t('enterpriseHeading')}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{t('custom')}</span>
+                <span className="agi-tier-price-sub">{t('customPricingSub')}</span>
+              </p>
+              <p className="agi-tier-body">{t('enterpriseBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('enterpriseFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('enterpriseFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('enterpriseFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('enterpriseFeature4')}
+                </li>
+              </ul>
+              <div className="agi-tier-cta-group">
+                <Link href="/contact-sales" className="agi-tier-cta">
                   {t('contactSalesCta')}
                 </Link>
               </div>
             </Reveal>
-          )}
+          </div>
         </section>
 
-        {/* ──────────── Higher-capacity plans early access (anchor target) ──────────── */}
+        {/* ──────────────────── Individual cloud on-ramp ────────────────── */}
+        <section className="agi-fl-section" aria-labelledby="pricing-individual-title">
+          <p className="agi-fl-eyebrow">{t('individualEyebrow')}</p>
+          <h2 id="pricing-individual-title" className="agi-fl-h2">
+            {t('individualHeading')}
+          </h2>
+          <p className="agi-fl-section-lede">{t('individualLede')}</p>
+
+          <div
+            className="agi-tier-toggle"
+            role="group"
+            aria-label={t('currencyLabel')}
+            style={{ marginTop: 32 }}
+          >
+            <button
+              type="button"
+              aria-pressed={currency === 'usd'}
+              onClick={() => setCurrency('usd')}
+              className={
+                currency === 'usd'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              USD
+            </button>
+            <button
+              type="button"
+              aria-pressed={currency === 'inr'}
+              onClick={() => setCurrency('inr')}
+              className={
+                currency === 'inr'
+                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                  : 'agi-tier-toggle-btn'
+              }
+            >
+              INR ({t('inIndia')})
+            </button>
+          </div>
+
+          <div className="agi-tier-grid agi-tier-grid--four" style={{ marginTop: 24 }}>
+            <Reveal as="article" className="agi-tier">
+              <h3 className="agi-tier-name">{BILLING_PLAN_PRICING.free.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{t('free')}</span>
+                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
+              </p>
+              <p className="agi-tier-body">{t('freeTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('freeFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('freeFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('freeFeature3')}
+                </li>
+              </ul>
+              <Link href={freeHref} className="agi-tier-cta agi-tier-cta--ghost">
+                {t('freeCta')}
+              </Link>
+            </Reveal>
+
+            <Reveal as="article" delay={40} className="agi-tier">
+              <h3 className="agi-tier-name">{basic.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{basicPrice}</span>
+                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
+              </p>
+              <p className="agi-tier-body">{t('basicTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('basicFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('basicFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('basicFeature3')}
+                </li>
+              </ul>
+              <button
+                type="button"
+                className="agi-tier-cta"
+                disabled={pendingPlan === 'basic'}
+                onClick={() => void handleUpgrade('basic')}
+              >
+                {t('basicCta')}
+              </button>
+            </Reveal>
+
+            <Reveal as="article" delay={80} className="agi-tier">
+              <h3 className="agi-tier-name">{pro.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">${proPrice}</span>
+                <span className="agi-tier-price-sub">
+                  {annual && proSavingsPct > 0
+                    ? t('perMonthBilledAnnually')
+                    : t('perMonthBilledMonthly')}
+                </span>
+              </p>
+              <p className="agi-tier-body">{t('proTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('proFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature3')}
+                </li>
+              </ul>
+              <button
+                type="button"
+                className="agi-tier-cta"
+                disabled={pendingPlan === 'pro'}
+                onClick={() => void handleUpgrade('pro')}
+              >
+                {t('proCta')}
+              </button>
+            </Reveal>
+
+            <Reveal as="article" delay={120} className="agi-tier">
+              <h3 className="agi-tier-name">{max.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">${max.monthlyPriceUsd}</span>
+                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
+              </p>
+              <p className="agi-tier-body">{t('maxTierBody')}</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  {t('maxFeature1')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('maxFeature2')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('maxFeature3')}
+                </li>
+              </ul>
+              <button
+                type="button"
+                className="agi-tier-cta"
+                disabled={pendingPlan === 'max'}
+                onClick={() => void handleUpgrade('max')}
+              >
+                {t('maxCta')}
+              </button>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ──────────── Early access (anchor target for the checkout gate) ─ */}
         <section
           id="waitlist"
           className="agi-fl-section"
@@ -404,7 +681,7 @@ export default function PricingPage() {
                 </tr>
               </thead>
               <tbody>
-                {comparisonRows.map((row, i) => (
+                {compareRows.map((row, i) => (
                   <tr
                     key={row.planId}
                     style={{
@@ -425,11 +702,6 @@ export default function PricingPage() {
                       }}
                     >
                       {row.label}
-                      {row.waitlist && (
-                        <span className="agi-chip" style={{ marginLeft: 8 }}>
-                          {t('waitlistChip')}
-                        </span>
-                      )}
                     </td>
                     <td
                       style={{

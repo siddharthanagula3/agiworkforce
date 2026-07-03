@@ -11,7 +11,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
@@ -119,23 +119,35 @@ jest.mock('../src/features/chat/components/CommandPalette', () => {
   };
 });
 
+let lastVoiceResetSignal: number | undefined;
+
 jest.mock('../src/features/voice/components/VoiceInputButton', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
   return {
-    VoiceInputButton: () => (
-      <Pressable testID="voice-input-button" accessibilityLabel="Voice input">
-        <Text>Mic</Text>
-      </Pressable>
-    ),
+    VoiceInputButton: (props: { resetSignal?: number }) => {
+      lastVoiceResetSignal = props.resetSignal;
+      return (
+        <Pressable testID="voice-input-button" accessibilityLabel="Voice input">
+          <Text>Mic</Text>
+        </Pressable>
+      );
+    },
   };
 });
+
+let capturedOverlaySend: (() => void) | undefined;
+let capturedOverlayCancel: (() => void) | undefined;
 
 jest.mock('../src/features/voice/components/RecordingOverlay', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
-    RecordingOverlay: () => <View testID="recording-overlay" />,
+    RecordingOverlay: (props: { onSend: () => void; onCancel: () => void }) => {
+      capturedOverlaySend = props.onSend;
+      capturedOverlayCancel = props.onCancel;
+      return <View testID="recording-overlay" />;
+    },
   };
 });
 
@@ -186,9 +198,13 @@ jest.mock('../src/ui/theme', () => ({
   },
 }));
 
-jest.mock('../src/features/chat/components/TemporaryChatToggle', () => ({
-  TemporaryChatToggle: jest.fn().mockReturnValue(null),
-}));
+jest.mock('../src/features/chat/components/TemporaryChatToggle', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    TemporaryChatToggle: () => <View testID="temporary-chat-toggle" />,
+  };
+});
 
 jest.mock('../lib/constants', () => ({
   MAX_INPUT_LINES: 6,
@@ -226,6 +242,9 @@ function renderInput(overrides: Partial<typeof defaultProps> = {}) {
 describe('ChatInput', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    lastVoiceResetSignal = undefined;
+    capturedOverlaySend = undefined;
+    capturedOverlayCancel = undefined;
   });
 
   // ---- Button presence ----
@@ -249,6 +268,16 @@ describe('ChatInput', () => {
     it('renders send button', () => {
       const { getByTestId } = renderInput();
       expect(getByTestId('send-button')).toBeTruthy();
+    });
+
+    it('renders the temporary chat toggle (visible status + shortcut in the toolbar)', () => {
+      // Regression: TemporaryChatToggle was fully built (icon, "Temporary" badge,
+      // a11y) with a docstring saying it belongs in the ChatInput toolbar, but was
+      // never actually imported/rendered anywhere — there was no way to see or
+      // toggle temporary-chat state from the main composer, only from deep inside
+      // the Add-to-Chat sheet.
+      const { getByTestId } = renderInput();
+      expect(getByTestId('temporary-chat-toggle')).toBeTruthy();
     });
   });
 
@@ -308,6 +337,55 @@ describe('ChatInput', () => {
 
       const input = getByLabelText('Message input');
       expect(input.props.placeholder).toContain('Offline');
+    });
+  });
+
+  // ---- Voice recording overlay "Send" reset signal ----
+
+  describe('recording overlay send', () => {
+    it('bumps voiceResetSignal even when the recording session already ended', async () => {
+      // Regression: on the iOS Simulator (no mic) — and in a real race on
+      // device — VoiceService.isRecording() can already be false by the time
+      // "Send recording" is tapped. The old handler returned early in that
+      // case WITHOUT bumping voiceResetSignal, so VoiceInputButton's internal
+      // state stayed stuck on "recording" (red mic, "Tap to stop recording"
+      // a11y label) with no way back short of triggering a second, unrelated
+      // error path.
+
+      const VoiceService = require('../src/features/voice/services/voice');
+      VoiceService.isRecording.mockReturnValue(false);
+
+      renderInput();
+      const signalBefore = lastVoiceResetSignal;
+
+      await act(async () => {
+        await capturedOverlaySend!();
+      });
+
+      await waitFor(() => {
+        expect(lastVoiceResetSignal).toBe((signalBefore ?? 0) + 1);
+      });
+      expect(VoiceService.stopRecording).not.toHaveBeenCalled();
+      expect(VoiceService.transcribe).not.toHaveBeenCalled();
+    });
+
+    it('bumps voiceResetSignal after a normal send with an active recording', async () => {
+      const VoiceService = require('../src/features/voice/services/voice');
+      VoiceService.isRecording.mockReturnValue(true);
+      VoiceService.transcribe.mockResolvedValue({ text: 'hello from voice' });
+
+      const onSend = jest.fn();
+      renderInput({ onSend });
+      const signalBefore = lastVoiceResetSignal;
+
+      await act(async () => {
+        await capturedOverlaySend!();
+      });
+
+      await waitFor(() => {
+        expect(lastVoiceResetSignal).toBe((signalBefore ?? 0) + 1);
+      });
+      expect(VoiceService.stopRecording).toHaveBeenCalledTimes(1);
     });
   });
 });

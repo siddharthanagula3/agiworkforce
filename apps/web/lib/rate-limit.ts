@@ -82,6 +82,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 push-token updates per minute (mirrors api-gateway limiter)
     failClosed: false,
   },
+  'mobile-feedback': {
+    limit: 10,
+    window: '1 h', // 10 feedback submissions per hour — generous for real use, blocks spam
+    failClosed: false, // Don't block a user's feedback submission if Redis fails
+  },
   'claim-offer': {
     limit: 3,
     window: '1 h', // 3 requests per hour

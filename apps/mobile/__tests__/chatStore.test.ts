@@ -104,6 +104,7 @@ import { localGenerate } from '@agiworkforce/local-llm';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useProjectStore } from '../src/features/projects/store';
+import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import {
   listInstalledModels,
   getInstalledModel,
@@ -418,6 +419,71 @@ describe('chatStore — streaming state', () => {
       expect(getState().streamingContent).toBe('');
       expect(getState().streamingReasoning).toBe('');
     });
+
+    it('strips <thinking> tags from cloud delta.content into reasoning instead of rendering them raw', async () => {
+      // Regression: apps/web's stream-transform.ts intentionally emits Anthropic
+      // extended-thinking as literal `<thinking>...</thinking>` markers inline in
+      // delta.content (the same tag convention parseLocalThinking already handles
+      // for local models). The cloud onDelta handler appended delta.content to
+      // streamingContent unparsed, so a Claude thinking-model reply rendered raw
+      // `<thinking>...</thinking>` tag soup as the visible assistant message
+      // instead of routing the reasoning into the reasoning field / ThinkingChip.
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              callbacks.onDelta({ content: '<thinking>' });
+              callbacks.onDelta({ content: 'Let me consider this.' });
+              callbacks.onDelta({ content: '</thinking>' });
+              callbacks.onDelta({ content: "Hello! I'm Claude." });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'question', MODEL);
+      });
+
+      const msgs = getState().messages[CONV_ID] ?? [];
+      const assistantMsg = msgs.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe("Hello! I'm Claude.");
+      expect(assistantMsg?.content).not.toContain('<thinking>');
+      expect(assistantMsg?.content).not.toContain('</thinking>');
+      expect(assistantMsg?.reasoning).toBe('Let me consider this.');
+    });
+
+    it('combines tag-extracted reasoning with a structured delta.reasoning channel without duplication', async () => {
+      // Regression: parseLocalThinking re-parses the FULL raw content buffer on
+      // every delta (required to handle a tag straddling two chunks). Naively
+      // accumulating its output onto the previous combined reasoning value across
+      // deltas would duplicate the reasoning text on every subsequent chunk.
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              callbacks.onDelta({ content: '<thinking>Step one.' });
+              callbacks.onDelta({ content: ' Step two.</thinking>' });
+              callbacks.onDelta({ content: 'Final answer.', reasoning: 'structured note' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'question', MODEL);
+      });
+
+      const msgs = getState().messages[CONV_ID] ?? [];
+      const assistantMsg = msgs.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe('Final answer.');
+      // Each source's text must appear exactly once — no duplication from re-parsing.
+      const reasoning = assistantMsg?.reasoning ?? '';
+      expect(reasoning.match(/Step one\. Step two\./g)?.length).toBe(1);
+      expect(reasoning.match(/structured note/g)?.length).toBe(1);
+    });
   });
 
   describe('local LLM path', () => {
@@ -609,6 +675,72 @@ describe('chatStore — streaming state', () => {
       expect(systemMessages).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ content: 'Use Project B instructions.' }),
+        ]),
+      );
+    });
+
+    it('injects Cloud project custom instructions into the remote stream (regression: was local-only)', async () => {
+      // Cloud project custom instructions previously never reached the server —
+      // the injection at send-time was hard-gated to executionMode === 'local',
+      // so a Cloud project's Custom Instructions were silently ignored on every
+      // Cloud turn despite the project editor UI accepting and saving them.
+      useChatStore.setState({
+        conversations: [
+          {
+            id: CONV_ID,
+            title: 'Cloud project chat',
+            updatedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            messageCount: 0,
+            pinned: false,
+            model: CLOUD_MODEL,
+            provider: 'cloud_managed',
+            executionMode: 'cloud',
+            projectId: 'cloud-project-a',
+          },
+        ],
+        messages: { [CONV_ID]: [] },
+      });
+      useCloudProjectStore.setState({
+        projects: [
+          {
+            id: 'cloud-project-a',
+            name: 'Cloud Project A',
+            description: null,
+            instructions: 'Always answer in exactly one sentence.',
+            color: null,
+            isArchived: false,
+            metadata: null,
+            source: 'mobile',
+            createdAt: '2026-06-11T00:00:00.000Z',
+            updatedAt: '2026-06-11T00:00:00.000Z',
+            deletedAt: null,
+          },
+        ],
+        activeProjectId: 'cloud-project-a',
+      });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockRemoteDisabledReason.mockReturnValue(null);
+
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDelta({ content: 'One sentence answer.' });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Describe a neural network', CLOUD_MODEL);
+      });
+
+      const systemMessages = capturedBody?.messages?.filter((message) => message.role === 'system');
+      expect(systemMessages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ content: 'Always answer in exactly one sentence.' }),
         ]),
       );
     });

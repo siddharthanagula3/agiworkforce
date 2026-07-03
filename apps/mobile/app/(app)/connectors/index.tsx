@@ -7,15 +7,14 @@
  * - Grouped by category: Cloud Storage, Productivity, Communication, Email & Calendar.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, SectionList, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Cloud, Link2 } from 'lucide-react-native';
+import { ArrowLeft, Link2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
-import type { InviteCodeTab } from '@/src/features/cloud-bridge/types';
+import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors } from '@/src/ui/theme';
 import { useIntegrationStore } from '@/src/features/integrations/store';
 import { ConnectorItem } from '@/src/features/connectors/components/ConnectorItem';
@@ -43,8 +42,6 @@ interface ConnectorSection {
 export default function ConnectorsScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [defaultTab, setDefaultTab] = useState<InviteCodeTab>('invite');
   const connectedConnectors = useIntegrationStore((s) => s.connectedConnectors);
   const enabledConnectors = useIntegrationStore((s) => s.enabledConnectors);
   const disconnectConnector = useIntegrationStore((s) => s.disconnectConnector);
@@ -73,26 +70,21 @@ export default function ConnectorsScreen() {
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  const openCloudAccess = useCallback((tab: InviteCodeTab) => {
-    setDefaultTab(tab);
-    setInviteOpen(true);
+  const handleConnect = useCallback((connectorId: string) => {
+    // Unreachable while !FEATURES.connectors — the catalog this screen renders
+    // only appears when the flag is on. Kept as a defensive fallback with
+    // accurate copy: connectors are gated by the feature flag (not built for
+    // mobile yet), not by AGI Cloud sign-in — matching the pattern already
+    // fixed in settings/cloud-connectors/index.tsx's WaitlistPlaceholder.
+    const connector = CONNECTORS.find((c) => c.id === connectorId);
+    const name = connector?.name ?? connectorId;
+
+    Alert.alert(
+      `Connect ${name}`,
+      'OAuth flow will open in your browser when AGI Cloud connectors are active.',
+      [{ text: 'OK' }],
+    );
   }, []);
-
-  const handleConnect = useCallback(
-    (connectorId: string) => {
-      const connector = CONNECTORS.find((c) => c.id === connectorId);
-      const name = connector?.name ?? connectorId;
-
-      Alert.alert(`Connect ${name}?`, `${name} connectors require AGI Cloud access.`, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Open AGI Cloud',
-          onPress: () => openCloudAccess('invite'),
-        },
-      ]);
-    },
-    [openCloudAccess],
-  );
 
   const handleToggle = useCallback(
     (connectorId: string, enabled: boolean) => {
@@ -121,116 +113,14 @@ export default function ConnectorsScreen() {
 
   // -- Render -----------------------------------------------------------------
 
+  // Connectors are gated by the feature flag (not built for mobile yet), not
+  // by AGI Cloud sign-in — a signed-in Pro/Max user would otherwise see a
+  // misleading "Enter invite code / Join waitlist" screen implying AGI Cloud
+  // itself is invite-gated, which hasn't been true since public alpha opened
+  // (founder decision, 2026-06-27). Matches the honest, no-false-affordance
+  // pattern already used by Schedules/Companion (FeatureUnavailable).
   if (!FEATURES.connectors) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-        <View
-          style={{
-            minHeight: 52,
-            paddingHorizontal: 18,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <Pressable
-            onPress={handleBack}
-            style={{ padding: 8, marginLeft: -8, borderRadius: 12 }}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-          >
-            <ArrowLeft size={22} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={{ color: colors.textPrimary, fontSize: 21, fontWeight: '700' }}>
-            Connectors
-          </Text>
-        </View>
-
-        <View
-          style={{
-            flex: 1,
-            paddingHorizontal: 24,
-            justifyContent: 'center',
-            paddingBottom: 72,
-          }}
-        >
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 18,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: colors.surfaceElevated,
-              borderWidth: 1,
-              borderColor: colors.border,
-              marginBottom: 18,
-            }}
-          >
-            <Cloud size={25} color={colors.textSecondary} strokeWidth={1.8} />
-          </View>
-          <Text style={{ color: colors.textPrimary, fontSize: 28, fontWeight: '700' }}>
-            AGI Cloud connectors
-          </Text>
-          <Text
-            style={{
-              color: colors.textSecondary,
-              fontSize: 16,
-              lineHeight: 23,
-              marginTop: 10,
-            }}
-          >
-            Connectors are available with AGI Cloud. Local Mode remains private and separate.
-          </Text>
-
-          <View style={{ gap: 10, marginTop: 30 }}>
-            <Pressable
-              onPress={() => openCloudAccess('invite')}
-              accessibilityRole="button"
-              accessibilityLabel="Enter invite code"
-              style={{
-                minHeight: 52,
-                borderRadius: 16,
-                backgroundColor: colors.teal,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 18,
-              }}
-            >
-              <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '700' }}>
-                Enter invite code
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => openCloudAccess('waitlist')}
-              accessibilityRole="button"
-              accessibilityLabel="Join waitlist"
-              style={{
-                minHeight: 52,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surfaceElevated,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 18,
-              }}
-            >
-              <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>
-                Join waitlist
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <InviteCodeModal
-          open={inviteOpen}
-          onClose={() => setInviteOpen(false)}
-          source="connectors"
-          defaultTab={defaultTab}
-        />
-      </SafeAreaView>
-    );
+    return <FeatureUnavailable feature="Connectors" />;
   }
 
   return (
@@ -330,12 +220,6 @@ export default function ConnectorsScreen() {
             </Text>
           </View>
         }
-      />
-      <InviteCodeModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        source="connectors"
-        defaultTab={defaultTab}
       />
     </SafeAreaView>
   );

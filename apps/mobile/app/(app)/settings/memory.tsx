@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Pressable, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { ArrowLeft, Brain, Search, X, Plus, Upload } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +25,15 @@ function formatCount(n: number): string {
 export default function MemoryScreen() {
   const router = useRouter();
   const colors = useThemeColors();
+  const { scope } = useLocalSearchParams<{ scope?: string }>();
+  const currentIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  // The memory store's read/write path follows the CURRENT chat mode toggle
+  // (trust-boundary requirement — chat-time retrieval must match the active
+  // conversation's mode). When the user navigates here via a Local- or
+  // Cloud-labeled Settings row that doesn't match the current toggle, show an
+  // honest notice instead of silently listing the other mode's memories.
+  const scopeMismatch =
+    (scope === 'cloud' && !currentIsCloud) || (scope === 'local' && currentIsCloud);
 
   const [searchText, setSearchText] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');
@@ -165,7 +175,7 @@ export default function MemoryScreen() {
           <ArrowLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
-          Memory
+          {currentIsCloud ? 'Cloud Memory' : 'Memory'}
         </Text>
         <Pressable
           onPress={handleImportPress}
@@ -179,6 +189,25 @@ export default function MemoryScreen() {
           <Upload size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
+
+      {scopeMismatch ? (
+        <View className="mx-4 mb-3">
+          <View
+            className="rounded-lg px-3 py-2.5"
+            style={{
+              backgroundColor: colors.surfaceElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}>
+              {scope === 'cloud'
+                ? "You're currently chatting in Local Mode, so this shows your Local memories, not Cloud. Switch to Cloud in chat to manage Cloud memories."
+                : "You're currently chatting in Cloud mode, so this shows your Cloud memories, not Local. Switch to Local in chat to manage Local memories."}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {/* Count subtitle */}
       <View className="px-4 mb-2">
@@ -332,6 +361,7 @@ export default function MemoryScreen() {
         onSave={handleSave}
         onUpdate={handleUpdate}
         open={addSheetOpen}
+        isCloud={currentIsCloud}
       />
     </SafeAreaView>
   );

@@ -229,9 +229,10 @@ type WaitlistState = 'idle' | 'submitting' | 'confirmed' | 'error';
 interface WaitlistTabProps {
   onWaitlisted?: (email: string) => void;
   onClose: () => void;
+  confirmedBody?: string;
 }
 
-function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
+function WaitlistTab({ onWaitlisted, onClose, confirmedBody }: WaitlistTabProps) {
   const colors = useThemeColors();
   const markWaitlistJoined = useWaitlistStore((s) => s.markJoined);
   const [email, setEmail] = useState('');
@@ -299,7 +300,7 @@ function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
             lineHeight: 20,
           }}
         >
-          We'll email you when AGI Cloud is ready.
+          {confirmedBody ?? "We'll email you when AGI Cloud is ready."}
         </Text>
       </View>
     );
@@ -434,6 +435,14 @@ function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
 // InviteCodeModal
 // ---------------------------------------------------------------------------
 
+const DEFAULT_TITLE = 'Early access';
+// PUBLIC ALPHA (founder 2026-06-27, PA-2): Managed Cloud itself is open by
+// sign-in — no invite/waitlist. This modal now only gates individual
+// unshipped features, so the default copy must not claim "AGI Cloud" broadly
+// is invite-only. Callers pass a feature-specific title/body when possible.
+const DEFAULT_BODY =
+  'This feature isn’t available on mobile yet. Join the waitlist to get notified, or enter your invitation code if you have early access.';
+
 export function InviteCodeModal({
   open,
   onClose,
@@ -441,6 +450,9 @@ export function InviteCodeModal({
   defaultTab = 'invite',
   onRedeemed,
   onWaitlisted,
+  title = DEFAULT_TITLE,
+  body = DEFAULT_BODY,
+  waitlistConfirmedBody,
 }: InviteCodeModalProps) {
   const colors = useThemeColors();
   const [activeTab, setActiveTab] = useState<'invite' | 'waitlist'>(defaultTab);
@@ -513,11 +525,10 @@ export function InviteCodeModal({
                 </View>
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
-                    AGI Cloud
+                    {title}
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
-                    AGI Cloud is currently invite-only. Join the waitlist, or enter your invitation
-                    code if you already have one.
+                    {body}
                   </Text>
                 </View>
                 <Pressable
@@ -588,7 +599,11 @@ export function InviteCodeModal({
                     onClose={handleClose}
                   />
                 ) : (
-                  <WaitlistTab onWaitlisted={onWaitlisted} onClose={handleClose} />
+                  <WaitlistTab
+                    onWaitlisted={onWaitlisted}
+                    onClose={handleClose}
+                    confirmedBody={waitlistConfirmedBody}
+                  />
                 )}
               </ScrollView>
             </SafeAreaView>

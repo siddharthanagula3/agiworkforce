@@ -3,6 +3,9 @@
  *
  * POST /api/mobile/push-token — register/update the Expo push token for a
  * mobile device.
+ * DELETE /api/mobile/push-token?deviceId=... — clear the push token for a
+ * device on sign-out, so a subsequent different account on the same physical
+ * device does not receive push notifications addressed to the prior account.
  *
  * Why this lives on the web app (not only the api-gateway): the mobile client
  * (`apps/mobile/services/notifications.ts`) posts to `${API_URL}/api/mobile/...`
@@ -11,8 +14,12 @@
  * api-gateway exposes the same path but under **JWT** auth on a different host,
  * so a token sent from the app never reached a handler — server-originated push
  * was undeliverable. This route accepts the existing Clerk-Bearer request and
- * upserts the device row in the same Neon `public.mobile_devices` table the
- * gateway uses, so the push-sender path is unchanged.
+ * upserts/clears the device row in the same Neon `public.mobile_devices` table
+ * the gateway uses, so the push-sender path is unchanged. (The gateway's own
+ * `DELETE /mobile/:deviceId` fully removes the device row for explicit device
+ * management — unreachable from the mobile app for the same auth-mismatch
+ * reason described above; this DELETE only clears push_token, matching the
+ * softer "sign out" intent rather than "forget this device.")
  *
  * Unlike the gateway's `/push-token` (which requires a prior `/mobile/register`
  * and 404s otherwise), this route UPSERTs because the mobile app never registers
@@ -90,4 +97,44 @@ async function handlePushToken(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
+const DeleteTokenSchema = z.object({
+  deviceId: z.string().uuid(),
+});
+
+async function handleDeletePushToken(request: NextRequest) {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'mobile-push-token');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const userId = await requireCurrentUserId();
+
+  const deviceId = new URL(request.url).searchParams.get('deviceId');
+  const parsed = DeleteTokenSchema.safeParse({ deviceId });
+  if (!parsed.success) {
+    throw createError.badRequest('Invalid deviceId', parsed.error.flatten());
+  }
+
+  const db = getNeonDb();
+
+  try {
+    // Scoped to (id, user_id) — a device row belonging to a different user is
+    // silently a no-op rather than an error, matching the fire-and-forget
+    // "best effort" contract the mobile client already uses for this endpoint.
+    await db.query(
+      `update public.mobile_devices
+         set push_token = null, updated_at = now()
+       where id = $1 and user_id = $2`,
+      [parsed.data.deviceId, userId],
+    );
+  } catch (error) {
+    logger.error({ error, userId, deviceId: parsed.data.deviceId }, 'Failed to clear push token');
+    throw createError.internal('Failed to clear push token');
+  }
+
+  return NextResponse.json({ success: true });
+}
+
 export const POST = withErrorHandler(handlePushToken);
+export const DELETE = withErrorHandler(handleDeletePushToken);

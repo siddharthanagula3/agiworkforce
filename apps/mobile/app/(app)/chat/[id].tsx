@@ -58,6 +58,8 @@ import {
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import { api } from '@/services/api';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -90,7 +92,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
-  const exportSheetRef = useRef<BottomSheet>(null);
+  const [exportSheetVisible, setExportSheetVisible] = useState(false);
   const addToChatRef = useRef<BottomSheet>(null);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
@@ -439,32 +441,36 @@ export default function ChatScreen() {
 
   // Attachment handlers lifted from AttachmentButton for AddToChatSheet
   const handleSheetCamera = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Camera Access',
-        'Camera permission is required to take photos. Please enable it in Settings.',
-      );
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      allowsEditing: false,
-      exif: false,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
-        result.assets.map((asset) => ({
-          id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? 'image/jpeg',
-          fileName: asset.fileName ?? 'photo.jpg',
-          width: asset.width,
-          height: asset.height,
-          fileSize: asset.fileSize,
-        }));
-      chatInputAttachRef.current?.addAttachments(attachments);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Camera Access',
+          'Camera permission is required to take photos. Please enable it in Settings.',
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        allowsEditing: false,
+        exif: false,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
+          result.assets.map((asset) => ({
+            id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            uri: asset.uri,
+            mimeType: asset.mimeType ?? 'image/jpeg',
+            fileName: asset.fileName ?? 'photo.jpg',
+            width: asset.width,
+            height: asset.height,
+            fileSize: asset.fileSize,
+          }));
+        chatInputAttachRef.current?.addAttachments(attachments);
+      }
+    } catch {
+      Alert.alert('Camera', 'Could not open the camera. Please try again.');
     }
   }, []);
 
@@ -577,7 +583,7 @@ export default function ChatScreen() {
   }, [router]);
 
   const handleOpenExport = useCallback(() => {
-    exportSheetRef.current?.snapToIndex(0);
+    setExportSheetVisible(true);
   }, []);
 
   const handleCloseVoiceMode = useCallback(() => {
@@ -605,9 +611,29 @@ export default function ChatScreen() {
   const handleDeleteMessage = useCallback(
     (messageId: string) => {
       if (!id) return;
+      if (conversationExecutionMode === 'cloud') {
+        // Cloud messages render from useChatCloudMessageStore (merged into
+        // useChatStore.messages), not the local chatMessageStore that
+        // deleteMessage() mutates — deleting there alone is a silent no-op for
+        // Cloud conversations. Optimistically remove from the cloud cache and
+        // persist the delete server-side so a resync doesn't bring it back.
+        const previous = useChatCloudMessageStore.getState().messages[id];
+        useChatCloudMessageStore.getState().deleteCloudMessage(id, messageId);
+        api
+          .delete(
+            `/api/chat/conversations/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}`,
+          )
+          .catch(() => {
+            if (previous) {
+              useChatCloudMessageStore.getState().setCloudMessages(id, previous);
+            }
+            Alert.alert('Could not delete message', 'Check your connection and try again.');
+          });
+        return;
+      }
       deleteMessage(id, messageId);
     },
-    [id, deleteMessage],
+    [id, deleteMessage, conversationExecutionMode],
   );
 
   const handleRetryMessage = useCallback(
@@ -651,7 +677,7 @@ export default function ChatScreen() {
         },
         (buttonIndex) => {
           if (buttonIndex === 0) {
-            exportSheetRef.current?.snapToIndex(0);
+            setExportSheetVisible(true);
           } else if (buttonIndex === 1 && id) {
             Alert.prompt(
               'Rename Conversation',
@@ -681,7 +707,7 @@ export default function ChatScreen() {
       );
     } else {
       Alert.alert('Conversation', undefined, [
-        { text: 'Share', onPress: () => exportSheetRef.current?.snapToIndex(0) },
+        { text: 'Share', onPress: () => setExportSheetVisible(true) },
         {
           text: 'Rename',
           onPress: () => {
@@ -927,7 +953,8 @@ export default function ChatScreen() {
 
         {/* Conversation export bottom sheet */}
         <ConversationExportSheet
-          sheetRef={exportSheetRef}
+          visible={exportSheetVisible}
+          onClose={() => setExportSheetVisible(false)}
           messages={conversationMessages}
           title={title}
         />

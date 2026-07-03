@@ -1,0 +1,148 @@
+/**
+ * Tests for POST and DELETE /api/mobile/push-token.
+ *
+ * Covers:
+ *   - POST upserts a device row scoped to the current user.
+ *   - POST 403s when the deviceId is already owned by a different user.
+ *   - DELETE clears push_token for the (deviceId, userId) pair on sign-out —
+ *     regression guard for the account-B-inherits-account-A push notification
+ *     leak (a device's push token previously survived sign-out indefinitely).
+ *   - DELETE is scoped to the requesting user's ownership: it does not throw
+ *     for a device it doesn't own (fire-and-forget "best effort" contract,
+ *     matching the mobile client's existing catch-and-ignore usage), and the
+ *     WHERE clause guarantees the update never touches another user's row.
+ *   - DELETE 400s on a missing/invalid deviceId.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const { mockRequireCurrentUserId, mockNeonQuery } = vi.hoisted(() => ({
+  mockRequireCurrentUserId: vi.fn(),
+  mockNeonQuery: vi.fn(),
+}));
+
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/csrf', () => ({
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@/lib/server/neon-chat', () => ({
+  requireCurrentUserId: mockRequireCurrentUserId,
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+  })),
+}));
+
+import { POST, DELETE } from '../route';
+
+const DEVICE_ID = '11111111-1111-4111-8111-111111111111';
+
+function makePostRequest(body: unknown) {
+  return new Request('http://localhost:3000/api/mobile/push-token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as never;
+}
+
+function makeDeleteRequest(deviceId?: string) {
+  const url = deviceId
+    ? `http://localhost:3000/api/mobile/push-token?deviceId=${deviceId}`
+    : 'http://localhost:3000/api/mobile/push-token';
+  return new Request(url, { method: 'DELETE' }) as never;
+}
+
+describe('POST /api/mobile/push-token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireCurrentUserId.mockResolvedValue('user-1');
+  });
+
+  it('upserts the device row for the current user', async () => {
+    mockNeonQuery
+      .mockResolvedValueOnce([]) // ownership check: no existing row
+      .mockResolvedValueOnce([]); // insert
+
+    const res = await POST(
+      makePostRequest({
+        deviceId: DEVICE_ID,
+        pushToken: 'ExponentPushToken[abc]',
+        platform: 'ios',
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body['success']).toBe(true);
+  });
+
+  it('rejects a device already owned by a different user', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ user_id: 'someone-else' }]);
+
+    const res = await POST(
+      makePostRequest({ deviceId: DEVICE_ID, pushToken: 'ExponentPushToken[abc]' }),
+    );
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 400 on an invalid payload', async () => {
+    const res = await POST(makePostRequest({ deviceId: 'not-a-uuid', pushToken: 'x' }));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('DELETE /api/mobile/push-token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireCurrentUserId.mockResolvedValue('user-1');
+  });
+
+  it('clears the push token for the current user’s device', async () => {
+    mockNeonQuery.mockResolvedValueOnce([]);
+
+    const res = await DELETE(makeDeleteRequest(DEVICE_ID));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body['success']).toBe(true);
+
+    // Regression: the UPDATE must be scoped to (id, user_id) so it can never
+    // clear another user's device, and it must null push_token (not delete
+    // the row — device history/metadata is preserved for DSAR export).
+    expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('set push_token = null'), [
+      DEVICE_ID,
+      'user-1',
+    ]);
+  });
+
+  it('returns 400 when deviceId is missing', async () => {
+    const res = await DELETE(makeDeleteRequest());
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when deviceId is not a valid UUID', async () => {
+    const res = await DELETE(makeDeleteRequest('not-a-uuid'));
+    expect(res.status).toBe(400);
+  });
+
+  it('does not throw for a device owned by a different user (fire-and-forget contract)', async () => {
+    // The WHERE clause naturally no-ops for a non-matching (id, user_id) pair —
+    // the query resolves successfully with zero rows affected, not an error.
+    mockNeonQuery.mockResolvedValueOnce([]);
+
+    const res = await DELETE(makeDeleteRequest(DEVICE_ID));
+
+    expect(res.status).toBe(200);
+  });
+});

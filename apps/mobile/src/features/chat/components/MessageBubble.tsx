@@ -34,6 +34,7 @@ import { ProvenanceFooter } from './ProvenanceFooter';
 import { PerformanceChip } from './PerformanceChip';
 import { ReportFlagButton } from './ReportFlagButton';
 import { copyToClipboard } from '@/lib/clipboard';
+import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
@@ -41,6 +42,14 @@ import type { ChatMessage, Artifact } from '@/types/chat';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
+
+/**
+ * Must match PERF_CHIP_SHOW_KEY in app/(app)/settings/performance.tsx — that
+ * screen's "Show performance chip in chat" toggle writes this raw MMKV key
+ * (default true); this file is the only reader. Kept as a duplicated literal
+ * rather than importing from a route file.
+ */
+const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
 /**
  * Whether the message's model can produce reasoning. Only hides the thinking
@@ -497,15 +506,25 @@ export const MessageBubble = memo(function MessageBubble({
               <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
             )}
 
-            {/* Performance chip — on-device inference metadata */}
-            {isAssistant && !message.isStreaming && message.runtimeTier && message.model && (
-              <PerformanceChip
-                model={message.model}
-                tier={message.runtimeTier}
-                tokensPerSecond={message.tokensPerSecond}
-                firstTokenLatencyMs={message.firstTokenLatencyMs}
-              />
-            )}
+            {/* Performance chip — on-device inference metadata.
+                Regression: this previously also required message.runtimeTier,
+                a field chatExecutionStore never sets (only tokensPerSecond is
+                populated on local completions), so the chip — and the "Show
+                performance chip in chat" settings toggle that promises it —
+                was permanently dead. PerformanceChip itself only reads
+                tokensPerSecond and no-ops when it's absent, so runtimeTier
+                was never actually required. */}
+            {isAssistant &&
+              !message.isStreaming &&
+              message.model &&
+              storage.getString(PERF_CHIP_SHOW_KEY) !== 'false' && (
+                <PerformanceChip
+                  model={message.model}
+                  tier={message.runtimeTier}
+                  tokensPerSecond={message.tokensPerSecond}
+                  firstTokenLatencyMs={message.firstTokenLatencyMs}
+                />
+              )}
 
             {/* Report/flag — Google Play GenAI policy: required on every assistant turn */}
             {isAssistant && !message.isStreaming && message.content.trim() && (

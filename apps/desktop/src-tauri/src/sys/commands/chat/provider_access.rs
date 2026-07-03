@@ -26,7 +26,7 @@ pub(super) fn check_billing_and_budget(
     {
         if !billing_state.check_cloud_access() {
             return Err(
-                "Subscription required. Please upgrade to the Hobby plan to use the AGI agent."
+                "Subscription required. Please upgrade to the Basic plan to use the AGI agent."
                     .to_string(),
             );
         }

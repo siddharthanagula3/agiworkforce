@@ -1,22 +1,28 @@
 /**
  * Cloud Usage Settings Screen
  *
- * Native RN equivalent of the web UsageSection. Fetches /api/usage/summary
- * (via the existing services/usage.ts service) and renders credit bars,
- * session counts, and cost breakdowns. Gated behind FEATURES.billing —
- * when that flag is false the screen shows a placeholder directing users to
- * the web dashboard, since v1 does not yet have the billing ledger active.
+ * Native RN equivalent of the web UsageSection. Fetches GET /api/usage (via
+ * services/usage.ts) and shows plan usage as a percentage — the primary
+ * metric is "X% used" + a progress bar + reset date, matching the reference
+ * pattern (Claude iOS Settings → Usage: a bar, "2% used", "Resets in 4hr
+ * 58min" — no raw dollar figures on the primary surface). Exact dollar
+ * figures are available in a collapsed "Details" section for users who want
+ * them, never as the headline number.
+ *
+ * Gated behind FEATURES.billing — when that flag is false the screen shows a
+ * placeholder directing users to the web dashboard, since v1 does not yet
+ * have the billing ledger active.
  *
  * Cloud-only surface.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator, Pressable } from 'react-native';
-import { BarChart3, RefreshCw } from 'lucide-react-native';
+import { BarChart3, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
-import { fetchUsageSummary, type UsageSummary } from '@/services/usage';
+import { fetchUsageSnapshot, type UsageSnapshot } from '@/services/usage';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -24,68 +30,83 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function money(n: number): string {
-  return `$${Math.max(0, n).toFixed(2)}`;
+function money(cents: number): string {
+  return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  basic: 'Basic',
+  pro: 'Pro',
+  max: 'Max',
+  team: 'Team',
+  enterprise: 'Enterprise',
+};
+
+function formatResetDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: sameYear ? undefined : 'numeric',
+  });
 }
 
 // ---------------------------------------------------------------------------
-// UsageBar — native progress bar row
+// UsagePercentBar — the primary, percentage-only metric (Claude-style)
 // ---------------------------------------------------------------------------
 
-function UsageBar({
+function UsagePercentBar({
   label,
-  value,
-  detail,
-  percent,
+  percentage,
+  resetLabel,
 }: {
   label: string;
-  value: string;
-  detail: string;
-  percent: number;
+  percentage: number;
+  resetLabel: string | null;
 }) {
   const colors = useThemeColors();
-  const clamped = Math.min(100, Math.max(0, percent));
+  const clamped = Math.min(100, Math.max(0, percentage));
+  const isNearLimit = clamped >= 90;
 
   return (
-    <View style={{ gap: 6 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '500' }}>
-          {label}
-        </Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{value}</Text>
-      </View>
-      {/* Track */}
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}>{label}</Text>
       <View
         style={{
-          height: 6,
-          borderRadius: 3,
+          height: 8,
+          borderRadius: 4,
           backgroundColor: colors.progressTrack,
           overflow: 'hidden',
         }}
       >
-        {/* Fill */}
         <View
           style={{
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: colors.teal,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: isNearLimit ? colors.agentError : colors.teal,
             width: `${clamped}%`,
           }}
         />
       </View>
-      <Text style={{ color: colors.textMuted, fontSize: 11 }}>{detail}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+          {Math.round(clamped)}% used
+        </Text>
+        {resetLabel && (
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Resets {resetLabel}</Text>
+        )}
+      </View>
     </View>
   );
 }
 
 // ---------------------------------------------------------------------------
-// StatRow — simple two-column label / value
+// StatRow — simple two-column label / value (used only inside "Details")
 // ---------------------------------------------------------------------------
 
 function StatRow({ label, value }: { label: string; value: string }) {
@@ -97,7 +118,6 @@ function StatRow({ label, value }: { label: string; value: string }) {
         alignItems: 'center',
         justifyContent: 'space-between',
         minHeight: 36,
-        borderBottomWidth: 0,
       }}
     >
       <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{label}</Text>
@@ -162,17 +182,18 @@ function BillingUnavailablePlaceholder() {
 export default function CloudUsageScreen() {
   const colors = useThemeColors();
 
-  const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [snapshot, setSnapshot] = useState<UsageSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchUsageSummary();
-      setSummary(data);
+      const data = await fetchUsageSnapshot();
+      setSnapshot(data);
       setLastUpdated(
         new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
       );
@@ -187,21 +208,14 @@ export default function CloudUsageScreen() {
     if (FEATURES.billing) void load();
   }, [load]);
 
-  const totalTokens = summary?.totalTokens ?? 0;
-  const totalCost = summary?.totalCost ?? 0;
-  const conversations = summary?.conversationCount ?? 0;
-
-  // Derive a rough percent from daily usage vs model breakdown max
-  const maxModelCost =
-    summary?.modelBreakdown.reduce((m, b) => Math.max(m, b.estimatedCost), 0) ?? 0;
-  const totalPercent =
-    maxModelCost > 0 ? Math.min(100, Math.round((totalCost / (maxModelCost * 10)) * 100)) : 0;
+  const planLabel = snapshot ? (PLAN_LABELS[snapshot.planTier] ?? snapshot.planTier) : '';
+  const periodResetLabel = snapshot ? formatResetDate(snapshot.periodEnd) : null;
 
   return (
     <SettingsScreenShell title="Usage">
       <SettingsInfo
-        title="Plan usage, credits, and recent activity"
-        body="Usage data is sourced from your AGI Cloud account ledger and refreshes on demand."
+        title="Plan usage"
+        body="See how much of your plan's included usage you've used this period."
         icon={BarChart3}
       />
 
@@ -211,7 +225,7 @@ export default function CloudUsageScreen() {
       {/* Live usage */}
       {FEATURES.billing && (
         <>
-          {loading && !summary && (
+          {loading && !snapshot && (
             <View style={{ alignItems: 'center', paddingVertical: 32 }}>
               <ActivityIndicator size="large" color={colors.teal} />
             </View>
@@ -232,9 +246,9 @@ export default function CloudUsageScreen() {
             </View>
           )}
 
-          {summary && (
+          {snapshot && (
             <>
-              {/* Summary card */}
+              {/* Primary card — percentage only, Claude-style */}
               <View
                 style={{
                   borderRadius: 14,
@@ -264,7 +278,7 @@ export default function CloudUsageScreen() {
                       letterSpacing: 0.5,
                     }}
                   >
-                    {summary.period}
+                    {planLabel} plan
                   </Text>
                   {lastUpdated && (
                     <Text style={{ color: colors.textMuted, fontSize: 11 }}>
@@ -274,33 +288,21 @@ export default function CloudUsageScreen() {
                 </View>
 
                 <View style={{ padding: 16, gap: 20 }}>
-                  <UsageBar
-                    label="Total spend"
-                    value={money(totalCost)}
-                    detail={`${formatTokens(totalTokens)} tokens across ${conversations} conversation${conversations !== 1 ? 's' : ''}`}
-                    percent={totalPercent}
-                  />
-
-                  {summary.dailyUsage.length > 0 && (
-                    <UsageBar
+                  {snapshot.hasDailyLimit ? (
+                    <UsagePercentBar
                       label="Today"
-                      value={money(
-                        summary.dailyUsage[summary.dailyUsage.length - 1]?.estimatedCost ?? 0,
-                      )}
-                      detail={`${formatTokens(summary.dailyUsage[summary.dailyUsage.length - 1]?.totalTokens ?? 0)} tokens`}
-                      percent={
-                        totalCost > 0
-                          ? Math.min(
-                              100,
-                              Math.round(
-                                ((summary.dailyUsage[summary.dailyUsage.length - 1]
-                                  ?.estimatedCost ?? 0) /
-                                  totalCost) *
-                                  100,
-                              ),
-                            )
+                      percentage={
+                        snapshot.dailyLimitCents > 0
+                          ? (snapshot.dailyUsedCents / snapshot.dailyLimitCents) * 100
                           : 0
                       }
+                      resetLabel="tomorrow"
+                    />
+                  ) : (
+                    <UsagePercentBar
+                      label="This period"
+                      percentage={snapshot.usagePercentage}
+                      resetLabel={periodResetLabel}
                     />
                   )}
                 </View>
@@ -340,38 +342,55 @@ export default function CloudUsageScreen() {
                 </View>
               </View>
 
-              {/* Model breakdown */}
-              {summary.modelBreakdown.length > 0 && (
+              {/* Details — raw dollar figures, collapsed by default (Claude/web pattern:
+                  percentage is the headline, exact numbers are opt-in, never primary). */}
+              <Pressable
+                onPress={() => setDetailsOpen((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={detailsOpen ? 'Hide usage details' : 'Show usage details'}
+                accessibilityState={{ expanded: detailsOpen }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 10,
+                  marginBottom: detailsOpen ? 8 : 18,
+                }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '500' }}>
+                  Details
+                </Text>
+                {detailsOpen ? (
+                  <ChevronUp size={16} color={colors.textMuted} />
+                ) : (
+                  <ChevronDown size={16} color={colors.textMuted} />
+                )}
+              </Pressable>
+
+              {detailsOpen && (
                 <View
                   style={{
                     borderRadius: 14,
                     backgroundColor: colors.surfaceElevated,
                     borderWidth: 1,
                     borderColor: colors.border,
-                    overflow: 'hidden',
+                    padding: 16,
+                    gap: 10,
                     marginBottom: 18,
                   }}
                 >
-                  <View
-                    style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: colors.border }}
-                  >
-                    <Text
-                      style={{
-                        color: colors.textMuted,
-                        fontSize: 11,
-                        fontWeight: '700',
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                      }}
-                    >
-                      By model
-                    </Text>
-                  </View>
-                  <View style={{ padding: 16, gap: 10 }}>
-                    {summary.modelBreakdown.map((m) => (
-                      <StatRow key={m.modelId} label={m.modelName} value={money(m.estimatedCost)} />
-                    ))}
-                  </View>
+                  <StatRow
+                    label="Included this period"
+                    value={money(snapshot.creditsAllocatedCents)}
+                  />
+                  <StatRow label="Used" value={money(snapshot.creditsUsedCents)} />
+                  <StatRow label="Remaining" value={money(snapshot.creditsRemainingCents)} />
+                  {snapshot.hasDailyLimit && (
+                    <>
+                      <StatRow label="Daily budget" value={money(snapshot.dailyLimitCents)} />
+                      <StatRow label="Used today" value={money(snapshot.dailyUsedCents)} />
+                    </>
+                  )}
                 </View>
               )}
             </>

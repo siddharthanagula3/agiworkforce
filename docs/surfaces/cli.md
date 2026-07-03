@@ -48,7 +48,7 @@ apps/cli/
 ├── src/                            288 .rs files / 172.9K LOC
 │   ├── main.rs                     entry; Command enum with 24 variants (lines 38-54 declare modules)
 │   ├── lib.rs                      pub mod declarations; line 43 had `pub mod subagent_v2;` REMOVED 2026-05-17 (file archived)
-│   ├── models.rs                   ⚠ provider_from_name match (lines 287-310): 12 named + 1 Custom
+│   ├── models/                     ⚠ directory module (was models.rs); provider_from_name match in models/provider_dispatch.rs: 12 named + 1 Custom
 │   ├── hooks.rs                    ⚠ 22 canonical hook events (lines 179-200)
 │   ├── tools.rs                    tool registry
 │   ├── sandbox.rs                  ⚠ macOS Seatbelt + Linux bwrap ship; Windows + Landlock are silent fallthrough — V5 §17 risk #10 says HARD-REFUSE
@@ -105,7 +105,7 @@ Plus nested subcommands in Session, Cloud, Plugin, Ecosystem, Sync, Marketplace.
 
 ## 12 named providers + Custom
 
-Per `apps/cli/src/models.rs:287-310`:
+Per `apps/cli/src/models/provider_dispatch.rs` (`provider_from_name`; re-exported from `models/mod.rs` — was `models.rs:287-310` before the module split):
 
 ```
 Anthropic      Claude models
@@ -124,7 +124,7 @@ Mistral        Codestral 2508 (CLI provider_from_name shows dropped 2026-05-03 c
 Custom         User-defined [providers.*] config blocks
 ```
 
-**Drift caveat**: Mistral is "dropped" in CLI `models.rs:310` comment but still in `models.json` providers list. Reconcile in W7.
+**Drift caveat**: Mistral is "dropped" in the CLI `models/provider_dispatch.rs` match comment but still in `models.json` providers list. Reconcile in W7.
 
 ## 22 canonical hook events
 
@@ -202,7 +202,7 @@ gh release download v-cli-1.1.6 --repo siddharthanagula3/agiworkforce
 
 ## Gotchas
 
-- **`provider_from_name` is the SSOT for CLI provider list** at `apps/cli/src/models.rs:287-310`. Comments inside this match block win over `models.json` for CLI behavior.
+- **`provider_from_name` is the SSOT for CLI provider list** at `apps/cli/src/models/provider_dispatch.rs` (re-exported via `models/mod.rs`). Comments inside this match block win over `models.json` for CLI behavior.
 - **`subagent_v2.rs` was archived 2026-05-17.** The live implementation is `subagent.rs`. Don't reintroduce v2 without explicit decision.
 - **Plan mode**: legacy `plan_mode` was DELETED at `tools.rs:193`. Only `update_plan` remains. Don't reintroduce.
 - **MCP transports**: CLI client supports stdio, SSE, and Streamable HTTP with optional OAuth via `apps/cli/src/mcp/{mod.rs,sse.rs,http.rs,oauth_flow.rs}`. `agi mcp-server` exposes AGI itself as a stdio MCP server.

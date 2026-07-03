@@ -42,7 +42,7 @@ import { storageFallback } from '../lib/storageFallback';
 
 // ---------------------------------------------------------------------------
 // Managed cloud models — available in cloud mode without user API keys.
-// Tier: 'hobby' models shown to all cloud users; 'pro' models require pro+.
+// Tier: 'basic' models shown to all cloud users; 'pro' models require pro+.
 // ---------------------------------------------------------------------------
 
 interface ManagedCloudModel {
@@ -50,7 +50,7 @@ interface ManagedCloudModel {
   displayName: string;
   provider: Provider;
   providerDisplayName: string;
-  tier: 'hobby' | 'pro';
+  tier: 'basic' | 'pro';
   category: 'instant' | 'latest' | 'thinking';
   contextWindow: number;
   maxOutput: number;
@@ -120,7 +120,7 @@ function getManagedCloudCatalogModels(): ManagedCloudModel[] {
   for (const provider of MANAGED_CLOUD_CORE_PROVIDERS) {
     const fastModel = buildManagedCloudModel(
       getTaskModelForProvider(provider, 'fast_completion'),
-      'hobby',
+      'basic',
       'instant',
     );
     if (fastModel) {
@@ -142,12 +142,12 @@ function getManagedCloudCatalogModels(): ManagedCloudModel[] {
 
 /**
  * Returns the managed cloud models available for the given plan tier.
- * hobby/free: hobby-tier models only
- * pro/max/enterprise: hobby + pro-tier models
+ * basic/free: basic-tier models only
+ * pro/max/enterprise: basic + pro-tier models
  */
 export function getManagedCloudModelsForTier(tier: PlanTier | string): ManagedCloudModel[] {
   const isPro = tier === 'pro' || tier === 'max' || tier === 'enterprise';
-  return getManagedCloudCatalogModels().filter((model) => isPro || model.tier === 'hobby');
+  return getManagedCloudCatalogModels().filter((model) => isPro || model.tier === 'basic');
 }
 
 export interface ProviderStatus {
@@ -494,9 +494,9 @@ export const useModelStore = create<ModelState>()(
             if (provider !== 'ollama' && modelId !== 'auto') {
               const currentPlan = (() => {
                 try {
-                  return useAccountStore.getState()?.plan ?? 'hobby';
+                  return useAccountStore.getState()?.plan ?? 'basic';
                 } catch {
-                  return 'hobby' as const;
+                  return 'basic' as const;
                 }
               })();
               const normalizedTier = normalizeSubscriptionTier(currentPlan);
@@ -931,9 +931,9 @@ export const useModelStore = create<ModelState>()(
           const { selectedModel } = get();
           const currentPlan = (() => {
             try {
-              return useAccountStore.getState()?.account?.plan ?? 'hobby';
+              return useAccountStore.getState()?.account?.plan ?? 'basic';
             } catch {
-              return 'hobby' as const;
+              return 'basic' as const;
             }
           })();
 
@@ -964,9 +964,9 @@ export const useModelStore = create<ModelState>()(
           const { selectedModel } = get();
           const currentPlan = (() => {
             try {
-              return useAccountStore.getState()?.account?.plan ?? 'hobby';
+              return useAccountStore.getState()?.account?.plan ?? 'basic';
             } catch {
-              return 'hobby' as const;
+              return 'basic' as const;
             }
           })();
 
@@ -1219,9 +1219,9 @@ export const initializeModelStoreFromSettings = async () => {
     const settingsStore = useSettingsStore.getState();
     const currentPlan = (() => {
       try {
-        return useAccountStore.getState()?.plan ?? 'hobby';
+        return useAccountStore.getState()?.plan ?? 'basic';
       } catch {
-        return 'hobby' as const;
+        return 'basic' as const;
       }
     })();
 
@@ -1253,7 +1253,7 @@ export const initializeModelStoreFromSettings = async () => {
 
 /**
  * Get the best auto mode for a given tier.
- * Max/Enterprise → Premium, Pro → Balanced, Hobby/Free → Economy
+ * Max/Enterprise → Premium, Pro → Balanced, Basic/Free → Economy
  */
 export const getBestAutoModeForTier = (tier: string): string => {
   return getBestAutoModeForSubscriptionTier(tier);
@@ -1266,7 +1266,7 @@ export const resolveEffectiveModelForTier = (
   return (
     normalizeModelId(selectedModel) ??
     selectedModel ??
-    getBestAutoModeForSubscriptionTier(tier ?? 'hobby')
+    getBestAutoModeForSubscriptionTier(tier ?? 'basic')
   );
 };
 
@@ -1279,7 +1279,7 @@ export const resolveEffectiveModelForTier = (
  * - In Advanced Mode: Only downgrades if using an auto mode above their tier
  *
  * Tier restrictions:
- * - hobby/free/none: Only 'auto-economy' allowed
+ * - basic/free/none: Only 'auto-economy' allowed
  * - pro: 'auto-economy' or 'auto-balanced' allowed
  * - max/enterprise: All auto modes allowed
  */
@@ -1392,7 +1392,7 @@ if (typeof window !== 'undefined') {
         return;
       }
 
-      const currentPlan = useAccountStore.getState().account.plan ?? 'hobby';
+      const currentPlan = useAccountStore.getState().account.plan ?? 'basic';
       const targetAutoMode = getBestAutoModeForSubscriptionTier(currentPlan);
       const modelStore = useModelStore.getState();
 

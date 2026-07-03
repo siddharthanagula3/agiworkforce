@@ -41,6 +41,8 @@ import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { generateImage, getGeneratedImageUri } from '@/src/features/image/services/imagegen';
 
 function getTimeOfDayGreeting(): string {
   const hour = new Date().getHours();
@@ -76,6 +78,10 @@ export default function ChatTabScreen() {
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
+  const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
+  const failImageGeneration = useChatStore((s) => s.failImageGeneration);
+  const { isOnline } = useNetworkStatus();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedProvider = useModelStore((s) => s.selectedProvider);
   const setModel = useModelStore((s) => s.setModel);
@@ -151,6 +157,78 @@ export default function ChatTabScreen() {
               : DEFAULT_LOCAL_MODEL_ID;
         if (!modelForSend) return;
         const trimmed = text.trim();
+
+        // Handle /image command from a brand-new chat — mirrors the same
+        // interception in chat/[id].tsx's handleSend. Without this, typing
+        // "/image ..." as the FIRST message of a new chat (a very common
+        // entry point) skipped the dedicated image-generation flow entirely:
+        // sendMessage() sent the literal "/image ..." text as a normal chat
+        // prompt, and the model improvised a raw markdown image link the
+        // renderer can't display, instead of a real generated image.
+        if (trimmed.startsWith('/image')) {
+          const prompt = trimmed.slice('/image'.length).trim();
+          if (!prompt) {
+            Alert.alert('Add an image prompt', 'Type what you want AGI to create after /image.');
+            return;
+          }
+          if (activeMode !== 'cloud') {
+            Alert.alert(
+              'Image generation uses AGI Cloud',
+              'Start an AGI Cloud chat to generate images. Local Mode can attach and inspect images without uploading them.',
+            );
+            return;
+          }
+          if (!FEATURES.imageGen) {
+            Alert.alert(
+              'Image generation uses AGI Cloud',
+              'You can attach and inspect local images now. Image generation is available with Cloud access.',
+            );
+            return;
+          }
+          if (!isOnline) {
+            Alert.alert(
+              'Network connection required',
+              'Image generation needs AGI Cloud. Connect to the internet and try again.',
+            );
+            return;
+          }
+
+          const title = prompt.length > 40 ? prompt.slice(0, 40).trim() + '...' : prompt;
+          const conversationId = await createConversation(title);
+          router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+
+          const assistantMessageId = beginImageGeneration(
+            conversationId,
+            trimmed,
+            prompt,
+            modelForSend,
+          );
+          generateImage({ prompt })
+            .then((result) => {
+              const image = result.images?.[0];
+              const imageUrl = getGeneratedImageUri(image);
+              if (result.success === false || !imageUrl) {
+                failImageGeneration(
+                  conversationId,
+                  assistantMessageId,
+                  result.error ?? 'AGI Cloud did not return an image.',
+                );
+                return;
+              }
+              completeImageGeneration(conversationId, assistantMessageId, {
+                imageUrl,
+                revisedPrompt: image?.revisedPrompt,
+                model: result.model,
+              });
+            })
+            .catch((err) => {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn('[ChatTabScreen] Image generation failed:', err);
+              failImageGeneration(conversationId, assistantMessageId, message);
+            });
+          return;
+        }
+
         const fallbackTitle = attachments?.[0]?.fileName ?? 'New chat';
         const titleSource = trimmed || fallbackTitle;
         const title =
@@ -165,7 +243,17 @@ export default function ChatTabScreen() {
         // Conversation creation failed — no-op (user can retry)
       }
     },
-    [activeMode, createConversation, sendMessage, selectedModel, router],
+    [
+      activeMode,
+      createConversation,
+      sendMessage,
+      selectedModel,
+      router,
+      isOnline,
+      beginImageGeneration,
+      completeImageGeneration,
+      failImageGeneration,
+    ],
   );
 
   const handleOpenModelPicker = useCallback(
@@ -243,32 +331,36 @@ export default function ChatTabScreen() {
   }, [handleOpenCloudAccess, router]);
 
   const handleSheetCamera = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Camera Access',
-        'Camera permission is required to take photos. Please enable it in Settings.',
-      );
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      allowsEditing: false,
-      exif: false,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
-        result.assets.map((asset) => ({
-          id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? 'image/jpeg',
-          fileName: asset.fileName ?? 'photo.jpg',
-          width: asset.width,
-          height: asset.height,
-          fileSize: asset.fileSize,
-        }));
-      chatInputAttachRef.current?.addAttachments(attachments);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Camera Access',
+          'Camera permission is required to take photos. Please enable it in Settings.',
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        allowsEditing: false,
+        exif: false,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
+          result.assets.map((asset) => ({
+            id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            uri: asset.uri,
+            mimeType: asset.mimeType ?? 'image/jpeg',
+            fileName: asset.fileName ?? 'photo.jpg',
+            width: asset.width,
+            height: asset.height,
+            fileSize: asset.fileSize,
+          }));
+        chatInputAttachRef.current?.addAttachments(attachments);
+      }
+    } catch {
+      Alert.alert('Camera', 'Could not open the camera. Please try again.');
     }
   }, []);
 

@@ -5,6 +5,7 @@ import { Plus, Link as LinkIcon } from 'lucide-react-native';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendButton } from './SendButton';
+import { TemporaryChatToggle } from './TemporaryChatToggle';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
@@ -211,7 +212,18 @@ export function ChatInput({
 
   const handleOverlaySend = useCallback(async () => {
     resetRecordingUi();
-    if (!VoiceService.isRecording()) return;
+    // Always bump voiceResetSignal on the way out — including when the
+    // recording session already ended before Send was tapped (e.g. no
+    // microphone on the iOS Simulator, or a race with the OS audio session).
+    // The old early-return here skipped the signal entirely, leaving
+    // VoiceInputButton's internal state stuck on "recording" (red mic icon,
+    // "Tap to stop recording" a11y label) with no way to recover short of
+    // tapping it again and hitting the "No recording in progress" error path,
+    // whose handler happens to reset the signal as a side effect.
+    if (!VoiceService.isRecording()) {
+      setVoiceResetSignal((value) => value + 1);
+      return;
+    }
     try {
       const uri = await VoiceService.stopRecording();
       const result = await VoiceService.transcribe(uri);
@@ -393,8 +405,13 @@ export function ChatInput({
             {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
           </View>
 
-          {/* Right group: [connectors] [mic] [send/stop] */}
+          {/* Right group: [temporary chat] [connectors] [mic] [send/stop] */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+            {/* Temporary chat toggle -- visible status + quick toggle. The
+                Add-to-Chat sheet's switch controls the same store value;
+                this is the always-visible indicator/shortcut for it. */}
+            <TemporaryChatToggle />
+
             {/* Connectors link -- hidden unless the host has a real destination */}
             {!isStreaming && onOpenConnectors ? (
               <Pressable

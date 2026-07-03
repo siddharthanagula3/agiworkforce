@@ -1,9 +1,9 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
+  title: 'Pricing | Local & BYOK free forever, AGI Cloud for Teams & Enterprise',
   description:
-    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, managed cloud is open in public alpha with a small Auto Economy cap, and higher-capacity AGI Cloud plans are rolling out.',
+    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, managed cloud is open in public alpha (Free/Basic/Pro/Max as the individual on-ramp), and Team & Enterprise plans give your org shared, governed access to frontier models.',
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -11,11 +11,13 @@ export const metadata: Metadata = {
     'AI automation cost',
     'BYOK AI',
     'AI subscription',
+    'AI for teams',
+    'enterprise AI',
   ],
   openGraph: {
-    title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
+    title: 'Pricing | Local & BYOK free forever, AGI Cloud for Teams & Enterprise',
     description:
-      'Local and BYOK stay free forever, managed cloud is open in public alpha with a capped free tier, and higher-capacity AGI Cloud plans are rolling out.',
+      'Local and BYOK stay free forever. Team and Enterprise plans give your org shared, governed access to frontier models with centralized billing.',
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -29,9 +31,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pricing | Free Local & BYOK, AGI Cloud (Public Alpha)',
+    title: 'Pricing | Local & BYOK free forever, AGI Cloud for Teams & Enterprise',
     description:
-      'Local and BYOK stay free forever, managed cloud is open in public alpha with a capped free tier, and higher-capacity AGI Cloud plans are rolling out.',
+      'Local and BYOK stay free forever. Team and Enterprise plans give your org shared, governed access to frontier models with centralized billing.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

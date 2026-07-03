@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -235,8 +235,13 @@ export default function AgentDetailScreen() {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const agent = useAgentStore((s) => s.agents.find((a) => a.id === id));
-  const pendingApprovals = useAgentStore((s) =>
-    s.pendingApprovals.filter((r) => r.status === 'pending'),
+  // Select the raw (stable-reference) array and filter in a memo — see
+  // app/(app)/companion/index.tsx for the full "Maximum update depth
+  // exceeded" root-cause writeup; this file had the identical crash.
+  const allApprovals = useAgentStore((s) => s.pendingApprovals);
+  const pendingApprovals = useMemo(
+    () => allApprovals.filter((r) => r.status === 'pending'),
+    [allApprovals],
   );
   const approveRequest = useAgentStore((s) => s.approveRequest);
   const rejectRequest = useAgentStore((s) => s.rejectRequest);

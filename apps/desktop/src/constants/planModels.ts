@@ -12,7 +12,7 @@ export const SUBSCRIPTION_TIERS = [
   'local-only',
   'byok',
   'free',
-  'hobby',
+  'basic',
   'pro',
   'max',
   'enterprise',
@@ -39,7 +39,7 @@ export const TIER_FEATURES = {
     maxMessagesPerDay: 10,
     hasOllama: true,
   },
-  hobby: {
+  basic: {
     maxMessagesPerDay: 100,
     hasOllama: true,
   },

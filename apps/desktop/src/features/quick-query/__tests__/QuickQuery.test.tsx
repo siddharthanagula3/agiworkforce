@@ -17,10 +17,10 @@ function renderQuickQuery(props: ComponentProps<typeof QuickQuery>) {
 describe('QuickQuery', () => {
   beforeEach(() => {
     useAccountStore.setState({
-      plan: 'hobby',
+      plan: 'basic',
       account: {
         ...useAccountStore.getState().account,
-        plan: 'hobby',
+        plan: 'basic',
       },
     });
 
@@ -30,7 +30,7 @@ describe('QuickQuery', () => {
     });
   });
 
-  it('shows only hobby-tier auto modes for hobby users', async () => {
+  it('shows only basic-tier auto modes for basic users', async () => {
     renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
     fireEvent.click(screen.getByRole('button', { name: /auto \(economy\)/i }));

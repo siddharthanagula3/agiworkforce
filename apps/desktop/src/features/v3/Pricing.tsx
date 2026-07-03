@@ -102,8 +102,8 @@ const FAQ_ITEMS = [
     a: '$5–10 each for 100 Opus prompts, 60 voice minutes, 10 image generations, 30 video seconds, or 200 computer-use actions. Purchased à la carte, never auto-renewed.',
   },
   {
-    q: 'How does the 14-day Hobby trial work?',
-    a: 'No card required. You get full Hobby access for 14 days. After that you can subscribe, downgrade to the free BYOK tier, or do nothing — we never charge without consent.',
+    q: 'How does the 14-day Basic trial work?',
+    a: 'No card required. You get full Basic access for 14 days. After that you can subscribe, downgrade to the free BYOK tier, or do nothing — we never charge without consent.',
   },
 ];
 

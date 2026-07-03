@@ -56,7 +56,7 @@ vi.mock('@features/billing/services/token-pack-purchase', () => ({
 
 // stripe-payments service
 vi.mock('@features/billing/services/stripe-payments', () => ({
-  upgradeToHobbyPlan: vi.fn(),
+  upgradeToBasicPlan: vi.fn(),
   upgradeToProPlan: vi.fn(),
   upgradeToMaxPlan: vi.fn(),
   contactEnterpriseSales: vi.fn(),
@@ -213,15 +213,15 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED absent', () => 
     it('redirects to /pricing#waitlist, does NOT call stripe service, when gate is off', async () => {
       render(React.createElement(BillingDashboard));
 
-      // The header CTA "Upgrade to Hobby" button has the gradient-primary class.
-      // Use getAllByRole and pick the button whose accessible name includes "Hobby"
-      // (it contains a visible <span class="hidden sm:inline">Upgrade to Hobby</span>).
+      // The header CTA "Upgrade to Basic" button has the gradient-primary class.
+      // Use getAllByRole and pick the button whose accessible name includes "Basic"
+      // (it contains a visible <span class="hidden sm:inline">Upgrade to Basic</span>).
       // The Topup stub renders a separate "Upgrade Pro" button — we want the header one.
       const allUpgradeBtns = await screen.findAllByRole('button', { name: /upgrade/i });
-      // The dashboard header button contains "Hobby" in its accessible name;
-      // pick it so the click fires handleUpgrade('hobby').
+      // The dashboard header button contains "Basic" in its accessible name;
+      // pick it so the click fires handleUpgrade('basic').
       const upgradeBtn = allUpgradeBtns.find((btn) =>
-        btn.textContent?.toLowerCase().includes('hobby'),
+        btn.textContent?.toLowerCase().includes('basic'),
       );
       expect(upgradeBtn).toBeTruthy();
 
@@ -232,8 +232,8 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED absent', () => 
       });
 
       // Confirm the stripe service was not called
-      const { upgradeToHobbyPlan } = await import('@features/billing/services/stripe-payments');
-      expect(upgradeToHobbyPlan).not.toHaveBeenCalled();
+      const { upgradeToBasicPlan } = await import('@features/billing/services/stripe-payments');
+      expect(upgradeToBasicPlan).not.toHaveBeenCalled();
     });
   });
 

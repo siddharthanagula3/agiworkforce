@@ -105,11 +105,11 @@ describe('modelStore', () => {
       expect(state.selectedProvider).toBe('managed_cloud');
     });
 
-    it('should block max-tier model selection for hobby plans', async () => {
+    it('should block max-tier model selection for basic plans', async () => {
       const { useModelStore } = await import('../stores/modelStore');
       const { useUnifiedAuthStore } = await import('../stores/auth');
 
-      useUnifiedAuthStore.setState({ plan: 'hobby' });
+      useUnifiedAuthStore.setState({ plan: 'basic' });
 
       const store = useModelStore.getState();
       await store.selectModel('gpt-5.5', 'openai');
@@ -133,7 +133,7 @@ describe('modelStore', () => {
     it('should deny unknown phantom model ids on every managed-cloud tier', async () => {
       const { isModelAllowedForTier } = await import('../constants/llm');
 
-      expect(isModelAllowedForTier('unknown-codex-phantom-model', 'hobby')).toBe(false);
+      expect(isModelAllowedForTier('unknown-codex-phantom-model', 'basic')).toBe(false);
       expect(isModelAllowedForTier('unknown-codex-phantom-model', 'pro')).toBe(false);
       expect(isModelAllowedForTier('unknown-codex-phantom-model', 'max')).toBe(false);
       expect(isModelAllowedForTier('unknown-codex-phantom-model', 'enterprise')).toBe(false);
@@ -142,13 +142,13 @@ describe('modelStore', () => {
     it('should resolve the best allowed auto mode when no model is selected', async () => {
       const { resolveEffectiveModelForTier } = await import('../stores/modelStore');
 
-      expect(resolveEffectiveModelForTier(null, 'hobby')).toBe('auto-economy');
+      expect(resolveEffectiveModelForTier(null, 'basic')).toBe('auto-economy');
       expect(resolveEffectiveModelForTier(null, 'pro')).toBe('auto-balanced');
       expect(resolveEffectiveModelForTier(null, 'max')).toBe('auto-premium');
-      expect(resolveEffectiveModelForTier('gpt-5.5', 'hobby')).toBe('gpt-5.5');
+      expect(resolveEffectiveModelForTier('gpt-5.5', 'basic')).toBe('gpt-5.5');
     });
 
-    it('should downgrade stale manual selections when plan tier is hobby', async () => {
+    it('should downgrade stale manual selections when plan tier is basic', async () => {
       const { useModelStore, enforceModelTierRestriction } = await import('../stores/modelStore');
       const { useUIStore } = await import('../stores/ui');
 
@@ -158,7 +158,7 @@ describe('modelStore', () => {
         selectedProvider: 'openai',
       });
 
-      enforceModelTierRestriction('hobby');
+      enforceModelTierRestriction('basic');
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const state = useModelStore.getState();

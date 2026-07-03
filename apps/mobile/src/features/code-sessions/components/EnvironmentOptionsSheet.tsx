@@ -126,6 +126,8 @@ export function EnvironmentOptionsSheet({
         onClose={() => setWaitlistVisible(false)}
         source="other"
         defaultTab="waitlist"
+        title="Hosted code environments"
+        body="Cloud code execution isn’t available on mobile yet. Join the waitlist to get notified, or enter your invitation code if you have early access."
       />
     </>
   );

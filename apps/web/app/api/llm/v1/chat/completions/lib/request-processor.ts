@@ -655,10 +655,16 @@ export async function processRequest(
   if (!freeTrialEnabled && !checkModelTierAccess(chatRequest.model, subscription.plan_tier)) {
     const modelKey = chatRequest.model.toLowerCase();
     const requiredTiers = MODEL_TIER_REQUIREMENTS[modelKey];
-    const requiredTier =
-      requiredTiers && requiredTiers.length > 0
-        ? (requiredTiers[0]?.toUpperCase() ?? 'PRO')
-        : 'PRO';
+    // Lowercase key (e.g. 'pro') for clients to pattern-match on, alongside the
+    // uppercased word used in the human-readable message below. Clients (mobile,
+    // desktop, web) key their upgrade-prompt UI off this field the same way they
+    // already do for the HTTP 429 paywall shape (`{kind:'paywall', requiredTier}`)
+    // — before this field existed, a model-tier-gate rejection had no structured
+    // way to tell it apart from a generic server error, so every client fell back
+    // to a blank "Something went wrong" message instead of an actionable upgrade
+    // prompt.
+    const requiredTierKey = requiredTiers && requiredTiers.length > 0 ? requiredTiers[0] : 'pro';
+    const requiredTier = requiredTierKey?.toUpperCase() ?? 'PRO';
     return {
       ok: false,
       response: NextResponse.json(
@@ -667,6 +673,7 @@ export async function processRequest(
             message: `Model ${chatRequest.model} requires ${requiredTier} subscription or higher.`,
             type: 'invalid_request_error',
             code: 'model_not_available',
+            requiredTier: requiredTierKey,
           },
         },
         { status: 403 },

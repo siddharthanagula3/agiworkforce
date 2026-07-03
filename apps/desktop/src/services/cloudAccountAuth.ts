@@ -464,11 +464,10 @@ class CloudAccountAuthService {
       'local-only': 0,
       byok: 0,
       free: 0,
-      hobby: 1,
+      basic: 1,
       pro: 2,
-      pro_plus: 3,
-      max: 4,
-      enterprise: 5,
+      max: 3,
+      enterprise: 4,
     };
     return (tierHierarchy[currentTier] ?? 0) >= (tierHierarchy[tier] ?? 0);
   }

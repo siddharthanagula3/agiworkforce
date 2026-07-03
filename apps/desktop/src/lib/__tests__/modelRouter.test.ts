@@ -304,18 +304,18 @@ describe('routeMessage — tier-aware routing (Phase 2c-1)', () => {
     expect(result.taskType).toBe('coding');
   });
 
-  it('coding message + Hobby tier → model is from economy pool', () => {
-    // Hobby pool = economy tier models. The escalation_coding slot (glm-4.7) is
+  it('coding message + Basic tier → model is from economy pool', () => {
+    // Basic pool = economy tier models. The escalation_coding slot (glm-4.7) is
     // not in the economy TIER_ALLOWED_MODELS list so pool fallback applies.
     // The router should still return a valid model from the economy pool.
     const result = routeMessage(
       'Write a function to parse JSON with error handling',
       'auto-economy',
       false,
-      'hobby',
+      'basic',
     );
-    const hobbyPool = MODEL_POOLS['auto-economy'];
-    expect(hobbyPool).toContain(result.selectedModel);
+    const basicPool = MODEL_POOLS['auto-economy'];
+    expect(basicPool).toContain(result.selectedModel);
     expect(result.taskType).toBe('coding');
   });
 

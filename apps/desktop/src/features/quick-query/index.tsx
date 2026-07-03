@@ -147,7 +147,7 @@ export function QuickQuery({
   const account = useAccountStore((state) => state.account);
   const getRecentConversations = useChatStore((state) => state.getRecentConversations);
   const canOpenRecentChats = typeof onOpenConversation === 'function';
-  const planTier = account.plan ?? 'hobby';
+  const planTier = account.plan ?? 'basic';
   const allowedAutoModes = getAllowedAutoModesForTier(planTier);
   const defaultModel = getBestAutoModeForTier(planTier);
 

@@ -57,7 +57,7 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
               <span className="font-medium">Unlock Full Access</span>
             </div>
             <p className="text-sm text-zinc-400">
-              Subscribe to Hobby plan or higher to access all features including API key management,
+              Subscribe to Basic plan or higher to access all features including API key management,
               unlimited automations, and more.
             </p>
             <Button

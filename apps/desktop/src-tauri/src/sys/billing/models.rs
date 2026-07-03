@@ -1,17 +1,20 @@
 use serde::{Deserialize, Serialize};
 
 /// Canonical 6-tier taxonomy (matches cloud subscription tier strings):
-/// `local-only`, `byok`, `hobby`, `pro`, `max`, `enterprise`.  `Free` is
+/// `local-only`, `byok`, `basic`, `pro`, `max`, `enterprise`.  `Free` is
 /// retained as a backward-compat alias for legacy rows.  Any other string
 /// would deserialize-fail before the variants below were added.
+///
+/// `basic` replaced `hobby` on 2026-07-02 (see `packages/types/src/design-system/user-identity.ts`);
+/// `pro_plus` was removed the same day with no successor.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum PlanTier {
     #[serde(rename = "local-only")]
     LocalOnly,
     #[serde(rename = "byok")]
     Byok,
-    #[serde(rename = "hobby")]
-    Hobby,
+    #[serde(rename = "basic", alias = "hobby")]
+    Basic,
     #[serde(rename = "pro")]
     Pro,
     #[serde(rename = "max")]
@@ -33,8 +36,8 @@ pub struct UserSubscription {
 
 impl UserSubscription {
     /// Cloud LLM access is denied only for `LocalOnly` (Ollama/LMStudio only, no managed cloud).
-    /// Hobby IS the first paid cloud tier — it must NOT be blocked here.
-    /// Byok and all higher tiers get cloud access (Byok: user's own key; Hobby+: managed credits).
+    /// Basic IS the first paid cloud tier — it must NOT be blocked here.
+    /// Byok and all higher tiers get cloud access (Byok: user's own key; Basic+: managed credits).
     pub fn has_cloud_access(&self) -> bool {
         !matches!(self.tier, PlanTier::LocalOnly)
     }

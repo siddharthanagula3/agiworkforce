@@ -96,6 +96,32 @@ jest.mock('../stores/settings/cloudSettingsStore', () => ({
   },
 }));
 
+// Tier store is reset to 'free' on sign-out so a previously-signed-in
+// Pro/Max account's cached tier doesn't survive sign-out and get shown to a
+// signed-out (or different) user on the Billing screen.
+jest.mock('../src/features/billing/store', () => ({
+  useTierStore: {
+    getState: jest.fn(),
+  },
+}));
+
+// Cloud artifacts (migration 0039 pulled artifacts) are persisted to MMKV and
+// scoped to the signed-in user — clearCloudArtifacts must run on sign-out so
+// a subsequent account cannot inherit a prior user's artifacts.
+jest.mock('../src/features/artifacts/store', () => ({
+  useArtifactStore: {
+    getState: jest.fn(),
+  },
+}));
+
+// mobile_devices push tokens are keyed by deviceId (not session) — the token
+// must be cleared server-side on sign-out so a subsequent different account
+// on this device doesn't receive push notifications addressed to the prior
+// account.
+jest.mock('../services/notifications', () => ({
+  unregisterPushToken: jest.fn(),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _settingsSyncMock = require('../stores/settings/settingsSyncStateStore') as {
   useSettingsSyncStateStore: { getState: jest.Mock };
@@ -110,6 +136,23 @@ const _cloudSettingsMock = require('../stores/settings/cloudSettingsStore') as {
 };
 const mockResetSettingsSync = jest.fn();
 const mockCloudSettingsSetState = _cloudSettingsMock.useCloudSettingsStore.setState as jest.Mock;
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _tierMock = require('../src/features/billing/store') as {
+  useTierStore: { getState: jest.Mock };
+};
+const mockSetTier = jest.fn();
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _artifactMock = require('../src/features/artifacts/store') as {
+  useArtifactStore: { getState: jest.Mock };
+};
+const mockClearCloudArtifacts = jest.fn();
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _notificationsMock = require('../services/notifications') as {
+  unregisterPushToken: jest.Mock;
+};
 
 // mmkv is not used by authStore but may be imported transitively.
 jest.mock('../lib/mmkv', () => ({
@@ -360,6 +403,10 @@ describe('authStore — secure storage persistence', () => {
       resetSettingsSync: mockResetSettingsSync,
     });
     _settingsMock.useSettingsStore.getState.mockReturnValue({});
+    _tierMock.useTierStore.getState.mockReturnValue({ setTier: mockSetTier });
+    _artifactMock.useArtifactStore.getState.mockReturnValue({
+      clearCloudArtifacts: mockClearCloudArtifacts,
+    });
   });
 
   it('signInWithEmail throws and does not write session to secure store (Clerk v1)', async () => {
@@ -449,6 +496,48 @@ describe('authStore — secure storage persistence', () => {
         settingsUpdatedAt: null,
       }),
     );
+  });
+
+  it('signOut resets the cached billing tier to free (no stale Pro/Max plan after sign-out)', async () => {
+    // Regression: the Billing screen reads useTierStore().tier with no auth check.
+    // Before this fix, a previously-signed-in Pro/Max account's cached tier
+    // survived sign-out in MMKV and a signed-out (or different) user would see
+    // "You are on the Pro plan" — a fake/stale billing state.
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+
+    await act(async () => {
+      await getState().signOut();
+    });
+
+    expect(mockSetTier).toHaveBeenCalledWith('free');
+  });
+
+  it('signOut clears cloud artifacts (account-B isolation)', async () => {
+    // Regression: clearCloudArtifacts() existed on the artifact store specifically
+    // for "sign-out / leaving cloud mode" (per its own docstring) but was never
+    // wired into signOut(). cloudArtifacts (migration 0039) are persisted to MMKV,
+    // so a subsequent signed-in account could inherit a prior user's artifacts.
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+
+    await act(async () => {
+      await getState().signOut();
+    });
+
+    expect(mockClearCloudArtifacts).toHaveBeenCalledTimes(1);
+  });
+
+  it('signOut unregisters the device push token (account-B push-notification isolation)', async () => {
+    // Regression: mobile_devices.push_token is keyed by deviceId, not session,
+    // so it previously survived sign-out indefinitely — a subsequent different
+    // account signing in on this device would still receive push notifications
+    // addressed to the prior account.
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+
+    await act(async () => {
+      await getState().signOut();
+    });
+
+    expect(_notificationsMock.unregisterPushToken).toHaveBeenCalledTimes(1);
   });
 
   it('onRehydrateStorage clears session and marks store uninitialized (biometric gate)', () => {

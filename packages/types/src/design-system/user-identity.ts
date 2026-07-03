@@ -1,31 +1,32 @@
 // packages/types/src/design-system/user-identity.ts
 
 /**
- * Pricing tiers per the LOCKED 2026-05-07 decision matrix.
+ * Pricing tiers per the current billing catalog (packages/types/src/billing-catalog.ts).
  * Named UIPlanTier to distinguish from the legacy Tauri PlanTier in tauri.ts.
  *
- * Sequence: Local + BYOK free forever. Hobby ($10) is the entry paid tier;
- * Pro ($29.99) is waitlisted; Pro+ ($49.99) is next paid launch and gates
- * the multi-provider in-thread switch differentiator. Max ($299.99) tops out.
+ * 2026-07-02: 'hobby' renamed to 'basic' (now $8/mo, ₹399/mo India — see
+ * BILLING_PLAN_PRICING), 'pro_plus' removed with no successor (it was never
+ * shipped as a real tier). `canSwitchProviderInThread` below, which used to
+ * gate on `pro_plus`, now gates on `max` only — the most-restrictive choice
+ * consistent with the removal, since no tier was designated to inherit that
+ * gate. Sequence: Local + BYOK free forever, then Basic → Pro → Max.
  */
-export type UIPlanTier = 'local' | 'byok' | 'hobby' | 'pro' | 'pro_plus' | 'max';
+export type UIPlanTier = 'local' | 'byok' | 'basic' | 'pro' | 'max';
 
 export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
   local: 'Local Mode',
   byok: 'Local Mode + BYOK',
-  hobby: 'Hobby',
+  basic: 'Basic',
   pro: 'Pro',
-  pro_plus: 'Pro+',
   max: 'Max',
 });
 
 export const PLAN_DESCRIPTION: Readonly<Record<UIPlanTier, string>> = Object.freeze({
   local: 'Local LLMs — Ollama / LM Studio',
   byok: 'Local app with your own provider keys',
-  hobby: 'Cloud Managed, basic models',
-  pro: 'Pro — coming soon',
-  pro_plus: 'Pro+ — multi-provider chat, every flagship',
-  max: 'Max — coming soon',
+  basic: 'Cloud Managed, basic models',
+  pro: 'Pro — balanced models, higher usage',
+  max: 'Max — flagship models, highest usage',
 });
 
 /** True for tiers that are free forever — never gate the tool on these. */
@@ -35,21 +36,20 @@ export function isFreePlan(tier: UIPlanTier): boolean {
 
 /**
  * True for tiers that include the multi-provider in-thread switch
- * differentiator (Pro+ exclusive feature). Used by ModelSelector + chat
- * runtime to gate the cross-provider continuity flow.
+ * differentiator. Used by ModelSelector + chat runtime to gate the
+ * cross-provider continuity flow.
  */
 export function canSwitchProviderInThread(tier: UIPlanTier): boolean {
-  return tier === 'pro_plus' || tier === 'max';
+  return tier === 'max';
 }
 
 /** Strict tier ordering for upgrade-path comparisons. */
 const TIER_ORDER: Readonly<Record<UIPlanTier, number>> = Object.freeze({
   local: 0,
   byok: 1,
-  hobby: 2,
+  basic: 2,
   pro: 3,
-  pro_plus: 4,
-  max: 5,
+  max: 4,
 });
 
 /** True iff `actual` meets or exceeds `required`. */

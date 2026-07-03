@@ -852,7 +852,7 @@ async fn get_user_tier_from_billing(billing: &BillingStateWrapper) -> String {
                 return match plan.as_str() {
                     p if p.contains("max") || p.contains("enterprise") => "max".to_string(),
                     p if p.contains("pro") || p.contains("professional") => "pro".to_string(),
-                    p if p.contains("hobby") || p.contains("basic") => "hobby".to_string(),
+                    p if p.contains("hobby") || p.contains("basic") => "basic".to_string(),
                     _ => "free".to_string(),
                 };
             }

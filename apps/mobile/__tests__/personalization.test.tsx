@@ -17,6 +17,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
+const mockUseLocalSearchParams = jest.fn(() => ({}) as { scope?: string });
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     push: jest.fn(),
@@ -24,6 +25,7 @@ jest.mock('expo-router', () => ({
     canGoBack: jest.fn().mockReturnValue(true),
     back: mockBack,
   }),
+  useLocalSearchParams: () => mockUseLocalSearchParams(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -118,6 +120,7 @@ describe('Personalization page', () => {
   beforeEach(() => {
     resetSettingsStore();
     jest.clearAllMocks();
+    mockUseLocalSearchParams.mockReturnValue({});
   });
 
   it('renders the Personalization header', () => {
@@ -218,5 +221,29 @@ describe('Personalization page', () => {
   it('renders the Response Style section header', () => {
     const { getByText } = render(<PersonalizationScreen />);
     expect(getByText('Response Style')).toBeTruthy();
+  });
+
+  it('resyncs editable fields (not stale scope-crossed data) when ?scope= changes on a reused screen instance', () => {
+    useLocalSettingsStore.setState({
+      personalization: { ...defaultPersonalization, fullName: 'Local Name' },
+    });
+    useCloudSettingsStore.setState({
+      personalization: { ...defaultPersonalization, fullName: 'Cloud Name' },
+      settingsUpdatedAt: null,
+    });
+
+    mockUseLocalSearchParams.mockReturnValue({ scope: 'local' });
+    const { getByDisplayValue, getByText, rerender } = render(<PersonalizationScreen />);
+    expect(getByDisplayValue('Local Name')).toBeTruthy();
+    expect(getByText('Personalization')).toBeTruthy();
+
+    // Simulate Expo Router reusing this screen instance for a navigation to
+    // the Cloud-scoped row — the resync effect must repopulate fields from
+    // cloudPersonalization instead of leaving the stale "Local Name" text.
+    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
+    rerender(<PersonalizationScreen />);
+
+    expect(getByDisplayValue('Cloud Name')).toBeTruthy();
+    expect(getByText('Cloud Personalization')).toBeTruthy();
   });
 });

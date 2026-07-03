@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -55,8 +55,15 @@ export default function CompanionScreen() {
     handleDismiss: approvalModalDismiss,
   } = useApprovalModal();
 
-  const pendingApprovals = useAgentStore((s) =>
-    s.pendingApprovals.filter((r) => r.status === 'pending'),
+  // Select the raw (stable-reference) array and filter in a memo — filtering
+  // inline inside the selector (`s.pendingApprovals.filter(...)`) returns a
+  // brand-new array on every store read, which Zustand's default reference
+  // equality treats as "changed" every render, causing an infinite
+  // resubscribe/re-render loop ("Maximum update depth exceeded").
+  const allApprovals = useAgentStore((s) => s.pendingApprovals);
+  const pendingApprovals = useMemo(
+    () => allApprovals.filter((r) => r.status === 'pending'),
+    [allApprovals],
   );
   useEffect(() => {
     if (pendingApprovals.length > 0 && !currentApproval) {

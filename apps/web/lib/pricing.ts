@@ -1,7 +1,7 @@
 // apps/web/lib/pricing.ts
 
 import { logger } from './logger';
-import { getPlanPriceUsd } from '@agiworkforce/types';
+import { getPlanPriceUsd, getPlanPriceInr } from '@agiworkforce/types';
 
 /**
  * Validate that a Stripe price ID is properly configured
@@ -32,6 +32,18 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
 }
 
 export const STRIPE_PRICE_IDS = {
+  basic: {
+    // India (₹399/mo) and rest-of-world (USD $8/mo) are separate Stripe
+    // Price objects on the same product — both resolve to tier 'basic'.
+    monthlyUsd: validatePriceId(
+      process.env['STRIPE_PRICE_BASIC_MONTHLY_USD'],
+      'STRIPE_PRICE_BASIC_MONTHLY_USD',
+    ),
+    monthlyInr: validatePriceId(
+      process.env['STRIPE_PRICE_BASIC_MONTHLY_INR'],
+      'STRIPE_PRICE_BASIC_MONTHLY_INR',
+    ),
+  },
   pro: {
     monthly: validatePriceId(process.env['STRIPE_PRICE_PRO_MONTHLY'], 'STRIPE_PRICE_PRO_MONTHLY'),
     yearly: validatePriceId(process.env['STRIPE_PRICE_PRO_YEARLY'], 'STRIPE_PRICE_PRO_YEARLY'),
@@ -60,6 +72,16 @@ export function arePriceIdsConfigured(): boolean {
 
 export const PRICING_CONFIG = {
   plans: [
+    {
+      id: 'basic',
+      name: 'Basic',
+      price: {
+        monthly: getPlanPriceUsd('basic', 'monthly'),
+        monthlyInr: getPlanPriceInr('basic'),
+        yearly: undefined, // Basic is monthly-only
+      },
+      stripe_price_ids: STRIPE_PRICE_IDS.basic,
+    },
     {
       id: 'pro',
       name: 'Pro',
@@ -90,6 +112,12 @@ export const PRICING_CONFIG = {
     },
   ],
   getPlanFromPriceId: (priceId: string): string | null => {
+    if (
+      STRIPE_PRICE_IDS.basic.monthlyUsd === priceId ||
+      STRIPE_PRICE_IDS.basic.monthlyInr === priceId
+    ) {
+      return 'basic';
+    }
     const allPlans = ['pro', 'max', 'team'] as const;
     for (const plan of allPlans) {
       const prices = STRIPE_PRICE_IDS[plan];

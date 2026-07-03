@@ -534,10 +534,13 @@ export default function CloudConnectorsScreen() {
 
   const handlePress = useCallback(
     (entry: ConnectorEntry) => {
+      // Unreachable while !FEATURES.connectors — the catalog below only renders
+      // when the flag is on. Kept as a defensive fallback with accurate copy
+      // (Connectors are gated by the feature flag, not by AGI Cloud sign-in).
       if (!FEATURES.connectors) {
         Alert.alert(
           `${entry.name}`,
-          'Cloud connector OAuth is gated behind AGI Cloud access. Join the waitlist to unlock.',
+          'Connectors aren’t available on mobile yet. We’ll notify you when they ship.',
           [{ text: 'OK' }],
         );
         return;
@@ -573,48 +576,49 @@ export default function CloudConnectorsScreen() {
 
       {!FEATURES.connectors && <WaitlistPlaceholder />}
 
-      {CATEGORIES.map((cat) => {
-        const entries = CATALOG.filter((c) => c.category === cat);
-        return (
-          <View key={cat} style={{ marginBottom: 18 }}>
-            <Text
-              style={{
-                color: colors.textMuted,
-                fontSize: 11,
-                fontWeight: '700',
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-                marginBottom: 7,
-                paddingHorizontal: 2,
-              }}
-            >
-              {cat}
-            </Text>
-            <View
-              style={{
-                borderRadius: 14,
-                backgroundColor: colors.surfaceElevated,
-                borderWidth: 1,
-                borderColor: colors.border,
-                overflow: 'hidden',
-              }}
-            >
-              {entries.map((entry, idx) => (
-                <View key={entry.id}>
-                  {idx > 0 && (
-                    <View style={{ height: 1, backgroundColor: colors.border, marginLeft: 66 }} />
-                  )}
-                  <ConnectorCard
-                    entry={entry}
-                    connected={isConnected(entry.id)}
-                    onPress={() => handlePress(entry)}
-                  />
-                </View>
-              ))}
+      {FEATURES.connectors &&
+        CATEGORIES.map((cat) => {
+          const entries = CATALOG.filter((c) => c.category === cat);
+          return (
+            <View key={cat} style={{ marginBottom: 18 }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: 11,
+                  fontWeight: '700',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  marginBottom: 7,
+                  paddingHorizontal: 2,
+                }}
+              >
+                {cat}
+              </Text>
+              <View
+                style={{
+                  borderRadius: 14,
+                  backgroundColor: colors.surfaceElevated,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  overflow: 'hidden',
+                }}
+              >
+                {entries.map((entry, idx) => (
+                  <View key={entry.id}>
+                    {idx > 0 && (
+                      <View style={{ height: 1, backgroundColor: colors.border, marginLeft: 66 }} />
+                    )}
+                    <ConnectorCard
+                      entry={entry}
+                      connected={isConnected(entry.id)}
+                      onPress={() => handlePress(entry)}
+                    />
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
-        );
-      })}
+          );
+        })}
     </SettingsScreenShell>
   );
 }

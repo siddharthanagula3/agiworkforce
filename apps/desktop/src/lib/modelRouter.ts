@@ -128,7 +128,7 @@ export interface IntelligentRoutingResult {
 
 /**
  * Model pools are tier-restricted to control access:
- * - Economy: Budget-friendly models available to Hobby tier
+ * - Economy: Budget-friendly models available to Basic tier
  * - Balanced: Mid-tier + Economy models for Pro tier
  * - Premium: All models including flagships for Max/Enterprise tier
  *
@@ -140,10 +140,10 @@ export interface IntelligentRoutingResult {
  * Capability Legend: V=Vision, T=Tools, Th=Thinking, C=ComputerUse, A=Agentic, E=CodeExecution
  */
 // =========================================================================
-// HOBBY TIER (auto-economy) - Budget models, ordered by BENCHMARK
+// BASIC TIER (auto-economy) - Budget models, ordered by BENCHMARK
 // Best benchmarks first within cost constraints
 // =========================================================================
-const ECONOMY_MODELS: readonly string[] = getAllowedModelsForTier('hobby');
+const ECONOMY_MODELS: readonly string[] = getAllowedModelsForTier('basic');
 const BALANCED_MODELS: readonly string[] = getAllowedModelsForTier('pro');
 const PREMIUM_MODELS: readonly string[] = getAllowedModelsForTier('max');
 
@@ -922,7 +922,7 @@ export function routeMessage(
   if (localResult) {
     // Step 2: Resolve canonical slot model via tier-aware resolveAutoModeModel.
     // This uses the RoutingTaskType from the shared classifier directly so slot
-    // lookup is tier-correct (e.g. coding → escalation_coding on Hobby, coding →
+    // lookup is tier-correct (e.g. coding → escalation_coding on Basic, coding →
     // coding_premium_pro on Pro).
     const sharedResult = _classifyTaskShared(message, []);
     const canonicalModelId = resolveAutoModeModel(autoMode, tier, sharedResult.type);
@@ -957,7 +957,7 @@ export function routeMessage(
   let inferredTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
 
   const intentResult = classifyIntentLocally(message, {
-    tier: 'hobby',
+    tier: 'basic',
     hasAttachments: false,
     attachmentTypes: [],
   });
@@ -1168,7 +1168,7 @@ export async function routeMessageAsync(
   let inferredTaskType: TaskType = autoMode === 'auto-premium' ? 'reasoning' : 'general';
 
   const intentResult = classifyIntentLocally(message, {
-    tier: 'hobby',
+    tier: 'basic',
     hasAttachments: false,
     attachmentTypes: [],
   });
@@ -1250,7 +1250,7 @@ export async function getModelForRequestAsync(
 function autoModeToTier(autoMode: AutoMode): SubscriptionTier {
   switch (autoMode) {
     case 'auto-economy':
-      return 'hobby';
+      return 'basic';
     case 'auto-balanced':
       return 'pro';
     case 'auto-premium':

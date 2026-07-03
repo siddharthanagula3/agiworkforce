@@ -6,8 +6,9 @@
  */
 
 import { useCallback, useState } from 'react';
-import { Alert, Clipboard, View } from 'react-native';
+import { Alert, Clipboard, Image, View } from 'react-native';
 import { Copy, Check, LogOut, Smartphone, Trash2, UserRound } from 'lucide-react-native';
+import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
@@ -21,12 +22,15 @@ import { api } from '@/services/api';
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
-  const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+  // useAuthStore().user is always null in v1 — Clerk is the real signed-in
+  // user source (see app/(app)/profile/index.tsx for the same pattern).
+  const { user: clerkUser } = useUser();
 
-  const userId = user?.id ?? null;
-  const userEmail = user?.email ?? null;
-  const displayName = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? null;
+  const userId = clerkUser?.id ?? null;
+  const userEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
+  const displayName = clerkUser?.fullName ?? clerkUser?.username ?? null;
+  const avatarUrl = clerkUser?.imageUrl ?? null;
 
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -106,22 +110,59 @@ export default function CloudAccountScreen() {
 
   return (
     <SettingsScreenShell title="Account">
+      {/* Avatar + name/email header — mirrors desktop/website account header */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+          borderRadius: 14,
+          backgroundColor: colors.surfaceElevated,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: 14,
+          marginBottom: 18,
+        }}
+      >
+        {avatarUrl ? (
+          <Image
+            source={{ uri: avatarUrl }}
+            style={{ width: 52, height: 52, borderRadius: 26 }}
+            accessibilityLabel="Profile picture"
+          />
+        ) : (
+          <View
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              backgroundColor: colors.surfaceHover,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <UserRound size={24} color={colors.textMuted} />
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}
+          >
+            {displayName || 'AGI Cloud account'}
+          </Text>
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
+            {userEmail || 'Signed in'}
+          </Text>
+        </View>
+      </View>
+
       {/* Profile summary */}
       <SettingsInfo
         title="Session management and account security"
         body={userEmail ? `Signed in as ${userEmail}` : 'Manage your AGI Cloud account.'}
         icon={UserRound}
       />
-
-      {/* Profile info row */}
-      {(displayName || userEmail) && (
-        <SettingsGroup>
-          {displayName ? <SettingsRow label={displayName} icon={UserRound} value="Name" /> : null}
-          {userEmail ? (
-            <SettingsRow label={userEmail} icon={UserRound} value="Email" isLast />
-          ) : null}
-        </SettingsGroup>
-      )}
 
       {/* Current session */}
       <SettingsGroup>

@@ -20,7 +20,6 @@ import { type DrawerContentComponentProps } from '@react-navigation/drawer';
 import { Text } from '@/components/ui/text';
 import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -279,7 +278,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [inviteOpen, setInviteOpen] = useState(false);
   // SILENT-SWITCH-FIX: mode switches to Cloud always require explicit user consent
   // via ModeSwitchModal — never silently call setAppMode('cloud').
   const [modeSwitchVisible, setModeSwitchVisible] = useState(false);
@@ -319,19 +317,19 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
 
-  const openInvite = useCallback(() => {
-    setInviteOpen(true);
-  }, []);
-
+  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default — the
+  // signed-in entitlement IS the gate, no invite/waitlist. Matches the sign-in route
+  // used by chat.tsx / chat/[id].tsx / models.tsx (fix 0fe0598c3).
   const openAgiAgent = useCallback(() => {
-    if (!cloudUnlocked || !DEFAULT_CLOUD_MODEL_ID) {
-      openInvite();
+    if (!DEFAULT_CLOUD_MODEL_ID) return;
+    if (!cloudUnlocked) {
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
       return;
     }
     // SILENT-SWITCH-FIX: show the consent modal instead of silently switching mode.
     // The actual setAppMode('cloud') call is deferred to the modal's onConfirm handler.
     setModeSwitchVisible(true);
-  }, [cloudUnlocked, openInvite]);
+  }, [cloudUnlocked, router]);
 
   const handleModeSwitchConfirm = useCallback(() => {
     setModeSwitchVisible(false);
@@ -584,13 +582,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
-
-      <InviteCodeModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        source="other"
-        defaultTab="invite"
-      />
 
       {/* SILENT-SWITCH-FIX: consent modal for Local→Cloud mode switch from AGI Agent button */}
       <ModeSwitchModal

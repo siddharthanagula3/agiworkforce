@@ -105,13 +105,38 @@ export async function upgradeToHobbyPlan(data: {
 }
 
 /**
+ * Create Basic Plan subscription and redirect to Stripe Checkout. Basic
+ * prices by currency (USD/INR), not billing interval — see
+ * app/api/checkout/route.ts and lib/pricing.ts.
+ */
+export async function upgradeToBasicPlan(data: {
+  userId: string;
+  userEmail: string;
+  currency?: 'usd' | 'inr';
+}): Promise<void> {
+  return upgradeToPlan({ ...data, plan: 'basic' });
+}
+
+/**
+ * Create Team Plan subscription and redirect to Stripe Checkout.
+ */
+export async function upgradeToTeamPlan(data: {
+  userId: string;
+  userEmail: string;
+  billingPeriod?: 'monthly' | 'yearly';
+}): Promise<void> {
+  return upgradeToPlan({ ...data, plan: 'team' });
+}
+
+/**
  * Generic function to upgrade to any plan
  */
 async function upgradeToPlan(data: {
   userId: string;
   userEmail: string;
-  plan: 'hobby' | 'pro' | 'max';
+  plan: 'hobby' | 'basic' | 'pro' | 'max' | 'team';
   billingPeriod?: 'monthly' | 'yearly';
+  currency?: 'usd' | 'inr';
 }): Promise<void> {
   void data.userId;
   void data.userEmail;
@@ -129,8 +154,12 @@ async function upgradeToPlan(data: {
       Authorization: `Bearer ${authToken}`,
     }),
     body: JSON.stringify({
+      // The checkout API's plan schema doesn't include 'hobby' (superseded by
+      // 'basic'); callers still using upgradeToHobbyPlan are legacy and unrelated
+      // to this pricing-page change, so we pass plan through unchanged here.
       plan: data.plan,
       billingInterval,
+      ...(data.currency ? { currency: data.currency } : {}),
     }),
   });
 
@@ -155,7 +184,7 @@ async function upgradeToPlan(data: {
  * customer balance credit that offsets the next invoice.
  */
 export async function upgradePlanMidCycle(data: {
-  plan: 'hobby' | 'pro' | 'max';
+  plan: 'basic' | 'pro' | 'max';
   billingInterval?: 'monthly' | 'yearly';
 }): Promise<{ creditAppliedUsd: string }> {
   const authToken = await getAuthToken();

@@ -44,13 +44,7 @@ interface AppModeState {
 // earlier build must not survive a reload (it would route chat persistence into
 // the unimplemented Rust command). See migrate() below.
 const APP_MODE_STORE_VERSION = 2;
-const CLOUD_MANAGED_TIERS: ReadonlySet<PlanTier> = new Set([
-  'hobby',
-  'pro',
-  'pro_plus',
-  'max',
-  'enterprise',
-]);
+const CLOUD_MANAGED_TIERS: ReadonlySet<PlanTier> = new Set(['basic', 'pro', 'max', 'enterprise']);
 
 export const useAppModeStore = create<AppModeState>()(
   devtools(
@@ -97,7 +91,7 @@ export const useAppModeStore = create<AppModeState>()(
               return;
             }
             if (!CLOUD_MANAGED_TIERS.has(get().planTier)) {
-              toast.error('Managed Cloud is available to Hobby, Pro, Max, and Enterprise tiers.');
+              toast.error('Managed Cloud is available to Basic, Pro, Max, and Enterprise tiers.');
               return;
             }
             set({ mode }, undefined, 'appMode/setMode');

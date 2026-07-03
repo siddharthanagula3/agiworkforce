@@ -160,8 +160,9 @@ export function ReportFlagButton({
                     key={cat.id}
                     testID={`report-category-${cat.id}`}
                     onPress={() => setSelectedCategory(cat.id)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selectedCategory === cat.id }}
+                    accessibilityRole="button"
+                    accessibilityLabel={cat.label}
+                    accessibilityState={{ selected: selectedCategory === cat.id }}
                     style={[
                       styles.categoryRow,
                       {
@@ -218,8 +219,9 @@ export function ReportFlagButton({
               <Pressable
                 testID="report-email-toggle"
                 onPress={() => setSendEmail((v) => !v)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: sendEmail }}
+                accessibilityRole="button"
+                accessibilityLabel="Send report to support team via email"
+                accessibilityState={{ selected: sendEmail }}
                 style={styles.emailRow}
               >
                 <View
@@ -261,6 +263,7 @@ export function ReportFlagButton({
                 onPress={handleSubmit}
                 disabled={!selectedCategory || loading}
                 accessibilityRole="button"
+                accessibilityLabel={loading ? 'Submitting report' : 'Submit Report'}
                 accessibilityState={{ disabled: !selectedCategory || loading }}
                 style={[
                   styles.submitBtn,

@@ -25,6 +25,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Clock, ChevronDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
 
 interface ThinkingBlockProps {
   content: string;
@@ -33,50 +34,6 @@ interface ThinkingBlockProps {
   completedAt?: string;
   durationSeconds?: number;
   defaultExpanded?: boolean;
-}
-
-/** Format elapsed/total seconds as "Xs" or "Xm Ys". */
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}m ${secs}s`;
-}
-
-/**
- * Derive a short live verb phrase from the leading content of a reasoning block.
- * Returns one of a small set of gerund phrases inferred from keywords in the
- * first non-empty line (or the most recent non-empty line) of the thinking text.
- * Falls back to "Thinking" when no keyword matches.
- *
- * No em-dashes. Max length 20 chars to fit the header bar.
- */
-export function deriveReasoningPhrase(content: string): string {
-  // Prefer the last non-empty line (most recent reasoning direction)
-  const lines = content.split('\n');
-  const activeLine =
-    [...lines]
-      .reverse()
-      .find((l) => l.trim().length > 0)
-      ?.trim()
-      .toLowerCase() ?? '';
-
-  if (!activeLine) return 'Thinking';
-
-  if (/\b(analyz|analys|examin|review)\w*/.test(activeLine)) return 'Analyzing';
-  if (/\b(calculat|comput|count|measur)\w*/.test(activeLine)) return 'Calculating';
-  if (/\b(search|look|find|check)\w*/.test(activeLine)) return 'Searching';
-  if (/\b(read|pars|scan|skim)\w*/.test(activeLine)) return 'Reading';
-  if (/\b(writ|draft|generat|creat|compil)\w*/.test(activeLine)) return 'Writing';
-  if (/\b(plan|outlin|structur|organiz)\w*/.test(activeLine)) return 'Planning';
-  if (/\b(reason|infer|deduc|conclud)\w*/.test(activeLine)) return 'Reasoning';
-  if (/\b(translat|convert|transform)\w*/.test(activeLine)) return 'Translating';
-  if (/\b(debug|fix|correct|repair)\w*/.test(activeLine)) return 'Debugging';
-  if (/\b(summar|condens|distil)\w*/.test(activeLine)) return 'Summarizing';
-  if (/\b(compar|contrast|evaluat|assess)\w*/.test(activeLine)) return 'Comparing';
-  if (/\b(explain|describ|clarif)\w*/.test(activeLine)) return 'Explaining';
-
-  return 'Thinking';
 }
 
 export function ThinkingBlock({
@@ -157,7 +114,7 @@ export function ThinkingBlock({
     return elapsedSeconds;
   })();
 
-  const durationLabel = formatDuration(resolvedDuration);
+  const durationLabel = formatThinkingDuration(resolvedDuration);
 
   // ── Preview line (collapsed state) ────────────────────────────────────────
   const previewLine =
