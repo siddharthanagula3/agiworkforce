@@ -1266,21 +1266,67 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to restore default provider:', error);
             }
 
-            // Sync autoApproveTools to backend on load
+            // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03):
+            // `ToolConfirmationState` on the Rust side now persists
+            // agent_mode / auto_approve_all itself (settings_v2) and restores
+            // them on every launch, failing closed to Safe/false when
+            // nothing is persisted yet. The old code here unconditionally
+            // PUSHED this frontend store's own (often-default, or stale —
+            // e.g. never updated by SafetyPolicies.tsx, which calls
+            // `set_agent_mode` directly and bypasses this store) value down
+            // to the backend on every load, silently clobbering whatever
+            // the backend had just correctly restored — reproducing the
+            // exact "safety setting reverts on restart" regression even
+            // after the backend fix. The backend is now the source of
+            // truth on load: read it and hydrate this store instead of
+            // overwriting it. Only fall back to pushing the frontend value
+            // if the read itself fails, so the two layers don't disagree
+            // indefinitely.
+            let resolvedAgentMode: AgentMode = mergedChatPreferences.agentMode ?? 'build';
             try {
-              await invoke('set_auto_approve_all', {
-                enabled: mergedChatPreferences.autoApproveTools ?? false,
-              });
+              resolvedAgentMode = await invoke<AgentMode>('get_agent_mode');
             } catch (error) {
-              console.error('Failed to sync auto-approve-all to backend:', error);
+              console.error(
+                'Failed to read persisted agent mode from backend, pushing frontend value:',
+                error,
+              );
+              try {
+                await invoke('set_agent_mode', { mode: resolvedAgentMode });
+              } catch (pushError) {
+                console.error('Failed to sync agent mode to backend:', pushError);
+              }
             }
 
+            let resolvedAutoApprove = mergedChatPreferences.autoApproveTools ?? false;
             try {
-              await invoke('set_agent_mode', {
-                mode: mergedChatPreferences.agentMode ?? 'build',
-              });
+              resolvedAutoApprove = await invoke<boolean>('get_auto_approve_all');
             } catch (error) {
-              console.error('Failed to sync agent mode to backend:', error);
+              console.error(
+                'Failed to read persisted auto-approve-all from backend, pushing frontend value:',
+                error,
+              );
+              try {
+                await invoke('set_auto_approve_all', { enabled: resolvedAutoApprove });
+              } catch (pushError) {
+                console.error('Failed to sync auto-approve-all to backend:', pushError);
+              }
+            }
+
+            if (
+              resolvedAgentMode !== mergedChatPreferences.agentMode ||
+              resolvedAutoApprove !== mergedChatPreferences.autoApproveTools
+            ) {
+              set(
+                (state) => ({
+                  chatPreferences: {
+                    ...state.chatPreferences,
+                    agentMode: resolvedAgentMode,
+                    autoApproveTools: resolvedAutoApprove,
+                  },
+                }),
+                undefined,
+                'settings/loadSettings/hydrateAgentModeFromBackend',
+              );
             }
 
             // Keep backend capability enforcement in sync with loaded settings.
@@ -1368,18 +1414,26 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to sync allowed directories to backend:', error);
             }
 
-            // Sync autoApproveTools flag to the backend confirmation state
-            try {
-              await invoke('set_auto_approve_all', { enabled: chatPreferences.autoApproveTools });
-            } catch (error) {
-              console.error('Failed to sync auto-approve-all to backend:', error);
-            }
-
-            try {
-              await invoke('set_agent_mode', { mode: chatPreferences.agentMode });
-            } catch (error) {
-              console.error('Failed to sync agent mode to backend:', error);
-            }
+            // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03):
+            // deliberately do NOT push `chatPreferences.agentMode` /
+            // `autoApproveTools` to the backend here. `ToolConfirmationState`
+            // is the source of truth for these two safety-gating fields and
+            // is updated immediately by both write paths that can change
+            // them (`setAgentMode`/`setAutoApproveTools` in this store, and
+            // SafetyPolicies.tsx's direct `set_agent_mode`/
+            // `set_auto_approve_all` invokes, which do NOT go through this
+            // store). Re-pushing `chatPreferences.agentMode` here re-opens
+            // the exact restart-clobber bug this fix closes: if this store's
+            // copy is stale (e.g. still 'build' because the user changed
+            // mode via SafetyPolicies.tsx, which never touches this store),
+            // any call to `saveSettings()` elsewhere in the app would
+            // silently downgrade the user's explicit Safe/Plan choice back
+            // to 'build' and — now that the backend persists it — make that
+            // downgrade survive restarts too. `loadSettings()` reads the
+            // backend's persisted value as authoritative, so this store's
+            // `chatPreferences.agentMode`/`autoApproveTools` fields are a
+            // best-effort mirror for UI/export purposes only, not a write
+            // path for backend gating state.
 
             // Sync capability toggles on explicit save.
             try {
