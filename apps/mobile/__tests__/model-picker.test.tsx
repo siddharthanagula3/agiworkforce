@@ -243,7 +243,7 @@ describe('ModelPickerSheet', () => {
     useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
     const { getByLabelText } = renderPicker();
 
-    const standardRow = getByLabelText('AGI Standard, selected');
+    const standardRow = getByLabelText('AGI Standard, selected, ready');
     expect(standardRow.props.accessibilityState.selected).toBe(true);
   });
 
@@ -252,8 +252,8 @@ describe('ModelPickerSheet', () => {
     useModelInstallStore.setState({ installedModelIds: [], readySystemModelIds: [], jobs: {} });
     const { getByLabelText, queryByLabelText } = renderPicker();
 
-    expect(queryByLabelText('AGI Standard, selected')).toBeNull();
-    const standardRow = getByLabelText('AGI Standard');
+    expect(queryByLabelText('AGI Standard, selected, ready')).toBeNull();
+    const standardRow = getByLabelText('AGI Standard, not downloaded');
     expect(standardRow.props.accessibilityState.selected).toBe(false);
   });
 
@@ -310,7 +310,7 @@ describe('ModelPickerSheet', () => {
     useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText('AGI Standard, selected'));
+    fireEvent.press(getByLabelText('AGI Standard, selected, ready'));
 
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
@@ -376,7 +376,7 @@ describe('ModelPickerSheet', () => {
   it('does not render thinking controls for local v1 models', () => {
     const { getByLabelText, queryByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText('AGI Standard, selected'));
+    fireEvent.press(getByLabelText('AGI Standard, selected, ready'));
 
     expect(queryByLabelText('Thinking mode for AGI Standard')).toBeNull();
   });
