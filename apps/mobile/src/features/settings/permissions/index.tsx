@@ -39,13 +39,22 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
   const status = permState?.lastObservedStatus ?? 'undetermined';
   const granted = isPermissionGranted(status);
   const statusLabel = granted ? 'On' : status === 'undetermined' ? 'Ask' : 'Off';
+  // Mirror statusLabel's three states here — collapsing 'undetermined' into
+  // 'denied' told VoiceOver users a permission was rejected when the OS
+  // simply hasn't asked yet, which reads as needing a trip to Settings to
+  // fix something that was never actually broken.
+  const accessibilityStatus = granted
+    ? 'allowed'
+    : status === 'undetermined'
+      ? 'not yet asked'
+      : 'denied';
 
   return (
     <View>
       <Pressable
         onPress={() => onPressDetail(kind)}
         accessibilityRole="button"
-        accessibilityLabel={`${entry.label} permission. Currently ${granted ? 'allowed' : 'denied'}. Tap to manage.`}
+        accessibilityLabel={`${entry.label} permission. Currently ${accessibilityStatus}. Tap to manage.`}
         style={{
           minHeight: 72,
           flexDirection: 'row',

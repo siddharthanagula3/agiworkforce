@@ -644,7 +644,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
       >
         <View>
           <View
-            accessibilityLabel="Microphone permission. Currently denied. Tap to manage."
+            accessibilityLabel="Microphone permission. Currently not yet asked. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -779,7 +779,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Camera permission. Currently denied. Tap to manage."
+            accessibilityLabel="Camera permission. Currently not yet asked. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -914,7 +914,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Photos & Files permission. Currently denied. Tap to manage."
+            accessibilityLabel="Photos & Files permission. Currently not yet asked. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1049,7 +1049,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Notifications permission. Currently denied. Tap to manage."
+            accessibilityLabel="Notifications permission. Currently not yet asked. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1184,7 +1184,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Contacts permission. Currently denied. Tap to manage."
+            accessibilityLabel="Contacts permission. Currently not yet asked. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
