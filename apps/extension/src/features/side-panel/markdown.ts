@@ -127,16 +127,42 @@ export function renderMarkdown(text: string): string {
   // SECURITY (M-1): entity-encode link text before interpolation so that a
   // model response like [<img onerror=…>](url) cannot inject HTML even if a
   // downstream DOMPurify pass is skipped or removed in a future refactor.
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
-    const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
-    const encodedText = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
-  });
+  //
+  // SECURITY (C-04 audit 2026-05-19): percent-encode the four characters
+  // that break out of an HTML attribute (`"`, `'`, `<`, `>`) inside the
+  // URL before interpolating into `href="..."`. The prior fix encoded the
+  // link text but left the URL raw, so a model response like
+  // `[click](https://e.com" onerror="alert(1))` would inject an attribute.
+  // Defense-in-depth for the case where a future refactor weakens or
+  // removes the downstream DOMPurify pass (sanitizeHtml above already
+  // strips onerror/onclick/etc. and forbids non-anchor tags, so this is
+  // not a live bypass of the current sanitizeHtml config).
+  // Self-review #8 audit 2026-05-19: the URL pattern was `[^)]+` which
+  // terminated at the first `)` and broke legitimate Wikipedia-style URLs
+  // like `[wiki](https://en.wikipedia.org/wiki/Foo_(bar))`. Switched to a
+  // pattern that allows balanced single-level parens — covers the
+  // overwhelming common case while still terminating on the outer `)`.
+  // Multi-level nesting is rare in URL paths; users can fall back to
+  // angle-bracket links if needed.
+  html = html.replace(
+    /\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g,
+    (_match: string, text: string, url: string) => {
+      const rawUrl = url.trim();
+      const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
+      const encodedHref = safeUrl
+        .replace(/"/g, '%22')
+        .replace(/'/g, '%27')
+        .replace(/</g, '%3C')
+        .replace(/>/g, '%3E');
+      const encodedText = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
+    },
+  );
 
   html = html
     .split(/\n{2,}/)

@@ -154,10 +154,17 @@ function extractSchemaTypes(): string[] {
   return Array.from(types);
 }
 
-function collectJsonLdTypes(data: unknown, types: Set<string>): void {
+// SECURITY (audit batch-221 [MEDIUM] resource exhaustion, 2026-06-13): cap
+// recursion depth to match collectSchemaTypes in nlweb.ts and bound work on
+// hostile/deeply nested JSON-LD.
+const MAX_JSONLD_RECURSION_DEPTH = 10;
+
+function collectJsonLdTypes(data: unknown, types: Set<string>, depth = 0): void {
+  if (depth > MAX_JSONLD_RECURSION_DEPTH) return;
+
   if (Array.isArray(data)) {
     for (const item of data) {
-      collectJsonLdTypes(item, types);
+      collectJsonLdTypes(item, types, depth + 1);
     }
     return;
   }
@@ -179,7 +186,7 @@ function collectJsonLdTypes(data: unknown, types: Set<string>): void {
     // Recurse into nested objects
     for (const value of Object.values(record)) {
       if (typeof value === 'object' && value !== null) {
-        collectJsonLdTypes(value, types);
+        collectJsonLdTypes(value, types, depth + 1);
       }
     }
   }

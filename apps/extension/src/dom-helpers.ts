@@ -1,7 +1,11 @@
 /**
- * @deprecated import from 'features/content/dom-helpers' instead.
- * Re-export shim — canonical source: src/features/content/dom-helpers.ts
- * Kept so __tests__/dom-helpers.test.ts resolves unchanged.
+ * Minimal DOM helpers to eliminate innerHTML for static/numeric content.
+ * All functions produce elements via the safe DOM API — no parser involved.
+ *
+ * This is the canonical, live implementation — imported by src/side_panel.ts
+ * and src/features/side-panel/voice.ts. (A stale, less-hardened duplicate at
+ * src/features/content/dom-helpers.ts existed with no importers and has been
+ * removed; see docs/agent-context/known-flaws.md EXT-DUPLICATE-MODULE-FORKS-01.)
  */
 
 /** Set textContent on an element (safe alternative to innerHTML = string). */
@@ -33,6 +37,19 @@ export function createElementWith(opts: CreateElementOptions): HTMLElement {
   if (opts.text !== undefined) el.textContent = opts.text;
   if (opts.attrs) {
     for (const [k, v] of Object.entries(opts.attrs)) {
+      // SECURITY (audit batch-221 [HIGH] insecure output handling, fixed
+      // 2026-06-13): defensively drop event-handler attributes (on*) and
+      // javascript:/data:/vbscript: URL schemes on url-bearing attributes so a
+      // caller cannot inject executable attributes through this helper. All
+      // current callers pass only static presentational attrs.
+      const key = k.toLowerCase();
+      if (key.startsWith('on')) continue;
+      if (
+        (key === 'href' || key === 'src' || key === 'xlink:href' || key === 'formaction') &&
+        /^\s*(?:javascript|data|vbscript):/i.test(v)
+      ) {
+        continue;
+      }
       el.setAttribute(k, v);
     }
   }
