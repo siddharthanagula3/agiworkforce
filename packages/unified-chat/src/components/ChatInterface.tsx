@@ -426,6 +426,93 @@ export function ChatInterface({
     [openArtifact],
   );
 
+  // Version history for the panel's version stepper. Keyed on the real
+  // artifact id (stripping any `::v<n>` pseudo-suffix — see
+  // ChatRuntime.getArtifactVersions) so this only refetches when the user
+  // switches to a different artifact, not on every local content tweak.
+  const [activeArtifactVersions, setActiveArtifactVersions] = useState<Artifact[]>([]);
+  const activeArtifactRealId = activeArtifact ? activeArtifact.id.split('::v')[0] : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeArtifact) {
+      setActiveArtifactVersions([]);
+      return undefined;
+    }
+    if (!runtime?.getArtifactVersions) {
+      setActiveArtifactVersions([activeArtifact]);
+      return undefined;
+    }
+    runtime
+      .getArtifactVersions(activeArtifact)
+      .then((versions) => {
+        if (!cancelled)
+          setActiveArtifactVersions(versions.length > 0 ? versions : [activeArtifact]);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveArtifactVersions([activeArtifact]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeArtifactRealId, runtime]);
+
+  const handleSelectArtifactVersion = useCallback(
+    (version: Artifact) => {
+      openArtifact(version, artifactViewMode);
+    },
+    [openArtifact, artifactViewMode],
+  );
+
+  // Edit-in-place persistence for ArtifactPanel. Always resolves edits
+  // against the real artifact id (stripping any `::v<n>` version suffix),
+  // matching the backend's rollback() semantics: saving while viewing a
+  // historical version creates a new version with that content.
+  const handleSaveArtifactEdit = useCallback(
+    async (artifactId: string, content: string) => {
+      const realId = artifactId.split('::v')[0] ?? artifactId;
+      let savedContent = content;
+
+      if (runtime?.updateArtifact) {
+        try {
+          const result = await runtime.updateArtifact(artifactId, content);
+          savedContent = result.content;
+        } catch (err) {
+          console.error('[ChatInterface] Failed to persist artifact edit:', err);
+          // Fall through — still reflect the edit locally so the user's
+          // draft isn't silently discarded.
+        }
+      }
+
+      if (activeConversationId) {
+        const store = useChatStore.getState();
+        const msgs = store.messagesByConversation[activeConversationId] ?? [];
+        const owner = msgs.find((m) => m.artifacts?.some((a) => a.id === realId));
+        if (owner) {
+          const updatedArtifacts = (owner.artifacts ?? []).map((a) =>
+            a.id === realId ? { ...a, content: savedContent } : a,
+          );
+          store.updateMessage(activeConversationId, owner.id, { artifacts: updatedArtifacts });
+        }
+      }
+
+      if (activeArtifact) {
+        const updated: Artifact = { ...activeArtifact, id: realId, content: savedContent };
+        openArtifact(updated, artifactViewMode);
+        if (runtime?.getArtifactVersions) {
+          try {
+            const versions = await runtime.getArtifactVersions(updated);
+            setActiveArtifactVersions(versions.length > 0 ? versions : [updated]);
+          } catch {
+            // Non-fatal — the stepper just won't refresh with the new version.
+          }
+        }
+      }
+    },
+    [runtime, activeConversationId, activeArtifact, artifactViewMode, openArtifact],
+  );
+
   // Notify host app when a non-chat view is selected so it can render the content
   const handleViewNavigation = useCallback(
     (view: string) => {
@@ -573,6 +660,9 @@ export function ChatInterface({
                 viewMode={artifactViewMode}
                 onViewModeChange={setArtifactViewMode}
                 onClose={closeArtifact}
+                versions={activeArtifactVersions}
+                onSelectVersion={handleSelectArtifactVersion}
+                onSaveEdit={handleSaveArtifactEdit}
               />
             </div>
           )}

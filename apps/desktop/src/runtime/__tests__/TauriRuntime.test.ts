@@ -205,4 +205,112 @@ describe('TauriRuntime', () => {
     const request = sendCall?.[1] as { request: Record<string, unknown> };
     expect(request.request['enableAgentMode']).toBeUndefined();
   });
+
+  // DESKTOP-ARTIFACTS-ENTIRELY-UNWIRED-01 fix regression: TauriRuntime must
+  // listen for the `chat:artifact` event (emitted by
+  // core/llm/tool_executor/artifact_tools.rs::execute_create_artifact_tool
+  // when the model calls the `create_artifact` tool) and surface it as an
+  // `{ type: 'artifact' }` StreamEvent — the same event -> chunk -> event
+  // pipeline already proven for tool_call/tool_result above. This is the
+  // deterministic frontend-side proof that the wiring works, independent of
+  // whether a live local model actually decides to call the tool.
+  it('surfaces a chat:artifact event as an artifact StreamEvent', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:artifact')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-1',
+              artifact: {
+                id: 'artifact-abc',
+                type: 'markdown',
+                title: 'Release Notes',
+                content: '# Hello Artifact',
+                language: null,
+                metadata: {},
+              },
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
+    runtime.onStream((event) => events.push(event));
+
+    await runtime.sendMessage('frontend-conversation-id', 'Write me a markdown summary');
+
+    const artifactEvent = events.find((event) => event.type === 'artifact');
+    expect(artifactEvent).toBeDefined();
+    expect(artifactEvent).toMatchObject({
+      type: 'artifact',
+      artifact: {
+        id: 'artifact-abc',
+        type: 'markdown',
+        title: 'Release Notes',
+        content: '# Hello Artifact',
+      },
+    });
+  });
+
+  // Mirrors the conversation-id filter already proven for chat:stream-chunk —
+  // an artifact event for a DIFFERENT conversation must not leak into this turn.
+  it('ignores a chat:artifact event for a different conversation', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:artifact')?.({
+            payload: {
+              conversation_id: 999,
+              artifact: {
+                id: 'artifact-other-conv',
+                type: 'code',
+                content: 'print("wrong conversation")',
+              },
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
+    runtime.onStream((event) => events.push(event));
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello');
+
+    expect(events.find((event) => event.type === 'artifact')).toBeUndefined();
+  });
 });
