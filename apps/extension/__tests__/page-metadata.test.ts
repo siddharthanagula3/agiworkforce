@@ -240,17 +240,23 @@ describe('extractPageMetadata', () => {
     // overflow / burn CPU inside extractSchemaTypes(). Regression coverage
     // against the LIVE module (not a mirror) — the recursion-depth fix
     // previously existed only in an orphaned, unimported duplicate at
-    // src/features/content/page-metadata.ts.
-    it('does not throw or hang on deeply nested JSON-LD (recursion depth cap)', () => {
-      let nested: Record<string, unknown> = { '@type': 'Thing' };
-      for (let i = 0; i < 5000; i++) {
-        nested = { '@type': 'Thing', child: nested };
+    // src/features/content/page-metadata.ts. Asserts the cap's discrete,
+    // deterministic effect (a @type past the cap is excluded, one within
+    // the cap is kept) rather than "does not throw", since
+    // extractPageMetadata's own try/catch would swallow a stack overflow
+    // regardless of whether the cap exists — a non-throwing assertion alone
+    // would pass identically with the cap removed.
+    it('excludes a @type nested beyond the recursion-depth cap, keeps one within it', () => {
+      let deep: Record<string, unknown> = { '@type': 'DeepTypeBeyondCap' };
+      for (let i = 0; i < 12; i++) {
+        deep = { child: deep }; // innermost '@type' now sits at depth 13 (cap is 10)
       }
-      addJsonLd(nested);
+      addJsonLd({ '@type': 'TopType', nested: deep });
 
-      expect(() => extractPageMetadata()).not.toThrow();
       const result = extractPageMetadata();
-      expect(result.schemaTypes).toContain('Thing');
+
+      expect(result.schemaTypes).toContain('TopType');
+      expect(result.schemaTypes).not.toContain('DeepTypeBeyondCap');
     });
   });
 
