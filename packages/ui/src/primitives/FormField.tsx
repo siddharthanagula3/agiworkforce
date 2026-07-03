@@ -19,7 +19,7 @@ import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
  *   before the field is ever blurred, with zero visible effect. Web's version is
  *   leaner (no pre-touch invocations of what may not be a cheap/pure function)
  *   for the same rendered behavior, so it's the better default for a shared
- *   primitive; callers with the reserved reference this doesn't matter to.
+ *   primitive.
  */
 export interface FormFieldProps extends Omit<InputProps, 'id'> {
   /** Unique identifier for the field */
