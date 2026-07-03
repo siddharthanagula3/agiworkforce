@@ -3,7 +3,9 @@
  *
  * Ties the REAL shared persistence client (`@agiworkforce/unified-chat`) to the
  * REAL desktop egress guard (`guardedFetch`) and proves the trust boundary on
- * the exact path desktop Cloud mode will use (`<WEB_APP_URL>/api/chat/conversations`):
+ * every path desktop Cloud mode will use (`<WEB_APP_URL>/api/chat/conversations*`,
+ * including the per-message `.../:id/messages` save route added to the shared
+ * client to mirror `useChatStream.ts`'s `saveMessageToDb()`):
  *
  *   (a) LOCAL  mode  → every cloud persistence call is BLOCKED (no non-local egress).
  *   (b) BYOK   mode  → every cloud persistence call is BLOCKED.
@@ -93,6 +95,14 @@ describe.each(['local', 'byok'] as const)(
       await expect(client.deleteConversation('c1')).rejects.toThrow(/blocked our-cloud egress/);
       expect(fetchSpy).not.toHaveBeenCalled();
     });
+
+    it('saveMessage (POST .../messages) is blocked before any network call', async () => {
+      const client = makeClient();
+      await expect(client.saveMessage('c1', { role: 'user', content: 'hi' })).rejects.toThrow(
+        /blocked our-cloud egress/,
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
   },
 );
 
@@ -117,11 +127,22 @@ describe('cloud persistence is ALLOWED in managed mode and reaches only the allo
     await client.listConversations();
     await client.updateConversationTitle('c1', 'b');
     await client.deleteConversation('c1');
+    await client.saveMessage('c1', { role: 'user', content: 'hi' });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(4);
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
     for (let i = 0; i < fetchSpy.mock.calls.length; i += 1) {
       const host = new URL(fetchUrlAt(i)).hostname;
       expect(host === CLOUD_HOST || host.endsWith(`.${CLOUD_HOST}`)).toBe(true);
     }
+  });
+
+  it('saveMessage reaches exactly the cloud host /api/chat/conversations/:id/messages', async () => {
+    const client = makeClient();
+    await client.saveMessage('c1', { role: 'user', content: 'hi' });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchUrlAt(0);
+    expect(new URL(url).hostname).toBe(CLOUD_HOST);
+    expect(new URL(url).pathname).toBe('/api/chat/conversations/c1/messages');
   });
 });

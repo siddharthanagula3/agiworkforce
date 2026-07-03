@@ -25,6 +25,9 @@ export type {
   CloudConversationWithMessages,
   CloudChatHeaders,
   CreateConversationInput,
+  SaveMessageInput,
+  SaveMessageRetryOptions,
+  SaveMessageResult,
 } from './lib/cloud-chat-persistence-client';
 
 // Stores — prefixed to avoid collisions with host-app store names
