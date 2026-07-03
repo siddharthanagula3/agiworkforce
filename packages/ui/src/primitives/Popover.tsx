@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Drift resolution: classified 'drifted'. Web and desktop bodies are otherwise
  * identical; the only difference is the z-index. Desktop had migrated to the

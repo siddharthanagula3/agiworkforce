@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Drift resolution: classified 'drifted' on two independent points:
  *

@@ -1,3 +1,5 @@
+'use client';
+
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '../cn';
