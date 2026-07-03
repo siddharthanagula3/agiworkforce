@@ -22,15 +22,16 @@ const readinessRows = [
   },
   {
     area: 'Managed compute',
-    status: 'Private beta only',
+    status: 'Public alpha',
     owner: 'Billing',
     evidence: `Hard review at ${MANAGED_COMPUTE_MARGIN_POLICY.hardStopAtRevenueShare * 100}% provider-cost share`,
   },
   {
     area: 'Identity',
-    status: 'Foundation ready',
+    status: 'Org/Teams only — no SSO/SCIM schema',
     owner: 'Enterprise',
-    evidence: 'Organization, SSO, and SCIM tables are in canonical migrations',
+    evidence:
+      'apps/web/db/neon has teams/organizations tables (0007, 0015); no sso_connections or directory_sync_connections migration exists anywhere, so /api/admin/sso and /api/admin/directory-sync will fail against a real database',
   },
   {
     area: 'Audit logs',
@@ -151,8 +152,8 @@ export default function AdminConsolePage() {
             <KeyRound className="h-5 w-5 text-emerald-300" aria-hidden="true" />
             <h2 className="mt-4 text-base font-medium text-white">Identity</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              SSO and SCIM data now live in root migrations so clean environments get the same admin
-              foundation as Web.
+              Organizations and Teams have real canonical migrations. SSO and SCIM do not yet — the
+              admin API routes exist but query tables with no migration, and there is no login flow.
             </p>
           </div>
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
