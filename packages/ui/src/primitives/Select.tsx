@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Drift resolution: SelectTrigger's background was `bg-background` on web vs
  * `bg-popover` on desktop. Resolved toward web's `bg-background` — it matches the

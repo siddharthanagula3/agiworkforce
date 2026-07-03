@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * NOTE: Button.tsx is not itself in the audited drift batch, but LoadingButton.tsx
  * (which IS in the batch) imports it directly, so it must exist here for

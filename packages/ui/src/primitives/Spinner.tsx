@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Drift resolution: desktop had dropped `role="status"` and the visually-hidden
  * `<span className="sr-only">Loading...</span>` that web renders inside the

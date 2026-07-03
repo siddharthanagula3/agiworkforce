@@ -1,3 +1,5 @@
+'use client';
+
 import { Loader2 } from 'lucide-react';
 import { cn } from '../cn';
 import { Button, type ButtonProps } from './Button';

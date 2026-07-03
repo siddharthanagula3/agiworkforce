@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Drift resolution: classified 'drifted', same divergence family as Dialog.tsx.
  * Merged rather than picking one side:

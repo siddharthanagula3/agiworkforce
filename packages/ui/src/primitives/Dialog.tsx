@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Drift resolution: classified 'drifted' — biggest divergence in the batch,
  * combining an API regression, a visual regression, and a stacking-order bug.
