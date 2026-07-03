@@ -672,6 +672,10 @@ pub enum Provider {
     NvidiaNim,
     OpenRouter,
     OllamaCloud,
+    /// LM Studio local runtime — OpenAI-compatible server, default `http://localhost:1234/v1`.
+    LmStudio,
+    /// llama.cpp `llama-server` local runtime — OpenAI-compatible server, default `http://localhost:8080/v1`.
+    LlamaCpp,
 }
 
 impl Provider {
@@ -703,6 +707,8 @@ impl Provider {
             Provider::NvidiaNim => "nvidia_nim",
             Provider::OpenRouter => "open_router",
             Provider::OllamaCloud => "ollama_cloud",
+            Provider::LmStudio => "lmstudio",
+            Provider::LlamaCpp => "llamacpp",
         }
     }
 
@@ -736,6 +742,8 @@ impl Provider {
             "nvidia_nim" | "nvidia-nim" | "nvidia" | "nim" => Some(Provider::NvidiaNim),
             "open_router" | "openrouter" | "open-router" => Some(Provider::OpenRouter),
             "ollama_cloud" | "ollama-cloud" | "ollamacloud" => Some(Provider::OllamaCloud),
+            "lmstudio" | "lm_studio" | "lm-studio" | "lm studio" => Some(Provider::LmStudio),
+            "llamacpp" | "llama_cpp" | "llama-cpp" | "llama.cpp" => Some(Provider::LlamaCpp),
             _ => None,
         }
     }

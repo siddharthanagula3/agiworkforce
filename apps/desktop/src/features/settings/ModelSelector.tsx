@@ -143,6 +143,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       google: [],
       ollama: [],
       lmstudio: [],
+      llamacpp: [],
       xai: [],
       deepseek: [],
       qwen: [],

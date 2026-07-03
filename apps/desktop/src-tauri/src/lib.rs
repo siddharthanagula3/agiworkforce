@@ -197,6 +197,14 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
 
+    // Embedded WebDriver server for E2E testing (WebdriverIO Tauri service).
+    // debug_assertions is a real rustc cfg (unlike in Cargo.toml dependency
+    // selectors, which don't support it) — this never registers/starts in release.
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+    }
+
     builder
         .setup(|app| {
 
@@ -1506,6 +1514,8 @@ pub fn run() {
             crate::sys::commands::llm_check_provider_status,
             crate::sys::commands::llm_get_usage_stats,
             crate::sys::commands::llm_get_ollama_models,
+            crate::sys::commands::llm_list_lmstudio_models,
+            crate::sys::commands::llm_list_llamacpp_models,
             crate::sys::commands::router_suggestions,
             crate::sys::commands::get_model_capabilities,
 

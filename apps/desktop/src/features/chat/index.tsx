@@ -357,7 +357,8 @@ export const UnifiedAgenticChat: React.FC<{
   // shared web SendPreview can render the destination call-out + banner.
   const sendPreviewPresentation = useMemo(() => {
     const providerKey = selectedProvider ?? undefined;
-    const isLocalRuntime = providerKey === 'ollama' || providerKey === 'lmstudio';
+    const isLocalRuntime =
+      providerKey === 'ollama' || providerKey === 'lmstudio' || providerKey === 'llamacpp';
     const providerMode: ProviderMode = !providerKey
       ? 'Local'
       : isLocalRuntime

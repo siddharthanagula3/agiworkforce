@@ -20,6 +20,10 @@ const LazyCustomModelsSettings = lazy(() =>
   import('../../CustomModelsSettings').then((m) => ({ default: m.CustomModelsSettings })),
 );
 
+const LazyLocalRuntimeSettings = lazy(() =>
+  import('./LocalRuntimeSettings').then((m) => ({ default: m.LocalRuntimeSettings })),
+);
+
 function Fallback({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
@@ -406,6 +410,10 @@ export function ModelsKeysTab({
               <Switch checked={ollamaEnabled} onCheckedChange={onOllamaEnabledChange} />
             </div>
           </div>
+
+          <Suspense fallback={<Fallback label="Loading local runtime settings..." />}>
+            <LazyLocalRuntimeSettings />
+          </Suspense>
 
           <Suspense fallback={<Fallback label="Loading custom model settings..." />}>
             <LazyCustomModelsSettings />
