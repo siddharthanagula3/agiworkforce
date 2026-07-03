@@ -189,12 +189,14 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         .filter(|model_id| !model_id.is_empty())
         .unwrap_or_else(|| match provider {
             // Local runtimes have no fixed default model — the actual model is
-            // always dynamically discovered (Ollama /api/tags, LM Studio/llama.cpp
+            // always dynamically discovered (Ollama /api/tags, LM Studio/llama.cpp/vLLM
             // /v1/models) and sent explicitly by the frontend. This fallback string
             // is only used when no explicit model was requested.
-            Provider::Ollama | Provider::OllamaCloud | Provider::LmStudio | Provider::LlamaCpp => {
-                "llama4-maverick"
-            }
+            Provider::Ollama
+            | Provider::OllamaCloud
+            | Provider::LmStudio
+            | Provider::LlamaCpp
+            | Provider::Vllm => "llama4-maverick",
             _ => {
                 debug_assert!(
                     CONFIG.models.contains_key("gpt-5.4-mini"),

@@ -24,6 +24,9 @@ const LMSTUDIO_DEFAULT_BASE_URL: &str = "http://localhost:1234/v1";
 /// Default llama.cpp `llama-server` base URL (OpenAI-compatible server). Configurable
 /// via `llm_configure_provider("llamacpp", ...)`.
 const LLAMACPP_DEFAULT_BASE_URL: &str = "http://localhost:8080/v1";
+/// Default vLLM base URL (OpenAI-compatible server). Configurable via
+/// `llm_configure_provider("vllm", ...)`.
+const VLLM_DEFAULT_BASE_URL: &str = "http://localhost:8000/v1";
 
 fn default_model() -> String {
     Provider::OpenAI
@@ -468,12 +471,13 @@ pub async fn llm_configure_provider(
             router.set_ollama(Box::new(ollama));
             Ok(())
         }
-        "lmstudio" | "llamacpp" => {
-            // LM Studio and llama.cpp are local OpenAI-compatible runtimes routed through
-            // DirectApiProvider. Like Ollama, no API key is required — reject malformed
-            // URLs here (same validation gate as the "ollama" branch above) rather than
-            // letting them silently reach `is_available()`, which would collapse a bad
-            // value into a plain `false` with no link back to the actual bad setting.
+        "lmstudio" | "llamacpp" | "vllm" => {
+            // LM Studio, llama.cpp, and vLLM are local OpenAI-compatible runtimes routed
+            // through DirectApiProvider. Like Ollama, no API key is required — reject
+            // malformed URLs here (same validation gate as the "ollama" branch above)
+            // rather than letting them silently reach `is_available()`, which would
+            // collapse a bad value into a plain `false` with no link back to the actual
+            // bad setting.
             if let Some(ref url) = base_url {
                 let parsed = url
                     .parse::<reqwest::Url>()
@@ -485,10 +489,10 @@ pub async fn llm_configure_provider(
                     ));
                 }
             }
-            let provider_enum = if provider == "lmstudio" {
-                Provider::LmStudio
-            } else {
-                Provider::LlamaCpp
+            let provider_enum = match provider.as_str() {
+                "lmstudio" => Provider::LmStudio,
+                "llamacpp" => Provider::LlamaCpp,
+                _ => Provider::Vllm,
             };
             let direct =
                 DirectApiProvider::new(provider_enum, api_key.unwrap_or_default(), base_url)
@@ -590,13 +594,17 @@ pub async fn rehydrate_byok_providers(
             continue;
         };
         // Ollama has no API key; ManagedCloud uses access tokens, not
-        // settings_v2 keys; local runtimes (LM Studio/llama.cpp) are
+        // settings_v2 keys; local runtimes (LM Studio/llama.cpp/vLLM) are
         // re-registered by the frontend's settings rehydration / lazy
         // `ensure_*_provider` on first Local-mode send — mirrors the
         // equivalent skip in `save_api_key`.
         if matches!(
             provider_enum,
-            Provider::Ollama | Provider::ManagedCloud | Provider::LmStudio | Provider::LlamaCpp
+            Provider::Ollama
+                | Provider::ManagedCloud
+                | Provider::LmStudio
+                | Provider::LlamaCpp
+                | Provider::Vllm
         ) {
             continue;
         }
@@ -768,9 +776,9 @@ pub async fn llm_get_available_models(
         }
     }
 
-    // LM Studio / llama.cpp: same dynamic-discovery pattern as Ollama above — only
-    // shown when the local server is actually reachable and reports installed models
-    // (never a fake availability badge).
+    // LM Studio / llama.cpp / vLLM: same dynamic-discovery pattern as Ollama above —
+    // only shown when the local server is actually reachable and reports installed
+    // models (never a fake availability badge).
     if router.has_provider(Provider::LmStudio) {
         match llm_list_lmstudio_models().await {
             Ok(models) => {
@@ -790,6 +798,17 @@ pub async fn llm_get_available_models(
                 }
             }
             Err(e) => tracing::debug!("llama.cpp not available: {}", e),
+        }
+    }
+
+    if router.has_provider(Provider::Vllm) {
+        match llm_list_vllm_models().await {
+            Ok(models) => {
+                if !models.is_empty() {
+                    available_models.extend(models);
+                }
+            }
+            Err(e) => tracing::debug!("vLLM not available: {}", e),
         }
     }
 
@@ -825,13 +844,15 @@ pub async fn llm_check_provider_status(
 ) -> Result<ProviderStatus, String> {
     let router = state.router.read().await;
 
-    // Local runtimes (Ollama, LM Studio, llama.cpp) are "available" purely based on
-    // whether the local server responds — they never require an API key.
-    let is_local_runtime = matches!(provider.as_str(), "ollama" | "lmstudio" | "llamacpp");
+    // Local runtimes (Ollama, LM Studio, llama.cpp, vLLM) are "available" purely
+    // based on whether the local server responds — they never require an API key.
+    let is_local_runtime =
+        matches!(provider.as_str(), "ollama" | "lmstudio" | "llamacpp" | "vllm");
     let local_runtime_label = match provider.as_str() {
         "ollama" => "Ollama",
         "lmstudio" => "LM Studio",
         "llamacpp" => "llama.cpp",
+        "vllm" => "vLLM",
         _ => "",
     };
 
@@ -854,11 +875,11 @@ pub async fn llm_check_provider_status(
                 ollama_running = Some(false);
             }
         }
-    } else if provider == "lmstudio" || provider == "llamacpp" {
-        let base_url = if provider == "lmstudio" {
-            LMSTUDIO_DEFAULT_BASE_URL
-        } else {
-            LLAMACPP_DEFAULT_BASE_URL
+    } else if provider == "lmstudio" || provider == "llamacpp" || provider == "vllm" {
+        let base_url = match provider.as_str() {
+            "lmstudio" => LMSTUDIO_DEFAULT_BASE_URL,
+            "llamacpp" => LLAMACPP_DEFAULT_BASE_URL,
+            _ => VLLM_DEFAULT_BASE_URL,
         };
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
@@ -1095,12 +1116,12 @@ async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
     Ok(models)
 }
 
-// --- LM Studio / llama.cpp model listing -----------------------------------
+// --- LM Studio / llama.cpp / vLLM model listing -----------------------------
 //
-// Both expose an OpenAI-compatible `GET /v1/models` endpoint returning
+// All three expose an OpenAI-compatible `GET /v1/models` endpoint returning
 // `{"data": [{"id": "..."}, ...]}` — unlike Ollama's `/api/tags` shape, so this
 // is intentionally NOT a copy of `list_ollama_models_internal`. One shared
-// parser is used for both providers since the wire format is identical.
+// parser is used for all three providers since the wire format is identical.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OpenAICompatModel {
@@ -1173,6 +1194,14 @@ pub async fn llm_list_lmstudio_models() -> Result<Vec<ModelInfo>, String> {
 pub async fn llm_list_llamacpp_models() -> Result<Vec<ModelInfo>, String> {
     list_openai_compat_models_internal(LLAMACPP_DEFAULT_BASE_URL, Provider::LlamaCpp, "llama.cpp")
         .await
+}
+
+/// List models currently loaded/served by vLLM (`GET /v1/models`).
+/// Returns `Err` if vLLM isn't running or isn't reachable at the configured URL —
+/// callers must not synthesize a fallback list (no fake availability).
+#[tauri::command]
+pub async fn llm_list_vllm_models() -> Result<Vec<ModelInfo>, String> {
+    list_openai_compat_models_internal(VLLM_DEFAULT_BASE_URL, Provider::Vllm, "vLLM").await
 }
 
 // --- OpenRouter live model catalog ------------------------------------------

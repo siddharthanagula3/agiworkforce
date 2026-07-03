@@ -77,7 +77,8 @@ use crate::sys::commands::chat::prompt_context::{
 };
 use crate::sys::commands::chat::provider_access::{
     check_billing_and_budget, ensure_llamacpp_provider, ensure_lmstudio_provider,
-    ensure_managed_cloud_provider, ensure_ollama_provider, request_uses_managed_cloud,
+    ensure_managed_cloud_provider, ensure_ollama_provider, ensure_vllm_provider,
+    request_uses_managed_cloud,
 };
 use crate::sys::commands::chat::stream_runtime::consume_llm_stream;
 use crate::sys::commands::chat::tool_config::{build_tool_definitions, normalize_tool_calls};

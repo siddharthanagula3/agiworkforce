@@ -676,6 +676,8 @@ pub enum Provider {
     LmStudio,
     /// llama.cpp `llama-server` local runtime — OpenAI-compatible server, default `http://localhost:8080/v1`.
     LlamaCpp,
+    /// vLLM local/self-hosted inference server — OpenAI-compatible server, default `http://localhost:8000/v1`.
+    Vllm,
 }
 
 impl Provider {
@@ -709,6 +711,7 @@ impl Provider {
             Provider::OllamaCloud => "ollama_cloud",
             Provider::LmStudio => "lmstudio",
             Provider::LlamaCpp => "llamacpp",
+            Provider::Vllm => "vllm",
         }
     }
 
@@ -744,6 +747,7 @@ impl Provider {
             "ollama_cloud" | "ollama-cloud" | "ollamacloud" => Some(Provider::OllamaCloud),
             "lmstudio" | "lm_studio" | "lm-studio" | "lm studio" => Some(Provider::LmStudio),
             "llamacpp" | "llama_cpp" | "llama-cpp" | "llama.cpp" => Some(Provider::LlamaCpp),
+            "vllm" | "v_llm" | "v-llm" => Some(Provider::Vllm),
             _ => None,
         }
     }

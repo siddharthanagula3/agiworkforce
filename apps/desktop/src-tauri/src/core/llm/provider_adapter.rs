@@ -291,10 +291,11 @@ impl ProviderAdapterFactory {
             Provider::NvidiaNim => Box::new(OpenAIAdapter), // NVIDIA NIM uses OpenAI-compatible format
             Provider::OpenRouter => Box::new(OpenAIAdapter), // OpenRouter uses OpenAI-compatible format
             Provider::OllamaCloud => Box::new(OpenAIAdapter), // Ollama Cloud uses OpenAI-compatible format
-            // LM Studio and llama.cpp's built-in server both expose an OpenAI-compatible
-            // /v1/chat/completions endpoint.
+            // LM Studio, llama.cpp, and vLLM's built-in servers all expose an
+            // OpenAI-compatible /v1/chat/completions endpoint.
             Provider::LmStudio => Box::new(OpenAIAdapter),
             Provider::LlamaCpp => Box::new(OpenAIAdapter),
+            Provider::Vllm => Box::new(OpenAIAdapter),
         }
     }
 }

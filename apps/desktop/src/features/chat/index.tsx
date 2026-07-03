@@ -358,7 +358,10 @@ export const UnifiedAgenticChat: React.FC<{
   const sendPreviewPresentation = useMemo(() => {
     const providerKey = selectedProvider ?? undefined;
     const isLocalRuntime =
-      providerKey === 'ollama' || providerKey === 'lmstudio' || providerKey === 'llamacpp';
+      providerKey === 'ollama' ||
+      providerKey === 'lmstudio' ||
+      providerKey === 'llamacpp' ||
+      providerKey === 'vllm';
     const providerMode: ProviderMode = !providerKey
       ? 'Local'
       : isLocalRuntime
