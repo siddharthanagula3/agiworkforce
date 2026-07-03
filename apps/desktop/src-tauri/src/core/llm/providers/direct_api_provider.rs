@@ -124,6 +124,13 @@ impl DirectApiProvider {
             Provider::Google => builder.header("x-goog-api-key", &self.api_key),
             // Azure uses api-key header (not Bearer auth)
             Provider::Azure => builder.header("api-key", &self.api_key),
+            // OpenRouter recommends (and its ToS/leaderboard attribution wants) two
+            // extra headers on every request identifying the calling app. Mirrors
+            // apps/web/lib/llm-providers/openrouter.ts's OPENROUTER_SITE_URL/APP_TITLE.
+            Provider::OpenRouter => builder
+                .bearer_auth(&self.api_key)
+                .header("HTTP-Referer", "https://www.agiworkforce.com")
+                .header("X-Title", "AGI Workforce"),
             // Local runtimes (LM Studio, llama.cpp) don't require an API key. Skip the
             // Authorization header entirely when no key was configured rather than sending
             // an empty Bearer token — some local servers reject malformed auth headers.
@@ -723,6 +730,26 @@ mod tests {
         assert!(url.contains("alt=sse"));
         // API key must NOT appear in the URL (sent via x-goog-api-key header instead)
         assert!(!url.contains("key="), "API key should not be in URL");
+    }
+
+    #[test]
+    fn openrouter_apply_auth_sends_bearer_and_attribution_headers() {
+        // OpenRouter recommends HTTP-Referer/X-Title on every request for its
+        // ToS/leaderboard attribution — mirrors apps/web/lib/llm-providers/openrouter.ts.
+        let p = DirectApiProvider::new(Provider::OpenRouter, "sk-or-v1-test".to_string(), None)
+            .expect("should create");
+        let builder = reqwest::Client::new().post("https://openrouter.ai/api/v1/chat/completions");
+        let request = p
+            .apply_auth(builder)
+            .build()
+            .expect("request should build");
+        let headers = request.headers();
+        assert_eq!(
+            headers.get("authorization").and_then(|v| v.to_str().ok()),
+            Some("Bearer sk-or-v1-test")
+        );
+        assert!(headers.contains_key("HTTP-Referer"));
+        assert!(headers.contains_key("X-Title"));
     }
 
     #[test]

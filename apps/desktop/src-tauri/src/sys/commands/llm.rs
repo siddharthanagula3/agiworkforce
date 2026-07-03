@@ -541,6 +541,99 @@ pub async fn llm_configure_provider(
     }
 }
 
+/// Re-register BYOK (direct-API) providers whose encrypted keys survived from
+/// a previous session.
+///
+/// `save_api_key`/`llm_configure_provider` only add a provider to the
+/// in-memory `LLMRouter` at the moment a key is saved. Restarting the app
+/// rebuilds an empty router — the frontend's settings-rehydration callback
+/// (`stores/settingsStore.ts`) only re-registers the local runtimes (Ollama,
+/// LM Studio, llama.cpp), never BYOK cloud providers. Without this step,
+/// every configured BYOK provider (OpenRouter, OpenAI, Anthropic, ...)
+/// reports `configured: false` after every restart even though its key is
+/// still safely stored (encrypted) in `settings_v2` — the user would have to
+/// re-paste the same key every launch with no indication why. Called once
+/// from `lib.rs`'s `setup()` after the LLM router and master-password
+/// encryption state exist.
+pub async fn rehydrate_byok_providers(
+    router: &Arc<RwLock<LLMRouter>>,
+    encryption: &crate::sys::security::MasterPasswordEncryption,
+) {
+    // Fetch all settings_v2 keys and filter the `api_key_<provider>` prefix in
+    // Rust (rather than a SQL LIKE pattern) so a literal underscore in the
+    // prefix can't be misread as the SQL LIKE single-character wildcard.
+    let provider_ids = match crate::core::mcp::config::open_mcp_settings_db() {
+        Ok(conn) => match conn.prepare("SELECT key FROM settings_v2") {
+            Ok(mut stmt) => match stmt.query_map([], |row| row.get::<_, String>(0)) {
+                Ok(rows) => rows
+                    .filter_map(Result::ok)
+                    .filter_map(|key| key.strip_prefix("api_key_").map(str::to_string))
+                    .collect::<Vec<_>>(),
+                Err(e) => {
+                    tracing::warn!("BYOK rehydration: failed to read stored keys: {}", e);
+                    Vec::new()
+                }
+            },
+            Err(e) => {
+                tracing::warn!("BYOK rehydration: failed to query settings_v2: {}", e);
+                Vec::new()
+            }
+        },
+        Err(e) => {
+            tracing::warn!("BYOK rehydration: failed to open settings DB: {}", e);
+            Vec::new()
+        }
+    };
+
+    for provider_id in provider_ids {
+        let Some(provider_enum) = Provider::from_string(&provider_id) else {
+            continue;
+        };
+        // Ollama has no API key; ManagedCloud uses access tokens, not
+        // settings_v2 keys; local runtimes (LM Studio/llama.cpp) are
+        // re-registered by the frontend's settings rehydration / lazy
+        // `ensure_*_provider` on first Local-mode send — mirrors the
+        // equivalent skip in `save_api_key`.
+        if matches!(
+            provider_enum,
+            Provider::Ollama | Provider::ManagedCloud | Provider::LmStudio | Provider::LlamaCpp
+        ) {
+            continue;
+        }
+
+        let api_key = match crate::sys::commands::mcp_oauth::retrieve_api_key(
+            Some(encryption),
+            provider_enum.as_string(),
+        ) {
+            Ok(key) if !key.is_empty() => key,
+            _ => continue,
+        };
+
+        match DirectApiProvider::new(provider_enum, api_key, None) {
+            Ok(direct) => {
+                router
+                    .write()
+                    .await
+                    .set_provider(provider_enum, Box::new(direct));
+                tracing::info!(
+                    "BYOK rehydration: restored '{}' provider from a stored key",
+                    provider_enum.as_string()
+                );
+            }
+            Err(e) => {
+                // Providers needing more than a bare key (Azure's deployment URL,
+                // Bedrock's SigV4 creds) can't be rehydrated from settings_v2 alone —
+                // log and continue rather than fail the whole rehydration pass.
+                tracing::warn!(
+                    "BYOK rehydration: could not restore '{}' provider ({}). Re-configure it in Settings \u{2192} Models & Keys.",
+                    provider_enum.as_string(),
+                    e
+                );
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn llm_set_default_provider(
     provider: String,
@@ -697,6 +790,28 @@ pub async fn llm_get_available_models(
                 }
             }
             Err(e) => tracing::debug!("llama.cpp not available: {}", e),
+        }
+    }
+
+    // OpenRouter: live catalog supplements (never replaces) the small curated
+    // free-tier set already added above from the static JSON catalog —
+    // OpenRouter proxies hundreds of models across many underlying providers,
+    // which can't reasonably be hand-curated. Only fetched once a key is
+    // configured, both for network hygiene (no background calls to a third
+    // party for users who haven't opted into OpenRouter) and because listing
+    // models a user can't actually call would be misleading.
+    if router.has_provider(Provider::OpenRouter) {
+        match llm_list_openrouter_models().await {
+            Ok(models) => {
+                let existing_ids: std::collections::HashSet<String> =
+                    available_models.iter().map(|m| m.id.clone()).collect();
+                available_models.extend(
+                    models
+                        .into_iter()
+                        .filter(|m| !existing_ids.contains(&m.id)),
+                );
+            }
+            Err(e) => tracing::debug!("OpenRouter live model list unavailable: {}", e),
         }
     }
 
@@ -1060,6 +1175,112 @@ pub async fn llm_list_llamacpp_models() -> Result<Vec<ModelInfo>, String> {
         .await
 }
 
+// --- OpenRouter live model catalog ------------------------------------------
+//
+// OpenRouter is a BYOK gateway proxying hundreds of models across many
+// underlying providers — the small hand-curated set in
+// `packages/types/src/models.curation.json` (a handful of free-tier models)
+// can't reasonably represent that whole catalog. This fetches OpenRouter's
+// public `/api/v1/models` list live and supplements (never replaces) the
+// curated entries in `llm_get_available_models`. Reference implementation
+// already shipped in `apps/cli/src/models/openrouter_models.rs`: that GET
+// requires no auth header (it's a public catalog listing, unlike chat
+// completions), so this mirrors it rather than sending a bearer token that
+// could turn an invalid/expired key into a spurious 401 on a request that
+// doesn't need auth at all.
+
+#[derive(Debug, Clone, Deserialize)]
+struct OpenRouterArchitecture {
+    #[serde(default)]
+    output_modalities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct OpenRouterModelEntry {
+    id: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    architecture: Option<OpenRouterArchitecture>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct OpenRouterModelsResponse {
+    #[serde(default)]
+    data: Vec<OpenRouterModelEntry>,
+}
+
+/// Maps one OpenRouter `/models` catalog entry into a `ModelInfo`, or `None`
+/// if it isn't usable as a normal chat model. OpenRouter's catalog mixes
+/// chat models with pure media-output generators (image/audio/video) that
+/// would fail if selected from the chat model picker.
+fn map_openrouter_entry(entry: &OpenRouterModelEntry) -> Option<ModelInfo> {
+    let id = entry.id.trim();
+    if id.is_empty() {
+        return None;
+    }
+    let outputs_media = entry
+        .architecture
+        .as_ref()
+        .map(|a| {
+            a.output_modalities
+                .iter()
+                .any(|m| matches!(m.as_str(), "audio" | "image" | "video"))
+        })
+        .unwrap_or(false);
+    if outputs_media {
+        return None;
+    }
+    Some(ModelInfo {
+        id: id.to_string(),
+        name: entry.name.clone().unwrap_or_else(|| id.to_string()),
+        provider: Provider::OpenRouter.as_string().to_string(),
+        available: true,
+    })
+}
+
+/// Shared implementation: fetch and map OpenRouter's live model catalog.
+async fn list_openrouter_models_internal() -> Result<Vec<ModelInfo>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get("https://openrouter.ai/api/v1/models")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to OpenRouter: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!(
+            "OpenRouter model list request failed ({}): {}",
+            status,
+            body.chars().take(300).collect::<String>()
+        ));
+    }
+
+    let parsed: OpenRouterModelsResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse OpenRouter models response: {}", e))?;
+
+    Ok(parsed.data.iter().filter_map(map_openrouter_entry).collect())
+}
+
+/// List OpenRouter's live model catalog (`GET /api/v1/models`). Unlike the
+/// local-runtime listers above, callers should only invoke this once an
+/// OpenRouter API key is configured (BYOK) — see the `has_provider` gate in
+/// `llm_get_available_models` — even though the endpoint itself is public,
+/// so the app doesn't make background egress calls to a third party for
+/// users who never opted into OpenRouter.
+#[tauri::command]
+pub async fn llm_list_openrouter_models() -> Result<Vec<ModelInfo>, String> {
+    list_openrouter_models_internal().await
+}
+
 #[tauri::command]
 pub async fn router_suggestions(
     state: State<'_, LLMState>,
@@ -1290,5 +1511,83 @@ mod tests {
         };
         assert!(second.response.cached);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    // --- OpenRouter live model catalog -----------------------------------
+
+    fn openrouter_entry(json: serde_json::Value) -> OpenRouterModelEntry {
+        serde_json::from_value(json).expect("test fixture should deserialize")
+    }
+
+    #[test]
+    fn map_openrouter_entry_maps_id_and_name() {
+        let entry = openrouter_entry(serde_json::json!({
+            "id": "meta-llama/llama-3.3-70b-instruct:free",
+            "name": "Llama 3.3 70B Instruct (Free)",
+        }));
+        let model = map_openrouter_entry(&entry).expect("should map");
+        assert_eq!(model.id, "meta-llama/llama-3.3-70b-instruct:free");
+        assert_eq!(model.name, "Llama 3.3 70B Instruct (Free)");
+        assert_eq!(model.provider, "open_router");
+        assert!(model.available);
+    }
+
+    #[test]
+    fn map_openrouter_entry_falls_back_to_id_when_name_missing() {
+        let entry = openrouter_entry(serde_json::json!({ "id": "vendor/some-model" }));
+        let model = map_openrouter_entry(&entry).expect("should map");
+        assert_eq!(model.name, "vendor/some-model");
+    }
+
+    #[test]
+    fn map_openrouter_entry_rejects_empty_id() {
+        let entry = openrouter_entry(serde_json::json!({ "id": "   " }));
+        assert!(map_openrouter_entry(&entry).is_none());
+    }
+
+    #[test]
+    fn map_openrouter_entry_drops_image_output_models() {
+        let entry = openrouter_entry(serde_json::json!({
+            "id": "vendor/image-gen",
+            "architecture": { "output_modalities": ["image"] },
+        }));
+        assert!(
+            map_openrouter_entry(&entry).is_none(),
+            "image-generation models should not appear in the chat model picker"
+        );
+    }
+
+    #[test]
+    fn map_openrouter_entry_keeps_text_output_models() {
+        let entry = openrouter_entry(serde_json::json!({
+            "id": "vendor/chat-model",
+            "architecture": { "output_modalities": ["text"] },
+        }));
+        assert!(map_openrouter_entry(&entry).is_some());
+    }
+
+    #[test]
+    fn openrouter_models_response_parses_real_shaped_payload() {
+        let body = serde_json::json!({
+            "data": [
+                {
+                    "id": "meta-llama/llama-3.3-70b-instruct:free",
+                    "name": "Llama 3.3 70B Instruct (Free)",
+                    "context_length": 131072,
+                    "pricing": { "prompt": "0", "completion": "0" },
+                    "architecture": { "output_modalities": ["text"] }
+                },
+                {
+                    "id": "vendor/lyria-music",
+                    "name": "Lyria Music",
+                    "architecture": { "output_modalities": ["audio"] }
+                }
+            ]
+        });
+        let parsed: OpenRouterModelsResponse =
+            serde_json::from_value(body).expect("should deserialize real-shaped payload");
+        let models: Vec<ModelInfo> = parsed.data.iter().filter_map(map_openrouter_entry).collect();
+        assert_eq!(models.len(), 1, "audio-output model should be filtered out");
+        assert_eq!(models[0].id, "meta-llama/llama-3.3-70b-instruct:free");
     }
 }

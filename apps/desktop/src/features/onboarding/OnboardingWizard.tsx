@@ -36,7 +36,12 @@ interface OllamaStatus {
 
 interface DetectedProvider {
   name: string;
-  secretKey: string;
+  /**
+   * Canonical provider id recognized by `Provider::from_string` on the Rust
+   * side. Must match what `save_api_key`/`llm_configure_provider` expect —
+   * NOT an arbitrary secret-store key name (see `handleByokSubmit`).
+   */
+  providerId: string;
 }
 
 function detectProvider(apiKey: string): DetectedProvider | null {
@@ -45,27 +50,27 @@ function detectProvider(apiKey: string): DetectedProvider | null {
   // First-party providers we recognize by key prefix.
   // Order matters: Anthropic must be checked before generic `sk-`.
   if (trimmed.startsWith('sk-ant-')) {
-    return { name: 'Anthropic', secretKey: 'anthropic_api_key' };
+    return { name: 'Anthropic', providerId: 'anthropic' };
   }
   if (trimmed.startsWith('AIza')) {
-    return { name: 'Google', secretKey: 'google_api_key' };
+    return { name: 'Google', providerId: 'google' };
   }
   if (trimmed.startsWith('xai-')) {
-    return { name: 'xAI', secretKey: 'xai_api_key' };
+    return { name: 'xAI', providerId: 'xai' };
   }
   if (trimmed.startsWith('pplx-')) {
-    return { name: 'Perplexity', secretKey: 'perplexity_api_key' };
+    return { name: 'Perplexity', providerId: 'perplexity' };
   }
   if (trimmed.startsWith('sk-or-')) {
-    // OpenRouter — handled as OpenAI-compatible BYO
-    return { name: 'OpenRouter', secretKey: 'open_router_api_key' };
+    // OpenRouter — handled as OpenAI-compatible BYOK
+    return { name: 'OpenRouter', providerId: 'open_router' };
   }
   // DeepSeek, Moonshot/Kimi, Qwen, Zhipu/GLM all use opaque tokens that look
   // like generic `sk-...`. We can't disambiguate by prefix alone, so they
   // fall through to the OpenAI bucket here. Users who need a specific
   // provider can configure it explicitly in Settings → Models & Keys.
   if (trimmed.startsWith('sk-')) {
-    return { name: 'OpenAI', secretKey: 'openai_api_key' };
+    return { name: 'OpenAI', providerId: 'openai' };
   }
   return null;
 }
@@ -143,9 +148,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setSaving(true);
     setSecretError(null);
     try {
-      await invoke('secret_manager_set', {
-        key: detected.secretKey,
-        value: apiKey.trim(),
+      // Must go through `save_api_key` — the same command Settings → Models &
+      // Keys uses — so the encrypted key lands in `settings_v2` and is
+      // registered on the LLM router immediately. `secret_manager_set` writes
+      // to an unrelated secrets store (JWT/DB-encryption keys, and per-tool
+      // credentials like the Research settings' Perplexity key) that nothing
+      // in the chat/provider-routing path ever reads back, so the key would
+      // be accepted here with no error yet silently never work for chat.
+      await invoke('save_api_key', {
+        provider: detected.providerId,
+        key: apiKey.trim(),
       });
     } catch (error) {
       setSecretError(
