@@ -10,7 +10,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "simple-icons": "^16.0.0"
+    "simple-icons": "^16.0.0",
+    "@radix-ui/react-collapsible": "^1.1.12",
+    "@radix-ui/react-context-menu": "^2.2.16",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-hover-card": "^1.1.15",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.1"
   },
   "peerDependencies": {
     "lucide-react": ">=0.400.0",

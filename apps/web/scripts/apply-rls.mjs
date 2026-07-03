@@ -7,7 +7,7 @@
  * ENABLE/FORCE RLS), so re-running is safe.
  *
  * USAGE (branch-first — NEVER point this at production until the probe passes):
- *   neonctl branches create --name tranche1-rls-probe
+ *   neon branches create --name tranche1-rls-probe
  *   DATABASE_URL="<branch-connection-string>" node apps/web/scripts/apply-rls.mjs
  *
  * Exits non-zero on any error.
