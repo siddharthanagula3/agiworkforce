@@ -250,6 +250,14 @@ export interface ChatInterfaceProps {
   allowModelFallbackModels?: boolean;
   /** Called when the user clicks the voice/mic button */
   onVoiceClick?: () => void;
+  /**
+   * Called when the user picks "Select folder" from the composer's attachment
+   * menu. Only reachable when the host surface exposes `canUseWorkingDirectory`
+   * (desktop) — the native dialog + backend sync are the host's responsibility.
+   */
+  onSelectFolder?: () => void;
+  /** Display label for the currently scoped project folder, if any. */
+  currentFolderLabel?: string | null;
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
   /** Explicit host-owned bridge for conversation selection and persistence. */
@@ -298,6 +306,8 @@ export function ChatInterface({
   onModelSelectorClick: onModelSelectorClickProp,
   allowModelFallbackModels = true,
   onVoiceClick: onVoiceClickProp,
+  onSelectFolder: onSelectFolderProp,
+  currentFolderLabel = null,
   onNavigateView,
   hostBridge = null,
   onAddMessage,
@@ -405,6 +415,10 @@ export function ChatInterface({
     onVoiceClickProp?.();
   }, [onVoiceClickProp]);
 
+  const handleSelectFolder = useCallback(() => {
+    onSelectFolderProp?.();
+  }, [onSelectFolderProp]);
+
   const handleArtifactClick = useCallback(
     (artifact: Artifact) => {
       openArtifact(artifact);
@@ -502,6 +516,8 @@ export function ChatInterface({
                 onModelSelectorClick={handleModelSelectorClick}
                 allowModelFallbackModels={allowModelFallbackModels}
                 onVoiceClick={handleVoiceClick}
+                onSelectFolder={handleSelectFolder}
+                currentFolderLabel={currentFolderLabel}
                 hasMessages={hasMessages}
                 disabled={!runtime}
                 disabledMessage="Connect to start chatting"
