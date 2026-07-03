@@ -296,7 +296,9 @@ export class TauriRuntime implements ChatRuntime {
       thinkingEnabled,
       webSearch,
       systemPrompt,
-      agentMode,
+      // agentMode intentionally not forwarded — see the comment on
+      // `focusMode`/`enableAgentMode` below for why mapping it onto
+      // `enableAgentMode` was the LOCAL-CHAT-NOINVOKE-01 root cause.
       effort,
     } = params;
     const frontendMessageId = crypto.randomUUID();
@@ -468,7 +470,23 @@ export class TauriRuntime implements ChatRuntime {
           thinkingMode: thinkingEnabled,
           reasoningEffort: effort,
           customInstructions: systemPrompt,
-          enableAgentMode: agentMode ? true : undefined,
+          // BUG (LOCAL-CHAT-NOINVOKE-01 root cause, found 2026-07-03): `agentMode`
+          // here is the AgentControl composer chip's permission-style value —
+          // 'ask' | 'auto' | 'plan' | 'bypass' (see SendMessageOptions.agentMode
+          // doc). It is ALWAYS a non-empty string once a conversation exists
+          // (default 'ask'), so the previous `agentMode ? true : undefined` was
+          // unconditionally true. That forced `enable_agent_mode: true` on every
+          // send. For an explicit (non-"auto") model — the normal case in Local
+          // mode, since there is no ManagedCloud auto-routing fallback there —
+          // the backend trusts this flag directly
+          // (send_message_setup::resolve_request_flags) and skips
+          // detect_agent_mode's intent/accessibility checks entirely, so EVERY
+          // plain chat message was being routed through the full computer-use
+          // AgentOrchestrator (send_message_execution::spawn_streaming_agent)
+          // instead of a normal LLM completion — explaining sends that never
+          // produce a visible assistant reply. `agentMode` is a tool-confirmation
+          // permission style, not an "activate agent mode" switch, and there is
+          // currently no chat_send_message field for it — do not forward it here.
           focusMode: webSearch ? 'web' : undefined,
         },
       });

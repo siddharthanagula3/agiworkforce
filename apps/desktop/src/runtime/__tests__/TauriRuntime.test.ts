@@ -180,4 +180,29 @@ describe('TauriRuntime', () => {
       }),
     });
   });
+
+  // LOCAL-CHAT-NOINVOKE-01 root-cause regression (2026-07-03): the AgentControl
+  // composer chip's `agentMode` is a permission-style value ('ask' | 'auto' |
+  // 'plan' | 'bypass') that is ALWAYS a non-empty string once a conversation
+  // exists — 'ask' is the default. A prior `agentMode ? true : undefined`
+  // mapping forced `enableAgentMode: true` on every send, which for an
+  // explicit (non-"auto") model routes the backend into the full computer-use
+  // AgentOrchestrator instead of a plain chat completion — the exact "user
+  // message shows, assistant reply never arrives" Local-mode failure. This
+  // pins `enableAgentMode` to never be forwarded from the default 'ask' mode.
+  it('never forwards enableAgentMode:true for the default AgentControl mode', async () => {
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
+      model: 'tinyllama:latest',
+      provider: 'ollama',
+      agentMode: 'ask',
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    expect(sendCall).toBeDefined();
+    const request = sendCall?.[1] as { request: Record<string, unknown> };
+    expect(request.request['enableAgentMode']).toBeUndefined();
+  });
 });
