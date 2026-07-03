@@ -25,12 +25,10 @@ function mapPlanTier(plan: PlanTier | null | undefined): UIPlanTier {
       return 'byok';
     case 'free':
       return 'byok';
-    case 'hobby':
-      return 'hobby';
+    case 'basic':
+      return 'basic';
     case 'pro':
       return 'pro';
-    case 'pro_plus':
-      return 'pro_plus';
     case 'max':
     case 'enterprise':
       return 'max';

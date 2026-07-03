@@ -134,10 +134,17 @@ import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useModelStore } from '../src/features/model-picker/store';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// claude-haiku-4.5 has capabilities.search: true in the catalog — used as the
+// default selected model so the "Web search" row's capability gate (added
+// alongside the model, not hard-coded) renders in these tests the same way it
+// did before that gate existed.
+const SEARCH_CAPABLE_MODEL_ID = 'claude-haiku-4.5';
 
 function resetStores() {
   useChatStore.setState({
@@ -151,6 +158,7 @@ function resetStores() {
     activeProjectId: null,
   });
   useChatAppModeStore.setState({ appMode: 'local' });
+  useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
 }
 
 const defaultProps = {
@@ -224,6 +232,17 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Computer use')).toBeNull();
       expect(queryByText('Health')).toBeNull();
       expect(queryByText('Beta')).toBeNull();
+    });
+
+    it('hides the Web search row for a model whose catalog capability is search: false', () => {
+      // deepseek-v4-flash has capabilities.search: false in the catalog — the
+      // toggle must not promise a search that silently no-ops server-side.
+      useModelStore.setState({ selectedModel: 'deepseek-v4-flash' });
+      const { queryByText, getByText } = renderSheet();
+
+      expect(queryByText('Web search')).toBeNull();
+      // Other tool rows are unaffected by the search-specific gate.
+      expect(getByText('Image generation')).toBeTruthy();
     });
   });
 

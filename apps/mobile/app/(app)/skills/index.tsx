@@ -72,7 +72,8 @@ export default function SkillsScreen() {
         </Text>
         <Text style={{ fontSize: 15, lineHeight: 22, color: colors.textSecondary, marginTop: 10 }}>
           Skills will connect AGI to repeatable cloud workflows across chat, projects, files, and
-          artifacts. Local chat stays available while cloud access is invite-only.
+          artifacts. This feature isn’t available on mobile yet — Local and Cloud chat stay
+          available in the meantime.
         </Text>
 
         <View style={{ gap: 10, marginTop: 28 }}>
@@ -121,6 +122,8 @@ export default function SkillsScreen() {
         onClose={() => setInviteOpen(false)}
         source="other"
         defaultTab={defaultTab}
+        title="AGI Cloud skills"
+        body="Skills aren’t available on mobile yet. Join the waitlist to get notified, or enter your invitation code if you have early access."
       />
     </SafeAreaView>
   );

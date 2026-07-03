@@ -55,7 +55,7 @@ export const UsageDashboard: React.FC = () => {
   // Calculate monthly credit usage percentage
   const planName = subscription?.plan_name?.toLowerCase() || '';
   let monthlyLimit = 0;
-  if (planName.includes('hobby')) monthlyLimit = 1.0;
+  if (planName.includes('basic')) monthlyLimit = 1.0;
   else if (planName.includes('pro')) monthlyLimit = 12.0;
   else if (planName.includes('max')) monthlyLimit = 150.0;
 
@@ -146,7 +146,7 @@ export const UsageDashboard: React.FC = () => {
             </div>
           )}
 
-          {(plan === 'hobby' || plan === 'pro' || plan === 'max') && credits && (
+          {(plan === 'basic' || plan === 'pro' || plan === 'max') && credits && (
             <>
               {/* Daily Credits Card */}
               {credits.daily_limit_cents !== undefined && credits.daily_limit_cents > 0 && (

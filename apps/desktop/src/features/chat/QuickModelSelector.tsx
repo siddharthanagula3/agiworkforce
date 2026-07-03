@@ -93,10 +93,10 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     })),
   );
 
-  // Get user's plan tier - when loading/unknown, use 'hobby' as a safe default
+  // Get user's plan tier - when loading/unknown, use 'basic' as a safe default
   // This ensures users can see some models while we confirm their actual tier
   // NEVER default to 'free' as it would block paid users from their models
-  const userPlanTier = account.plan ?? 'hobby';
+  const userPlanTier = account.plan ?? 'basic';
 
   // Router suggestion feature is disabled - keeping state for potential future re-enablement
   const [suggestion] = useState<RouterSuggestion | null>(null);
@@ -205,7 +205,7 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
   };
 
   // Determine which auto modes to show based on plan tier
-  // Tier hierarchy: hobby/free → economy only, pro → +balanced, max/enterprise → +premium
+  // Tier hierarchy: basic/free → economy only, pro → +balanced, max/enterprise → +premium
   const availableAutoModes = useMemo(
     () => getAllowedAutoModesForTier(userPlanTier),
     [userPlanTier],

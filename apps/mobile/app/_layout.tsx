@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSegments, Slot } from 'expo-router';
-import { useURL } from 'expo-linking';
+import { useLinkingURL } from 'expo-linking';
 import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -113,6 +113,13 @@ function ClerkTokenBridge() {
       setClerkSignedIn(false);
       // Signing out re-locks Cloud access, closing any stale invite-redeemed unlock.
       setCloudAccess(false);
+      // Signing out must also drop the cached subscription tier — otherwise a
+      // previously-signed-in Pro/Max user's plan survives sign-out in MMKV and
+      // the Billing screen shows a stale "You are on the Pro plan" to a
+      // signed-out (or different) user. Tier is read-only plan metadata with
+      // no server-side session to re-validate once signed out, so the only
+      // honest state is 'free'.
+      useTierStore.getState().setTier('free');
     }
   }, [getToken, userId, isSignedIn, setClerkSignedIn, setCloudAccess]);
 
@@ -121,6 +128,7 @@ function ClerkTokenBridge() {
       setClerkTokenGetter(null, null, null);
       useAuthStore.getState().setClerkSignedIn(false);
       useWaitlistStore.getState().setCloudAccess(false);
+      useTierStore.getState().setTier('free');
     };
   }, []);
 
@@ -139,7 +147,14 @@ export default function RootLayout() {
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
   const router = useRouter();
-  const url = useURL();
+  // `useURL()` (RNLinking 'url' NativeEventEmitter) only reliably fires for the
+  // URL that launched the process — subsequent deep-link opens while the app is
+  // already running are silently dropped. `useLinkingURL()` (ExpoLinking's
+  // 'onURLReceived' channel — the same one expo-router's own linking resolver
+  // uses) fires on every open, including pair/reset-password/App-Intents links
+  // arriving while the app is foregrounded. Discovered via reproducible
+  // simulator testing of the App Intents deep-link handler below.
+  const url = useLinkingURL();
   const backPressCount = useRef(0);
   const { colors: themeColors, statusBarStyle } = useTheme();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
@@ -481,6 +496,101 @@ export default function RootLayout() {
       router.push({ pathname: '/(app)/companion' as const, params: { pairingCode: code } });
     }
   }, [url, session, isInitialized, router]);
+
+  // C1c: App Intents / Siri deep links — agiworkforce://intent/<verb>?<params>
+  // Dispatched natively from native/ios/AGIAppIntents/*.swift (AGIIntentDispatch)
+  // when a user invokes a Siri phrase, Spotlight action, or Shortcuts automation.
+  // Text-bearing verbs route through the existing share-preview review screen
+  // (same HIGH-MOB-03 pattern as external shares) so a Siri mis-transcription
+  // is never auto-sent to the model without the user seeing it first.
+  useEffect(() => {
+    if (!url || !isInitialized) return;
+
+    const parsed = Linking.parse(url);
+    const scheme = (parsed.scheme ?? '').toLowerCase();
+    const hostname = (parsed.hostname ?? '').toLowerCase();
+    if (scheme !== 'agiworkforce' || hostname !== 'intent') return;
+
+    const segments = (parsed.path ?? '').split('/').filter(Boolean);
+    const verb = segments[0];
+    const queryParams = parsed.queryParams ?? {};
+    const getParam = (key: string): string | undefined => {
+      const value = queryParams[key];
+      return typeof value === 'string' && value.length > 0 ? value : undefined;
+    };
+
+    switch (verb) {
+      case 'chat':
+        router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+        break;
+      case 'ask': {
+        const prompt = getParam('prompt');
+        if (prompt) {
+          router.push(
+            `/(app)/share-preview?text=${encodeURIComponent(prompt)}` as Parameters<
+              typeof router.push
+            >[0],
+          );
+        } else {
+          router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+        }
+        break;
+      }
+      case 'summarize': {
+        const text = getParam('text');
+        if (text) {
+          router.push(
+            `/(app)/share-preview?text=${encodeURIComponent(
+              `Summarize this:\n\n${text}`,
+            )}` as Parameters<typeof router.push>[0],
+          );
+        }
+        break;
+      }
+      case 'remind': {
+        const reminder = getParam('reminder');
+        const when = getParam('when');
+        if (reminder) {
+          const message = when ? `Remind me to ${reminder} at ${when}` : `Remind me to ${reminder}`;
+          router.push(
+            `/(app)/share-preview?text=${encodeURIComponent(message)}` as Parameters<
+              typeof router.push
+            >[0],
+          );
+        }
+        break;
+      }
+      case 'translate': {
+        const text = getParam('text');
+        const targetLanguage = getParam('targetLanguage');
+        router.push({
+          pathname: '/(app)/translate' as const,
+          params: {
+            ...(text ? { text } : {}),
+            ...(targetLanguage ? { targetLanguage } : {}),
+          },
+        });
+        break;
+      }
+      case 'scan':
+        // Siri-supplied image URIs aren't forwarded yet — opens the in-app scan
+        // capture flow. Forwarding the URI requires wiring external-URI ingestion
+        // into app/(app)/scan.tsx (tracked as follow-up).
+        router.push('/(app)/scan' as Parameters<typeof router.push>[0]);
+        break;
+      case 'analyze_image':
+        // Same limitation as 'scan' — opens the capture flow, doesn't yet forward
+        // the IntentFile URI Siri staged.
+        router.push('/(app)/camera' as Parameters<typeof router.push>[0]);
+        break;
+      case 'transcribe':
+        // Opens the voice flow; doesn't yet forward the staged audio file URI.
+        router.push('/(app)/voice' as Parameters<typeof router.push>[0]);
+        break;
+      default:
+        break;
+    }
+  }, [url, isInitialized, router]);
 
   // Password reset links are handled by the Web/Clerk account surface.
   // Mobile keeps this route gate only to avoid treating account links as

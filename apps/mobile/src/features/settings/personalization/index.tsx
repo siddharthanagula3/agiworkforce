@@ -4,10 +4,10 @@
  * User profile fields (name, nickname, occupation, custom instructions)
  * plus 4 response-style sliders (warmth, enthusiasm, headers/lists, emoji).
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, TextInput, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import { ArrowLeft, Check, Sun, Moon, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -164,7 +164,7 @@ function ThemeSegmentedControl({
                 borderColor: selected ? c.accentBorder : c.border,
               }}
               accessibilityLabel={label}
-              accessibilityRole="radio"
+              accessibilityRole="button"
               accessibilityState={{ selected }}
             >
               <Icon size={16} color={selected ? c.teal : c.textMuted} />
@@ -189,7 +189,12 @@ function ThemeSegmentedControl({
 export default function PersonalizationScreen() {
   const router = useRouter();
   const c = useThemeColors();
-  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const { scope } = useLocalSearchParams<{ scope?: string }>();
+  const globalIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  // An explicit ?scope= from navigation (Settings' "Local Mode" vs "Cloud"
+  // sections) always wins over the current chat toggle, so this screen never
+  // silently shows Cloud data under a "Local Mode" tap or vice versa.
+  const isCloud = scope === 'cloud' ? true : scope === 'local' ? false : globalIsCloud;
 
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
   const localSetPersonalization = useLocalSettingsStore((s) => s.setPersonalization);
@@ -214,6 +219,27 @@ export default function PersonalizationScreen() {
   const [enthusiasm, setEnthusiasm] = useState(personalization.enthusiasm);
   const [headersLists, setHeadersLists] = useState(personalization.headersLists);
   const [emoji, setEmoji] = useState(personalization.emoji);
+
+  // Expo Router can reuse this screen's instance across pushes to the same
+  // route with only the `scope` search param changing (Local <-> Cloud), so
+  // the `useState` initializers above only run on the very first mount. Without
+  // this resync, editing Cloud Personalization then navigating to Local
+  // Personalization (or vice versa) would show stale unsaved edits from the
+  // other scope instead of that scope's real data — resync whenever the
+  // resolved scope actually changes.
+  const prevIsCloudRef = useRef(isCloud);
+  useEffect(() => {
+    if (prevIsCloudRef.current === isCloud) return;
+    prevIsCloudRef.current = isCloud;
+    setFullName(personalization.fullName);
+    setNickname(personalization.nickname);
+    setOccupation(personalization.occupation);
+    setInstructions(personalization.instructions);
+    setWarmth(personalization.warmth);
+    setEnthusiasm(personalization.enthusiasm);
+    setHeadersLists(personalization.headersLists);
+    setEmoji(personalization.emoji);
+  }, [isCloud, personalization]);
 
   const sliderValues: Record<SliderConfig['key'], number> = {
     warmth,
@@ -309,7 +335,7 @@ export default function PersonalizationScreen() {
             <ArrowLeft size={20} color={c.textSecondary} />
           </Pressable>
           <Text variant="subheading" className="ml-2" style={{ color: c.textPrimary }}>
-            Personalization
+            {isCloud ? 'Cloud Personalization' : 'Personalization'}
           </Text>
         </View>
         <Pressable

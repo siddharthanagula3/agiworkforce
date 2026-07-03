@@ -784,7 +784,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 // Derived tier flags
                 isPro:
                   newPlan !== null &&
-                  (newPlan === 'hobby' ||
+                  (newPlan === 'basic' ||
                     newPlan === 'pro' ||
                     newPlan === 'max' ||
                     newPlan === 'enterprise'),
@@ -823,12 +823,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               plan,
               planDisplayName: PLAN_DISPLAY_NAMES[plan],
               subscriptionStatus: plan === 'free' ? 'none' : 'active',
-              isPro:
-                plan === 'hobby' ||
-                plan === 'pro' ||
-                plan === 'pro_plus' ||
-                plan === 'max' ||
-                plan === 'enterprise',
+              isPro: plan === 'basic' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
               isEnterprise: plan === 'enterprise',
             },
             undefined,
@@ -1025,7 +1020,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                     (planTier === 'pro' ||
                       planTier === 'max' ||
                       planTier === 'enterprise' ||
-                      planTier === 'hobby'),
+                      planTier === 'basic'),
                   isEnterprise: planTier === 'enterprise',
                 },
                 undefined,
@@ -1422,11 +1417,9 @@ export function getPlanDescription(plan: PlanTier): string {
     'local-only':
       'Run everything on your own machine with Ollama / LMStudio. No managed cloud, no sync.',
     byok: 'Bring your own API keys while the desktop app stays local. Managed cloud sync is coming soon to desktop (public alpha on Web & Mobile today).',
-    hobby: 'Perfect for getting started; 350 credits per billing cycle on the $10 Hobby plan.',
+    basic: 'Perfect for getting started; managed cloud entry tier on the $8/mo Basic plan.',
     free: 'Limited automations; Community support',
     pro: 'Unlimited automations; 1,050 credits per billing cycle; Priority support',
-    pro_plus:
-      'Pro features plus daily flagship caps (Opus 4.7 + GPT-5.5, 15K tokens/day each), 60s/mo Runway video, and the US-only routing toggle.',
     max: 'Maximum performance; 10,500 credits per billing cycle; Dedicated support',
     enterprise: 'Custom solutions; Dedicated support; SSO',
   };

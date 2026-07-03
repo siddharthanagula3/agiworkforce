@@ -99,7 +99,7 @@ async fn execute_web_search(
 
     if requested_type == "images" {
         return Err(
-            "Image search is not available in the desktop hobby-tier search flow yet. Use web or news search instead.".to_string(),
+            "Image search is not available in the desktop basic-tier search flow yet. Use web or news search instead.".to_string(),
         );
     }
 

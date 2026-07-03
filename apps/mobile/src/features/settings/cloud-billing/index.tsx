@@ -29,6 +29,8 @@ import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
+import { useIapStore } from '@/src/features/billing/iapStore';
 
 // Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
@@ -38,6 +40,44 @@ const FREE_FEATURES = [
   'Analyze text and images',
   'Search the web',
 ];
+
+// ---------------------------------------------------------------------------
+// IAP subscription management — StoreKit 2 / Play Billing only. No in-app
+// web/Stripe checkout: Apple/Google require native IAP for a subscription
+// purchased or managed from inside the app. Mirrors Claude's iOS Billing
+// screen (plan name + "Manage subscription" + "Restore purchases", no
+// checkout UI in-app). Only mounted when FEATURES.iap is true, so useIAP()'s
+// native store connection never initializes while the flag is off.
+// ---------------------------------------------------------------------------
+
+function IapManagementSection() {
+  const colors = useThemeColors();
+  const { manageSubscription, restore } = useIapPurchaseFlow();
+  const status = useIapStore((s) => s.status);
+  const errorMessage = useIapStore((s) => s.errorMessage);
+  const isBusy = status === 'purchasing' || status === 'verifying' || status === 'restoring';
+
+  return (
+    <SettingsGroup>
+      <SettingsRow
+        label="Manage subscription"
+        icon={CreditCard}
+        onPress={isBusy ? undefined : () => void manageSubscription()}
+      />
+      <SettingsRow
+        label={status === 'restoring' ? 'Restoring…' : 'Restore purchases'}
+        icon={ExternalLink}
+        onPress={isBusy ? undefined : () => void restore()}
+        isLast={!(status === 'error' && errorMessage)}
+      />
+      {status === 'error' && errorMessage && (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
+          <Text style={{ color: colors.agentError, fontSize: 12 }}>{errorMessage}</Text>
+        </View>
+      )}
+    </SettingsGroup>
+  );
+}
 
 function PlanBadge({ tier }: { tier: string }) {
   const colors = useThemeColors();
@@ -201,6 +241,8 @@ export default function CloudBillingScreen() {
           )}
         </View>
       </View>
+
+      {FEATURES.iap && <IapManagementSection />}
 
       {/* Invoices */}
       <SettingsGroup>

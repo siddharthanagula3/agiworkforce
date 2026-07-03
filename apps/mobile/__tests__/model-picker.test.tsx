@@ -107,13 +107,10 @@ jest.mock('react-native-reanimated', () => ({
   useReducedMotion: jest.fn().mockReturnValue(false),
 }));
 
-jest.mock('../src/features/cloud-bridge', () => {
-  const { View } = require('react-native');
-  return {
-    InviteCodeModal: ({ open }: { open: boolean }) =>
-      open ? <View testID="invite-code-modal" /> : null,
-  };
-});
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
 
 // ---------------------------------------------------------------------------
 // Import modules under test AFTER mocks
@@ -318,21 +315,21 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
 
-  it('does not select locked cloud rows and opens cloud access', async () => {
+  it('does not select locked cloud rows and routes to sign-in (public alpha, no invite/waitlist gate)', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText, getByTestId } = renderPicker({ modelScope: 'cloud' });
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     fireEvent.press(getByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`));
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
-    await waitFor(() => expect(getByTestId('invite-code-modal')).toBeTruthy());
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(auth)/login'));
   });
 
   it('delegates locked cloud rows to the parent invite surface when provided', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const onOpenCloudAccess = jest.fn();
-    const { getByLabelText, queryByTestId } = renderPicker({
+    const { getByLabelText } = renderPicker({
       onOpenCloudAccess,
       modelScope: 'cloud',
     });
@@ -342,13 +339,13 @@ describe('ModelPickerSheet', () => {
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
     await waitFor(() => expect(onOpenCloudAccess).toHaveBeenCalledWith('invite'));
-    expect(queryByTestId('invite-code-modal')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('selects cloud rows after invite access', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     const cloudModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText, getByText, queryByTestId } = renderPicker({ modelScope: 'cloud' });
+    const { getByLabelText, getByText } = renderPicker({ modelScope: 'cloud' });
 
     expect(getByText('AGI Cloud models are managed separately from Local Mode.')).toBeTruthy();
 
@@ -356,7 +353,7 @@ describe('ModelPickerSheet', () => {
 
     expect(useModelStore.getState().selectedModel).toBe(cloudModel.id);
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
-    expect(queryByTestId('invite-code-modal')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('selects a local auto mode when tapped', () => {

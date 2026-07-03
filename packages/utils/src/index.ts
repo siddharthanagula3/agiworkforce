@@ -119,3 +119,7 @@ export type { ContainmentResult } from './pathContainment';
 
 // Trust boundary fencing for untrusted content injected into LLM prompts.
 export { fenceUntrustedContent } from './fence';
+
+// Shared reasoning/thinking-block presentation logic (web ThinkingBlock,
+// mobile ThinkingChip) — duration formatting + live verb-phrase inference.
+export { formatThinkingDuration, deriveReasoningPhrase } from './reasoning';

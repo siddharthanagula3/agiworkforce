@@ -17,7 +17,14 @@ import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { CreditService } from '@/lib/services/credit-service';
 import { getPlanPriceCents, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
-const TIER_ORDER: Record<string, number> = { free: 0, pro: 1, max: 2, team: 3, enterprise: 4 };
+const TIER_ORDER: Record<string, number> = {
+  free: 0,
+  basic: 0.5,
+  pro: 1,
+  max: 2,
+  team: 3,
+  enterprise: 4,
+};
 
 function isUpgrade(from: string, to: string): boolean {
   return (TIER_ORDER[to] ?? -1) > (TIER_ORDER[from] ?? -1);
@@ -53,7 +60,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw createError.validation(`Invalid request: ${msg}`);
   }
-  const { plan: targetPlan, billingInterval } = parsed.data;
+  const { plan: targetPlan, billingInterval, currency } = parsed.data;
 
   const db = getNeonDb();
   const stripe = getStripe();
@@ -90,12 +97,21 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Resolve new price ID
-  const planPrices = STRIPE_PRICE_IDS[targetPlan as keyof typeof STRIPE_PRICE_IDS];
-  if (!planPrices) throw createError.validation(`Unknown plan: ${targetPlan}`);
-  const newPriceId = planPrices[billingInterval];
-  if (!newPriceId) {
-    throw createError.validation(`No price configured for ${targetPlan} ${billingInterval}`);
+  // Resolve new price ID. 'basic' prices by currency (USD/INR), not interval.
+  let newPriceId: string | undefined;
+  if (targetPlan === 'basic') {
+    newPriceId =
+      currency === 'inr' ? STRIPE_PRICE_IDS.basic.monthlyInr : STRIPE_PRICE_IDS.basic.monthlyUsd;
+    if (!newPriceId) {
+      throw createError.validation(`No price configured for basic (${currency ?? 'usd'})`);
+    }
+  } else {
+    const planPrices = STRIPE_PRICE_IDS[targetPlan as 'pro' | 'max' | 'team'];
+    if (!planPrices) throw createError.validation(`Unknown plan: ${targetPlan}`);
+    newPriceId = planPrices[billingInterval];
+    if (!newPriceId) {
+      throw createError.validation(`No price configured for ${targetPlan} ${billingInterval}`);
+    }
   }
 
   const stripeSubId = sub.stripe_subscription_id;

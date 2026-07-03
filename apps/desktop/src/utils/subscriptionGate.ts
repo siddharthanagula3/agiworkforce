@@ -15,9 +15,8 @@ const PLAN_TIER_HIERARCHY: PlanTier[] = [
   'local-only',
   'byok',
   'free',
-  'hobby',
+  'basic',
   'pro',
-  'pro_plus',
   'max',
   'enterprise',
 ];
@@ -87,7 +86,7 @@ export function checkAutoModeAccess(): SubscriptionGateResult {
   if (!authState.subscription) {
     return {
       hasAccess: false,
-      reason: 'Auto Mode requires a Hobby plan or higher.',
+      reason: 'Auto Mode requires a Basic plan or higher.',
       requiresUpgrade: true,
       currentTier: 'free',
       currentStatus: 'none',
@@ -97,12 +96,12 @@ export function checkAutoModeAccess(): SubscriptionGateResult {
   const subscription = authState.subscription;
   const planTier = asPlanTier(subscription.plan_tier);
   const currentTierIndex = PLAN_TIER_HIERARCHY.indexOf(planTier);
-  const hobbyTierIndex = PLAN_TIER_HIERARCHY.indexOf('hobby');
+  const basicTierIndex = PLAN_TIER_HIERARCHY.indexOf('basic');
 
-  if (currentTierIndex < hobbyTierIndex) {
+  if (currentTierIndex < basicTierIndex) {
     return {
       hasAccess: false,
-      reason: 'Auto Mode requires a Hobby plan or higher.',
+      reason: 'Auto Mode requires a Basic plan or higher.',
       requiresUpgrade: true,
       currentTier: planTier,
       currentStatus: subscription.status as SubscriptionStatus,
@@ -128,7 +127,7 @@ export function getUpgradeMessage(currentTier?: PlanTier): string {
     currentTier === 'local-only' ||
     currentTier === 'byok'
   ) {
-    return 'Subscribe to Hobby plan to unlock AGI Workforce';
+    return 'Subscribe to Basic plan to unlock AGI Workforce';
   }
-  return 'Upgrade to Hobby plan or higher to continue using AGI Workforce';
+  return 'Upgrade to Basic plan or higher to continue using AGI Workforce';
 }

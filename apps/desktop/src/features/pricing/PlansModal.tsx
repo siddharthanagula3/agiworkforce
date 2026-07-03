@@ -2,7 +2,7 @@
  * PlansModal — in-app plans/pricing modal.
  *
  * Reachable from:
- *   1. Profile popover "View all plans" / "Try Hobby" links
+ *   1. Profile popover "View all plans" / "Try Basic" links
  *      → dispatches CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } })
  *      → App.tsx listens and sets plansModalOpen state
  *   2. Settings → Billing tab (future — wire via openPlansModal() helper below)
@@ -38,7 +38,7 @@ export interface PlansModalProps {
 // Tier ordering for display
 // ---------------------------------------------------------------------------
 
-const TIER_ORDER: UIPlanTier[] = ['local', 'byok', 'hobby', 'pro', 'max'];
+const TIER_ORDER: UIPlanTier[] = ['local', 'byok', 'basic', 'pro', 'max'];
 
 // ---------------------------------------------------------------------------
 // Map legacy PlanTier → UIPlanTier
@@ -48,7 +48,8 @@ function legacyToUIPlanTier(raw: string | null | undefined): UIPlanTier {
   if (!raw) return 'byok';
   if (raw === 'free' || raw === 'byok') return 'byok';
   if (raw === 'local') return 'local';
-  if (raw === 'hobby') return 'hobby';
+  // 'hobby' is a legacy value from before the 2026-07-02 tier rename.
+  if (raw === 'hobby' || raw === 'basic') return 'basic';
   if (raw === 'pro') return 'pro';
   if (raw === 'max') return 'max';
   if (raw === 'enterprise') return 'max'; // treat enterprise as max for display
@@ -69,7 +70,7 @@ export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansMod
       return;
     }
 
-    if (tier === 'hobby') {
+    if (tier === 'basic') {
       if (isFreePlan(currentTier)) {
         onOpenCloudWaitlist?.();
       } else {

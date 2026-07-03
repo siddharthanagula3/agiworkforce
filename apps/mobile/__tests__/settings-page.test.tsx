@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { Alert } from 'react-native';
@@ -80,14 +79,6 @@ jest.mock('../services/authSession', () => ({
   getCurrentUser: jest.fn(async () => null),
   getCurrentUserId: jest.fn(async () => null),
 }));
-
-jest.mock('../src/features/cloud-bridge', () => {
-  const { View } = require('react-native');
-  return {
-    InviteCodeModal: ({ open }: { open: boolean }) =>
-      open ? <View testID="invite-code-modal" /> : null,
-  };
-});
 
 import SettingsTabScreen from '../app/(app)/(tabs)/settings';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -186,27 +177,39 @@ describe('Settings page', () => {
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
   });
 
-  it('does not reopen the invite modal after cloud access is unlocked', () => {
+  it('does not route to sign-in again after cloud access is unlocked', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    const { getByLabelText, queryByTestId } = render(<SettingsTabScreen />);
+    const { getByLabelText } = render(<SettingsTabScreen />);
 
     fireEvent.press(getByLabelText('Email / Phone Number. Cloud'));
 
-    expect(queryByTestId('invite-code-modal')).toBeNull();
-    expect(alertSpy).toHaveBeenCalledWith(
-      'AGI Cloud access',
-      'AGI Cloud is unlocked on this device. Local Mode stays separate from Cloud account features.',
-    );
+    expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
+    expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 
-  it('opens invite modal from a cloud row', () => {
-    const { getByLabelText, getByTestId } = render(<SettingsTabScreen />);
+  it('routes unlocked Cloud rows to their real screens instead of a dead-end alert', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Cloud Personalization. Cloud'));
+    fireEvent.press(getByLabelText('Cloud Memory. Cloud'));
+    fireEvent.press(getByLabelText('Cloud Data Controls. Cloud'));
+    fireEvent.press(getByLabelText('Email / Phone Number. Cloud'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization?scope=cloud');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory?scope=cloud');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-account');
+  });
+
+  it('routes a signed-out cloud row tap to sign-in (public alpha, no invite/waitlist gate)', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
 
     fireEvent.press(getByLabelText('Email / Phone Number. Sign in'));
 
-    expect(getByTestId('invite-code-modal')).toBeTruthy();
+    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
   });
 
   it('navigates to real local settings routes', () => {

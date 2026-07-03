@@ -147,7 +147,7 @@ export const VoiceSelector = forwardRef<
             marginBottom: 4,
           }}
           accessibilityLabel={`${item.name} voice`}
-          accessibilityRole="radio"
+          accessibilityRole="button"
           accessibilityState={{ selected: isSelected }}
         >
           {isSelected ? (
@@ -261,7 +261,7 @@ export const VoiceSelector = forwardRef<
                       borderColor: selected ? colors.accentBorder : colors.border,
                     }}
                     accessibilityLabel={`${lang.label} language`}
-                    accessibilityRole="radio"
+                    accessibilityRole="button"
                     accessibilityState={{ selected }}
                   >
                     <Text
@@ -316,7 +316,7 @@ export const VoiceSelector = forwardRef<
                   borderColor: isSelected ? colors.teal : colors.border,
                 }}
                 accessibilityLabel={`${preset.name} voice preset: ${preset.description}`}
-                accessibilityRole="radio"
+                accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
               >
                 <View

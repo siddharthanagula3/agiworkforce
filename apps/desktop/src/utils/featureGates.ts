@@ -53,9 +53,9 @@ export function checkFeatureAccess(
     if (restrictedFeatures.includes(feature)) {
       return {
         allowed: false,
-        reason: `This feature requires a Hobby subscription or higher`,
+        reason: `This feature requires a Basic subscription or higher`,
         upgradeRequired: true,
-        suggestedPlan: 'hobby',
+        suggestedPlan: 'basic',
       };
     }
 
@@ -71,13 +71,13 @@ export function checkFeatureAccess(
       // 'team' is not a canonical PlanTier.
       // If a 'team' tier is ever added, update PlanTier, subscriptionGate.ts,
       // and Rust billing/models.rs simultaneously.
-      return ['hobby', 'pro', 'pro_plus', 'max', 'enterprise'].includes(planName)
+      return ['basic', 'pro', 'max', 'enterprise'].includes(planName)
         ? { allowed: true }
         : {
             allowed: false,
-            reason: 'Upgrade to Hobby to access this feature',
+            reason: 'Upgrade to Basic to access this feature',
             upgradeRequired: true,
-            suggestedPlan: 'hobby',
+            suggestedPlan: 'basic',
           };
 
     case 'priority_support':

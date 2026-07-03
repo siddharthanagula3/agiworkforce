@@ -271,7 +271,11 @@ pub struct RouterContext {
     #[serde(default)]
     pub cost_priority: CostPriority,
     #[serde(default)]
-    pub plan_tier: String, // 'free', 'hobby', 'pro', 'max', 'enterprise'
+    /// 'free', 'basic', 'pro', 'max', 'enterprise'. Legacy 'hobby' is still
+    /// accepted below — it comes from `plan_name` on subscription rows persisted
+    /// in local sqlite before the 2026-07-02 hobby→basic rename, not from the
+    /// `PlanTier` enum (which already aliases it), so it must be matched here too.
+    pub plan_tier: String,
 
     // New intelligent routing fields (January 2026)
     /// Primary classified intent type (chat, coding, image-gen, video-gen, search, etc.)
@@ -394,8 +398,9 @@ impl LLMRouter {
             .map(|intent| intent.to_lowercase())
             .collect();
 
-        // For free and hobby plans, prefer ultra-cheap models
-        let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
+        // For free and basic plans, prefer ultra-cheap models ('hobby' kept for
+        // pre-rename subscription rows still persisted with the old plan name)
+        let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "basic" | "hobby");
 
         let mut provider = Provider::Google;
         let mut task_category = TaskCategory::Simple;
@@ -480,7 +485,7 @@ impl LLMRouter {
         intent_type: &str,
         context: &RouterContext,
     ) -> Option<RouterSuggestion> {
-        let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "hobby");
+        let is_budget_plan = matches!(context.plan_tier.as_str(), "free" | "basic" | "hobby");
 
         let (provider, model, reason) = match intent_type {
             // === Search intents - route to Perplexity ===
@@ -1565,7 +1570,10 @@ impl LLMRouter {
             RoutingStrategy::Auto => {
                 // Auto maps to different strategies based on plan tier
                 let strategy =
-                    if matches!(plan_tier, Some("free") | Some("hobby") | Some("standard")) {
+                    if matches!(
+                        plan_tier,
+                        Some("free") | Some("basic") | Some("hobby") | Some("standard")
+                    ) {
                         RoutingStrategy::AutoEconomy
                     } else if matches!(plan_tier, Some("pro") | Some("professional")) {
                         RoutingStrategy::AutoBalanced

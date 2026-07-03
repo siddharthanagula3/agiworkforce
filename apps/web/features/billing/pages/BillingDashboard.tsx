@@ -6,7 +6,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@shared/ui/button';
 import {
-  upgradeToHobbyPlan,
+  upgradeToBasicPlan,
   upgradeToProPlan,
   upgradeToMaxPlan,
   upgradePlanMidCycle,
@@ -177,7 +177,7 @@ const BillingPage: React.FC = () => {
     !!billing && currentPlan !== 'free' && ['active', 'trialing'].includes(billing.status ?? '');
 
   const handleUpgrade = async (
-    plan: 'hobby' | 'pro' | 'max' | 'enterprise',
+    plan: 'basic' | 'pro' | 'max' | 'enterprise',
     period: 'monthly' | 'yearly' = 'monthly',
   ) => {
     if (!user) {
@@ -224,12 +224,11 @@ const BillingPage: React.FC = () => {
       }
 
       // New subscriber: route through Stripe Checkout.
-      if (plan === 'hobby') {
+      if (plan === 'basic') {
         toast.loading('Redirecting to checkout...');
-        await upgradeToHobbyPlan({
+        await upgradeToBasicPlan({
           userId: user.id,
           userEmail: user.email || '',
-          billingPeriod: period,
         });
       } else if (plan === 'pro') {
         toast.loading('Redirecting to checkout...');
@@ -401,7 +400,7 @@ const BillingPage: React.FC = () => {
                 <Button
                   onClick={() => {
                     const current = normalizePlan(billing?.plan);
-                    const next = current === 'free' ? 'hobby' : current === 'hobby' ? 'pro' : 'max';
+                    const next = current === 'free' ? 'basic' : current === 'basic' ? 'pro' : 'max';
                     handleUpgrade(next);
                   }}
                   size="sm"
@@ -411,8 +410,8 @@ const BillingPage: React.FC = () => {
                   <span className="hidden sm:inline">
                     Upgrade to{' '}
                     {normalizePlan(billing?.plan) === 'free'
-                      ? 'Hobby'
-                      : normalizePlan(billing?.plan) === 'hobby'
+                      ? 'Basic'
+                      : normalizePlan(billing?.plan) === 'basic'
                         ? 'Pro'
                         : 'Max'}
                   </span>

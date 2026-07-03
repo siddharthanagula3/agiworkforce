@@ -33,5 +33,9 @@ module.exports = {
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     // expo-sqlite stub for storage tests until the native module is linked.
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
+    // @react-native-community/netinfo registers a native event subscription at
+    // import time that crashes outside a real RN runtime — stub it globally
+    // rather than per-test-file, since lib/egressGuard.ts now imports it.
+    '^@react-native-community/netinfo$': '<rootDir>/__mocks__/netinfo.js',
   },
 };

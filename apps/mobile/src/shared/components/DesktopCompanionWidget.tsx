@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -75,11 +75,20 @@ interface ConnectedWidgetProps {
 function ConnectedWidget({ compact, onPressDashboard, onPressApprovals }: ConnectedWidgetProps) {
   const desktopName = useConnectionStore((s) => s.desktopName);
   const desktopMetadata = useConnectionStore((s) => s.desktopMetadata);
-  const activeAgents = useAgentStore((s) =>
-    s.agents.filter((a) => a.status === 'running' || a.status === 'waiting'),
+  // Select the raw (stable-reference) arrays and filter in memos — filtering
+  // inline inside the selector returns a brand-new array on every store read,
+  // which Zustand's default reference equality treats as "changed" every
+  // render, causing an infinite resubscribe/re-render loop ("Maximum update
+  // depth exceeded"; see app/(app)/companion/index.tsx for the full writeup).
+  const allAgents = useAgentStore((s) => s.agents);
+  const activeAgents = useMemo(
+    () => allAgents.filter((a) => a.status === 'running' || a.status === 'waiting'),
+    [allAgents],
   );
-  const pendingApprovals = useAgentStore((s) =>
-    s.pendingApprovals.filter((r) => r.status === 'pending'),
+  const allApprovals = useAgentStore((s) => s.pendingApprovals);
+  const pendingApprovals = useMemo(
+    () => allApprovals.filter((r) => r.status === 'pending'),
+    [allApprovals],
   );
 
   const pulseStyle = usePulseAnimation();

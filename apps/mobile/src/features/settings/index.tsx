@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Alert, View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -28,7 +28,6 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
@@ -248,7 +247,6 @@ export default function SettingsTabScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const [inviteOpen, setInviteOpen] = useState(false);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloud = appMode === 'cloud';
   const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
@@ -271,16 +269,19 @@ export default function SettingsTabScreen() {
     router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
+  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default — the
+  // signed-in entitlement IS the gate, no invite/waitlist. Matches the sign-in route
+  // used by chat.tsx / chat/[id].tsx / models.tsx (fix 0fe0598c3).
   const openCloudAccess = useCallback(() => {
     if (!cloudUnlocked) {
-      setInviteOpen(true);
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
       return;
     }
     Alert.alert(
       'AGI Cloud access',
       'AGI Cloud is unlocked on this device. Local Mode stays separate from Cloud account features.',
     );
-  }, [cloudUnlocked]);
+  }, [cloudUnlocked, router]);
 
   const handleSignOut = useCallback(() => {
     Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
@@ -350,13 +351,13 @@ export default function SettingsTabScreen() {
             key: 'personalization',
             label: 'Personalization',
             icon: Sparkles,
-            onPress: push('/(app)/settings/personalization'),
+            onPress: push('/(app)/settings/personalization?scope=local'),
           },
           {
             key: 'memory',
             label: 'Memory',
             icon: Brain,
-            onPress: push('/(app)/settings/memory'),
+            onPress: push('/(app)/settings/memory?scope=local'),
           },
           {
             key: 'capabilities',
@@ -388,7 +389,9 @@ export default function SettingsTabScreen() {
             icon: Sparkles,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudAccess,
+            onPress: cloudUnlocked
+              ? push('/(app)/settings/personalization?scope=cloud')
+              : openCloudAccess,
           },
           {
             key: 'cloud-memory',
@@ -396,7 +399,7 @@ export default function SettingsTabScreen() {
             icon: Brain,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudAccess,
+            onPress: cloudUnlocked ? push('/(app)/settings/memory?scope=cloud') : openCloudAccess,
           },
           {
             key: 'cloud-data-controls',
@@ -404,7 +407,7 @@ export default function SettingsTabScreen() {
             icon: Database,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudAccess,
+            onPress: cloudUnlocked ? push('/(app)/settings/data-controls') : openCloudAccess,
           },
           {
             key: 'email-phone',
@@ -412,7 +415,7 @@ export default function SettingsTabScreen() {
             icon: Mail,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudAccess,
+            onPress: cloudUnlocked ? push('/(app)/settings/cloud-account') : openCloudAccess,
           },
           {
             key: 'privacy',
@@ -562,13 +565,6 @@ export default function SettingsTabScreen() {
           <SectionCard key={section.title ?? `section-${index}`} section={section} />
         ))}
       </ScrollView>
-
-      <InviteCodeModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        source="other"
-        defaultTab="invite"
-      />
     </SafeAreaView>
   );
 }

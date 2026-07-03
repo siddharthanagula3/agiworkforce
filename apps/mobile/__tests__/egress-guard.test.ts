@@ -16,6 +16,12 @@ jest.mock('@/services/secureFetch', () => ({
   secureFetch: (input: unknown, init: unknown) => mockSecureFetch(input, init),
 }));
 
+const mockNetInfoRefresh = jest.fn().mockResolvedValue(undefined);
+jest.mock('@react-native-community/netinfo', () => ({
+  __esModule: true,
+  default: { refresh: (...args: unknown[]) => mockNetInfoRefresh(...args) },
+}));
+
 // Mode source: the persisted app-mode store. We control getState() per test.
 let mockAppMode: unknown = 'local';
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
@@ -33,6 +39,7 @@ import {
 
 beforeEach(() => {
   mockSecureFetch.mockReset().mockResolvedValue(new Response('ok', { status: 200 }));
+  mockNetInfoRefresh.mockClear();
   mockAppMode = 'local';
 });
 
@@ -137,5 +144,44 @@ describe('guardedFetch — fail-closed mode resolution', () => {
       EgressBlockedError,
     );
     expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('guardedFetch — NetInfo self-correction on a successful round-trip', () => {
+  // Regression guard: NetInfo's own passive reachability probe only re-checks
+  // on OS connectivity-change events and can report a stale "offline" state
+  // for minutes while real API/chat traffic keeps succeeding (observed on the
+  // iOS Simulator). A resolved response — any HTTP status, since even a 4xx/5xx
+  // proves the round-trip completed — is stronger evidence of connectivity, so
+  // guardedFetch forces NetInfo to refresh instead of waiting for its own timer.
+  it('force-refreshes NetInfo after a successful (2xx) response', async () => {
+    mockAppMode = 'cloud';
+    mockSecureFetch.mockResolvedValue(new Response('ok', { status: 200 }));
+    await guardedFetch('https://agiworkforce.com/api/chat/send');
+    expect(mockNetInfoRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('still force-refreshes NetInfo on a resolved non-2xx response (round-trip proves connectivity)', async () => {
+    mockAppMode = 'cloud';
+    mockSecureFetch.mockResolvedValue(new Response('server error', { status: 500 }));
+    await guardedFetch('https://agiworkforce.com/api/chat/send');
+    expect(mockNetInfoRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT refresh NetInfo when the request never leaves the device (Local-mode block)', async () => {
+    mockAppMode = 'local';
+    await expect(guardedFetch('https://agiworkforce.com/api/x')).rejects.toBeInstanceOf(
+      EgressBlockedError,
+    );
+    expect(mockNetInfoRefresh).not.toHaveBeenCalled();
+  });
+
+  it('does NOT refresh NetInfo when the fetch itself throws (genuine network failure)', async () => {
+    mockAppMode = 'cloud';
+    mockSecureFetch.mockRejectedValue(new Error('Network request failed'));
+    await expect(guardedFetch('https://agiworkforce.com/api/chat/send')).rejects.toThrow(
+      'Network request failed',
+    );
+    expect(mockNetInfoRefresh).not.toHaveBeenCalled();
   });
 });

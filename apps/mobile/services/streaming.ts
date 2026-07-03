@@ -188,6 +188,31 @@ async function attemptStream(
       }
     }
 
+    // Detect a model-tier-gate rejection: HTTP 403 + { error: { code:
+    // 'model_not_available', requiredTier, message } } — thrown when the
+    // selected model requires a higher subscription tier than the user has
+    // (e.g. an Auto-mode routing slot resolving to a Pro-only model for a Free
+    // account). Without this, the rejection fell through to the generic "HTTP
+    // 403: ..." Error below, which chatExecutionStore intentionally renders as
+    // a blank "Something went wrong" bubble — an actionable, user-fixable
+    // condition (pick another model / upgrade) with zero actionable UI.
+    // Reusing ApiPaywallError gets the existing PaywallBottomSheet upgrade
+    // prompt for free, consistent with every other tier-gate in the app.
+    if (response.status === 403) {
+      try {
+        const parsed = JSON.parse(text) as { error?: Record<string, unknown> };
+        if (parsed?.error?.code === 'model_not_available') {
+          throw new ApiPaywallError(
+            'model_access',
+            typeof parsed.error.requiredTier === 'string' ? parsed.error.requiredTier : 'pro',
+            typeof parsed.error.message === 'string' ? parsed.error.message : '',
+          );
+        }
+      } catch (jsonErr) {
+        if (jsonErr instanceof ApiPaywallError) throw jsonErr;
+      }
+    }
+
     callbacks.onError(new Error(`HTTP ${response.status}: ${text}`));
     return false;
   }

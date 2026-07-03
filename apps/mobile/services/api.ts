@@ -225,6 +225,22 @@ async function request<T>(
 
     if (!response.ok) {
       const body = await response.text();
+      // Structured JSON error bodies carry a human-readable `error` or `message`
+      // field — surface that instead of dumping the raw JSON payload verbatim,
+      // since callers often show this text directly in chat/error UI.
+      let friendlyMessage: string | null = null;
+      try {
+        const parsed = JSON.parse(body) as Record<string, unknown>;
+        const candidate = parsed.error ?? parsed.message;
+        if (typeof candidate === 'string' && candidate.trim()) {
+          friendlyMessage = candidate;
+        }
+      } catch {
+        // Not JSON — fall back to the raw (truncated) body below.
+      }
+      if (friendlyMessage) {
+        throw new Error(friendlyMessage);
+      }
       // Avoid leaking sensitive data — truncate long error bodies
       const safeBody = body.length > 500 ? body.slice(0, 500) + '...(truncated)' : body;
       throw new Error(`HTTP ${response.status}: ${safeBody}`);

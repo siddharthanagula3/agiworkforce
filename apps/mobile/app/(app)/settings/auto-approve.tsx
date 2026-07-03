@@ -205,7 +205,7 @@ function ApprovalChoiceRow({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="radio"
+      accessibilityRole="button"
       accessibilityLabel={`${option.label}. ${trimSentence(option.description)}`}
       accessibilityState={{ selected }}
       style={({ pressed }) => ({

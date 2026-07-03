@@ -564,4 +564,22 @@ describe('model env-gating (requiresEnvironment)', () => {
       expect(verdict.reason).toMatch(/local model runtime/i);
     });
   });
+
+  describe('web-search capability regression guard', () => {
+    // Regression test for a parity bug (2026-07-02): the chat-completions
+    // request-processor only injects the provider-native web_search tool when
+    // `capabilities.search` is true (a false value short-circuits the `??`
+    // fallback, so the tool is silently never offered). All three Anthropic
+    // models had `search: false` in the catalog even though
+    // apps/web/lib/llm-providers/anthropic.ts has full wire-format support for
+    // Anthropic's server-managed web_search tool — making that code path
+    // permanently dead for every Claude model. Assert the fix stays in place.
+    it('every current-generation Anthropic model advertises search support', () => {
+      for (const modelId of ['claude-opus-4.8', 'claude-sonnet-4.6', 'claude-haiku-4.5']) {
+        const metadata = getModelMetadataById(modelId);
+        expect(metadata, `missing catalog entry for ${modelId}`).not.toBeNull();
+        expect(metadata!.capabilities.search, `${modelId} capabilities.search`).toBe(true);
+      }
+    });
+  });
 });

@@ -49,7 +49,7 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     analytics: false,
     llmCostTracking: true,
   },
-  hobby: {
+  basic: {
     automationsPerDay: 10,
     browserAutomation: false,
     advancedUiAutomation: false,
@@ -86,19 +86,6 @@ export const PLAN_FEATURES: Record<PlanTier, PlanFeatures> = {
     customWorkflows: false,
     webhookIntegration: false,
     analytics: false,
-    llmCostTracking: true,
-  },
-  pro_plus: {
-    automationsPerDay: 'unlimited',
-    browserAutomation: true,
-    advancedUiAutomation: true,
-    emailSupport: true,
-    prioritySupport: true,
-    teamFeatures: false,
-    sso: false,
-    customWorkflows: true,
-    webhookIntegration: false,
-    analytics: true,
     llmCostTracking: true,
   },
   max: {
