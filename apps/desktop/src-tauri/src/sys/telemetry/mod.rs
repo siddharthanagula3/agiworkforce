@@ -32,12 +32,14 @@ pub fn init() -> Result<TelemetryGuard> {
 }
 
 pub fn init_with_config(log_config: LogConfig) -> Result<TelemetryGuard> {
-    init_tracing(log_config.clone())?;
+    let (_file_guard, _stdout_guard) = init_tracing(log_config.clone())?;
     let metrics = MetricsCollector::new();
 
     let guard = TelemetryGuard {
         _log_config: log_config,
         metrics,
+        _file_guard,
+        _stdout_guard,
         #[cfg(feature = "sentry")]
         _sentry_guard: None,
     };
@@ -56,13 +58,15 @@ pub fn init_with_sentry(
     sentry_dsn: &str,
     environment: &str,
 ) -> Result<TelemetryGuard> {
-    init_tracing(log_config.clone())?;
+    let (_file_guard, _stdout_guard) = init_tracing(log_config.clone())?;
     let metrics = MetricsCollector::new();
     let sentry_guard = init_sentry(sentry_dsn, environment)?;
 
     Ok(TelemetryGuard {
         _log_config: log_config,
         metrics,
+        _file_guard,
+        _stdout_guard,
         _sentry_guard: Some(sentry_guard),
     })
 }
@@ -110,6 +114,11 @@ fn initialize_sentry_if_configured(_log_config: &LogConfig) -> Result<Option<Tel
 pub struct TelemetryGuard {
     pub(crate) _log_config: LogConfig,
     pub metrics: MetricsCollector,
+    // Must live for the process lifetime: dropping either non-blocking writer's
+    // guard silently kills its flush thread, discarding every subsequent
+    // `tracing::` call (see the comment on `tracing::init_tracing`).
+    _file_guard: tracing_appender::non_blocking::WorkerGuard,
+    _stdout_guard: tracing_appender::non_blocking::WorkerGuard,
     #[cfg(feature = "sentry")]
     _sentry_guard: Option<sentry::ClientInitGuard>,
 }
