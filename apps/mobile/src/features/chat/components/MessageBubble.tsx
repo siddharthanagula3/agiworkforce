@@ -6,6 +6,7 @@ import {
   ActionSheetIOS,
   Platform,
 } from 'react-native';
+import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { Clock, FileText, Download } from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
@@ -275,6 +276,55 @@ export const MessageBubble = memo(function MessageBubble({
     handleOpenEditModal,
   ]);
 
+  // Message actions (Copy/Retry/Edit/Delete/Export) are otherwise only reachable
+  // via the onLongPress action sheet below, which has no standard discoverable
+  // VoiceOver equivalent. Mirror the same option set as native accessibility
+  // actions so screen-reader users can reach them from the rotor "Actions" menu
+  // without needing to perform a long-press gesture.
+  const accessibilityActionsList = useMemo<AccessibilityActionInfo[]>(() => {
+    const actions: AccessibilityActionInfo[] = [];
+    if (isUser && onEditMessage) actions.push({ name: 'edit', label: 'Edit message' });
+    if (isAssistant && onRetryMessage) actions.push({ name: 'retry', label: 'Retry' });
+    actions.push({ name: 'copy', label: 'Copy message' });
+    if (isAssistant && message.content.trim()) {
+      actions.push({ name: 'export', label: 'Export message' });
+    }
+    if (onDeleteMessage) actions.push({ name: 'delete', label: 'Delete message' });
+    return actions;
+  }, [isUser, isAssistant, onEditMessage, onRetryMessage, onDeleteMessage, message.content]);
+
+  const handleAccessibilityAction = useCallback(
+    (event: AccessibilityActionEvent) => {
+      switch (event.nativeEvent.actionName) {
+        case 'copy':
+          copyToClipboard(message.content);
+          break;
+        case 'retry':
+          onRetryMessage?.(message.id);
+          break;
+        case 'edit':
+          handleOpenEditModal();
+          break;
+        case 'delete':
+          onDeleteMessage?.(message.id);
+          break;
+        case 'export':
+          handleShowExport();
+          break;
+        default:
+          break;
+      }
+    },
+    [
+      message.id,
+      message.content,
+      onRetryMessage,
+      onDeleteMessage,
+      handleOpenEditModal,
+      handleShowExport,
+    ],
+  );
+
   const contentElements = useMemo(
     () => renderMarkdownContent(message.content, themeColors),
     [message.content, themeColors],
@@ -295,7 +345,10 @@ export const MessageBubble = memo(function MessageBubble({
         delayLongPress={400}
         accessible={true}
         accessibilityLabel={`${isUser ? 'Your' : roleLabel} message: ${message.content?.slice(0, 100) || 'empty'}`}
+        accessibilityHint="Double tap and hold for message actions"
         accessibilityRole="text"
+        accessibilityActions={accessibilityActionsList}
+        onAccessibilityAction={handleAccessibilityAction}
       >
         <View className="flex-row gap-3">
           {/* Avatar */}
