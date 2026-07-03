@@ -27,7 +27,13 @@ import {
 } from '@agiworkforce/types';
 
 export interface ChatInputProps {
-  onSend: (content: string, agentMode?: string, effort?: string) => void;
+  /**
+   * `attachments` carries the raw `File` objects the user attached in the
+   * composer (DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01) — previously dropped
+   * here entirely. Host runtimes are responsible for encoding them onto the
+   * wire (e.g. `TauriRuntime` reads them into base64 for IPC).
+   */
+  onSend: (content: string, agentMode?: string, effort?: string, attachments?: File[]) => void;
   onStop: () => void;
   onPlusClick: () => void;
   onModelSelectorClick: () => void;
@@ -275,7 +281,7 @@ export function ChatInput({
       }
     }
 
-    onSend(content, agentMode, effort);
+    onSend(content, agentMode, effort, attachedFiles.length > 0 ? attachedFiles : undefined);
     el.value = '';
     el.style.height = 'auto';
     setAttachedFiles([]);
@@ -288,6 +294,7 @@ export function ChatInput({
     projectId,
     resolveAgentControl,
     modelProviderId,
+    attachedFiles,
   ]);
 
   const handleKeyDown = useCallback(
