@@ -4,6 +4,7 @@ import * as Popover from '@radix-ui/react-popover';
 import {
   Paperclip,
   Camera,
+  Folder,
   FolderPlus,
   HardDrive,
   GitBranch,
@@ -29,6 +30,14 @@ export interface AttachmentMenuProps {
   onAddFiles: () => void;
   /** Called with a screenshot File when capture succeeds */
   onScreenshot?: (file: File) => void;
+  /**
+   * Called when the user picks "Select folder" / "Change folder". Render-gated
+   * by the `canUseWorkingDirectory` capability (desktop-only) — the native
+   * folder dialog + backend sync live in the host app, not in this package.
+   */
+  onSelectFolder?: () => void;
+  /** Display label for the currently scoped folder, if any (host-formatted). */
+  currentFolderLabel?: string | null;
   /** Whether Web search is currently toggled on */
   webSearchEnabled: boolean;
   onWebSearchToggle: () => void;
@@ -105,20 +114,26 @@ const STYLE_OPTIONS: { value: StyleOption; label: string }[] = [
 /**
  * Shared, capability-aware composer menu — the REFERENCE implementation for how
  * surfaces should gate platform actions (it render-gates "Take a screenshot" via
- * `useCapability('canTakeScreenshot')`).
+ * `useCapability('canTakeScreenshot')` and "Select folder" via
+ * `useCapability('canUseWorkingDirectory')`).
  *
- * STATUS: not yet mounted by any live shell. The live composers are surface-local
- * today — web `ChatComposerNew`, desktop `v3/PlusMenu`, mobile `AddToChatSheet`.
- * Real capability adoption is therefore proven on those live composers (and on
- * the live web slash menu), NOT here. Converging the three live composers onto
- * this shared component is tracked as a Strong-Improvement; until then this is a
- * reference/SSOT exemplar, not the production path.
+ * STATUS: this IS the live plus/attachment menu for desktop — mounted by
+ * `ChatInput.tsx` (also in this package), which is rendered by `ChatInterface`
+ * at the bottom of the composer and is what `DesktopShellV3` (and the legacy
+ * `App.tsx` fallback) actually ship. Desktop's `v3/PlusMenu.tsx` is a separate,
+ * unmounted component (only consumer is the dead `v3/Composer.tsx` — see
+ * `DESKTOP-V3-COMPOSER-DEADCODE-01` in `docs/agent-context/known-flaws.md`).
+ * Web and mobile do not currently import this component (they use their own
+ * surface-local composers); when they do, the capability gates above already
+ * make it a correct drop-in.
  */
 export function AttachmentMenu({
   open,
   onOpenChange,
   onAddFiles,
   onScreenshot,
+  onSelectFolder,
+  currentFolderLabel = null,
   webSearchEnabled,
   onWebSearchToggle,
   researchEnabled,
@@ -134,6 +149,12 @@ export function AttachmentMenu({
   // affordance. Render-gate so the item is ABSENT on web/mobile rather than
   // relying on the optional `onScreenshot` prop being omitted.
   const canTakeScreenshot = useCapability('canTakeScreenshot');
+
+  // PLATFORM gate: scoping the session to a local project folder requires a
+  // native file-system dialog (desktop-only, `canUseWorkingDirectory` is false
+  // for web/mobile in the capability matrix). The actual dialog + backend sync
+  // live in the host app and arrive via `onSelectFolder`.
+  const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
 
   const handleScreenshot = async () => {
     if (!onScreenshot) {
@@ -215,6 +236,16 @@ export function AttachmentMenu({
               label={screenshotting ? 'Capturing…' : 'Take a screenshot'}
               onClick={handleScreenshot}
               className={screenshotting ? 'opacity-60 pointer-events-none' : undefined}
+            />
+          )}
+          {canUseWorkingDirectory && (
+            <MenuItem
+              icon={<Folder size={15} />}
+              label={currentFolderLabel ? `Folder: ${currentFolderLabel}` : 'Select folder'}
+              onClick={() => {
+                onSelectFolder?.();
+                onOpenChange(false);
+              }}
             />
           )}
 
