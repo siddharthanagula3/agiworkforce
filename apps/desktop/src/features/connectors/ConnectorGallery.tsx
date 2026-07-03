@@ -46,7 +46,7 @@ import { McpClient } from '@/api/mcp';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
 import { CustomRemoteMcpConnectorDialog } from './CustomRemoteMcpConnectorDialog';
-import { ConnectorDetailView } from './ConnectorDetailView';
+import { ConnectorDetailView, type ConnectorTool } from './ConnectorDetailView';
 import { OAuthCredentialsPanel } from '../settings/OAuthCredentialsPanel';
 import {
   Select,
@@ -113,6 +113,34 @@ function connectorAuthLabel(connector: ConnectorDef): string {
 
 function connectorById(id: string): ConnectorDef | null {
   return CONNECTORS.find((connector) => connector.id === id) ?? null;
+}
+
+// Mirrors the MCP server-name convention used when a connector is actually
+// activated (`get_connector_mcp_mapping` in
+// apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs), e.g. `github` ->
+// `connector-github`, `google_drive` -> `connector-google-drive`. Connectors
+// without a real MCP-backed server (no entry in that mapping) simply won't
+// match anything here, which correctly falls through to "no live tool
+// schema available" in ConnectorDetailView.
+function connectorMcpServerName(connectorId: string): string {
+  return `connector-${connectorId.replace(/_/g, '-')}`;
+}
+
+// Mirrors the heuristic `mcp_call_tool` uses server-side
+// (apps/desktop/src-tauri/src/sys/commands/mcp.rs) to flag destructive tools
+// when no explicit per-tool permission has been recorded yet. This only
+// affects the UI's *suggested default* in the permission dropdown — the
+// server independently recomputes the same heuristic at call time and is the
+// actual enforcement point, so a mismatch here is a UX nit, not a security
+// gap.
+function isDestructiveToolName(name: string): boolean {
+  return (
+    name.includes('delete') ||
+    name.includes('write') ||
+    name.includes('create') ||
+    name.includes('update') ||
+    name.includes('remove')
+  );
 }
 
 function ConnectorMark({
@@ -371,10 +399,43 @@ export function ConnectorGallery() {
   );
 
   const [expiresAtByProvider, setExpiresAtByProvider] = useState<Record<string, number | null>>({});
+  // Real per-connector tool schema for the detail/permissions view. `null`
+  // means "loading", `[]` means "checked, no live tools" (e.g. the
+  // connector has no MCP-backed server, or it isn't connected yet).
+  const [detailTools, setDetailTools] = useState<ConnectorTool[] | null>(null);
 
   useEffect(() => {
     void fetchConnected();
   }, [fetchConnected]);
+
+  useEffect(() => {
+    if (!detailConnectorId) {
+      setDetailTools(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailTools(null);
+    const targetServer = connectorMcpServerName(detailConnectorId);
+    void (async () => {
+      try {
+        const allTools = await McpClient.listTools();
+        if (cancelled) return;
+        const matched: ConnectorTool[] = allTools
+          .filter((tool) => tool.server === targetServer)
+          .map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            destructive: isDestructiveToolName(tool.name),
+          }));
+        setDetailTools(matched);
+      } catch {
+        if (!cancelled) setDetailTools([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailConnectorId]);
 
   useEffect(() => {
     if (connectedIds.length === 0) {
@@ -573,7 +634,7 @@ export function ConnectorGallery() {
       <>
         <ConnectorDetailView
           connector={detailConnector}
-          tools={undefined}
+          tools={detailTools}
           onBack={() => setDetailConnectorId(null)}
         />
         {dialogs}
