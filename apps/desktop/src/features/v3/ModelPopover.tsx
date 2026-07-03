@@ -151,7 +151,8 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
       provider === 'ollama' ||
       provider === 'local' ||
       provider === 'lmstudio' ||
-      provider === 'llamacpp'
+      provider === 'llamacpp' ||
+      provider === 'vllm'
     );
   });
 

@@ -98,6 +98,8 @@ interface LLMConfig {
   lmstudioUrl: string;
   /** Base URL for the local llama.cpp `llama-server` (OpenAI-compatible). Default: http://localhost:8080/v1 */
   llamacppUrl: string;
+  /** Base URL for the local vLLM server (OpenAI-compatible). Default: http://localhost:8000/v1 */
+  vllmUrl: string;
 }
 
 interface WindowPreferences {
@@ -221,6 +223,7 @@ interface SettingsState {
   setOllamaUrl: (url: string) => void;
   setLmStudioUrl: (url: string) => void;
   setLlamaCppUrl: (url: string) => void;
+  setVllmUrl: (url: string) => void;
 
   setTheme: (theme: Theme) => void;
   setSelectedTheme: (themeId: string | undefined) => void;
@@ -322,6 +325,7 @@ const defaultSettings: Pick<
     ollamaUrl: 'http://localhost:11434',
     lmstudioUrl: 'http://localhost:1234/v1',
     llamacppUrl: 'http://localhost:8080/v1',
+    vllmUrl: 'http://localhost:8000/v1',
     taskRouting: {
       search: { provider: 'managed_cloud', model: 'auto' },
       code: { provider: 'managed_cloud', model: 'auto' },
@@ -406,7 +410,9 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v21: Added chatFont to windowPreferences for chat font selector tiles
 // v22: Added personalization preferences (name, occupation, bio, formality, warmth, detail, emojiUsage)
 // v23: Added terminalSandbox execution preferences
-const SETTINGS_STORE_VERSION = 24;
+// v24: Added lmstudioUrl/llamacppUrl to llmConfig (LM Studio/llama.cpp local runtimes)
+// v25: Added vllmUrl to llmConfig (vLLM local runtime)
+const SETTINGS_STORE_VERSION = 25;
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -868,6 +874,17 @@ export const useSettingsStore = create<SettingsState>()(
           void get().saveSettings();
         },
 
+        setVllmUrl: (url: string) => {
+          set(
+            (state) => ({
+              llmConfig: { ...state.llmConfig, vllmUrl: url },
+            }),
+            undefined,
+            'settings/setVllmUrl',
+          );
+          void get().saveSettings();
+        },
+
         setTheme: (theme: Theme) => {
           set(
             (state) => ({
@@ -1220,6 +1237,7 @@ export const useSettingsStore = create<SettingsState>()(
               ollamaUrl: settings.llmConfig?.ollamaUrl ?? defaultSettings.llmConfig.ollamaUrl,
               lmstudioUrl: settings.llmConfig?.lmstudioUrl ?? defaultSettings.llmConfig.lmstudioUrl,
               llamacppUrl: settings.llmConfig?.llamacppUrl ?? defaultSettings.llmConfig.llamacppUrl,
+              vllmUrl: settings.llmConfig?.vllmUrl ?? defaultSettings.llmConfig.vllmUrl,
             };
 
             const mergedWindowPreferences: WindowPreferences = {
@@ -1265,11 +1283,16 @@ export const useSettingsStore = create<SettingsState>()(
               console.error('Failed to configure Ollama provider:', error);
             }
 
-            // Configure local LM Studio / llama.cpp providers. Like Ollama, these are
-            // best-effort: `ensure_lmstudio_provider`/`ensure_llamacpp_provider` on the
-            // Rust side lazily register a default-URL instance before any Local-mode
-            // chat send, so a failure here only matters if the user configured a
-            // non-default base URL and this callback never ran.
+            // Configure local LM Studio / llama.cpp / vLLM providers. Like Ollama, these
+            // are best-effort: `ensure_lmstudio_provider`/`ensure_llamacpp_provider`/
+            // `ensure_vllm_provider` on the Rust side lazily register a default-URL
+            // instance before any Local-mode chat send, so a failure here only matters
+            // if the user configured a non-default base URL and this callback never ran.
+            // This is also the ONLY restart-survival path for a non-default base URL:
+            // `rehydrate_byok_providers` (lib.rs setup()) explicitly skips local runtimes
+            // (they have no BYOK key in settings_v2), so without this invoke a custom
+            // vLLM/LM Studio/llama.cpp URL would silently revert to the default on every
+            // app restart even though it's correctly persisted here.
             try {
               await invoke('llm_configure_provider', {
                 provider: 'lmstudio',
@@ -1287,6 +1310,15 @@ export const useSettingsStore = create<SettingsState>()(
               });
             } catch (error) {
               console.error('Failed to configure llama.cpp provider:', error);
+            }
+            try {
+              await invoke('llm_configure_provider', {
+                provider: 'vllm',
+                apiKey: null,
+                baseUrl: mergedLLMConfig.vllmUrl || 'http://localhost:8000/v1',
+              });
+            } catch (error) {
+              console.error('Failed to configure vLLM provider:', error);
             }
 
             if (get().loading === false) {
@@ -1580,6 +1612,7 @@ export const useSettingsStore = create<SettingsState>()(
             ollamaUrl: persisted?.llmConfig?.ollamaUrl ?? currentState.llmConfig.ollamaUrl,
             lmstudioUrl: persisted?.llmConfig?.lmstudioUrl ?? currentState.llmConfig.lmstudioUrl,
             llamacppUrl: persisted?.llmConfig?.llamacppUrl ?? currentState.llmConfig.llamacppUrl,
+            vllmUrl: persisted?.llmConfig?.vllmUrl ?? currentState.llmConfig.vllmUrl,
           };
 
           const mergedWindowPreferences: WindowPreferences = {
@@ -1897,6 +1930,14 @@ export const useSettingsStore = create<SettingsState>()(
             }
             if (llmConfig.llamacppUrl === undefined) {
               llmConfig.llamacppUrl = 'http://localhost:8080/v1';
+            }
+          }
+
+          // Migration from v24 to v25: Add vllmUrl to llmConfig
+          if (version < 25 && state.llmConfig) {
+            const llmConfig = state.llmConfig as Partial<LLMConfig>;
+            if (llmConfig.vllmUrl === undefined) {
+              llmConfig.vllmUrl = 'http://localhost:8000/v1';
             }
           }
 

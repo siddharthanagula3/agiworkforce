@@ -1,8 +1,8 @@
 /**
- * Local Runtime Settings — LM Studio and llama.cpp
+ * Local Runtime Settings — LM Studio, llama.cpp, and vLLM
  *
  * Mirrors the Ollama card in `./index.tsx` (URL config + installed/running state,
- * no fake availability) for the other two local OpenAI-compatible runtimes added
+ * no fake availability) for the other local OpenAI-compatible runtimes added
  * alongside Ollama. Self-contained: manages its own status-check state so it can
  * be dropped into the Local Models section without threading new props through
  * `SettingsPanel.tsx`'s existing Ollama-specific state machine.
@@ -25,8 +25,10 @@ interface ProviderStatusResponse {
   error?: string | null;
 }
 
+type RuntimeKey = 'lmstudio' | 'llamacpp' | 'vllm';
+
 interface RuntimeConfig {
-  key: 'lmstudio' | 'llamacpp';
+  key: RuntimeKey;
   label: string;
   defaultUrl: string;
   docsHost: string;
@@ -51,15 +53,47 @@ const RUNTIMES: RuntimeConfig[] = [
     docsUrl: 'https://github.com/ggml-org/llama.cpp',
     listCommand: 'llm_list_llamacpp_models',
   },
+  {
+    key: 'vllm',
+    label: 'vLLM',
+    defaultUrl: 'http://localhost:8000/v1',
+    docsHost: 'docs.vllm.ai',
+    docsUrl: 'https://docs.vllm.ai',
+    listCommand: 'llm_list_vllm_models',
+  },
 ];
 
+// Explicit per-runtime lookup rather than a binary ternary — a binary
+// lmstudio/llamacpp check would silently fall through to llamacpp's URL/setter
+// for any third (or later) runtime key added here.
+function selectPersistedUrl(state: ReturnType<typeof useSettingsStore.getState>, key: RuntimeKey) {
+  switch (key) {
+    case 'lmstudio':
+      return state.llmConfig.lmstudioUrl;
+    case 'llamacpp':
+      return state.llmConfig.llamacppUrl;
+    case 'vllm':
+      return state.llmConfig.vllmUrl;
+  }
+}
+
+function selectSetPersistedUrl(
+  state: ReturnType<typeof useSettingsStore.getState>,
+  key: RuntimeKey,
+) {
+  switch (key) {
+    case 'lmstudio':
+      return state.setLmStudioUrl;
+    case 'llamacpp':
+      return state.setLlamaCppUrl;
+    case 'vllm':
+      return state.setVllmUrl;
+  }
+}
+
 function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
-  const persistedUrl = useSettingsStore((state) =>
-    runtime.key === 'lmstudio' ? state.llmConfig.lmstudioUrl : state.llmConfig.llamacppUrl,
-  );
-  const setPersistedUrl = useSettingsStore((state) =>
-    runtime.key === 'lmstudio' ? state.setLmStudioUrl : state.setLlamaCppUrl,
-  );
+  const persistedUrl = useSettingsStore((state) => selectPersistedUrl(state, runtime.key));
+  const setPersistedUrl = useSettingsStore((state) => selectSetPersistedUrl(state, runtime.key));
 
   const [urlInput, setUrlInput] = React.useState(persistedUrl || runtime.defaultUrl);
   const [checking, setChecking] = React.useState(true);

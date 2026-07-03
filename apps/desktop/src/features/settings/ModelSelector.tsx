@@ -144,6 +144,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       ollama: [],
       lmstudio: [],
       llamacpp: [],
+      vllm: [],
       xai: [],
       deepseek: [],
       qwen: [],
