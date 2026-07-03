@@ -81,6 +81,7 @@ export default function ChatTabScreen() {
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
   const failImageGeneration = useChatStore((s) => s.failImageGeneration);
+  const clearError = useChatStore((s) => s.clearError);
   const { isOnline } = useNetworkStatus();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedProvider = useModelStore((s) => s.selectedProvider);
@@ -443,8 +444,13 @@ export default function ChatTabScreen() {
   );
 
   const handleNewChat = useCallback(() => {
+    // Error state lives in the shared chat store, not scoped per-conversation —
+    // without this, a stale error banner from the previous conversation (e.g.
+    // "no on-device model ready" from a Local-mode chat) leaks into a brand
+    // new chat, even after switching to Cloud mode and getting a real reply.
+    clearError();
     router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
-  }, [router]);
+  }, [router, clearError]);
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
