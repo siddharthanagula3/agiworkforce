@@ -80,6 +80,12 @@ pub trait Validate {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateConversationRequest {
     pub title: String,
+    // LOCAL-CHAT-NOINVOKE-01: TauriRuntime.ensureBackendConversation sends
+    // `userId` (camelCase); without this alias every first send in a brand
+    // new conversation fails IPC deserialization ("missing field `user_id`")
+    // before chat_send_message is ever invoked — no assistant reply, no
+    // visible error. Same pattern as ChatSendMessageRequest's per-field aliases.
+    #[serde(alias = "userId")]
     pub user_id: String,
 }
 

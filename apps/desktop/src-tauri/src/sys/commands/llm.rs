@@ -438,6 +438,24 @@ pub async fn llm_configure_provider(
 
     match provider.as_str() {
         "ollama" => {
+            // Reject malformed URLs here rather than letting them silently reach
+            // OllamaProvider::is_available(), where a bad value (e.g. a stray
+            // partial string left over from an in-progress settings edit) makes
+            // every request URL-builder error, is_available() collapses that into
+            // a plain `false`, and the router reports the generic "no local
+            // provider reachable" — a deeply confusing failure with no link back
+            // to the actual bad setting.
+            if let Some(ref url) = base_url {
+                let parsed = url
+                    .parse::<reqwest::Url>()
+                    .map_err(|e| format!("Invalid Ollama URL '{}': {}", url, e))?;
+                if !matches!(parsed.scheme(), "http" | "https") {
+                    return Err(format!(
+                        "Invalid Ollama URL '{}': must start with http:// or https://",
+                        url
+                    ));
+                }
+            }
             let ollama = OllamaProvider::new(base_url)
                 .map_err(|e| format!("Failed to create Ollama provider: {}", e))?;
             router.set_ollama(Box::new(ollama));
