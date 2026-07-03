@@ -22,6 +22,7 @@ import type {
   SendMessageOptions,
   SendMessageParams,
   StreamChunk,
+  TauriAttachmentPayload,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
 import { invoke } from '../lib/tauri-mock';
@@ -187,6 +188,52 @@ function mapMessage(raw: RawMessage): ChatMessage {
 }
 
 // ---------------------------------------------------------------------------
+// Attachment encoding (DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01)
+//
+// `File` objects cannot cross the Tauri IPC boundary, so every attachment
+// the composer collected must be read into a base64 data URL and shaped to
+// match the Rust `ChatAttachment` struct (`apps/desktop/src-tauri/src/sys/
+// commands/chat/types.rs`) before `invoke('chat_send_message', ...)`.
+// ---------------------------------------------------------------------------
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Failed to read attachment "${file.name}"`));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * `File.name` is always a bare filename per the File API spec, but we strip
+ * any stray path separators defensively — the backend's `ChatAttachment`
+ * validator rejects `/`, `\`, and `..` in `name` (path-traversal guard).
+ */
+function sanitizeAttachmentName(name: string): string {
+  const base = name.split(/[/\\]/).pop() ?? name;
+  return base.replace(/\.\./g, '_');
+}
+
+async function encodeAttachmentsForIpc(files: File[]): Promise<TauriAttachmentPayload[]> {
+  return Promise.all(
+    files.map(async (file) => {
+      const dataUrl = await readFileAsDataUrl(file);
+      return {
+        id: crypto.randomUUID(),
+        // Only 'image' routes through the vision/multimodal path on the
+        // backend; every other accepted type (PDF/text/CSV/code) is a
+        // document that goes through text extraction instead.
+        type: file.type.startsWith('image/') ? 'image' : 'file',
+        name: sanitizeAttachmentName(file.name),
+        mimeType: file.type || undefined,
+        content: dataUrl,
+      } satisfies TauriAttachmentPayload;
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TauriRuntime implementation
 // ---------------------------------------------------------------------------
 
@@ -247,12 +294,20 @@ export class TauriRuntime implements ChatRuntime {
     content: string,
     options?: SendMessageOptions,
   ): Promise<void> {
+    // DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01: `options.attachments` carries
+    // the real `File` objects ChatInput held locally. Previously this was
+    // hardcoded to `undefined` here, so no attachment content ever reached
+    // the backend regardless of what the user attached.
+    const attachments =
+      options?.attachments && options.attachments.length > 0
+        ? await encodeAttachmentsForIpc(options.attachments)
+        : undefined;
     const params: SendMessageParams = {
       conversationId,
       content,
       model: options?.model,
       provider: options?.provider,
-      attachments: undefined,
+      attachments,
       signal: options?.signal,
       // Forward the composer controls that were previously dropped here.
       thinkingEnabled: options?.thinkingEnabled,
