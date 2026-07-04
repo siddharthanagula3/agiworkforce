@@ -42,6 +42,14 @@ export interface TokenUsage {
    * Always ADDITIONAL to promptTokens (Anthropic-only counter in practice).
    */
   cacheCreationInputTokens?: number;
+  /**
+   * Subset of cacheCreationInputTokens written to Anthropic's 1-hour cache
+   * (billed at 2x input instead of the 5m rate's 1.25x). Anthropic only
+   * reports this breakdown (`usage.cache_creation.ephemeral_1h_input_tokens`)
+   * when a request mixes 5m and 1h TTLs; when omitted, the entire
+   * cacheCreationInputTokens total is billed at the 5m rate.
+   */
+  cacheCreation1hInputTokens?: number;
 }
 
 export interface ModelPricing {
@@ -111,6 +119,13 @@ export class LLMCostCalculator {
       const completionTokens = Math.max(0, usage.completionTokens);
       const cacheReadTokens = Math.max(0, usage.cacheReadInputTokens ?? 0);
       const cacheCreationTokens = Math.max(0, usage.cacheCreationInputTokens ?? 0);
+      // Anthropic only reports the 1h/5m split when a request mixes TTLs; clamp
+      // to the total so a stale/inconsistent breakdown can never over-count.
+      const cacheCreation1hTokens = Math.min(
+        cacheCreationTokens,
+        Math.max(0, usage.cacheCreation1hInputTokens ?? 0),
+      );
+      const cacheCreation5mTokens = cacheCreationTokens - cacheCreation1hTokens;
 
       const pricing = this.getPricing(provider, model);
 
@@ -121,8 +136,11 @@ export class LLMCostCalculator {
       // promptTokens already excludes them — don't subtract.
       const cacheReadRate =
         pricing.cachedInputCostPer1MTokens ?? pricing.inputCostPer1MTokens * 0.1;
-      const cacheWriteRate =
+      // 5m write rate: 1.25x input (Anthropic default ephemeral cache).
+      const cacheWrite5mRate =
         pricing.cachedWriteCostPer1MTokens ?? pricing.inputCostPer1MTokens * 1.25;
+      // 1h write rate: 2x input (Anthropic's extended-TTL cache option).
+      const cacheWrite1hRate = pricing.inputCostPer1MTokens * 2.0;
 
       const billableInput = pricing.cacheTokensDisjointFromInput
         ? promptTokens
@@ -130,7 +148,9 @@ export class LLMCostCalculator {
 
       const inputCost = (billableInput / 1_000_000) * pricing.inputCostPer1MTokens;
       const cacheReadCost = (cacheReadTokens / 1_000_000) * cacheReadRate;
-      const cacheWriteCost = (cacheCreationTokens / 1_000_000) * cacheWriteRate;
+      const cacheWriteCost =
+        (cacheCreation5mTokens / 1_000_000) * cacheWrite5mRate +
+        (cacheCreation1hTokens / 1_000_000) * cacheWrite1hRate;
       const outputCost = (completionTokens / 1_000_000) * pricing.outputCostPer1MTokens;
 
       const totalCostDollars = inputCost + cacheReadCost + cacheWriteCost + outputCost;

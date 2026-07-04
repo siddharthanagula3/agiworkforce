@@ -394,6 +394,9 @@ async function handleLLMCompletion(request: NextRequest) {
 
       let inputTokens = 0;
       let outputTokens = 0;
+      let cacheReadInputTokens: number | undefined;
+      let cacheCreationInputTokens: number | undefined;
+      let cacheCreation1hInputTokens: number | undefined;
       let buffer = '';
 
       const transformStream = new TransformStream({
@@ -421,19 +424,45 @@ async function handleLLMCompletion(request: NextRequest) {
                 if (event.type === 'message_delta' && event.usage) {
                   outputTokens = event.usage.output_tokens || outputTokens;
                 }
-                // Anthropic format: message_start with input tokens
+                // Anthropic format: message_start with input tokens + cache usage
                 if (event.type === 'message_start' && event.message?.usage) {
                   inputTokens = event.message.usage.input_tokens || inputTokens;
+                  if (event.message.usage.cache_read_input_tokens != null) {
+                    cacheReadInputTokens = event.message.usage.cache_read_input_tokens;
+                  }
+                  if (event.message.usage.cache_creation_input_tokens != null) {
+                    cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens;
+                  }
+                  // Only present when the request mixes 5m and 1h TTLs; absent means
+                  // the entire cache_creation_input_tokens total is 5m-priced.
+                  if (event.message.usage.cache_creation?.ephemeral_1h_input_tokens != null) {
+                    cacheCreation1hInputTokens =
+                      event.message.usage.cache_creation.ephemeral_1h_input_tokens;
+                  }
                 }
                 // OpenAI format: usage in final chunk
                 if (event.usage) {
                   inputTokens = event.usage.prompt_tokens || inputTokens;
                   outputTokens = event.usage.completion_tokens || outputTokens;
+                  // OpenAI: prompt_tokens_details.cached_tokens (Chat Completions) /
+                  // input_tokens_details.cached_tokens (Responses API).
+                  const streamCacheRead =
+                    event.usage.prompt_tokens_details?.cached_tokens ??
+                    event.usage.input_tokens_details?.cached_tokens ??
+                    undefined;
+                  if (streamCacheRead != null) {
+                    cacheReadInputTokens = streamCacheRead;
+                  }
                 }
                 // Google/Gemini format
                 if (event.usageMetadata) {
                   inputTokens = event.usageMetadata.promptTokenCount || inputTokens;
                   outputTokens = event.usageMetadata.candidatesTokenCount || outputTokens;
+                  // Gemini implicit caching: cachedContentTokenCount is a subset of
+                  // promptTokenCount served from cache.
+                  if (event.usageMetadata.cachedContentTokenCount != null) {
+                    cacheReadInputTokens = event.usageMetadata.cachedContentTokenCount;
+                  }
                 }
               } catch {
                 // Ignore JSON parse errors for non-JSON lines
@@ -450,6 +479,9 @@ async function handleLLMCompletion(request: NextRequest) {
               promptTokens: inputTokens,
               completionTokens: outputTokens,
               totalTokens,
+              cacheReadInputTokens,
+              cacheCreationInputTokens,
+              cacheCreation1hInputTokens,
             });
 
             const costDifference = actualCostCents - estimatedCostCents;
@@ -616,6 +648,9 @@ async function handleLLMCompletion(request: NextRequest) {
     promptTokens: llmResponse.promptTokens,
     completionTokens: llmResponse.completionTokens,
     totalTokens: llmResponse.totalTokens,
+    cacheReadInputTokens: llmResponse.cachedInputTokens,
+    cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
+    cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
   });
 
   // RECONCILIATION: Adjust for the difference between estimated and actual cost

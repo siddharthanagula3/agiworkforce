@@ -48,6 +48,9 @@ export interface NormalizedUsage {
   reasoningOutputTokens?: number;
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
+  /** Subset of cacheCreationInputTokens written to Anthropic's 1h cache TTL
+   *  (billed at 2.0x input instead of the 5m rate's 1.25x). */
+  cacheCreation1hInputTokens?: number;
 }
 
 // Maximum number of concurrent sessions tracked. Oldest session is evicted.
@@ -98,13 +101,13 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   //  - Anthropic 1h TTL: 2.0× input rate (published: write costs +100%).
   //  - OpenAI / DeepSeek: no creation counter exposed — cacheCreationInputTokens
   //    will always be 0 for those providers so this rate is never applied.
-  // GAP: we cannot distinguish 5m-write from 1h-write tokens in the NormalizedUsage
-  // shape; cacheCreationInputTokens conflates both. The cost tracker therefore
-  // applies the 5m rate (1.25×) conservatively. If a session uses 1h TTL, the
-  // actual write cost is 2.0× — tracked gap, not a bug to fix without schema change.
+  // Anthropic's response only breaks cacheCreationInputTokens down into
+  // cacheCreation1hInputTokens when a request mixes 5m/1h TTLs; the remainder
+  // is billed at the 5m rate. See anthropic.ts's stable-prefix 1h upgrade.
   // Use catalog cached_write when populated; fall back to 1.25× of input rate.
   const cacheCreationPerM =
     typeof meta.cached_write === 'number' ? meta.cached_write : inputPerM * 1.25;
+  const cacheCreation1hPerM = inputPerM * 2.0;
 
   const rawInputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
@@ -112,7 +115,12 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   // Reference: codex-cli TokenUsage.reasoning_output_tokens · counted at output rate.
   const reasoningTokens = usage.reasoningOutputTokens ?? 0;
   const cacheRead = usage.cacheReadInputTokens ?? 0;
-  const cacheCreation = usage.cacheCreationInputTokens ?? 0;
+  const cacheCreationTotal = usage.cacheCreationInputTokens ?? 0;
+  const cacheCreation1h = Math.min(
+    cacheCreationTotal,
+    Math.max(0, usage.cacheCreation1hInputTokens ?? 0),
+  );
+  const cacheCreation5m = cacheCreationTotal - cacheCreation1h;
 
   // Token-accounting convention differs by provider, which decides whether cache
   // tokens must be SUBTRACTED from the input bucket before costing:
@@ -128,14 +136,15 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
   const isAnthropic = meta.provider === 'anthropic';
   const billableInput = isAnthropic
     ? rawInputTokens
-    : Math.max(0, rawInputTokens - cacheRead - cacheCreation);
+    : Math.max(0, rawInputTokens - cacheRead - cacheCreationTotal);
 
   return (
     (billableInput * inputPerM) / 1_000_000 +
     (outputTokens * outputPerM) / 1_000_000 +
     (reasoningTokens * outputPerM) / 1_000_000 +
     (cacheRead * cacheReadPerM) / 1_000_000 +
-    (cacheCreation * cacheCreationPerM) / 1_000_000
+    (cacheCreation5m * cacheCreationPerM) / 1_000_000 +
+    (cacheCreation1h * cacheCreation1hPerM) / 1_000_000
   );
 }
 
@@ -272,6 +281,9 @@ export function toOtelAttributes(
   }
   if (usage.cacheCreationInputTokens != null) {
     attrs['codex.usage.cache_creation_input_tokens'] = usage.cacheCreationInputTokens;
+  }
+  if (usage.cacheCreation1hInputTokens != null) {
+    attrs['codex.usage.cache_creation_1h_input_tokens'] = usage.cacheCreation1hInputTokens;
   }
   if (usage.reasoningOutputTokens != null) {
     attrs['codex.usage.reasoning_output_tokens'] = usage.reasoningOutputTokens;

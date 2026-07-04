@@ -2,9 +2,9 @@
  * POST /api/usage/deduct
  *
  * Deducts credits from the authenticated user's active billing-period wallet.
- * Called by token-enforcement-service after a successful LLM response.
+ * Called after a successful LLM response.
  *
- * Request body (sent by token-enforcement-service):
+ * Request body:
  *   { amount_cents, description?, metadata?, idempotency_key? }
  *
  * Response:

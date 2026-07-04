@@ -14,7 +14,6 @@ import {
   openBillingPortal,
   isStripeConfigured,
 } from '@features/billing/services/stripe-payments';
-import { buyTokenPack } from '@features/billing/services/token-pack-purchase';
 import { toast } from 'sonner';
 import {
   useBillingData,
@@ -37,26 +36,33 @@ import ErrorBoundary from '@shared/components/ErrorBoundary';
 import {
   normalizePlan,
   BillingInfo,
-  CreditPack,
   formatCurrency,
   formatDate,
 } from '@features/billing/components/Billing/types';
 import { Subscription } from '@features/billing/components/Billing/Subscription';
 import { Usage } from '@features/billing/components/Billing/Usage';
-import { Topup } from '@features/billing/components/Billing/Topup';
 
-// Managed cloud is public-alpha-open; paid-plan checkout is env-gated. Set
-// NEXT_PUBLIC_CHECKOUT_ENABLED=true to open live checkout (mirrors server
-// STRIPE_CHECKOUT_ENABLED). Defaults to off so free users are routed to the
-// early-access list, not a live purchase flow.
-const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
+// Paid-plan checkout (2026-07-04): open by default, matching the
+// managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
+// The env var is retained ONLY as an incident-response kill-switch: set
+// NEXT_PUBLIC_CHECKOUT_ENABLED=0 (or 'false'/'off') to re-gate.
+//
+// NEXT_PUBLIC_CHECKOUT_ENABLED MUST be kept equal to the server-side
+// STRIPE_CHECKOUT_ENABLED flag (app/api/checkout/route.ts) and to the same
+// client flag in app/pricing/page.tsx — see the comment block in
+// apps/web/.env.example. If they diverge, the CTA and the API will disagree
+// about whether checkout is actually available.
+const CHECKOUT_ENABLED_RAW = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED']?.trim().toLowerCase();
+const CHECKOUT_ENABLED =
+  CHECKOUT_ENABLED_RAW !== '0' &&
+  CHECKOUT_ENABLED_RAW !== 'false' &&
+  CHECKOUT_ENABLED_RAW !== 'off';
 
 const BillingPage: React.FC = () => {
   const { user } = useAuthStore();
   const searchParams = useSearchParams();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('yearly');
   const [isManagingBilling, setIsManagingBilling] = useState(false);
-  const [showBuyTokens, setShowBuyTokens] = useState(false);
 
   const {
     data: billingData,
@@ -126,19 +132,8 @@ const BillingPage: React.FC = () => {
   useEffect(() => {
     const success = searchParams.get('success');
     const sessionId = searchParams.get('session_id');
-    const action = searchParams.get('action');
-    const tokensParam = searchParams.get('tokens');
 
     const timeoutIds: ReturnType<typeof setTimeout>[] = [];
-
-    if (action === 'buy-tokens') {
-      setShowBuyTokens(true);
-      const scrollTimeoutId = setTimeout(() => {
-        const element = document.getElementById('buy-tokens-section');
-        element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-      timeoutIds.push(scrollTimeoutId);
-    }
 
     const scheduleRetryRefresh = () => {
       const delays = [1000, 3000, 8000];
@@ -150,18 +145,7 @@ const BillingPage: React.FC = () => {
       });
     };
 
-    if (success === 'true' && tokensParam && user && !hasShownSuccessToast.current) {
-      const tokens = parseInt(tokensParam, 10);
-      if (!Number.isNaN(tokens) && tokens > 0) {
-        toast.success(`Success! ${tokens.toLocaleString()} credits added to your account.`, {
-          duration: 5000,
-        });
-      } else {
-        toast.success('Credit purchase successful!', { duration: 5000 });
-      }
-      hasShownSuccessToast.current = true;
-      scheduleRetryRefresh();
-    } else if (success === 'true' && sessionId && user && !hasShownSuccessToast.current) {
+    if (success === 'true' && sessionId && user && !hasShownSuccessToast.current) {
       toast.success('Payment successful! Your subscription has been upgraded.');
       hasShownSuccessToast.current = true;
       scheduleRetryRefresh();
@@ -291,34 +275,6 @@ const BillingPage: React.FC = () => {
     }
   };
 
-  const handleBuyTokenPack = async (pack: CreditPack) => {
-    if (!user) {
-      toast.error('Please log in to purchase credits');
-      return;
-    }
-
-    // Gate credit pack purchases behind the managed-credits env flag (early-access).
-    if (!CHECKOUT_ENABLED) {
-      window.location.href = '/pricing#waitlist';
-      return;
-    }
-
-    try {
-      toast.loading(`Redirecting to checkout for ${pack.name}...`);
-      await buyTokenPack({
-        userId: user.id,
-        userEmail: user.email || '',
-        packId: pack.id,
-        tokens: pack.credits,
-        price: pack.price,
-      });
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to start checkout. Please try again.',
-      );
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -444,14 +400,6 @@ const BillingPage: React.FC = () => {
           onDownloadInvoice={handleDownloadInvoice}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
-        />
-
-        <Topup
-          billing={billing}
-          showBuyTokens={showBuyTokens}
-          onClose={() => setShowBuyTokens(false)}
-          onBuyTokenPack={handleBuyTokenPack}
-          onUpgradePro={() => handleUpgrade('pro', 'monthly')}
         />
       </div>
     </ErrorBoundary>

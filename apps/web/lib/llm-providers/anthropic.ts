@@ -357,6 +357,9 @@ export class AnthropicProvider extends BaseLLMProvider {
         totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
         finishReason,
         cacheCreationInputTokens: data.usage?.cache_creation_input_tokens,
+        // Anthropic only includes this breakdown when the request mixes 5m and 1h
+        // TTLs; when absent, cache_creation_input_tokens is entirely 5m-priced.
+        cacheCreation1hInputTokens: data.usage?.cache_creation?.ephemeral_1h_input_tokens,
         cachedInputTokens: data.usage?.cache_read_input_tokens,
         tool_calls: toolCalls,
       };
