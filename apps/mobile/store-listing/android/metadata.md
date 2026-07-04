@@ -1,9 +1,16 @@
-# Google Play Console — AGI Android Metadata Draft
+# Google Play Console — AGI Android Metadata Draft (SUPERSEDED)
 
-Status: Current draft, not submission-locked
+> **Superseded 2026-07-04.** This draft describes the pre-public-alpha
+> Cloud invite/waitlist gate, which no longer exists — AGI Cloud is now
+> open to any signed-in user with no invite code. Do not paste this
+> copy. The canonical, current source for Play Console submission is
+> `../LISTING-METADATA-ANDROID.json` plus `../FOUNDER-SUBMISSION-CHECKLIST.md`.
+> This file is kept only as historical reference.
+
+Status: Superseded draft — see notice above
 Last updated: 2026-06-05
 
-This file must reflect the current Mobile demo path: Local Mode first, Cloud Managed visible through invite/waitlist gates, no direct provider-key entry on Mobile.
+This file reflects an older Mobile demo path: Local Mode first, Cloud Managed visible through invite/waitlist gates, no direct provider-key entry on Mobile.
 
 ## App Name
 

@@ -143,16 +143,22 @@ What it controls:
 - No native in-app purchase flow is reachable from either store's billing
   library.
 
-**Separate from billing/IAP:** an "Upgrade to `<Tier>`" CTA
-(`PaywallBottomSheet.tsx`) IS live in v1.2.0. It opens
-`agiworkforce.com/pricing?from=mobile-paywall` in the system browser to
-complete checkout — this is a web-link CTA, not an in-app purchase, and
-does not require Apple / Google billing entitlements to exist. It DOES
-raise Apple Guideline 3.1.1 / Google Play external-offers-policy questions
+**Separate from billing/IAP:** as of the 2026-07-04 05:17 commit
+(`9bc2ca8bb`), the chat-paywall CTA (`PaywallBottomSheet.tsx`) no longer
+opens a browser checkout — when `FEATURES.iap` is off it shows an
+informational no-CTA message instead, specifically to stay out of
+Guideline 3.1.1 territory on that surface. The web-checkout link still
+exists, but only on the Settings → Billing screen
+(`src/features/settings/cloud-billing/index.tsx` → "Upgrade plan" /
+"Adjust plan" row), which opens `agiworkforce.com/pricing` in the system
+browser. This is a web-link CTA, not an in-app purchase, and does not
+require Apple / Google billing entitlements to exist. It DOES raise the
+same Apple Guideline 3.1.1 / Google Play external-offers-policy question
 about linking out to complete a paid subscription purchase from within
-the app. That policy question is unresolved — see
-`FOUNDER-SUBMISSION-CHECKLIST.md` Part D item 11. Do not resolve it here;
-it needs founder + legal sign-off.
+the app — moving the CTA off the paywall sheet did not remove the
+underlying policy question, only relocate where it appears. That
+question is unresolved — see `FOUNDER-SUBMISSION-CHECKLIST.md` Part D
+item 11. Do not resolve it here; it needs founder + legal sign-off.
 
 ---
 

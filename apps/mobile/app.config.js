@@ -1,7 +1,24 @@
 // app.config.js — dynamic Expo config (replaces app.json).
 // New Architecture is the default in Expo SDK 55 — no explicit newArchEnabled needed.
 /** @type {import('expo/config').ExpoConfig} */
+const { withEntitlementsPlist } = require('@expo/config-plugins');
 const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
+
+// @kingstinct/react-native-healthkit's config plugin always writes
+// com.apple.developer.healthkit.background-delivery as an explicit boolean
+// (false when unused, per its app.plugin.js) rather than omitting the key.
+// The registered App ID's HealthKit capability makes Xcode's auto-generated
+// distribution provisioning profile grant this entitlement as true, so an
+// explicit `false` in the app's entitlements file is a literal value
+// mismatch that fails archiving ("doesn't match the entitlements file's
+// value for the ... background-delivery entitlement"). The app doesn't use
+// background delivery at all, so drop the key entirely post-healthkit-plugin
+// rather than asserting a value either way.
+const withHealthKitBackgroundDeliveryFix = (config) =>
+  withEntitlementsPlist(config, (config) => {
+    delete config.modResults['com.apple.developer.healthkit.background-delivery'];
+    return config;
+  });
 
 function envIsTruthy(name) {
   const value = process.env[name]?.toLowerCase();
@@ -67,7 +84,7 @@ const config = {
     associatedDomains,
     infoPlist: {
       NSCameraUsageDescription:
-        'AGI Workforce uses the camera to scan QR codes for desktop pairing and to send images to AI for analysis.',
+        'AGI Workforce uses the camera to scan documents and text for AI analysis and to attach photos to your conversations.',
       NSMicrophoneUsageDescription:
         'AGI Workforce uses the microphone for voice input and real-time voice conversations with AI.',
       NSPhotoLibraryUsageDescription:
@@ -170,6 +187,11 @@ const config = {
     ],
   },
   plugins: [
+    // Placed first: expo config-plugins composes same-mod-type plugins in
+    // reverse array order (last plugin's mod runs first), so this must be
+    // first here to run LAST, after @kingstinct/react-native-healthkit's
+    // entitlements mod further down populates the key this deletes.
+    withHealthKitBackgroundDeliveryFix,
     'expo-router',
     'expo-secure-store',
     // minSdkVersion 26 (Android 8.0) floor — required by com.google.mlkit:genai-common
@@ -233,13 +255,19 @@ const config = {
     'expo-sharing',
     // HealthKit: injects com.apple.developer.healthkit entitlement (iOS only).
     // App only reads data (see healthKitPermission.ts requestAuthorization
-    // read-only call) — update-usage string disabled since write is unused.
+    // read-only call). NSHealthUpdateUsageDescription is still required by
+    // Apple's binary scanner even though write is unused — the linked
+    // library exposes write-capable HealthKit API symbols regardless of
+    // whether the app calls them, and App Store validation rejects the
+    // build without this string present (confirmed via `altool --validate-app`,
+    // error: "Missing purpose string in Info.plist ... NSHealthUpdateUsageDescription").
     [
       '@kingstinct/react-native-healthkit',
       {
         NSHealthShareUsageDescription:
           'AGI Workforce reads health data to provide AI-powered health insights and summaries.',
-        NSHealthUpdateUsageDescription: false,
+        NSHealthUpdateUsageDescription:
+          'AGI Workforce does not write to Health data. This permission is required by a linked library but is never used.',
         background: false,
       },
     ],

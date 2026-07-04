@@ -1,9 +1,16 @@
-# Google Play Data Safety — AGI Mobile Draft
+# Google Play Data Safety — AGI Mobile Draft (SUPERSEDED)
 
-Status: Current draft, not submission-locked
+> **Superseded 2026-07-04.** AGI Cloud is now public alpha, open to any
+> signed-in user — there is no invite/waitlist gate. The canonical,
+> current data-safety answers are in `../LISTING-METADATA-ANDROID.json`
+> → `data_safety` and `../FOUNDER-SUBMISSION-CHECKLIST.md` → B.6. Do not
+> paste this file's table into Play Console. Kept only as historical
+> reference for the security-practices columns.
+
+Status: Superseded draft — see notice above
 Last updated: 2026-06-05
 
-Current Mobile posture: default Local Mode does not require an account and should not collect cloud account data. Cloud Managed features are invite/waitlist gated and become data-sharing paths only after access is enabled and the user explicitly enters that mode.
+Older Mobile posture described here: default Local Mode does not require an account and should not collect cloud account data. Cloud Managed features were invite/waitlist gated and became data-sharing paths only after access was enabled and the user explicitly entered that mode.
 
 ## Data Collection
 

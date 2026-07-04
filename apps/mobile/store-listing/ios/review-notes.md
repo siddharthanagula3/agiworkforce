@@ -1,9 +1,15 @@
-# App Review Notes — AGI iOS Draft
+# App Review Notes — AGI iOS Draft (SUPERSEDED)
 
-Status: Current draft, not submission-locked
+> **Superseded.** The canonical, current App Review notes paste-in is
+> `../REVIEWER-NOTES-IOS.md` (v1.2.0, public-alpha Cloud, no invite
+> gate). Do not paste this file's copy — it describes the older
+> invite/waitlist-gated Cloud posture, which no longer exists. Kept
+> only as historical reference.
+
+Status: Superseded draft — see notice above
 Last updated: 2026-06-05
 
-Paste only after rechecking the submitted binary. Current Mobile posture: Local Mode first, Cloud Managed invite/waitlist gated, no direct provider-key entry on Mobile.
+Paste only after rechecking the submitted binary. Older Mobile posture described here: Local Mode first, Cloud Managed invite/waitlist gated, no direct provider-key entry on Mobile.
 
 ## Notes For The App Review Team
 
