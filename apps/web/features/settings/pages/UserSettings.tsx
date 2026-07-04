@@ -3,6 +3,15 @@
  * NO MOCK DATA - All data comes from and saves to Neon
  * Uses React Query for server state management
  * Form validation powered by react-hook-form + Zod with XSS sanitization
+ *
+ * NOT MOUNTED BY ANY ROUTE. The reachable settings UI is the shared
+ * WebSettingsModal (features/settings/components/WebSettingsModal.tsx),
+ * driven by per-section components under features/settings/sections/*.
+ * This full-page implementation predates that modal architecture; its
+ * Security tab content (TwoFactorPanel) was ported into
+ * features/settings/sections/SecuritySection.tsx and wired into the modal.
+ * Do not link to this page — it renders nowhere and will drift out of sync
+ * with the real settings surfaces.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
