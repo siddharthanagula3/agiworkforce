@@ -105,17 +105,15 @@ const NATIVE_CODE_EXECUTION_PROVIDERS = new Set(['anthropic', 'google', 'openai'
  * requested. Providers with a NATIVE (provider-executed) interpreter use it; providers
  * without one fail-closed (no tool).
  *
- * IMPORTANT — E2B offering is intentionally DISABLED on this request path. The E2B
- * execution tools are platform-executed (the agentic loop must run them), but the
- * server-side tool loop is unreachable in production (the route enters it only with a
- * non-empty MCP catalog AND under a hardcoded manual-approval gate that has no resume
- * endpoint — a pre-existing architectural gap, predating P3). Offering E2B tools here
- * would inject a tool that NOTHING executes and would strip OpenAI's working native
- * interpreter — a regression. So this stays native-always / fail-closed until a
- * reachable, approval-gated E2B execution loop exists (founder decision — see the
- * design doc). The lib/e2b binding + tools remain as the verified, dormant foundation.
+ * This function is the FALLBACK path used when the E2B cut-over does not apply to the
+ * current request (see request-processor.ts's `code_execution` branch): free-native
+ * providers (Anthropic/Google) always use it, and everyone else falls back to it when
+ * `AGI_E2B_EXECUTION` is off, the request isn't streaming, or it's a free-trial request.
+ * The reachable, approval-gated E2B execution loop (route.ts `hasE2BTools` → 'auto' mode
+ * → `runToolLoop` → `routeExecutionTool`) is the path taken when the cut-over conditions
+ * in request-processor.ts are met — see that file and the design doc for the full gating.
  *
- * Effect: this is byte-for-byte the pre-P3 behavior, regardless of E2B configuration.
+ * Effect: when the cut-over doesn't apply, this is byte-for-byte the pre-P3 behavior.
  */
 export function resolveCodeExecutionTools(provider: string): unknown[] {
   const p = provider.toLowerCase();
