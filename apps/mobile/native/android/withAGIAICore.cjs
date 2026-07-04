@@ -13,6 +13,7 @@
 
 const {
   withAppBuildGradle,
+  withProjectBuildGradle,
   withDangerousMod,
   createRunOncePlugin,
 } = require('@expo/config-plugins');
@@ -114,9 +115,46 @@ function withAICoreMainApplication(config) {
   ]);
 }
 
+// Detox's androidTest build merges react-native-executorch's bundled native libs
+// (libc++_shared.so, libfbjni.so, ...) against the copies react-android already ships.
+// That merge conflict happens inside react-native-executorch's own
+// :mergeDebugAndroidTestNativeLibs task (a library subproject build, not the app
+// module), so app/build.gradle packagingOptions can't reach it — it has to be applied
+// to every android library subproject from the root build.gradle. Only wire this when
+// Detox is enabled so production builds are unaffected.
+const DETOX_PICK_FIRST_MARKER = 'agi-detox-libcxx-pickfirst';
+function withAICoreDetoxNativeLibPickFirst(config) {
+  return withProjectBuildGradle(config, (c) => {
+    const gradle = c.modResults.contents;
+    if (gradle.includes(DETOX_PICK_FIRST_MARKER)) return c;
+    c.modResults.contents = `${gradle}
+// @generated ${DETOX_PICK_FIRST_MARKER} - agi-aicore-plugin
+// Resolves duplicate .so merge conflicts in library subprojects' androidTest builds
+// (e.g. react-native-executorch vs react-android) when Detox is enabled.
+subprojects { subproject ->
+  subproject.plugins.withId('com.android.library') {
+    // NOTE: the closure-style "jniLibs { pickFirst 'x' }" DSL silently no-ops when
+    // called on subprojects from outside their own build.gradle (verified via direct
+    // packagingOptions.jniLibs.pickFirsts inspection) — mutate the pickFirsts set
+    // directly instead.
+    subproject.android.packagingOptions.jniLibs.pickFirsts.add('**/*.so')
+  }
+}
+`;
+    return c;
+  });
+}
+
 function withAGIAICore(config) {
   config = withAICoreGradle(config);
   config = withAICoreMainApplication(config);
+  if (
+    process.env.EXPO_ENABLE_DETOX === '1' ||
+    process.env.EXPO_ENABLE_DETOX === 'true' ||
+    process.env.EXPO_ENABLE_DETOX === 'yes'
+  ) {
+    config = withAICoreDetoxNativeLibPickFirst(config);
+  }
   return config;
 }
 
