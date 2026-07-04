@@ -4,12 +4,15 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
 <View
   accessibilityLabel="Recording in progress"
   accessibilityRole="alert"
-  className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-3"
+  className="absolute inset-x-0 bottom-0 px-4 pt-3"
   entering={{}}
   exiting={{}}
   style={
     {
       "backgroundColor": "rgba(15, 15, 15, 0.95)",
+      "elevation": 50,
+      "paddingBottom": 16,
+      "zIndex": 50,
     }
   }
 >

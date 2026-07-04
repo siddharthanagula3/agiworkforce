@@ -80,6 +80,7 @@ interface ExecutionState {
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   clearError: () => void;
   clearPaywallError: () => void;
+  setPaywallError: (paywallError: PaywallErrorState) => void;
 }
 
 const abortControllers = new Map<string, AbortController>();
@@ -441,6 +442,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
   clearError: () => set({ error: null }),
   clearPaywallError: () => set({ paywallError: null }),
+  setPaywallError: (paywallError) => set({ paywallError }),
 
   sendMessage: async (conversationId, content, model, attachments, options) => {
     // #2: enforce minor-safe content filtering before the prompt reaches ANY LLM

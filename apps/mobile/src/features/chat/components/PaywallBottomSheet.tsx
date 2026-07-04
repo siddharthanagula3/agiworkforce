@@ -58,6 +58,7 @@ const FEATURE_LABELS: Record<string, string> = {
   computer_use: 'Computer use',
   deep_research: 'Deep research',
   image_quota: 'More image generation',
+  image_generation: 'AI image generation',
   token_cap: 'Higher token limits',
   mcp: 'MCP server support',
   web_search: 'Web search',

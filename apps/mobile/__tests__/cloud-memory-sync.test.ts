@@ -51,10 +51,13 @@ import { useMemorySyncStateStore } from '../stores/memory/memorySyncStateStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { syncNow, markMemoryForSync } from '../services/cloudSyncEngine';
 import { useMemoryStore } from '../src/features/memory/store';
-import { insertMemoryFact } from '../storage/memory';
+import { insertMemoryFact, togglePinMemoryFact } from '../storage/memory';
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
+const mockTogglePinMemoryFact = togglePinMemoryFact as jest.MockedFunction<
+  typeof togglePinMemoryFact
+>;
 
 const T = '2026-06-22T00:00:00.000Z';
 const MEMORY_SYNC_PATH = '/api/memory/sync';
@@ -92,6 +95,7 @@ function seedCloudMemory(id: string, content = 'test', isDeleted = false) {
     content,
     category: null,
     source: 'mobile',
+    pinned: false,
     isDeleted,
     createdAt: T,
     updatedAt: T,
@@ -188,7 +192,13 @@ describe('memory sync — cursor', () => {
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith('/api/memory/sync'))
         return { memories: [], cursor: '15', hasMore: false } as never;
-      return { conversations: [], messages: [], artifacts: [], cursor: '42', hasMore: false } as never;
+      return {
+        conversations: [],
+        messages: [],
+        artifacts: [],
+        cursor: '42',
+        hasMore: false,
+      } as never;
     });
 
     await syncNow();
@@ -315,8 +325,7 @@ describe('memory sync — push', () => {
 
     // Server returns empty applied list (simulates server rejection).
     mockPost.mockImplementation(async (path: string) => {
-      if ((path as string) === MEMORY_SYNC_PATH)
-        return { applied: [], cursor: '0' } as never;
+      if ((path as string) === MEMORY_SYNC_PATH) return { applied: [], cursor: '0' } as never;
       // Chat sync ack
       return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
     });
@@ -380,5 +389,66 @@ describe('memory store — local/cloud separation', () => {
 
     // The new id must be in the dirty queue.
     expect(useMemorySyncStateStore.getState().dirtyMemoryIds).toContain(cloudEntries[0]!.id);
+  });
+});
+
+// ── Pin persistence (cloud mode) ────────────────────────────────────────────────
+
+describe('memory store — cloud pin/unpin persistence', () => {
+  it('a cloud-mode togglePin writes to the cloud store and marks it dirty, not SQLite', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    mockTogglePinMemoryFact.mockClear();
+
+    await useMemoryStore.getState().addMemory('pin me');
+    const entry = useCloudMemoryStore.getState().entries[0]!;
+    useMemorySyncStateStore.getState().clearMemoryDirty([entry.id]);
+
+    await useMemoryStore.getState().togglePin(entry.id);
+
+    expect(useCloudMemoryStore.getState().entries[0]!.pinned).toBe(true);
+    expect(useMemorySyncStateStore.getState().dirtyMemoryIds).toContain(entry.id);
+    expect(mockTogglePinMemoryFact).not.toHaveBeenCalled();
+  });
+
+  it('pushes the pinned flag to the server on sync', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    await useMemoryStore.getState().addMemory('pin me too');
+    const entry = useCloudMemoryStore.getState().entries[0]!;
+    await useMemoryStore.getState().togglePin(entry.id);
+
+    await syncNow();
+
+    const pushCall = mockPost.mock.calls.find(([path]) => path === MEMORY_SYNC_PATH);
+    expect(pushCall).toBeDefined();
+    const body = pushCall![1] as { memories: Array<{ id: string; pinned?: boolean }> };
+    const pushedEntry = body.memories.find((m) => m.id === entry.id);
+    expect(pushedEntry?.pinned).toBe(true);
+  });
+
+  it('does not revert a locally-pinned entry when the server pull omits the pinned field', async () => {
+    // Server does not yet support the pinned column — its delta omits the field.
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/memory/sync')) {
+        return {
+          memories: [memoryPullItem('m-pinned', '5', { content: 'already pinned' })],
+          cursor: '5',
+          hasMore: false,
+        } as never;
+      }
+      return emptyChatPull() as never;
+    });
+
+    useChatAppModeStore.getState().setAppMode('cloud');
+    seedCloudMemory('m-pinned', 'already pinned');
+    useCloudMemoryStore.getState().upsertCloudMemory({
+      ...useCloudMemoryStore.getState().entries[0]!,
+      pinned: true,
+    });
+
+    await syncNow();
+
+    expect(useCloudMemoryStore.getState().entries.find((e) => e.id === 'm-pinned')?.pinned).toBe(
+      true,
+    );
   });
 });

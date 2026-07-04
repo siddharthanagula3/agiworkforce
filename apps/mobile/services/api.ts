@@ -225,6 +225,31 @@ async function request<T>(
 
     if (!response.ok) {
       const body = await response.text();
+
+      // Some routes (e.g. image generation) gate on plan tier with a 403 and
+      // an object-shaped `{ error: { code: 'plan_upgrade_required', ... } }`
+      // body instead of the 429 `{ kind: 'paywall' }` shape above. Recognise
+      // this shape too so the caller's ApiPaywallError handling (upgrade
+      // sheet) fires instead of a silent generic-error failure.
+      if (response.status === 403) {
+        try {
+          const parsed = JSON.parse(body) as {
+            error?: { code?: string; message?: string; required_plans?: string[] };
+          };
+          if (parsed.error?.code === 'plan_upgrade_required') {
+            throw new ApiPaywallError(
+              'image_generation',
+              parsed.error.required_plans?.[0] ?? 'pro',
+              parsed.error.message ?? '',
+            );
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof ApiPaywallError) throw parseErr;
+          // Not JSON, or not the plan-upgrade shape — fall through to the
+          // generic error handling below.
+        }
+      }
+
       // Structured JSON error bodies carry a human-readable `error` or `message`
       // field — surface that instead of dumping the raw JSON payload verbatim,
       // since callers often show this text directly in chat/error UI.

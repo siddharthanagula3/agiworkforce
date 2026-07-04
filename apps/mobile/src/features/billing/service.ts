@@ -1,9 +1,9 @@
 /**
  * Billing service — portal session fetch.
  *
- * Calls `/api/billing/portal-session` with the user's auth token and returns a
- * one-time Stripe Customer Portal URL.  The URL is validated by the caller
- * before being opened (HIGH-MOB-02 allowlist in lib/safeOpenURL.ts).
+ * Calls `/api/portal` with the user's auth token and returns a one-time
+ * Stripe Customer Portal URL.  The URL is validated by the caller before
+ * being opened (HIGH-MOB-02 allowlist in lib/safeOpenURL.ts).
  */
 import { api } from '@/services/api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -19,7 +19,7 @@ export interface PortalSessionResult {
  */
 export async function fetchPortalSessionUrl(): Promise<string> {
   if (!FEATURES.billing) throw new Error('billing: cloud billing not available in v1');
-  const data = await api.post<PortalSessionResult>('/api/billing/portal-session');
+  const data = await api.post<PortalSessionResult>('/api/portal');
   if (!data.url) {
     throw new Error('billing: portal-session response missing url field');
   }

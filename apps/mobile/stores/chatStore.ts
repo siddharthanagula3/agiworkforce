@@ -98,6 +98,7 @@ export interface CombinedChatState {
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   clearError: () => void;
   clearPaywallError: () => void;
+  setPaywallError: (paywallError: PaywallErrorState) => void;
   searchConversations: (query: string) => void;
   setChatMode: (mode: ChatMode) => void;
   setChatStyle: (style: ChatStyle) => void;
@@ -170,6 +171,7 @@ function buildCombinedState(
     editMessage: exec.editMessage,
     clearError: exec.clearError,
     clearPaywallError: exec.clearPaywallError,
+    setPaywallError: exec.setPaywallError,
     searchQuery: view.searchQuery,
     searchResults: view.searchResults,
     isSearching: view.isSearching,

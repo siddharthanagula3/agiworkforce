@@ -26,6 +26,8 @@ export interface CloudMemoryEntry {
   category: string | null;
   /** Always 'mobile' for locally-created entries; may be 'web'/'desktop'/'auto' for pulled entries. */
   source: 'mobile' | 'desktop' | 'web' | 'auto';
+  /** Pinned facts are surfaced first and always injected into chat context. */
+  pinned: boolean;
   /** ISO 8601 string. LWW key: server accepts the latest updatedAt. */
   createdAt: string;
   updatedAt: string;
