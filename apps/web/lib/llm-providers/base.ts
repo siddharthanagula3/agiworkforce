@@ -54,6 +54,9 @@ export interface LLMProviderResponse {
   finishReason?: string;
   reasoningOutputTokens?: number; // Thinking/reasoning tokens (OpenAI o-series, Anthropic extended thinking)
   cacheCreationInputTokens?: number;
+  /** Subset of cacheCreationInputTokens billed at Anthropic's 1-hour cache rate
+   *  (2x input) instead of the 5m rate (1.25x input). See cache-retention.ts. */
+  cacheCreation1hInputTokens?: number;
   cachedInputTokens?: number;
   tool_calls?: unknown[]; // Tool calls if the model used function calling
   citations?: unknown[]; // Citations from server-managed tools (e.g., Anthropic web_search)

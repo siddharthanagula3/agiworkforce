@@ -42,6 +42,7 @@ export async function buildStreamResponse(
   let reasoningOutputTokens: number | undefined;
   let cacheReadInputTokens: number | undefined;
   let cacheCreationInputTokens: number | undefined;
+  let cacheCreation1hInputTokens: number | undefined;
   let buffer = '';
   const encoder = new TextEncoder();
   const streamStartedAt = Date.now();
@@ -287,6 +288,12 @@ export async function buildStreamResponse(
               if (event.message.usage.cache_creation_input_tokens != null) {
                 cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens;
               }
+              // Only present when the request mixes 5m and 1h TTLs; absent means
+              // the entire cache_creation_input_tokens total is 5m-priced.
+              if (event.message.usage.cache_creation?.ephemeral_1h_input_tokens != null) {
+                cacheCreation1hInputTokens =
+                  event.message.usage.cache_creation.ephemeral_1h_input_tokens;
+              }
             }
             if (event.usage) {
               inputTokens = Math.max(inputTokens, event.usage.prompt_tokens || 0);
@@ -415,6 +422,7 @@ export async function buildStreamResponse(
             totalTokens,
             cacheReadInputTokens: cacheReadInputTokens || undefined,
             cacheCreationInputTokens: cacheCreationInputTokens || undefined,
+            cacheCreation1hInputTokens: cacheCreation1hInputTokens || undefined,
           });
 
           const costDifference = actualCostCents - estimatedCostCents;
@@ -473,6 +481,7 @@ export async function buildStreamResponse(
           reasoningOutputTokens,
           cacheReadInputTokens,
           cacheCreationInputTokens,
+          cacheCreation1hInputTokens,
         };
         recordModelUsage(userId, modelUsed, usage);
         logger.info(

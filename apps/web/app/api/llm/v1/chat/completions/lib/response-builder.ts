@@ -22,6 +22,7 @@ export async function buildNonStreamResponse(
     totalTokens: number;
     reasoningOutputTokens?: number;
     cacheCreationInputTokens?: number;
+    cacheCreation1hInputTokens?: number;
     cachedInputTokens?: number;
     citations?: unknown[];
     search_results?: unknown[];
@@ -56,6 +57,7 @@ export async function buildNonStreamResponse(
         totalTokens: llmResponse.totalTokens,
         cacheReadInputTokens: llmResponse.cachedInputTokens,
         cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
+        cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
       });
 
   const costDifference = actualCostCents - estimatedCostCents;
@@ -126,6 +128,7 @@ export async function buildNonStreamResponse(
       reasoningOutputTokens: llmResponse.reasoningOutputTokens,
       cacheReadInputTokens: llmResponse.cachedInputTokens,
       cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
     };
     recordModelUsage(userId, llmResponse.model, usage);
     logger.info(

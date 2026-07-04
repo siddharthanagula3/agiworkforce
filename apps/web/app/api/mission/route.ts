@@ -294,6 +294,9 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
       promptTokens: llmResponse.promptTokens,
       completionTokens: llmResponse.completionTokens,
       totalTokens: llmResponse.totalTokens,
+      cacheReadInputTokens: llmResponse.cachedInputTokens,
+      cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
     });
     const costDiff = actualCostCents - estimatedCostCents;
     if (costDiff !== 0) {

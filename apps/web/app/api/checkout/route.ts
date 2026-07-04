@@ -27,11 +27,16 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-// Paid-plan checkout is env-gated while billing controls (metering, refunds,
-// fraud, provider terms) are proven. Managed cloud itself is public-alpha-open;
-// this gate only governs paid higher-capacity tiers, not cloud access.
-// Set STRIPE_CHECKOUT_ENABLED=true in env to open paid-plan checkout.
-const CHECKOUT_ENABLED = process.env['STRIPE_CHECKOUT_ENABLED'] === 'true';
+// Paid-plan checkout (2026-07-04): open by default, matching the
+// managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
+// The env var is retained ONLY as an incident-response kill-switch: set
+// STRIPE_CHECKOUT_ENABLED=0 (or 'false'/'off') to re-gate. Any other value
+// (including unset) keeps checkout open.
+const CHECKOUT_ENABLED_RAW = process.env['STRIPE_CHECKOUT_ENABLED']?.trim().toLowerCase();
+const CHECKOUT_ENABLED =
+  CHECKOUT_ENABLED_RAW !== '0' &&
+  CHECKOUT_ENABLED_RAW !== 'false' &&
+  CHECKOUT_ENABLED_RAW !== 'off';
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
@@ -40,8 +45,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     return csrfError as NextResponse;
   }
 
-  // Reject checkout requests when paid-plan checkout is not yet enabled
-  // (STRIPE_CHECKOUT_ENABLED). Prevents bypassing the gate via the API directly.
+  // Reject checkout requests only when the incident-response kill-switch
+  // (STRIPE_CHECKOUT_ENABLED=0/false/off) has been set.
   if (!CHECKOUT_ENABLED) {
     throw createError.validation(
       'Paid-plan checkout is not available yet. Local and BYOK are free; managed cloud is in public alpha.',

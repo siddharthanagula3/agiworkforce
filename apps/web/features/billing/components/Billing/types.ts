@@ -57,46 +57,6 @@ export interface BillingInfo {
   }[];
 }
 
-export interface CreditPack {
-  id: string;
-  name: string;
-  credits: number;
-  price: number;
-  popular?: boolean;
-  savings?: string;
-}
-
-export const CREDIT_PACKS: CreditPack[] = [
-  {
-    id: 'pack_500',
-    name: 'Starter Pack',
-    credits: 500,
-    price: 5,
-  },
-  {
-    id: 'pack_1500',
-    name: 'Popular Pack',
-    credits: 1500,
-    price: 12,
-    popular: true,
-    savings: 'Save 20%',
-  },
-  {
-    id: 'pack_5000',
-    name: 'Power Pack',
-    credits: 5000,
-    price: 35,
-    savings: 'Save 30%',
-  },
-  {
-    id: 'pack_15000',
-    name: 'Enterprise Pack',
-    credits: 15000,
-    price: 90,
-    savings: 'Save 40%',
-  },
-];
-
 const VALID_CURRENCY_RE = /^[A-Z]{3}$/;
 
 export function formatDate(dateString: string) {

@@ -19,6 +19,15 @@ function normalizeTier(tier: string): 'free' | PaidTier {
     case 'pro':
     case 'team':
       return 'pro';
+    // Basic ($8/mo, formerly 'hobby') has the SAME model/feature access as
+    // Pro/Max — it's differentiated only by a lower per-provider usage
+    // budget (BILLING_PLAN_PRICING.basic.monthlyUsageBudgetUsd in
+    // @agiworkforce/types), not by a smaller model allowlist. Mapping to
+    // 'max' here (the broadest PaidTier) unlocks flagship models too;
+    // without this case it fell through to 'free', which zeroed out model
+    // access entirely for every Basic subscriber.
+    case 'basic':
+    case 'hobby':
     case 'max':
       return 'max';
     case 'enterprise':

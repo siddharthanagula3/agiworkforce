@@ -62,11 +62,6 @@ export const rateLimitConfigs = {
     window: '1 m', // 15 requests per minute (allows retries and page refreshes)
     failClosed: false, // Allow checkout even if Redis fails - business critical
   },
-  'credit-topup': {
-    limit: 15,
-    window: '1 m', // 15 top-up checkout sessions per minute (allows retries)
-    failClosed: false, // Allow topup even if Redis fails - business critical
-  },
   'device-link': {
     limit: 10,
     window: '1 m', // 10 device codes per minute (prevents abuse)
@@ -86,6 +81,11 @@ export const rateLimitConfigs = {
     limit: 10,
     window: '1 h', // 10 feedback submissions per hour — generous for real use, blocks spam
     failClosed: false, // Don't block a user's feedback submission if Redis fails
+  },
+  'mobile-iap-verify': {
+    limit: 10,
+    window: '1 m', // 10 verify attempts per minute — allows retries, blocks receipt-replay abuse
+    failClosed: true, // Security-sensitive (billing writes): block if Redis fails
   },
   'claim-offer': {
     limit: 3,
@@ -211,6 +211,11 @@ export const rateLimitConfigs = {
   'chat-message': {
     limit: 20,
     window: '1 m', // 20 messages per minute (to prevent API abuse)
+    failClosed: false,
+  },
+  'uploads-presign': {
+    limit: 30,
+    window: '1 m', // 30 presigned-upload requests per minute per user
     failClosed: false,
   },
   // LLM completion endpoints - critical for cost control and abuse prevention
