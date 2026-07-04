@@ -141,9 +141,14 @@ export async function getE2BExecutor(conversationId?: string): Promise<E2BExecut
   // reached without an explicit `pauseE2BSession()` call (e.g. a crashed request) --
   // state survives so the next turn can still resume it. Ephemeral (no-conversationId)
   // sandboxes keep the SDK default (kill), since there is no conversation to resume into.
+  // Tag sandboxes with an opaque, non-PII identifier (conversationId, never message
+  // content) so they're attributable in the E2B dashboard for abuse/fraud/billing
+  // observability (mirrors e2b-dev/fragments' `Sandbox.create({ metadata })` pattern).
+  // Purely additive: does not affect execution behavior.
+  const metadata: Record<string, string> = conversationId ? { conversationId } : {};
   const createOpts = conversationId
-    ? { timeoutMs: sandboxTimeoutMs, lifecycle: { onTimeout: 'pause' as const } }
-    : { timeoutMs: sandboxTimeoutMs };
+    ? { timeoutMs: sandboxTimeoutMs, lifecycle: { onTimeout: 'pause' as const }, metadata }
+    : { timeoutMs: sandboxTimeoutMs, metadata };
 
   let sandbox: SandboxInstance;
   let sandboxId: string;
@@ -215,10 +220,14 @@ export async function getE2BExecutor(conversationId?: string): Promise<E2BExecut
         const stdout = (execution.logs?.stdout ?? []).join('');
         const stderr = (execution.logs?.stderr ?? []).join('');
         if (execution.error) {
+          // Include the traceback (not just name/value) so the model gets the same
+          // debugging signal a human would in a notebook -- e2b-dev/fragments'
+          // reference UI surfaces the full traceback for the same reason.
+          const traceback = execution.error.traceback ? `\n${execution.error.traceback}` : '';
           return {
             ok: false,
             output: stdout,
-            error: `${execution.error.name}: ${execution.error.value}`,
+            error: `${execution.error.name}: ${execution.error.value}${traceback}`,
           };
         }
         const output = [stdout, stderr, execution.text ?? ''].filter(Boolean).join('\n');
