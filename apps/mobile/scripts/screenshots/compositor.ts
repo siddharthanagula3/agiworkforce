@@ -1,0 +1,211 @@
+#!/usr/bin/env tsx
+/* eslint-disable no-console -- CLI tool; stdout/log is the intended output channel */
+/**
+ * Store screenshot compositor — first-pass design.
+ *
+ * NOT scraped or measured from a competitor's App Store screenshots (no
+ * pixel-accurate reference was available). This is a defensible first pass
+ * built from AGI's own established brand tokens (dark theme background,
+ * `#10a37f` accent from src/ui/theme/tokens.ts) — swap in real copy/colors
+ * once product/marketing signs off on final creative.
+ *
+ * Renders: dark gradient background -> centered device frame (raw capture)
+ * -> bold headline + subhead above the frame -> thin brand-green accent rule.
+ *
+ * Usage:
+ *   tsx compositor.ts --raw <path> --out <path> --heading <str> --subhead <str> --width <n> --height <n>
+ *   tsx compositor.ts --recompose-all   (re-run over every existing raw capture using pipeline.ts's copy deck)
+ */
+
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import sharp from 'sharp';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { join, resolve, dirname } from 'node:path';
+
+const BG_TOP = '#0f0f0f';
+const BG_BOTTOM = '#171717';
+const ACCENT = '#10a37f';
+const HEADING_COLOR = '#f5f5f5';
+const SUBHEAD_COLOR = '#a3a3a3';
+
+interface Args {
+  raw: string;
+  out: string;
+  heading: string;
+  subhead: string;
+  width: number;
+  height: number;
+}
+
+function parseArgs(argv: string[]): Args {
+  const get = (flag: string) => {
+    const i = argv.indexOf(flag);
+    return i >= 0 ? argv[i + 1] : undefined;
+  };
+  const raw = get('--raw');
+  const out = get('--out');
+  const heading = get('--heading');
+  const subhead = get('--subhead');
+  const width = get('--width');
+  const height = get('--height');
+  if (!raw || !out || !heading || !subhead || !width || !height) {
+    throw new Error(
+      'Usage: compositor.ts --raw <path> --out <path> --heading <str> --subhead <str> --width <n> --height <n>',
+    );
+  }
+  return { raw, out, heading, subhead, width: Number(width), height: Number(height) };
+}
+
+function drawBackgroundAndText(args: Args): Buffer {
+  const { width, height, heading, subhead } = args;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, BG_TOP);
+  bg.addColorStop(1, BG_BOTTOM);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  const headingSize = Math.round(width * 0.062);
+  const subheadSize = Math.round(width * 0.03);
+  const textTop = height * 0.06;
+  const centerX = width / 2;
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = HEADING_COLOR;
+  ctx.font = `700 ${headingSize}px sans-serif`;
+  ctx.fillText(heading, centerX, textTop + headingSize, width * 0.9);
+
+  const accentY = textTop + headingSize + subheadSize * 0.6;
+  const accentWidth = width * 0.12;
+  ctx.fillStyle = ACCENT;
+  ctx.fillRect(
+    centerX - accentWidth / 2,
+    accentY,
+    accentWidth,
+    Math.max(3, Math.round(width * 0.004)),
+  );
+
+  ctx.fillStyle = SUBHEAD_COLOR;
+  ctx.font = `500 ${subheadSize}px sans-serif`;
+  ctx.fillText(subhead, centerX, accentY + subheadSize * 2, width * 0.85);
+
+  return canvas.toBuffer('image/png');
+}
+
+async function composite(args: Args): Promise<void> {
+  const { raw, out, width, height } = args;
+  if (!existsSync(raw)) {
+    throw new Error(`Raw capture not found: ${raw}`);
+  }
+
+  const backgroundPng = drawBackgroundAndText(args);
+
+  // Device frame occupies ~78% of canvas height, centered, even side margins.
+  const frameMaxHeight = Math.round(height * 0.78);
+  const frameMaxWidth = Math.round(width * 0.86);
+  const rawMeta = await sharp(raw).metadata();
+  const rawWidth = rawMeta.width ?? width;
+  const rawHeight = rawMeta.height ?? height;
+  const scale = Math.min(frameMaxWidth / rawWidth, frameMaxHeight / rawHeight);
+  const frameWidth = Math.round(rawWidth * scale);
+  const frameHeight = Math.round(rawHeight * scale);
+
+  const resizedRaw = await sharp(raw).resize(frameWidth, frameHeight).png().toBuffer();
+
+  const frameLeft = Math.round((width - frameWidth) / 2);
+  const frameTop = Math.round(height - frameHeight - height * 0.06);
+
+  mkdirSync(dirname(out), { recursive: true });
+  await sharp(backgroundPng)
+    .composite([{ input: resizedRaw, left: frameLeft, top: frameTop }])
+    .resize(width, height)
+    .png()
+    .toFile(out);
+
+  console.log(`Composited ${out}`);
+}
+
+const SCREENSHOTS_FOR_RECOMPOSE = [
+  {
+    id: '01',
+    name: 'local-demo-chat',
+    heading: 'Local chat first',
+    subhead: 'Start privately, then sign in to unlock cloud.',
+  },
+  {
+    id: '02',
+    name: 'onboarding-local',
+    heading: 'Start without an account',
+    subhead: 'Local setup, device fit, and model readiness.',
+  },
+  {
+    id: '03',
+    name: 'first-message',
+    heading: 'Chat with local models',
+    subhead: 'Composer, model badge, and performance feedback.',
+  },
+  {
+    id: '04',
+    name: 'cloud-sign-in',
+    heading: 'Sign in for Cloud',
+    subhead: 'Cloud chat opens to any signed-in account.',
+  },
+  {
+    id: '05',
+    name: 'image-question',
+    heading: 'Ask about images',
+    subhead: 'Attach a photo and keep the workflow in chat.',
+  },
+  {
+    id: '06',
+    name: 'voice-recording',
+    heading: 'Hold to speak',
+    subhead: 'Voice input feeds the same local chat workflow.',
+  },
+];
+
+async function recomposeAll(): Promise<void> {
+  const root = resolve(__dirname, '..', '..', 'store-listing', 'screenshots', 'captures');
+  if (!existsSync(root)) {
+    console.log(`No captures found at ${root}`);
+    return;
+  }
+  for (const platform of readdirSync(root)) {
+    const platformDir = join(root, platform);
+    for (const className of readdirSync(platformDir)) {
+      const rawDir = join(platformDir, className, 'raw');
+      const finalDir = join(platformDir, className, 'final');
+      if (!existsSync(rawDir)) continue;
+      for (const shot of SCREENSHOTS_FOR_RECOMPOSE) {
+        const rawFile = join(rawDir, `${shot.id}-${shot.name}.png`);
+        if (!existsSync(rawFile)) continue;
+        const meta = await sharp(rawFile).metadata();
+        await composite({
+          raw: rawFile,
+          out: join(finalDir, `${shot.id}-${shot.name}.png`),
+          heading: shot.heading,
+          subhead: shot.subhead,
+          width: meta.width ?? 1206,
+          height: meta.height ?? 2622,
+        });
+      }
+    }
+  }
+}
+
+async function main() {
+  GlobalFonts.loadSystemFonts?.();
+  const argv = process.argv.slice(2);
+  if (argv.includes('--recompose-all')) {
+    await recomposeAll();
+    return;
+  }
+  await composite(parseArgs(argv));
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

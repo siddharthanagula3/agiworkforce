@@ -19,7 +19,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, readdirSync, statSync, copyFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 type Platform = 'ios' | 'android';
@@ -91,7 +91,7 @@ const SCREENSHOTS: Screenshot[] = [
     name: 'local-demo-chat',
     spec: '01-multi-provider.spec.ts',
     heading: 'Local chat first',
-    subhead: 'Start privately, then unlock cloud when invited.',
+    subhead: 'Start privately, then sign in to unlock cloud.',
   },
   {
     id: '02',
@@ -109,10 +109,10 @@ const SCREENSHOTS: Screenshot[] = [
   },
   {
     id: '04',
-    name: 'cloud-waitlist',
-    spec: '04-mode-toggle-to-waitlist.spec.ts',
-    heading: 'Cloud is invite-gated',
-    subhead: 'AGI Agent opens through a visible waitlist flow.',
+    name: 'cloud-sign-in',
+    spec: '04-mode-toggle-to-sign-in.spec.ts',
+    heading: 'Sign in for Cloud',
+    subhead: 'Cloud chat opens to any signed-in account.',
   },
   {
     id: '05',
@@ -163,17 +163,61 @@ function resolveSpec(s: Screenshot, d: DeviceClass): string {
   return s.spec;
 }
 
+/**
+ * Recursively find the first .png Detox wrote under an artifacts run dir.
+ * Detox nests screenshots under a per-test directory it names itself
+ * (e.g. "✓ describe name/artifactName.png"), so the exact path can't be
+ * predicted up front — only the run-level root we pass via
+ * --artifacts-location.
+ */
+function findScreenshotPng(dir: string): string | null {
+  if (!existsSync(dir)) return null;
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    const stat = statSync(full);
+    if (stat.isDirectory()) {
+      const found = findScreenshotPng(full);
+      if (found) return found;
+    } else if (entry.endsWith('.png')) {
+      return full;
+    }
+  }
+  return null;
+}
+
 function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
   const detoxConfig = device.platform === 'ios' ? 'ios.sim.debug' : 'android.emu.debug';
   const specPath = join(ROOT, 'scripts', 'screenshots', 'specs', spec);
   if (!existsSync(specPath)) {
     throw new Error(`Screenshot spec not found: ${specPath}`);
   }
+  // Detox's own artifact naming is per-test and unpredictable, so we point
+  // --artifacts-location at a throwaway dir (trailing slash pins the exact
+  // path — no timestamp suffix) and copy the one PNG it produces to the
+  // path pipeline.ts's caller expects.
+  const artifactsDir = join(
+    ROOT,
+    'store-listing',
+    'screenshots',
+    '.detox-artifacts',
+    device.className,
+    spec.replace(/\.spec\.ts$/, ''),
+  );
+  rmSync(artifactsDir, { recursive: true, force: true });
+  mkdirSync(artifactsDir, { recursive: true });
   const env = { ...process.env, DETOX_CAPTURE_PATH: rawOut };
   execSync(
-    `pnpm exec detox test --configuration ${detoxConfig} apps/mobile/scripts/screenshots/specs/${spec}`,
+    `pnpm exec detox test --configuration ${detoxConfig} --artifacts-location "${artifactsDir}/" ` +
+      `apps/mobile/scripts/screenshots/specs/${spec}`,
     { stdio: 'inherit', env },
   );
+  const producedPng = findScreenshotPng(artifactsDir);
+  if (!producedPng) {
+    throw new Error(`Detox did not produce a screenshot under ${artifactsDir}`);
+  }
+  mkdirSync(resolve(rawOut, '..'), { recursive: true });
+  copyFileSync(producedPng, rawOut);
+  rmSync(artifactsDir, { recursive: true, force: true });
 }
 
 function composite(rawPath: string, finalPath: string, s: Screenshot, device: DeviceClass) {
