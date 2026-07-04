@@ -16,6 +16,14 @@ The store layer enforces the split. `apps/mobile/stores/settings/localSettingsSt
 
 `apps/mobile/src/features/settings/general/index.tsx`. Device-scoped defaults: **Haptic Feedback** and **Temporary Chat** toggles (`stores/settingsStore.ts`), plus navigation rows to **Models**, **Performance**, and **Storage**. The hub's General row shows the active model short name from the model picker. Model IDs must come only from `packages/types/src/models.json` — never hardcoded here. Requirement: the info banner must state these controls are device-only and that Cloud settings are managed separately. No BYOK/provider-key row may ever appear.
 
+### Temporary Chat — 🟡 Partial (approved scope addition, 2026-07-04)
+
+`isTemporaryChat` already exists as a global toggle (`stores/settingsStore.ts`, surfaced in General settings and via `TemporaryChatToggle` in the composer, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx`) and already short-circuits memory learning (see Volume 14 — Memory). Gap vs. the approved reference behavior: it must also (1) exclude the conversation from **Conversation History** entirely rather than only suppressing memory writes, (2) show an explicit in-chat explainer banner ("This chat won't appear in history, use memory, or train models; may be retained briefly for safety") the first time it's toggled per session, and (3) auto-expire/purge any safety-retention copy after a bounded window (≤30 days) rather than retaining indefinitely. This is a per-conversation mode, not a Local/Cloud trust-boundary change — it applies within whichever mode (Local or Cloud) is currently active and must not be conflated with the Local/Cloud split.
+
+### Personalization tone controls — 🔭 Planned (approved scope addition, 2026-07-04)
+
+Beyond the existing single `personalization`/memory-learning boolean (Volume 14), add a **Personalization** settings screen with: a base style/tone selector, and granular Warmth / Enthusiasm / Headers-and-lists / Emoji dials (each a small discrete range, e.g. Less/Default/More), plus the existing custom-instructions free text. These are prompt-assembly-time preferences (feed into system-prompt construction), not memory facts — store them as their own scoped preference object (Local vs Cloud per `appMode`, same routing convention as the rest of this volume) rather than overloading the memory store. Model/tone values must never be hardcoded — read available style options from a shared config, not inlined per-screen.
+
 ## Appearance — ✅ Built
 
 `apps/mobile/src/features/settings/appearance/index.tsx`. Three options: **System** (default), **Light**, **Dark**, all on one neutral mobile palette. The screen is scope-aware: it edits `themeMode` in the Local or Cloud store per `appMode`. Requirement: selection is single-choice with a visible checkmark, persists across launches, and survives a Local↔Cloud mode switch without leaking the other scope's value.

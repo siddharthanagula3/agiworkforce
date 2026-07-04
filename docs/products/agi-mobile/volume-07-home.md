@@ -18,7 +18,9 @@ The landing surface is the chat home. `app/(app)/index.tsx` redirects to `/(app)
 
 ## Navigation — bottom navigation + routing
 
-The bottom tab bar has been **replaced by a slide-out drawer** (permanent sidebar on iPad ≥768px, front-drawer on iPhone). The Expo Router `Tabs` group is retained only for route compatibility with the tab bar fully hidden (`tabBar={() => null}`), so legacy routes like `/(app)/(tabs)/chat|projects|settings` still resolve. Primary nav (Projects, Artifacts, the cloud-only "AGI Agent") lives in the drawer; Settings and Help & About are pinned to the drawer footer. The cloud-only AGI Agent item is hidden in local mode and, in cloud mode, opens the consent modal rather than silently switching. **✅ Built** — `apps/mobile/app/(app)/_layout.tsx`, `apps/mobile/app/(app)/(tabs)/_layout.tsx`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx`. A reinstated visible bottom tab bar is **🔭 Planned** only if a future nav study justifies it; it is not built today.
+The bottom tab bar has been **replaced by a slide-out drawer** (permanent sidebar on iPad ≥768px, front-drawer on iPhone). The Expo Router `Tabs` group is retained only for route compatibility with the tab bar fully hidden (`tabBar={() => null}`), so legacy routes like `/(app)/(tabs)/chat|projects|settings` still resolve. Primary nav (Projects, Artifacts, Library, the cloud-only "AGI Agent") lives in the drawer; Settings and Help & About are pinned to the drawer footer. The cloud-only AGI Agent item is hidden in local mode and, in cloud mode, opens the consent modal rather than silently switching. **✅ Built** — `apps/mobile/app/(app)/_layout.tsx`, `apps/mobile/app/(app)/(tabs)/_layout.tsx`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx`. A reinstated visible bottom tab bar is **🔭 Planned** only if a future nav study justifies it; it is not built today.
+
+**"AGI Code" (deferred, do not build now, founder decision 2026-07-04):** a richer remote-agent-session browser — top-level nav item listing live coding-agent sessions grouped by project/paired-machine, with organize/archive/connections management — is explicitly **not** in scope until CLI and Desktop are themselves production-ready, since AGI Code and the related "dispatch" companion feature both depend on those surfaces working first. Do not add a nav entry, placeholder screen, or "coming soon" affordance for this yet.
 
 Requirements: every route registered in the drawer must resolve without crash; swipe-to-open is enabled only on phone (`swipeEnabled: !isTablet`); the active route is reflected in `accessibilityState.selected`.
 
@@ -39,6 +41,10 @@ Requirements: cloud search must never run against Local-only conversations; an e
 Projects appear as a drawer section (cap 6) and the Projects screen. In cloud mode the list reads `cloudProjectStore` (synced via `cloudSyncEngine`, excluding tombstoned/archived); in local mode it reads the local project store. Gated by `FEATURES.projects` (true). **✅ Built** — `apps/mobile/src/features/projects/` (`store.ts`, `service.ts`, `components/ProjectCard.tsx`), `apps/mobile/stores/projects/cloudProjectStore.ts`, `apps/mobile/app/(app)/(tabs)/projects.tsx`, `apps/mobile/app/(app)/projects/[id].tsx`.
 
 Requirements: Local and Cloud project lists stay separate per `appMode`; deletions sync as tombstones, not hard wipes mid-render.
+
+## Library — 🔭 Planned (approved scope addition, 2026-07-04)
+
+A drawer nav item distinct from Artifacts/Projects: a single aggregated view of **all generated content** (generated images, generated documents/artifacts, any other model-generated output), independent of which conversation produced it. This is a read/browse surface over existing generated-content stores (image-generation output, artifact output) — it must not introduce a second copy of that data; it indexes/aggregates the same records already owned by their respective features (Volume 17 — Image Generation; Artifacts). Same Local/Cloud mode-filtering convention as Projects and Chat History.
 
 ## Pinned Conversations
 
