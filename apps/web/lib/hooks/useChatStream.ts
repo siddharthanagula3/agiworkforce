@@ -561,6 +561,7 @@ export function useChatStream(): UseChatStreamReturn {
           body: JSON.stringify({
             model,
             messages: apiMessages,
+            conversation_id: conversationId,
             stream: true,
             temperature: options.temperature,
             max_tokens: options.maxTokens,
@@ -840,8 +841,24 @@ export function useChatStream(): UseChatStreamReturn {
                 if (results.length > 0) {
                   currentSearchResults = results;
                   setSearchResults(assistantMessageId, results);
-                  finishTool('web_search', 'completed');
                 }
+                finishTool('web_search', 'completed');
+              } else if (
+                searchResultsBlock?.content &&
+                typeof searchResultsBlock.content === 'object' &&
+                !Array.isArray(searchResultsBlock.content) &&
+                (searchResultsBlock.content as Record<string, unknown>)['type'] ===
+                  'web_search_tool_result_error'
+              ) {
+                // Anthropic reports a failed web_search sub-tool call as a single error
+                // object (not an array) with shape { type: 'web_search_tool_result_error',
+                // error_code: string }. Surface it as a failed tool run instead of silently
+                // finishing (or never finishing) the tool.
+                const errorCode =
+                  ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
+                    | string
+                    | undefined) || 'unknown_error';
+                finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
               }
 
               // Handle platform-executed tool results (MCP / E2B sandbox)
@@ -952,12 +969,35 @@ export function useChatStream(): UseChatStreamReturn {
 
           finishRunningTools('failed', errorMessage);
 
+          const errorContent = buildAssistantErrorContent(errorMessage);
           updateMessage(assistantMessageId, {
             isStreaming: false,
-            content: buildAssistantErrorContent(errorMessage),
+            content: errorContent,
             error: true,
           });
           setError(errorMessage);
+
+          // Persist the failed generation so a reload doesn't silently drop the
+          // error state (previously only the success path called saveMessageToDb).
+          if (!isTemporaryConversation) {
+            saveMessageToDb(
+              conversationId,
+              {
+                id: assistantMessageId,
+                role: 'assistant',
+                content: errorContent,
+                model,
+                metadata: buildAssistantMetadata(),
+              },
+              authToken,
+            )
+              .then((saved) => {
+                if (saved?.id && saved.id !== assistantMessageId) {
+                  updateMessage(assistantMessageId, { id: saved.id });
+                }
+              })
+              .catch((err) => notifyPersistenceFailure('assistant', err));
+          }
         }
         stopStreaming();
         setLoading(false);

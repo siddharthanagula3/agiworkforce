@@ -49,6 +49,7 @@ function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-1',
     chatRequest: { model: 'gpt-test', messages: [], stream: true } as never,
+    conversationId: undefined,
     requestedModel: 'gpt-test',
     provider: 'openai',
     estimatedCostCents: 0,

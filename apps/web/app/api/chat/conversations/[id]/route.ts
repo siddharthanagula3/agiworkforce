@@ -15,6 +15,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
+import { killE2BSession } from '@/lib/e2b/runtime';
 import {
   getNeonChatDb,
   requireCurrentUserId,
@@ -41,7 +42,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const db = getNeonChatDb();
   const [conversation] = await db.query<ChatConversationRow>(
     `
-      select id, title, model, project_id, created_at, updated_at
+      select id, title, model, project_id, pinned, is_temporary, created_at, updated_at
       from web_conversations
       where id = $1 and user_id = $2 and deleted_at is null
       limit 1
@@ -129,7 +130,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         pinned = case when $7::boolean then $8::boolean else pinned end,
         updated_at = now()
       where id = $1 and user_id = $2 and deleted_at is null
-      returning id, title, model, project_id, pinned, created_at, updated_at
+      returning id, title, model, project_id, pinned, is_temporary, created_at, updated_at
     `,
     [
       id,
@@ -173,6 +174,15 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to delete conversation');
     throw createError.internal('Failed to delete conversation');
+  }
+
+  // Release any paused E2B sandbox bound to this conversation. Best-effort: the
+  // conversation is already soft-deleted regardless of this outcome, and Redis's own
+  // TTL (session-store.ts) is the safety net if this ever throws.
+  try {
+    await killE2BSession(id);
+  } catch (error) {
+    logger.warn({ error, conversationId: id }, '[e2b] failed to release sandbox on delete');
   }
 
   return NextResponse.json({ success: true });
