@@ -198,41 +198,55 @@ function fileExtension(name: string): string {
 }
 
 /**
- * Validate a candidate File against the attachment contract. Returns
- * `{ ok: true }` when the file is accepted; otherwise a structured rejection
- * with a user-presentable message.
+ * Core attachment-contract check on primitive fields. Shared by
+ * `validateAttachmentFile` (browser `File`) and any server route that only
+ * has `{ fileName, mimeType, byteCount }` from a JSON body and shouldn't
+ * materialize a `File`/`Blob` just to re-run this check.
  *
  * Validation order is fixed (empty → too-large → unsupported) so callers can
  * rely on the first-failure being the most-actionable for the user.
  */
-export function validateAttachmentFile(file: File): AttachmentValidation {
-  if (file.size === 0) {
+export function validateAttachmentMeta(
+  name: string,
+  mimeType: string,
+  byteCount: number,
+): AttachmentValidation {
+  if (byteCount === 0) {
     return {
       ok: false,
       reason: 'empty',
-      message: `${file.name} is empty.`,
+      message: `${name} is empty.`,
     };
   }
-  if (file.size > MAX_ATTACHMENT_BYTES) {
+  if (byteCount > MAX_ATTACHMENT_BYTES) {
     const limitMb = Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024));
     return {
       ok: false,
       reason: 'too-large',
-      message: `${file.name} is larger than the ${limitMb} MiB attachment limit.`,
+      message: `${name} is larger than the ${limitMb} MiB attachment limit.`,
     };
   }
-  const mime = (file.type ?? '').toLowerCase();
+  const mime = (mimeType ?? '').toLowerCase();
   const mimeAllowed =
     mime.length > 0 && ALLOWED_ATTACHMENT_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
-  const extAllowed = ALLOWED_ATTACHMENT_EXTENSIONS.includes(fileExtension(file.name));
+  const extAllowed = ALLOWED_ATTACHMENT_EXTENSIONS.includes(fileExtension(name));
   if (!mimeAllowed && !extAllowed) {
     return {
       ok: false,
       reason: 'unsupported-type',
-      message: `${file.name} (${mime || 'unknown type'}) is not an accepted attachment type.`,
+      message: `${name} (${mime || 'unknown type'}) is not an accepted attachment type.`,
     };
   }
   return { ok: true };
+}
+
+/**
+ * Validate a candidate File against the attachment contract. Returns
+ * `{ ok: true }` when the file is accepted; otherwise a structured rejection
+ * with a user-presentable message.
+ */
+export function validateAttachmentFile(file: File): AttachmentValidation {
+  return validateAttachmentMeta(file.name, file.type, file.size);
 }
 
 // ============================================================================

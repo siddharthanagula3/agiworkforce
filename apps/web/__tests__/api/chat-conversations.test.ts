@@ -169,7 +169,7 @@ describe('Chat Conversations API', () => {
         );
       });
 
-      it('should limit results to 50 conversations', async () => {
+      it('should default-limit results to 50 conversations', async () => {
         mockQuery.mockResolvedValueOnce(mockConversations);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
@@ -178,8 +178,8 @@ describe('Chat Conversations API', () => {
         await GET(request);
 
         expect(mockQuery).toHaveBeenCalledWith(
-          expect.stringContaining('limit 50'),
-          expect.any(Array),
+          expect.stringContaining('limit $2'),
+          expect.arrayContaining([expect.any(String), 51]),
         );
       });
 
