@@ -14,7 +14,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Terminal;
 
 use crate::agent::AgentSession;
@@ -271,6 +271,37 @@ impl TuiApp {
     fn new(session: AgentSession, config: CliConfig, sandbox_disabled: bool) -> Self {
         let model_name = session.model.clone();
         let provider_name = format!("{:?}", session.provider).to_lowercase();
+
+        // Resume support: `run()` loads a resumed session's prior turns into
+        // `session.messages`/`session.turn_count` *before* constructing
+        // `TuiApp` (see the `resume_messages`/`resume_managed_session` match
+        // above), but until now that only fed the model/context-loading
+        // state — the transcript pane's own `chat_messages` was always
+        // seeded empty, so a resumed TUI launch rendered the blank welcome
+        // screen with "Turns: 0" even though the underlying session (and any
+        // follow-up prompt) had the full prior history. Hydrate the
+        // transcript widget state from the same `session.messages` here so
+        // the first render already shows the resumed conversation.
+        let turn_count = session.turn_count;
+        let chat_messages: Vec<ChatMessage> = session
+            .messages
+            .iter()
+            .filter_map(|m| {
+                let role = match m.role.as_str() {
+                    "user" => ChatRole::User,
+                    "assistant" => ChatRole::Assistant,
+                    // System/tool-result messages aren't rendered as
+                    // transcript bubbles elsewhere in the TUI either; skip
+                    // them here rather than showing raw tool-call JSON.
+                    _ => return None,
+                };
+                let text = m.text_content();
+                if text.trim().is_empty() {
+                    return None;
+                }
+                Some(ChatMessage { role, text })
+            })
+            .collect();
         let git_branch = std::process::Command::new("git")
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .output()
@@ -317,41 +348,13 @@ impl TuiApp {
             command_registry.push(registry_command);
         }
         if let Some(prompts) = session.mcp_prompt_info() {
-            for prompt in prompts {
-                if command_registry.find(&prompt.command_name).is_some() {
-                    continue;
-                }
-                let loaded_from = format!("mcp:{}", prompt.server_name);
-                let mut registry_command = RegistryCommand::prompt(
-                    prompt.command_name.clone(),
-                    format!("[MCP:{}] {}", prompt.server_name, prompt.description),
-                    CommandSource::Mcp,
-                    Some(&loaded_from),
-                );
-                if !prompt.arguments.is_empty() {
-                    registry_command.argument_hint = Some(
-                        prompt
-                            .arguments
-                            .iter()
-                            .map(|arg| {
-                                if arg.required {
-                                    format!("{}=<value>", arg.name)
-                                } else {
-                                    format!("[{}=<value>]", arg.name)
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" "),
-                    );
-                }
-                command_registry.push(registry_command);
-            }
+            register_mcp_prompt_commands(&mut command_registry, prompts);
         }
 
         Self {
             session,
             config,
-            chat_messages: Vec::new(),
+            chat_messages,
             input: String::new(),
             cursor: 0,
             scroll_offset: 0,
@@ -360,7 +363,7 @@ impl TuiApp {
             should_quit: false,
             model_name,
             provider_name,
-            turn_count: 0,
+            turn_count,
             total_input_tokens: 0,
             total_output_tokens: 0,
             mode: InteractionMode::Chat,
@@ -531,9 +534,15 @@ fn approval_choice_to_decision(
 /// The agent turn is parked on the broker (`request().await`) while this runs,
 /// so a synchronous key loop here cannot starve it. This intentionally touches
 /// only `terminal` + local overlay state — never `TuiApp` — so it composes with
-/// the `&mut app.session` borrow held by the in-flight agent future.
+/// the `&mut app.session` borrow held by the in-flight agent future. To avoid
+/// blanking the surrounding UI (header/cost-HUD/transcript/composer/status),
+/// each frame first redraws the normal in-turn chrome via `draw_turn_chrome`
+/// (the same helper `render_turn_frame` uses) and then layers the approval
+/// overlay on top *within the same `terminal.draw` closure* — mirroring how
+/// `render()` composites `active_overlay`/pickers on top of the main frame.
 fn run_tui_approval_modal(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
 ) -> Result<crate::tui::widgets::approval_overlay::ApprovalChoice> {
     use crate::tui::widgets::approval_overlay::{ApprovalChoice, ApprovalOverlayState};
@@ -544,15 +553,22 @@ fn run_tui_approval_modal(
 
     loop {
         terminal.draw(|frame| {
-            let area = frame.area();
-            frame.render_widget(Clear, area);
-            overlay.render_into(frame, area);
+            let chat_area = draw_turn_chrome(frame, ctx);
+            // Drawn last within the same closure so it composites on top of
+            // the chrome that was just painted, instead of replacing it.
+            overlay.render_into(frame, chat_area);
         })?;
 
         if event::poll(Duration::from_millis(TICK_RATE_MS))? {
             match event::read()? {
                 Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
                     ViewAction::Submit(_) | ViewAction::Close => {
+                        // Force a full chrome-only redraw before returning
+                        // control to the main loop so no stale overlay
+                        // fragments can linger in the terminal's diff state.
+                        terminal.draw(|frame| {
+                            draw_turn_chrome(frame, ctx);
+                        })?;
                         return Ok(overlay.result.unwrap_or(ApprovalChoice::No));
                     }
                     ViewAction::Continue | ViewAction::SideAction(_) => {}
@@ -670,36 +686,45 @@ fn render_turn_frame(
     ctx: &FrameCtx,
 ) -> Result<()> {
     terminal.draw(|frame| {
-        let area = frame.area();
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // header
-                Constraint::Min(5),    // chat area
-                Constraint::Length(3), // composer (disabled during a turn)
-                Constraint::Length(1), // status bar
-            ])
-            .split(area);
-
-        render_header(frame, chunks[0], ctx);
-        render_chat(frame, chunks[1], ctx);
-
-        let hint = Paragraph::new(Line::from(Span::styled(
-            "  … working — Esc or Ctrl-C to cancel",
-            Style::default().fg(crate::tui::terminal_palette::ui_muted()),
-        )))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(
-                    Style::default().fg(crate::tui::terminal_palette::ui_muted()),
-                ),
-        );
-        frame.render_widget(hint, chunks[2]);
-
-        render_status_bar(frame, chunks[3], ctx);
+        draw_turn_chrome(frame, ctx);
     })?;
     Ok(())
+}
+
+/// Draws the header/chat/composer-hint/status chrome shared by the live
+/// in-turn frame (`render_turn_frame`) and the tool-approval modal
+/// (`run_tui_approval_modal`), which layers its overlay on top of this within
+/// the same `terminal.draw` closure instead of replacing it. Returns the chat
+/// area (`chunks[1]`) so callers can composite additional content over it.
+fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
+    let area = frame.area();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // header
+            Constraint::Min(5),    // chat area
+            Constraint::Length(3), // composer (disabled during a turn)
+            Constraint::Length(1), // status bar
+        ])
+        .split(area);
+
+    render_header(frame, chunks[0], ctx);
+    render_chat(frame, chunks[1], ctx);
+
+    let hint = Paragraph::new(Line::from(Span::styled(
+        "  … working — Esc or Ctrl-C to cancel",
+        Style::default().fg(crate::tui::terminal_palette::ui_muted()),
+    )))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(crate::tui::terminal_palette::ui_muted())),
+    );
+    frame.render_widget(hint, chunks[2]);
+
+    render_status_bar(frame, chunks[3], ctx);
+
+    chunks[1]
 }
 
 /// Braille spinner frame for a given tick. Free fn so it can be computed from a
@@ -1538,6 +1563,28 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 
     match key.code {
+        // A handful of slash commands (/mcp, /plugin, /usage, /tasks, …)
+        // render a boxed "dialog" — complete with its own "Esc to
+        // cancel"/"Esc to close"/"Esc to back" footer — as a plain system
+        // chat message rather than a real overlay (see
+        // `screen_renderers::is_dialog_frame` doc comment). Without this
+        // check, Esc always fell through to the global quit binding below,
+        // silently exiting the whole app instead of honoring the footer's
+        // own affordance. Dismiss the dialog message first; only quit when
+        // the last message isn't one of these fake dialogs.
+        KeyCode::Esc
+            if app
+                .chat_messages
+                .last()
+                .is_some_and(|m| {
+                    m.role == ChatRole::System
+                        && super::widgets::screen_renderers::is_dialog_frame(&m.text)
+                }) =>
+        {
+            app.chat_messages.pop();
+            InputAction::None
+        }
+
         KeyCode::Esc => InputAction::Quit,
 
         // Shift+Tab → cycle mode
@@ -1698,6 +1745,51 @@ fn composer_move_down(app: &mut TuiApp) -> bool {
     let next_line_len = next_line_end - next_line_start;
     app.cursor = next_line_start + col_offset.min(next_line_len);
     true
+}
+
+/// Register any MCP-discovered prompt commands (`/mcp:<server>:<prompt>`)
+/// into `registry` that aren't already present.
+///
+/// Idempotent — skips prompts already registered by name (matching
+/// `CommandRegistry::find`), so it's safe to call both at `TuiApp`
+/// construction time (when MCP servers connected synchronously before the
+/// background attach was spawned, or not at all) and again once the
+/// background `mcp_attach_join` task finishes and injects the manager via
+/// `session.set_mcp_manager`. Without the second call, `/mcp:<server>:<prompt>`
+/// stayed permanently absent from `app.command_registry` — and therefore from
+/// the command popup's candidate list — for the overwhelmingly common case
+/// where MCP finishes connecting *after* the TUI has already started (the
+/// whole point of the non-blocking background attach).
+fn register_mcp_prompt_commands(registry: &mut CommandRegistry, prompts: &[crate::mcp::McpPrompt]) {
+    for prompt in prompts {
+        if registry.find(&prompt.command_name).is_some() {
+            continue;
+        }
+        let loaded_from = format!("mcp:{}", prompt.server_name);
+        let mut registry_command = RegistryCommand::prompt(
+            prompt.command_name.clone(),
+            format!("[MCP:{}] {}", prompt.server_name, prompt.description),
+            CommandSource::Mcp,
+            Some(&loaded_from),
+        );
+        if !prompt.arguments.is_empty() {
+            registry_command.argument_hint = Some(
+                prompt
+                    .arguments
+                    .iter()
+                    .map(|arg| {
+                        if arg.required {
+                            format!("{}=<value>", arg.name)
+                        } else {
+                            format!("[{}=<value>]", arg.name)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+        }
+        registry.push(registry_command);
+    }
 }
 
 fn open_command_popup(app: &mut TuiApp) {
@@ -3138,6 +3230,16 @@ async fn run_event_loop(
             if let Some(handle) = mcp_attach_join.take() {
                 if let Ok(Some(mgr)) = handle.await {
                     app.session.set_mcp_manager(mgr);
+                    // `TuiApp::new` only saw whatever MCP prompts were
+                    // available *before* this background attach finished
+                    // (almost always none — that's the whole point of not
+                    // blocking startup on it). Refresh the command registry
+                    // now so `/mcp:<server>:<prompt>` becomes dispatchable
+                    // and shows up in the `/` command popup as soon as the
+                    // servers are actually connected.
+                    if let Some(prompts) = app.session.mcp_prompt_info() {
+                        register_mcp_prompt_commands(&mut app.command_registry, prompts);
+                    }
                 }
             }
         }
@@ -3568,7 +3670,38 @@ async fn send_message(
                 outcome = &mut send_fut => break Some(outcome),
                 _ = broker.notified() => {
                     while let Some(req) = broker.drain_pending().await {
-                        let choice = run_tui_approval_modal(terminal, &req)?;
+                        // Same disjoint-field construction as the live-frame
+                        // `FrameCtx` below: `app.session` is already
+                        // mutably borrowed by `send_fut`, so this must stay
+                        // field-by-field rather than `FrameCtx::from_app(app)`.
+                        let approval_ctx = FrameCtx {
+                            model_name: &app.model_name,
+                            provider_name: &app.provider_name,
+                            git_branch: app.git_branch.as_deref(),
+                            total_input_tokens: app.total_input_tokens,
+                            total_output_tokens: app.total_output_tokens,
+                            turn_count: app.turn_count,
+                            context_percent: context_percent_for(
+                                &app.model_name,
+                                app.total_input_tokens,
+                                app.total_output_tokens,
+                            ),
+                            chat_messages: &app.chat_messages,
+                            tool_cells: &tool_cells,
+                            is_loading: app.is_loading,
+                            stream_start: app.stream_start,
+                            stream_buffer: &app.stream_buffer,
+                            spinner_char: spinner_frame(app.spinner_tick),
+                            loading_verb: loading_verb_for(app.turn_count),
+                            scroll_offset: app.scroll_offset,
+                            access_mode: turn_access_mode,
+                            privacy_mode: turn_privacy_mode,
+                            mode: app.mode,
+                            effort_label: app.effort.label(),
+                            sandbox_type: app.sandbox_type,
+                            cost_str: turn_cost_str.clone(),
+                        };
+                        let choice = run_tui_approval_modal(terminal, &approval_ctx, &req)?;
                         broker
                             .complete(req.id, approval_choice_to_decision(choice))
                             .await;
@@ -4530,5 +4663,93 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Regression for the tool-approval-modal blanking bug: `run_tui_approval_modal`
+    /// used to run its own isolated `terminal.draw` that cleared the *entire*
+    /// frame and rendered only the approval box, wiping out the
+    /// header/cost-HUD/transcript/composer/status chrome underneath. The fix
+    /// makes it share `draw_turn_chrome` (the same helper `render_turn_frame`
+    /// uses for the live in-turn frame) and layer the overlay on top within the
+    /// same `terminal.draw` closure — mirroring how `render()` composites
+    /// `active_overlay`/pickers over the main frame instead of replacing it.
+    ///
+    /// This exercises the exact draw sequence `run_tui_approval_modal` performs
+    /// (`draw_turn_chrome` then `overlay.render_into` in one `terminal.draw`)
+    /// against a `TestBackend` and asserts the rendered buffer contains BOTH
+    /// the chrome (header title + a distinctive transcript message) AND the
+    /// approval box, proving compositing rather than full-frame replacement.
+    #[test]
+    fn approval_modal_composites_over_chrome_instead_of_blanking_it() {
+        use crate::tui::widgets::approval_overlay::ApprovalOverlayState;
+        use ratatui::backend::TestBackend;
+
+        let chat_messages = vec![ChatMessage {
+            role: ChatRole::Assistant,
+            text: "UNIQUE_TRANSCRIPT_MARKER_314159".to_string(),
+        }];
+        let tool_cells: Vec<ToolCell> = Vec::new();
+        let ctx = FrameCtx {
+            model_name: "gemma4:e4b",
+            provider_name: "ollama",
+            git_branch: None,
+            total_input_tokens: 10,
+            total_output_tokens: 5,
+            turn_count: 1,
+            context_percent: 1,
+            chat_messages: &chat_messages,
+            tool_cells: &tool_cells,
+            is_loading: true,
+            stream_start: None,
+            stream_buffer: "",
+            spinner_char: "⠋",
+            loading_verb: "Reasoning",
+            scroll_offset: 0,
+            access_mode: crate::design_system::AccessMode::Local,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            mode: InteractionMode::Chat,
+            effort_label: "Medium",
+            sandbox_type: None,
+            cost_str: "$0.00".to_string(),
+        };
+
+        let mut overlay = ApprovalOverlayState::default();
+        overlay.open(
+            "Allow write_file to modify:",
+            vec!["src/main.rs (+1 / -0 lines)".to_string()],
+        );
+
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                let chat_area = draw_turn_chrome(frame, &ctx);
+                overlay.render_into(frame, chat_area);
+            })
+            .expect("draw");
+
+        let rendered: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+
+        assert!(
+            rendered.contains("Tool Approval"),
+            "approval box must be drawn"
+        );
+        assert!(
+            rendered.contains("gemma4:e4b"),
+            "header chrome must still be visible under the approval overlay, not blanked"
+        );
+        assert!(
+            rendered.contains("UNIQUE_TRANSCRIPT_MARKER_314159"),
+            "transcript content must still be visible under the approval overlay, not blanked"
+        );
+        assert!(
+            rendered.contains("Esc or Ctrl-C to cancel") || rendered.contains("working"),
+            "composer/status chrome must still be visible under the approval overlay, not blanked"
+        );
     }
 }

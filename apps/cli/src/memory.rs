@@ -1,8 +1,14 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
+
+/// Guards the one-time legacy global-memory migration notice so it prints at
+/// most once per process even if `MemoryManager::new` is called repeatedly
+/// (e.g. once per turn to pick up on-disk edits).
+static LEGACY_GLOBAL_MEMORY_MIGRATION_WARNED: AtomicBool = AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Memory tier
@@ -16,7 +22,7 @@ use serde::{Deserialize, Serialize};
 /// last.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MemoryTier {
-    /// `~/.agi/CLAUDE.md` — user-wide defaults.
+    /// `~/.agiworkforce/CLAUDE.md` — user-wide defaults.
     Global,
     /// `<project_root>/CLAUDE.md` — project-level instructions.
     Project,
@@ -53,8 +59,14 @@ pub struct MemoryEntry {
 
 /// Discovers and loads hierarchical memory files (CLAUDE.md) from three tiers.
 pub struct MemoryManager {
-    /// `~/.agi/CLAUDE.md`
+    /// `~/.agiworkforce/CLAUDE.md`
     global_path: PathBuf,
+    /// `~/.agi/CLAUDE.md` — undocumented legacy location used by older
+    /// builds. Read-only fallback: if `global_path` has no content, we read
+    /// from here instead of silently ignoring pre-existing user memory. We
+    /// never write to or delete this file; `agi migrate` (see
+    /// `ecosystem.rs`) is the explicit, user-initiated way to move it.
+    legacy_global_path: PathBuf,
     /// `<project_root>/CLAUDE.md` (None when no project root found)
     project_path: Option<PathBuf>,
     /// `<cwd>/CLAUDE.md` when cwd != project root (None otherwise)
@@ -64,18 +76,20 @@ pub struct MemoryManager {
 impl MemoryManager {
     /// Create a new `MemoryManager` by discovering memory files at each tier.
     ///
-    /// - **Global**: `~/.agi/CLAUDE.md`
+    /// - **Global**: `~/.agiworkforce/CLAUDE.md` (falls back to reading the
+    ///   legacy `~/.agi/CLAUDE.md` if the documented path has no content).
     /// - **Project**: Walk up from `cwd` to find a project root (`.git`,
     ///   `Cargo.toml`, `package.json`, etc.) and use `<root>/CLAUDE.md`.
     /// - **Local**: `<cwd>/CLAUDE.md` only when cwd differs from the project
     ///   root (avoids double-loading).
     pub fn new(cwd: &Path) -> Self {
-        // Global
-        let global_path = dirs::home_dir()
+        // Global — documented home directory is `~/.agiworkforce/`, matching
+        // every other subsystem (config, rules, prompts, etc.).
+        let home_dir = dirs::home_dir()
             .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".agi")
-            .join("CLAUDE.md");
+            .unwrap_or_else(|| PathBuf::from("."));
+        let global_path = home_dir.join(".agiworkforce").join("CLAUDE.md");
+        let legacy_global_path = home_dir.join(".agi").join("CLAUDE.md");
 
         // Project — reuse the existing project-root discovery
         let project_root = find_git_root(cwd);
@@ -110,6 +124,7 @@ impl MemoryManager {
 
         Self {
             global_path,
+            legacy_global_path,
             project_path,
             local_path,
         }
@@ -125,6 +140,27 @@ impl MemoryManager {
                 content,
                 source: MemoryTier::Global,
                 file_path: self.global_path.clone(),
+            });
+        } else if let Some(content) = read_if_exists(&self.legacy_global_path) {
+            // Read-only fallback: older builds wrote global memory to the
+            // undocumented `~/.agi/CLAUDE.md`. Keep loading it so existing
+            // user memory isn't silently dropped, but never write to or
+            // delete it here — `agi migrate` is the explicit way to move it.
+            if LEGACY_GLOBAL_MEMORY_MIGRATION_WARNED
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                eprintln!(
+                    "[memory] Loaded global memory from legacy path {} — this location is undocumented and deprecated. \
+Move the file to {} (or run `agi migrate`) to keep using it going forward.",
+                    self.legacy_global_path.display(),
+                    self.global_path.display()
+                );
+            }
+            entries.push(MemoryEntry {
+                content,
+                source: MemoryTier::Global,
+                file_path: self.legacy_global_path.clone(),
             });
         }
 
@@ -218,11 +254,17 @@ impl MemoryManager {
     ///
     /// Returns `(tier, path, exists)` tuples for all three tiers.
     pub fn list(&self) -> Vec<(MemoryTier, PathBuf, bool)> {
-        let mut result = vec![(
-            MemoryTier::Global,
-            self.global_path.clone(),
-            self.global_path.exists(),
-        )];
+        // Prefer the documented path; fall back to reporting the legacy path
+        // if only that one exists, so `agi memory list` doesn't claim global
+        // memory is missing when it's actually loaded from the legacy file.
+        let global_entry = if self.global_path.exists() {
+            (MemoryTier::Global, self.global_path.clone(), true)
+        } else if self.legacy_global_path.exists() {
+            (MemoryTier::Global, self.legacy_global_path.clone(), true)
+        } else {
+            (MemoryTier::Global, self.global_path.clone(), false)
+        };
+        let mut result = vec![global_entry];
 
         if let Some(ref pp) = self.project_path {
             result.push((MemoryTier::Project, pp.clone(), pp.exists()));
@@ -831,6 +873,7 @@ mod tests {
         let (_d, path) = tmp_dir();
         let mgr = MemoryManager {
             global_path: path.join("subdir").join("deep").join("CLAUDE.md"),
+            legacy_global_path: path.join("legacy-unused").join("CLAUDE.md"),
             project_path: None,
             local_path: None,
         };
