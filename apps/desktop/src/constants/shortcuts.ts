@@ -169,7 +169,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
 
   {
     id: 'cycle-variant',
-    key: 'r',
+    key: 'j',
     modifiers: { meta: true, shift: true },
     description: 'Toggle thinking/reasoning model variant',
     category: 'model',
@@ -189,7 +189,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   // Window
   {
     id: 'toggle-sidebar',
-    key: 'b',
+    key: 'u',
     modifiers: { meta: true, shift: true },
     description: 'Toggle sidebar',
     category: 'window',

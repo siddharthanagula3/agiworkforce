@@ -67,7 +67,10 @@ export const config: WebdriverIO.Config = {
   framework: 'mocha',
   mochaOpts: {
     ui: 'bdd',
-    timeout: 120000,
+    // 5 minutes: some specs (e.g. real local-LLM generation via Ollama) need
+    // more headroom than typical UI-interaction tests. Per-test overrides via
+    // `this.timeout(...)` are also supported for outliers.
+    timeout: 300000,
   },
   reporters: ['spec'],
 };

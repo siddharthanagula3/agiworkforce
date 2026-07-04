@@ -418,9 +418,38 @@ describe('AGI Desktop v3 Sidebar', () => {
     console.log('PROJECT DELETE: stays gone after reload:', deletedStaysGone);
   });
 
-  it('Local/Cloud toggle: shows a clear, non-confusing coming-soon message for Cloud', async function () {
+  it('Local/Cloud toggle: shows a clear, non-confusing coming-soon message for Cloud (PA-3 gate, live-driven)', async function () {
     this.timeout(30000);
-    await browser.pause(500);
+    // Standalone-run safety: when this test isn't preceded by the file's
+    // earlier tests (which already wait out initial mount), the sidebar may
+    // not be in the DOM yet — wait for it explicitly rather than a fixed pause.
+    const sidebarReady = await waitForSelector('aside[data-v3-sidebar]', 15000);
+    expect(sidebarReady).toBe(true);
+    await browser.pause(300);
+
+    // Prior specs in this file (and prior full-suite runs, since collapse
+    // state persists to localStorage) may leave the sidebar collapsed, in
+    // which case LocalCloudToggle renders a single icon button with no
+    // role="tab" — the original version of this test silently found zero
+    // elements in that state and had no assertion to catch it. Force
+    // expanded first so the real tablist markup is present.
+    const collapsedBefore = await browser.execute(() =>
+      document.querySelector('aside[data-v3-sidebar]')?.getAttribute('data-collapsed'),
+    );
+    if (collapsedBefore !== 'false') {
+      await clickSelector('aside[data-v3-sidebar] button[title="Expand sidebar"]');
+      await browser.pause(400);
+    }
+
+    const tabsBefore = await browser.execute(() => {
+      const tabs = Array.from(
+        document.querySelectorAll('aside[data-v3-sidebar] [role="tab"]'),
+      ) as HTMLElement[];
+      return tabs.map((t) => ({ label: t.textContent, selected: t.getAttribute('aria-selected') }));
+    });
+    // Real assertion: the toggle must actually be reachable and start on Local.
+    expect(tabsBefore.length).toBe(2);
+    expect(tabsBefore[0]?.selected).toBe('true'); // Local tab selected by default
 
     await clickSelector('aside[data-v3-sidebar] [role="tab"][aria-selected="false"]');
     await browser.pause(400);
@@ -428,6 +457,9 @@ describe('AGI Desktop v3 Sidebar', () => {
     const toastText = await browser.execute(() => document.body.textContent ?? '');
     const hasComingSoonCopy = toastText.includes('AGI Cloud is available on Web & Mobile');
     console.log('CLOUD TOGGLE: coming-soon toast text present:', hasComingSoonCopy);
+    // Real assertion: PA-3's honest interim copy must actually be on screen —
+    // not "available on desktop", not silence.
+    expect(hasComingSoonCopy).toBe(true);
 
     const modeAfterClick = await browser.execute(() => {
       const tabs = Array.from(
@@ -442,6 +474,13 @@ describe('AGI Desktop v3 Sidebar', () => {
       'CLOUD TOGGLE: tab state unchanged (stays on Local, gate refuses the switch):',
       JSON.stringify(modeAfterClick),
     );
+    // Real assertion: the PA-3 gate (`appModeStore.setMode`) must refuse the
+    // switch — Local stays selected, Cloud never becomes active. If this ever
+    // flips to Cloud being selected, the PA-3 gate has been lifted/bypassed
+    // without DCL-4 completing, which is a locked-decision violation.
+    expect(modeAfterClick[0]?.selected).toBe('true');
+    expect(modeAfterClick[1]?.selected).toBe('false');
+
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-11-cloud-toggle-toast.png`);
   });
 

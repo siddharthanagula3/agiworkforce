@@ -7,6 +7,34 @@ import { CONNECTORS } from '../features/connectors/connectorDefinitions';
 /** Duration (ms) before a pending OAuth flow is treated as timed out */
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
+/**
+ * Last-known-good fallback for `supportedConnectorIds`, used only (a) before
+ * the store has ever successfully fetched the real backend list, and (b) if
+ * a later fetch fails — never overwrite a working value with an empty one.
+ * Mirrors `get_connector_mcp_mapping`'s keys in
+ * `apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs` as of this fix.
+ * Intentionally NOT the full `CONNECTOR_DIRECTORY` catalog — this is a
+ * fail-closed default (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01):
+ * an IPC hiccup should never cause an unsupported connector to reappear as
+ * connectable.
+ */
+export const FALLBACK_SUPPORTED_CONNECTOR_IDS: string[] = [
+  'github',
+  'slack',
+  'google_drive',
+  'figma',
+  'stripe',
+  'vercel',
+  'sentry',
+  'linear',
+  'notion',
+  'cloudflare',
+  'gmail',
+  'google_calendar',
+  'outlook',
+  'jira',
+];
+
 export type ConnectorPermState = 'allow' | 'ask' | 'never';
 
 /** Persisted per-tool permission state: connectorId → toolName → PermState */
@@ -24,11 +52,27 @@ interface ConnectorsState {
   _oauthTimers: Record<string, ReturnType<typeof setTimeout>>;
   /** Per-tool permission state, persisted across sessions */
   connectorPermissions: ConnectorPermissions;
+  /**
+   * Connector ids the backend actually has a real MCP server mapping for
+   * (see `mcp_get_supported_connector_ids`). The "Available to connect"
+   * grid filters against this instead of trusting the static frontend
+   * catalog, so a connector can never be advertised as connectable without
+   * real backend support (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01).
+   * Persisted so a cold start has a last-known-good value to render before
+   * the async fetch resolves.
+   */
+  supportedConnectorIds: string[];
 
   connect: (id: string) => Promise<void>;
   connectWithApiKey: (id: string, apiKey: string) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
   fetchConnected: () => Promise<void>;
+  /**
+   * Refreshes `supportedConnectorIds` from the backend. Only overwrites the
+   * current value on success — a failed fetch (offline, IPC error) keeps the
+   * last-known-good list rather than collapsing to empty.
+   */
+  fetchSupportedConnectorIds: () => Promise<void>;
   /** Called after OAuth callback succeeds — marks connector as connected + activates MCP */
   completeOAuth: (id: string) => Promise<void>;
   /** Called when the OAuth flow times out — marks connector as failed */
@@ -62,6 +106,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
         oauthStartedAt: {},
         _oauthTimers: {},
         connectorPermissions: {},
+        supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
 
         connect: async (id: string) => {
           set((state) => ({
@@ -92,11 +137,22 @@ export const useConnectorsStore = create<ConnectorsState>()(
                 return; // Early return — don't mark connected
               }
               case 'api_key':
+              case 'mcp_remote': {
                 await McpClient.connectConnector(id);
+                // AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01):
+                // `mcp_connect_connector` silently no-ops (returns Ok with no
+                // MCP server spawned) when the backend has no mapping for
+                // this connector id. Verify a real, persisted MCP server
+                // actually backs it before marking connected — mirrors the
+                // same check `completeOAuth` already does for the OAuth flow.
+                const verifiedProviders = await McpClient.listConnectedProviders();
+                if (!verifiedProviders.includes(id)) {
+                  throw new Error(
+                    'AGI could not verify a live MCP connection for this connector — it may not have a supported backend yet.',
+                  );
+                }
                 break;
-              case 'mcp_remote':
-                await McpClient.connectConnector(id);
-                break;
+              }
               case 'none':
                 break;
             }
@@ -123,6 +179,15 @@ export const useConnectorsStore = create<ConnectorsState>()(
           try {
             await McpClient.saveApiKey(id, apiKey);
             await McpClient.connectConnector(id);
+            // AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01):
+            // verify a real MCP server actually backs this connector before
+            // marking it connected — see the same check in `connect()`.
+            const verifiedProviders = await McpClient.listConnectedProviders();
+            if (!verifiedProviders.includes(id)) {
+              throw new Error(
+                'AGI could not verify a live MCP connection for this connector — it may not have a supported backend yet.',
+              );
+            }
             set((state) => ({
               connectedIds: [...new Set([...state.connectedIds, id])],
               loading: { ...state.loading, [id]: false },
@@ -166,6 +231,22 @@ export const useConnectorsStore = create<ConnectorsState>()(
             const message =
               err instanceof Error ? err.message : 'Failed to load connected providers';
             set((state) => ({ error: { ...state.error, __list: message } }));
+          }
+        },
+
+        fetchSupportedConnectorIds: async () => {
+          try {
+            const ids = await McpClient.getSupportedConnectorIds();
+            // Only overwrite on a successful, well-formed response — an
+            // empty/errored fetch must never blank out a previously known
+            // set of supported connectors (fail-closed, not fail-empty).
+            if (Array.isArray(ids) && ids.length > 0) {
+              set({ supportedConnectorIds: ids });
+            }
+          } catch {
+            // Best-effort: keep the last-known-good (persisted or fallback)
+            // list. Not surfaced as a user-facing error — the grid still
+            // renders correctly with the previous value.
           }
         },
 
@@ -276,12 +357,13 @@ export const useConnectorsStore = create<ConnectorsState>()(
             oauthStartedAt: {},
             _oauthTimers: {},
             connectorPermissions: {},
+            supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
           });
         },
       }),
       {
         name: 'connectors-store',
-        version: 5,
+        version: 6,
         migrate: (persistedState, version) => {
           if (version < 3) {
             return {
@@ -309,6 +391,12 @@ export const useConnectorsStore = create<ConnectorsState>()(
               connectorPermissions: {},
             } as ConnectorsState;
           }
+          if (version < 6) {
+            return {
+              ...(persistedState as ConnectorsState),
+              supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
+            } as ConnectorsState;
+          }
           return persistedState as ConnectorsState;
         },
         // Do not persist timer IDs — they are runtime-only
@@ -319,6 +407,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
           pendingOAuth: state.pendingOAuth,
           oauthStartedAt: state.oauthStartedAt,
           connectorPermissions: state.connectorPermissions,
+          supportedConnectorIds: state.supportedConnectorIds,
         }),
       },
     ),

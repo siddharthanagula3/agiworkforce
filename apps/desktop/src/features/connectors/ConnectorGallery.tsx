@@ -376,23 +376,27 @@ export function ConnectorGallery() {
 
   const {
     connectedIds,
+    supportedConnectorIds,
     loading,
     error,
     connect,
     connectWithApiKey,
     disconnect,
     fetchConnected,
+    fetchSupportedConnectorIds,
     clearError,
     completeOAuth,
   } = useConnectorsStore(
     useShallow((s) => ({
       connectedIds: s.connectedIds,
+      supportedConnectorIds: s.supportedConnectorIds,
       loading: s.loading,
       error: s.error,
       connect: s.connect,
       connectWithApiKey: s.connectWithApiKey,
       disconnect: s.disconnect,
       fetchConnected: s.fetchConnected,
+      fetchSupportedConnectorIds: s.fetchSupportedConnectorIds,
       clearError: s.clearError,
       completeOAuth: s.completeOAuth,
     })),
@@ -406,7 +410,8 @@ export function ConnectorGallery() {
 
   useEffect(() => {
     void fetchConnected();
-  }, [fetchConnected]);
+    void fetchSupportedConnectorIds();
+  }, [fetchConnected, fetchSupportedConnectorIds]);
 
   useEffect(() => {
     if (!detailConnectorId) {
@@ -514,9 +519,22 @@ export function ConnectorGallery() {
     };
   }, [completeOAuth]);
 
+  // DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01: the static catalog
+  // (CONNECTOR_DIRECTORY) is necessary but not sufficient — a connector must
+  // ALSO have a real backend MCP mapping (mirrored here via
+  // `supportedConnectorIds`, fetched from `mcp_get_supported_connector_ids`)
+  // before it can ever be advertised as connectable. This is what keeps
+  // atlassian/google_sheets/context7 (real OAuth/consent flow, but no
+  // `get_connector_mcp_mapping` entry) out of this grid instead of producing
+  // a permanent fake-"Connected" badge with zero backing tools.
+  const supportedConnectors = useMemo(
+    () => CONNECTOR_DIRECTORY.filter((c) => supportedConnectorIds.includes(c.id)),
+    [supportedConnectorIds],
+  );
+
   const visibleCategories = useMemo(
-    () => CONNECTOR_CATEGORIES.filter((cat) => CONNECTOR_DIRECTORY.some((c) => c.category === cat)),
-    [],
+    () => CONNECTOR_CATEGORIES.filter((cat) => supportedConnectors.some((c) => c.category === cat)),
+    [supportedConnectors],
   );
 
   const connectedConnectors = useMemo(
@@ -529,7 +547,7 @@ export function ConnectorGallery() {
 
   const availableConnectors = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return CONNECTOR_DIRECTORY.filter((connector) => {
+    return supportedConnectors.filter((connector) => {
       if (connectedIds.includes(connector.id)) return false;
       const matchesSearch =
         query.length === 0 ||
@@ -539,7 +557,7 @@ export function ConnectorGallery() {
       const matchesCategory = categoryFilter === 'all' || connector.category === categoryFilter;
       return matchesSearch && matchesCategory;
     });
-  }, [categoryFilter, connectedIds, search]);
+  }, [categoryFilter, connectedIds, search, supportedConnectors]);
 
   const detailConnector = detailConnectorId ? connectorById(detailConnectorId) : null;
   const connectorListError = error['__list'] ?? null;

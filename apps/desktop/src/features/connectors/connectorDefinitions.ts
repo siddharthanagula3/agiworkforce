@@ -144,7 +144,12 @@ export const CONNECTORS: ConnectorDef[] = [
     provider: 'canva',
     category: 'Design',
     color: 'blue',
-    featured: true,
+    // AUDIT-FIX: no `McpOAuthProvider::from_str` arm and no
+    // `get_connector_mcp_mapping` entry exist for 'canva' — clicking Connect
+    // previously failed immediately with "Unknown provider: canva". Hidden
+    // until real backend support lands (see
+    // DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01).
+    comingSoon: true,
     authType: 'oauth',
     docsUrl: 'https://www.canva.dev',
   },
@@ -171,7 +176,12 @@ export const CONNECTORS: ConnectorDef[] = [
     provider: 'hubspot',
     category: 'CRM & Sales',
     color: 'orange',
-    featured: true,
+    // AUDIT-FIX: no `McpOAuthProvider::from_str` arm and no
+    // `get_connector_mcp_mapping` entry exist for 'hubspot' — clicking
+    // Connect previously failed immediately with "Unknown provider:
+    // hubspot". Hidden until real backend support lands (see
+    // DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01).
+    comingSoon: true,
     authType: 'oauth',
     docsUrl: 'https://developers.hubspot.com',
   },
@@ -185,7 +195,15 @@ export const CONNECTORS: ConnectorDef[] = [
     category: 'Development',
     color: 'purple',
     featured: true,
-    authType: 'oauth',
+    // AUDIT-FIX: Linear's backend mapping (`get_connector_mcp_mapping` in
+    // mcp_oauth.rs) is a fully working `ApiKey`-credentialed connector, but
+    // this catalog previously declared `authType: 'oauth'`, which routed
+    // `ConnectorGallery.handleConnectClick` to the OAuth flow —
+    // `McpOAuthProvider::from_str` has no 'linear' arm, so every attempt
+    // failed immediately with "Unknown provider: linear", making a
+    // fully-working integration unreachable through the UI.
+    authType: 'api_key',
+    apiKeyPlaceholder: 'API key...',
     docsUrl: 'https://developers.linear.app',
   },
   {

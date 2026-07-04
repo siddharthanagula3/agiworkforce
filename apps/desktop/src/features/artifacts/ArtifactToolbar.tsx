@@ -90,7 +90,13 @@ export function ArtifactToolbar({
       <div className="flex items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={handleCopy}
+              aria-label={copied ? 'Copied' : 'Copy'}
+            >
               {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
             </Button>
           </TooltipTrigger>
@@ -98,7 +104,13 @@ export function ArtifactToolbar({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleDownload}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={handleDownload}
+              aria-label="Download"
+            >
               <Download className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
@@ -106,7 +118,13 @@ export function ArtifactToolbar({
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleOpenInPanel}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={handleOpenInPanel}
+              aria-label="Open in panel"
+            >
               <ExternalLink className="h-3 w-3" />
             </Button>
           </TooltipTrigger>

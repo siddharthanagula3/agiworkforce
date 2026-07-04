@@ -305,9 +305,54 @@ pub async fn detect_ecosystem_tools() -> Result<Vec<DetectedTool>, String> {
     Ok(scan_ecosystem())
 }
 
+/// Convert a scanned [`ImportedMcpServer`] into the `McpServerConfig` shape
+/// used by the live MCP client / dotfile persistence layer.
+fn imported_server_to_mcp_config(
+    imported: &ImportedMcpServer,
+) -> crate::core::mcp::McpServerConfig {
+    if let Some(command) = &imported.command {
+        crate::core::mcp::McpServerConfig {
+            command: command.clone(),
+            args: imported.args.clone(),
+            env: imported.env.clone(),
+            enabled: true,
+            transport: None,
+        }
+    } else {
+        // No command means this was a remote/HTTP entry — `json_server_entry`
+        // and `toml_server_entry` only produce an `ImportedMcpServer` at all
+        // when at least one of `command`/`url` is present.
+        crate::core::mcp::McpServerConfig {
+            command: String::new(),
+            args: Vec::new(),
+            env: HashMap::new(),
+            enabled: true,
+            transport: imported.url.clone().map(|url| {
+                crate::core::mcp::TransportConfig::Http(crate::core::mcp::HttpSseConfig {
+                    url,
+                    ..Default::default()
+                })
+            }),
+        }
+    }
+}
+
 /// Import MCP server configurations from detected ecosystem tools.
+///
+/// AUDIT-FIX (sibling of DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01): this
+/// used to be a pure scan-and-return function — the frontend showed
+/// "Imported N MCP server(s)" on success, but nothing was ever written
+/// anywhere and the live MCP client never learned about the scanned servers.
+/// It now persists every discovered server into the shared CLI dotfile
+/// (`~/.agiworkforce/mcp.json`, via `McpServersConfig::write_dotfile_servers`
+/// — the same durable store `dotfile_add_mcp_server` uses) and reloads the
+/// live MCP client so the servers actually connect, matching what the
+/// success toast already claims.
 #[tauri::command]
-pub async fn import_ecosystem_mcp_servers() -> Result<Vec<ImportedMcpServer>, String> {
+pub async fn import_ecosystem_mcp_servers(
+    mcp_state: tauri::State<'_, crate::sys::commands::mcp::McpState>,
+    app: tauri::AppHandle,
+) -> Result<Vec<ImportedMcpServer>, String> {
     let detected = scan_ecosystem();
     let mut servers = Vec::new();
 
@@ -346,6 +391,21 @@ pub async fn import_ecosystem_mcp_servers() -> Result<Vec<ImportedMcpServer>, St
                 }
             }
         }
+    }
+
+    if !servers.is_empty() {
+        let entries: Vec<(String, crate::core::mcp::McpServerConfig)> = servers
+            .iter()
+            .map(|s| (s.name.clone(), imported_server_to_mcp_config(s)))
+            .collect();
+
+        crate::core::mcp::config::McpServersConfig::write_dotfile_servers(&entries)?;
+
+        // Reload the live MCP client so the newly-persisted servers actually
+        // connect now, instead of only existing on disk until the next app
+        // restart — the exact gap that made the pre-fix version's success
+        // toast a lie.
+        mcp_state.reload_active_config(&app).await?;
     }
 
     Ok(servers)
@@ -451,4 +511,76 @@ fn toml_server_entry(source: &str, name: &str, config: &toml::Value) -> Option<I
         env,
         url,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sibling of DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01: proves the
+    /// stdio conversion path used by `import_ecosystem_mcp_servers` before
+    /// writing to the dotfile actually round-trips command/args/env, so the
+    /// persisted entry is a faithful copy of what was scanned.
+    #[test]
+    fn imported_server_to_mcp_config_preserves_stdio_command() {
+        let mut env = HashMap::new();
+        env.insert("FOO".to_string(), "bar".to_string());
+        let imported = ImportedMcpServer {
+            name: "claude:filesystem".to_string(),
+            source: "claude".to_string(),
+            original_name: "filesystem".to_string(),
+            command: Some("npx".to_string()),
+            args: vec!["-y".to_string(), "some-pkg".to_string()],
+            env: env.clone(),
+            url: None,
+        };
+
+        let config = imported_server_to_mcp_config(&imported);
+        assert_eq!(config.command, "npx");
+        assert_eq!(config.args, vec!["-y".to_string(), "some-pkg".to_string()]);
+        assert_eq!(config.env, env);
+        assert!(config.enabled);
+        assert!(config.transport.is_none());
+    }
+
+    #[test]
+    fn imported_server_to_mcp_config_converts_url_only_entry_to_http_transport() {
+        let imported = ImportedMcpServer {
+            name: "zed:remote-docs".to_string(),
+            source: "zed".to_string(),
+            original_name: "remote-docs".to_string(),
+            command: None,
+            args: vec![],
+            env: HashMap::new(),
+            url: Some("https://example.com/mcp".to_string()),
+        };
+
+        let config = imported_server_to_mcp_config(&imported);
+        assert!(config.command.is_empty());
+        match config.transport {
+            Some(crate::core::mcp::TransportConfig::Http(http)) => {
+                assert_eq!(http.url, "https://example.com/mcp");
+            }
+            other => panic!("expected Http transport, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn json_server_entry_prefixes_name_with_source_to_avoid_collisions() {
+        let config = serde_json::json!({
+            "command": "npx",
+            "args": ["-y", "some-pkg"]
+        });
+        let entry = json_server_entry("claude", "filesystem", &config)
+            .expect("valid command entry should parse");
+        assert_eq!(entry.name, "claude:filesystem");
+        assert_eq!(entry.original_name, "filesystem");
+        assert_eq!(entry.command.as_deref(), Some("npx"));
+    }
+
+    #[test]
+    fn json_server_entry_returns_none_without_command_or_url() {
+        let config = serde_json::json!({ "env": {} });
+        assert!(json_server_entry("claude", "broken", &config).is_none());
+    }
 }

@@ -299,6 +299,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/runtime/src/desktop-index.ts',
         ),
+        '@agiworkforce/utils/uuidv7': path.resolve(__dirname, '../../packages/utils/src/uuidv7.ts'),
         '@agiworkforce/utils': path.resolve(__dirname, '../../packages/utils/src/index.ts'),
         ...webTauriAliases,
       },

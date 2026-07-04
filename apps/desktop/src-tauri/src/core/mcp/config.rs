@@ -450,6 +450,67 @@ impl McpServersConfig {
         }
     }
 
+    /// Write additional server entries into the shared CLI dotfile
+    /// (`~/.agiworkforce/mcp.json`), creating the file (and its parent
+    /// directory) if necessary and preserving any existing content.
+    /// Entries whose name collides with an existing dotfile entry are
+    /// overwritten (last write wins).
+    ///
+    /// This is the persistence half of the fix for the
+    /// `import_ecosystem_mcp_servers` sibling of
+    /// DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01: that command used to scan
+    /// other AI tools' MCP configs and return the results with a success
+    /// toast, but never wrote anything anywhere, so "Imported N MCP
+    /// server(s)" was true only of the in-memory scan result, never of any
+    /// durable state. Callers should follow this with
+    /// `McpState::reload_active_config` so the live client picks up the
+    /// newly-written entries immediately (mirrors `dotfile_add_mcp_server`).
+    pub fn write_dotfile_servers(entries: &[(String, McpServerConfig)]) -> Result<usize, String> {
+        if entries.is_empty() {
+            return Ok(0);
+        }
+
+        let path = Self::dotfile_config_path()
+            .ok_or_else(|| "Could not resolve home directory for ~/.agiworkforce/mcp.json".to_string())?;
+
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create dotfile directory: {}", e))?;
+        }
+
+        let mut root: serde_json::Value = if path.exists() {
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read mcp.json: {}", e))?;
+            serde_json::from_str(&content).map_err(|e| format!("Failed to parse mcp.json: {}", e))?
+        } else {
+            serde_json::json!({ "mcpServers": {} })
+        };
+
+        let servers = root
+            .as_object_mut()
+            .ok_or_else(|| "mcp.json root is not an object".to_string())?
+            .entry("mcpServers")
+            .or_insert_with(|| serde_json::json!({}));
+
+        let servers_map = servers
+            .as_object_mut()
+            .ok_or_else(|| "mcpServers is not an object".to_string())?;
+
+        let mut written = 0usize;
+        for (name, config) in entries {
+            let value = serde_json::to_value(config)
+                .map_err(|e| format!("Failed to serialize server '{}': {}", name, e))?;
+            servers_map.insert(name.clone(), value);
+            written += 1;
+        }
+
+        let output = serde_json::to_string_pretty(&root)
+            .map_err(|e| format!("Failed to serialize mcp.json: {}", e))?;
+        std::fs::write(&path, output).map_err(|e| format!("Failed to write mcp.json: {}", e))?;
+
+        Ok(written)
+    }
+
     pub fn default() -> Self {
         serde_json::from_str(DEFAULT_CONFIG_JSON).unwrap_or_else(|error| {
             tracing::error!(
@@ -2135,6 +2196,94 @@ mod tests {
             };
             config.merge_dotfile_servers();
             assert!(config.mcp_servers.is_empty());
+        });
+    }
+
+    // ── write_dotfile_servers (import_ecosystem_mcp_servers persistence fix) ──
+
+    #[test]
+    fn write_dotfile_servers_creates_file_when_missing() {
+        with_temp_home(|home| {
+            let entries = vec![(
+                "claude:filesystem".to_string(),
+                McpServerConfig {
+                    command: "npx".to_string(),
+                    args: vec!["-y".to_string(), "some-pkg".to_string()],
+                    env: HashMap::new(),
+                    enabled: true,
+                    transport: None,
+                },
+            )];
+
+            let written = McpServersConfig::write_dotfile_servers(&entries)
+                .expect("write_dotfile_servers should succeed");
+            assert_eq!(written, 1);
+
+            let dotfile_path = home.join(".agiworkforce").join("mcp.json");
+            let content = std::fs::read_to_string(&dotfile_path).expect("dotfile should exist");
+            let parsed: serde_json::Value =
+                serde_json::from_str(&content).expect("dotfile should be valid JSON");
+            let servers = parsed
+                .get("mcpServers")
+                .and_then(|v| v.as_object())
+                .expect("mcpServers object");
+            assert!(servers.contains_key("claude:filesystem"));
+            assert_eq!(servers["claude:filesystem"]["command"], "npx");
+
+            // And the newly-written entry actually merges back in for the
+            // live client — the exact mechanism `reload_active_config` relies
+            // on, proving this is the same durable persistence path as
+            // `dotfile_add_mcp_server`.
+            let mut config = McpServersConfig {
+                mcp_servers: HashMap::new(),
+            };
+            config.merge_dotfile_servers();
+            assert!(config.mcp_servers.contains_key("claude:filesystem"));
+        });
+    }
+
+    #[test]
+    fn write_dotfile_servers_preserves_existing_entries_and_overwrites_collisions() {
+        with_temp_home(|home| {
+            write_dotfile_mcp_json(
+                home,
+                r#"{"mcpServers":{"existing":{"command":"npx","args":["-y","old-pkg"]}}}"#,
+            );
+
+            let entries = vec![(
+                "existing".to_string(),
+                McpServerConfig {
+                    command: "npx".to_string(),
+                    args: vec!["-y".to_string(), "new-pkg".to_string()],
+                    env: HashMap::new(),
+                    enabled: true,
+                    transport: None,
+                },
+            )];
+            McpServersConfig::write_dotfile_servers(&entries).expect("write should succeed");
+
+            let dotfile_path = home.join(".agiworkforce").join("mcp.json");
+            let content = std::fs::read_to_string(&dotfile_path).unwrap();
+            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+            assert_eq!(
+                parsed["mcpServers"]["existing"]["args"][1],
+                serde_json::json!("new-pkg"),
+                "same-name entries should be overwritten, last write wins"
+            );
+        });
+    }
+
+    #[test]
+    fn write_dotfile_servers_is_a_noop_for_empty_entries() {
+        with_temp_home(|home| {
+            let written =
+                McpServersConfig::write_dotfile_servers(&[]).expect("empty write should succeed");
+            assert_eq!(written, 0);
+            let dotfile_path = home.join(".agiworkforce").join("mcp.json");
+            assert!(
+                !dotfile_path.exists(),
+                "an empty entry list must not create the dotfile"
+            );
         });
     }
 }
