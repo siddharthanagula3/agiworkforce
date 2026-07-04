@@ -222,7 +222,7 @@ const AUTO_MODEL_DEFAULTS: Record<
   string | null
 > = {
   'auto-balanced': resolveAutoModeModel('auto-balanced', 'pro'),
-  'auto-economy': resolveAutoModeModel('auto-economy', 'hobby'),
+  'auto-economy': resolveAutoModeModel('auto-economy', 'basic'),
   'auto-premium': resolveAutoModeModel('auto-premium', 'max'),
 } as const;
 

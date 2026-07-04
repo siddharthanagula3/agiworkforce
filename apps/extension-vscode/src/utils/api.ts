@@ -14,7 +14,10 @@ import * as https from 'https';
 import { URL } from 'url';
 // AUDIT-FIX: vscode-reorg
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
-import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
+import {
+  getModelProviderInfo,
+  normalizeConfiguredModelId,
+} from '../features/model-picker/modelConstants';
 import { getTokenCounter } from '../data/tokenCounter';
 import { TierInfoSchema } from '../protocol/apiResponses';
 
@@ -830,29 +833,91 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
 
 // ─── Provider-stream path ─────────────────────────────────────────────────────
 //
-// The direct platform-token path has been removed. Until AGI Cloud account
-// sign-in is wired into the VS Code extension, this setting fails closed
-// instead of accepting manually pasted runtime tokens.
+// AGI Cloud account sign-in IS wired (features/account-auth/deviceAuth.ts,
+// command agi-workforce.signIn, token stored via setAccountToken/getAccountToken)
+// and the SSE client for /api/v1/providers/:id/stream IS implemented
+// (integrations/providerStreamClient.ts) — this function's job is just to
+// glue those two already-working pieces together.
+
+const PROVIDER_STREAM_SUPPORTED = new Set(['anthropic', 'openai', 'ollama', 'google']);
+
+function getGatewayUrl(): string {
+  return getGlobalConfig<string>('agiWorkforce', 'gatewayUrl', 'https://api.agiworkforce.com');
+}
 
 /**
- * Stream a chat completion through the new ProviderAdapter pipeline. Same
- * `StreamCallbacks` shape as `streamChatCompletion`, so chat participant
- * call sites can branch on a feature flag without restructuring.
+ * Stream a chat completion through the /api/v1/providers/:id/stream gateway,
+ * authenticated with the AGI Cloud account token from `signInToAgiCloud`.
+ * Same `StreamCallbacks` shape as `streamChatCompletion`, so chat participant
+ * call sites can branch on the `agiWorkforce.useProviderStream` feature flag
+ * without restructuring.
  */
 export async function streamChatCompletionViaProvider(
-  _secrets: vscode.SecretStorage,
+  secrets: vscode.SecretStorage,
   messages: LlmChatMessage[],
   callbacks: StreamCallbacks,
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
 ): Promise<void> {
-  void messages;
-  void callbacks;
-  void cancellationToken;
-  void overrideModel;
-  throw new AgiWorkforceApiError(
-    'AGI Cloud sign-in is not available in the VS Code extension yet. Disable agiWorkforce.useProviderStream or use AGI Web for account-gated provider streaming.',
-    401,
-    'AGI_ACCOUNT_WEB_AUTH_NOT_WIRED',
-  );
+  const accountToken = await getAccountToken(secrets);
+  if (accountToken === undefined || accountToken === '') {
+    throw new AgiWorkforceApiError(
+      'Sign in to AGI Cloud to use provider-stream routing (agi-workforce.signIn), or disable agiWorkforce.useProviderStream to use the default AGI Workforce proxy instead.',
+      401,
+      'AGI_ACCOUNT_TOKEN_MISSING',
+    );
+  }
+
+  const model = overrideModel ?? getModel();
+  const { providerId } = getModelProviderInfo(model);
+  if (providerId === null || !PROVIDER_STREAM_SUPPORTED.has(providerId)) {
+    throw new AgiWorkforceApiError(
+      `The provider-stream gateway does not yet support '${providerId ?? 'unknown'}' models. Disable agiWorkforce.useProviderStream to route this model through the default AGI Workforce proxy instead.`,
+      400,
+      'AGI_PROVIDER_STREAM_UNSUPPORTED_PROVIDER',
+    );
+  }
+
+  const { streamFromProvider } = await import('../integrations/providerStreamClient');
+  const abortController = new AbortController();
+  const cancelListener = cancellationToken.onCancellationRequested(() => abortController.abort());
+
+  try {
+    for await (const chunk of streamFromProvider({
+      gatewayUrl: getGatewayUrl(),
+      providerId: providerId as 'anthropic' | 'openai' | 'ollama' | 'google',
+      authToken: accountToken,
+      request: { model, messages },
+      signal: abortController.signal,
+    })) {
+      if (cancellationToken.isCancellationRequested) break;
+      switch (chunk.type) {
+        case 'text-delta':
+          callbacks.onToken(chunk.delta);
+          break;
+        case 'tool-use-start':
+          callbacks.onToolUseStart?.(chunk.toolUseId, chunk.name);
+          break;
+        case 'tool-use-delta':
+          callbacks.onToolUseDelta?.(chunk.toolUseId, chunk.deltaJson);
+          break;
+        case 'tool-use-end':
+          callbacks.onToolUseEnd?.(chunk.toolUseId);
+          break;
+        case 'thinking-delta':
+        case 'usage':
+          // No StreamCallbacks hook for extended-thinking text or usage
+          // accounting yet — ignored rather than mis-routed as a token.
+          break;
+        case 'error':
+          callbacks.onError(new AgiWorkforceApiError(chunk.message, chunk.retryable ? 503 : 500));
+          return;
+        case 'stop':
+          break;
+      }
+    }
+    callbacks.onDone();
+  } finally {
+    cancelListener.dispose();
+  }
 }

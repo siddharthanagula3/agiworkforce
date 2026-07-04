@@ -60,8 +60,8 @@ describe('sidebar sendMessage — paywall guard (P0-F)', () => {
     expect(result.activeModelAfter).toBe('claude-opus-4.8');
   });
 
-  it('blocks cross-provider switch (gpt→gemini) on hobby tier', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('hobby');
+  it('blocks cross-provider switch (gpt→gemini) on basic tier', async () => {
+    vi.mocked(resolveTier).mockResolvedValue('basic');
     const result = await simulateSendMessage('gpt-5.5', 'gemini-3.1-pro-preview', mockContext);
     expect(result.blocked).toBe(true);
     expect(result.activeModelAfter).toBe('gpt-5.5');
@@ -74,8 +74,8 @@ describe('sidebar sendMessage — paywall guard (P0-F)', () => {
     expect(result.activeModelAfter).toBe('claude-opus-4.8');
   });
 
-  it('allows cross-provider switch (claude→gpt) on pro_plus tier', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('pro_plus');
+  it('allows cross-provider switch (claude→gpt) on max tier', async () => {
+    vi.mocked(resolveTier).mockResolvedValue('max');
     const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.5', mockContext);
     expect(result.blocked).toBe(false);
     expect(result.activeModelAfter).toBe('gpt-5.5');
@@ -171,8 +171,8 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     expect(tier).toBe('byok');
   });
 
-  it('global "pro_plus" is respected (legitimate user setting)', async () => {
-    stubTierInspect({ globalValue: 'pro_plus', workspaceValue: undefined });
+  it('global "max" is respected (legitimate user setting)', async () => {
+    stubTierInspect({ globalValue: 'max', workspaceValue: undefined });
     const ctx = makeContext(undefined);
 
     const { resolveTier: realResolveTier } = await vi.importActual<
@@ -180,11 +180,11 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
-    expect(tier).toBe('pro_plus');
+    expect(tier).toBe('max');
   });
 
-  it('workspace "pro_plus" when globalValue is byok still resolves to byok', async () => {
-    stubTierInspect({ globalValue: undefined, workspaceValue: 'pro_plus' });
+  it('workspace "max" when globalValue is byok still resolves to byok', async () => {
+    stubTierInspect({ globalValue: undefined, workspaceValue: 'max' });
     const ctx = makeContext(undefined);
 
     const { resolveTier: realResolveTier } = await vi.importActual<
@@ -197,14 +197,14 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
 
   it('cached globalState tier is used when no global setting is present', async () => {
     stubTierInspect({ globalValue: undefined, workspaceValue: undefined });
-    const ctx = makeContext('hobby');
+    const ctx = makeContext('basic');
 
     const { resolveTier: realResolveTier } = await vi.importActual<
       typeof import('../integrations/tierResolver')
     >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
-    expect(tier).toBe('hobby');
+    expect(tier).toBe('basic');
   });
 
   it('cross-provider switch is still blocked when workspace spoofs tier=max but global is byok', async () => {

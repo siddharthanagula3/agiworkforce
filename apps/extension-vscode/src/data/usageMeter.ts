@@ -23,9 +23,8 @@ const LOCAL_PREFIXES = ['ollama/', 'lmstudio/', 'lms/', 'local/'];
 const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'local',
   'byok',
-  'hobby',
+  'basic',
   'pro',
-  'pro_plus',
   'max',
 ]);
 
@@ -37,7 +36,15 @@ function isLocalModel(modelId: string): boolean {
 function coercePlanTier(raw: string | undefined): UIPlanTier | undefined {
   if (raw === undefined) return undefined;
   const normalized = raw.toLowerCase().replace(/-/g, '_');
-  const remapped = normalized === 'pro+' ? 'pro_plus' : normalized;
+  // Legacy aliases from before the 2026-06-30 tier rename: 'hobby' -> 'basic',
+  // 'pro+'/'pro_plus' -> 'max' (pro_plus was never shipped and was removed
+  // with no direct successor).
+  const remapped =
+    normalized === 'hobby'
+      ? 'basic'
+      : normalized === 'pro+' || normalized === 'pro_plus'
+        ? 'max'
+        : normalized;
   return VALID_TIERS.has(remapped) ? (remapped as UIPlanTier) : undefined;
 }
 
