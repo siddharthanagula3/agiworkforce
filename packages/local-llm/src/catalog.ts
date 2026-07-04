@@ -10,6 +10,18 @@ const ET_URL_PREFIX = 'https://huggingface.co/software-mansion/react-native-exec
 // browser instead of the .pte bytes, so model download fails.
 const ET_VERSION_TAG = 'resolve/v0.8.0';
 
+// Cloudflare R2 public base URL for downloadable on-device model files (Wave 1-2
+// task #22 — bucket/token provisioning tracked separately). Must use the
+// EXPO_PUBLIC_ prefix so Metro/Expo inlines it into the client bundle; unset in
+// dev until the bucket exists, in which case downloadUrl below resolves to
+// undefined and the install flow reports the model as unavailable rather than
+// throwing.
+const R2_MODELS_BASE_URL = process.env.EXPO_PUBLIC_R2_MODELS_BASE_URL?.trim().replace(/\/$/, '');
+
+function r2ModelUrl(fileName: string): string | undefined {
+  return R2_MODELS_BASE_URL ? `${R2_MODELS_BASE_URL}/${fileName}` : undefined;
+}
+
 const CATALOG: OnDeviceModel[] = [
   {
     id: 'qwen3-4b-instruct-2507',
@@ -117,27 +129,44 @@ const CATALOG: OnDeviceModel[] = [
       structuredOutput: true,
     },
     license: 'Apple Entitlement',
-    role: 'system-multimodal',
+    role: 'system-model',
     shipsInV1: true,
   },
   {
+    // Reclassified from the fictitious OS-resident "Gemini Nano via AICore" path
+    // (com.google.mlkit:genai-common has no generic chat API — see
+    // native/android/AGIAICoreModule.kt) to a real, downloadable model run through
+    // com.google.mediapipe:tasks-genai's LlmInference API. Google's own gallery app
+    // (google-ai-edge/gallery, model_allowlists/*.json) ships this exact checkpoint
+    // for its lightest Android tier, via the newer LiteRT-LM runtime (.litertlm,
+    // verified sizeInBytes 584_417_280). We target tasks-genai instead (per Wave
+    // 1-2 task #25 decision), which consumes the equivalent .task bundle from the
+    // same litert-community/Gemma3-1B-IT HF repo — see the official MediaPipe
+    // sample (mediapipe-samples/examples/llm_inference/android, Model.kt). That
+    // repo is Gemma-license-gated, so the exact byte size of the .task file itself
+    // could not be verified without HF credentials; fileSizeBytes below reuses the
+    // verified size of the equivalent int4 .litertlm sibling as the closest known
+    // reference and MUST be corrected to the real .task size once it is fetched
+    // for the R2 upload (deployment step, task #22).
     id: 'gemini-nano-aicore',
-    displayName: 'Gemini Nano',
-    family: 'gemini-nano',
-    paramCountB: 1.8, // Nano v2 approximate
-    fileSizeBytes: 0, // OS-resident via AICore — not downloaded
+    displayName: 'Gemma 3 1B (Fast)',
+    family: 'gemma3-1b',
+    paramCountB: 1.0,
+    fileSizeBytes: 584_417_280, // int4 — see comment above; unverified for the exact .task container
     supportedRuntimes: ['aicore'],
-    contextWindow: 1_024, // AICore Prompt API limit on Nano
+    contextWindow: 2_048, // matches the _ekv2048 prefill-cache variant we ship
     capabilities: {
       text: true,
-      visionIn: true,
+      visionIn: false, // Gemma 3 1B is text-only (multimodal starts at 4B)
       audioIn: false,
       toolCalls: false,
       structuredOutput: false,
     },
-    license: 'Google AICore',
-    role: 'system-multimodal',
+    license: 'Gemma',
+    role: 'system-model',
     shipsInV1: true,
+    downloadUrl: r2ModelUrl('gemma3-1b-it-int4.task'),
+    format: 'task',
   },
   {
     id: 'phi-4-mini-instruct',

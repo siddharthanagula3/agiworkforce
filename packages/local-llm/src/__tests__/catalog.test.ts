@@ -28,11 +28,12 @@ describe('on-device catalog: getModelById', () => {
     expect(model!.supportedRuntimes).toContain('apple-foundation-models');
   });
 
-  it('returns gemini-nano-aicore entry with fileSizeBytes 0', () => {
+  it('returns gemini-nano-aicore as a downloadable tasks-genai model', () => {
     const model = getModelById('gemini-nano-aicore');
     expect(model).toBeDefined();
-    expect(model!.fileSizeBytes).toBe(0);
+    expect(model!.fileSizeBytes).toBeGreaterThan(0);
     expect(model!.supportedRuntimes).toContain('aicore');
+    expect(model!.format).toBe('task');
   });
 });
 
@@ -93,10 +94,10 @@ describe('on-device catalog: getLiteModeModel', () => {
 });
 
 describe('on-device catalog: getModelsForRole', () => {
-  it('returns only system-multimodal entries for that role', () => {
-    const models = getModelsForRole('system-multimodal');
+  it('returns only system-model entries for that role', () => {
+    const models = getModelsForRole('system-model');
     expect(models.length).toBeGreaterThanOrEqual(2);
-    expect(models.every((m) => m.role === 'system-multimodal')).toBe(true);
+    expect(models.every((m) => m.role === 'system-model')).toBe(true);
   });
 
   it('returns empty array for role with no matches', () => {
