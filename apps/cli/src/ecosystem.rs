@@ -566,7 +566,7 @@ pub fn migrate_claude_code_from_home(
 
     let global_memory = copy_if_missing(
         &claude_dir.join("CLAUDE.md"),
-        &home.join(".agi").join("CLAUDE.md"),
+        &home.join(".agiworkforce").join("CLAUDE.md"),
         dry_run,
     )?;
 
@@ -1557,7 +1557,7 @@ args = ["mcp"]
 
         assert_eq!(report.mcp.added, vec!["claude:docs"]);
         assert_eq!(report.global_memory.status, FileCopyStatus::Created);
-        assert!(home.path().join(".agi/CLAUDE.md").is_file());
+        assert!(home.path().join(".agiworkforce/CLAUDE.md").is_file());
         assert!(agi.path().join("prompts/claude/review.md").is_file());
         assert!(agi.path().join("prompts/claude/nested/fix.md").is_file());
         assert!(agi.path().join("skills/claude/reviewer/SKILL.md").is_file());
@@ -1600,7 +1600,7 @@ args = ["mcp"]
         assert!(report.dry_run);
         assert_eq!(report.global_memory.status, FileCopyStatus::DryRunCreate);
         assert_eq!(report.hooks.status, FileCopyStatus::DryRunCreate);
-        assert!(!home.path().join(".agi/CLAUDE.md").exists());
+        assert!(!home.path().join(".agiworkforce/CLAUDE.md").exists());
         assert!(!agi.path().join(".mcp.json").exists());
         assert!(!agi.path().join("prompts/claude/review.md").exists());
         assert!(!agi.path().join("skills/claude/reviewer/SKILL.md").exists());

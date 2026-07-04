@@ -207,7 +207,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
         "Local model                      Run AI locally — no account required",
         "Provide your own API key         Pay for what you use (Anthropic, OpenAI, Google)",
         "Other providers                  ChatGPT, Anthropic, GitHub Copilot OAuth",
-        "AGI cloud                        Waitlist only — join at agiworkforce.com",
+        "AGI cloud                        Sign in to get started — open to everyone",
         "Skip for now                     Configure later with /login",
     ];
 

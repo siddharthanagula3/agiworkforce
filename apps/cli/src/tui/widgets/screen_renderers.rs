@@ -48,6 +48,64 @@ fn frame(title_line: String, body_lines: &[String], footer: &str) -> String {
     out
 }
 
+/// True when `text` looks like a `frame()`-rendered slash-command "dialog"
+/// (an ASCII box opening with the `divider()` rule and closing with a footer
+/// hint that mentions `Esc`), as opposed to a plain system message.
+///
+/// These renderers pre-date the M8 Ratatui overlay state machine (see module
+/// docs above): every one of them is dispatched as a plain
+/// `SlashResult::SystemMessage` chat entry rather than a real overlay
+/// registered with `TuiApp::open_overlay`, so the global key handler has no
+/// overlay to intercept `Esc` and instead falls through to the app-quit
+/// binding — even though the rendered footer tells the user "Esc to
+/// cancel"/"Esc to close"/"Esc to back". Until the real overlay lands, the
+/// TUI's `Esc` handler uses this check to dismiss the dialog message instead
+/// of quitting. Structural (shape-based) rather than string-matching a
+/// specific footer so it covers every `frame()` caller, not just `/mcp` and
+/// `/plugin`.
+pub fn is_dialog_frame(text: &str) -> bool {
+    let mut lines = text.lines();
+    match lines.next() {
+        Some(first) if first == divider() => {}
+        _ => return false,
+    }
+    text.lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .map(|footer| footer.contains("Esc"))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod dialog_frame_tests {
+    use super::*;
+
+    #[test]
+    fn detects_frame_shaped_dialog_text() {
+        let text = frame(
+            "Title".to_string(),
+            &["  a body line".to_string()],
+            "Esc to close",
+        );
+        assert!(is_dialog_frame(&text));
+    }
+
+    #[test]
+    fn rejects_plain_system_messages() {
+        assert!(!is_dialog_frame("Session forked."));
+        assert!(!is_dialog_frame("Switched to gpt (openai)"));
+        assert!(!is_dialog_frame(""));
+    }
+
+    #[test]
+    fn rejects_frame_shaped_text_without_esc_footer() {
+        // Defensive: a frame()-shaped block whose footer never mentions Esc
+        // should not be treated as a dismissible dialog.
+        let text = frame("Title".to_string(), &[], "Enter to confirm");
+        assert!(!is_dialog_frame(&text));
+    }
+}
+
 // ---------------------------------------------------------------------------
 // /mcp — scoped server list with status glyphs (captures 602, 603)
 // ---------------------------------------------------------------------------

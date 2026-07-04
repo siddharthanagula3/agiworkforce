@@ -644,7 +644,42 @@ pub fn aggregate_results(results: &[HookResult]) -> HookAggregateOutcome {
 /// `matcher`/`if_condition` to scope their hook narrowly.
 ///
 /// Verifies file permissions on Unix (rejects group/other-readable files).
+///
+/// IMPORTANT: every one of load_hooks()'s ~10 call sites across the CLI
+/// discards the `Err` via `.unwrap_or_default()` (hooks are optional, so a
+/// missing/broken config must not crash the caller). That previously meant
+/// malformed JSON and the CLI-NEW-011 symlink/UID-mismatch security refusal
+/// were both silently swallowed — hooks would just stop firing with zero
+/// diagnostic anywhere, and a symlink attack would look identical to "no
+/// hooks configured". To fix this once instead of at every call site, this
+/// function prints a one-line `Warning: ...` to stderr itself immediately
+/// before returning any `Err`, so the warning fires regardless of how the
+/// caller consumes the `Result`. Callers that want the warning-then-default
+/// behavior explicitly can use [`load_hooks_or_default`] instead of chaining
+/// `.unwrap_or_default()` themselves.
 pub fn load_hooks() -> Result<HooksConfig> {
+    match load_hooks_inner() {
+        Ok(config) => Ok(config),
+        Err(e) => {
+            eprintln!(
+                "{} hooks.json failed to load: {:#} — hooks disabled",
+                crate::terminal_style::danger_header("warning:"),
+                e
+            );
+            Err(e)
+        }
+    }
+}
+
+/// Load hooks configuration, defaulting to an empty config (with the
+/// standard load-failure warning already printed by [`load_hooks`]) if
+/// loading fails. Prefer this over `load_hooks().unwrap_or_default()` at new
+/// call sites — it's equivalent, but names the fallback behavior explicitly.
+pub fn load_hooks_or_default() -> HooksConfig {
+    load_hooks().unwrap_or_default()
+}
+
+fn load_hooks_inner() -> Result<HooksConfig> {
     let path = crate::config::CliConfig::config_dir()?.join("hooks.json");
 
     let mut config: HooksConfig = if !path.exists() {

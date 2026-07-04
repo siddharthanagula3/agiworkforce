@@ -4,8 +4,18 @@
 //! `search()` degrades gracefully to an empty list when the registry is
 //! unreachable.  Primary install methods are local path and git URL.
 //!
-//! Installed plugins are tracked in `~/.agiworkforce/plugins/installed.json`
-//! (the same file used by [`crate::plugins::InstalledPlugins`]).
+//! Installed plugins are tracked in `~/.agiworkforce/plugins/installed.json`.
+//!
+//! `agi plugin install`/`agi plugin list` (see `crate::plugins::PluginsManager`)
+//! manage the *same* `~/.agiworkforce/plugins/` directory but historically did
+//! not write `installed.json` — they discover plugins by scanning the
+//! directory tree for manifests instead. To keep both command families
+//! interoperating over one source of truth, [`InstalledPlugins::load`]
+//! reconciles the registry against the plugins directory on every load: any
+//! subdirectory with a recognized plugin manifest that isn't yet tracked is
+//! adopted into the registry (and the reconciled registry is persisted back
+//! to disk). This makes a plugin installed via either `agi plugin install`
+//! or `agi marketplace install` visible and manageable via both.
 
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
@@ -14,7 +24,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
-// Installed plugin tracking (self-contained, no dependency on plugins.rs)
+// Installed plugin tracking — shared source of truth with `crate::plugins`
 // ---------------------------------------------------------------------------
 
 /// A single installed plugin entry in `installed.json`.
@@ -49,14 +59,23 @@ impl Default for InstalledPlugins {
 }
 
 impl InstalledPlugins {
-    /// Load installed.json from the plugins directory.
-    /// Returns an empty registry if the file doesn't exist.
+    /// Load installed.json from the plugins directory, then reconcile it
+    /// against the directory tree so plugins installed via `agi plugin
+    /// install` (which writes straight to disk without touching
+    /// installed.json) are picked up here too. The reconciled registry is
+    /// persisted back to `installed.json` on a best-effort basis so the two
+    /// command families converge on one file instead of drifting apart
+    /// again on the next read.
     pub fn load(plugins_dir: &Path) -> Self {
         let path = plugins_dir.join("installed.json");
-        match std::fs::read_to_string(&path) {
+        let mut registry: Self = match std::fs::read_to_string(&path) {
             Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
             Err(_) => Self::default(),
+        };
+        if reconcile_with_disk(plugins_dir, &mut registry) {
+            let _ = registry.save(plugins_dir);
         }
+        registry
     }
 
     /// Save installed.json to the plugins directory.
@@ -66,6 +85,47 @@ impl InstalledPlugins {
         std::fs::write(&path, contents)?;
         Ok(())
     }
+}
+
+/// Scan `plugins_dir` for subdirectories that carry a recognized plugin
+/// manifest but are not yet tracked in `registry`, and adopt them. Returns
+/// `true` if the registry was modified (caller should persist).
+///
+/// Only directories with a real manifest are adopted so stray/unrelated
+/// directories (e.g. a future non-plugin cache dir) don't get captured as
+/// phantom "installed" plugins.
+fn reconcile_with_disk(plugins_dir: &Path, registry: &mut InstalledPlugins) -> bool {
+    let Ok(entries) = std::fs::read_dir(plugins_dir) else {
+        return false;
+    };
+    let mut changed = false;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if name == CACHE_DIR || registry.plugins.contains_key(name) {
+            continue;
+        }
+        if crate::plugins::load_manifest_for(&path).is_none() {
+            // No recognized manifest — not a plugin directory we can adopt.
+            continue;
+        }
+        registry.plugins.insert(
+            name.to_string(),
+            InstalledPluginEntry {
+                scope: "user".to_string(),
+                install_path: path.to_string_lossy().to_string(),
+                version: read_manifest_version(&path),
+                installed_at: Utc::now(),
+            },
+        );
+        changed = true;
+    }
+    changed
 }
 
 // ---------------------------------------------------------------------------

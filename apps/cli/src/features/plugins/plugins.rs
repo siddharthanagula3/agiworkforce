@@ -94,8 +94,10 @@ pub struct LoadedPlugin {
     pub mcp_servers: HashMap<String, McpServerConfig>,
     pub apps: Vec<String>,
     pub error: Option<String>,
-    /// Format of the manifest this plugin was loaded from. `None` if no
-    /// manifest was found (the plugin still loads as a bare directory).
+    /// Format of the manifest this plugin was loaded from. Always `Some` —
+    /// directories with none of the 5 recognized manifest files are skipped
+    /// during discovery (see `PluginsManager::load_from_dir`) rather than
+    /// loaded as an inert, capability-less entry.
     pub format: Option<ManifestFormat>,
     /// Plugin-declared command markdown paths (relative to plugin root).
     pub manifest_commands: Vec<PathBuf>,
@@ -325,35 +327,37 @@ impl PluginsManager {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            // Try each manifest path in priority order.
-            let parsed = load_manifest_for(&path);
-            let (manifest, format) = match parsed {
-                Some((mut m, fmt)) => {
-                    // Validate MCP server commands in stdio entries —
-                    // reject shell metacharacters that could enable
-                    // command injection. HTTP/SSE entries (no command,
-                    // url in `extra`) are passed through untouched.
-                    m.mcp_servers.retain(|sname, cfg| {
-                        if cfg.command.is_empty() {
-                            // No command means HTTP/SSE transport —
-                            // safety check doesn't apply.
-                            return true;
-                        }
-                        let has_metachar =
-                            cfg.command.contains(&['|', ';', '&', '$', '`', '\0'][..]);
-                        if has_metachar {
-                            eprintln!(
-                                "[plugins] Rejected MCP server '{}' in plugin '{}': \
-                                 command contains shell metacharacters",
-                                sname, name
-                            );
-                        }
-                        !has_metachar
-                    });
-                    (Some(m), Some(fmt))
-                }
-                None => (None, None),
+            // Try each manifest path in priority order. A directory with none
+            // of the 5 recognized manifest files (or an unparsable one — see
+            // `load_manifest_for`'s eprintln) contributes zero commands,
+            // skills, agents, or MCP servers, so surfacing it as a loaded
+            // "[no-manifest]" plugin in `doctor`/`plugin list` was a fake
+            // availability badge: it looked installed/enabled but did
+            // nothing. Skip it instead of fabricating an inert entry.
+            let Some((mut m, fmt)) = load_manifest_for(&path) else {
+                continue;
             };
+            // Validate MCP server commands in stdio entries — reject shell
+            // metacharacters that could enable command injection. HTTP/SSE
+            // entries (no command, url in `extra`) are passed through
+            // untouched.
+            m.mcp_servers.retain(|sname, cfg| {
+                if cfg.command.is_empty() {
+                    // No command means HTTP/SSE transport —
+                    // safety check doesn't apply.
+                    return true;
+                }
+                let has_metachar = cfg.command.contains(&['|', ';', '&', '$', '`', '\0'][..]);
+                if has_metachar {
+                    eprintln!(
+                        "[plugins] Rejected MCP server '{}' in plugin '{}': \
+                         command contains shell metacharacters",
+                        sname, name
+                    );
+                }
+                !has_metachar
+            });
+            let (manifest, format) = (Some(m), Some(fmt));
 
             // Surface unknown manifest fields once at debug level so
             // ecosystem authors notice when a field they need isn't
@@ -1112,6 +1116,31 @@ mod tests {
             manager.agent_paths(),
             vec![plugin_root.join("agents").join("agent.md")]
         );
+    }
+
+    #[test]
+    fn load_from_dir_skips_directories_with_no_recognized_manifest() {
+        // A bare directory under ~/.agiworkforce/plugins/ (e.g. an empty dir
+        // left over from a failed install, or an unrelated stray folder) has
+        // none of the 5 recognized manifest files. Previously this was still
+        // reported as a "loaded" plugin (format: None, "[no-manifest]") even
+        // though it contributes zero commands/skills/agents/MCP servers — a
+        // fake availability badge. It must be skipped entirely.
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        std::fs::create_dir_all(plugins_dir.join("stray-empty-dir")).unwrap();
+        // A real plugin alongside it should still load normally.
+        write_test_plugin(&plugins_dir.join("real-plugin"));
+
+        let mut manager = PluginsManager {
+            global_dir: plugins_dir,
+            plugins: Vec::new(),
+        };
+        let loaded = manager.load_all(None).unwrap();
+
+        assert_eq!(loaded.len(), 1, "stray no-manifest dir must not be loaded");
+        assert_eq!(loaded[0].config_name, "real-plugin");
+        assert!(loaded[0].format.is_some());
     }
 
     #[cfg(unix)]

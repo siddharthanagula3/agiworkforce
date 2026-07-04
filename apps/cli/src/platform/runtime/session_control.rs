@@ -297,6 +297,14 @@ pub fn create_managed_session(messages: Vec<Message>) -> Result<ResolvedManagedS
     create_managed_session_in(&CliConfig::config_dir()?, messages)
 }
 
+/// Return true if a managed session with the given id already exists on disk
+/// under the CLI config directory. Used to guard destructive overwrite paths
+/// (e.g. `agi session fork --as <name>`) before writing.
+pub fn managed_session_exists(session_id: impl AsRef<str>) -> Result<bool> {
+    let base_dir = CliConfig::config_dir()?;
+    Ok(find_session_path_in(&base_dir, session_id.as_ref()).is_some())
+}
+
 /// Create a new managed session with an explicit session id (e.g. a user-chosen slug
 /// from `agi session fork --as <name>`). The id becomes the filename so
 /// `agi --resume <id>` resolves immediately.

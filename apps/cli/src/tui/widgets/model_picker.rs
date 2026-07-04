@@ -83,7 +83,12 @@ impl Default for ModelPickerState {
             visible: false,
             search: String::new(),
             cursor: 0,
-            search_focused: false,
+            // Search starts focused so the "type to filter..." placeholder is
+            // true from the moment the picker opens — typing immediately
+            // filters without requiring the user to discover the `/` key
+            // first. Up/Down still unfocus search to navigate the list, and
+            // `/` remains available to re-focus after that.
+            search_focused: true,
             effort: Effort::Medium,
             rows: Vec::new(),
         }
@@ -248,7 +253,8 @@ impl ModelPickerState {
     pub fn open(&mut self, all_models: &[Model], current_model: &str) {
         self.visible = true;
         self.search.clear();
-        self.search_focused = false;
+        // Focused by default so typing immediately filters (see Default impl).
+        self.search_focused = true;
         self.effort = Effort::Medium;
         self.rebuild_rows(all_models);
         // Pre-select the currently active model.

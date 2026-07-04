@@ -151,25 +151,44 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
         .output()
         .await?;
     let _ = std::fs::remove_file(&tmp);
-    let mut applied = Vec::new();
-    for line in String::from_utf8_lossy(&stat.stdout).lines() {
-        if let Some(f) = line.split('|').next() {
-            let t = f.trim();
-            if !t.is_empty() {
-                applied.push(t.to_string());
-            }
-        }
-    }
     let code = apply.status.code().unwrap_or(1);
+    let mut applied = Vec::new();
     let mut conflicted = Vec::new();
     let mut skipped = Vec::new();
-    if code != 0 {
+    if code == 0 {
+        // `git apply --stat` only summarizes what a patch *would* touch — it
+        // doesn't validate applicability the way the real `git apply` (run
+        // above as `apply`) does. Only trust that summary, and only report
+        // files as "applied", once the real apply invocation has actually
+        // succeeded. Reporting from `--stat` unconditionally previously made
+        // `agi apply` claim success (and list changed files) even when the
+        // real apply failed and nothing was written to disk.
+        for line in String::from_utf8_lossy(&stat.stdout).lines() {
+            if let Some(f) = line.split('|').next() {
+                let t = f.trim();
+                if !t.is_empty() {
+                    applied.push(t.to_string());
+                }
+            }
+        }
+    } else {
         for line in String::from_utf8_lossy(&apply.stderr).lines() {
             if line.contains("conflict") || line.contains("rejected") {
                 conflicted.push(line.to_string());
             } else if line.contains("already exists") {
                 skipped.push(line.to_string());
             }
+        }
+        // Neither category matched a known pattern — surface the raw error
+        // rather than silently dropping it, so a failed apply is never
+        // reported as clean with an empty everything.
+        if conflicted.is_empty() && skipped.is_empty() {
+            let stderr = String::from_utf8_lossy(&apply.stderr).trim().to_string();
+            conflicted.push(if stderr.is_empty() {
+                format!("git apply failed with exit code {code}")
+            } else {
+                stderr
+            });
         }
     }
     Ok(PatchResult {
@@ -213,11 +232,14 @@ pub fn print_patch_result(result: &PatchResult) {
         println!("  {} {}", ts::danger("!"), f);
     }
     if result.exit_code == 0 {
+        // `applied`/`skipped`/`conflicted` are only ever populated from a
+        // real successful `git apply` on this path (see `apply_git_patch`),
+        // so exit_code == 0 always means the patch genuinely applied.
         println!("{}", ts::success_header("Patch applied."));
-    } else if result.conflicted.is_empty() {
-        println!("{}", ts::warning_header("Patch applied with warnings."));
-    } else {
+    } else if !result.conflicted.is_empty() {
         println!("{}", ts::danger_header("Patch had conflicts."));
+    } else {
+        println!("{}", ts::danger_header("Patch failed to apply."));
     }
 }
 

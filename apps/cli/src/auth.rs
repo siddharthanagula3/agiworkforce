@@ -480,7 +480,32 @@ pub async fn login_copilot() -> Result<AuthEntry> {
 struct ChatGPTDeviceCodeResponse {
     device_auth_id: String,
     user_code: String,
+    #[serde(deserialize_with = "deserialize_u64_from_str_or_num")]
     interval: u64,
+}
+
+/// The ChatGPT device-code endpoint returns `interval` as a JSON string
+/// (e.g. `"5"`) rather than a number, despite the OAuth device-flow spec
+/// (RFC 8628) defining it as an integer. Accept either representation.
+fn deserialize_u64_from_str_or_num<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StrOrNum {
+        Str(String),
+        Num(u64),
+    }
+
+    match StrOrNum::deserialize(deserializer)? {
+        StrOrNum::Str(s) => s
+            .parse::<u64>()
+            .map_err(|e| D::Error::custom(format!("invalid interval string {s:?}: {e}"))),
+        StrOrNum::Num(n) => Ok(n),
+    }
 }
 
 #[derive(Deserialize)]
@@ -1168,6 +1193,26 @@ fn extract_chatgpt_account_id(jwt: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chatgpt_device_code_response_accepts_string_interval() {
+        // Real auth.openai.com endpoint sends interval as a JSON string.
+        let json = r#"{"device_auth_id":"abc","user_code":"XYZ-123","interval":"5"}"#;
+        let parsed: ChatGPTDeviceCodeResponse =
+            serde_json::from_str(json).expect("should parse string interval");
+        assert_eq!(parsed.interval, 5);
+        assert_eq!(parsed.device_auth_id, "abc");
+        assert_eq!(parsed.user_code, "XYZ-123");
+    }
+
+    #[test]
+    fn chatgpt_device_code_response_accepts_numeric_interval() {
+        // Also accept a spec-compliant numeric interval, for robustness.
+        let json = r#"{"device_auth_id":"abc","user_code":"XYZ-123","interval":5}"#;
+        let parsed: ChatGPTDeviceCodeResponse =
+            serde_json::from_str(json).expect("should parse numeric interval");
+        assert_eq!(parsed.interval, 5);
+    }
 
     #[test]
     fn default_login_provider_targets_agiworkforce() {
