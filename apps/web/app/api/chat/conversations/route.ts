@@ -18,6 +18,15 @@ import {
   type ChatConversationRow,
 } from '@/lib/server/neon-chat';
 
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+
+function parsePositiveInt(raw: string | null, fallback: number, max?: number): number {
+  const parsed = Number.parseInt(raw ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return max !== undefined ? Math.min(parsed, max) : parsed;
+}
+
 async function handleGetConversations(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -29,32 +38,49 @@ async function handleGetConversations(request: NextRequest) {
   const rawQ = url.searchParams.get('q') ?? '';
   const q = rawQ.slice(0, 200).trim();
 
+  // Offset-based pagination so the sidebar can page past the most-recent 50
+  // conversations instead of having anything older become unreachable.
+  const limit =
+    parsePositiveInt(url.searchParams.get('limit'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) ||
+    DEFAULT_PAGE_SIZE;
+  const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
+
   try {
-    let conversations: ChatConversationRow[];
+    let rows: ChatConversationRow[];
+    // Fetch one extra row to cheaply detect whether another page exists
+    // without a separate count(*) query.
     if (q) {
-      conversations = await getNeonChatDb().query<ChatConversationRow>(
+      rows = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, project_id, pinned, created_at, updated_at
+          select id, title, model, project_id, pinned, is_temporary, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null and title ilike $2
           order by pinned desc, updated_at desc
-          limit 50
+          limit $3 offset $4
         `,
-        [userId, `%${q}%`],
+        [userId, `%${q}%`, limit + 1, offset],
       );
     } else {
-      conversations = await getNeonChatDb().query<ChatConversationRow>(
+      rows = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, project_id, pinned, created_at, updated_at
+          select id, title, model, project_id, pinned, is_temporary, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null
           order by pinned desc, updated_at desc
-          limit 50
+          limit $2 offset $3
         `,
-        [userId],
+        [userId, limit + 1, offset],
       );
     }
-    return NextResponse.json({ conversations });
+
+    const hasMore = rows.length > limit;
+    const conversations = hasMore ? rows.slice(0, limit) : rows;
+
+    return NextResponse.json({
+      conversations,
+      hasMore,
+      nextOffset: offset + conversations.length,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch conversations');
     throw createError.internal('Failed to fetch conversations');
@@ -90,17 +116,24 @@ async function handleCreateConversation(request: NextRequest) {
     // ensures a client can never overwrite another user's conversation by id.
     const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
       `
-        insert into web_conversations (id, user_id, title, model, project_id)
-        values (coalesce($5::uuid, gen_random_uuid()), $1, $2, $3, $4)
+        insert into web_conversations (id, user_id, title, model, project_id, is_temporary)
+        values (coalesce($5::uuid, gen_random_uuid()), $1, $2, $3, $4, $6)
         on conflict (id) do update set
           title = excluded.title,
           model = excluded.model,
           project_id = excluded.project_id,
           updated_at = now()
         where web_conversations.user_id = $1
-        returning id, title, model, project_id, created_at, updated_at
+        returning id, title, model, project_id, pinned, is_temporary, created_at, updated_at
       `,
-      [userId, body.title, body.model ?? null, body.projectId ?? null, body.id ?? null],
+      [
+        userId,
+        body.title,
+        body.model ?? null,
+        body.projectId ?? null,
+        body.id ?? null,
+        body.isTemporary ?? false,
+      ],
     );
     if (!conversation) {
       // The id exists but is owned by another user — never leak or hijack it.

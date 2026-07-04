@@ -21,7 +21,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import {
   SYNCED_APP_SURFACES,
   DEVELOPER_SESSION_SURFACES,
-  MAX_ATTACHMENT_BYTES,
+  validateAttachmentMeta,
   type SourceSurface,
 } from '@agiworkforce/types';
 
@@ -115,9 +115,13 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   if (typeof body.byteCount !== 'number' || body.byteCount <= 0) {
     throw createError.validation('byteCount must be a positive number');
   }
-  if (body.byteCount > MAX_ATTACHMENT_BYTES) {
-    const limitMb = Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024));
-    throw createError.validation(`byteCount exceeds the ${limitMb} MiB limit`);
+  const attachmentValidation = validateAttachmentMeta(
+    body.fileName.trim(),
+    body.mimeType.trim(),
+    body.byteCount,
+  );
+  if (!attachmentValidation.ok) {
+    throw createError.validation(attachmentValidation.message);
   }
   if (
     !body.checksumSha256 ||

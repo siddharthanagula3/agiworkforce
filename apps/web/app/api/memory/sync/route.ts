@@ -40,6 +40,7 @@ type MemoryDelta = {
   content: string;
   category: string | null;
   source: string | null;
+  pinned: boolean;
   is_deleted: boolean;
   created_at: string;
   updated_at: string;
@@ -72,7 +73,7 @@ async function handlePull(request: NextRequest, url: URL) {
   try {
     const memories = await db.query<MemoryDelta>(
       `
-        select id, content, category, source, is_deleted,
+        select id, content, category, source, pinned, is_deleted,
                created_at, updated_at, server_version
         from user_memories
         where user_id = $1 and server_version > $2
@@ -130,6 +131,7 @@ const PushMemorySchema = z.object({
   content: z.string().max(20_000),
   category: z.string().max(200).nullable().optional(),
   source: z.string().max(50).nullable().optional(),
+  pinned: z.boolean().optional(),
   isDeleted: z.boolean().optional(),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime(),
@@ -185,12 +187,13 @@ async function handlePost(request: NextRequest) {
       const rows = await db.query<{ id: string; server_version: string }>(
         `
           insert into user_memories
-            (id, user_id, content, category, source, is_deleted, created_at, updated_at)
-          values ($1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()), $8::timestamptz)
+            (id, user_id, content, category, source, pinned, is_deleted, created_at, updated_at)
+          values ($1, $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), $9::timestamptz)
           on conflict (id) do update set
             content = excluded.content,
             category = excluded.category,
             source = excluded.source,
+            pinned = excluded.pinned,
             is_deleted = excluded.is_deleted,
             updated_at = excluded.updated_at
           where user_memories.user_id = $2
@@ -203,6 +206,7 @@ async function handlePost(request: NextRequest) {
           m.content,
           m.category ?? null,
           m.source ?? null,
+          m.pinned ?? false,
           m.isDeleted ?? false,
           m.createdAt ?? null,
           m.updatedAt,
