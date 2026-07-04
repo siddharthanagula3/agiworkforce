@@ -1002,7 +1002,7 @@ export default function ChatScreen() {
         <PaywallBottomSheet
           ref={paywallSheetRef}
           feature={paywallError?.feature ?? 'token_cap'}
-          requiredTier={paywallError?.requiredTier ?? 'hobby'}
+          requiredTier={paywallError?.requiredTier ?? 'basic'}
           reason={paywallError?.reason}
           onDismiss={clearPaywallError}
         />
