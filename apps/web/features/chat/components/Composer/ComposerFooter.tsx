@@ -617,8 +617,19 @@ export function ComposerFooter({
           inline ? 'flex items-center gap-2' : 'flex items-center justify-between gap-2 px-1'
         }
       >
-        {/* Left: keyboard hint */}
-        {!inline && <span className="text-xs text-muted-foreground">{hint}</span>}
+        {/* Left: keyboard hint. Always rendered (even inline) so the send shortcut is
+            disclosed somewhere in the UI instead of only in marketing copy — collapses
+            on narrow inline toolbars (md breakpoint) to avoid crowding the composer row. */}
+        <span
+          className={[
+            'whitespace-nowrap text-xs text-muted-foreground',
+            inline ? 'hidden md:inline' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {hint}
+        </span>
 
         <div className="flex items-center gap-2">
           {/* Response style selector */}

@@ -193,6 +193,8 @@ const AUTO_PROMPT_BLOCKLIST = [
   '/auth',
   '/device-auth',
   '/customize',
+  '/projects',
+  '/pricing',
 ];
 
 const AUTO_PROMPT_KEY = 'agi-waitlist-auto-prompted';

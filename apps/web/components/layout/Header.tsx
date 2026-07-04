@@ -58,7 +58,7 @@ const NAV_ITEMS = [
   { href: '/docs', key: 'navDocs', fallback: 'Docs' },
 ] as const;
 
-export function Header() {
+export function Header({ minimal = false }: { minimal?: boolean } = {}) {
   const { t } = useTranslation('common');
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
@@ -95,6 +95,19 @@ export function Header() {
     setIsMenuOpen(false);
     await handleSignOut();
   };
+
+  // Minimal chrome for focused auth entry points (/login, /signup): just the
+  // wordmark, no nav/products/account links to compete with the sign-in form.
+  if (minimal) {
+    return (
+      <header className="agi-top" style={{ position: 'relative' }}>
+        <Link href="/" className="agi-mark" aria-label={t('agiHome')}>
+          <AgiMark size={20} />
+          <span style={{ marginLeft: 8 }}>AGI</span>
+        </Link>
+      </header>
+    );
+  }
 
   return (
     <header className="agi-top" style={{ position: 'relative' }}>
@@ -185,59 +198,75 @@ export function Header() {
 
       {/* Mobile menu (hidden by default; shown when toggled) */}
       {isMenuOpen && (
-        <div
-          id="agi-mobile-menu"
-          className="agi-top-mobile-menu"
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            background: 'var(--agi-bg-2)',
-            borderTop: '1px solid var(--agi-rule)',
-            padding: '16px 28px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            zIndex: 50,
-          }}
-        >
-          <span className="agi-top-mobile-group">{t('navProducts', 'Products')}</span>
-          {PRODUCT_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="agi-top-link"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              {item.label}
-            </Link>
-          ))}
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="agi-top-link"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              {t(item.key, item.fallback)}
-            </Link>
-          ))}
-          {userEmail ? (
-            <>
-              <Link href="/chat" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
-                {t('navChat')}
+        <>
+          {/* Backdrop scrim: covers the full viewport behind the mobile nav
+              panel so page content can't bleed through, and closes the menu
+              when tapped outside the panel. */}
+          <div
+            className="agi-top-mobile-backdrop"
+            aria-hidden="true"
+            onClick={() => setIsMenuOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.45)',
+              zIndex: 49,
+            }}
+          />
+          <div
+            id="agi-mobile-menu"
+            className="agi-top-mobile-menu"
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              background: 'var(--agi-bg-2)',
+              borderTop: '1px solid var(--agi-rule)',
+              padding: '16px 28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              zIndex: 50,
+            }}
+          >
+            <span className="agi-top-mobile-group">{t('navProducts', 'Products')}</span>
+            {PRODUCT_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="agi-top-link"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {item.label}
               </Link>
-              <button type="button" onClick={handleMobileSignOut} className="agi-top-link">
-                {t('navSignOut')}
-              </button>
-            </>
-          ) : (
-            <Link href="/login" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
-              {t('navSignIn')}
-            </Link>
-          )}
-        </div>
+            ))}
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="agi-top-link"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {t(item.key, item.fallback)}
+              </Link>
+            ))}
+            {userEmail ? (
+              <>
+                <Link href="/chat" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
+                  {t('navChat')}
+                </Link>
+                <button type="button" onClick={handleMobileSignOut} className="agi-top-link">
+                  {t('navSignOut')}
+                </button>
+              </>
+            ) : (
+              <Link href="/login" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
+                {t('navSignIn')}
+              </Link>
+            )}
+          </div>
+        </>
       )}
 
       <style jsx>{`

@@ -409,11 +409,20 @@ export function DevBand({
   /** Custom visual column (e.g. a showcase-scene collage). */
   visual?: ReactNode;
 }) {
+  // Server Component (no useId) -- this component renders more than once per
+  // page (see app/page.tsx), so the heading id must be derived per-instance
+  // from the (unique) eyebrow text rather than hardcoded, or every instance
+  // after the first gets aria-labelledby pointing at the FIRST instance's
+  // heading via getElementById's first-match behavior.
+  const titleId = `agi-fl-dev-title-${eyebrow
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')}`;
   return (
-    <section className="agi-fl-devband" aria-labelledby="agi-fl-dev-title">
+    <section className="agi-fl-devband" aria-labelledby={titleId}>
       <div className="agi-fl-devband-copy">
         <p className="agi-fl-eyebrow">{eyebrow}</p>
-        <h2 id="agi-fl-dev-title" className="agi-fl-h2">
+        <h2 id={titleId} className="agi-fl-h2">
           {title}
         </h2>
         <p className="agi-fl-section-lede">{body}</p>
