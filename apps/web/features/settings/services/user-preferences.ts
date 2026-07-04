@@ -3,13 +3,12 @@
  * Manages user settings and preferences with full Neon integration
  * Includes TOTP 2FA authentication support
  *
- * Storage: Vercel Blob (requires BLOB_READ_WRITE_TOKEN env var on the server)
- * Note: uploadAvatar is called from a server action / API route, not directly
- * from browser code, so BLOB_READ_WRITE_TOKEN is safe server-side.
+ * Storage: Cloudflare R2 via a presigned-upload flow. uploadAvatar() runs in
+ * the browser (called from the useUploadAvatar React Query mutation), so it
+ * must never import a storage SDK directly — it asks POST /api/uploads/presign
+ * for a short-lived PUT URL and uploads bytes straight to R2.
  */
 
-// AD-6 override: avatar storage migrated from Vercel Blob to Vercel Blob.
-import { put } from '@vercel/blob';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 
@@ -755,8 +754,8 @@ class SettingsService {
   }
 
   /**
-   * Upload avatar to Vercel Blob (migrated from Vercel Blob, AD-6 override).
-   * Requires BLOB_READ_WRITE_TOKEN on the server.
+   * Upload avatar to Cloudflare R2 via a presigned URL: request the URL from
+   * the server, PUT the bytes directly to R2, then persist the public URL.
    */
   async uploadAvatar(file: File): Promise<{ data: string; error?: string }> {
     try {
@@ -765,21 +764,47 @@ class SettingsService {
         return { data: '', error: 'User not authenticated' };
       }
 
-      // Generate unique filename (no userId needed for uniqueness)
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      // Upload to Vercel Blob
-      const blob = await put(filePath, file, {
-        access: 'public',
-        contentType: file.type,
+      const csrfToken = await getCsrfToken();
+      const presignRes = await fetch('/api/uploads/presign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({
+          kind: 'avatar',
+          fileName: file.name,
+          mimeType: file.type,
+          byteCount: file.size,
+        }),
       });
 
-      // Update profile with new avatar URL
-      await this.updateProfile({ avatar_url: blob.url });
+      if (!presignRes.ok) {
+        const err = (await presignRes.json().catch(() => ({}))) as { message?: string };
+        return { data: '', error: err.message ?? `HTTP ${presignRes.status}` };
+      }
 
-      return { data: blob.url };
+      const presign = (await presignRes.json()) as {
+        uploadUrl: string;
+        uploadHeaders?: Record<string, string>;
+        publicUrl: string;
+      };
+
+      const putRes = await fetch(presign.uploadUrl, {
+        method: 'PUT',
+        headers: presign.uploadHeaders ?? { 'Content-Type': file.type },
+        body: file,
+      });
+
+      if (!putRes.ok) {
+        return { data: '', error: `Upload failed (HTTP ${putRes.status})` };
+      }
+
+      // Update profile with new avatar URL
+      await this.updateProfile({ avatar_url: presign.publicUrl });
+
+      return { data: presign.publicUrl };
     } catch (error) {
       return {
         data: '',
