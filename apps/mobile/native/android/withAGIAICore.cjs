@@ -1,11 +1,10 @@
 // Expo config plugin: wires Android AICore native module into the generated android/ project.
 //
 // What this does at prebuild time:
-//   1. Adds com.google.mlkit:genai-common to android/app/build.gradle dependencies.
-//      Note: genai-common 1.0.0-beta3 is the latest public artifact providing on-device
-//      Gemini Nano inference (Google Maven, last updated 2026-01-28). The module comment
-//      references "play-services-aicore" which is the anticipated stable coord once the
-//      AICore Developer Preview graduates to GA.
+//   1. Adds com.google.mlkit:genai-prompt to android/app/build.gradle dependencies.
+//      genai-prompt exposes Generation.getClient() / GenerativeModel, ML Kit's real
+//      chat/prompt inference surface over Gemini Nano via AICore (transitively pulls in
+//      genai-common for FeatureStatus/DownloadStatus/StreamingCallback).
 //   2. Copies AGIAICoreModule.kt + AGIAICorePackage.kt into the generated source tree.
 //   3. Registers AGIAICorePackage() in MainApplication.kt's getPackages() list.
 //
@@ -23,11 +22,11 @@ const path = require('path');
 const PLUGIN_NAME = 'agi-aicore-plugin';
 const PLUGIN_VERSION = '1.0.0';
 
-// Latest public ML Kit GenAI artifact on Google Maven (2026-01-28).
-// Provides Gemini Nano on-device inference on AICore-capable devices (Pixel 8+, Galaxy S24+).
-// Source: https://dl.google.com/dl/android/maven2/com/google/mlkit/genai-common/maven-metadata.xml
-const AICORE_DEP = "implementation 'com.google.mlkit:genai-common:1.0.0-beta3'";
-const AICORE_DEP_MARKER = 'com.google.mlkit:genai-common';
+// Public ML Kit GenAI Prompt artifact on Google Maven — provides Gemini Nano
+// on-device inference on AICore-capable devices (Pixel 8+, Galaxy S24+).
+// Source: https://dl.google.com/dl/android/maven2/com/google/mlkit/genai-prompt/maven-metadata.xml
+const AICORE_DEP = "implementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'";
+const AICORE_DEP_MARKER = 'com.google.mlkit:genai-prompt';
 
 const PACKAGE_IMPORT = 'import com.agiworkforce.app.native.AGIAICorePackage';
 const PACKAGE_REGISTRATION = 'add(AGIAICorePackage())';
