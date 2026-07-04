@@ -24,7 +24,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }} testID="cloud-sign-in-screen">
         <AuthView mode="signInOrUp" isDismissible onDismiss={() => router.replace('/(app)')} />
       </View>
     </SafeAreaView>
