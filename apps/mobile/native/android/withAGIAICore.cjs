@@ -1,10 +1,11 @@
 // Expo config plugin: wires Android AICore native module into the generated android/ project.
 //
 // What this does at prebuild time:
-//   1. Adds com.google.mediapipe:tasks-genai to android/app/build.gradle dependencies.
-//      (real LlmInference/LlmInferenceSession API — see native/android/AGIAICoreModule.kt
-//      for why the earlier com.google.mlkit:genai-common dependency was replaced: that
-//      artifact never exposed a generic chat/completion surface.)
+//   1. Adds com.google.mlkit:genai-common to android/app/build.gradle dependencies.
+//      Note: genai-common 1.0.0-beta3 is the latest public artifact providing on-device
+//      Gemini Nano inference (Google Maven, last updated 2026-01-28). The module comment
+//      references "play-services-aicore" which is the anticipated stable coord once the
+//      AICore Developer Preview graduates to GA.
 //   2. Copies AGIAICoreModule.kt + AGIAICorePackage.kt into the generated source tree.
 //   3. Registers AGIAICorePackage() in MainApplication.kt's getPackages() list.
 //
@@ -20,15 +21,13 @@ const fs = require('fs');
 const path = require('path');
 
 const PLUGIN_NAME = 'agi-aicore-plugin';
-const PLUGIN_VERSION = '2.0.0';
+const PLUGIN_VERSION = '1.0.0';
 
-// Latest tasks-genai release on Google's Maven (verified via
-// https://dl.google.com/android/maven2/com/google/mediapipe/group-index.xml).
-// Provides the LlmInference/LlmInferenceSession API for on-device Gemma/Llama/
-// Qwen/Phi .task model inference — used by Google's own mediapipe-samples and
-// google-ai-edge/gallery apps.
-const AICORE_DEP = "implementation 'com.google.mediapipe:tasks-genai:0.10.35'";
-const AICORE_DEP_MARKER = 'com.google.mediapipe:tasks-genai';
+// Latest public ML Kit GenAI artifact on Google Maven (2026-01-28).
+// Provides Gemini Nano on-device inference on AICore-capable devices (Pixel 8+, Galaxy S24+).
+// Source: https://dl.google.com/dl/android/maven2/com/google/mlkit/genai-common/maven-metadata.xml
+const AICORE_DEP = "implementation 'com.google.mlkit:genai-common:1.0.0-beta3'";
+const AICORE_DEP_MARKER = 'com.google.mlkit:genai-common';
 
 const PACKAGE_IMPORT = 'import com.agiworkforce.app.native.AGIAICorePackage';
 const PACKAGE_REGISTRATION = 'add(AGIAICorePackage())';
