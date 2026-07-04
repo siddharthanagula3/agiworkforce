@@ -22,7 +22,7 @@
  *   <PaywallBottomSheet
  *     ref={paywallRef}
  *     feature={paywallProps?.feature ?? 'token_cap'}
- *     requiredTier={paywallProps?.requiredTier ?? 'hobby'}
+ *     requiredTier={paywallProps?.requiredTier ?? 'basic'}
  *     reason={paywallProps?.reason}
  *     onDismiss={() => paywallRef.current?.close()}
  *   />
@@ -50,14 +50,18 @@ import { useIapStore } from '@/src/features/billing/iapStore';
 // ---------------------------------------------------------------------------
 
 const TIER_LABELS: Record<string, string> = {
-  hobby: 'Hobby',
+  'local-only': 'Local Mode',
+  byok: 'Local Mode + BYOK',
+  free: 'Free',
+  basic: 'Basic',
   pro: 'Pro',
-  pro_plus: 'Pro+',
   max: 'Max',
+  team: 'Team',
   enterprise: 'Enterprise',
 };
 
 const FEATURE_LABELS: Record<string, string> = {
+  general_upgrade: 'More features',
   video_generation: 'Video generation',
   opus_4_7: 'Opus 4.7 access',
   gpt_5_5: 'GPT-5.5 access',
@@ -145,7 +149,7 @@ function IapUpgradeButton({
 export interface PaywallSheetProps {
   /** Feature key from ApiPaywallError.feature (e.g. 'token_cap'). */
   feature: string;
-  /** Required tier key from ApiPaywallError.requiredTier (e.g. 'hobby'). */
+  /** Required tier key from ApiPaywallError.requiredTier (e.g. 'basic'). */
   requiredTier: string;
   /** Optional human-readable reason from the server (e.g. '10/10 images used'). */
   reason?: string;

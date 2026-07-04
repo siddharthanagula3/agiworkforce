@@ -6,16 +6,20 @@
  * portal (or the pricing page for free users).
  *
  * BILLING feature flag: the Stripe portal fetch is gated behind
- * FEATURES.billing. When the flag is false (v1 default) the screen renders
- * a plan card with an "Upgrade" CTA that opens agiworkforce.com/pricing.
+ * FEATURES.billing. Upgrading/adjusting a subscription NEVER opens an
+ * external checkout URL (Apple Guideline 3.1.1) — it opens the same
+ * in-app PaywallBottomSheet used by the chat paywall, which itself falls
+ * back to native StoreKit/Play IAP (FEATURES.iap) or an honest "not
+ * available yet" message when neither is ready.
  * No stub / fake data is shown — the screen is always honest about state.
  *
  * Cloud-only surface.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { View, ActivityIndicator, Alert } from 'react-native';
 import { CreditCard, ExternalLink, Zap, Check } from 'lucide-react-native';
+import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
@@ -27,10 +31,23 @@ import {
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
+import type { PurchasableTier } from '@/src/features/billing/iapProducts';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
 import { useIapStore } from '@/src/features/billing/iapStore';
+import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
+
+/** Ordered purchasable tiers — used to pick "the next tier up" from the user's current one. */
+const PURCHASABLE_TIER_ORDER: PurchasableTier[] = ['basic', 'pro', 'max', 'team'];
+
+function nextPurchasableTier(currentTier: string): PurchasableTier {
+  const idx = PURCHASABLE_TIER_ORDER.indexOf(currentTier as PurchasableTier);
+  if (idx === -1 || idx === PURCHASABLE_TIER_ORDER.length - 1) {
+    return PURCHASABLE_TIER_ORDER[0];
+  }
+  return PURCHASABLE_TIER_ORDER[idx + 1];
+}
 
 // Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
@@ -104,31 +121,38 @@ export default function CloudBillingScreen() {
   const isRefreshing = useTierStore((s) => s.isRefreshing);
 
   const [portalLoading, setPortalLoading] = useState(false);
+  const paywallSheetRef = useRef<BottomSheet>(null);
 
   // Single source of truth for plan labels (@agiworkforce/types) — keeps this
   // screen's label in lock-step with account.tsx / web (no "Pro+" vs "Pro Max" drift).
   const tierLabel = getBillingPlanPricing(tier).label;
   const isFreeTier = tier === 'free';
 
+  // Upgrading/adjusting a plan never opens an external checkout URL — Apple
+  // Guideline 3.1.1 requires in-app subscription purchases go through native
+  // IAP. This opens the same PaywallBottomSheet the chat paywall uses, which
+  // itself handles the FEATURES.iap-on (native purchase) vs -off (honest
+  // "not available yet" message) branches.
   const handleUpgrade = useCallback(() => {
-    void openExternalUrl('https://agiworkforce.com/pricing');
+    paywallSheetRef.current?.expand();
   }, []);
 
   const handleManageBilling = useCallback(async () => {
-    if (!FEATURES.billing) {
-      // Billing portal not yet active — open pricing page instead
-      void openExternalUrl('https://agiworkforce.com/pricing');
+    if (FEATURES.billing) {
+      setPortalLoading(true);
+      try {
+        const url = await fetchPortalSessionUrl();
+        await openExternalUrl(url);
+      } catch {
+        Alert.alert('Billing portal unavailable', 'Please try again later.');
+      } finally {
+        setPortalLoading(false);
+      }
       return;
     }
-    setPortalLoading(true);
-    try {
-      const url = await fetchPortalSessionUrl();
-      await openExternalUrl(url);
-    } catch {
-      Alert.alert('Billing portal unavailable', 'Please visit agiworkforce.com/billing.');
-    } finally {
-      setPortalLoading(false);
-    }
+    // No Stripe portal yet — fall back to the in-app paywall/IAP management
+    // sheet rather than an external web page.
+    paywallSheetRef.current?.expand();
   }, []);
 
   return (
@@ -255,6 +279,13 @@ export default function CloudBillingScreen() {
           isLast
         />
       </SettingsGroup>
+
+      <PaywallBottomSheet
+        ref={paywallSheetRef}
+        feature="general_upgrade"
+        requiredTier={nextPurchasableTier(tier)}
+        onDismiss={() => paywallSheetRef.current?.close()}
+      />
     </SettingsScreenShell>
   );
 }

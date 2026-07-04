@@ -31,7 +31,7 @@ import type { BillingPlanTier } from '@agiworkforce/types';
 interface MeResponse {
   user?: { id?: string; email?: string };
   plan?: {
-    /** Subscription tier — 'free' | 'hobby' | 'pro' | 'pro_plus' | 'max'. */
+    /** Subscription tier — 'free' | 'basic' | 'pro' | 'max' | 'team' | 'enterprise'. */
     tier?: string | null;
     display_name?: string;
     status?: string;
