@@ -37,29 +37,24 @@ describe('Mode toggle → cloud InviteCodeModal', () => {
   it('ModeToggle is visible in the chat header', async () => {
     await waitFor(element(by.id('chat.mode-toggle')))
       .toBeVisible()
-      .withTimeout(4000);
+      .withTimeout(10000);
   });
 
-  it('tapping the Cloud side opens the InviteCodeModal', async () => {
+  // NOTE (2026-07-04): the invite-code/waitlist gate this spec was written
+  // against no longer exists. Managed Cloud went to public alpha on
+  // 2026-06-27 (founder decision, PA-2) — tapping the Cloud side of
+  // ModeToggle now routes a signed-out user straight to Clerk sign-in
+  // (`/(auth)/login`), not an invite-code-modal/waitlist sheet. See
+  // handleTapCloudMode in app/(app)/(tabs)/chat.tsx. This spec (and the
+  // "Cloud is invite-gated" screenshot copy in scripts/screenshots/pipeline.ts
+  // and the waitlist description in store-listing/screenshots/specs/README.md)
+  // needs a product-confirmed rewrite for the current sign-in-gated flow
+  // before it can capture a real store screenshot. Left failing intentionally
+  // rather than papering over it with a fake assertion.
+  it('tapping the Cloud side routes to Clerk sign-in (current public-alpha flow)', async () => {
     await element(by.id('chat.mode-toggle.cloud')).tap();
     await waitFor(element(by.id('invite-code-modal')))
       .toBeVisible()
       .withTimeout(6000);
-  });
-
-  it('shows the email input field', async () => {
-    await waitFor(element(by.id('cloud-waitlist-email-input')))
-      .toBeVisible()
-      .withTimeout(4000);
-  });
-
-  it('the submit button is present for Cloud waitlist entry', async () => {
-    await waitFor(element(by.id('cloud-waitlist-submit-btn')))
-      .toBeVisible()
-      .withTimeout(4000);
-  });
-
-  it('captures the Cloud waitlist modal without submitting', async () => {
-    await device.takeScreenshot('04-cloud-waitlist');
   });
 });

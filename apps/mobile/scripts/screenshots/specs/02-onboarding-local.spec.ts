@@ -2,7 +2,8 @@
  * E2E spec — 02: onboarding
  *
  * Critical path:
- *   cold launch → privacy hero shown
+ *   cold launch → age gate (real first screen on a fresh install)
+ *   enter an adult age → continue → privacy hero shown
  *   tap "Start chatting" → compliance disclosure modal
  *   accept disclosure → device-tier detection screen
  *   tap "Continue" or "Download model" → installed/download path
@@ -12,14 +13,11 @@
  *   EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC=1
  * before running this spec. The app does not read Detox-only biometric
  * launch arguments.
- *
- * NOTE: Detox is not in package.json. Install with
- *   pnpm add -D detox@20
- * before running. The file imports from 'detox' using the same pattern
- * as 01-multi-provider.spec.ts (which also requires Detox installed).
  */
 
 import { device, element, by, waitFor } from 'detox';
+
+jest.setTimeout(540000);
 
 describe('Onboarding — local setup with cloud invite gate', () => {
   beforeAll(async () => {
@@ -34,7 +32,15 @@ describe('Onboarding — local setup with cloud invite gate', () => {
     await device.terminateApp();
   });
 
-  it('shows the hero screen on first launch', async () => {
+  it('shows the age gate on first launch and passes it with an adult age', async () => {
+    await waitFor(element(by.id('age-gate-root')))
+      .toBeVisible()
+      .withTimeout(8000);
+    await element(by.id('age-gate-input')).typeText('30');
+    await element(by.id('age-gate-continue-btn')).tap();
+  });
+
+  it('shows the hero screen after the age gate', async () => {
     await waitFor(element(by.id('onboarding-hero-screen')))
       .toBeVisible()
       .withTimeout(8000);
@@ -107,17 +113,30 @@ describe('Onboarding — local setup with cloud invite gate', () => {
   });
 
   it('"Continue to chat" skip button navigates to chat empty state', async () => {
-    // If download screen is present, skip it; otherwise we are already in chat.
-    try {
-      await element(by.id('download-skip-btn')).tap();
-    } catch {
-      // Not present — Tier-1 path or download already finished.
+    // The skip button is a no-op while the recommended model is still
+    // resolving/downloading (see handleSkipToChat's tier2Loading guard), so
+    // retry the tap until the app actually transitions to chat.
+    const deadline = Date.now() + 480000;
+    let reachedChat = false;
+    while (Date.now() < deadline && !reachedChat) {
+      try {
+        await element(by.id('download-skip-btn')).tap();
+      } catch {
+        // Not present — Tier-1 path or download already finished.
+      }
+      try {
+        await waitFor(element(by.id('chat.composer.input')))
+          .toBeVisible()
+          .withTimeout(3000);
+        reachedChat = true;
+      } catch {
+        // Still on the download screen — loop and retry the tap.
+      }
     }
 
-    // Either the chat input or a conversation-list element confirms we are in chat.
     await waitFor(element(by.id('chat.composer.input')))
       .toBeVisible()
-      .withTimeout(10000);
+      .withTimeout(5000);
     await device.takeScreenshot('02-onboarding-local');
   });
 });
