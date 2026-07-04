@@ -67,7 +67,8 @@
       }
     ],
     "data_not_linked_to_you": [],
-    "note": "Local Mode collects no personal data by default. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email and optional name."
+    "note": "Local Mode collects no personal data by default. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email and optional name.",
+    "OPEN_GAP_2026-07-04": "This app declares HealthKit entitlement + NSHealthShareUsageDescription (app.config.js) and reads real step/sleep/workout samples for the optional Apple Health connector (src/features/integrations/services/healthKitQuery.ts) — advertised in whats_new and the 'healthkit' keyword above. No Health & Fitness category is declared here. App Store Connect App Privacy (A.6) will very likely require a Health & Fitness data-type declaration for this build. Resolve with engineering (retention/linkage decision) before answering the App Privacy questionnaire — do not submit with only Contact Info declared."
   },
 
   "urls": {

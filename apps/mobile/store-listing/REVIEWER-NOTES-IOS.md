@@ -1,4 +1,4 @@
-# App Review Notes — AGI iOS v1.0.0 (complete paste-in)
+# App Review Notes — AGI iOS v1.2.0 (complete paste-in)
 
 > Paste verbatim into App Store Connect →
 > App Information → App Review Information → Notes (4,000-char field).
@@ -6,10 +6,11 @@
 > table rows to fit — the policy compliance sections (1–3) are non-
 > negotiable; the demo section is supplementary.
 >
-> Character count of the body block below: 3,971 chars.
+> Recount this body's character count before pasting — content below has
+> changed since the 3,971-char v1.0.0 count and has not been re-measured.
 >
-> This file supersedes `ios/review-notes.md` for v1.0.0 submissions.
-> Keep both files in sync on every resubmission.
+> This file supersedes `ios/review-notes.md`. Keep both files in sync on
+> every resubmission.
 
 ---
 
@@ -18,9 +19,14 @@
 Hello — thank you for reviewing AGI (bundle id: com.agiworkforce.app).
 
 AGI is an AI chat client with a Local Mode path that runs without an
-account. In v1.0.0 reviewer access can use Local Mode without login or
-API keys. AGI Cloud is present only as an invite/waitlist flow and is not
-public cloud access in this binary.
+account. Reviewer access can use Local Mode without login or API keys.
+AGI Cloud is in public alpha and open to any signed-in user — there is
+no invite code or waitlist gate in this binary. Signing in (free, self-
+service, via Clerk) unlocks Cloud chat, image generation, and web search
+on a free tier, with an in-app row that opens a web checkout
+(agiworkforce.com/pricing) to view paid plans. There is no StoreKit
+purchase in this build — `FEATURES.iap` is off pending real product IDs
+and server-side receipt verification.
 
 ---
 
@@ -34,7 +40,7 @@ There is no sign-in or account creation in v1. First launch shows a
    "I understand — continue"
 3. Model setup → the recommended model (Qwen3-4B-Instruct-2507,
    ~2.4 GB) downloads automatically or the reviewer can pick a
-   smaller model (Phi-3-mini, 2.3 GB) from the catalog
+   smaller model (AGI Lite (Llama 3.2 1B), ~1.1 GB) from the catalog
 
 After step 3 the app opens to the chat screen. No credentials needed.
 
@@ -71,6 +77,15 @@ The modal fires in onboarding step 2 (above). It:
 - Cannot be bypassed — `isDisclosureSatisfied()` blocks every LLM
   request until the modal acceptance is recorded to MMKV.
 
+### 3b. AGI Cloud sign-in — what it collects
+
+Signing in to AGI Cloud (Settings → Account, or the sign-in prompt
+reached from any Cloud-only row) uses Clerk. It collects the account
+email address (required) and name (only if provided by the sign-in
+method). No other personal data is required to use Cloud chat, image
+generation, or web search on the free tier. This matches the App
+Privacy nutrition label declared in App Store Connect.
+
 ---
 
 ### 4. On-device model download UX
@@ -78,7 +93,7 @@ The modal fires in onboarding step 2 (above). It:
 After the disclosure modal, onboarding step 3 downloads the default
 model:
 
-- Model: Qwen3-4B-Instruct-2507, ~2.4 GB (or Phi-3-mini, ~2.3 GB)
+- Model: Qwen3-4B-Instruct-2507, ~2.4 GB (or AGI Lite (Llama 3.2 1B), ~1.1 GB)
 - CDN: Software Mansion (HTTPS, certificate-pinned)
 - Pre-download sheet shows: model name, file size, required free
   disk space, license (Apache 2.0), and a link to the model card
@@ -114,17 +129,19 @@ that needs that permission. Local Mode does not require account sign-in.
 
 ### 7. Demo flows
 
-| Demo                      | Steps                                                | Expected result                                  |
-| ------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
-| Local chat (default path) | Launch → complete 3-screen onboarding → type "Hello" | Model responds on-device; no AGI Cloud chat call |
-| Disclosure modal          | Fresh install → step 1 → tap "Get started"           | Disclosure modal renders before step 2           |
-| Decline disclosure        | Tap "Not now"                                        | Returns to step 1; no API call made              |
-| Model download cancel     | Step 3 → tap Cancel during download                  | Download stops; model not installed              |
-| DSAR export               | Settings → Storage → Export all my data              | Share sheet opens with JSON file                 |
-| Permissions               | Settings → Safety & Security → Permissions           | Permission rows explain what each access is for  |
+| Demo                      | Steps                                                 | Expected result                                                        |
+| ------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Local chat (default path) | Launch → complete 3-screen onboarding → type "Hello"  | Model responds on-device; no AGI Cloud chat call                       |
+| Disclosure modal          | Fresh install → step 1 → tap "Get started"            | Disclosure modal renders before step 2                                 |
+| Decline disclosure        | Tap "Not now"                                         | Returns to step 1; no API call made                                    |
+| Model download cancel     | Step 3 → tap Cancel during download                   | Download stops; model not installed                                    |
+| AGI Cloud sign-in         | Settings → Account → Sign in → complete Clerk sign-in | Cloud chat, image gen, and web search unlock — no invite code required |
+| DSAR export               | Settings → Storage → Export all my data               | Share sheet opens with JSON file                                       |
+| Permissions               | Settings → Safety & Security → Permissions            | Permission rows explain what each access is for                        |
 
-No demo account or API key is required for Local Mode. AGI Cloud requires
-invite access.
+No demo account or API key is required for Local Mode. AGI Cloud sign-in
+is free and self-service (no invite code, no waitlist) — the reviewer can
+create their own account with any email to reach Cloud chat.
 
 ---
 
