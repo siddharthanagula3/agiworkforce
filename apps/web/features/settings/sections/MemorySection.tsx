@@ -18,8 +18,8 @@ export function MemorySection() {
           Memory
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Facts the assistant should remember about you across conversations. Stored on this device;
-          hosted memory sync is available through cloud upgrades.
+          Facts the assistant should remember about you across conversations. Stored on this device,
+          and synced to your account across devices when you&apos;re signed in.
         </p>
       </div>
 

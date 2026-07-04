@@ -29,6 +29,14 @@ type SessionRow = {
   updated_at: string;
 };
 
+type ProjectRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type MessageRow = {
   id: string;
   conversation_id: string;
@@ -103,13 +111,15 @@ async function handleGet(request: NextRequest) {
     return NextResponse.json({ searches: rows });
   }
 
-  // Popular searches
+  // Popular searches — scoped to the authenticated user only (see 0045
+  // migration; previously this leaked every user's raw search query text to
+  // every other user).
   if (type === 'popular') {
     const days = parseInt(url.searchParams.get('days') ?? '7', 10);
-    const rows = await db.query<PopularSearchRow>('select * from get_popular_searches($1, $2)', [
-      limit,
-      days,
-    ]);
+    const rows = await db.query<PopularSearchRow>(
+      'select * from get_popular_searches($1, $2, $3)',
+      [userId, limit, days],
+    );
     return NextResponse.json({ searches: rows });
   }
 
@@ -152,6 +162,37 @@ async function handleGet(request: NextRequest) {
      order by updated_at desc
      limit $${sessionParams.length + 1}`,
     [...sessionParams, limit],
+  );
+
+  // Search projects by name/description, scoped to the authenticated user.
+  // Soft-deleted projects (deleted_at, see 0041_projects_cloud_sync.sql) are
+  // excluded unless includeArchived is set, mirroring the conversation
+  // filter above. Kept in a separate `projects` response array (not merged
+  // into `results`) because the existing search UI (GlobalSearchDialog,
+  // global-search-service.ts) only knows how to render/navigate
+  // 'session' | 'message' result types — it routes every click to
+  // `/chat/${sessionId}`, which would 404 for a project id. Wiring a
+  // dedicated project result card that navigates to `/projects/${id}` is a
+  // follow-up; this keeps the addition purely additive and non-breaking.
+  const projectParams: unknown[] = [userId, `%${q}%`];
+  const projectClauses: string[] = ['user_id = $1', '(name ilike $2 or description ilike $2)'];
+  if (!includeArchived) projectClauses.push('deleted_at is null');
+  if (startDate) {
+    projectClauses.push(`created_at >= $${projectParams.length + 1}`);
+    projectParams.push(startDate);
+  }
+  if (endDate) {
+    projectClauses.push(`created_at <= $${projectParams.length + 1}`);
+    projectParams.push(endDate);
+  }
+
+  const projectRows = await db.query<ProjectRow>(
+    `select id, name, description, created_at, updated_at
+     from user_projects
+     where ${projectClauses.join(' and ')}
+     order by updated_at desc
+     limit $${projectParams.length + 1}`,
+    [...projectParams, limit],
   );
 
   // Get user's session IDs for message search
@@ -228,14 +269,36 @@ async function handleGet(request: NextRequest) {
     };
   });
 
+  const projectResults = projectRows.map((p) => {
+    const matchText = p.name + (p.description ? ` ${p.description}` : '');
+    const match = extractMatch(matchText, q);
+    return {
+      type: 'project' as const,
+      projectId: p.id,
+      projectName: p.name,
+      content: p.description ?? '',
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+      matchedText: match.matched,
+      contextBefore: match.before,
+      contextAfter: match.after,
+    };
+  });
+
   const allResults = [...sessionResults, ...messageResults]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, limit);
 
+  // NOTE: projectMatches/projectResults are intentionally excluded from
+  // stats.totalResults and `results` — see the comment above the project
+  // query. Bumping totalResults here without rendering the extra rows in
+  // `results` would make the UI's "Found N results" count not match the
+  // number of rows actually shown, which is its own visible bug.
   const stats = {
     totalResults: sessionResults.length + messageResults.length,
     sessionMatches: sessionResults.length,
     messageMatches: messageResults.length,
+    projectMatches: projectResults.length,
   };
 
   // Fire-and-forget search tracking
@@ -245,7 +308,7 @@ async function handleGet(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ results: allResults, stats });
+  return NextResponse.json({ results: allResults, projects: projectResults, stats });
 }
 
 async function handlePost(request: NextRequest) {

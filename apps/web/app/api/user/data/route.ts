@@ -9,6 +9,22 @@ import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { GET as exportUserDataGet } from '@/app/api/user/export/route';
+
+/**
+ * GET /api/user/data
+ *
+ * GDPR Article 20: Right to Data Portability
+ *
+ * Settings → Privacy → "Export data" calls this endpoint expecting a
+ * downloadable JSON file. It delegates to the canonical export handler at
+ * /api/user/export (same GDPR export logic, same rate limiting) so there is
+ * a single source of truth for what gets exported.
+ *
+ * Authentication: Required (Bearer token or session cookie)
+ * Rate Limit: 5 requests per hour (see /api/user/export)
+ */
+export const GET = exportUserDataGet;
 
 /**
  * DELETE /api/user/data

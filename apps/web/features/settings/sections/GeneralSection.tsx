@@ -135,6 +135,8 @@ export function GeneralSection() {
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSucceeded, setDeleteSucceeded] = useState(false);
+  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -262,21 +264,50 @@ export function GeneralSection() {
         method: 'DELETE',
         headers,
       });
+      const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data: unknown = await res.json().catch(() => ({}));
         const msg =
           data !== null && typeof data === 'object' && 'error' in data
             ? String((data as { error?: unknown }).error)
             : 'Account deletion failed.';
         throw new Error(msg);
       }
-      await logout();
-      router.replace('/');
+      // Show a confirmation state before signing the user out — do not
+      // silently bounce them to the homepage right after they confirmed.
+      // Use the server's own message rather than inventing copy about what
+      // deletion scheduling does or doesn't allow (e.g. cancellation).
+      const serverMessage =
+        data !== null && typeof data === 'object' && 'message' in data
+          ? String((data as { message?: unknown }).message)
+          : null;
+      setDeleteSuccessMessage(
+        serverMessage ?? 'Your account deletion has been scheduled. You will be signed out now.',
+      );
+      setIsDeleting(false);
+      setDeleteSucceeded(true);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Account deletion failed.');
       setIsDeleting(false);
     }
+  }, []);
+
+  const handleDeleteSuccessContinue = useCallback(() => {
+    setShowDeleteDialog(false);
+    void (async () => {
+      await logout();
+      router.replace('/');
+    })();
   }, [logout, router]);
+
+  // Once deletion succeeds, auto-continue to sign-out after the user has
+  // had a moment to read the confirmation, unless they dismiss it sooner.
+  useEffect(() => {
+    if (!deleteSucceeded) return;
+    const timer = setTimeout(() => {
+      handleDeleteSuccessContinue();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [deleteSucceeded, handleDeleteSuccessContinue]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -488,6 +519,8 @@ export function GeneralSection() {
             onClick={() => {
               setDeleteConfirmInput('');
               setDeleteError(null);
+              setDeleteSucceeded(false);
+              setDeleteSuccessMessage(null);
               setShowDeleteDialog(true);
             }}
             className="shrink-0 rounded-md bg-destructive px-4 py-2 text-[13px] font-semibold text-destructive-foreground transition-opacity hover:opacity-90"
@@ -501,53 +534,86 @@ export function GeneralSection() {
       <AlertDialog
         open={showDeleteDialog}
         onOpenChange={(open) => {
-          if (!isDeleting) setShowDeleteDialog(open);
+          // Block dismissal while the delete request is in flight or while
+          // the success confirmation is showing — the user must explicitly
+          // acknowledge before we sign them out.
+          if (!isDeleting && !deleteSucceeded) setShowDeleteDialog(open);
         }}
       >
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete your account and all associated data. There is a 24-hour
-              grace window before deletion completes. After that, this action cannot be reversed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+          {deleteSucceeded ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle data-testid="delete-account-success-title">
+                  Account deletion scheduled
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {deleteSuccessMessage ??
+                    'Your account deletion has been scheduled. You will be signed out now.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
 
-          <div className="py-1">
-            <label
-              htmlFor="delete-confirm-input"
-              className="mb-2 block text-[13px] text-foreground"
-            >
-              Type <strong>DELETE</strong> to confirm:
-            </label>
-            <input
-              id="delete-confirm-input"
-              type="text"
-              value={deleteConfirmInput}
-              onChange={(e) => setDeleteConfirmInput(e.target.value)}
-              placeholder="DELETE"
-              autoComplete="off"
-              data-testid="delete-confirm-input"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
-            />
-            {deleteError !== null && <p className="mt-2 text-xs text-destructive">{deleteError}</p>}
-          </div>
+              <AlertDialogFooter>
+                <AlertDialogAction
+                  data-testid="delete-account-success-continue"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleDeleteSuccessContinue();
+                  }}
+                >
+                  Continue
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete your account and all associated data. There is a
+                  24-hour grace window before deletion completes. After that, this action cannot be
+                  reversed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
 
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="delete-account-confirm"
-              onClick={(e) => {
-                e.preventDefault();
-                setShowDeleteDialog(false);
-                void handleDeleteAccount();
-              }}
-              disabled={deleteConfirmInput !== 'DELETE' || isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete account'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+              <div className="py-1">
+                <label
+                  htmlFor="delete-confirm-input"
+                  className="mb-2 block text-[13px] text-foreground"
+                >
+                  Type <strong>DELETE</strong> to confirm:
+                </label>
+                <input
+                  id="delete-confirm-input"
+                  type="text"
+                  value={deleteConfirmInput}
+                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                  placeholder="DELETE"
+                  autoComplete="off"
+                  data-testid="delete-confirm-input"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                />
+                {deleteError !== null && (
+                  <p className="mt-2 text-xs text-destructive">{deleteError}</p>
+                )}
+              </div>
+
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="delete-account-confirm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void handleDeleteAccount();
+                  }}
+                  disabled={deleteConfirmInput !== 'DELETE' || isDeleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete account'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </div>
