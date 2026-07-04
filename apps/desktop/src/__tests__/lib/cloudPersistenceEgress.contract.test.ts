@@ -78,7 +78,7 @@ describe.each(['local', 'byok'] as const)(
 
     it('createConversation (POST) is blocked before any network call', async () => {
       const client = makeClient();
-      await expect(client.createConversation({ title: 'x', mode: 'chat' })).rejects.toThrow(
+      await expect(client.createConversation({ title: 'x' })).rejects.toThrow(
         /blocked our-cloud egress/,
       );
       expect(fetchSpy).not.toHaveBeenCalled();
@@ -113,7 +113,7 @@ describe('cloud persistence is ALLOWED in managed mode and reaches only the allo
 
   it('createConversation reaches exactly the cloud host /api/chat/conversations', async () => {
     const client = makeClient();
-    await client.createConversation({ title: 'hi', mode: 'chat' });
+    await client.createConversation({ title: 'hi' });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const url = fetchUrlAt(0);
@@ -123,7 +123,7 @@ describe('cloud persistence is ALLOWED in managed mode and reaches only the allo
 
   it('every persistence verb reaches only the allowed cloud host', async () => {
     const client = makeClient();
-    await client.createConversation({ title: 'a', mode: 'chat' });
+    await client.createConversation({ title: 'a' });
     await client.listConversations();
     await client.updateConversationTitle('c1', 'b');
     await client.deleteConversation('c1');

@@ -30,6 +30,25 @@ struct OllamaRequest {
     images: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tools: Option<Vec<serde_json::Value>>,
+    /// Ollama's own extended-thinking toggle. Unlike Anthropic/OpenAI, where
+    /// omitting a thinking parameter means "no extended thinking", Ollama's
+    /// newer reasoning models (e.g. qwen3.5) default thinking ON at the API
+    /// level -- omitting this field does NOT disable it. Must be forwarded
+    /// explicitly whenever the caller has an opinion either way.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    think: Option<bool>,
+}
+
+/// Translate the provider-agnostic `ThinkingParameter` into the plain
+/// `think: bool` Ollama's `/api/chat` expects. Any variant other than an
+/// explicit `Enabled(false)` is treated as "thinking wanted" since Ollama has
+/// no equivalent to Anthropic-style budgets/adaptive levels.
+fn resolve_ollama_think(thinking: Option<&crate::core::llm::ThinkingParameter>) -> Option<bool> {
+    match thinking {
+        Some(crate::core::llm::ThinkingParameter::Enabled(enabled)) => Some(*enabled),
+        Some(_) => Some(true),
+        None => None,
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,7 +57,22 @@ struct OllamaOptions {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     num_predict: Option<u32>,
+    /// Ollama's total context window (prompt + response tokens). Ollama
+    /// silently defaults this to 4096 regardless of the model's real
+    /// capability (e.g. qwen3.5's advertised 128K) unless set explicitly.
+    /// AGI Workforce's "Claude Desktop-like" chat mode injects a large system
+    /// prompt plus every enabled MCP tool's schema, which alone can consume
+    /// nearly all of a 4096 window, leaving the model almost no budget to
+    /// respond before Ollama truncates with `done_reason: "length"`. Set to a
+    /// larger fixed value to leave real headroom for a response; still far
+    /// below most local models' actual ceiling to avoid excessive KV-cache
+    /// memory use on modest hardware. Follow-up: size this per-model from
+    /// real capability metadata once available instead of one fixed value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    num_ctx: Option<u32>,
 }
+
+const OLLAMA_DEFAULT_NUM_CTX: u32 = 32768;
 
 #[derive(Debug, Clone, Deserialize)]
 struct OllamaResponse {
@@ -261,9 +295,11 @@ impl LLMProvider for OllamaProvider {
             options: Some(OllamaOptions {
                 temperature: request.temperature,
                 num_predict: request.max_tokens,
+                num_ctx: Some(OLLAMA_DEFAULT_NUM_CTX),
             }),
             images,
             tools,
+            think: resolve_ollama_think(request.thinking.as_ref()),
         };
 
         let response = self
@@ -488,9 +524,11 @@ impl LLMProvider for OllamaProvider {
             options: Some(OllamaOptions {
                 temperature: request.temperature,
                 num_predict: request.max_tokens,
+                num_ctx: Some(OLLAMA_DEFAULT_NUM_CTX),
             }),
             images,
             tools,
+            think: resolve_ollama_think(request.thinking.as_ref()),
         };
 
         tracing::debug!(

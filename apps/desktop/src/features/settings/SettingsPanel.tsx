@@ -21,12 +21,14 @@ import {
   useSettingsStore,
   type Language,
   type GlobalHotkeyPreferences,
+  type PersonalizationPreferences,
 } from '../../stores/settingsStore';
 import { LEGACY_TAB_MAP, type SettingsTab } from '../../stores/settingsDialogStore';
 import { useModelStore } from '../../stores/modelStore';
 import type { NotificationSettings } from '../../hooks/useNotifications';
 import { Button } from '@/components/ui/Button';
 import { SectionErrorBoundary } from '@/components/ui/SectionErrorBoundary';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import {
   Dialog,
   DialogContent,
@@ -144,6 +146,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const allowedDirectories = useSettingsStore(useShallow((state) => state.allowedDirectories));
   const customModels = useSettingsStore(useShallow((state) => state.customModels));
   const features = useSettingsStore(useShallow((state) => state.features));
+  const personalization = useSettingsStore(useShallow((state) => state.personalization));
+  const setPersonalization = useSettingsStore((state) => state.setPersonalization);
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setLanguage = useSettingsStore((state) => state.setLanguage);
   const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
@@ -176,7 +180,15 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [navQuery, setNavQuery] = useState('');
+  const { confirm, dialog: discardChangesDialog } = useConfirm();
   const baselineSnapshotRef = useRef<string | null>(null);
+  // Baseline for personalization specifically (separate from baselineSnapshotRef's
+  // serialized string) so `handleCancel` can restore it directly via
+  // `setPersonalization`. Needed because `loadSettings()` — unlike every other
+  // field in the snapshot — never touches `personalization` (it isn't part of the
+  // disk-backed settings_load payload type), so discarding changes must restore
+  // it explicitly or a personalization edit would silently survive a "Cancel".
+  const personalizationBaselineRef = useRef<PersonalizationPreferences | null>(null);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
   const resolvedWindowPreferences = windowPreferences ?? createDefaultWindowPreferences();
@@ -334,6 +346,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       allowedDirectories: state.allowedDirectories,
       customModels: state.customModels,
       features: state.features,
+      personalization: state.personalization,
       notifications: notifs,
     });
   }, []);
@@ -347,11 +360,15 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             loadSettings(),
             loadNotificationSettings(),
           ]);
+          // loadSettings() never touches personalization (see ref comment above),
+          // so its baseline is just whatever is currently in the store at open time.
+          personalizationBaselineRef.current = useSettingsStore.getState().personalization;
           baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
         } catch (err) {
           console.error('Failed to load settings:', err);
           toast.error('Failed to load settings');
           baselineSnapshotRef.current = null;
+          personalizationBaselineRef.current = null;
         }
         await refreshOllamaState();
         setHasUnsavedChanges(false);
@@ -398,6 +415,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     allowedDirectories,
     customModels,
     features,
+    personalization,
     notificationSettings,
     buildCurrentSnapshot,
   ]);
@@ -483,6 +501,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           >[0],
         );
       }
+      personalizationBaselineRef.current = useSettingsStore.getState().personalization;
       baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
       setHasUnsavedChanges(false);
       onOpenChange(false);
@@ -500,6 +519,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         loadSettings(),
         loadNotificationSettings(),
       ]);
+      // loadSettings() does not revert personalization (it's not part of the
+      // disk-backed payload), so restore it from the open-time baseline
+      // explicitly — otherwise a discarded personalization edit would
+      // silently survive Cancel/Escape/click-outside while every other field
+      // correctly reverts.
+      if (personalizationBaselineRef.current) {
+        setPersonalization(personalizationBaselineRef.current);
+      }
       baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
       await refreshOllamaState();
     } catch (err) {
@@ -516,7 +543,34 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     loadSettings,
     onOpenChange,
     refreshOllamaState,
+    setPersonalization,
   ]);
+
+  // Any close path (X button, Escape, click-outside, footer "Cancel") ends up
+  // here via handleDialogOpenChange/requestClose. Previously all of these
+  // unconditionally called handleCancel(), which re-fetches settings from disk
+  // and overwrites the live store — silently discarding any edit that wasn't
+  // explicitly committed via "Save Changes", with zero warning to the user.
+  // confirmDiscardIfNeeded() gates that: if there's nothing unsaved it's a
+  // no-op passthrough; otherwise it blocks the close behind an explicit
+  // "Discard changes?" confirmation.
+  const confirmDiscardIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (!hasUnsavedChanges) return true;
+    return confirm({
+      title: 'Discard unsaved changes?',
+      description:
+        "You've made changes in Settings that haven't been saved. Closing now will discard them.",
+      confirmText: 'Discard changes',
+      cancelText: 'Keep editing',
+      variant: 'destructive',
+    });
+  }, [hasUnsavedChanges, confirm]);
+
+  const requestClose = useCallback(async () => {
+    const shouldClose = await confirmDiscardIfNeeded();
+    if (!shouldClose) return;
+    await handleCancel();
+  }, [confirmDiscardIfNeeded, handleCancel]);
 
   const handleDialogOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -524,9 +578,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         onOpenChange(true);
         return;
       }
-      void handleCancel();
+      void requestClose();
     },
-    [handleCancel, onOpenChange],
+    [requestClose, onOpenChange],
   );
 
   const handleOllamaUrlChange = useCallback(
@@ -729,7 +783,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                         {saveError}
                       </div>
                     )}
-                    <Button variant="outline" onClick={() => void handleCancel()} disabled={isBusy}>
+                    <Button variant="outline" onClick={() => void requestClose()} disabled={isBusy}>
                       Cancel
                     </Button>
                     <Button
@@ -754,6 +808,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           </div>
         </DialogContent>
       </Dialog>
+      {discardChangesDialog}
     </SectionErrorBoundary>
   );
 }

@@ -61,10 +61,23 @@ struct ConnectorMcpMapping {
     credential_source: ConnectorCredentialSource,
 }
 
-/// Get the MCP mapping for a connector, if one exists
-fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> {
-    match connector_id {
-        "github" => Some(ConnectorMcpMapping {
+/// Canonical connector → MCP server mapping table.
+///
+/// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): this table
+/// is now the single source of truth for "does clicking Connect on this
+/// connector ever spawn a real MCP server". Previously the frontend catalog
+/// (`connectorDefinitions.ts`'s `CONNECTOR_DIRECTORY`) advertised several
+/// connector ids (atlassian, google_sheets, context7, canva, hubspot) that
+/// had no entry here, so `mcp_connect_connector` silently no-opped and
+/// `mcp_list_connected_providers` still reported "connected" purely from
+/// credential presence — a permanent fake-connected badge with zero backing
+/// tools. `mcp_get_supported_connector_ids` (below) exposes exactly these
+/// keys to the frontend so the "Available to connect" grid can never again
+/// advertise a connector this table doesn't back.
+const CONNECTOR_MCP_MAPPINGS: &[(&str, ConnectorMcpMapping)] = &[
+    (
+        "github",
+        ConnectorMcpMapping {
             server_name: "connector-github",
             command: "npx",
             args: &[
@@ -74,8 +87,11 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             ],
             env_keys: &[("GITHUB_PERSONAL_ACCESS_TOKEN", "GitHub token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "github" },
-        }),
-        "slack" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "slack",
+        ConnectorMcpMapping {
             server_name: "connector-slack",
             command: "npx",
             args: &[
@@ -85,8 +101,11 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             ],
             env_keys: &[("SLACK_BOT_TOKEN", "Slack bot token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "slack" },
-        }),
-        "google_drive" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "google_drive",
+        ConnectorMcpMapping {
             server_name: "connector-google-drive",
             command: "npx",
             args: &[
@@ -96,50 +115,71 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             ],
             env_keys: &[("GDRIVE_OAUTH_TOKEN", "Google Drive OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
-        }),
-        "figma" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "figma",
+        ConnectorMcpMapping {
             server_name: "connector-figma",
             command: "npx",
             args: &["-y", "--ignore-scripts", "@sethdouglasford/mcp-figma"],
             env_keys: &[("FIGMA_ACCESS_TOKEN", "Figma access token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "figma" },
-        }),
-        "stripe" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "stripe",
+        ConnectorMcpMapping {
             server_name: "connector-stripe",
             command: "npx",
             args: &["-y", "--ignore-scripts", "@stripe/mcp", "--tools=all"],
             env_keys: &[("STRIPE_SECRET_KEY", "Stripe secret key")],
             credential_source: ConnectorCredentialSource::ApiKey,
-        }),
-        "vercel" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "vercel",
+        ConnectorMcpMapping {
             server_name: "connector-vercel",
             command: "npx",
             args: &["-y", "--ignore-scripts", "mcp-vercel"],
             env_keys: &[("VERCEL_TOKEN", "Vercel token")],
             credential_source: ConnectorCredentialSource::ApiKey,
-        }),
-        "sentry" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "sentry",
+        ConnectorMcpMapping {
             server_name: "connector-sentry",
             command: "npx",
             args: &["-y", "--ignore-scripts", "@sentry/mcp-server"],
             env_keys: &[("SENTRY_AUTH_TOKEN", "Sentry auth token")],
             credential_source: ConnectorCredentialSource::ApiKey,
-        }),
-        "linear" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "linear",
+        ConnectorMcpMapping {
             server_name: "connector-linear",
             command: "npx",
             args: &["-y", "--ignore-scripts", "mcp-linear"],
             env_keys: &[("LINEAR_API_KEY", "Linear API key")],
             credential_source: ConnectorCredentialSource::ApiKey,
-        }),
-        "notion" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "notion",
+        ConnectorMcpMapping {
             server_name: "connector-notion",
             command: "npx",
             args: &["-y", "--ignore-scripts", "@notionhq/notion-mcp-server"],
             env_keys: &[("OPENAPI_MCP_HEADERS", "Notion auth headers")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "notion" },
-        }),
-        "cloudflare" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "cloudflare",
+        ConnectorMcpMapping {
             server_name: "connector-cloudflare",
             command: "npx",
             args: &[
@@ -149,8 +189,11 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             ],
             env_keys: &[("CLOUDFLARE_API_TOKEN", "Cloudflare API token")],
             credential_source: ConnectorCredentialSource::ApiKey,
-        }),
-        "gmail" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "gmail",
+        ConnectorMcpMapping {
             server_name: "connector-gmail",
             command: "npx",
             args: &[
@@ -160,15 +203,21 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             ],
             env_keys: &[("GMAIL_OAUTH_TOKEN", "Gmail OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
-        }),
-        "google_calendar" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "google_calendar",
+        ConnectorMcpMapping {
             server_name: "connector-google-calendar",
             command: "npx",
             args: &["-y", "--ignore-scripts", "@cocal/google-calendar-mcp"],
             env_keys: &[("GOOGLE_CALENDAR_OAUTH_TOKEN", "Google Calendar OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
-        }),
-        "outlook" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "outlook",
+        ConnectorMcpMapping {
             server_name: "connector-outlook",
             command: "npx",
             args: &["-y", "--ignore-scripts", "outlook-mcp-device-flow"],
@@ -176,8 +225,11 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             credential_source: ConnectorCredentialSource::OAuth {
                 provider: "microsoft",
             },
-        }),
-        "jira" => Some(ConnectorMcpMapping {
+        },
+    ),
+    (
+        "jira",
+        ConnectorMcpMapping {
             server_name: "connector-jira",
             command: "npx",
             args: &["-y", "--ignore-scripts", "@caobing122/jira-mcp-server"],
@@ -185,9 +237,37 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             credential_source: ConnectorCredentialSource::OAuth {
                 provider: "atlassian",
             },
-        }),
-        _ => None,
-    }
+        },
+    ),
+];
+
+/// Get the MCP mapping for a connector, if one exists.
+fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> {
+    CONNECTOR_MCP_MAPPINGS
+        .iter()
+        .find(|(id, _)| *id == connector_id)
+        .map(|(_, mapping)| mapping.clone())
+}
+
+/// Every connector id that has a real, working MCP server mapping — i.e.
+/// every id `get_connector_mcp_mapping` resolves to `Some(..)`. This is the
+/// backend half of the DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01 fix:
+/// the frontend "Available to connect" grid derives its visible set from
+/// this list (via `mcp_get_supported_connector_ids`) instead of trusting its
+/// own static catalog, so a connector can never be advertised as connectable
+/// without real backend support behind it.
+pub(crate) fn supported_connector_ids() -> Vec<&'static str> {
+    CONNECTOR_MCP_MAPPINGS.iter().map(|(id, _)| *id).collect()
+}
+
+/// Tauri command wrapper around [`supported_connector_ids`] for the frontend
+/// connector catalog filter.
+#[tauri::command]
+pub async fn mcp_get_supported_connector_ids() -> Result<Vec<String>, String> {
+    Ok(supported_connector_ids()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect())
 }
 
 // ============================================================================
@@ -1490,89 +1570,145 @@ async fn fetch_user_info(
     }
 }
 
-/// Lists all connector provider IDs that have stored OAuth tokens or API keys
-#[tauri::command]
-pub async fn mcp_list_connected_providers() -> Result<Vec<String>, String> {
-    let conn = open_mcp_settings_db()?;
+/// Every connector id `mcp_list_connected_providers` will consider.
+const KNOWN_CONNECTOR_PROVIDERS: &[&str] = &[
+    "gmail",
+    "google_calendar",
+    "google_drive",
+    "google_sheets",
+    "notion",
+    "figma",
+    "slack",
+    "canva",
+    "atlassian",
+    "hubspot",
+    "linear",
+    "github",
+    "vercel",
+    "stripe",
+    "context7",
+    "outlook",
+    "intercom",
+    "teams",
+    "discord",
+    "asana",
+    "monday",
+    "clickup",
+    "jira",
+    "airtable",
+    "sentry",
+    "cloudflare",
+    "netlify",
+    "onedrive",
+    "dropbox",
+    "box",
+    "confluence",
+    "trello",
+    "salesforce",
+    "zendesk",
+    "twilio",
+    "sendgrid",
+    "mailchimp",
+    "openai",
+    "anthropic",
+    "youtube",
+    "twitter",
+    "linkedin",
+    "facebook",
+    "instagram",
+    "pinterest",
+    "reddit",
+    "spotify",
+    "zoom",
+    "webex",
+];
+
+/// Core "is this connector really connected" logic, split out from the
+/// `#[tauri::command]` wrapper so it can be unit tested without constructing
+/// a full `tauri::State<McpState>`.
+///
+/// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): a provider
+/// used to be reported "connected" purely because a credential (OAuth token
+/// or API key) existed in `settings_v2` — regardless of whether any MCP
+/// server was ever actually provisioned for it. That let any gap in
+/// `get_connector_mcp_mapping` (e.g. atlassian, google_sheets, context7,
+/// which all have working OAuth/credential flows but no mapping entry)
+/// present a permanent green "Connected" badge with zero backing tools.
+///
+/// The fix: credentials are necessary but no longer sufficient.
+/// - If the connector has no entry in `get_connector_mcp_mapping` at all,
+///   there is no MCP server that could ever back it, so it can never count
+///   as connected — regardless of stray credentials.
+/// - If it does have a mapping, it only counts as connected when that
+///   mapping's `server_name` is present in `configured_servers` — i.e.
+///   `mcp_connect_connector` actually succeeded and persisted a real server
+///   entry (see `mcp_connect_connector`'s `None` branch, which never touches
+///   `config.mcp_servers`, vs. its success path, which inserts into it and
+///   rolls back on failure). This is a fast, race-free check against the
+///   persisted config rather than the live `get_connected_servers()` set,
+///   which is briefly empty during every config reload (startup, `mcp_update_config`,
+///   dotfile add/remove) and would otherwise flash real, working connectors
+///   (GitHub, Slack, ...) as falsely disconnected.
+fn resolve_connected_providers(
+    conn: &rusqlite::Connection,
+    configured_servers: &std::collections::HashSet<String>,
+    known_providers: &[&str],
+) -> Result<Vec<String>, String> {
     let mut providers = Vec::new();
 
-    let known_providers = [
-        "gmail",
-        "google_calendar",
-        "google_drive",
-        "google_sheets",
-        "notion",
-        "figma",
-        "slack",
-        "canva",
-        "atlassian",
-        "hubspot",
-        "linear",
-        "github",
-        "vercel",
-        "stripe",
-        "context7",
-        "outlook",
-        "intercom",
-        "teams",
-        "discord",
-        "asana",
-        "monday",
-        "clickup",
-        "jira",
-        "airtable",
-        "sentry",
-        "cloudflare",
-        "netlify",
-        "onedrive",
-        "dropbox",
-        "box",
-        "confluence",
-        "trello",
-        "salesforce",
-        "zendesk",
-        "twilio",
-        "sendgrid",
-        "mailchimp",
-        "openai",
-        "anthropic",
-        "youtube",
-        "twitter",
-        "linkedin",
-        "facebook",
-        "instagram",
-        "pinterest",
-        "reddit",
-        "spotify",
-        "zoom",
-        "webex",
-    ];
+    for provider in known_providers {
+        let has_token = has_stored_tokens_for_provider(conn, provider)?;
 
-    for provider in &known_providers {
-        let has_token = has_stored_tokens_for_provider(&conn, provider)?;
-
-        if has_token {
-            providers.push(provider.to_string());
-            continue;
-        }
-
-        // Check API key
-        let api_key = format!("api_key_{}", provider);
-        let has_api_key: bool = conn
-            .query_row(
+        let has_api_key = if has_token {
+            true
+        } else {
+            let api_key = format!("api_key_{}", provider);
+            conn.query_row(
                 "SELECT COUNT(*) FROM settings_v2 WHERE key = ?1",
                 rusqlite::params![api_key],
                 |row| row.get::<_, i64>(0),
             )
             .unwrap_or(0)
-            > 0;
+                > 0
+        };
 
-        if has_api_key {
-            providers.push(provider.to_string());
+        if !has_token && !has_api_key {
+            continue;
+        }
+
+        match get_connector_mcp_mapping(provider) {
+            Some(mapping) => {
+                if configured_servers.contains(mapping.server_name) {
+                    providers.push(provider.to_string());
+                }
+                // else: credentials exist but no MCP server was ever
+                // actually provisioned for this connector — do not
+                // fake-badge it as connected.
+            }
+            None => {
+                // No MCP-backed server exists for this id at all. Credential
+                // presence alone can never mean "connected" — this is exactly
+                // the structural gap that produced permanent fake-connected
+                // badges for atlassian/google_sheets/context7.
+            }
         }
     }
 
     Ok(providers)
+}
+
+/// Lists all connector provider IDs that are genuinely connected — i.e. have
+/// stored credentials *and* a real, persisted MCP server backing them.
+#[tauri::command]
+pub async fn mcp_list_connected_providers(
+    mcp_state: tauri::State<'_, McpState>,
+) -> Result<Vec<String>, String> {
+    let conn = open_mcp_settings_db()?;
+    let configured_servers: std::collections::HashSet<String> = {
+        let config = mcp_state.config.lock();
+        config.mcp_servers.keys().cloned().collect()
+    };
+    resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
 }
 
 fn has_stored_tokens_for_provider(
@@ -2113,48 +2249,160 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn list_connected_providers_resolves_google_aliases_from_canonical_storage() {
+    /// Runs `body` with a fresh temp-dir-backed settings_v2 table and restores
+    /// the previous `AGIWORKFORCE_APP_DATA_DIR` afterwards, regardless of
+    /// whether `body` succeeds or panics-via-assert.
+    async fn with_temp_settings_db<F, Fut, T>(body: F) -> T
+    where
+        F: FnOnce(rusqlite::Connection) -> Fut,
+        Fut: std::future::Future<Output = T>,
+    {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let previous = std::env::var("AGIWORKFORCE_APP_DATA_DIR").ok();
         std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", temp_dir.path());
 
-        let stored_tokens = StoredTokens {
-            access_token: "test-access".to_string(),
-            refresh_token: Some("test-refresh".to_string()),
-            expires_at: Some(1_893_456_000),
-            scope: Some("gmail".to_string()),
-            user_info: None,
-        };
+        let conn = open_mcp_settings_db().expect("open settings db");
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS settings_v2 (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                category TEXT NOT NULL,
+                encrypted INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )
+        .expect("prepare settings_v2 schema");
 
-        let result = async {
-            let conn = open_mcp_settings_db()?;
-            conn.execute_batch(
-                "CREATE TABLE IF NOT EXISTS settings_v2 (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL,
-                    category TEXT NOT NULL,
-                    encrypted INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )",
-            )
-            .map_err(|e| format!("Failed to prepare settings_v2 schema: {}", e))?;
-
-            store_tokens(McpOAuthProvider::Google, &stored_tokens)?;
-            let providers = mcp_list_connected_providers().await?;
-            Ok::<Vec<String>, String>(providers)
-        }
-        .await;
+        let result = body(conn).await;
 
         match previous {
             Some(value) => std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", value),
             None => std::env::remove_var("AGIWORKFORCE_APP_DATA_DIR"),
         }
 
-        let providers = result.expect("provider listing should succeed");
+        result
+    }
+
+    /// AUDIT-FIX (DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01): before
+    /// this fix, storing a Google OAuth token alone was sufficient for
+    /// `mcp_list_connected_providers` to report gmail/google_calendar/
+    /// google_drive as "connected", even if `mcp_connect_connector` had never
+    /// been called and no MCP server was ever provisioned. This test proves
+    /// credentials alone are no longer sufficient: with an empty configured-
+    /// servers set, none of them should be reported as connected.
+    #[tokio::test]
+    async fn credentials_alone_do_not_report_connected_without_a_configured_server() {
+        let providers = with_temp_settings_db(|conn| async move {
+            let stored_tokens = StoredTokens {
+                access_token: "test-access".to_string(),
+                refresh_token: Some("test-refresh".to_string()),
+                expires_at: Some(1_893_456_000),
+                scope: Some("gmail".to_string()),
+                user_info: None,
+            };
+            store_tokens(McpOAuthProvider::Google, &stored_tokens).expect("store tokens");
+
+            let configured_servers = std::collections::HashSet::new();
+            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
+                .expect("resolve connected providers")
+        })
+        .await;
+
+        assert!(!providers.contains(&"gmail".to_string()));
+        assert!(!providers.contains(&"google_calendar".to_string()));
+        assert!(!providers.contains(&"google_drive".to_string()));
+    }
+
+    /// Once a real MCP server has actually been provisioned (i.e. its
+    /// `server_name` is present in the persisted config — what
+    /// `mcp_connect_connector` inserts on success), the provider correctly
+    /// resolves as connected. Also confirms Google's legacy
+    /// `mcp_oauth_tokens_google_drive` alias still resolves through
+    /// `has_stored_tokens_for_provider`.
+    #[tokio::test]
+    async fn provider_is_connected_once_credentials_and_a_configured_server_both_exist() {
+        let providers = with_temp_settings_db(|conn| async move {
+            let stored_tokens = StoredTokens {
+                access_token: "test-access".to_string(),
+                refresh_token: Some("test-refresh".to_string()),
+                expires_at: Some(1_893_456_000),
+                scope: Some("gmail".to_string()),
+                user_info: None,
+            };
+            store_tokens(McpOAuthProvider::Google, &stored_tokens).expect("store tokens");
+
+            let mut configured_servers = std::collections::HashSet::new();
+            configured_servers.insert("connector-gmail".to_string());
+
+            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
+                .expect("resolve connected providers")
+        })
+        .await;
+
         assert!(providers.contains(&"gmail".to_string()));
-        assert!(providers.contains(&"google_calendar".to_string()));
-        assert!(providers.contains(&"google_drive".to_string()));
+        // google_calendar/google_drive share the same Google credentials but
+        // have their own distinct server names, which were NOT added to
+        // `configured_servers` above — they must not be reported connected.
+        assert!(!providers.contains(&"google_calendar".to_string()));
+        assert!(!providers.contains(&"google_drive".to_string()));
+    }
+
+    /// A connector id with no entry in `get_connector_mcp_mapping` at all
+    /// (e.g. a legacy/never-implemented catalog id) can never be reported as
+    /// connected, even if a stray credential row exists for it — this is the
+    /// core structural fix for DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01.
+    #[tokio::test]
+    async fn provider_with_no_mcp_mapping_is_never_reported_connected() {
+        assert!(get_connector_mcp_mapping("atlassian").is_none());
+        assert!(get_connector_mcp_mapping("google_sheets").is_none());
+        assert!(get_connector_mcp_mapping("context7").is_none());
+
+        let providers = with_temp_settings_db(|conn| async move {
+            let key = "api_key_atlassian".to_string();
+            upsert_settings_v2_value(&conn, &key, "encrypted-placeholder", "security", true)
+                .expect("store stray api key");
+
+            // Even if a configured server happened to exist under some
+            // unrelated name, an unmapped provider must still never resolve.
+            let mut configured_servers = std::collections::HashSet::new();
+            configured_servers.insert("connector-something-else".to_string());
+
+            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
+                .expect("resolve connected providers")
+        })
+        .await;
+
+        assert!(!providers.contains(&"atlassian".to_string()));
+    }
+
+    #[test]
+    fn supported_connector_ids_matches_mapping_table_and_excludes_drift_ids() {
+        let ids = supported_connector_ids();
+        assert_eq!(ids.len(), CONNECTOR_MCP_MAPPINGS.len());
+        for expected in [
+            "github",
+            "slack",
+            "google_drive",
+            "figma",
+            "stripe",
+            "vercel",
+            "sentry",
+            "linear",
+            "notion",
+            "cloudflare",
+            "gmail",
+            "google_calendar",
+            "outlook",
+            "jira",
+        ] {
+            assert!(ids.contains(&expected), "missing expected id: {expected}");
+        }
+        for drifted in ["atlassian", "google_sheets", "context7", "canva", "hubspot"] {
+            assert!(
+                !ids.contains(&drifted),
+                "id '{drifted}' should not be advertised as supported yet"
+            );
+        }
     }
 }

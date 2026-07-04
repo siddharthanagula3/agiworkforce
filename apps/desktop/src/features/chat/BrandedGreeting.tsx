@@ -3,12 +3,12 @@
  *
  * Personalized, time-aware greeting shown in the empty chat state.
  * Reads the user's display name from the auth store and rotates
- * greetings based on time of day. A subtle animated sparkle icon
- * anchors the AGI Workforce brand.
+ * greetings based on time of day. The spinning AgiMark brand glyph
+ * anchors the AGI Workforce brand, matching web's GreetingBanner.
  */
 
 import React, { useMemo } from 'react';
-import { Sparkles } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { useUnifiedAuthStore, selectUser } from '../../stores/auth';
 
@@ -94,7 +94,7 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ className }) =
         className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-500/10 border border-violet-500/20"
         aria-hidden="true"
       >
-        <Sparkles className="h-6 w-6 text-violet-400 animate-pulse" />
+        <AgiMark size={24} spinning className="text-violet-400" />
       </div>
 
       {/* Headline */}

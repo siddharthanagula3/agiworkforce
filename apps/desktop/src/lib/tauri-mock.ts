@@ -452,6 +452,26 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     // MCP Connector/OAuth commands
     case 'mcp_list_connected_providers':
       return [] as T;
+    // Mirrors the backend `get_connector_mcp_mapping` table in
+    // mcp_oauth.rs — keep in sync when a connector's real backend support
+    // lands (see DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01).
+    case 'mcp_get_supported_connector_ids':
+      return [
+        'github',
+        'slack',
+        'google_drive',
+        'figma',
+        'stripe',
+        'vercel',
+        'sentry',
+        'linear',
+        'notion',
+        'cloudflare',
+        'gmail',
+        'google_calendar',
+        'outlook',
+        'jira',
+      ] as T;
     case 'mcp_get_registry':
       return [] as T;
     case 'mcp_install_server':

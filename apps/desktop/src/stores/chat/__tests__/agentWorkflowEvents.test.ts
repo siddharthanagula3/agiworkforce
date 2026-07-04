@@ -7,6 +7,18 @@ vi.mock('@agiworkforce/api', () => ({
   },
 }));
 
+const mockInvoke = vi.fn();
+vi.mock('../../../lib/tauri-mock', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../../lib/tauri-mock')>('../../../lib/tauri-mock');
+  return { ...actual, invoke: (...args: unknown[]) => mockInvoke(...args) };
+});
+
+const mockSendNotification = vi.fn().mockResolvedValue(undefined);
+vi.mock('@tauri-apps/plugin-notification', () => ({
+  sendNotification: (...args: unknown[]) => mockSendNotification(...args),
+}));
+
 import { useAgentStore } from '../agentStore';
 import { useChatStore } from '../chatStore';
 import { useToolStore } from '../toolStore';
@@ -63,9 +75,24 @@ function createAssistantMessage(): string {
   return messageId;
 }
 
+const defaultNotificationSettings = {
+  enabled: true,
+  sound_enabled: true,
+  badge_enabled: true,
+  desktop_notifications: true,
+  enabled_types: [],
+  do_not_disturb: false,
+  dnd_start_time: null,
+  dnd_end_time: null,
+};
+
 describe('agentWorkflowEvents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === 'notification_get_settings') return defaultNotificationSettings;
+      return undefined;
+    });
     useChatStore.getState().resetOnLogout();
     useAgentStore.getState().resetOnLogout();
     useToolStore.getState().resetOnLogout();
@@ -504,5 +531,53 @@ describe('agentWorkflowEvents', () => {
         type: 'agi:browser-active',
       }),
     );
+  });
+
+  it('sends a native OS notification for background agent completion when enabled', async () => {
+    createAssistantMessage();
+
+    await applyBackgroundAgentCompleted({
+      agentId: 'bg-agent-notify-1',
+      goal: 'Compile weekly report',
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith('notification_get_settings');
+    expect(mockSendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'AGI Workforce — Task Completed' }),
+    );
+  });
+
+  it('respects the desktop_notifications=false setting and does not fire a notification', async () => {
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === 'notification_get_settings') {
+        return { ...defaultNotificationSettings, desktop_notifications: false };
+      }
+      return undefined;
+    });
+    createAssistantMessage();
+
+    await applyBackgroundAgentCompleted({
+      agentId: 'bg-agent-notify-2',
+      goal: 'Compile weekly report',
+    });
+
+    expect(mockSendNotification).not.toHaveBeenCalled();
+  });
+
+  it('respects do_not_disturb=true and does not fire a notification', async () => {
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === 'notification_get_settings') {
+        return { ...defaultNotificationSettings, do_not_disturb: true };
+      }
+      return undefined;
+    });
+    createAssistantMessage();
+
+    await applyBackgroundAgentCompleted({
+      agentId: 'bg-agent-notify-3',
+      goal: 'Compile weekly report',
+    });
+
+    expect(mockSendNotification).not.toHaveBeenCalled();
   });
 });
