@@ -6,10 +6,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import type {
-  AgentStatus,
-  AgentCommunication,
-} from '@core/ai/orchestration/agent-collaboration-manager';
+import type { AgentStatus, AgentCommunication } from '@shared/types';
 
 export interface ChatSession {
   id: string;

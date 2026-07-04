@@ -15,6 +15,22 @@ export type { SearchResponse, SearchResult } from '@core/integrations/web-search
 export type WebSearchResults = SearchResponse | SearchResult[];
 export type WebChatStyleMode = 'concise' | 'formal' | 'explanatory';
 
+// Preserved from the deleted document-generation-service.ts runtime; still
+// consumed by document-export-service and document message components.
+export type DocumentFormat = 'markdown' | 'pdf' | 'docx';
+
+export interface GeneratedDocument {
+  title: string;
+  content: string;
+  metadata: {
+    type: string;
+    generatedAt: Date;
+    wordCount: number;
+    tokensUsed?: number;
+    model?: string;
+  };
+}
+
 export interface SendReplayMetadata {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
