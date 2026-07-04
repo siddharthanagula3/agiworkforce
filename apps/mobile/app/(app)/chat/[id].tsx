@@ -68,7 +68,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
 import { generateImage, getGeneratedImageUri } from '@/src/features/image/services/imagegen';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
 import { useProjectStore } from '@/src/features/projects/store';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import type { ChatMessage } from '@/types/chat';
@@ -767,7 +767,10 @@ export default function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        {/* Chat header: hamburger left, ModeToggle center, new-chat + menu right */}
+        {/* Chat header: circular hamburger left, ModeToggle center, circular
+            new-chat + menu right -- same pill-chrome language as the home
+            tab header (app/(app)/(tabs)/chat.tsx), applied here for the
+            in-conversation screen. */}
         <View
           style={{
             flexDirection: 'row',
@@ -782,11 +785,18 @@ export default function ChatScreen() {
           {/* Hamburger — opens drawer */}
           <Pressable
             onPress={handleOpenDrawer}
-            style={{ padding: 8, borderRadius: 8 }}
+            style={({ pressed }) => ({
+              width: 32,
+              height: 32,
+              borderRadius: radii.full,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+            })}
             accessibilityLabel="Open menu"
             accessibilityRole="button"
           >
-            <Menu size={22} color={colors.textSecondary} />
+            <Menu size={18} color={colors.textSecondary} />
           </Pressable>
 
           {/* Active project chip — tappable, navigates to project detail */}
@@ -802,12 +812,10 @@ export default function ChatScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 8,
-                backgroundColor: colors.accentSurface,
-                borderWidth: 1,
-                borderColor: colors.accentBorder,
+                paddingHorizontal: 12,
+                height: 32,
+                borderRadius: radii.full,
+                backgroundColor: colors.inputSurface,
                 maxWidth: 120,
               }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}
@@ -815,7 +823,7 @@ export default function ChatScreen() {
             >
               <Text
                 numberOfLines={1}
-                style={{ fontSize: 11, color: colors.teal, fontWeight: '500' }}
+                style={{ fontSize: 12, color: colors.teal, fontWeight: '500' }}
               >
                 {activeProject.name}
               </Text>
@@ -839,19 +847,33 @@ export default function ChatScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Pressable
               onPress={handleNewChat}
-              style={{ padding: 8, borderRadius: 8 }}
+              style={({ pressed }) => ({
+                width: 32,
+                height: 32,
+                borderRadius: radii.full,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+              })}
               accessibilityLabel="New chat"
               accessibilityRole="button"
             >
-              <SquarePen size={20} color={colors.textSecondary} />
+              <SquarePen size={18} color={colors.textSecondary} />
             </Pressable>
             <Pressable
               onPress={handleMenuPress}
-              style={{ padding: 8, borderRadius: 8 }}
+              style={({ pressed }) => ({
+                width: 32,
+                height: 32,
+                borderRadius: radii.full,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+              })}
               accessibilityLabel="Conversation menu"
               accessibilityRole="button"
             >
-              <MoreHorizontal size={20} color={colors.textSecondary} />
+              <MoreHorizontal size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
         </View>

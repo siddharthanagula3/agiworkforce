@@ -1,0 +1,64 @@
+import { useEffect, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import { EyeOff, X } from 'lucide-react-native';
+import { Text } from '@/components/ui/text';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useThemeColors } from '@/src/ui/theme';
+
+/**
+ * Module-level (not persisted) — resets on cold start, shared across every
+ * chat screen instance so the explainer shows once per app session rather
+ * than once per conversation.
+ */
+let hasShownThisSession = false;
+
+/**
+ * One-time explainer shown above the message list the first time Temporary
+ * Chat is active in a given app session. Dismissible; does not reappear after
+ * dismissal even if the user re-enters another temporary chat this session.
+ */
+export function TemporaryChatBanner() {
+  const colors = useThemeColors();
+  const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (isTemporaryChat && !hasShownThisSession) {
+      hasShownThisSession = true;
+      setVisible(true);
+    }
+  }, [isTemporaryChat]);
+
+  if (!visible) return null;
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        backgroundColor: colors.purpleSurface,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }}
+      accessibilityRole="alert"
+      accessibilityLabel="Temporary chat explainer"
+    >
+      <EyeOff size={14} color={colors.purple} style={{ marginTop: 1 }} />
+      <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: colors.textSecondary }}>
+        This chat won&apos;t appear in history, use memory, or train models. May be retained briefly
+        for safety.
+      </Text>
+      <Pressable
+        onPress={() => setVisible(false)}
+        hitSlop={8}
+        accessibilityLabel="Dismiss temporary chat explainer"
+        accessibilityRole="button"
+      >
+        <X size={14} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}

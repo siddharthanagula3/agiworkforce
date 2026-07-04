@@ -23,7 +23,7 @@ export function Switch({
       value={value}
       onValueChange={onValueChange}
       disabled={disabled}
-      trackColor={{ false: colors.surfaceHover, true: colors.teal }}
+      trackColor={{ false: colors.surfaceHover, true: colors.agentSuccess }}
       thumbColor={colors.white}
       ios_backgroundColor={colors.surfaceHover}
       style={{ opacity: disabled ? 0.65 : 1 }}

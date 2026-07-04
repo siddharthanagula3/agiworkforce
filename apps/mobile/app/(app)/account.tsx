@@ -21,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useChatStore } from '@/stores/chatStore';
+import { isHistoryVisibleConversation } from '@/src/features/chat/utils/conversationMode';
 import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
@@ -30,7 +31,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const { user, signOut } = useAuthStore();
   const tier = useTierStore((s) => s.tier);
-  const conversations = useChatStore((s) => s.conversations);
+  const conversations = useChatStore((s) => s.conversations).filter(isHistoryVisibleConversation);
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
   const handleBack = useCallback(() => {

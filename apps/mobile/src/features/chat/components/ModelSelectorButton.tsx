@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getShortDisplayName, isAutoMode, getModelById } from '@/src/features/model-picker/service';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
 
 interface ModelSelectorButtonProps {
   onPress: () => void;
@@ -42,12 +42,12 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
       style={({ pressed }) => ({
         minWidth: 150,
         height: 36,
-        borderRadius: 8,
-        paddingHorizontal: 8,
+        borderRadius: radii.full,
+        paddingHorizontal: 10,
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+        backgroundColor: pressed ? colors.surfaceHover : colors.inputSurface,
       })}
       hitSlop={6}
       accessibilityLabel={`Model: ${label}${thinkingOn ? ', thinking mode on' : ''}`}

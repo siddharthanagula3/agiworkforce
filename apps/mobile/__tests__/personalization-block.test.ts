@@ -9,6 +9,7 @@ const NEUTRAL: Personalization = {
   nickname: '',
   occupation: '',
   instructions: '',
+  style: 'default',
   warmth: 50,
   enthusiasm: 50,
   headersLists: 50,
@@ -76,5 +77,25 @@ describe('renderPersonalizationBlock', () => {
     const out = renderPersonalizationBlock({ ...NEUTRAL, nickname: 'JD' });
     expect(out.startsWith('User personalization')).toBe(true);
     expect(out).toContain('\n- ');
+  });
+
+  it('emits no style guidance for the default style', () => {
+    const out = renderPersonalizationBlock({ ...NEUTRAL, style: 'default' });
+    expect(out).toBe('');
+  });
+
+  it('encodes the concise style preset', () => {
+    const out = renderPersonalizationBlock({ ...NEUTRAL, style: 'concise' });
+    expect(out).toContain('short and to the point');
+  });
+
+  it('encodes the explanatory style preset', () => {
+    const out = renderPersonalizationBlock({ ...NEUTRAL, style: 'explanatory' });
+    expect(out).toContain('reasoning');
+  });
+
+  it('encodes the formal style preset', () => {
+    const out = renderPersonalizationBlock({ ...NEUTRAL, style: 'formal' });
+    expect(out).toContain('professional language');
   });
 });

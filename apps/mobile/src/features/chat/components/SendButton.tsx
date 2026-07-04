@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Send, Square, Clock } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useThemeColors, radii, type ColorScheme } from '@/src/ui/theme';
 
 type SendButtonState = 'idle' | 'streaming' | 'queued';
 
@@ -91,7 +91,7 @@ export function SendButton({ state, onPress, disabled }: SendButtonProps) {
       style={[
         {
           padding: 8,
-          borderRadius: 12,
+          borderRadius: radii.full,
           alignItems: 'center',
           justifyContent: 'center',
         },

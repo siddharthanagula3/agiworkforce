@@ -136,8 +136,11 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
         const MAX_CONVERSATIONS = 200;
         const MAX_MESSAGES_PER_CONVERSATION = 100;
         // Only persist cloud conversations — enforced by the executionMode guard
-        // at write-time (setCloudConversations + addCloudConversation).
-        const conversations = state.conversations.slice(0, MAX_CONVERSATIONS);
+        // at write-time (setCloudConversations + addCloudConversation). Temporary
+        // conversations are excluded so they never survive relaunch.
+        const conversations = state.conversations
+          .filter((c) => !c.temporary)
+          .slice(0, MAX_CONVERSATIONS);
         const conversationIds = new Set(conversations.map((c) => c.id));
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {

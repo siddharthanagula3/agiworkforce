@@ -57,6 +57,7 @@ const defaultPersonalization: Personalization = {
   nickname: '',
   occupation: '',
   instructions: '',
+  style: 'default',
   warmth: 50,
   enthusiasm: 50,
   headersLists: 50,
@@ -89,6 +90,20 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       name: 'settings-store-local',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
+      // Deep-merge personalization so a persisted object from before a new field
+      // (e.g. `style`) existed still gets the default for that field instead of
+      // `undefined`, without needing a version-bump migration for every addition.
+      merge: (persisted, current) => {
+        const persistedState = (persisted ?? {}) as Partial<LocalSettingsState>;
+        return {
+          ...current,
+          ...persistedState,
+          personalization: {
+            ...current.personalization,
+            ...(persistedState.personalization ?? {}),
+          },
+        };
+      },
       onRehydrateStorage: () => (state, error) => {
         if (error) {
           console.warn('[localSettingsStore] Hydration failed:', error);

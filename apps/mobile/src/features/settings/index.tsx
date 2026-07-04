@@ -34,7 +34,7 @@ import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
@@ -73,14 +73,14 @@ function tagStyle(tag: string, colors: ReturnType<typeof useThemeColors>) {
 function SectionCard({ section }: { section: SettingsSection }) {
   const colors = useThemeColors();
   return (
-    <View style={{ marginBottom: 18 }}>
+    <View style={{ marginBottom: 24 }}>
       {section.title ? (
         <Text
           style={{
             color: colors.textMuted,
             fontSize: 13,
             fontWeight: '600',
-            marginBottom: 7,
+            marginBottom: 8,
             paddingHorizontal: 2,
           }}
         >
@@ -89,10 +89,8 @@ function SectionCard({ section }: { section: SettingsSection }) {
       ) : null}
       <View
         style={{
-          borderRadius: 14,
+          borderRadius: cardRadius,
           backgroundColor: colors.surfaceElevated,
-          borderWidth: 1,
-          borderColor: colors.border,
           overflow: 'hidden',
         }}
       >
@@ -194,15 +192,13 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Edit profile"
       style={{
         minHeight: 72,
-        borderRadius: 16,
+        borderRadius: cardRadius,
         backgroundColor: colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: colors.border,
         paddingHorizontal: 14,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        marginBottom: 18,
+        marginBottom: 24,
       }}
     >
       <View
@@ -551,8 +547,6 @@ export default function SettingsTabScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
-              borderWidth: 1,
-              borderColor: colors.border,
             })}
           >
             <X size={20} color={colors.textSecondary} />

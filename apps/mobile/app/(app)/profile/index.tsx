@@ -27,7 +27,10 @@ import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
+import {
+  executionModeForConversation,
+  isHistoryVisibleConversation,
+} from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
@@ -63,11 +66,12 @@ export default function ProfileScreen() {
   // cloud conversations). In local mode, filter by executionMode.
   const modeConversations = useMemo(
     () =>
-      isCloudMode
+      (isCloudMode
         ? cloudConversations
         : localConversations.filter(
             (conversation) => executionModeForConversation(conversation) === appMode,
-          ),
+          )
+      ).filter(isHistoryVisibleConversation),
     [appMode, isCloudMode, localConversations, cloudConversations],
   );
   const totalMessages = modeConversations.reduce((sum, conversation) => {

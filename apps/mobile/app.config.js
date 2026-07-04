@@ -84,8 +84,8 @@ const config = {
         'AGI Workforce accesses reminders only after you enable the Calendar connector.',
       NSContactsUsageDescription:
         'AGI Workforce accesses your contacts to help compose messages and manage communications through AI.',
-      NSHealthShareUsageDescription:
-        'AGI Workforce reads health data to provide AI-powered health insights and summaries.',
+      // NSHealthShareUsageDescription is injected by the
+      // @kingstinct/react-native-healthkit config plugin below.
       NSSpeechRecognitionUsageDescription:
         'AGI Workforce uses speech recognition to transcribe voice input for AI conversations.',
       NSTranslationUsageDescription:
@@ -221,6 +221,18 @@ const config = {
     ],
     'expo-document-picker',
     'expo-sharing',
+    // HealthKit: injects com.apple.developer.healthkit entitlement (iOS only).
+    // App only reads data (see healthKitPermission.ts requestAuthorization
+    // read-only call) — update-usage string disabled since write is unused.
+    [
+      '@kingstinct/react-native-healthkit',
+      {
+        NSHealthShareUsageDescription:
+          'AGI Workforce reads health data to provide AI-powered health insights and summaries.',
+        NSHealthUpdateUsageDescription: false,
+        background: false,
+      },
+    ],
     // StoreKit 2 (iOS) / Play Billing (Android) in-app purchase bridge for
     // subscription upgrades. Wires the IAP capability + Android BILLING
     // permission at prebuild time — requires `expo prebuild` + pod install
