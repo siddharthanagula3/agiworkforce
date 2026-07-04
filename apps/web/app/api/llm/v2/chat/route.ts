@@ -440,6 +440,9 @@ async function handleViaV1Fallback(
       promptTokens: llmResponse.promptTokens,
       completionTokens: llmResponse.completionTokens,
       totalTokens: llmResponse.totalTokens,
+      cacheReadInputTokens: llmResponse.cachedInputTokens,
+      cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
     });
     const costDifference = actualCostCents - estimatedCostCents;
 
@@ -1002,6 +1005,8 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
               promptTokens: usage.promptTokens,
               completionTokens: usage.completionTokens,
               totalTokens: (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0),
+              cacheReadInputTokens: usage.cacheReadInputTokens,
+              cacheCreationInputTokens: usage.cacheCreationInputTokens,
             },
           );
           const costDifference = actualCostCents - aiSdkEstimatedCostCents;
