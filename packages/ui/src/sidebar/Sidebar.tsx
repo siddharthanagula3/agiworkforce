@@ -62,6 +62,14 @@ export interface SidebarProps extends SessionItemHandlers {
   activeSessionId?: string;
   projects?: SidebarProject[];
   selectedProjectFilter?: string | null;
+  /** True while the initial session list fetch is in flight. Drives a
+   *  skeleton in place of the empty state so a loading list never reads as
+   *  "you have zero conversations". */
+  isLoading?: boolean;
+  /** Non-null when the session list failed to load. Rendered instead of the
+   *  "No conversations yet" empty state so a failed fetch is distinguishable
+   *  from a genuinely empty account. */
+  error?: string | null;
 
   /* ---- layout ---- */
   className?: string;
@@ -125,6 +133,8 @@ export function Sidebar(props: SidebarProps) {
     activeSessionId,
     projects = [],
     selectedProjectFilter = null,
+    isLoading = false,
+    error = null,
     className,
     collapsed = false,
     width = 260,
@@ -822,7 +832,35 @@ export function Sidebar(props: SidebarProps) {
               );
             })}
 
-            {visible.length === 0 && (
+            {/* Loading skeleton — only while the list is genuinely empty so far,
+                so a background refetch on an already-populated list never
+                replaces real rows with placeholders. */}
+            {visible.length === 0 && isLoading && (
+              <div className="space-y-1 px-2 py-1" role="status" aria-label="Loading conversations">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className="h-8 animate-pulse rounded-md bg-[hsl(var(--accent))]/50"
+                    style={{ animationDelay: `${i * 75}ms` }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Error state — distinguishes a failed fetch from a genuinely
+                empty account so users don't mistake a transient error for
+                "you have no chats". */}
+            {visible.length === 0 && !isLoading && error && (
+              <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+                <MessageSquare className="mb-2 h-7 w-7 text-red-400/60" />
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Couldn&apos;t load conversations
+                </p>
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]/60">{error}</p>
+              </div>
+            )}
+
+            {visible.length === 0 && !isLoading && !error && (
               <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
                 <MessageSquare className="mb-2 h-7 w-7 text-[hsl(var(--muted-foreground))]/30" />
                 <p className="text-sm text-[hsl(var(--muted-foreground))]/60">

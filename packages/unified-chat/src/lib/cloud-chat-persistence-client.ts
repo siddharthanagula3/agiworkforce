@@ -53,12 +53,21 @@ export interface CloudConversationMetadata {
  * (`user_id`, `created_at`, ...) are mapped here once so each surface consumes a
  * stable shape. This is structurally identical to the web hook's `ChatSession`,
  * so the adapter can assign it directly.
+ *
+ * `model` and `projectId` mirror the real `/api/chat/conversations` route's
+ * `model`/`project_id` response columns (see `handleCreateConversation` /
+ * `handleGetConversations` in `apps/web/app/api/chat/conversations/route.ts`).
+ * `userId` is NOT actually returned by any of the route's `RETURNING`/`select`
+ * clauses today — it stays on the type for forward-compat but is always
+ * `undefined` in practice; do not rely on it without also fixing the route.
  */
 export interface CloudConversation {
   id: string;
   userId: string;
   title: string;
   mode: CloudConversationMode;
+  model?: string;
+  projectId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   metadata: CloudConversationMetadata;
@@ -112,10 +121,31 @@ export interface CloudChatPersistenceClientConfig {
   fetchImpl?: CloudChatFetch;
 }
 
-/** Body for creating a conversation. */
+/**
+ * Body for creating a conversation. Fields mirror the real
+ * `/api/chat/conversations` route's `CreateConversationSchema`
+ * (`apps/web/lib/validations/chat.ts`) exactly:
+ *
+ *   - `id` — optional client-supplied UUID. Offline-first clients (mobile,
+ *     desktop) MUST generate this locally (`@agiworkforce/utils/uuidv7`) so the
+ *     conversation has a stable cloud identity before the round-trip completes
+ *     — required for the desktop↔web cross-surface continuity proof (DCL-4):
+ *     without it, desktop cannot know a conversation's cloud id until the
+ *     response arrives. Web omits it and the DB default (`gen_random_uuid()`)
+ *     applies. The route is idempotent on `id` (`ON CONFLICT ... DO UPDATE`),
+ *     so a retried create cannot duplicate the row.
+ *   - `model` / `projectId` — optional, passed straight through to the route.
+ *
+ * `mode` is NOT part of the real schema (a legacy field from the dead
+ * `use-chat-persistence.ts` extraction source) — zod silently strips it, so
+ * it was inert, not wired to anything server-side. Removed here; see the
+ * 2026-07-03 DCL-1 realignment note above.
+ */
 export interface CreateConversationInput {
+  id?: string;
   title: string;
-  mode: CloudConversationMode;
+  model?: string;
+  projectId?: string | null;
 }
 
 /**
@@ -193,6 +223,8 @@ export function mapRawConversation(raw: Record<string, unknown>): CloudConversat
     userId: raw['user_id'] as string,
     title: (raw['title'] as string) ?? 'Untitled',
     mode: (raw['mode'] as CloudConversationMode) || 'chat',
+    model: typeof raw['model'] === 'string' ? (raw['model'] as string) : undefined,
+    projectId: (raw['project_id'] as string | null | undefined) ?? undefined,
     createdAt: new Date((raw['created_at'] as string) ?? Date.now()),
     updatedAt: new Date((raw['updated_at'] as string) ?? Date.now()),
     metadata: (raw['metadata'] as CloudConversationMetadata) ?? {
@@ -276,7 +308,12 @@ export function createCloudChatPersistenceClient(
       const res = await fetchImpl(endpoint(), {
         method: 'POST',
         headers: await writeHeaders(true),
-        body: JSON.stringify({ title: input.title, mode: input.mode }),
+        body: JSON.stringify({
+          id: input.id,
+          title: input.title,
+          model: input.model,
+          projectId: input.projectId,
+        }),
       });
       if (!res.ok) await throwForResponse(res);
       const result = (await res.json()) as { conversation: Record<string, unknown> };

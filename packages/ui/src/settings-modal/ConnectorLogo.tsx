@@ -209,18 +209,23 @@ const ICON_MAP: Record<string, SimpleIconData> = {
 // ---------------------------------------------------------------------------
 
 const CONNECTOR_LOGO_URLS: Record<string, string> = {
-  // Microsoft family — official SVGs via Wikimedia/Microsoft
+  // Microsoft family — official SVGs via Wikimedia/Microsoft. Outlook,
+  // OneDrive, Teams, and SharePoint resolve through Commons' stable
+  // Special:FilePath redirect (not a hashed /wikipedia/commons/x/xx/ path)
+  // because Commons re-hashes those URLs whenever the underlying file is
+  // renamed, which had left these four hotlinks 404ing and falling back to
+  // plain-letter tiles.
   slack: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
   outlook:
-    'https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Outlook%20%282018%E2%80%93present%29.svg',
   onedrive:
-    'https://upload.wikimedia.org/wikipedia/commons/3/3c/Microsoft_Office_OneDrive_%282019%E2%80%93present%29.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20OneDrive%20%282019%E2%80%93present%29.svg',
   teams:
-    'https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Teams%20%282025%E2%80%93present%29.svg',
   sharepoint:
-    'https://upload.wikimedia.org/wikipedia/commons/e/e1/Microsoft_Office_SharePoint_%282019%E2%80%93present%29.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20SharePoint%20%282019%E2%80%93present%29.svg',
   microsoft365:
-    'https://upload.wikimedia.org/wikipedia/commons/4/4f/Microsoft_Office_2013-2019_logo.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20365%20%282022%29.svg',
   azure: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg',
 
   // AI
@@ -236,8 +241,9 @@ const CONNECTOR_LOGO_URLS: Record<string, string> = {
   twilio: 'https://www.google.com/s2/favicons?domain=twilio.com&sz=64',
   sendgrid: 'https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64',
 
-  // Design
-  canva: 'https://upload.wikimedia.org/wikipedia/commons/b/bb/Canva_Logo.svg',
+  // Design — no current Canva mark on Commons (file was removed), so this
+  // resolves Canva's own site favicon instead of falling back to a bare tile.
+  canva: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
   adobe: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.png',
 
   // Cloud / Infra
