@@ -213,6 +213,13 @@ export class DesktopBridge implements vscode.Disposable {
   private _reconnectAttempts = 0;
   /** Whether we were previously connected (for disconnect notification). */
   private _wasConnected = false;
+  /**
+   * Guards the "bridge token not found" warning so it fires once per outage
+   * instead of once per reconnect attempt — without this, exponential-backoff
+   * retries stack a fresh toast every attempt, permanently burying the chat
+   * panel's controls under an ever-growing pile of identical notifications.
+   */
+  private _tokenMissingWarningShown = false;
 
   private readonly _onStatusChange = new vscode.EventEmitter<BridgeStatus>();
   public readonly onStatusChange = this._onStatusChange.event;
@@ -301,12 +308,15 @@ export class DesktopBridge implements vscode.Disposable {
     this._setStatus('connecting');
 
     if (getBridgeAuthHeaders() === undefined) {
-      void vscode.window.showWarningMessage(
-        'AGI Workforce: Desktop bridge token not found. ' +
-          'Make sure the AGI Workforce desktop app is running, or run ' +
-          '`agiworkforce desktop --reset-bridge-token` from a terminal.',
-        'Dismiss',
-      );
+      if (!this._tokenMissingWarningShown) {
+        this._tokenMissingWarningShown = true;
+        void vscode.window.showWarningMessage(
+          'AGI Workforce: Desktop bridge token not found. ' +
+            'Make sure the AGI Workforce desktop app is running, or run ' +
+            '`agiworkforce desktop --reset-bridge-token` from a terminal.',
+          'Dismiss',
+        );
+      }
       this._setStatus('error');
       this._scheduleReconnect();
       return;
@@ -424,13 +434,17 @@ export class DesktopBridge implements vscode.Disposable {
           }
           // Stay in 'connecting' until auth_ok is received.
         } else {
-          // No token file — bridge may not be running yet. Show actionable notice.
-          void vscode.window.showWarningMessage(
-            'AGI Workforce: Desktop bridge token not found. ' +
-              'Make sure the AGI Workforce desktop app is running, or run ' +
-              '`agiworkforce desktop --reset-bridge-token` from a terminal.',
-            'Dismiss',
-          );
+          // No token file — bridge may not be running yet. Show actionable notice
+          // (once per outage — see _tokenMissingWarningShown).
+          if (!this._tokenMissingWarningShown) {
+            this._tokenMissingWarningShown = true;
+            void vscode.window.showWarningMessage(
+              'AGI Workforce: Desktop bridge token not found. ' +
+                'Make sure the AGI Workforce desktop app is running, or run ' +
+                '`agiworkforce desktop --reset-bridge-token` from a terminal.',
+              'Dismiss',
+            );
+          }
           this._setStatus('error');
           this._closeWebSocket();
           this._scheduleReconnect();
@@ -654,6 +668,11 @@ export class DesktopBridge implements vscode.Disposable {
   private _resetBackoff(): void {
     this._reconnectBackoffMs = DesktopBridge.BACKOFF_INITIAL_MS;
     this._reconnectAttempts = 0;
+    // A fresh connection attempt is starting (manual reconnect, successful
+    // WS open, or explicit disconnect) — if the bridge goes down again for a
+    // new reason, the user should be warned again rather than staying
+    // permanently silenced by the guard in connect()/_connectWebSocket().
+    this._tokenMissingWarningShown = false;
   }
 
   private _clearReconnect(): void {

@@ -46,13 +46,13 @@ describe('usageMeter', () => {
 
   it('uses reported managed quota fields instead of stubbed quota values', async () => {
     vi.mocked(fetchTierInfo).mockResolvedValue({
-      tier: 'pro_plus',
+      tier: 'max',
       tokensUsed: 25_000,
       tokenCap: 100_000,
       resetsAt: '2026-06-01T00:00:00.000Z',
     });
 
-    await expect(resolvePlanTier(secrets)).resolves.toBe('pro_plus');
+    await expect(resolvePlanTier(secrets)).resolves.toBe('max');
     await expect(resolveUsageMeter(secrets, 999)).resolves.toEqual({
       remaining: 0.75,
       resetsAt: '2026-06-01T00:00:00.000Z',
@@ -64,7 +64,7 @@ describe('usageMeter', () => {
 
   it('does not invent remaining quota when managed usage totals are missing', async () => {
     vi.mocked(fetchTierInfo).mockResolvedValue({
-      tier: 'hobby',
+      tier: 'basic',
       resetsAt: '2026-06-01T00:00:00.000Z',
     });
 

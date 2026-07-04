@@ -5,8 +5,9 @@
  * runtime. Uses Node's global fetch (available in VS Code's Node 18+ host)
  * and a manual SSE frame parser — same as the web client.
  *
- * Auth: caller passes a bearer token sourced from VS Code secret storage.
- * Gateway URL: `agiworkforce.api.gateway.url` setting, defaulting to
+ * Auth: caller passes a bearer token sourced from VS Code secret storage
+ * (the AGI Cloud account token from `signInToAgiCloud`, via `getAccountToken`).
+ * Gateway URL: `agiWorkforce.gatewayUrl` setting, defaulting to
  * `https://api.agiworkforce.com` for production. Override per-machine via
  * VS Code settings.
  */

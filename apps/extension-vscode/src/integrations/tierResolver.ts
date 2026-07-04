@@ -26,20 +26,19 @@ export type Tier = UIPlanTier;
 const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'local',
   'byok',
-  'hobby',
+  'basic',
   'pro',
-  'pro_plus',
   'max',
 ]);
 
 /**
  * Tier ordering — lower index = lower tier.
- * Used to compare tiers (e.g. is 'hobby' < 'pro_plus'?).
+ * Used to compare tiers (e.g. is 'basic' < 'pro'?).
  *
  * Kept here as a local convenience for tests that introspect order; the
  * canonical comparator is {@link tierAtLeast} from `@agiworkforce/types`.
  */
-export const TIER_ORDER: readonly Tier[] = ['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max'];
+export const TIER_ORDER: readonly Tier[] = ['local', 'byok', 'basic', 'pro', 'max'];
 
 /** Re-export of the canonical {@link tierAtLeast} comparator. */
 export { tierAtLeast };
@@ -49,8 +48,15 @@ export { tierAtLeast };
 function coerceTier(raw: string | undefined): Tier | undefined {
   if (raw === undefined) return undefined;
   const normalized = raw.toLowerCase().replace(/-/g, '_');
-  // Also accept "pro+" as alias for "pro_plus" (API may return either form)
-  const remapped = normalized === 'pro+' ? 'pro_plus' : normalized;
+  // Legacy aliases from before the 2026-06-30 tier rename: 'hobby' -> 'basic',
+  // 'pro+'/'pro_plus' -> 'max' (pro_plus was never shipped and was removed
+  // with no direct successor; anything gated on it now gates on 'max').
+  const remapped =
+    normalized === 'hobby'
+      ? 'basic'
+      : normalized === 'pro+' || normalized === 'pro_plus'
+        ? 'max'
+        : normalized;
   return VALID_TIERS.has(remapped) ? (remapped as Tier) : undefined;
 }
 
