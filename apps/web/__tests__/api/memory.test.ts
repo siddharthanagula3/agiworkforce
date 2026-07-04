@@ -36,7 +36,14 @@ const mockQuery = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: mockQuery,
+    query: (sql: string, params: unknown[]) => {
+      // assertAccountActive() in getClerkAuthUser issues its own account_status
+      // lookup ahead of the route's real query; keep it out of mockQuery's queue.
+      if (typeof sql === 'string' && sql.includes('account_status')) {
+        return Promise.resolve([]);
+      }
+      return mockQuery(sql, params);
+    },
     execute: vi.fn().mockResolvedValue(1),
     transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
     withUser: vi.fn(() => ({})),
