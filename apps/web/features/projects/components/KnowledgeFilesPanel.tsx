@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { ProjectKnowledgeFile } from '@agiworkforce/types';
-import { put } from '@vercel/blob';
+import {
+  ALLOWED_ATTACHMENT_ACCEPT,
+  validateAttachmentFile,
+  type ProjectKnowledgeFile,
+} from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { FilePreviewModal } from './FilePreviewModal';
 
@@ -16,23 +19,6 @@ type UploadState =
   | { status: 'idle' }
   | { status: 'uploading'; fileName: string; progress: number }
   | { status: 'error'; message: string };
-
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MiB · mirrors MAX_ATTACHMENT_BYTES
-
-const ALLOWED_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'application/json',
-  'application/xml',
-  'text/html',
-]);
 
 /** Compute SHA-256 hex digest of an ArrayBuffer. */
 async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
@@ -80,19 +66,10 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   }, [projectId]);
 
   async function handleUpload(file: File) {
-    // Client-side validation
-    if (file.size > MAX_FILE_BYTES) {
-      setUploadState({
-        status: 'error',
-        message: `File too large. Maximum size is ${MAX_FILE_BYTES / 1024 / 1024} MiB.`,
-      });
-      return;
-    }
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      setUploadState({
-        status: 'error',
-        message: `File type "${file.type}" is not supported.`,
-      });
+    // Client-side validation (mirrors the server's shared attachment contract)
+    const validation = validateAttachmentFile(file);
+    if (!validation.ok) {
+      setUploadState({ status: 'error', message: validation.message });
       return;
     }
 
@@ -103,22 +80,50 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       const arrayBuffer = await file.arrayBuffer();
       const checksumSha256 = await sha256Hex(arrayBuffer);
 
-      // 2. Upload to Vercel Blob (requires BLOB_READ_WRITE_TOKEN on the server)
-      const timestamp = Date.now();
-      const ext = file.name.split('.').pop() ?? 'bin';
-      const storagePath = `knowledge-files/projects/${projectId}/${timestamp}_${checksumSha256.slice(0, 8)}.${ext}`;
+      // 2. Ask the server for a presigned R2 upload URL, then PUT bytes
+      // directly to R2 (never import a storage SDK from this client component).
+      const csrfToken = await getCsrfToken();
 
-      const uploadedBlob = await put(storagePath, file, {
-        access: 'public',
-        contentType: file.type || 'application/octet-stream',
+      const presignRes = await fetch('/api/uploads/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+        body: JSON.stringify({
+          kind: 'knowledge-file',
+          fileName: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          byteCount: file.size,
+          projectId,
+        }),
       });
+
+      if (!presignRes.ok) {
+        const err = (await presignRes.json().catch(() => ({}))) as { message?: string };
+        throw new Error(err.message ?? `Failed to get upload URL (HTTP ${presignRes.status})`);
+      }
+
+      const presign = (await presignRes.json()) as {
+        uploadUrl: string;
+        uploadHeaders?: Record<string, string>;
+        publicUrl: string;
+      };
+
+      const putRes = await fetch(presign.uploadUrl, {
+        method: 'PUT',
+        headers: presign.uploadHeaders ?? {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file,
+      });
+
+      if (!putRes.ok) {
+        throw new Error(`Upload failed (HTTP ${putRes.status})`);
+      }
 
       setUploadState({ status: 'uploading', fileName: file.name, progress: 80 });
 
-      const storageUri = uploadedBlob.url;
+      const storageUri = presign.publicUrl;
 
       // 3. Register the file via the API
-      const csrfToken = await getCsrfToken();
       const response = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`,
         {
@@ -224,7 +229,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
         <input
           ref={fileInputRef}
           type="file"
-          accept={Array.from(ALLOWED_MIME_TYPES).join(',')}
+          accept={ALLOWED_ATTACHMENT_ACCEPT}
           style={{ display: 'none' }}
           onChange={handleFileInputChange}
           data-testid="knowledge-files-input"
