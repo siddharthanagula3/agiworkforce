@@ -1,8 +1,24 @@
 import { NativeModules, Platform } from 'react-native';
-import type { DeviceCapabilities } from './types';
+import type { DeviceCapabilities, Tier1Status } from './types';
 
 const TIER2_MIN_RAM_MB = 3500;
 let lastThermalThrottled = false;
+
+const VALID_TIER1_STATUSES: readonly Tier1Status[] = [
+  'available',
+  'downloadable',
+  'downloading',
+  'unavailable',
+];
+
+// Native modules older than this change won't return `status` yet — fall back
+// to deriving it from the `available` boolean so the app keeps working.
+function resolveTier1Status(rawStatus: unknown, available: boolean): Tier1Status {
+  if (typeof rawStatus === 'string' && (VALID_TIER1_STATUSES as string[]).includes(rawStatus)) {
+    return rawStatus as Tier1Status;
+  }
+  return available ? 'available' : 'unavailable';
+}
 
 function hasExecutorchRuntime(): boolean {
   try {
@@ -19,6 +35,7 @@ function hasExecutorchRuntime(): boolean {
 export async function detectCapabilities(): Promise<DeviceCapabilities> {
   let tier1Available = false;
   let tier1Runtime: DeviceCapabilities['tier1Runtime'] = null;
+  let tier1Status: Tier1Status = 'unavailable';
   let totalRAMMB = 0;
   let osVersion = '';
   let thermalThrottled = false;
@@ -30,6 +47,7 @@ export async function detectCapabilities(): Promise<DeviceCapabilities> {
         const caps = await mod.getCapabilities();
         tier1Available = !!caps.available;
         tier1Runtime = tier1Available ? 'foundation_models' : null;
+        tier1Status = resolveTier1Status(caps.status, tier1Available);
         totalRAMMB = caps.totalRAMMB ?? 0;
         osVersion = caps.osVersion ?? '';
         thermalThrottled = !!caps.thermalThrottled;
@@ -44,6 +62,7 @@ export async function detectCapabilities(): Promise<DeviceCapabilities> {
         const caps = await mod.getCapabilities();
         tier1Available = !!caps.available;
         tier1Runtime = tier1Available ? 'aicore' : null;
+        tier1Status = resolveTier1Status(caps.status, tier1Available);
         totalRAMMB = caps.totalRAMMB ?? 0;
         osVersion = caps.osVersion ?? '';
         thermalThrottled = !!caps.thermalThrottled;
@@ -65,6 +84,7 @@ export async function detectCapabilities(): Promise<DeviceCapabilities> {
     thermalThrottled,
     tier1Available,
     tier1Runtime,
+    tier1Status,
     tier2Available,
     tier3Available,
   };

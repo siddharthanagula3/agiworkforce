@@ -3,12 +3,23 @@ export type LocalRuntimeName = 'foundation_models' | 'aicore' | 'executorch' | '
 
 export type LocalRuntimeTier = 1 | 2 | 3;
 
+/**
+ * Fine-grained Tier 1 system-model status, sourced from the native side's
+ * feature-download state (Android AICore `FeatureStatus`; iOS is always
+ * 'unavailable' while Foundation Models is stubbed). `tier1Available` stays a
+ * plain boolean (true only for 'available') for existing callers; use
+ * `tier1Status` when the caller needs to distinguish "not supported" from
+ * "fetching in the background".
+ */
+export type Tier1Status = 'available' | 'downloadable' | 'downloading' | 'unavailable';
+
 export interface DeviceCapabilities {
   totalRAMMB: number;
   osVersion: string;
   thermalThrottled: boolean;
   tier1Available: boolean;
   tier1Runtime: 'foundation_models' | 'aicore' | null;
+  tier1Status: Tier1Status;
   tier2Available: boolean;
   tier3Available: true;
 }
