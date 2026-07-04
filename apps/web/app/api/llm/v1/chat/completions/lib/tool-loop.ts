@@ -43,7 +43,7 @@ import {
   toOpenAiToolDef,
   type WebMcpToolDef,
 } from '@/lib/mcp-tool-executor';
-import { isExecutionTool, routeExecutionTool } from '@/lib/e2b/execution-tools';
+import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import type { ProcessedRequest } from './request-processor';
 
@@ -412,10 +412,12 @@ async function runMcpTool(
       })
       .filter(Boolean)
       .join('\n');
-    return { content: text || '(no output)', isError: result.isError === true };
+    // Cap MCP tool output too (design doc §4.3: unbounded MCP output is a memory-exhaustion
+    // risk) — reuses the same byte cap as the E2B execution-tool path.
+    return { content: capOutput(text || '(no output)'), isError: result.isError === true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { content: `Tool error: ${msg}`, isError: true };
+    return { content: capOutput(`Tool error: ${msg}`), isError: true };
   }
 }
 
