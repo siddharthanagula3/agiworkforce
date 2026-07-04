@@ -194,6 +194,9 @@ const FALLBACK_LOCAL_MODEL: OnDeviceModel = {
  */
 const SYSTEM_RUNTIME_ONLY = new Set(['apple-foundation-models', 'aicore']);
 
+// Backlog: this always excludes system-runtime-only rows rather than showing them
+// once native async capability detection confirms the runtime is actually active.
+// Making the catalog reactive to that detection is a separate scope item, not done here.
 function isSystemRuntimeOnly(model: OnDeviceModel): boolean {
   return model.supportedRuntimes.every((r) => SYSTEM_RUNTIME_ONLY.has(r));
 }
