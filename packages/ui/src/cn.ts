@@ -3,18 +3,16 @@
  *
  * packages/ui MUST NOT import a surface's `cn` (apps/desktop/lib/utils or
  * @shared/lib/utils) — that would couple the shared package to a surface.
- * This is a minimal, dependency-free join: it filters falsy values and
- * collapses whitespace. It deliberately does NOT do Tailwind class merging
- * (no tailwind-merge dependency) — callers pass non-conflicting classes, and
- * the component's own classes come last so an explicit `className` override
- * still wins via CSS source order.
+ * Uses the same clsx+tailwind-merge stack both surfaces' own `cn` use, so a
+ * caller's `className` override (e.g. shrinking an icon Button with
+ * `className="h-7 w-7"`) actually wins over the component's own conflicting
+ * Tailwind classes instead of both surviving in the DOM.
  */
-export type ClassValue = string | number | false | null | undefined;
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
-export function cn(...values: ClassValue[]): string {
-  return values
-    .filter((value): value is string | number => Boolean(value))
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+export type { ClassValue };
+
+export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
 }

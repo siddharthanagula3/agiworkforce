@@ -52,6 +52,18 @@ describe('mapRawConversation', () => {
     expect(c.metadata.messageCount).toBe(3);
   });
 
+  it('maps model and project_id (real route response columns)', () => {
+    const c = mapRawConversation({ ...RAW_CONV, model: 'claude-sonnet-5', project_id: 'proj_1' });
+    expect(c.model).toBe('claude-sonnet-5');
+    expect(c.projectId).toBe('proj_1');
+  });
+
+  it('leaves model/projectId undefined when absent', () => {
+    const c = mapRawConversation({ id: 'x' });
+    expect(c.model).toBeUndefined();
+    expect(c.projectId).toBeUndefined();
+  });
+
   it('applies defaults for missing fields', () => {
     const c = mapRawConversation({ id: 'x' });
     expect(c.title).toBe('Untitled');
@@ -67,20 +79,45 @@ describe('mapRawConversation', () => {
 
 describe('createCloudChatPersistenceClient', () => {
   describe('createConversation', () => {
-    it('POSTs to /api/chat/conversations with title+mode body and returns normalized DTO', async () => {
+    it('POSTs to /api/chat/conversations with the real CreateConversationSchema body shape and returns normalized DTO', async () => {
       const fetchImpl = mockFetch({ conversation: RAW_CONV });
       const client = createCloudChatPersistenceClient({ fetchImpl });
 
-      const result = await client.createConversation({ title: 'My chat', mode: 'mission' });
+      const result = await client.createConversation({
+        id: '0192a1b2-c3d4-7e5f-8a6b-0123456789ab',
+        title: 'My chat',
+        model: 'claude-sonnet-5',
+        projectId: 'proj_1',
+      });
 
       expect(fetchImpl).toHaveBeenCalledTimes(1);
       const { url, init } = nthCall(fetchImpl);
       expect(url).toBe('/api/chat/conversations');
       expect(init.method).toBe('POST');
-      expect(JSON.parse(init.body as string)).toEqual({ title: 'My chat', mode: 'mission' });
+      expect(JSON.parse(init.body as string)).toEqual({
+        id: '0192a1b2-c3d4-7e5f-8a6b-0123456789ab',
+        title: 'My chat',
+        model: 'claude-sonnet-5',
+        projectId: 'proj_1',
+      });
       expect((init.headers as CloudChatHeaders)['Content-Type']).toBe('application/json');
       expect(result.id).toBe('conv_1');
       expect(result.userId).toBe('user_1');
+    });
+
+    it('omits id/model/projectId from the body when not provided (web callers)', async () => {
+      const fetchImpl = mockFetch({ conversation: RAW_CONV });
+      const client = createCloudChatPersistenceClient({ fetchImpl });
+
+      await client.createConversation({ title: 'My chat' });
+
+      const { init } = nthCall(fetchImpl);
+      expect(JSON.parse(init.body as string)).toEqual({
+        id: undefined,
+        title: 'My chat',
+        model: undefined,
+        projectId: undefined,
+      });
     });
   });
 
@@ -183,7 +220,7 @@ describe('createCloudChatPersistenceClient', () => {
         baseUrl: 'https://agiworkforce.com/',
         fetchImpl,
       });
-      await client.createConversation({ title: 't', mode: 'chat' });
+      await client.createConversation({ title: 't' });
       expect(nthCall(fetchImpl).url).toBe('https://agiworkforce.com/api/chat/conversations');
     });
   });
@@ -217,7 +254,7 @@ describe('createCloudChatPersistenceClient', () => {
         fetchImpl,
         getAuthToken: async () => 'tok_xyz',
       });
-      await client.createConversation({ title: 't', mode: 'chat' });
+      await client.createConversation({ title: 't' });
       const headers = nthCall(fetchImpl).init.headers as CloudChatHeaders;
       expect(headers['Authorization']).toBe('Bearer tok_xyz');
     });
@@ -232,7 +269,7 @@ describe('createCloudChatPersistenceClient', () => {
       const fetchImpl = mockFetch({ conversation: RAW_CONV });
       const client = createCloudChatPersistenceClient({ fetchImpl, decorateHeaders });
 
-      await client.createConversation({ title: 't', mode: 'chat' });
+      await client.createConversation({ title: 't' });
 
       expect(decorateHeaders).toHaveBeenCalledTimes(1);
       const headers = nthCall(fetchImpl).init.headers as CloudChatHeaders;
@@ -266,9 +303,7 @@ describe('createCloudChatPersistenceClient', () => {
     it('throws the server error field on non-ok responses', async () => {
       const fetchImpl = mockFetch({ error: 'Not allowed' }, { ok: false, status: 403 });
       const client = createCloudChatPersistenceClient({ fetchImpl });
-      await expect(client.createConversation({ title: 't', mode: 'chat' })).rejects.toThrow(
-        'Not allowed',
-      );
+      await expect(client.createConversation({ title: 't' })).rejects.toThrow('Not allowed');
     });
 
     it('throws HTTP <status> when the error body has no error field', async () => {

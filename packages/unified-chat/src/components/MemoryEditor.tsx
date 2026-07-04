@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
@@ -11,8 +11,12 @@ import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
  * component can drop into the Settings shell (web / extensions) or be
  * rendered standalone in a Capabilities → Memory route on mobile.
  *
- * v1 LOCAL-ONLY POSTURE — facts are device-local. Cloud sync is a Cloud
- * Managed concern and is not wired here.
+ * Facts are always available instantly from local storage. On mount, in
+ * runtimes where account-scoped sync is possible (Web / Chrome extension —
+ * see `memoryStore.ts` for the Desktop/Mobile trust-boundary guard), the
+ * editor pulls the latest facts from `/api/memory` so memory now follows the
+ * signed-in account across devices instead of staying trapped in one
+ * browser's local storage.
  */
 
 const MAX_FACT_CHARS = 280;
@@ -30,7 +34,7 @@ export interface MemoryEditorProps {
 
 export function MemoryEditor({
   title = 'Memory',
-  description = 'Things the assistant should remember about you across conversations. Stored on this device only — cloud sync arrives with Cloud Managed.',
+  description = 'Things the assistant should remember about you across conversations.',
   hideClearAll = false,
   className,
 }: MemoryEditorProps) {
@@ -39,10 +43,20 @@ export function MemoryEditor({
   const update = useMemoryStore((s) => s.update);
   const remove = useMemoryStore((s) => s.remove);
   const clear = useMemoryStore((s) => s.clear);
+  const syncStatus = useMemoryStore((s) => s.syncStatus);
+  const hydrateFromServer = useMemoryStore((s) => s.hydrateFromServer);
 
   const [draft, setDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
+
+  // Pull the account-scoped copy on mount so facts saved from another
+  // device show up here too. No-op where sync isn't available (Desktop
+  // Tauri webview, Mobile) — see memoryStore.ts's `canSyncToServer` guard.
+  useEffect(() => {
+    void hydrateFromServer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
 
   const onSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -101,6 +115,7 @@ export function MemoryEditor({
           {description ? (
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}
+          <p className="text-xs text-[var(--chat-text-muted)]">{syncStatusLabel(syncStatus)}</p>
         </div>
       ) : null}
 
@@ -233,6 +248,22 @@ export function MemoryEditor({
       ) : null}
     </div>
   );
+}
+
+function syncStatusLabel(status: ReturnType<typeof useMemoryStore.getState>['syncStatus']): string {
+  switch (status) {
+    case 'syncing':
+      return 'Syncing with your account…';
+    case 'synced':
+      return 'Synced to your account — available on every device you sign into.';
+    case 'error':
+      return 'Saved on this device. Couldn’t reach your account to sync — will retry.';
+    case 'unavailable':
+      return 'Saved on this device only.';
+    case 'idle':
+    default:
+      return 'Saved on this device.';
+  }
 }
 
 function formatRelativeDate(iso: string): string {

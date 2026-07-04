@@ -11,6 +11,7 @@ import {
   Brain,
   Sparkles,
 } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
 import {
   siAnthropic,
   siGoogle,
@@ -165,6 +166,12 @@ interface ProviderLogoProps {
 }
 
 function ProviderLogo({ providerKey, size = 16 }: ProviderLogoProps) {
+  // AGI's own routed-auto provider gets the brand mark, not a generic dot —
+  // matches web's ProviderLogo() convention for the same `managed_cloud` case.
+  if (providerKey === 'agi-cloud' || providerKey === 'managed_cloud') {
+    return <AgiMark size={size} mono />;
+  }
+
   const iconData = SIMPLE_ICON_MAP[providerKey];
   const brandColor = getProviderBrandColor(providerKey);
 
