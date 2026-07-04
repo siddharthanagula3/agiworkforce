@@ -32,7 +32,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/web/`. Read-
 - **Tiers**: 6 (Local-only / BYOK / Hobby / Pro waitlist / Max waitlist / Enterprise contact-sales)
 - **Pricing**: Hobby has same features as Pro/Max, lower per-provider token caps. Hobby Web Search = "Yes (lower token cap)" not false.
 - **Provider list** (`app/i18n/locales/{en,es}/models.json`): 9 cloud (anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu) + ollama + lmstudio. Azure/AWS Bedrock = `comingSoonProviders` only.
-- **Pro/Max waitlist UI**: Stripe IDs wired but checkout buttons replaced with "Join Waitlist" CTA.
+- **Checkout is open for all tiers** (superseded 2026-07-04, founder decision): Basic/Pro/Max all get real Stripe Checkout via the `STRIPE_CHECKOUT_ENABLED`/`NEXT_PUBLIC_CHECKOUT_ENABLED` kill-switch (open unless explicitly set to `0`/`false`/`off`). The prior "Pro/Max waitlist UI" restriction no longer applies — do not reintroduce a Pro/Max-specific waitlist gate.
 - Models in marketing: provider names only, never version numbers.
 - Models in code: use `packages/types/src/models.json` and provider capability metadata; do not paste model IDs from memory.
 
