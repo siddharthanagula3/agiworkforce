@@ -38,6 +38,6 @@ export interface E2BExecutor {
 
 /**
  * Max bytes of execution output returned to the model. Caps memory/context blow-up
- * from a runaway tool (today the MCP path returns unbounded output — a known gap).
+ * from a runaway tool. Also reused by the generic MCP tool-result path (tool-loop.ts).
  */
 export const MAX_EXECUTION_OUTPUT_BYTES = 100_000;
