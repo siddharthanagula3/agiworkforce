@@ -61,7 +61,7 @@ const config = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.agiworkforce.app',
-    buildNumber: '1',
+    buildNumber: '2',
     // AUDIT-FIX: H-11 — declare apex + www so iOS verifies the AASA file on
     // /.well-known/ before any Universal-Link tap is routed to the app.
     associatedDomains,
