@@ -2,12 +2,17 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
 import { Copy, Check, LogOut, Trash2 } from 'lucide-react';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useAuthStore } from '@shared/stores/authentication-store';
 
 export function AccountSection() {
-  const user = useBillingStore((s) => s.user);
-  const signOut = useBillingStore((s) => s.signOut);
+  // Read from the real, populated auth store (the one the sidebar/header use)
+  // rather than useBillingStore's `user` field, which is only ever written by
+  // a dead `_setUser` action with zero callers and is therefore always null.
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const { signOut: clerkSignOut } = useClerk();
   const router = useRouter();
 
   const orgId = user?.id ?? null;
@@ -31,13 +36,20 @@ export function AccountSection() {
     setLoggingOut(true);
     setLogoutError(null);
     try {
-      await signOut();
-      router.replace('/login');
+      // Use the SAME sign-out path as the sidebar's "Log out" (useAuthStore.logout()
+      // followed by Clerk's signOut). useAuthStore.logout() calls cleanupAllStores(),
+      // which clears the per-user localStorage-backed stores (workforce, mission,
+      // notifications, chat, multi-agent chat, usage warnings, artifacts, layout,
+      // settings, user profile). The old useBillingStore.signOut() path only reset
+      // useChatStore, leaving the rest of those stores populated with the previous
+      // user's data for the next signed-in session.
+      await logout();
+      await clerkSignOut({ redirectUrl: '/login' });
     } catch (err) {
       setLogoutError(err instanceof Error ? err.message : 'Sign out failed.');
       setLoggingOut(false);
     }
-  }, [signOut, router]);
+  }, [logout, clerkSignOut]);
 
   const sessionRows: Array<{
     device: string;
@@ -50,15 +62,7 @@ export function AccountSection() {
         {
           device: getDeviceLabel(),
           location: 'Unknown',
-          created: user['created_at']
-            ? new Date(String(user['created_at'])).toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })
-            : 'Unknown',
+          created: 'Unknown',
           updated: 'Now',
           isCurrent: true,
         },
@@ -190,11 +194,22 @@ export function AccountSection() {
               Delete account
             </p>
             <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-              To delete your account, cancel your subscription first, then go to the Profile page.
+              Deleting your account is handled from the General section&apos;s Danger Zone.
             </p>
           </div>
-          <a
-            href="/settings/profile#danger-zone"
+          {/*
+            This surface intentionally has no delete-account implementation of its
+            own. GeneralSection's Danger Zone (data-testid="danger-zone") is the one
+            canonical, working delete flow (confirm-text dialog -> DELETE
+            /api/user/delete-account); PrivacySection has its own separate working
+            copy. Rather than adding a third drifted implementation here, this just
+            routes to the canonical section via the modal's own client-side router
+            (same mechanism WebSettingsModal's rail uses for section switching), so
+            it stays inside the Settings modal instead of doing a full page nav.
+          */}
+          <button
+            type="button"
+            onClick={() => router.push('/settings/general')}
             style={{
               flexShrink: 0,
               display: 'inline-flex',
@@ -207,13 +222,12 @@ export function AccountSection() {
               background: 'var(--settings-destructive)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
-              textDecoration: 'none',
               cursor: 'pointer',
             }}
           >
             <Trash2 size={14} />
             Delete account
-          </a>
+          </button>
         </div>
       </section>
 

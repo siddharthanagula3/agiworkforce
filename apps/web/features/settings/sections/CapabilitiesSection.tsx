@@ -135,16 +135,18 @@ export function CapabilitiesSection() {
           />,
         )}
 
-        <Link
-          href="/settings/memory"
-          className="text-xs text-[var(--chat-accent-primary)] hover:underline"
-        >
-          View and manage memory
-        </Link>
+        <div className="flex flex-col items-start gap-3">
+          <Link
+            href="/settings/memory"
+            className="text-xs text-[var(--chat-accent-primary)] hover:underline"
+          >
+            View and manage memory
+          </Link>
 
-        <Button variant="outline" size="sm" asChild className="text-xs">
-          <Link href="/settings/memory#import">Import memory from other AI providers</Link>
-        </Button>
+          <Button variant="outline" size="sm" asChild className="text-xs">
+            <Link href="/settings/memory#import">Import memory from other AI providers</Link>
+          </Button>
+        </div>
       </section>
 
       <section className="space-y-4">

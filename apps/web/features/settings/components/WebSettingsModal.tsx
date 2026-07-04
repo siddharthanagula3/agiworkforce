@@ -10,11 +10,13 @@
  * Sections wired:
  *   general      -> GeneralSection  (profile + preferences + danger zone)
  *   account      -> AccountSection  (sessions, org ID, logout)
+ *   security     -> SecuritySection (2FA, session timeout, change password)
  *   privacy      -> PrivacySection  (toggles, export, delete)
  *   billing      -> BillingSection  (plan, payment, invoices)
  *   usage        -> UsageSection    (credit bars, analytics)
  *   capabilities -> CapabilitiesSection (memory, tools, artifacts)
  *   memory       -> MemorySection   (MemoryEditor)
+ *   notifications -> NotificationsSection (browser/email/mobile-push toggles)
  *   connectors   -> ConnectorsPanel (built-in to shared shell via adapter)
  *   skills       -> SkillsPanel     (built-in to shared shell via adapter)
  *   plugins      -> PluginsPanel    (built-in to shared shell via adapter)
@@ -30,11 +32,13 @@ import { getCsrfToken } from '@/lib/client/csrf';
 // Section components — real wired content, NOT route stubs
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
+import { SecuritySection } from '../sections/SecuritySection';
 import { PrivacySection } from '../sections/PrivacySection';
 import { BillingSection } from '../sections/BillingSection';
 import { UsageSection } from '../sections/UsageSection';
 import { CapabilitiesSection } from '../sections/CapabilitiesSection';
 import { MemorySection } from '../sections/MemorySection';
+import { NotificationsSection } from '../sections/NotificationsSection';
 
 // ---------------------------------------------------------------------------
 // Skeleton shown while a section is still hydrating
@@ -67,6 +71,7 @@ interface ApiSkill {
 const SECTION_TO_SEGMENT: Record<string, string> = {
   general: 'general',
   account: 'account',
+  security: 'security',
   privacy: 'privacy',
   billing: 'billing',
   usage: 'usage',
@@ -75,6 +80,7 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
   skills: 'skills',
   plugins: 'plugins',
   memory: 'memory',
+  notifications: 'notifications',
 };
 
 const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
@@ -289,11 +295,13 @@ export function WebSettingsModal({
   const sectionContent: Partial<Record<string, React.ReactNode>> = {
     general: <GeneralSection />,
     account: <AccountSection />,
+    security: <SecuritySection />,
     privacy: <PrivacySection />,
     billing: <BillingSection />,
     usage: <UsageSection />,
     capabilities: <CapabilitiesSection />,
     memory: <MemorySection />,
+    notifications: <NotificationsSection />,
     // connectors / skills / plugins fall through to adapter-driven built-in panels
   };
 

@@ -133,42 +133,21 @@ export function BillingSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h1
-            style={{
-              fontFamily: 'var(--serif)',
-              fontSize: 24,
-              fontWeight: 500,
-              color: 'var(--text-1)',
-              margin: '0 0 4px',
-            }}
-          >
-            Billing
-          </h1>
-          <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-            Your plan, usage, and payment details.
-          </p>
-        </div>
-        {isFreeTier && (
-          <Link
-            href="/pricing"
-            style={{
-              padding: '8px 16px',
-              background: 'var(--text-1)',
-              border: 'none',
-              borderRadius: 'var(--radius)',
-              color: 'var(--bg-base, #09090b)',
-              fontSize: 13,
-              fontWeight: 600,
-              textDecoration: 'none',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Upgrade plan
-          </Link>
-        )}
+      <div>
+        <h1
+          style={{
+            fontFamily: 'var(--serif)',
+            fontSize: 24,
+            fontWeight: 500,
+            color: 'var(--text-1)',
+            margin: '0 0 4px',
+          }}
+        >
+          Billing
+        </h1>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+          Your plan, usage, and payment details.
+        </p>
       </div>
 
       {/* Current plan card */}
