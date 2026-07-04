@@ -69,11 +69,11 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
               id: e.id,
               fact: e.content,
               source_conversation_id: null,
-              pinned: false,
+              pinned: e.pinned,
               created_at: new Date(e.createdAt).getTime(),
             }),
           )
-          .sort((a, b) => b.created_at - a.created_at);
+          .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at);
         entries = cloudEntries;
       } else {
         // ── Local path: read from SQLite (unchanged).
@@ -111,6 +111,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           content: fact.trim(),
           category: null,
           source: 'mobile' as const,
+          pinned: false,
           isDeleted: false,
           createdAt: now,
           updatedAt: now,
@@ -263,7 +264,25 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at),
     }));
     try {
-      await togglePinMemoryFact(id, pinned);
+      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      if (isCloud) {
+        // ── Cloud path: write to the cloud memory store + queue for push ──────
+        // The local-only SQLite path (togglePinMemoryFact) must NOT be used
+        // here — it silently no-ops on cloud entries, so the pin appears to
+        // work until the next fetch/sync reverts it to unpinned.
+        const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
+        if (existing) {
+          useCloudMemoryStore.getState().upsertCloudMemory({
+            ...existing,
+            pinned,
+            updatedAt: new Date().toISOString(),
+          });
+          markMemoryForSync(id);
+        }
+      } else {
+        // ── Local path: write to SQLite (unchanged) ───────────────────────────
+        await togglePinMemoryFact(id, pinned);
+      }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to update pin' });
       await get().fetchMemories();
@@ -365,7 +384,7 @@ export async function retrieveMemoryContext(
         id: e.id,
         fact: e.content,
         source_conversation_id: null,
-        pinned: false,
+        pinned: e.pinned,
         created_at: new Date(e.createdAt).getTime(),
       }));
   }

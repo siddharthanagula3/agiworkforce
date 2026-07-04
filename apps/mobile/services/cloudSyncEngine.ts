@@ -299,6 +299,8 @@ interface MemoryPullItem {
   content: string;
   category: string | null;
   source: 'mobile' | 'desktop' | 'web' | 'auto';
+  /** Server may not yet support pinning (pending migration) — treat missing as false. */
+  pinned?: boolean;
   is_deleted: boolean;
   created_at: string;
   updated_at: string;
@@ -317,6 +319,8 @@ interface MemoryPushItem {
   content: string;
   category?: string | null;
   source?: string;
+  /** Server-side column/schema support is pending — sent best-effort. */
+  pinned?: boolean;
   isDeleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -338,11 +342,19 @@ async function pullMemory(): Promise<void> {
     const memories = res.memories ?? [];
     if (memories.length > 0) {
       // Map wire snake_case → client camelCase, then apply to store.
+      // NOTE: the server does not yet return `pinned` (pending Neon migration
+      // on user_memories + route update). Until it does, a delta never carries
+      // pinned state, so falling back to `false` would silently revert a
+      // locally-toggled pin on the next pull. Preserve the existing local
+      // value when the wire item omits the field; only adopt the server's
+      // value once it actually starts sending it.
+      const existingById = new Map(useCloudMemoryStore.getState().entries.map((e) => [e.id, e]));
       const deltas: CloudMemoryEntry[] = memories.map((m) => ({
         id: m.id,
         content: m.content,
         category: m.category,
         source: m.source,
+        pinned: m.pinned ?? existingById.get(m.id)?.pinned ?? false,
         isDeleted: m.is_deleted,
         createdAt: m.created_at,
         updatedAt: m.updated_at,
@@ -382,6 +394,9 @@ async function pushMemory(): Promise<void> {
       content: entry.content,
       category: entry.category,
       source: entry.source,
+      // Sent best-effort: the server ignores unknown fields until the pending
+      // Neon migration + route update land (see pinned note in pullMemory).
+      pinned: entry.pinned,
       isDeleted: entry.isDeleted,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,

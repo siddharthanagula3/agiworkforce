@@ -62,19 +62,44 @@ export async function syncLocalConversationsToCloud(): Promise<LocalCloudSyncRes
   for (const conv of localConversations) {
     try {
       // Create the conversation on the cloud backend.
-      await api.post('/api/chat/conversations', {
-        title: conv.title ?? 'Synced from Local Mode',
-        // Signal that this came from a local sync, not a live cloud session.
-        metadata: { syncedFromLocal: true, localId: conv.id },
-      });
+      const { conversation } = await api.post<{ conversation: { id: string } }>(
+        '/api/chat/conversations',
+        {
+          title: conv.title ?? 'Synced from Local Mode',
+          // Signal that this came from a local sync, not a live cloud session.
+          metadata: { syncedFromLocal: true, localId: conv.id },
+        },
+      );
 
       const localMessages = (messages[conv.id] ?? [])
         .filter((m) => !m.isStreaming && !m.isQueued)
         .slice(-MAX_MESSAGES_PER_CONVERSATION)
-        .map(sanitiseMessageForCloud);
+        .map(sanitiseMessageForCloud)
+        .filter((m) => m.content.trim().length > 0);
+
+      let savedCount = 0;
+      if (localMessages.length > 0) {
+        const { saved } = await api.post<{ saved: number }>(
+          `/api/chat/conversations/${conversation.id}/messages/bulk`,
+          {
+            messages: localMessages.map((m) => ({
+              role: m.role,
+              content: m.content,
+              model: m.model,
+            })),
+          },
+        );
+        savedCount = saved;
+      }
+
+      // Only report success once the server has actually accepted the
+      // messages: a partial save (saved < sent) is still a sync error.
+      if (savedCount < localMessages.length) {
+        throw new Error(`Server accepted ${savedCount}/${localMessages.length} messages`);
+      }
 
       result.conversationsSynced += 1;
-      result.messagesSynced += localMessages.length;
+      result.messagesSynced += savedCount;
     } catch (err) {
       const label = conv.title ?? conv.id;
       result.errors.push(
