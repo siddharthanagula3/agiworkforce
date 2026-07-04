@@ -447,9 +447,16 @@ export const useNotificationStore = create<NotificationStore>()(
 
         // System integration
         sendDesktopNotification: (notification: Notification) => {
-          const { desktopPermission } = get();
-
-          if (desktopPermission === 'granted' && 'Notification' in window) {
+          // Read the live browser permission instead of the store's cached
+          // `desktopPermission` field. That field is only ever updated by
+          // this store's own requestDesktopPermission() action — a caller
+          // that requests permission directly via the raw
+          // Notification.requestPermission() API (e.g. the in-chat
+          // "enable notifications" banner) leaves desktopPermission stuck
+          // at 'default' forever, so this always silently no-op'd even
+          // after the user actually granted permission.
+          if (typeof window === 'undefined' || !('Notification' in window)) return;
+          if (Notification.permission === 'granted') {
             const desktopNotification = new Notification(notification.title, {
               body: notification.message,
               icon: '/favicon.ico', // Adjust path as needed

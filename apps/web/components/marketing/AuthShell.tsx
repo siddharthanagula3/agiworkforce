@@ -25,14 +25,14 @@ export function AuthShell({
   return (
     <div data-design="agi">
       <main className="agi-shell">
-        <Header />
+        <Header minimal />
         <section className="agi-auth-page agi-auth-split">
           <aside className="agi-auth-brand" aria-label="Why AGI">
             <div className="agi-auth-logo">
               <AgiMark size={52} spinning />
               <span className="agi-auth-logo-name">AGI</span>
             </div>
-            <h1 className="agi-auth-title">{title}</h1>
+            <h2 className="agi-auth-title">{title}</h2>
             <p className="agi-auth-lede">{lede}</p>
             <ul className="agi-auth-points">
               {points.map((point) => (

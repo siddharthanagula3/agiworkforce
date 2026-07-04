@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
@@ -8,6 +9,8 @@ import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
+import { useNotificationStore } from '@shared/stores/notification-store';
+import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { useBillingStore } from '@/stores/unified/auth';
 import { getBestAutoModeForTier } from '@/constants/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
@@ -46,12 +49,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
+import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
@@ -120,7 +127,14 @@ type PendingByokHandoff = {
 
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
-  const thinkingSteps = thinkingContent ? [thinkingContent] : m.metadata?.thinkingSteps;
+  // MessageBubble renders `thinkingContent` as a ThinkingBlock above the
+  // message AND (separately) a "Thinking process" collapsible from
+  // `thinkingSteps`. Previously this derived thinkingSteps=[thinkingContent]
+  // whenever thinkingContent was set, so the same reasoning text rendered
+  // twice. Only pass through thinkingSteps when it's the model's own
+  // distinct multi-step breakdown (no thinkingContent present) — when
+  // thinkingContent exists, ThinkingBlock already owns showing it.
+  const thinkingSteps = thinkingContent ? undefined : m.metadata?.thinkingSteps;
   const metadata: Record<string, unknown> | undefined =
     m.metadata || m.model
       ? {
@@ -248,6 +262,11 @@ async function patchConversationMessageReaction(params: {
 }
 
 export default function WebChatPage() {
+  // Core chat UI previously had zero i18n coverage — every string, including
+  // the composer placeholder, was hardcoded English even though full
+  // translation resources already exist (app/i18n/locales/*). Wire the most
+  // visible strings through the existing 'chat' and 'common' namespaces.
+  const { t, i18n } = useTranslation(['chat', 'common']);
   const { getToken, isLoaded: authLoaded } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -256,6 +275,21 @@ export default function WebChatPage() {
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Auto-collapse the sidebar below the mobile breakpoint so the composer
+  // never gets squeezed into a few px of width on a phone-sized viewport.
+  // Tracked separately from the user's manual collapse toggle so widening
+  // the window back out restores whatever the user had chosen, and the
+  // manual toggle below the breakpoint doesn't fight the media query.
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsNarrowViewport(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+  const effectiveSidebarCollapsed = sidebarCollapsed || isNarrowViewport;
 
   // Model from the model store · needed by the access gate below before the composer hooks.
   const availableModels = useModelStore((s) => s.availableModels);
@@ -543,6 +577,61 @@ export default function WebChatPage() {
   const activeConversationTitle = displayedConversation?.title;
   const { share, isSharing } = useShareConversation(activeConversationTitle);
   const hasMessages = displayedMessages.length > 0;
+
+  // "Reply ready" browser notification: fires once per completed stream while
+  // the tab is backgrounded. Previously the permission banner above only
+  // ever called Notification.requestPermission() — nothing consumed the
+  // grant, so no notification ever fired. Respects the user's saved
+  // "browserReplyReady" preference from Settings > Notifications.
+  const wasStreamingRef = useRef(false);
+  const browserReplyReadyRef = useRef(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetchPreferenceNamespace<{ browserReplyReady: boolean }>('notifications', {
+      browserReplyReady: true,
+    })
+      .then((value) => {
+        if (!cancelled) browserReplyReadyRef.current = value.browserReplyReady;
+      })
+      .catch(() => {
+        // Non-fatal: keep the default (on) so a failed preferences fetch
+        // never silently disables a notification the user never turned off.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const justFinished = wasStreamingRef.current && !isStreaming;
+    wasStreamingRef.current = isStreaming;
+    if (!justFinished) return;
+    if (typeof document === 'undefined' || typeof Notification === 'undefined') return;
+    // Matches the Settings copy: "Shown as desktop popups when the AGI tab
+    // is in the background." Don't interrupt an active, focused session.
+    if (document.visibilityState !== 'hidden') return;
+    if (Notification.permission !== 'granted') return;
+    if (!browserReplyReadyRef.current) return;
+    if (chatError) return; // a failed turn isn't a "reply ready"
+
+    const lastAssistant = [...displayedMessages].reverse().find((m) => m.role === 'assistant');
+    if (!lastAssistant?.content) return;
+
+    useNotificationStore.getState().sendDesktopNotification({
+      id: lastAssistant.id,
+      type: 'info',
+      title: 'Reply ready',
+      message:
+        lastAssistant.content.trim().slice(0, 140) ||
+        displayedConversation?.title ||
+        'Your response is ready.',
+      timestamp: new Date(),
+      read: false,
+      persistent: false,
+      priority: 'low',
+      category: 'chat',
+    });
+  }, [isStreaming, displayedMessages, chatError, displayedConversation]);
 
   // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
   // the empty new-chat surface and create persistence only when the user sends.
@@ -1143,11 +1232,17 @@ export default function WebChatPage() {
   }, []);
 
   /**
-   * Delete project from the store after an explicit confirmation so a stray
-   * click in the ... menu can never silently drop a project.
+   * Delete project from the store AND the server after an explicit
+   * confirmation so a stray click in the ... menu can never silently drop a
+   * project. Previously this only mutated the local Zustand store — the
+   * project (a server-side user_projects row) was never actually deleted,
+   * so it reappeared on the next reload once the mount-time server hydrate
+   * effect re-merged it back in. DELETE /api/projects/[id] already exists
+   * and soft-deletes the row; wire it here instead of only touching the
+   * client cache.
    */
   const handleProjectDelete = useCallback(
-    (projectId: string) => {
+    async (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
       const label = project?.name ? `"${project.name}"` : 'this project';
       if (
@@ -1156,9 +1251,27 @@ export default function WebChatPage() {
       ) {
         return;
       }
+      // Optimistic remove, with rollback on server failure so the sidebar
+      // never lies about what actually got deleted.
       removeProjectFromStore(projectId);
+      try {
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        const res = await fetch(`/api/projects/${projectId}`, {
+          method: 'DELETE',
+          headers,
+          credentials: 'same-origin',
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to delete project (${res.status})`);
+        }
+      } catch (err) {
+        if (project) {
+          setStoreProjects([...useProjectStore.getState().projects, project]);
+        }
+        toast.error(err instanceof Error ? err.message : 'Failed to delete project');
+      }
     },
-    [storeProjects, removeProjectFromStore],
+    [storeProjects, removeProjectFromStore, setStoreProjects],
   );
 
   // Project settings dialog derived data
@@ -1584,9 +1697,17 @@ export default function WebChatPage() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
+          {user?.email && (
+            <>
+              <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
+                {user.email}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onClick={() => router.push('/settings/general')}>
             <Settings className="mr-2 h-4 w-4" />
-            Settings
+            {t('common:settings')}
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
@@ -1595,7 +1716,17 @@ export default function WebChatPage() {
               <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-40">
-              <DropdownMenuItem disabled>English</DropdownMenuItem>
+              <DropdownMenuRadioGroup
+                value={i18n.language}
+                onValueChange={(code) => void i18n.changeLanguage(code)}
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <DropdownMenuRadioItem key={lang.code} value={lang.code}>
+                    <span className="mr-2">{lang.flag}</span>
+                    {lang.nativeName}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuItem onClick={() => router.push('/help')}>
@@ -1647,7 +1778,10 @@ export default function WebChatPage() {
         sessions={sidebarSessions}
         projects={sidebarProjects}
         activeSessionId={displayedConversationId ?? undefined}
-        collapsed={sidebarCollapsed}
+        collapsed={effectiveSidebarCollapsed}
+        isMobile={isNarrowViewport}
+        isLoading={isLoading && conversations.length === 0}
+        error={conversations.length === 0 ? chatError : null}
         mode="cloud"
         onNewChat={handleNewChat}
         onToggleCollapse={handleToggleSidebar}
@@ -1772,7 +1906,7 @@ export default function WebChatPage() {
                     onStop={stopGeneration}
                     isLoading={isLoading}
                     isGenerating={isStreaming}
-                    placeholder="How can I help you today?"
+                    placeholder={t('chat:placeholder')}
                     prefillText={composerPrefill}
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
                     onTypingChange={handleTypingChange}
@@ -1815,7 +1949,7 @@ export default function WebChatPage() {
                 <div
                   className={cn(
                     'mx-auto w-full max-w-3xl px-4',
-                    sidebarCollapsed ? 'max-w-4xl' : '',
+                    effectiveSidebarCollapsed ? 'max-w-4xl' : '',
                   )}
                 >
                   <ChatComposerNew
@@ -1823,7 +1957,7 @@ export default function WebChatPage() {
                     onStop={stopGeneration}
                     isLoading={isLoading}
                     isGenerating={isStreaming}
-                    placeholder="How can I help you today?"
+                    placeholder={t('chat:placeholder')}
                     prefillText={composerPrefill}
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
                     onTypingChange={handleTypingChange}

@@ -51,7 +51,6 @@ export interface UseChatPersistenceReturn {
 export function useChatPersistence(sessionId?: string, _userId?: string): UseChatPersistenceReturn {
   const messages = useMissionStore((state) => state.messages);
   const activeEmployees = useMissionStore((state) => state.activeEmployees);
-  const mode = useMissionStore((state) => state.mode);
 
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -175,7 +174,10 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       setError(null);
 
       try {
-        const conversation = await client.createConversation({ title, mode });
+        // `mode` is intentionally not sent: CreateConversationInput dropped it
+        // (packages/unified-chat/src/lib/cloud-chat-persistence-client.ts) as a
+        // dead field the server never read — see that file's doc comment.
+        const conversation = await client.createConversation({ title });
 
         // Preserve the original behavior: userId comes from the caller, not the
         // server response (the create endpoint does not echo user_id).
@@ -194,7 +196,7 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
         setIsLoading(false);
       }
     },
-    [mode, client],
+    [client],
   );
 
   // Update session title

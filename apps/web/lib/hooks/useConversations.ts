@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+
+const CONVERSATIONS_PAGE_SIZE = 50;
 
 // API response types
 interface ApiConversation {
@@ -14,6 +16,12 @@ interface ApiConversation {
   pinned?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+interface ConversationsListResponse {
+  conversations: ApiConversation[];
+  hasMore?: boolean;
+  nextOffset?: number;
 }
 
 interface ApiMessage {
@@ -30,8 +38,13 @@ interface UseConversationsReturn {
   activeConversationId: string | null;
   isLoading: boolean;
   error: string | null;
+  // Pagination: the sidebar list is fetched a page at a time (50 rows) so
+  // conversations beyond the most-recent page stay reachable via loadMore.
+  hasMoreConversations: boolean;
+  isLoadingMoreConversations: boolean;
   // Actions
   fetchConversations: () => Promise<void>;
+  loadMoreConversations: () => Promise<void>;
   createConversation: (title?: string, model?: string) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (
@@ -64,6 +77,11 @@ export function useConversations(): UseConversationsReturn {
   const setLoading = useChatStore((state) => state.setLoading);
   const setError = useChatStore((state) => state.setError);
 
+  // Pagination state for "load more" beyond the first page of conversations.
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
+  const nextOffsetRef = useRef(0);
+
   // Helper to get auth token
   const getAuthHeaders = useCallback(async () => {
     if (!isLoaded) {
@@ -82,7 +100,7 @@ export function useConversations(): UseConversationsReturn {
     };
   }, [getToken, isLoaded, isSignedIn]);
 
-  // Fetch all conversations
+  // Fetch the first page of conversations (resets pagination state)
   const fetchConversations = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -90,14 +108,17 @@ export function useConversations(): UseConversationsReturn {
     try {
       if (!isLoaded || !isSignedIn) return;
       const headers = await getAuthHeaders();
-      const response = await fetch('/api/chat/conversations', { headers });
+      const response = await fetch(
+        `/api/chat/conversations?limit=${CONVERSATIONS_PAGE_SIZE}&offset=0`,
+        { headers },
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error?.message || 'Failed to fetch conversations');
       }
 
-      const data = await response.json();
+      const data: ConversationsListResponse = await response.json();
       const conversationList: Conversation[] = (data.conversations || []).map(
         (c: ApiConversation) => ({
           id: c.id,
@@ -111,12 +132,71 @@ export function useConversations(): UseConversationsReturn {
       );
 
       setConversations(conversationList);
+      nextOffsetRef.current = data.nextOffset ?? conversationList.length;
+      setHasMoreConversations(Boolean(data.hasMore));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch conversations');
     } finally {
       setLoading(false);
     }
   }, [getAuthHeaders, isLoaded, isSignedIn, setConversations, setLoading, setError]);
+
+  // Fetch the next page and append it to the existing list (deduped by id).
+  const loadMoreConversations = useCallback(async () => {
+    if (!isLoaded || !isSignedIn || isLoadingMoreConversations || !hasMoreConversations) {
+      return;
+    }
+
+    setIsLoadingMoreConversations(true);
+    setError(null);
+
+    try {
+      const headers = await getAuthHeaders();
+      const offset = nextOffsetRef.current;
+      const response = await fetch(
+        `/api/chat/conversations?limit=${CONVERSATIONS_PAGE_SIZE}&offset=${offset}`,
+        { headers },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || 'Failed to load more conversations');
+      }
+
+      const data: ConversationsListResponse = await response.json();
+      const newConversations: Conversation[] = (data.conversations || []).map(
+        (c: ApiConversation) => ({
+          id: c.id,
+          title: c.title,
+          model: c.model ?? null,
+          projectId: c.project_id ?? null,
+          isPinned: c.pinned ?? false,
+          createdAt: c.created_at,
+          updatedAt: c.updated_at,
+        }),
+      );
+
+      const existingIds = new Set(conversations.map((c) => c.id));
+      const deduped = newConversations.filter((c) => !existingIds.has(c.id));
+      setConversations([...conversations, ...deduped]);
+
+      nextOffsetRef.current = data.nextOffset ?? offset + newConversations.length;
+      setHasMoreConversations(Boolean(data.hasMore));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load more conversations');
+    } finally {
+      setIsLoadingMoreConversations(false);
+    }
+  }, [
+    getAuthHeaders,
+    isLoaded,
+    isSignedIn,
+    isLoadingMoreConversations,
+    hasMoreConversations,
+    conversations,
+    setConversations,
+    setError,
+  ]);
 
   // Create a new conversation
   const createConversation = useCallback(
@@ -290,7 +370,10 @@ export function useConversations(): UseConversationsReturn {
     activeConversationId,
     isLoading,
     error,
+    hasMoreConversations,
+    isLoadingMoreConversations,
     fetchConversations,
+    loadMoreConversations,
     createConversation,
     loadConversation,
     updateConversation,

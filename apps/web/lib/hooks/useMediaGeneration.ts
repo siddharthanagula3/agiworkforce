@@ -15,6 +15,53 @@ export interface GenerateImageOptions {
   model?: string;
 }
 
+/** Error codes/types the media-generation API uses to signal a paywall (upgrade-required) failure. */
+const PAYWALL_ERROR_CODES = new Set([
+  'insufficient_credits',
+  'plan_upgrade_required',
+  'subscription_required',
+]);
+const PAYWALL_ERROR_TYPES = new Set(['insufficient_quota', 'plan_upgrade_required']);
+
+/**
+ * Structured error thrown by media-generation requests. Preserves the API's
+ * error shape (status/code/type + a resolved `isPaywall` flag) instead of
+ * collapsing everything into a plain Error message, so callers can render a
+ * PaywallCard / upgrade prompt instead of a raw error bubble.
+ */
+export class MediaGenerationApiError extends Error {
+  status: number | undefined;
+  code: string | undefined;
+  type: string | undefined;
+  isPaywall: boolean;
+  creditsRequired: number | undefined;
+  creditsRemaining: number | undefined;
+
+  constructor(
+    message: string,
+    options: {
+      status?: number;
+      code?: string;
+      type?: string;
+      creditsRequired?: number;
+      creditsRemaining?: number;
+    } = {},
+  ) {
+    super(message);
+    this.name = 'MediaGenerationApiError';
+    this.status = options.status;
+    this.code = options.code;
+    this.type = options.type;
+    this.creditsRequired = options.creditsRequired;
+    this.creditsRemaining = options.creditsRemaining;
+    this.isPaywall =
+      options.status === 402 ||
+      options.status === 403 ||
+      (options.code ? PAYWALL_ERROR_CODES.has(options.code) : false) ||
+      (options.type ? PAYWALL_ERROR_TYPES.has(options.type) : false);
+  }
+}
+
 export function useMediaGeneration() {
   const { addJob, updateJob } = useMediaStore();
 
@@ -50,7 +97,24 @@ export function useMediaGeneration() {
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({ error: 'Generation failed' }));
-          throw new Error(err.error?.message || err.error || `Request failed: ${response.status}`);
+          const errorField = err?.error;
+          const message =
+            (typeof errorField === 'object' && errorField?.message) ||
+            (typeof errorField === 'string' ? errorField : undefined) ||
+            `Request failed: ${response.status}`;
+          const code = typeof errorField === 'object' ? errorField?.code : undefined;
+          const type = typeof errorField === 'object' ? errorField?.type : undefined;
+          const creditsRequired =
+            typeof errorField === 'object' ? errorField?.credits_required : undefined;
+          const creditsRemaining =
+            typeof errorField === 'object' ? errorField?.credits_remaining : undefined;
+          throw new MediaGenerationApiError(message, {
+            status: response.status,
+            code,
+            type,
+            creditsRequired,
+            creditsRemaining,
+          });
         }
 
         const data = (await response.json()) as {

@@ -316,6 +316,12 @@ const ChatComposerNewComponent = ({
   const selectedModelCaps = getModelMetadata(composerSelectedModelId)?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
   const modelSupportsSearch = selectedModelCaps?.search ?? false;
+  // Deep Research is its own capability field in models.json, distinct from
+  // plain web search - values diverge in both directions (e.g. claude-haiku-4.5
+  // has search:true/research:false, gpt-5.5 has search:false/research:true).
+  // Gating on modelSupportsSearch alone both wrongly exposes Research for
+  // search-only models and wrongly blocks it for research-only models.
+  const modelSupportsResearch = selectedModelCaps?.research ?? false;
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   const modelSupportsCodeExecution = selectedModelCaps?.codeExecution ?? false;
 
@@ -325,10 +331,10 @@ const ChatComposerNewComponent = ({
     if (webSearchEnabled && !modelSupportsSearch) setWebSearchEnabled(false);
   }, [webSearchEnabled, modelSupportsSearch]);
 
-  // Research requires web search; clear it if the model loses search support.
+  // Clear Research if the model loses research support.
   useEffect(() => {
-    if (researchEnabled && !modelSupportsSearch) setResearchEnabled(false);
-  }, [researchEnabled, modelSupportsSearch]);
+    if (researchEnabled && !modelSupportsResearch) setResearchEnabled(false);
+  }, [researchEnabled, modelSupportsResearch]);
 
   // If the user switches to a model that can't execute code, clear the toggle.
   useEffect(() => {
@@ -893,6 +899,15 @@ const ChatComposerNewComponent = ({
 
   const handleFileDrop = useCallback(
     (files: File[]) => {
+      // Check the free-trial gate first so dropped files are never briefly
+      // added and then silently stripped by the isFreeTrial cleanup effect
+      // above (flash-then-vanish) - show a clear message instead.
+      if (isFreeTrial) {
+        setLocalNotice(
+          'Attachments are not available on the free trial. Upgrade to attach photos & files.',
+        );
+        return;
+      }
       if (!modelSupportsVision) {
         setLocalNotice(
           "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
@@ -901,7 +916,7 @@ const ChatComposerNewComponent = ({
       }
       addImageAttachments(files);
     },
-    [addImageAttachments, modelSupportsVision],
+    [addImageAttachments, modelSupportsVision, isFreeTrial],
   );
 
   // + button indicator: amber tint when any feature is active
@@ -924,7 +939,7 @@ const ChatComposerNewComponent = ({
           <button
             type="button"
             onClick={onUpgradeRequest}
-            className="font-medium text-[var(--chat-accent-primary)] hover:underline"
+            className="font-medium text-[var(--chat-accent-primary-text)] hover:underline"
           >
             Upgrade
           </button>
@@ -1092,16 +1107,22 @@ const ChatComposerNewComponent = ({
                     {/* 1. Add photos */}
                     <button
                       type="button"
-                      disabled={!modelSupportsVision}
+                      disabled={!modelSupportsVision || isFreeTrial}
                       onClick={() => {
                         fileInputRef.current?.click();
                         closeMenu();
                       }}
                       className={cn(
                         'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                        !modelSupportsVision && 'cursor-not-allowed opacity-50',
+                        (!modelSupportsVision || isFreeTrial) && 'cursor-not-allowed opacity-50',
                       )}
-                      title={modelSupportsVision ? undefined : "This model can't read images"}
+                      title={
+                        isFreeTrial
+                          ? 'Upgrade to attach photos & files'
+                          : modelSupportsVision
+                            ? undefined
+                            : "This model can't read images"
+                      }
                     >
                       <Paperclip className="h-4 w-4 text-muted-foreground" />
                       <span className="flex-1 text-left">Add photos &amp; files</span>
@@ -1366,7 +1387,7 @@ const ChatComposerNewComponent = ({
                         handleResearchToggle();
                         closeMenu();
                       }}
-                      disabled={isLoading || disabled || !modelSupportsSearch}
+                      disabled={isLoading || disabled || !modelSupportsResearch}
                     />
 
                     {/* 8b. Code execution toggle */}
@@ -1469,18 +1490,20 @@ const ChatComposerNewComponent = ({
 
               <button
                 onClick={handleResearchToggle}
-                disabled={isLoading || disabled || !modelSupportsSearch}
+                disabled={isLoading || disabled || !modelSupportsResearch}
                 className={cn(
                   'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
                   researchEnabled
                     ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled || !modelSupportsSearch) &&
+                  (isLoading || disabled || !modelSupportsResearch) &&
                     'cursor-not-allowed opacity-50',
                 )}
                 aria-label="Toggle deep research"
                 aria-pressed={researchEnabled}
-                title={modelSupportsSearch ? undefined : "This model can't search the web"}
+                title={
+                  modelSupportsResearch ? undefined : "This model doesn't support Deep Research"
+                }
               >
                 <Telescope className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Research</span>
@@ -1529,9 +1552,9 @@ const ChatComposerNewComponent = ({
                 }
               >
                 <Brain className="h-3.5 w-3.5" />
-                {thinkingEnabled && (
-                  <span className="hidden sm:inline">{EFFORT_LABEL[thinkingEffort]}</span>
-                )}
+                <span className="hidden sm:inline">
+                  {thinkingEnabled ? EFFORT_LABEL[thinkingEffort] : 'Think'}
+                </span>
               </button>
 
               {activeConversationId ? (
@@ -1720,8 +1743,13 @@ const ChatComposerNewComponent = ({
             </div>
           )}
 
-          {/* Voice Input Button */}
-          {!isFreeTrial && (
+          {/* Voice Input Button - always rendered (like Search/Research) so free-trial
+              users see a visible-disabled control with a tooltip instead of the mic
+              disappearing from the DOM. */}
+          <div
+            className="relative order-5"
+            title={isFreeTrial ? 'Upgrade to use voice input' : undefined}
+          >
             <VoiceInputButton
               onTranscript={(text) => {
                 setMessage((prev) => {
@@ -1730,10 +1758,9 @@ const ChatComposerNewComponent = ({
                 });
                 setTimeout(() => textareaRef.current?.focus(), 50);
               }}
-              disabled={isLoading || composerDisabled}
-              className="order-5"
+              disabled={isLoading || composerDisabled || isFreeTrial}
             />
-          )}
+          </div>
 
           {/* Send / Stop Button */}
           <SendButton
@@ -1751,7 +1778,7 @@ const ChatComposerNewComponent = ({
           type="file"
           multiple
           accept="image/*"
-          disabled={isFreeTrial}
+          disabled={!modelSupportsVision || isFreeTrial}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -1763,7 +1790,8 @@ const ChatComposerNewComponent = ({
       </div>
 
       {/* Disclaimer · sits below the composer (outside the pill), ChatGPT/Claude-
-          style. Replaces the in-pill 'Cmd+Enter to send' keyboard hint. */}
+          style. The 'Cmd+Enter to send' keyboard hint lives in ComposerFooter (visible
+          at md+ widths) rather than here — see ComposerFooter's inline hint span. */}
       <p className="mt-2 text-center text-[11px] text-muted-foreground">
         AGI can make mistakes. Check important info.
       </p>

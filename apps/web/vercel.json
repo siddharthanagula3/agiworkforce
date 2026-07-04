@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/reset-credits",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/purge-temporary-chats",
+      "schedule": "0 3 * * *"
     }
   ]
 }

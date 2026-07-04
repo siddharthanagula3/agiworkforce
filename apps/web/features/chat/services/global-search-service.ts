@@ -183,7 +183,14 @@ class GlobalSearchService {
   }
 
   /**
-   * Get popular searches from the last N days
+   * Get the current authenticated user's own popular searches from the last
+   * N days ("Trending Searches"). Scoped server-side to the caller's user id
+   * (derived from the auth token / session, see /api/search route.ts and the
+   * get_popular_searches(p_user_id, ...) Neon function) — this method
+   * intentionally does NOT take a userId argument. Do not add one: passing a
+   * client-supplied userId here instead of relying on server-side auth would
+   * reopen the cross-user data leak this was fixed for (any user could read
+   * any other user's raw search query text by passing their id).
    */
   async getPopularSearches(limit: number = 10, days: number = 7): Promise<PopularSearch[]> {
     try {
@@ -289,8 +296,8 @@ class GlobalSearchService {
   }
 
   /**
-   * Get trending search terms (last 7 days)
-   * Returns simple string array for backward compatibility
+   * Get the current user's own trending search terms (last 7 days).
+   * Returns simple string array for backward compatibility.
    */
   async getTrendingSearchTerms(limit: number = 10): Promise<string[]> {
     const popular = await this.getPopularSearches(limit, 7);

@@ -43,14 +43,16 @@ export const CONNECTOR_LOGOS: Record<
     bgColor: '#0F9D58',
   },
   outlook: {
-    // Microsoft brand CDN — official Outlook icon
-    url: 'https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg',
+    // Microsoft brand CDN — official Outlook icon. Special:FilePath (not the
+    // hashed /wikipedia/commons/x/xx/ path) so this keeps resolving when
+    // Commons renames/re-hashes the underlying file.
+    url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Outlook%20%282018%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
   onedrive: {
     // Microsoft brand CDN — official OneDrive icon
-    url: 'https://upload.wikimedia.org/wikipedia/commons/3/3c/Microsoft_Office_OneDrive_%282019%E2%80%93present%29.svg',
+    url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20OneDrive%20%282019%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
@@ -68,7 +70,7 @@ export const CONNECTOR_LOGOS: Record<
   // Collaboration
   teams: {
     // Microsoft brand CDN — official Teams icon
-    url: 'https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg',
+    url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Teams%20%282025%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },
@@ -78,7 +80,7 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   asana: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Asana_logo.svg',
+    url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Asana%20logo.svg',
     width: 32,
     height: 32,
   },
@@ -354,8 +356,9 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   canva: {
-    // Canva official mark (SVG via Wikipedia)
-    url: 'https://upload.wikimedia.org/wikipedia/commons/b/bb/Canva_Logo.svg',
+    // No current Canva mark on Commons (file was removed); favicon service
+    // resolves Canva's own site icon instead of falling back to a bare tile.
+    url: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
     width: 32,
     height: 32,
   },
@@ -406,7 +409,7 @@ export const CONNECTOR_LOGOS: Record<
   },
   sharepoint: {
     // Microsoft SharePoint official mark (SVG via Wikipedia)
-    url: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Microsoft_Office_SharePoint_%282019%E2%80%93present%29.svg',
+    url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20SharePoint%20%282019%E2%80%93present%29.svg',
     width: 32,
     height: 32,
   },

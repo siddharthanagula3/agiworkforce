@@ -607,6 +607,13 @@
     --chat-accent-secondary: #da7756;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
     --chat-accent-primary: #c8892a;
+    /* Darkened amber for TEXT set directly on light/near-white surfaces.
+       --chat-accent-primary itself only measures ~2.8-3:1 against --chat-bg /
+       --chat-bg-elevated in light mode (fails WCAG AA 4.5:1 for normal text) -
+       it's tuned for icon fills and translucent /15 tint backgrounds instead.
+       Use this variant for CTA/link copy (e.g. the free-trial "Upgrade" link).
+       Measures ~5.3-5.6:1 against light-mode chat surfaces. */
+    --chat-accent-primary-text: #8b5f1d;
     /*
      * Legacy product-surface aliases used by /settings and older shared pages.
      * Keep them derived from semantic tokens so light/dark mode stays readable
@@ -719,6 +726,9 @@
     --chat-accent-secondary: #da7756;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
     --chat-accent-primary: #c8892a;
+    /* On dark surfaces #c8892a already clears WCAG AA for text (~6.7:1 against
+       --chat-bg #0a0a0a), so the text variant can reuse the same value. */
+    --chat-accent-primary-text: #c8892a;
     /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
@@ -733,11 +743,16 @@
      so AGI's brand colour is consistent across both warm and cool palettes. */
   [data-chat-theme='cool'] {
     --chat-accent-primary: #c8892a;
+    /* Light-mode cool theme: darkened text variant, see --chat-accent-primary-text
+       above for the WCAG AA rationale (~5.3-5.6:1 vs ~2.8-3:1). */
+    --chat-accent-primary-text: #8b5f1d;
   }
 
   .dark [data-chat-theme='cool'],
   .dark[data-chat-theme='cool'] {
     --chat-accent-primary: #c8892a;
+    /* Dark-mode cool theme: #c8892a already passes AA for text on dark surfaces. */
+    --chat-accent-primary-text: #c8892a;
   }
 }
 
@@ -1578,6 +1593,16 @@
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* The chat composer renders its own accent-colored focus ring on the
+   outer container (see ChatComposerNew.tsx `isFocused` state). Without
+   this override the generic *:focus-visible rule above also paints a
+   second, differently-colored outline directly on the textarea, producing
+   a visible double focus ring. The container ring is sufficient focus
+   affordance, so suppress the redundant inner outline here. */
+[data-composer-textarea]:focus-visible {
+  outline: none;
 }
 
 *:focus:not(:focus-visible) {
@@ -2672,8 +2697,9 @@
 }
 [data-design='agi'] .agi-tier-price {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 2px 8px;
   margin: 0;
 }
 [data-design='agi'] .agi-tier-price-num {
@@ -2683,6 +2709,7 @@
   color: var(--agi-ink);
 }
 [data-design='agi'] .agi-tier-price-sub {
+  flex-basis: 100%;
   font-size: 13px;
   color: var(--agi-ink-quiet);
 }
