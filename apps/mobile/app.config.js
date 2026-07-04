@@ -260,6 +260,10 @@ const config = {
     // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
     // Injects com.google.mlkit:genai-common gradle dep + registers AGIAICorePackage in MainApplication.kt.
     './native/android/withAGIAICore.cjs',
+    // Detox e2e (Android): wires testInstrumentationRunner, androidTestImplementation('com.wix:detox:+'),
+    // and the network security config needed for the Detox test server. iOS side (Podfile) is wired
+    // separately by Detox's own postinstall / `detox init` step, not this plugin.
+    ...(envIsTruthy('EXPO_ENABLE_DETOX') ? ['@config-plugins/detox'] : []),
   ],
   updates: {
     fallbackToCacheTimeout: 0,
