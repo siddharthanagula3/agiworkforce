@@ -86,7 +86,28 @@ function upsertOne(state: Collection, incoming: SharedArtifact, maxArtifacts?: n
 
   // Idempotent: identical content (ignoring timestamps) is a no-op — deterministic
   // re-derivation must not spuriously bump versions.
-  if (existing.content === incoming.content) return state;
+  const contentUnchanged = existing.content === incoming.content;
+  const metadataUnchanged =
+    existing.title === incoming.title && existing.language === incoming.language;
+  if (contentUnchanged && metadataUnchanged) return state;
+
+  // Metadata-only change (e.g. rename): patch in place without a version bump.
+  if (contentUnchanged) {
+    const patched: SharedArtifact = {
+      ...existing,
+      title: incoming.title,
+      language: incoming.language,
+    };
+    return {
+      artifacts: state.artifacts.map((a) => (a.id === incoming.id ? patched : a)),
+      versionsById: {
+        ...state.versionsById,
+        [incoming.id]: (state.versionsById[incoming.id] ?? [existing]).map((v) =>
+          v === existing ? patched : v,
+        ),
+      },
+    };
+  }
 
   // Content changed (an edit) → append a new version with an incremented number.
   const nextVersion: SharedArtifact = {

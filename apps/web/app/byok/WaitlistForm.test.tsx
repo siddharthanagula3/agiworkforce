@@ -40,7 +40,7 @@ function submitForm() {
   fireEvent.change(screen.getByRole('textbox'), {
     target: { value: 'user@example.com' },
   });
-  fireEvent.click(screen.getByRole('button', { name: /request cloud access/i }));
+  fireEvent.click(screen.getByRole('button', { name: /request early access/i }));
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ describe('WaitlistForm · CSRF error handling', () => {
     expect(input).toHaveAttribute('placeholder', 'you@example.com…');
 
     fireEvent.change(input, { target: { value: 'user@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /request cloud access/i }));
+    fireEvent.click(screen.getByRole('button', { name: /request early access/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Joining…' })).toBeDisabled();
