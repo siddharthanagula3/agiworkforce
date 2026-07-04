@@ -1,4 +1,4 @@
-# AGI v1.0.0 — Founder submission checklist
+# AGI v1.2.0 — Founder submission checklist
 
 > One-page reference. Every field you must paste into App Store Connect
 > and Play Console before clicking Submit. Sources are the canonical
@@ -26,16 +26,16 @@ Log in at https://appstoreconnect.apple.com → My Apps → + → New App.
 
 ### A.2 Version Information
 
-Navigate to App Store Connect → Version (1.0.0).
+Navigate to App Store Connect → Version (1.2.0).
 
 | Field            | Value                                                                                                                                     | Char count / limit |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | App Store name   | `AGI`                                                                                                                                     | 3 / 30             |
 | Subtitle         | `On-device AI assistant`                                                                                                                  | 22 / 30            |
-| Promotional text | `Chat with AI on your phone. No Wi-Fi required. Free forever. On-device model runs locally — your conversations never leave your device.` | 108 / 170          |
+| Promotional text | `Chat with AI on your phone. No Wi-Fi required. Free forever. On-device model runs locally — your conversations never leave your device.` | 135 / 170          |
 | Keywords         | `ai,chat,assistant,local,offline,privacy,llm,dpdp,on-device,healthkit`                                                                    | 68 / 100           |
-| Description      | Paste from `LISTING-METADATA-IOS.json` → `description` field (1,709 chars)                                                                | 1709 / 4000        |
-| What's New       | Paste from `LISTING-METADATA-IOS.json` → `whats_new` field                                                                                | 230 / 4000         |
+| Description      | Paste from `LISTING-METADATA-IOS.json` → `description` field (1,544 chars)                                                                | 1544 / 4000        |
+| What's New       | Paste from `LISTING-METADATA-IOS.json` → `whats_new` field                                                                                | 463 / 4000         |
 | Support URL      | `https://agiworkforce.com/support`                                                                                                        | —                  |
 | Marketing URL    | `https://agiworkforce.com`                                                                                                                | optional           |
 
@@ -64,22 +64,22 @@ Navigate to App Store Connect → Version (1.0.0).
 
 ### A.5 Pricing and Availability
 
-| Field            | Value                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| Price            | Free                                                                                   |
-| In-app purchases | None                                                                                   |
-| Availability     | All territories EXCEPT: Mainland China, Russia, Iran, North Korea, Syria, Cuba, Crimea |
-| Pre-order        | No                                                                                     |
+| Field            | Value                                                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Price            | Free                                                                                                                                               |
+| In-app purchases | None — the in-app "Upgrade to `<Tier>`" CTA opens a web checkout in-browser; it is not a StoreKit product (see Part D item 11 re: Guideline 3.1.1) |
+| Availability     | All territories EXCEPT: Mainland China, Russia, Iran, North Korea, Syria, Cuba, Crimea                                                             |
+| Pre-order        | No                                                                                                                                                 |
 
 ### A.6 App Privacy (Nutrition Labels)
 
 Path: App Store Connect → App Privacy → Get Started
 
-Do not select **Data Not Collected** if the Cloud waitlist remains visible
-in the submitted build.
+Do not select **Data Not Collected** — Cloud sign-in (public alpha, open to
+any signed-in user) remains in the submitted build.
 
-Local Mode collects no personal data by default. The optional AGI Cloud
-waitlist collects email address and optional name for access notifications.
+Local Mode collects no personal data by default. Signing in to AGI Cloud
+collects account email address and optional name (from the sign-in method).
 Declare those fields as Contact Info used for app functionality and not
 shared with third parties.
 
@@ -132,7 +132,7 @@ Path: Play Console → Store presence → Main store listing
 | ----------------- | ----------------------------------------------------------------------------- | ------------------ |
 | App name          | `AGI`                                                                         | 3 / 30             |
 | Short description | `AI on your phone. Free. Works in airplane mode.`                             | 47 / 80            |
-| Full description  | Paste from `LISTING-METADATA-ANDROID.json` → `full_description` (1,709 chars) | 1709 / 4000        |
+| Full description  | Paste from `LISTING-METADATA-ANDROID.json` → `full_description` (1,544 chars) | 1544 / 4000        |
 
 Category: **Productivity**
 
@@ -167,10 +167,15 @@ Screenshot slots (after running `pnpm screenshots:android`):
 
 Path: Play Console → App content → App access
 
-Select: **All functionality is accessible** (no login required in v1)
+Cloud sign-in gates Cloud chat, image generation, and web search — Local
+Mode chat requires no login. Select **Some functionality is restricted**
+and describe that Cloud features require creating a free account (Clerk
+sign-in); no reviewer test credentials are needed since sign-up is
+self-service and free.
 
 Additional instructions for reviewers: paste full contents of
-`REVIEWER-NOTES-ANDROID.md` into the instructions field.
+`REVIEWER-NOTES-ANDROID.md` into the instructions field (confirm that file
+also reflects the public-alpha Cloud sign-in gate before submitting).
 
 ### B.6 Data safety
 
@@ -209,7 +214,7 @@ Path: Play Console → App content → Target audience and content
 Path: Play Console → Production → Create new release
 
 Upload the signed AAB produced by the mobile CI build.
-Release notes: paste `LISTING-METADATA-ANDROID.json` → `release_notes_v1_0_0`.
+Release notes: paste `LISTING-METADATA-ANDROID.json` → `release_notes_v1_2_0`.
 
 ---
 
@@ -222,12 +227,12 @@ Run through this list the day before you submit.
 - [ ] Visual spot-check: every screenshot shows the on-device shield badge
 - [ ] Visual spot-check: no placeholder text ("TODO", "**FILL**") visible in any screenshot
 - [ ] `apps/mobile/app.config.js` `version` matches the build you are submitting
-- [ ] Direct provider-key entry disabled, `FEATURES.cloudChat = false`, and `FEATURES.billing = false` confirmed in `lib/v1FeatureFlags.ts`
+- [ ] Direct provider-key entry disabled (`FEATURES.byokKeys = false`), `FEATURES.cloudChat = true` (public alpha, open to any signed-in user), and `FEATURES.billing = false` / `FEATURES.iap = false` confirmed in `lib/v1FeatureFlags.ts`
 - [ ] Privacy policy page at `https://agiworkforce.com/privacy` is live and accessible
 - [ ] Support page at `https://agiworkforce.com/support` is live (or redirects to a working contact page)
 - [ ] `review@agiworkforce.com` inbox is monitored; test it before submitting
-- [ ] iOS: App Store Connect → App Privacy declares optional waitlist email/name collection
-- [ ] Android: Play Console → Data Safety declares optional waitlist email/name collection
+- [ ] iOS: App Store Connect → App Privacy declares optional Cloud sign-in email/name collection
+- [ ] Android: Play Console → Data Safety declares optional Cloud sign-in email/name collection
 - [ ] [DESIGN] 1024 × 1024 iOS app icon uploaded
 - [ ] [DESIGN] 512 × 512 Android app icon uploaded
 - [ ] [DESIGN] 1024 × 500 Android feature graphic uploaded
@@ -285,9 +290,25 @@ or founder-held credentials.
    submitting (edit `LISTING-METADATA-IOS.json` and
    `LISTING-METADATA-ANDROID.json` → `full_description`).
 
-10. **Cloud waitlist URL**: The app's "Join cloud waitlist" button posts
-    through the AGI Web/API waitlist endpoint. Confirm this endpoint is
-    live and the form flow works end-to-end before launch.
+10. **Cloud sign-in flow**: Cloud is public alpha — any signed-in user
+    reaches Cloud chat, image generation, and web search (no invite or
+    waitlist gate; the `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env is an
+    incident-response kill switch only). Confirm Clerk sign-in works
+    end-to-end on both platforms before launch.
+
+11. **Upgrade CTA / Guideline 3.1.1 (LIVE LEGAL/POLICY QUESTION — do not
+    resolve without founder + legal sign-off)**: The in-app "Upgrade to
+    `<Tier>`" button (`PaywallBottomSheet.tsx`) opens a web checkout
+    (`agiworkforce.com/pricing?from=mobile-paywall`) in the system browser
+    rather than a StoreKit/Play Billing purchase. Apple Guideline 3.1.1
+    and Google Play's external offers policy both have region-specific
+    rules on whether/how apps may link out to external purchase flows for
+    digital subscriptions purchasable in-app. Confirm with legal counsel
+    whether this flow is compliant as-is, needs an entitlements-reader
+    integration, external-link disclosure copy, or must be gated behind
+    Apple's External Purchase Link Entitlement (or removed) for iOS
+    before submission. See `KILL-SWITCH.md` for the flag that can hide
+    the CTA entirely if the answer is "not yet."
 
 ---
 
