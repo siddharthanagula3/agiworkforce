@@ -1,22 +1,23 @@
 package com.agiworkforce.app.native
 
+import android.app.ActivityManager
+import android.content.Context
 import android.os.Build
 import android.os.PowerManager
-import android.content.Context
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.prompt.GenerateContentRequest
+import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.GenerativeModel
+import com.google.mlkit.genai.prompt.PromptPrefix
+import com.google.mlkit.genai.prompt.TextPart
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.*
-import android.app.ActivityManager
+import kotlinx.coroutines.flow.collect
 
-// Tier 1 Android: on-device LLM inference, rewrite in progress against
-// MediaPipe tasks-genai (com.google.mediapipe:tasks-genai, LlmInference API).
-// STUBBED: returns available=false and generate() rejects. The previous
-// implementation called classes that do not exist in the real
-// com.google.mlkit:genai-common API surface (that dependency only exposes a
-// shared FeatureStatus/DownloadStatus/StreamingCallback base used by ML Kit's
-// task-specific GenAI features — no generic chat/session inference API).
-// While stubbed, the JS bridge still works — calls return "not available" so
-// the LLM tier selector falls through to Tier 2 (executorch) / Tier 3 (llama.rn).
+// Tier 1 Android: on-device LLM inference via ML Kit GenAI Prompt API
+// (com.google.mlkit:genai-prompt), which drives Gemini Nano through AICore.
 class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext), CoroutineScope {
 
@@ -26,8 +27,22 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
   companion object {
     const val MODULE_NAME = "AGIAICore"
 
-    fun isAvailable(context: Context): Boolean {
-      return false
+    @Volatile
+    private var client: GenerativeModel? = null
+
+    private val downloadInFlight = AtomicBoolean(false)
+
+    private fun getOrCreateClient(): GenerativeModel {
+      return client ?: synchronized(this) {
+        client ?: Generation.getClient().also { client = it }
+      }
+    }
+
+    private fun releaseClient() {
+      synchronized(this) {
+        client?.close()
+        client = null
+      }
     }
 
     // Returns true if device is thermally throttled (THROTTLING or SHUTDOWN states).
@@ -42,11 +57,33 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
 
   override fun getName() = MODULE_NAME
 
+  // Starts (or joins) the AICore feature download without blocking the caller.
+  // Safe to call repeatedly — download() is idempotent on Google's side and
+  // downloadInFlight prevents us from spawning duplicate collectors.
+  private fun triggerBackgroundDownload(model: GenerativeModel) {
+    if (!downloadInFlight.compareAndSet(false, true)) return
+    launch {
+      try {
+        model.download().collect { /* no JS progress channel wired yet */ }
+      } catch (e: Exception) {
+        // Best-effort: the next getCapabilities()/generate() call will re-check
+        // status and retry the download if it's still needed.
+      } finally {
+        downloadInFlight.set(false)
+      }
+    }
+  }
+
   @ReactMethod
   fun getCapabilities(promise: Promise) {
     launch {
       try {
-        val available = isAvailable(reactContext)
+        val status = runCatching { getOrCreateClient().checkStatus() }
+          .getOrDefault(FeatureStatus.UNAVAILABLE)
+        if (status == FeatureStatus.DOWNLOADABLE) {
+          triggerBackgroundDownload(getOrCreateClient())
+        }
+        val available = status == FeatureStatus.AVAILABLE
         val thermalThrottled = isThermallyThrottled(reactContext)
         val totalRAMMB = getTotalRAMMB()
         val osVersion = "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})"
@@ -73,7 +110,89 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
     requestId: String,
     promise: Promise
   ) {
-    promise.reject("UNAVAILABLE", "On-device Android inference is not implemented yet")
+    launch {
+      val model = getOrCreateClient()
+      try {
+        val status = runCatching { model.checkStatus() }.getOrDefault(FeatureStatus.UNAVAILABLE)
+        if (status != FeatureStatus.AVAILABLE) {
+          if (status == FeatureStatus.DOWNLOADABLE) triggerBackgroundDownload(model)
+          promise.reject("UNAVAILABLE", "Gemini Nano is not available on this device yet")
+          return@launch
+        }
+
+        val requestBuilder = GenerateContentRequest.Builder(TextPart(buildPrompt(messages, prompt)))
+        if (!systemPrompt.isNullOrBlank()) {
+          requestBuilder.promptPrefix = PromptPrefix(systemPrompt)
+        }
+
+        val text = StringBuilder()
+        model.generateContentStream(requestBuilder.build()).collect { response ->
+          val token = response.candidates.firstOrNull()?.text.orEmpty()
+          if (token.isNotEmpty()) {
+            text.append(token)
+            sendEvent(
+              "AGIAICore.token",
+              WritableNativeMap().apply {
+                putString("requestId", requestId)
+                putString("token", token)
+                putBoolean("done", false)
+              },
+            )
+          }
+        }
+
+        sendEvent(
+          "AGIAICore.token",
+          WritableNativeMap().apply {
+            putString("requestId", requestId)
+            putString("token", "")
+            putBoolean("done", true)
+            putBoolean("aborted", false)
+          },
+        )
+        promise.resolve(text.toString())
+      } catch (e: CancellationException) {
+        sendEvent(
+          "AGIAICore.token",
+          WritableNativeMap().apply {
+            putString("requestId", requestId)
+            putString("token", "")
+            putBoolean("done", true)
+            putBoolean("aborted", true)
+            putString("reason", "cancel")
+          },
+        )
+        promise.resolve("")
+      } catch (e: Exception) {
+        sendEvent(
+          "AGIAICore.token",
+          WritableNativeMap().apply {
+            putString("requestId", requestId)
+            putString("token", "")
+            putBoolean("done", true)
+            putBoolean("aborted", true)
+            putString("reason", e.message ?: "error")
+          },
+        )
+        promise.reject("GENERATE_ERROR", e.message, e)
+      }
+    }
+  }
+
+  // genai-prompt's GenerateContentRequest carries a single TextPart plus an
+  // optional PromptPrefix — there's no native multi-turn session API, so prior
+  // turns are folded into one transcript ahead of the current prompt.
+  private fun buildPrompt(messages: ReadableArray, prompt: String): String {
+    val sb = StringBuilder()
+    for (i in 0 until messages.size()) {
+      val entry = messages.getMap(i) ?: continue
+      val role = entry.getString("role") ?: continue
+      val content = entry.getString("content") ?: continue
+      val label = if (role == "assistant") "Assistant" else "User"
+      sb.append(label).append(": ").append(content).append("\n\n")
+    }
+    sb.append("User: ").append(prompt).append("\n\nAssistant:")
+    return sb.toString()
   }
 
   private fun sendEvent(eventName: String, params: WritableMap) {
@@ -91,6 +210,7 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
 
   override fun onCatalystInstanceDestroy() {
     job.cancel()
+    releaseClient()
     super.onCatalystInstanceDestroy()
   }
 }
