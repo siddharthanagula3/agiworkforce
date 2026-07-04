@@ -379,6 +379,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '**/e2e/**',
         '**/playwright/**',
         '**/src-tauri/**',
+        '**/wdio/**',
       ],
       // Coverage configuration
       coverage: {
