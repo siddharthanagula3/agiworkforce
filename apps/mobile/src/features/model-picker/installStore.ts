@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
   getCapabilities,
   getModelById as getCatalogModelById,
+  tier1PrepareModel,
   tier2LoadModel,
 } from '@agiworkforce/local-llm';
 import {
@@ -9,6 +10,7 @@ import {
   listInstalledModels,
   recordInstalledModel,
 } from '@/storage/installedModels';
+import { downloadModel } from '@/services/modelDownload';
 import type { InstalledModel } from '@/storage/types';
 import type { ModelDef } from './service';
 
@@ -67,8 +69,10 @@ function defaultStatusForModel(
     };
   }
 
-  const preset = model.executorchPreset ?? getCatalogModelById(model.id)?.executorchPreset;
-  if (!preset && model.availability === 'download_required') {
+  const catalogModel = getCatalogModelById(model.id);
+  const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
+  const hasGenericDownload = Boolean(catalogModel?.downloadUrl && catalogModel?.checksum);
+  if (!preset && !hasGenericDownload && model.availability === 'download_required') {
     return {
       status: 'unavailable',
       progress: 0,
@@ -109,12 +113,12 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
       listInstalledModels().catch(() => []),
       getCapabilities().catch(() => null),
     ]);
+    // gemini-nano-aicore is no longer a zero-download OS-resident model (it's a
+    // downloaded tasks-genai .task file — see catalog.ts), so it's intentionally
+    // absent here; its readiness is tracked via installedModelIds instead, same
+    // as any other downloadable model.
     const readySystemModelIds =
-      caps?.tier1Runtime === 'foundation_models'
-        ? ['apple-foundation-models']
-        : caps?.tier1Runtime === 'aicore'
-          ? ['gemini-nano-aicore']
-          : [];
+      caps?.tier1Runtime === 'foundation_models' ? ['apple-foundation-models'] : [];
     set({ installedModelIds: installed.map((model) => model.id), readySystemModelIds });
   },
 
@@ -161,6 +165,52 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
 
     const catalogModel = getCatalogModelById(model.id);
     const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
+
+    if (!preset && catalogModel?.downloadUrl && catalogModel?.checksum) {
+      set((state) => ({
+        jobs: { ...state.jobs, [model.id]: { status: 'downloading', progress: 0.01 } },
+      }));
+
+      try {
+        const record = await downloadModel({
+          modelId: catalogModel.id,
+          displayName: catalogModel.displayName,
+          downloadUrl: catalogModel.downloadUrl,
+          checksum: catalogModel.checksum,
+          fileSizeBytes: catalogModel.fileSizeBytes,
+          runtime: 'local',
+          format: catalogModel.format ?? 'gguf',
+          onProgress: (downloaded, total) => {
+            set((state) => ({
+              jobs: {
+                ...state.jobs,
+                [model.id]: {
+                  status: 'downloading',
+                  progress: Math.max(0.01, clampProgress(total > 0 ? downloaded / total : 0)),
+                },
+              },
+            }));
+          },
+        });
+
+        if (catalogModel.supportedRuntimes.includes('aicore') && record.local_path) {
+          await tier1PrepareModel(record.local_path);
+        }
+
+        set((state) => ({
+          installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
+          jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
+        }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        set((state) => ({
+          jobs: { ...state.jobs, [model.id]: { status: 'failed', progress: 0, error: message } },
+        }));
+        throw err;
+      }
+      return;
+    }
+
     if (!preset) {
       const error = 'The native package for this model is not bundled yet.';
       set((state) => ({

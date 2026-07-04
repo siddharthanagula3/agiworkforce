@@ -96,7 +96,7 @@ type RecommendedModel = OnDeviceModel & { needsDownload: boolean };
 function pickRecommendedModel(tier: LocalRuntimeTier): RecommendedModel {
   if (tier === 1) {
     // System model — already on device
-    const sysModel = getShippableModels().find((m) => m.role === 'system-multimodal') ?? {
+    const sysModel = getShippableModels().find((m) => m.role === 'system-model') ?? {
       id: 'apple-foundation-models',
       displayName: 'Apple Intelligence',
       family: 'apple-fm' as const,
@@ -112,7 +112,7 @@ function pickRecommendedModel(tier: LocalRuntimeTier): RecommendedModel {
         structuredOutput: true,
       },
       license: 'Apple Entitlement',
-      role: 'system-multimodal' as const,
+      role: 'system-model' as const,
       shipsInV1: true,
     };
     return { ...sysModel, needsDownload: false };
