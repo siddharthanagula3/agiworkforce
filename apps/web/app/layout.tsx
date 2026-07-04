@@ -200,7 +200,15 @@ export default async function RootLayout({
       >
         <ClerkProvider localization={clerkLocalization}>
           <SkipLinks />
-          <div id="main-content" tabIndex={-1}>
+          {/*
+           * role="main" (rather than a native <main> tag) so nested route
+           * pages that already render their own <main> (marketing pages)
+           * don't end up with two <main> elements, which is invalid HTML.
+           * This still gives every route — including the authenticated
+           * chat app, which has no <main> of its own — a main landmark
+           * for assistive tech and the skip link to jump to.
+           */}
+          <div id="main-content" role="main" tabIndex={-1}>
             <Providers nonce={nonce}>{children}</Providers>
           </div>
           {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}

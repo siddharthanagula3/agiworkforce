@@ -63,6 +63,10 @@ export const CreateConversationSchema = z.object({
     .optional()
     .default('auto'),
   projectId: z.string().max(200, 'Project ID must be 200 characters or less').nullable().optional(),
+  // Temporary Chat (mobile/desktop Cloud mode): excluded from indefinite
+  // retention, purged by the cron job after ~30 days. See
+  // docs/products/agi-mobile/volume-23-settings.md ("Temporary Chat").
+  isTemporary: z.boolean().optional().default(false),
 });
 
 export type CreateConversationInput = z.infer<typeof CreateConversationSchema>;

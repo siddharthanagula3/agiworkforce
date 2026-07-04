@@ -13,6 +13,46 @@ export interface ConnectorStatus {
   disconnect: (id: string) => Promise<void>;
 }
 
+interface ConnectorsResponse {
+  connectors: Array<{ connectorId: string; connectedAt?: string }>;
+}
+
+// Module-level cache + in-flight request dedup so multiple components mounting
+// the hook at once (ConnectorsPage, DirectoryModal, CustomizePage, etc.) don't
+// each independently trigger a GET /api/connectors, which was contributing to
+// rate-limit 429s that broke the core chat UI.
+const CONNECTORS_CACHE_TTL_MS = 5000;
+let connectorsInFlight: Promise<ConnectorsResponse> | null = null;
+let connectorsCache: { data: ConnectorsResponse; fetchedAt: number } | null = null;
+
+function invalidateConnectorsCache() {
+  connectorsCache = null;
+  connectorsInFlight = null;
+}
+
+function fetchConnectorsShared(): Promise<ConnectorsResponse> {
+  if (connectorsCache && Date.now() - connectorsCache.fetchedAt < CONNECTORS_CACHE_TTL_MS) {
+    return Promise.resolve(connectorsCache.data);
+  }
+  if (connectorsInFlight) {
+    return connectorsInFlight;
+  }
+  const request = fetch('/api/connectors')
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error(`Failed to fetch connectors: ${res.status}`);
+      }
+      const json = (await res.json()) as ConnectorsResponse;
+      connectorsCache = { data: json, fetchedAt: Date.now() };
+      return json;
+    })
+    .finally(() => {
+      connectorsInFlight = null;
+    });
+  connectorsInFlight = request;
+  return request;
+}
+
 /**
  * Shared hook for fetching and mutating connector connection state.
  * Used by ConnectorsPage, DirectoryModal, and CustomizePage.
@@ -37,6 +77,7 @@ export function useConnectors(): ConnectorStatus {
       setConnectedIds(new Set());
       setConnectedAtMap({});
       setLoading(false);
+      invalidateConnectorsCache();
       return () => {
         cancelled = true;
       };
@@ -44,14 +85,7 @@ export function useConnectors(): ConnectorStatus {
 
     async function fetchConnectors() {
       try {
-        const res = await fetch('/api/connectors');
-        if (!res.ok) {
-          setLoading(false);
-          return;
-        }
-        const json = (await res.json()) as {
-          connectors: Array<{ connectorId: string; connectedAt?: string }>;
-        };
+        const json = await fetchConnectorsShared();
         if (!cancelled) {
           setConnectedIds(new Set(json.connectors.map((c) => c.connectorId)));
           const atMap: Record<string, string> = {};
@@ -100,6 +134,8 @@ export function useConnectors(): ConnectorStatus {
             next.delete(id);
             return next;
           });
+        } else {
+          invalidateConnectorsCache();
         }
       } catch {
         setConnectedIds((prev) => {
@@ -136,6 +172,8 @@ export function useConnectors(): ConnectorStatus {
         });
         if (!res.ok) {
           setConnectedIds((prev) => new Set([...prev, id]));
+        } else {
+          invalidateConnectorsCache();
         }
       } catch {
         setConnectedIds((prev) => new Set([...prev, id]));

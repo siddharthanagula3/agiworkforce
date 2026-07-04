@@ -29,7 +29,16 @@ const MAX_FILE_COUNT = 20;
  */
 const MAX_FILE_SIZE_BYTES = MAX_ATTACHMENT_BYTES;
 
-const ALLOWED_MIME_TYPES = new Set([
+/**
+ * MIME allowlist for `addFiles`. Exported (with the helpers below) so the
+ * composer that owns the `<input type="file">` element can build its
+ * `accept` attribute and gating logic from this single source of truth
+ * instead of hardcoding a separate, narrower list that drifts out of sync
+ * with what this hook actually accepts (see `ChatComposerNew.tsx`'s
+ * `accept="image/*"` — tracked as a fast-follow, not fixed here since that
+ * file is out of scope for this pass).
+ */
+export const ALLOWED_MIME_TYPES = new Set([
   // Images
   'image/png',
   'image/jpeg',
@@ -46,6 +55,8 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   // Code
   'text/javascript',
   'text/typescript',
@@ -53,6 +64,38 @@ const ALLOWED_MIME_TYPES = new Set([
   'text/css',
   'application/xml',
 ]);
+
+/**
+ * Extension fallback used when the browser can't determine a MIME type
+ * (common for code files on some platforms). Kept in sync with the regex
+ * in `isAllowedType` below so `getAcceptAttribute()` reflects reality.
+ */
+const ALLOWED_EXTENSIONS_FALLBACK = [
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.py',
+  '.rs',
+  '.go',
+  '.rb',
+  '.sh',
+  '.yml',
+  '.yaml',
+  '.toml',
+];
+
+/**
+ * Builds an `<input type="file" accept="...">` value from the canonical
+ * allowlist above. Consuming components should call this instead of
+ * hardcoding `accept="image/*"`, which silently disagrees with what
+ * `addFiles`/`isAllowedType` actually accept and produces dead
+ * document-upload code paths (menu says "Add photos & files" but the file
+ * picker only offers images).
+ */
+export function getAcceptAttribute(): string {
+  return [...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS_FALLBACK].join(',');
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -100,7 +143,13 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function isAllowedType(file: File): boolean {
+/**
+ * Exported so callers (e.g. the composer's drop/paste/file-input handlers)
+ * can pre-filter or validate a `File[]` using the exact same rule `addFiles`
+ * enforces internally, rather than hand-rolling a narrower `file.type.startsWith('image/')`
+ * check that silently drops valid non-image documents.
+ */
+export function isAllowedType(file: File): boolean {
   if (ALLOWED_MIME_TYPES.has(file.type)) return true;
   // Fallback: allow if the browser couldn't determine the MIME but the file
   // has a text-like extension (.ts, .tsx, .py, .rs, .go, etc.)

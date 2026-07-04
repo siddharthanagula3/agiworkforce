@@ -207,6 +207,20 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
     // Clear chat store (lazy import avoids circular dependency at module-init)
     const { useChatStore } = await import('@/stores/chatStore');
     useChatStore.getState().reset();
+    // Clear memory facts (lazy import avoids pulling the chat package into the
+    // module-init path). Memory facts are stored under a single global
+    // localStorage key (`agi-memory-store-v1`), not scoped per-user, so on a
+    // shared device the next signed-in user would otherwise inherit the
+    // previous user's remembered facts. See stores/unified/auth.ts signOut()
+    // — keep this in sync with shared/stores/authentication-store.ts's
+    // cleanupAllStores(), which performs the equivalent cleanup for the
+    // useAuthStore.logout() sign-out path.
+    try {
+      const { useMemoryStore } = await import('@agiworkforce/unified-chat');
+      useMemoryStore.getState().clear();
+    } catch {
+      // Memory store unavailable — proceed with the rest of sign-out cleanup.
+    }
     set({ ...INITIAL_STATE, isLoading: false, initialized: true });
     if (typeof window !== 'undefined') {
       window.location.href = '/login';

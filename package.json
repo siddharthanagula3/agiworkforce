@@ -59,7 +59,8 @@
       "react-dom": "19.2.6",
       "react-test-renderer": "19.2.6",
       "typescript": "5.9.3",
-      "@types/node": "^22.19.15"
+      "@types/node": "^22.19.15",
+      "@wdio/native-utils": "2.5.0"
     },
     "patchedDependencies": {
       "expo@55.0.24": "patches/expo@55.0.24.patch"
