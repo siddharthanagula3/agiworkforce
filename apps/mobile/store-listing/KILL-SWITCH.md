@@ -1,4 +1,4 @@
-# Feature Kill Switches — AGI Mobile v1.0.0
+# Feature Kill Switches — AGI Mobile v1.2.0
 
 > Authoritative reference for disabling risky features without an app
 > update. "Kill switch" means: the feature is hidden from every
@@ -49,29 +49,24 @@ toggle methods in v1.
 
 ### Image generation (`FEATURES.imageGen`)
 
-**Current state:** `false` — completely disabled in v1.
+**Current state:** `true` — live in v1.2.0 (Cloud mode only).
 
 What it controls:
 
-- The "Generate image" option in the composer action sheet is hidden.
-- Any model response that returns an `image_gen` tool call is silently
-  rejected (the tool call is dropped from the message renderer).
-- No request to any image generation API (GPT Image, Ideogram, Stable
-  Diffusion endpoint) can be initiated.
+- The "Generate image" option in the composer action sheet.
+- Model responses that return an `image_gen` tool call are rendered.
+- Requests route through the Cloud provider path; not available in
+  Local Mode.
 
-How to flip on for v1.1:
+To kill in an emergency: set `imageGen: false` in `v1FeatureFlags.ts`,
+typecheck, and ship a binary update (see Emergency response playbook
+below — no remote flip in v1).
 
-1. Set `imageGen: true` in `v1FeatureFlags.ts`.
-2. Ensure provider-side content filters are wired for every image gen
-   provider (OpenAI GPT Image built-in classifier is the minimum bar).
-3. Add the content-policy pre-screen step required by Apple 1.1.1 and
-   Google Play Inappropriate Content policy before shipping.
-4. Update the App Store / Play Store listing to disclose image
-   generation capability.
-
-**Review impact:** Reviewer will see no image generation surface in v1.
-Do not mention image generation in any v1 reviewer notes or store
-listing copy.
+**Review impact:** the store listing now discloses image generation
+(`description` / `whats_new` in `LISTING-METADATA-IOS.json` and
+`LISTING-METADATA-ANDROID.json`). Confirm Apple 1.1.1 / Google Play
+content-policy pre-screening is wired for the active image gen provider
+before each submission.
 
 ---
 
@@ -115,40 +110,49 @@ were enabled — OTA is disabled in v1, so binary update required).
 
 ### Cloud chat / sync (`FEATURES.cloudChat`)
 
-**Current state:** `false` for public Local Mode — AGI Cloud remains invite-gated.
+**Current state:** `true` — AGI Cloud is public alpha, open by default to
+any signed-in user (founder decision 2026-06-27/28). There is no invite
+or waitlist gate; signing in via Clerk AuthView IS the entitlement. The
+server-side `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env is an incident-response
+kill switch only (set to `0`/`false`/`off` to re-gate), not a launch gate.
 
 What it controls:
 
-- Conversation rows are written to SQLCipher (local only).
-- No cloud row is created. No realtime subscription is
-  opened.
-- The "Sync conversations" toggle in Settings is hidden.
-- The cloud waitlist/invite button is shown instead and routes through AGI
-  Web/API.
+- Whether Cloud mode (chat sync, image generation, web search) is reachable
+  at all — `FEATURES.v1LocalOnly` must stay `false` for `cloudChat: true` to
+  take effect (setting both `true` deadlocks Cloud mode dead while the UI
+  still shows it — see `v1FeatureFlags.ts`).
+- Local Mode continues to work fully offline with no account required;
+  Cloud sign-in is opt-in.
 
-How to flip on for gated Cloud testing:
-
-1. Set `cloudChat: true`.
-2. Ensure auth flow (`FEATURES.auth = true`), Clerk-authenticated Web/API
-   access control, and the Cloud provider disclosure are all wired.
-3. Re-run the 5.1.2(i) compliance review before submission.
+To kill in an emergency (re-gate Cloud entirely): set the
+`AGI_MANAGED_COMPUTE_PRIVATE_BETA` server env to `0`/`false`/`off` for an
+instant server-side rollback, or ship a binary with `cloudChat: false` if
+the client itself must stop offering the entry point.
 
 ---
 
-### Billing / subscriptions (`FEATURES.billing`)
+### Billing / subscriptions (`FEATURES.billing`, `FEATURES.iap`)
 
-**Current state:** `false` — completely disabled in v1.
+**Current state:** both `false` — no StoreKit 2 / Google Billing Library
+code path is reachable, and no server-side purchase receipt verification
+exists yet (see `useIapPurchaseFlow.ts` and the open IAP work item).
 
 What it controls:
 
-- No StoreKit 2 / Google Billing Library code path is reachable.
-- No subscription upgrade sheet is shown.
-- The "Pro" / "Hobby" tier badges in the profile screen show "Waitlist"
-  rather than a purchase CTA.
+- No native in-app purchase flow is reachable from either store's billing
+  library.
 
-Note: the cloud_waitlist join flow (a web-link CTA) is active in v1.
-This is a marketing sign-up form, not an in-app purchase. It does not
-require Apple / Google billing entitlements.
+**Separate from billing/IAP:** an "Upgrade to `<Tier>`" CTA
+(`PaywallBottomSheet.tsx`) IS live in v1.2.0. It opens
+`agiworkforce.com/pricing?from=mobile-paywall` in the system browser to
+complete checkout — this is a web-link CTA, not an in-app purchase, and
+does not require Apple / Google billing entitlements to exist. It DOES
+raise Apple Guideline 3.1.1 / Google Play external-offers-policy questions
+about linking out to complete a paid subscription purchase from within
+the app. That policy question is unresolved — see
+`FOUNDER-SUBMISSION-CHECKLIST.md` Part D item 11. Do not resolve it here;
+it needs founder + legal sign-off.
 
 ---
 
@@ -207,9 +211,13 @@ feature, the response timeline is:
 
 ---
 
-## v1.1 migration path: local flags → remote config
+## Remote config migration path: local flags → remote config
 
-When cloud mode ships in v1.1:
+Cloud mode has shipped (public alpha, v1.2.0) using the client-side
+`AGI_MANAGED_COMPUTE_PRIVATE_BETA` kill switch for instant server-side
+rollback. The remaining local-only flags (image gen, computer use,
+billing/IAP) still follow this migration path when their remote-flip
+requirement becomes load-bearing:
 
 1. Add a Web/API-backed `remote_feature_flags` table with columns:
    `key text primary key, value bool, updated_at timestamptz`.
