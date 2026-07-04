@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Support',
   description:
-    'How to reach us today, where to report bugs, and what support is planned for waitlist tiers.',
+    'How to reach us today, where to report bugs, and what support looks like across every tier.',
   alternates: { canonical: 'https://agiworkforce.com/support' },
 };
 
@@ -18,10 +18,10 @@ const SUPPORT_ROWS: { tier: string; status: string; channel: string; expectation
     expectation: 'Best-effort reply from a human',
   },
   {
-    tier: 'Hobby · Pro · Max',
-    status: 'Waitlist, not yet sold',
-    channel: 'Priority email, planned',
-    expectation: 'Response targets publish when these tiers go on sale',
+    tier: 'Basic · Pro · Max',
+    status: 'Available now',
+    channel: 'Email · contact@agiworkforce.com',
+    expectation: 'Best-effort reply from a human, no published response-time SLA yet',
   },
   {
     tier: 'Enterprise',
