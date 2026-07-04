@@ -2,8 +2,6 @@ export * from './components/DeviceIntegrationStatus';
 export * from './components/PlatformCard';
 export * from './services/deviceIntegrations';
 export * from './services/healthData';
-export * from './services/healthKitPermission';
-export * from './services/healthKitQuery';
 export {
   useIntegrationStore,
   type ConnectorState,
