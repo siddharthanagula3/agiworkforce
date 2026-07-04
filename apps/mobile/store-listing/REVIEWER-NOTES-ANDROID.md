@@ -1,13 +1,14 @@
-# Play Console Review Notes — AGI Android v1.0.0
+# Play Console Review Notes — AGI Android v1.2.0
 
 > Paste verbatim into Play Console →
 > App content → App access → Instructions for reviewers.
 >
 > Play Console allows a freeform text field plus optional username /
-> password fields for demo accounts. AGI v1 requires no account —
+> password fields for demo accounts. AGI requires no demo account —
 > leave username/password blank and explain below.
 >
-> Character count: ~2,800 (well within Play Console's limit).
+> Recount this body's character count before pasting — content below has
+> changed since the ~2,800-char v1.0.0 count and has not been re-measured.
 
 ---
 
@@ -16,22 +17,28 @@
 Hello — thank you for reviewing AGI (package: com.agiworkforce.app).
 
 AGI is an AI chat client with a Local Mode path that runs without an
-account. In v1.0.0 reviewer access can use Local Mode without login,
-API keys, or Google Play Billing. AGI Cloud is present only as an
-invite/waitlist flow and is not public cloud access in this binary.
+account. Reviewer access can use Local Mode without login, API keys, or
+Google Play Billing. AGI Cloud is in public alpha and open to any
+signed-in user — there is no invite code or waitlist gate in this
+binary. Signing in (free, self-service, via Clerk) unlocks Cloud chat,
+image generation, and web search on a free tier, with an in-app row
+that opens a web checkout (agiworkforce.com/pricing) to view paid
+plans. There is no Play Billing purchase in this build — native IAP is
+feature-flagged off pending real product IDs and server-side receipt
+verification.
 
 ---
 
 ### No account needed — how to get past the first screen
 
-There is no sign-in, registration, or Google account connection in v1.
-First launch shows a 3-screen onboarding:
+There is no sign-in, registration, or Google account connection
+required for Local Mode. First launch shows a 3-screen onboarding:
 
 1. Hero slide → tap "Get started"
 2. Disclosure modal (EU AI Act Article 50 + provider consent) → tap
    "I understand — continue"
 3. Model setup → Qwen3-4B-Instruct-2507 (~2.4 GB) downloads, or the
-   reviewer can pick Phi-3-mini (~2.3 GB) from the catalog
+   reviewer can pick AGI Lite (Llama 3.2 1B, ~1.1 GB) from the catalog
 
 After step 3 the app opens to the chat screen. No credentials needed.
 
@@ -43,23 +50,26 @@ Google Play's GenAI policy requires apps that generate or process
 AI content to provide a mechanism for users to flag problematic
 output.
 
-In AGI v1: long-press any assistant message bubble → "Report this
+In AGI: long-press any assistant message bubble → "Report this
 response" → sheet with three options ("Harmful or dangerous", "False
 or misleading", "Other") → submit. In Local Mode the report is stored
-locally; when Cloud reporting is enabled behind invite access, it routes
+locally; in AGI Cloud (public alpha, any signed-in user) it routes
 through the AGI backend.
 
 ---
 
 ### Data Safety form — what was submitted and why
 
-AGI v1 default install collects **no data**. The Data Safety form
-(`android/data-safety.md` in the submission package) declares:
+Local Mode collects **no data**. The Data Safety form
+(`LISTING-METADATA-ANDROID.json` → `data_safety`, mirrored in
+`android/data-safety.md`) declares:
 
-- "Data Linked to You": none for Local Mode reviewer flow.
-- "Data Not Linked to You": only applies when the user explicitly unlocks
-  and uses a non-local Cloud route; explicit consent is obtained before
-  non-local AI-provider data sharing.
+- "Data Linked to You": Email address and Name (App functionality
+  purpose), collected only when the user signs in to AGI Cloud
+  (public alpha, any signed-in user — free, self-service, no invite
+  code). Name is collected only if provided by the sign-in method.
+- Data is not shared with third parties, not sold, and not used for
+  advertising.
 - No advertising IDs (GAID). No device fingerprinting. No analytics
   by default (opt-in toggle in Settings → Privacy).
 - API keys stored in Android Keystore, hardware-backed. AGI never
@@ -114,17 +124,23 @@ and LGPD Art. 15 right-of-access requirements.
 
 ### Permissions declared
 
-| Permission          | When requested                                             | Purpose                                     |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------- |
-| `CAMERA`            | User taps "Scan QR" in Settings → Devices                  | Pair with desktop companion app via QR code |
-| `RECORD_AUDIO`      | User holds the mic button in the chat composer             | On-device voice transcription               |
-| `READ_MEDIA_IMAGES` | User taps the photo-picker icon in composer                | Attach image to chat message                |
-| `READ_CALENDAR`     | User enables Calendar connector in Settings → Integrations | Read events when user asks model to do so   |
-| `READ_CONTACTS`     | User enables Contacts connector in Settings → Integrations | Read contacts when user asks model to do so |
+| Permission          | When requested                                              | Purpose                                                           |
+| ------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| `CAMERA`            | User taps the camera icon in the chat composer or scan tool | Take a photo to attach to a chat message, or scan a code/document |
+| `RECORD_AUDIO`      | User holds the mic button in the chat composer              | On-device voice transcription                                     |
+| `READ_MEDIA_IMAGES` | User taps the photo-picker icon in composer                 | Attach image to chat message                                      |
+| `READ_CALENDAR`     | User enables Calendar connector in Settings → Integrations  | Read events when user asks model to do so                         |
+| `READ_CONTACTS`     | User enables Contacts connector in Settings → Integrations  | Read contacts when user asks model to do so                       |
 
 No permission is requested at launch. Camera / mic / photo are
 lazy-requested on the user's tap of the relevant affordance.
 Calendar / Contacts are behind optional connector opt-in toggles.
+Note: the desktop-companion QR pairing flow (`FEATURES.companion`) is
+disabled in this build — camera use in the shipped binary is for photo
+attachment and the in-app scan tool only. `app.config.js`'s
+`NSCameraUsageDescription` string still mentions "desktop pairing";
+flag to engineering to update that string before submission so it
+matches actual v1.2.0 camera usage.
 
 ---
 

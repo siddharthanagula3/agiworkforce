@@ -25,6 +25,7 @@ export function PerformanceChip({ tokensPerSecond }: PerformanceChipProps): Reac
   if (tokensPerSecond === undefined || tokensPerSecond <= 0) return null;
   return (
     <View
+      testID="performance-chip"
       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}
       accessibilityLabel={`Decode speed ${tokensPerSecond} tokens per second`}
     >

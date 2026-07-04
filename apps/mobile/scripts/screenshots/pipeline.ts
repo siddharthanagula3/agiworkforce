@@ -207,7 +207,7 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
   mkdirSync(artifactsDir, { recursive: true });
   const env = { ...process.env, DETOX_CAPTURE_PATH: rawOut };
   execSync(
-    `pnpm exec detox test --configuration ${detoxConfig} --artifacts-location "${artifactsDir}/" ` +
+    `pnpm exec detox test --configuration ${detoxConfig} --reuse --artifacts-location "${artifactsDir}/" ` +
       `apps/mobile/scripts/screenshots/specs/${spec}`,
     { stdio: 'inherit', env },
   );

@@ -15,10 +15,31 @@
   entries to your privacy manifest") and the per-category index at
   https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api
 
-  AGI Local Mode collects no personal data by default. Optional AGI
-  Cloud waitlist access collects email address and optional name for
-  app-functionality access notifications. NSPrivacyTracking is false.
-  AGI does not include the AdSupport / IDFA APIs.
+  AGI Local Mode collects no personal data by default. Signing in to
+  AGI Cloud (public alpha, open to any signed-in user, no invite gate)
+  collects email address and optional name for app-functionality
+  purposes. NSPrivacyTracking is false. AGI does not include the
+  AdSupport / IDFA APIs.
+
+  *** OPEN GAP as of 2026-07-04 — escalate to engineering before
+  submission ***: `app.config.js`'s HealthKit config plugin
+  (`withHealthKitBackgroundDeliveryFix` + the entitlement injection
+  around line 251) declares the `com.apple.developer.healthkit`
+  entitlement and `NSHealthShareUsageDescription`, and
+  `src/features/integrations/services/healthKitQuery.ts` reads real
+  step/sleep/workout samples from HealthKit for the optional Apple
+  Health connector. Neither this file nor the generated
+  `NSPrivacyCollectedDataTypes` array in `app.config.js` (~line 136)
+  declares a Health & Fitness collected-data-type entry. Apple's
+  privacy-manifest guidance requires declaring data types the app
+  accesses via HealthKit, separate from whether that data is
+  transmitted off-device. This needs an engineering + product decision
+  on whether Health data is linked to the user's identity, used for
+  tracking (it is not, per current code), and its retention, before
+  adding the correct `NSPrivacyCollectedDataTypeHealth` entry to the
+  config-plugin source of truth. Do not add it here without that
+  decision — this file is a generated mirror of `app.config.js`, not
+  the source of truth.
 -->
 <plist version="1.0">
 <dict>

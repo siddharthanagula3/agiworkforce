@@ -115,7 +115,6 @@ export default function AppLayout() {
       <Drawer.Screen name="translate" options={HIDDEN} />
       <Drawer.Screen name="image" options={HIDDEN} />
       <Drawer.Screen name="voice" options={HIDDEN} />
-      <Drawer.Screen name="usage" options={HIDDEN} />
       <Drawer.Screen name="widget-setup" options={HIDDEN} />
     </Drawer>
   );
