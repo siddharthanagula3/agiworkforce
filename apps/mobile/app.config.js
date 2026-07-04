@@ -172,6 +172,16 @@ const config = {
   plugins: [
     'expo-router',
     'expo-secure-store',
+    // minSdkVersion 26 (Android 8.0) floor — required by com.google.mlkit:genai-common
+    // (withAGIAICore.cjs) manifest merger; drops Android 7.0/7.1 support.
+    [
+      'expo-build-properties',
+      {
+        android: {
+          minSdkVersion: 26,
+        },
+      },
+    ],
     // Clerk cloud auth (native AuthView + secure token cache). Adds the Clerk
     // iOS/Android native modules; requires a native rebuild (expo run:ios).
     '@clerk/expo',

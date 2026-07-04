@@ -53,6 +53,16 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
       // THERMAL_STATUS_SEVERE = 4, THERMAL_STATUS_CRITICAL = 5, THERMAL_STATUS_EMERGENCY = 6, THERMAL_STATUS_SHUTDOWN = 7
       return state >= PowerManager.THERMAL_STATUS_SEVERE
     }
+
+    // JS-facing status string mirroring @agiworkforce/local-llm's Tier1Status union.
+    fun statusToWireString(status: Int): String {
+      return when (status) {
+        FeatureStatus.AVAILABLE -> "available"
+        FeatureStatus.DOWNLOADABLE -> "downloadable"
+        FeatureStatus.DOWNLOADING -> "downloading"
+        else -> "unavailable"
+      }
+    }
   }
 
   override fun getName() = MODULE_NAME
@@ -90,6 +100,7 @@ class AGIAICoreModule(private val reactContext: ReactApplicationContext) :
         val map = WritableNativeMap().apply {
           putInt("tier", 1)
           putBoolean("available", available)
+          putString("status", statusToWireString(status))
           putBoolean("thermalThrottled", thermalThrottled)
           putInt("totalRAMMB", totalRAMMB)
           putString("osVersion", osVersion)

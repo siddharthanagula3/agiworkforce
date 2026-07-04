@@ -77,10 +77,18 @@ function writeBool(key: string, v: boolean): void {
 
 type TierNum = 1 | 2 | 3;
 
+function tier1FetchingNote(caps: DeviceCapabilities): string | null {
+  if (caps.tier1Status === 'downloadable' || caps.tier1Status === 'downloading') {
+    return 'AICore is fetching Gemini Nano in the background — this device will move to Tier 1 automatically once it finishes.';
+  }
+  return null;
+}
+
 function tierLabel(caps: DeviceCapabilities): {
   tier: TierNum;
   label: string;
   description: string;
+  fetchingNote: string | null;
 } {
   if (caps.tier1Available) {
     return {
@@ -90,6 +98,7 @@ function tierLabel(caps: DeviceCapabilities): {
         caps.tier1Runtime === 'foundation_models'
           ? 'Apple Foundation Models — OS-resident, fastest, lowest energy'
           : 'Google AICore (Gemini Nano) — OS-resident',
+      fetchingNote: null,
     };
   }
   if (caps.tier2Available) {
@@ -97,12 +106,14 @@ function tierLabel(caps: DeviceCapabilities): {
       tier: 2,
       label: 'Tier 2',
       description: 'ExecuTorch — hardware-accelerated, needs ≥3.5 GB RAM',
+      fetchingNote: tier1FetchingNote(caps),
     };
   }
   return {
     tier: 3,
     label: 'Tier 3',
     description: 'llama.rn — universal fallback, CPU-only inference',
+    fetchingNote: tier1FetchingNote(caps),
   };
 }
 
@@ -592,6 +603,20 @@ export default function PerformanceScreen() {
                   {tierInfo.description}
                 </Text>
               </View>
+
+              {tierInfo.fetchingNote ? (
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}
+                >
+                  <ActivityIndicator size="small" color={c.teal} />
+                  <Text
+                    style={{ fontSize: 12, color: c.textMuted, flex: 1 }}
+                    accessibilityLabel={tierInfo.fetchingNote}
+                  >
+                    {tierInfo.fetchingNote}
+                  </Text>
+                </View>
+              ) : null}
 
               <Separator />
 
