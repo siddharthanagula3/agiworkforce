@@ -19,6 +19,7 @@ import { Textarea } from '@shared/ui/textarea';
 import { Smile, Trash2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import type { Project } from '@features/projects/stores/project-store';
 
@@ -66,14 +67,41 @@ export function ProjectSettingsDialog({
       toast.error('Project name is required');
       return;
     }
+    const updates = {
+      name: name.trim(),
+      instructions: instructions.trim() || undefined,
+    };
     setIsSaving(true);
     try {
-      onUpdate(project.id, {
-        name: name.trim(),
-        instructions: instructions.trim() || undefined,
+      // Persist to the server first (Neon `user_projects`) so the rename/edit
+      // survives the next hydration/sync. Previously this handler only wrote
+      // to the local projectStore, which the next server-driven refresh would
+      // silently revert. See PUT /api/projects/[id].
+      const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+        method: 'PUT',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'same-origin',
+        body: JSON.stringify(updates),
       });
+
+      if (!response.ok) {
+        let message = `Failed to update project (${response.status})`;
+        try {
+          const json = (await response.json()) as { error?: string; message?: string };
+          message = json.message || json.error || message;
+        } catch {
+          // response body wasn't JSON · fall back to the generic message above
+        }
+        throw new Error(message);
+      }
+
+      // Server write succeeded · sync the local store so the UI reflects the
+      // change immediately without waiting for the next background refresh.
+      onUpdate(project.id, updates);
       toast.success('Project updated');
       onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update project');
     } finally {
       setIsSaving(false);
     }

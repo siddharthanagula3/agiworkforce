@@ -223,6 +223,24 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
 
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
-    expect(json.error?.message ?? '').toMatch(/byteCount/i);
+    expect(json.error?.message ?? '').toMatch(/larger than the 25 MiB/i);
+  });
+
+  it('returns 400 for a disallowed mimeType with no recognized extension', async () => {
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'payload.bin',
+        mimeType: 'application/octet-stream',
+        byteCount: 1024,
+        checksumSha256: 'abc123',
+        sourceSurface: 'web',
+        storageUri: 'storage/files/payload.bin',
+      }),
+      routeContext('proj-1'),
+    );
+
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error?: { message?: string } };
+    expect(json.error?.message ?? '').toMatch(/not an accepted attachment type/i);
   });
 });

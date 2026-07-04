@@ -221,7 +221,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editTitle, setEditTitle] = React.useState(session?.title || '');
-  const { share, isSharing, hasMessages } = useShareConversation(session?.title);
+  const { share, revoke, isSharing, hasMessages, hasActiveShare } = useShareConversation(
+    session?.title,
+  );
 
   React.useEffect(() => {
     setEditTitle(session?.title || '');
@@ -372,6 +374,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <DropdownMenuItem onClick={() => void share()} disabled={isSharing}>
                 <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
                 Share
+              </DropdownMenuItem>
+            )}
+
+            {hasActiveShare && (
+              <DropdownMenuItem onClick={() => void revoke()}>
+                <X className="mr-2 h-4 w-4" aria-hidden="true" />
+                Revoke share link
               </DropdownMenuItem>
             )}
 
