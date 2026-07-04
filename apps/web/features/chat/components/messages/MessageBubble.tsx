@@ -58,7 +58,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
-import type { GeneratedDocument } from '../../services/document-generation-service';
+import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ArtifactBlock } from '../ArtifactBlock';
 import { ComparisonResponse } from './ComparisonResponse';
@@ -992,7 +992,19 @@ const MessageBubbleComponent = function MessageBubble({
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={() => onDelete(message.id)}
+                          onClick={() => {
+                            // Confirm before deleting so a stray click in the ... menu
+                            // can never silently drop a message — matches the
+                            // conversation/project delete guard (WebChatPage
+                            // handleDeleteSession/handleProjectDelete).
+                            if (
+                              typeof window !== 'undefined' &&
+                              !window.confirm("Delete this message? This can't be undone.")
+                            ) {
+                              return;
+                            }
+                            onDelete(message.id);
+                          }}
                           className="text-destructive focus:text-destructive"
                         >
                           <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />

@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { documentExportService } from '../../services/document-export-service';
-import type { DocumentFormat } from '../../services/document-generation-service';
+import type { DocumentFormat } from '../../types/message-metadata';
 import { cn } from '@shared/lib/utils';
 
 interface DocumentActionsProps {

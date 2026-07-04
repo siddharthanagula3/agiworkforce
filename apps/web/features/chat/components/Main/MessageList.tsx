@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Bot } from 'lucide-react';
 import type { ChatMessage } from '../../types';
-import { isWebSearchResponse, type WebSearchResults } from '../../types/message-metadata';
+import {
+  isWebSearchResponse,
+  type WebSearchResults,
+  type GeneratedDocument,
+} from '../../types/message-metadata';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
-import type { GeneratedDocument } from '../../services/document-generation-service';
 import { MessageBubble, messageListVariants } from '../messages/MessageBubble';
 import { TypingIndicator } from '../messages/TypingIndicator';
 import { useChatStore } from '@shared/stores/chat-store';
