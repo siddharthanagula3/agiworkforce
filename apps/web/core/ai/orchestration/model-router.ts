@@ -4,7 +4,7 @@
  * Supports user override
  */
 
-import type { LLMProvider } from '@core/ai/llm/unified-language-model';
+import type { LLMProvider } from '@core/ai/llm/types';
 import {
   getModelMetadataById,
   getProviderDefaultModel,

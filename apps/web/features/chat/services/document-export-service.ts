@@ -7,7 +7,7 @@
 
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
-import type { DocumentFormat } from './document-generation-service';
+import type { DocumentFormat } from '../types/message-metadata';
 
 export interface ExportOptions {
   title?: string;

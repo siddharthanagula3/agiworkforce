@@ -15,7 +15,7 @@ import { FileText, ChevronDown, ChevronUp, Maximize2, Minimize2 } from 'lucide-r
 import { cn } from '@shared/lib/utils';
 import { EnhancedMarkdownRenderer } from '../messages/EnhancedMarkdownRenderer';
 import { DocumentActions } from './DocumentActions';
-import type { GeneratedDocument } from '../../services/document-generation-service';
+import type { GeneratedDocument } from '../../types/message-metadata';
 
 interface DocumentMessageProps {
   document: GeneratedDocument;

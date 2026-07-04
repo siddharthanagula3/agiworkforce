@@ -14,38 +14,17 @@
  * } from '@core/integrations';
  */
 
-// Chat Completion Handler
-export {
-  sendAIMessage,
-  isProviderConfigured,
-  getConfiguredProviders,
-  type AIMessage,
-  type AIProvider,
-  type Provider,
-} from './chat-completion-handler';
-
 // Web Search Services
 export {
   webSearch,
   searchWithPerplexity,
   searchWithGoogle,
   searchWithDuckDuckGo,
-  searchAndSummarize,
   isWebSearchConfigured,
   getAvailableSearchProviders,
   type SearchResult,
   type SearchResponse,
 } from './web-search-handler';
-
-// Token Usage Tracking
-export {
-  tokenLogger,
-  logTokenUsage,
-  TokenLoggerService,
-  type TokenLogEntry,
-  type TokenUsageByModel,
-  type SessionTokenSummary,
-} from './token-usage-tracker';
 
 // WebSocket Manager
 export {

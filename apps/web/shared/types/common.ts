@@ -548,6 +548,44 @@ export interface ProtocolAgentCapability {
 }
 
 /**
+ * Real-time status of an agent during multi-agent orchestration.
+ * Preserved from the deleted agent-collaboration-manager runtime; still
+ * consumed by agent-metrics-store and company-hub-store.
+ */
+export interface AgentStatus {
+  agentName: string;
+  status:
+    | 'idle'
+    | 'thinking'
+    | 'analyzing'
+    | 'working'
+    | 'waiting'
+    | 'completed'
+    | 'blocked'
+    | 'error';
+  currentTask?: string;
+  progress: number; // 0-100
+  toolsUsing?: string[];
+  blockedBy?: string;
+  output?: unknown;
+}
+
+/**
+ * A single communication event between agents during orchestration.
+ * Preserved from the deleted agent-collaboration-manager runtime; still
+ * consumed by agent-metrics-store.
+ */
+export interface AgentCommunication {
+  id: string;
+  from: string;
+  to: string;
+  type: 'request' | 'response' | 'handoff' | 'collaboration' | 'status' | 'error' | 'completion';
+  message: string;
+  timestamp: Date;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Agent capability for employee selection/reasoning
  * Used for intelligent agent selection based on task requirements
  */

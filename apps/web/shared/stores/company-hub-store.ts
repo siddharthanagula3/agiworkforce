@@ -7,8 +7,18 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
-import type { AgentStatus } from '@core/ai/orchestration/agent-collaboration-manager';
-import type { TokenUsageByModel } from '@core/integrations/token-usage-tracker';
+import type { AgentStatus } from '@shared/types';
+
+export interface TokenUsageByModel {
+  [model: string]: {
+    provider: 'anthropic' | 'openai' | 'google' | 'perplexity';
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cost: number;
+    callCount: number;
+  };
+}
 
 export interface AgentAssignment {
   agentId: string;
