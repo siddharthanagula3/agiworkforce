@@ -74,6 +74,7 @@ describe('connectorsStore', () => {
   });
 
   it('connects API-key connectors through the shared MCP client', async () => {
+    mcpMock.listConnectedProviders.mockResolvedValue(['vercel']);
     await useConnectorsStore.getState().connectWithApiKey('vercel', 'secret-key');
 
     expect(mcpMock.saveApiKey).toHaveBeenCalledWith('vercel', 'secret-key');
