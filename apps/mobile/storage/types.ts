@@ -1,6 +1,6 @@
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 export type ModelRuntime = 'local' | 'cloud';
-export type ModelFormat = 'gguf' | 'safetensors' | 'mlx' | 'onnx' | 'pte' | 'task';
+export type ModelFormat = 'gguf' | 'safetensors' | 'mlx' | 'onnx' | 'pte';
 export type ChatMode = 'chat' | 'agent' | 'voice';
 
 export interface Conversation {

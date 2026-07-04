@@ -68,19 +68,6 @@ export async function tier1Generate(opts: GenerateOptions): Promise<GenerateResu
   throw new Error('Tier 1 not available on this platform');
 }
 
-/**
- * Tells the Android AGIAICore native module where the downloaded tasks-genai
- * .task model file lives on disk so it can lazily create the LlmInference
- * engine on next generate() call. No-op on iOS (Foundation Models is
- * OS-resident, never downloaded).
- */
-export async function tier1PrepareModel(modelPath: string): Promise<void> {
-  if (Platform.OS !== 'android') return;
-  const mod = NativeModules.AGIAICore;
-  if (!mod) throw new Error('AGIAICore native module not available');
-  await mod.prepareModel(modelPath);
-}
-
 function createFallbackRequestId(): string {
   fallbackRequestSequence = (fallbackRequestSequence + 1) % Number.MAX_SAFE_INTEGER;
   return `tier1-${Date.now().toString(36)}-${fallbackRequestSequence.toString(36)}`;

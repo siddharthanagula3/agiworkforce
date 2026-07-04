@@ -18,7 +18,7 @@ export interface ExecutorchPreset {
 export interface OnDeviceModel {
   id: string;
   displayName: string;
-  family: 'qwen3' | 'qwen2.5-vl' | 'gemma4' | 'llama3.2' | 'phi4-mini' | 'apple-fm' | 'gemma3-1b';
+  family: 'qwen3' | 'qwen2.5-vl' | 'gemma4' | 'llama3.2' | 'phi4-mini' | 'apple-fm' | 'gemini-nano';
   paramCountB: number;
   fileSizeBytes: number;
   supportedRuntimes: OnDeviceRuntime[];
@@ -37,7 +37,7 @@ export interface OnDeviceModel {
     | 'premium-multimodal-alt'
     | 'lite-mode'
     | 'internal-eval-hedge'
-    | 'system-model';
+    | 'system-multimodal';
   shipsInV1: boolean;
   liteMode?: boolean;
   /** Pre-built ExecuTorch preset for react-native-executorch LLMModule. Present when 'executorch' is in supportedRuntimes. */
@@ -46,6 +46,6 @@ export interface OnDeviceModel {
   downloadUrl?: string;
   /** SHA-256 hex digest of the model file for integrity verification. */
   checksum?: string;
-  /** File format: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx' | 'task'. Required when downloadUrl is present. */
-  format?: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx' | 'task';
+  /** File format: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx'. Required when downloadUrl is present. */
+  format?: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx';
 }
