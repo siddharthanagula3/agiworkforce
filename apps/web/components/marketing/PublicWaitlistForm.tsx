@@ -17,9 +17,11 @@ type FormState = 'idle' | 'submitting' | 'success' | 'error';
 export function PublicWaitlistForm({
   source = 'website',
   ctaLabel = 'Join Waitlist',
+  successMessage = "You're on the list. We'll email you when AGI Cloud access opens for your address.",
 }: {
   source?: WaitlistModalSource;
   ctaLabel?: string;
+  successMessage?: string;
 }) {
   const emailId = useId();
   const errorId = useId();
@@ -54,8 +56,7 @@ export function PublicWaitlistForm({
   if (state === 'success') {
     return (
       <p className="agi-waitlist-inline-success" role="status">
-        You&rsquo;re on the list. We&rsquo;ll email you when AGI Cloud access opens for your
-        address.
+        {successMessage}
       </p>
     );
   }

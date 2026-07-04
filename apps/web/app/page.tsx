@@ -16,6 +16,7 @@ import {
   SurfaceTicker,
   TrustTriptych,
 } from '../components/marketing/FlagshipSections';
+import { PublicWaitlistForm } from '../components/marketing/PublicWaitlistForm';
 import { LAUNCH } from '../lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
@@ -308,6 +309,24 @@ export default function Home() {
           ]}
           visual={<ApprovalWindow />}
         />
+
+        <section className="agi-fl-section" aria-labelledby="agi-mobile-launch-title">
+          <p className="agi-fl-eyebrow">AGI Mobile</p>
+          <h2 id="agi-mobile-launch-title" className="agi-fl-h2">
+            Local, on-device AI. Free forever.
+          </h2>
+          <p className="agi-fl-section-lede">
+            AGI Mobile runs today, in Local Mode, on your phone, at no cost. We are bringing it to
+            the App Store and Google Play. Leave your email and we will tell you the day it is live.
+          </p>
+          <div className="agi-fl-launch-form">
+            <PublicWaitlistForm
+              source="mobile"
+              ctaLabel="Notify Me"
+              successMessage="You're on the list. We'll email you the day AGI Mobile lands on the App Store and Google Play."
+            />
+          </div>
+        </section>
 
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
