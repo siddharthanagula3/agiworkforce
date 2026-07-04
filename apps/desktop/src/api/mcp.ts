@@ -613,6 +613,23 @@ export async function mcpListConnectedProviders(): Promise<string[]> {
   }
 }
 
+/**
+ * Returns every connector id that has a real, working MCP server mapping on
+ * the backend (`get_connector_mcp_mapping` in `mcp_oauth.rs`). This is the
+ * single source of truth the "Available to connect" grid filters against —
+ * fixes DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01, where the
+ * frontend catalog could advertise a connector (atlassian, google_sheets,
+ * context7, ...) that had no backend mapping, producing a permanent
+ * fake-"Connected" badge with zero backing tools.
+ */
+export async function mcpGetSupportedConnectorIds(): Promise<string[]> {
+  try {
+    return await invokeWithTimeout<string[]>('mcp_get_supported_connector_ids');
+  } catch (error) {
+    throw new Error(`Failed to list supported connector ids: ${error}`);
+  }
+}
+
 export async function mcpConnectConnector(connectorId: string): Promise<unknown> {
   try {
     validateNonEmpty(connectorId, 'connector ID');
@@ -1109,6 +1126,10 @@ export class McpClient {
 
   static async listConnectedProviders(): Promise<string[]> {
     return mcpListConnectedProviders();
+  }
+
+  static async getSupportedConnectorIds(): Promise<string[]> {
+    return mcpGetSupportedConnectorIds();
   }
 
   static async connectConnector(connectorId: string): Promise<unknown> {

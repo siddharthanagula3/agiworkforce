@@ -429,13 +429,17 @@ fn resolve_thinking_parameter(
         return Some(param);
     }
 
-    // 2. Explicit thinking_mode=false means the user turned it off -- respect that.
+    // 2. Explicit thinking_mode=false means the user turned it off -- respect
+    //    that. Return `Some(Enabled(false))` rather than `None`: some providers
+    //    (e.g. Ollama's newer reasoning models) default to thinking ON at the
+    //    API level, so simply omitting the parameter does not disable it --
+    //    the explicit "false" signal must survive to the provider layer.
     if thinking_mode == Some(false) {
         tracing::debug!(
             model = %model,
             "Extended thinking explicitly disabled by frontend"
         );
-        return None;
+        return Some(ThinkingParameter::Enabled(false));
     }
 
     // 3. thinking_mode is None (frontend did not specify) -- auto-detect from
