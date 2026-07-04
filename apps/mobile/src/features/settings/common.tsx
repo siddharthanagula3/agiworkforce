@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ChevronRight, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useTheme, useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
 
 export function SettingsScreenShell({
   title,
@@ -57,12 +57,10 @@ export function SettingsGroup({ children }: { children: React.ReactNode }) {
   return (
     <View
       style={{
-        borderRadius: 14,
+        borderRadius: cardRadius,
         backgroundColor: colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: colors.border,
         overflow: 'hidden',
-        marginBottom: 18,
+        marginBottom: 24,
       }}
     >
       {children}
@@ -83,12 +81,10 @@ export function SettingsInfo({
   return (
     <View
       style={{
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderRadius: cardRadius,
         backgroundColor: colors.surfaceElevated,
         padding: 14,
-        marginBottom: 18,
+        marginBottom: 24,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>

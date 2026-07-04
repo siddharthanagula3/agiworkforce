@@ -3,6 +3,7 @@ import { View, Pressable, TextInput, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import {
+  BookImage,
   Boxes,
   Cloud,
   FolderOpen,
@@ -27,7 +28,10 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { DEFAULT_CLOUD_MODEL_ID } from '@/src/features/model-picker/service';
-import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
+import {
+  executionModeForConversation,
+  isHistoryVisibleConversation,
+} from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { ModeSwitchModal } from '@/src/features/chat/components/ModeSwitchModal';
@@ -36,6 +40,7 @@ type RoutePath =
   | '/(app)/(tabs)/projects'
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
+  | '/(app)/library'
   | '/(app)/(tabs)/settings'
   | '/(app)/about'
   | '/(app)/profile'
@@ -43,7 +48,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'projects' | 'artifacts' | 'agi-agent';
+  key: 'projects' | 'artifacts' | 'library' | 'agi-agent';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -62,6 +67,12 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'Artifacts',
     icon: Boxes,
     route: '/(app)/artifacts',
+  },
+  {
+    key: 'library',
+    label: 'Library',
+    icon: BookImage,
+    route: '/(app)/library',
   },
   {
     key: 'agi-agent',
@@ -355,7 +366,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       : conversations;
     return (
       source
-        .filter((conversation) => executionModeForConversation(conversation) === appMode)
+        .filter(
+          (conversation) =>
+            executionModeForConversation(conversation) === appMode &&
+            isHistoryVisibleConversation(conversation),
+        )
         // Pinned chats first; preserve the existing recency order within each group.
         .slice()
         .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
@@ -397,6 +412,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       const p = pathname.startsWith('/') ? pathname : `/${pathname}`;
       if (key === 'projects') return p.includes('/projects');
       if (key === 'artifacts') return p.includes('/artifacts');
+      if (key === 'library') return p.includes('/library');
       return false;
     },
     [pathname],

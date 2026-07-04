@@ -10,6 +10,7 @@ import { useThemeColors } from '@/src/ui/theme';
  *   Drawer (slide-out on iPhone, permanent sidebar on iPad)
  *     (tabs)/       -- Chat, Projects, Settings screens (retained for route compat)
  *     artifacts/    -- mobile artifact gallery
+ *     library/      -- aggregated generated images + artifacts view
  *     code/         -- desktop/cloud code-session preview + handoff
  *     skills/       -- 150+ skill browser
  *     dispatch/     -- Desktop companion (Dispatch)
@@ -58,6 +59,7 @@ export default function AppLayout() {
 
       {/* New drawer-level routes */}
       <Drawer.Screen name="artifacts/index" options={HIDDEN} />
+      <Drawer.Screen name="library/index" options={HIDDEN} />
       <Drawer.Screen name="code/index" options={HIDDEN} />
       <Drawer.Screen name="code/[id]" options={HIDDEN} />
       <Drawer.Screen name="code/archived" options={HIDDEN} />

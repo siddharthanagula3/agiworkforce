@@ -25,7 +25,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { useTheme, useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 interface AddToChatSheetProps {
@@ -156,7 +156,11 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       snapPoints={SNAP_POINTS}
       enablePanDownToClose
       backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: themeColors.surfaceElevated }}
+      backgroundStyle={{
+        backgroundColor: themeColors.surfaceElevated,
+        borderTopLeftRadius: sheetRadius,
+        borderTopRightRadius: sheetRadius,
+      }}
       handleIndicatorStyle={{ backgroundColor: themeColors.textMuted }}
     >
       <BottomSheetScrollView
@@ -174,6 +178,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             paddingBottom: 16,
           }}
         >
+          <View style={{ width: 28 }} />
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: themeColors.textPrimary,
+            }}
+          >
+            Add to Chat
+          </Text>
           <Pressable
             onPress={closeSheet}
             testID="add-to-chat-close"
@@ -185,16 +199,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           >
             <X size={20} color={themeColors.textMuted} />
           </Pressable>
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: '600',
-              color: themeColors.textPrimary,
-            }}
-          >
-            Add to Chat
-          </Text>
-          <View style={{ width: 28 }} />
         </View>
 
         {/* Section 1: Attachment Row */}

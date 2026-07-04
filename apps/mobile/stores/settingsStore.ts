@@ -12,11 +12,15 @@ export type AccentColor = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'am
 export type FontPreference = 'default' | 'system' | 'dyslexic';
 export type TTSProvider = 'system' | 'cloud';
 
+/** Base response style/tone preset; see PERSONALIZATION_STYLES for labels. */
+export type PersonalizationStyle = 'default' | 'concise' | 'explanatory' | 'formal';
+
 export interface Personalization {
   fullName: string;
   nickname: string;
   occupation: string;
   instructions: string;
+  style: PersonalizationStyle;
   warmth: number;
   enthusiasm: number;
   headersLists: number;

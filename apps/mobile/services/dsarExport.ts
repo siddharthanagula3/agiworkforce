@@ -184,6 +184,7 @@ export interface DsarMobileSettings {
     nickname: string;
     occupation: string;
     instructions: string;
+    style: string;
     warmth: number;
     enthusiasm: number;
     headers_lists: number;

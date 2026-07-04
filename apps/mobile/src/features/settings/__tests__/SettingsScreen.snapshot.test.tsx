@@ -23,6 +23,8 @@ jest.mock('@/src/ui/theme', () => ({
     agentWarning: '#f59e0b',
     agentError: '#ef4444',
   },
+  cardRadius: 24,
+  sheetRadius: 32,
   useTheme: () => ({
     colors: {
       textPrimary: '#fff',

@@ -15,7 +15,6 @@ import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-han
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { Avatar } from '@/components/ui/avatar';
 import { StreamingIndicator } from './StreamingIndicator';
 import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
@@ -37,7 +36,7 @@ import { ReportFlagButton } from './ReportFlagButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, radii } from '@/src/ui/theme';
 import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
@@ -338,7 +337,6 @@ export const MessageBubble = memo(function MessageBubble({
       testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
       entering={reducedMotion ? undefined : FadeInDown.duration(200).springify()}
       className="px-4 py-3"
-      style={{ backgroundColor: isAssistant ? themeColors.surfaceBase : undefined }}
     >
       <Pressable
         onLongPress={handleLongPress}
@@ -350,36 +348,44 @@ export const MessageBubble = memo(function MessageBubble({
         accessibilityActions={accessibilityActionsList}
         onAccessibilityAction={handleAccessibilityAction}
       >
-        <View className="flex-row gap-3">
-          {/* Avatar */}
-          <Avatar size="sm" variant={isUser ? 'user' : 'assistant'} />
-
-          {/* Content column */}
-          <View className="flex-1 gap-1">
-            {/* Role label + offline queued badge */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ color: themeColors.textMuted, fontSize: 12, fontWeight: '500' }}>
-                {roleLabel}
-              </Text>
-              {isUser && message.isQueued && (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 3,
-                    backgroundColor: themeColors.warningSurface,
-                    paddingHorizontal: 5,
-                    paddingVertical: 2,
-                    borderRadius: 4,
-                  }}
-                  accessibilityLabel="Message queued offline"
-                >
-                  <Clock size={10} color={themeColors.agentWarning} />
-                  <Text style={{ fontSize: 10, color: themeColors.agentWarning }}>queued</Text>
-                </View>
-              )}
+        <View style={{ alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+          {/* Offline queued badge (user messages only) */}
+          {isUser && message.isQueued && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
+                backgroundColor: themeColors.warningSurface,
+                paddingHorizontal: 5,
+                paddingVertical: 2,
+                borderRadius: 4,
+                marginBottom: 4,
+              }}
+              accessibilityLabel="Message queued offline"
+            >
+              <Clock size={10} color={themeColors.agentWarning} />
+              <Text style={{ fontSize: 10, color: themeColors.agentWarning }}>queued</Text>
             </View>
+          )}
 
+          {/* Content column: user messages render as a right-aligned rounded
+              bubble (ChatGPT-style pill); assistant messages render as plain
+              text spanning the full width with no bubble background. */}
+          <View
+            className="gap-1"
+            style={
+              isUser
+                ? {
+                    maxWidth: '85%',
+                    backgroundColor: themeColors.surfaceHover,
+                    borderRadius: radii['2xl'],
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }
+                : { width: '100%' }
+            }
+          >
             {/* User attachments: images and files sent with the message */}
             {isUser && message.attachments && message.attachments.length > 0 && (
               <View className="mt-1">
@@ -596,7 +602,6 @@ export const MessageBubble = memo(function MessageBubble({
         <View
           style={{
             flexDirection: 'row',
-            paddingLeft: 48,
             paddingTop: 2,
           }}
         >

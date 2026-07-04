@@ -21,7 +21,7 @@ import {
   type AutoModeDef,
   type ModelDef,
 } from '@/src/features/model-picker/service';
-import { useThemeColors } from '@/src/ui/theme';
+import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 
 function groupBySurface(
   models: ModelDef[],
@@ -317,14 +317,27 @@ export function ModelPickerSheet({
         enablePanDownToClose
         enableDynamicSizing={false}
         backdropComponent={renderBackdrop}
-        backgroundStyle={{ backgroundColor: colors.background }}
+        backgroundStyle={{
+          backgroundColor: colors.background,
+          borderTopLeftRadius: sheetRadius,
+          borderTopRightRadius: sheetRadius,
+        }}
         handleIndicatorStyle={{ backgroundColor: colors.textMuted, width: 36 }}
       >
         <View style={{ paddingHorizontal: 16, paddingBottom: 12, paddingTop: 2 }}>
           <View
             style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>
+            <View style={{ width: 32 }} />
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 17,
+                fontWeight: '600',
+                flex: 1,
+                textAlign: 'center',
+              }}
+            >
               Models
             </Text>
             <Pressable
@@ -341,8 +354,6 @@ export function ModelPickerSheet({
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: colors.surfaceElevated,
-                borderWidth: 1,
-                borderColor: colors.border,
               }}
             >
               <XIcon size={16} color={colors.textSecondary} />

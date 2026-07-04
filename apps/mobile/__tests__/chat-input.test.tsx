@@ -196,6 +196,15 @@ jest.mock('../src/ui/theme', () => ({
     textPrimary: '#fff',
     surfaceElevated: '#1a1a1a',
   },
+  radii: {
+    sm: 6,
+    md: 8,
+    lg: 12,
+    xl: 16,
+    '2xl': 24,
+    '3xl': 32,
+    full: 9999,
+  },
 }));
 
 jest.mock('../src/features/chat/components/TemporaryChatToggle', () => {
@@ -265,8 +274,17 @@ describe('ChatInput', () => {
       expect(getByTestId('voice-input-button')).toBeTruthy();
     });
 
-    it('renders send button', () => {
-      const { getByTestId } = renderInput();
+    it('renders voice-mode button when composer is empty and onOpenVoiceMode is set', () => {
+      // The composer's right circle is a state slot (ChatGPT reference:
+      // empty -> voice-mode waveform, typing -> send, streaming -> stop).
+      // Send-with-content is covered separately in "sending messages" below.
+      const { getByLabelText } = renderInput();
+      expect(getByLabelText('Start voice mode')).toBeTruthy();
+    });
+
+    it('renders send button once the composer has content', () => {
+      const { getByLabelText, getByTestId } = renderInput();
+      fireEvent.changeText(getByLabelText('Message input'), 'Hello');
       expect(getByTestId('send-button')).toBeTruthy();
     });
 

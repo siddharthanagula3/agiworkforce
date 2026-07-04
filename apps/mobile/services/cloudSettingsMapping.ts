@@ -29,6 +29,7 @@
 
 import type {
   Personalization,
+  PersonalizationStyle,
   ThemeMode,
   AccentColor,
   FontPreference,
@@ -57,10 +58,16 @@ export interface CloudPersonalization {
   occupation?: string;
   /** Maps to personalization.instructions on mobile. */
   customInstructions?: string;
+  /** Base response style/tone preset. */
+  style?: PersonalizationStyle;
   /** Response warmth slider 0–100. */
   warmth?: number;
   /** Response enthusiasm slider 0–100. */
   enthusiasm?: number;
+  /** Headers/lists structure slider 0–100. */
+  headersLists?: number;
+  /** Emoji frequency slider 0–100. */
+  emoji?: number;
 }
 
 /** Inner shape of the `notifications` namespace. */
@@ -139,8 +146,11 @@ export function toCloudSettings(
       nickname: personalization.nickname,
       occupation: personalization.occupation,
       customInstructions: personalization.instructions,
+      style: personalization.style,
       warmth: personalization.warmth,
       enthusiasm: personalization.enthusiasm,
+      headersLists: personalization.headersLists,
+      emoji: personalization.emoji,
     },
     notifications: {
       enabled: notificationsEnabled,
@@ -183,15 +193,27 @@ export function applyCloudSettings(partial: CloudSettings): void {
 
   // personalization — use the merging setter to avoid clobbering unsynced fields
   if (partial.personalization) {
-    const { fullName, nickname, occupation, customInstructions, warmth, enthusiasm } =
-      partial.personalization;
+    const {
+      fullName,
+      nickname,
+      occupation,
+      customInstructions,
+      style,
+      warmth,
+      enthusiasm,
+      headersLists,
+      emoji,
+    } = partial.personalization;
     const patch: Partial<Personalization> = {};
     if (fullName !== undefined) patch.fullName = fullName;
     if (nickname !== undefined) patch.nickname = nickname;
     if (occupation !== undefined) patch.occupation = occupation;
     if (customInstructions !== undefined) patch.instructions = customInstructions;
+    if (style !== undefined) patch.style = style;
     if (warmth !== undefined) patch.warmth = warmth;
     if (enthusiasm !== undefined) patch.enthusiasm = enthusiasm;
+    if (headersLists !== undefined) patch.headersLists = headersLists;
+    if (emoji !== undefined) patch.emoji = emoji;
     if (Object.keys(patch).length > 0) store.setPersonalization(patch);
   }
 
