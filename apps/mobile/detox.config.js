@@ -4,17 +4,10 @@
  * Requirements:
  *   - iOS: Xcode 16+, iPhone 17 Pro simulator (or any iPhone 16+ class)
  *   - Android: Android SDK 34+, Pixel 8 emulator API 34
- *   - detox binary: install via `pnpm add -D detox@20` before running
+ *   - detox, detox-cli, ts-jest are devDependencies (installed 2026-07-04)
  *
- * CI note (2026-05-18):
- *   Detox is NOT listed in package.json devDependencies. The founder must
- *   run `pnpm add -D detox@20` once on a machine with a connected simulator
- *   before the suite can execute. See `docs/e2e-setup.md` for the full
- *   runbook. The 5 specs in scripts/screenshots/specs/ are syntactically
- *   valid TypeScript and pass `pnpm typecheck` without the package installed
- *   file). Actual Detox execution requires the native binary.
- *
- * Usage (after installing detox):
+ * Usage:
+ *   iOS build:   pnpm exec detox build --configuration ios.sim.debug
  *   iOS debug:   pnpm exec detox test --configuration ios.sim.debug
  *   iOS release: pnpm exec detox test --configuration ios.sim.release
  *   Android:     pnpm exec detox test --configuration android.emu.debug
@@ -35,15 +28,15 @@ module.exports = {
   apps: {
     'ios.debug': {
       type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/agiworkforce.app',
+      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/AGIWorkforce.app',
       build:
-        'xcodebuild -workspace ios/agiworkforce.xcworkspace -scheme agiworkforce -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
+        'xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
     },
     'ios.release': {
       type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/agiworkforce.app',
+      binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/AGIWorkforce.app',
       build:
-        'xcodebuild -workspace ios/agiworkforce.xcworkspace -scheme agiworkforce -configuration Release -sdk iphonesimulator -derivedDataPath ios/build',
+        'xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Release -sdk iphonesimulator -derivedDataPath ios/build',
     },
     'android.debug': {
       type: 'android.apk',
