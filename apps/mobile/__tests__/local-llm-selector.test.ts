@@ -63,10 +63,7 @@ beforeEach(() => {
 });
 
 // System-tier model IDs (OS-resident, not downloaded) — at least one must exist.
-// gemini-nano-aicore is no longer OS-resident/zero-download: it's a downloaded
-// tasks-genai .task model (see packages/local-llm/src/catalog.ts), so it's
-// intentionally absent from this OS-resident-only list.
-const SYSTEM_TIER_IDS = ['apple-foundation-models'];
+const SYSTEM_TIER_IDS = ['apple-foundation-models', 'gemini-nano-aicore'];
 
 describe('local-llm: catalog', () => {
   it('returns all shippable models including at least one system-tier entry', () => {
@@ -94,23 +91,15 @@ describe('local-llm: catalog', () => {
     }
   });
 
-  it('OS-resident system-tier model (apple-foundation-models): fileSizeBytes=0, role=system-model', () => {
-    const { getModelById } = getLocalLlm();
+  it('system-tier models: fileSizeBytes=0, role=system-multimodal', () => {
+    const { getModelsForRole } = getLocalLlm();
 
-    const sys = getModelById('apple-foundation-models');
-    expect(sys).toBeDefined();
-    expect(sys!.fileSizeBytes).toBe(0);
-    expect(sys!.role).toBe('system-model');
-  });
-
-  it('gemini-nano-aicore is a downloadable system-role model, not OS-resident', () => {
-    const { getModelById } = getLocalLlm();
-
-    const gemma = getModelById('gemini-nano-aicore');
-    expect(gemma).toBeDefined();
-    expect(gemma!.fileSizeBytes).toBeGreaterThan(0);
-    expect(gemma!.role).toBe('system-model');
-    expect(gemma!.format).toBe('task');
+    const systemModels = getModelsForRole('system-multimodal');
+    expect(systemModels.length).toBeGreaterThanOrEqual(1);
+    for (const sys of systemModels) {
+      expect(sys.fileSizeBytes).toBe(0);
+      expect(sys.role).toBe('system-multimodal');
+    }
   });
 
   it('download models have non-zero fileSizeBytes and executorch/llama-rn runtime support', () => {
@@ -126,19 +115,19 @@ describe('local-llm: catalog', () => {
     expect(llama.supportedRuntimes).toContain('executorch');
   });
 
-  it('getModelsForRole(system-model) returns system-tier entries', () => {
+  it('getModelsForRole(system-multimodal) returns system-tier entries', () => {
     const { getModelsForRole } = getLocalLlm();
 
-    const systemTier = getModelsForRole('system-model');
-    expect(systemTier.every((m: { role: string }) => m.role === 'system-model')).toBe(true);
-    expect(systemTier.length).toBeGreaterThanOrEqual(2);
+    const systemTier = getModelsForRole('system-multimodal');
+    expect(systemTier.every((m: { role: string }) => m.role === 'system-multimodal')).toBe(true);
+    expect(systemTier.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('getModelsForRole(default) excludes system-model entries', () => {
+  it('getModelsForRole(default) excludes system-multimodal entries', () => {
     const { getModelsForRole } = getLocalLlm();
 
     const defaultModels = getModelsForRole('default');
-    expect(defaultModels.every((m: { role: string }) => m.role !== 'system-model')).toBe(true);
+    expect(defaultModels.every((m: { role: string }) => m.role !== 'system-multimodal')).toBe(true);
   });
 
   it('returns undefined for unknown model id', () => {

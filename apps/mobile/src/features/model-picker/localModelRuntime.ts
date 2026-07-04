@@ -103,16 +103,9 @@ export async function resolveLocalModelRef(requestedModelId: string): Promise<Lo
     (await getInstalledModel(model.id).catch(() => null));
 
   if (installedModel?.local_path) {
-    // tasks-genai (.task) models are routed to Tier 1 (aicore) by modelId, not
-    // modelPath — selector.ts's canUseTier1ForModel bails out whenever
-    // modelPath is set, which would otherwise misroute a downloaded Gemma
-    // .task file into the Tier 3 llama.rn/GGUF loader. The native module
-    // already knows the on-disk path via tier1PrepareModel (called right
-    // after download in installStore.ts).
-    const isAicoreModel = installedModel.format === 'task';
     return {
       modelId: model.id,
-      modelPath: isAicoreModel ? undefined : installedModel.local_path,
+      modelPath: installedModel.local_path,
       displayName: model.name,
       installed: true,
     };
