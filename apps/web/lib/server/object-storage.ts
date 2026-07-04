@@ -10,6 +10,10 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
  * matters for a chat product serving generated images/attachments repeatedly.
  * Public bucket + permanent URLs, matching the trust model of the prior Vercel
  * Blob usage (all objects were `access: 'public'`).
+ *
+ * Once the CLOUDFLARE_R2_* env vars below are set, run
+ * `node apps/web/scripts/verify-r2-connection.mjs` for an end-to-end smoke
+ * test (upload, public-URL fetch, delete) before relying on this in prod.
  */
 
 function env(name: string): string | undefined {
