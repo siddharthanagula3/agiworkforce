@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -65,6 +66,44 @@ fn saved_denial_message(action: &str) -> String {
         "{} is denied by saved permissions. Use /permissions reset to clear.",
         action
     )
+}
+
+/// Reached when a mutating tool needs approval, there is no TUI/approval
+/// callback installed (headless / `agi exec` context), and stdin is not a
+/// TTY — i.e. there is no way to actually obtain user consent (the
+/// `dialoguer::Confirm` prompt below would fail immediately and silently
+/// resolve to "denied").
+///
+/// Returning a normal `ToolResult { success: false, .. }` here is not enough:
+/// the denial gets reported back to the model as a routine tool result, the
+/// model narrates an apology, and the *process* still exits 0 — a script
+/// driving `agi exec` gets no failure signal even though the requested
+/// mutation never happened. Hard-fail the process instead so non-interactive
+/// callers can detect the failure.
+fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
+    eprintln!(
+        "{}",
+        ts::danger(&format!(
+            "{action} requires approval, but no --full-auto/-y/--dangerously-skip-permissions \
+             flag was passed and stdin is not a terminal, so no confirmation is possible."
+        ))
+    );
+    eprintln!(
+        "{}",
+        format!(
+            "  Refusing to silently continue: exiting with a non-zero status instead of letting \
+             the '{tool_name}' call be auto-denied without signal.",
+        )
+        .dimmed()
+    );
+    std::process::exit(1);
+}
+
+/// True when there is no way to prompt a human for approval right now:
+/// stdin is not attached to a terminal (e.g. `agi exec ... </dev/null`, a
+/// piped/scripted invocation, or a CI runner).
+fn stdin_is_noninteractive() -> bool {
+    !std::io::stdin().is_terminal()
 }
 
 async fn read_text_file_limited(
@@ -448,6 +487,9 @@ pub(super) async fn execute_write_file(
                 } else {
                     // No TUI callback (REPL / headless): preview the change, then fall
                     // back to the blocking dialoguer confirm.
+                    if stdin_is_noninteractive() {
+                        abort_noninteractive_auto_deny("write_file", "Writing this file");
+                    }
                     if file_path.exists() && file_path.is_file() {
                         match read_existing_text_for_preview(file_path) {
                             Ok(existing) => {
@@ -710,6 +752,9 @@ pub(super) async fn execute_edit_file(
                         &permission_paths,
                     );
                 } else {
+                    if stdin_is_noninteractive() {
+                        abort_noninteractive_auto_deny("edit_file", "Editing this file");
+                    }
                     eprintln!("  {} {}", ts::deletion("-"), ts::deletion(old_preview));
                     eprintln!("  {} {}", ts::addition("+"), ts::addition(new_preview));
 
@@ -816,6 +861,9 @@ pub(super) async fn execute_apply_patch(
                         false
                     }
                 } else {
+                    if stdin_is_noninteractive() {
+                        abort_noninteractive_auto_deny("apply_patch", "Applying this patch");
+                    }
                     Confirm::new()
                         .with_prompt("Apply this patch?")
                         .default(false)
@@ -997,6 +1045,9 @@ pub(super) async fn execute_multiedit(
                         &permission_paths,
                     );
                 } else {
+                    if stdin_is_noninteractive() {
+                        abort_noninteractive_auto_deny("multiedit", "Applying these edits");
+                    }
                     eprintln!(
                         "{}",
                         format!("  Diff for {} ({} edits):", path, edits.len()).dimmed()

@@ -750,6 +750,9 @@ enum SessionAction {
         /// New session name; auto-generated if omitted.
         #[arg(long = "as")]
         as_name: Option<String>,
+        /// Overwrite an existing session with the same name/id if one exists.
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -1138,6 +1141,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             session_id,
             at_turn,
             as_name,
+            force,
         } => {
             // Load source session without creating a fork copy (fork=false avoids
             // the UUID-named phantom copy that the old path wrote).
@@ -1182,6 +1186,13 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             } else {
                 format!("{}-fork", session_id)
             };
+            // Refuse to silently clobber an existing session with the same target
+            // id/name unless the user explicitly opts in with --force.
+            if !force && runtime::session_control::managed_session_exists(&new_id)? {
+                anyhow::bail!(
+                    "session '{new_id}' already exists — use --force to overwrite it or choose a different --as name",
+                );
+            }
             // Persist the forked (and optionally truncated) session to disk under
             // the user-chosen ID so `agi --resume <as_name>` works immediately.
             let resolved = runtime::session_control::create_managed_session_with_id(
@@ -1206,6 +1217,36 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// Classify a `agi plugin install <source>` argument as a git remote or a
+/// local filesystem path.
+///
+/// A naive `.contains("git")` substring check misrouted any local directory
+/// whose path merely contained the letters "git" (e.g. `my-git-plugin`, or
+/// even `digit-plugin`) into `git clone`, which then failed with a
+/// confusing "repository does not exist" error. An existing local path is
+/// always treated as local regardless of its name; remaining sources are
+/// only classified as git when they look like an actual git remote (a
+/// scheme URL, scp-like `user@host:path` shorthand, or a `.git` suffix).
+fn is_git_plugin_source(source: &str) -> bool {
+    // An existing local path wins over any name-based heuristic.
+    if std::path::Path::new(source).exists() {
+        return false;
+    }
+    if source.starts_with("http://")
+        || source.starts_with("https://")
+        || source.starts_with("git://")
+        || source.starts_with("ssh://")
+    {
+        return true;
+    }
+    // scp-like SSH shorthand: user@host:path — but not an absolute local
+    // path that happens to contain a colon-free '@' somewhere.
+    if source.contains('@') && source.contains(':') && !source.starts_with('/') {
+        return true;
+    }
+    source.ends_with(".git")
 }
 
 /// Fetch the user's remaining credit percentage from the AGI cloud API.
@@ -1585,22 +1626,34 @@ pub async fn run_main() -> Result<()> {
                 Ok(())
             }
             Command::Apply { session_id, file } => {
-                if let Some(fp) = file {
+                // Propagate a non-zero exit code whenever the underlying
+                // `git apply` did not actually succeed, so scripts/CI can
+                // detect a failed patch instead of always seeing exit 0.
+                let result = if let Some(fp) = file {
                     let r = apply_patch::apply_from_file(std::path::Path::new(fp)).await?;
                     apply_patch::print_patch_result(&r);
+                    Some(r)
                 } else if let Some(sid) = session_id {
                     let r = apply_patch::apply_from_session(sid).await?;
                     apply_patch::print_patch_result(&r);
+                    Some(r)
                 } else {
                     let conn = sessions::open_db()?;
                     if let Some(s) = sessions::list_sessions(&conn, 1)?.first() {
                         let r = apply_patch::apply_from_session(&s.id).await?;
                         apply_patch::print_patch_result(&r);
+                        Some(r)
                     } else {
                         eprintln!("No sessions found.");
+                        None
                     }
+                };
+                match result {
+                    Some(r) if r.exit_code != 0 => {
+                        anyhow::bail!("patch did not apply cleanly (exit code {})", r.exit_code)
+                    }
+                    _ => Ok(()),
                 }
-                Ok(())
             }
             Command::Sandbox { full_auto, command } => {
                 let cmd_str = command.join(" ");
@@ -1728,11 +1781,10 @@ pub async fn run_main() -> Result<()> {
                             match plugins::derive_plugin_install_name(source, name.as_deref()) {
                                 Ok(name) => name,
                                 Err(error) => {
-                                    eprintln!("Refusing install: {error}");
-                                    return Ok(());
+                                    anyhow::bail!("Refusing install: {error}");
                                 }
                             };
-                        let psrc = if source.starts_with("http") || source.contains("git") {
+                        let psrc = if is_git_plugin_source(source) {
                             plugins::PluginSource::Git {
                                 url: source.clone(),
                                 branch: None,
@@ -1746,18 +1798,16 @@ pub async fn run_main() -> Result<()> {
                                 plugins::PluginIntegrity::PinnedSha256(s.to_string())
                             }
                             (Some(s), _) => {
-                                eprintln!(
+                                anyhow::bail!(
                                     "Refusing install: unsupported integrity claim '{}'. Only --integrity sha256:<hex> is implemented.",
                                     s
                                 );
-                                return Ok(());
                             }
                             (None, true) => plugins::PluginIntegrity::UnsafeSkip,
                             (None, false) => {
-                                eprintln!(
+                                anyhow::bail!(
                                     "Refusing install: pass --integrity sha256:<hex> (or --unsafe-no-integrity)"
                                 );
-                                return Ok(());
                             }
                         };
                         match mgr.install(plugins::PluginInstallRequest {
@@ -1770,16 +1820,19 @@ pub async fn run_main() -> Result<()> {
                                     Some(fmt) => format!(" ({} manifest)", fmt.short_tag()),
                                     None => String::new(),
                                 };
-                                println!("Installed to {}{}", path.display(), fmt_tag)
+                                println!("Installed to {}{}", path.display(), fmt_tag);
+                                Ok(())
                             }
                             plugins::PluginInstallOutcome::AlreadyInstalled { path } => {
-                                println!("Already at {}", path.display())
+                                println!("Already at {}", path.display());
+                                Ok(())
                             }
                             plugins::PluginInstallOutcome::Failed { error } => {
-                                eprintln!("Failed: {}", error)
+                                // Non-zero exit on failure so scripts/CI can detect
+                                // it, matching `agi marketplace install`'s behavior.
+                                anyhow::bail!("Failed: {}", error)
                             }
                         }
-                        Ok(())
                     }
                 }
             }
@@ -2339,6 +2392,19 @@ pub async fn run_main() -> Result<()> {
         }
     };
 
+    // Parse `-m model1,model2,...` fallback-chain syntax. Without this the
+    // whole comma-joined string was passed through as a single literal model
+    // id (e.g. "gemma4:e4b,ministral-3:14b"), so the fallback chain never
+    // fired and lookups failed with a bogus "model not installed" error. The
+    // `Exec` subcommand already parses this correctly (see `FallbackChain::parse`
+    // above) — mirror that here for the interactive/one-shot path so `-m`
+    // behaves consistently across `agi exec` and plain `agi`.
+    let model_fallback_chain = routing::fallback::FallbackChain::parse(&model);
+    let model: String = model_fallback_chain
+        .head()
+        .map(|s| s.to_string())
+        .unwrap_or(model);
+
     // Read file contents for -f flag — text files and images are handled separately
     let file_context_result = read_file_contexts(&cli.files)?;
 
@@ -2460,6 +2526,7 @@ pub async fn run_main() -> Result<()> {
             cli.session_id_override.clone(),
             cli.json_events,
             cli.agent.clone(),
+            model_fallback_chain.clone(),
         )
         .await;
     }
@@ -2869,6 +2936,7 @@ pub async fn run_oneshot(
     session_id_override: Option<String>,
     json_events: bool,
     agent_name: Option<String>,
+    fallback_chain: routing::fallback::FallbackChain,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new_checked(
         model,
@@ -2887,6 +2955,12 @@ pub async fn run_oneshot(
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
+    // `-m model1,model2,...` fallback chain — mirrors the `Exec` subcommand's
+    // handling so a `,`-separated `-m` list actually rotates through
+    // fallback models on transient failure instead of being silently dropped.
+    if fallback_chain.primaries.len() > 1 {
+        session.fallback_chain = Some(fallback_chain);
+    }
     // Sprint B4: thread the permission mode + auto-approval into the
     // session before any send. `--mode plan` here means the model sees
     // the plan-mode reminder and the dispatcher gates mutating tools.
