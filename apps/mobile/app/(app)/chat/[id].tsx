@@ -38,10 +38,12 @@ import {
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
+import { ApiPaywallError } from '@/services/api';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { useWaitlistStore } from '@/src/features/waitlist';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
+import { TemporaryChatBanner } from '@/src/features/chat/components/TemporaryChatBanner';
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
 import {
@@ -128,6 +130,7 @@ export default function ChatScreen() {
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const paywallError = useChatStore((s) => s.paywallError);
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
+  const setPaywallError = useChatStore((s) => s.setPaywallError);
   const sendError = useChatStore((s) => s.error);
   const clearError = useChatStore((s) => s.clearError);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
@@ -283,6 +286,17 @@ export default function ChatScreen() {
             });
           })
           .catch((err) => {
+            if (err instanceof ApiPaywallError) {
+              // Paywall/tier-limit block — remove the "generating" placeholder
+              // and surface the upgrade sheet instead of a generic failure.
+              deleteMessage(id, assistantMessageId);
+              setPaywallError({
+                feature: err.feature,
+                requiredTier: err.requiredTier,
+                reason: err.reason,
+              });
+              return;
+            }
             const message = err instanceof Error ? err.message : String(err);
             console.warn('[ChatScreen] Image generation failed:', err);
             failImageGeneration(id, assistantMessageId, message);
@@ -862,6 +876,9 @@ export default function ChatScreen() {
             </Text>
           </View>
         )}
+
+        {/* Temporary chat explainer — shown once per app session */}
+        <TemporaryChatBanner />
 
         {/* Messages */}
         {isLoadingMessages && conversationMessages.length === 0 ? (

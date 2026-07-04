@@ -101,6 +101,7 @@ export async function consolidateFactsFromTurn(params: {
             content: fact,
             category: null,
             source: 'mobile',
+            pinned: false,
             createdAt: now,
             updatedAt: now,
             isDeleted: false,

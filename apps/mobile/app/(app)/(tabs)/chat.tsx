@@ -25,6 +25,7 @@ import {
 } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
+import { ApiPaywallError } from '@/services/api';
 import { useModelStore } from '@/src/features/model-picker/store';
 import {
   DEFAULT_CLOUD_MODEL_ID,
@@ -81,6 +82,8 @@ export default function ChatTabScreen() {
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
   const failImageGeneration = useChatStore((s) => s.failImageGeneration);
+  const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearError = useChatStore((s) => s.clearError);
   const { isOnline } = useNetworkStatus();
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -223,6 +226,17 @@ export default function ChatTabScreen() {
               });
             })
             .catch((err) => {
+              if (err instanceof ApiPaywallError) {
+                // Paywall/tier-limit block — remove the "generating" placeholder
+                // and surface the upgrade sheet on the destination chat screen.
+                deleteMessage(conversationId, assistantMessageId);
+                setPaywallError({
+                  feature: err.feature,
+                  requiredTier: err.requiredTier,
+                  reason: err.reason,
+                });
+                return;
+              }
               const message = err instanceof Error ? err.message : String(err);
               console.warn('[ChatTabScreen] Image generation failed:', err);
               failImageGeneration(conversationId, assistantMessageId, message);
@@ -254,6 +268,8 @@ export default function ChatTabScreen() {
       beginImageGeneration,
       completeImageGeneration,
       failImageGeneration,
+      deleteMessage,
+      setPaywallError,
     ],
   );
 
@@ -459,21 +475,26 @@ export default function ChatTabScreen() {
         <View className="flex-row items-center gap-2">
           <Pressable
             onPress={handleOpenDrawer}
-            className="w-8 h-8 rounded-lg items-center justify-center"
+            className="w-8 h-8 rounded-full items-center justify-center"
             style={({ pressed }) => ({ backgroundColor: pressed ? c.surfaceHover : c.transparent })}
             accessibilityLabel="Open navigation drawer"
             accessibilityRole="button"
           >
             <Menu size={18} color={c.textSecondary} />
           </Pressable>
-          <AgiMark size={20} />
-          <Text variant="subheading" style={{ color: c.textPrimary }}>
-            AGI
-          </Text>
+          <View
+            className="flex-row items-center gap-1.5 rounded-full"
+            style={{ backgroundColor: c.inputSurface, paddingHorizontal: 12, height: 32 }}
+          >
+            <AgiMark size={18} />
+            <Text variant="subheading" style={{ color: c.textPrimary }}>
+              AGI
+            </Text>
+          </View>
         </View>
         <Pressable
           onPress={handleNewChat}
-          className="w-8 h-8 rounded-lg items-center justify-center"
+          className="w-8 h-8 rounded-full items-center justify-center"
           style={{ backgroundColor: c.accentSurface }}
           accessibilityLabel="New chat"
           accessibilityRole="button"
