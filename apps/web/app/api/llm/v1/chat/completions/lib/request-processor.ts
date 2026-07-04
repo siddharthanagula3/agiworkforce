@@ -131,6 +131,12 @@ export const ChatCompletionRequestSchema = z.object({
     .optional(),
   effort: z.string().optional(),
   use_prompt_cache: z.boolean().optional(),
+  // Optional, additive: identifies the web conversation this request belongs to (see
+  // shared/stores/chat-store.ts). Backward-compatible -- any caller that omits it (other
+  // surfaces, direct API users) is unaffected. Used ONLY to key conversation-scoped E2B
+  // sandbox persistence (lib/e2b/runtime.ts); never trusted for authorization (ownership
+  // is enforced separately by /api/chat/conversations routes).
+  conversation_id: z.string().max(256).optional(),
 });
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
@@ -138,6 +144,8 @@ export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 export type ProcessedRequest = {
   requestId: string;
   chatRequest: ChatCompletionRequest;
+  /** Conversation this request belongs to, if the caller sent one (see conversation_id). */
+  conversationId: string | undefined;
   requestedModel: string;
   provider: string;
   estimatedCostCents: number;
@@ -1175,6 +1183,7 @@ export async function processRequest(
     ok: true,
     requestId,
     chatRequest,
+    conversationId: chatRequest.conversation_id,
     requestedModel,
     provider,
     estimatedCostCents,

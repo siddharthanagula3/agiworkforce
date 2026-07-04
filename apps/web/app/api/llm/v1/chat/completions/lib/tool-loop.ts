@@ -44,7 +44,8 @@ import {
   type WebMcpToolDef,
 } from '@/lib/mcp-tool-executor';
 import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
-import { getE2BExecutor } from '@/lib/e2b/runtime';
+import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
+import type { E2BExecutor } from '@/lib/e2b/types';
 import type { ProcessedRequest } from './request-processor';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -361,9 +362,15 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
 /**
  * Execute a single MCP tool call.
  * Returns the text content of the result and whether it was an error.
+ *
+ * `e2bExecutor` is resolved ONCE per tool loop (see `runToolLoop`'s `resolveE2BExecutor`)
+ * and reused across every execution-tool call in the turn/conversation -- this function
+ * does not create or dispose it, so state (variables/imports in a code context) persists
+ * across calls instead of being torn down after each one.
  */
 async function runMcpTool(
   toolCall: PendingToolCall,
+  e2bExecutor: () => Promise<E2BExecutor | null>,
 ): Promise<{ content: string; isError: boolean }> {
   // E2B execution interception: if a code/file/folder execution tool is ever invoked, it
   // runs in the E2B sandbox (gated, fail-closed), never as a generic MCP tool.
@@ -379,17 +386,12 @@ async function runMcpTool(
   // FAIL-CLOSED: a null/erroring executor surfaces an explicit error to the model — never a
   // silent no-op, never a provider-native fallback.
   if (isExecutionTool(toolCall.qualifiedName)) {
-    const executor = await getE2BExecutor();
-    try {
-      const result = await routeExecutionTool(executor, toolCall.qualifiedName, toolCall.args);
-      return {
-        content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
-        isError: !result.ok,
-      };
-    } finally {
-      // One sandbox per execution tool call (Phase B: conversation-scoped sessions).
-      await executor?.dispose();
-    }
+    const executor = await e2bExecutor();
+    const result = await routeExecutionTool(executor, toolCall.qualifiedName, toolCall.args);
+    return {
+      content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
+      isError: !result.ok,
+    };
   }
 
   const parsed = parseQualifiedToolName(toolCall.qualifiedName);
@@ -460,127 +462,162 @@ export async function* runToolLoop(
   // Mutable message thread for re-invocations.
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
-  let step = 0;
-  while (step < maxSteps) {
-    step++;
-
-    // Build the request for this step.
-    const stepRequest = { ...llmRequest, messages };
-
-    // Call the provider.
-    let providerStream: ReadableStream;
-    try {
-      providerStream = await LLMProviderFactory.streamRequest(processed.provider, stepRequest);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error(
-        { provider: processed.provider, step, error: msg },
-        '[tool-loop] provider call failed',
-      );
-      yield encoder.encode(
-        sseData({
-          choices: [{ delta: { content: `\n\nError: ${msg}` }, index: 0 }],
-          model: responseModel,
-        }),
-      );
-      break;
+  // Conversation-scoped E2B executor: resolved (created, or resumed from a paused
+  // session) at most ONCE per loop invocation and reused across every execution-tool
+  // call in every step of this turn, so a code context's variables/imports persist
+  // instead of being torn down after each call. Cleaned up in the `finally` below --
+  // paused (not killed) when `conversationId` is known so the NEXT turn's loop can
+  // resume it; killed immediately otherwise (no conversation to resume into).
+  const conversationId = processed.conversationId;
+  let e2bExecutor: E2BExecutor | null = null;
+  let e2bExecutorResolved = false;
+  async function resolveE2BExecutor(): Promise<E2BExecutor | null> {
+    if (!e2bExecutorResolved) {
+      e2bExecutor = await getE2BExecutor(conversationId);
+      e2bExecutorResolved = true;
     }
-
-    // Collect and pass through the provider stream.
-    const { lines, finishReason, pendingToolCalls, textContent } =
-      await collectProviderStream(providerStream);
-
-    // Forward all collected lines to the client.
-    for (const line of lines) {
-      yield encoder.encode(line);
-    }
-
-    // If no tool calls, the model is done: emit [DONE] and exit.
-    if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
-      yield encoder.encode(sseDone());
-      break;
-    }
-
-    // Append the assistant's tool-use turn to the thread.
-    const assistantToolCalls = pendingToolCalls.map((tc) => ({
-      id: tc.id,
-      type: 'function' as const,
-      function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
-    }));
-    messages.push({
-      role: 'assistant',
-      content: textContent,
-      tool_calls: assistantToolCalls as unknown[],
-    });
-
-    // In manual approval mode, emit an approval request for each tool and
-    // stop the stream -- the client resumes via the approve endpoint.
-    // In auto mode, execute immediately.
-    if (approvalMode === 'manual') {
-      for (const tc of pendingToolCalls) {
-        yield encoder.encode(
-          toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
-        );
-      }
-      // Emit [DONE] so the client knows the current stream is complete
-      // and the approval prompt is the terminal event for this turn.
-      yield encoder.encode(sseDone());
-      return;
-    }
-
-    // Auto mode: execute tools.
-    // Partition into parallel (read-only) and serial (mutating) groups.
-    const readOnly = pendingToolCalls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
-    const mutating = pendingToolCalls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
-
-    // Emit "running" status for all tools. Include tc.args so the client can
-    // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
-    for (const tc of pendingToolCalls) {
-      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
-    }
-
-    // Execute read-only tools concurrently.
-    const results: { tc: PendingToolCall; content: string; isError: boolean }[] = [];
-
-    const parallelResults = await Promise.all(
-      readOnly.map(async (tc) => {
-        const result = await runMcpTool(tc);
-        return { tc, ...result };
-      }),
-    );
-    results.push(...parallelResults);
-
-    // Execute mutating tools serially.
-    for (const tc of mutating) {
-      const result = await runMcpTool(tc);
-      results.push({ tc, ...result });
-    }
-
-    // Emit status + result events, and append tool result messages.
-    for (const { tc, content, isError } of results) {
-      yield encoder.encode(
-        toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
-      );
-      yield encoder.encode(
-        toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
-      );
-
-      messages.push({
-        role: 'tool',
-        content,
-        tool_call_id: tc.id,
-      });
-    }
-
-    // Continue to next step.
+    return e2bExecutor;
   }
 
-  if (step >= maxSteps) {
-    logger.warn(
-      { maxSteps, provider: processed.provider },
-      '[tool-loop] max steps reached without terminal stop',
-    );
-    yield encoder.encode(sseDone());
+  try {
+    let step = 0;
+    while (step < maxSteps) {
+      step++;
+
+      // Build the request for this step.
+      const stepRequest = { ...llmRequest, messages };
+
+      // Call the provider.
+      let providerStream: ReadableStream;
+      try {
+        providerStream = await LLMProviderFactory.streamRequest(processed.provider, stepRequest);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(
+          { provider: processed.provider, step, error: msg },
+          '[tool-loop] provider call failed',
+        );
+        yield encoder.encode(
+          sseData({
+            choices: [{ delta: { content: `\n\nError: ${msg}` }, index: 0 }],
+            model: responseModel,
+          }),
+        );
+        break;
+      }
+
+      // Collect and pass through the provider stream.
+      const { lines, finishReason, pendingToolCalls, textContent } =
+        await collectProviderStream(providerStream);
+
+      // Forward all collected lines to the client.
+      for (const line of lines) {
+        yield encoder.encode(line);
+      }
+
+      // If no tool calls, the model is done: emit [DONE] and exit.
+      if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
+        yield encoder.encode(sseDone());
+        break;
+      }
+
+      // Append the assistant's tool-use turn to the thread.
+      const assistantToolCalls = pendingToolCalls.map((tc) => ({
+        id: tc.id,
+        type: 'function' as const,
+        function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
+      }));
+      messages.push({
+        role: 'assistant',
+        content: textContent,
+        tool_calls: assistantToolCalls as unknown[],
+      });
+
+      // In manual approval mode, emit an approval request for each tool and
+      // stop the stream -- the client resumes via the approve endpoint.
+      // In auto mode, execute immediately.
+      if (approvalMode === 'manual') {
+        for (const tc of pendingToolCalls) {
+          yield encoder.encode(
+            toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
+          );
+        }
+        // Emit [DONE] so the client knows the current stream is complete
+        // and the approval prompt is the terminal event for this turn.
+        yield encoder.encode(sseDone());
+        return;
+      }
+
+      // Auto mode: execute tools.
+      // Partition into parallel (read-only) and serial (mutating) groups.
+      const readOnly = pendingToolCalls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
+      const mutating = pendingToolCalls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
+
+      // Emit "running" status for all tools. Include tc.args so the client can
+      // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
+      for (const tc of pendingToolCalls) {
+        yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
+      }
+
+      // Execute read-only tools concurrently.
+      const results: { tc: PendingToolCall; content: string; isError: boolean }[] = [];
+
+      const parallelResults = await Promise.all(
+        readOnly.map(async (tc) => {
+          const result = await runMcpTool(tc, resolveE2BExecutor);
+          return { tc, ...result };
+        }),
+      );
+      results.push(...parallelResults);
+
+      // Execute mutating tools serially.
+      for (const tc of mutating) {
+        const result = await runMcpTool(tc, resolveE2BExecutor);
+        results.push({ tc, ...result });
+      }
+
+      // Emit status + result events, and append tool result messages.
+      for (const { tc, content, isError } of results) {
+        yield encoder.encode(
+          toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
+        );
+        yield encoder.encode(
+          toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
+        );
+
+        messages.push({
+          role: 'tool',
+          content,
+          tool_call_id: tc.id,
+        });
+      }
+
+      // Continue to next step.
+    }
+
+    if (step >= maxSteps) {
+      logger.warn(
+        { maxSteps, provider: processed.provider },
+        '[tool-loop] max steps reached without terminal stop',
+      );
+      yield encoder.encode(sseDone());
+    }
+  } finally {
+    // Lifecycle cleanup: only relevant if an E2B execution tool actually ran during this
+    // loop invocation. Runs on normal completion, on `return` (manual-approval suspend),
+    // on `break` (provider error / terminal stop), AND on early `.return()` from the
+    // caller's `cancel()` (client disconnect / abort) -- generator `finally` blocks fire
+    // in all of these cases, closing the billing-leak gap of a mid-turn abort.
+    if (e2bExecutor) {
+      if (conversationId) {
+        // Pause (not kill): stops billing while preserving sandbox + context state so
+        // the NEXT turn's runToolLoop can resume it via getE2BExecutor(conversationId).
+        await pauseE2BSession(conversationId);
+      } else {
+        // No conversation to resume into -- release the sandbox immediately.
+        await e2bExecutor.dispose();
+      }
+    }
   }
 }
 
