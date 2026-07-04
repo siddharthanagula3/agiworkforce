@@ -10,23 +10,36 @@
  * basic (monthly only), pro (monthly + yearly), max (monthly only), team (monthly + yearly).
  * `free`, `local-only`, `byok`, and `enterprise` are not purchasable in-app.
  */
-import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 
 export type PurchasableTier = Extract<BillingPlanTier, 'basic' | 'pro' | 'max' | 'team'>;
 
-const PURCHASABLE_TIERS: ReadonlySet<BillingPlanTier> = new Set<BillingPlanTier>([
-  'basic',
-  'pro',
-  'max',
-  'team',
-]);
+/**
+ * Derived from `BILLING_PLAN_PRICING` (the single source of truth in
+ * `@agiworkforce/types`) rather than hardcoded here a second time — a tier
+ * is purchasable in-app iff it has a positive monthly price. Keeps this list
+ * from drifting if pricing.ts adds/removes a paid tier.
+ */
+const PURCHASABLE_TIERS: ReadonlySet<BillingPlanTier> = new Set(
+  Object.values(BILLING_PLAN_PRICING)
+    .filter((p) => p.monthlyPriceUsd > 0)
+    .map((p) => p.id),
+);
 
 export function isPurchasableTier(tier: BillingPlanTier): tier is PurchasableTier {
   return PURCHASABLE_TIERS.has(tier);
 }
 
-/** Tiers that offer a yearly interval. `basic` and `max` are monthly-only today. */
-export const YEARLY_AVAILABLE_TIERS: ReadonlySet<PurchasableTier> = new Set(['pro', 'team']);
+/** Tiers that offer a yearly interval, derived the same way from `BILLING_PLAN_PRICING`. */
+export const YEARLY_AVAILABLE_TIERS: ReadonlySet<PurchasableTier> = new Set(
+  Object.values(BILLING_PLAN_PRICING)
+    .filter((p) => p.yearlyPriceUsd > 0)
+    .map((p) => p.id as PurchasableTier),
+);
 
 interface IapProductId {
   /** App Store Connect product/subscription identifier. */
