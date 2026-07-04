@@ -1,15 +1,14 @@
 import 'server-only';
 
 import { randomUUID } from 'crypto';
-import { put, del } from '@vercel/blob';
+import { putObject, deleteObject, isObjectStorageConfigured } from './object-storage';
 
 /**
- * Durable object storage for AI-generated media, backed by Vercel Blob.
+ * Durable object storage for AI-generated media, backed by Cloudflare R2.
  *
- * `BLOB_READ_WRITE_TOKEN` is injected automatically on Vercel deployments; when
- * it's absent (e.g. a local dev branch without the token) callers should treat
- * persistence as best-effort and fall back to returning media inline, so a
- * missing token never breaks generation.
+ * When R2 is not configured (e.g. a local dev branch without credentials)
+ * callers should treat persistence as best-effort and fall back to returning
+ * media inline, so missing config never breaks generation.
  */
 
 export interface StoredMedia {
@@ -19,9 +18,9 @@ export interface StoredMedia {
   contentType: string;
 }
 
-/** True when Vercel Blob is configured (token present). */
+/** True when Cloudflare R2 is configured. */
 export function isMediaStorageConfigured(): boolean {
-  return Boolean(process.env['BLOB_READ_WRITE_TOKEN']);
+  return isObjectStorageConfigured();
 }
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -64,15 +63,11 @@ export async function storeMedia(params: {
 }): Promise<StoredMedia> {
   const { userId, kind, data, contentType } = params;
   const pathname = `media/${kind}/${userId}/${randomUUID()}.${extForMime(contentType)}`;
-  const blob = await put(pathname, data, {
-    access: 'public',
-    contentType,
-    addRandomSuffix: false,
-  });
-  return { url: blob.url, pathname, byteSize: data.byteLength, contentType };
+  const { url } = await putObject({ key: pathname, data, contentType });
+  return { url, pathname, byteSize: data.byteLength, contentType };
 }
 
-/** Remove a previously stored blob by pathname (best-effort cleanup). */
+/** Remove a previously stored object by pathname (best-effort cleanup). */
 export async function deleteStoredMedia(pathname: string): Promise<void> {
-  await del(pathname);
+  await deleteObject(pathname);
 }

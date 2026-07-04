@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -19,6 +20,10 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
  */
 
 export const runtime = 'nodejs';
+
+const DeleteMediaQuerySchema = z.object({
+  id: z.string().uuid(),
+});
 
 function headers(request: NextRequest) {
   return { ...getCorsHeaders(request), ...getSecurityHeaders() };
@@ -44,12 +49,13 @@ async function handleDeleteMedia(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const id = request.nextUrl.searchParams.get('id');
-  if (!id) {
-    throw createError.validation('id query parameter is required');
+  const rawId = request.nextUrl.searchParams.get('id');
+  const parsed = DeleteMediaQuerySchema.safeParse({ id: rawId });
+  if (!parsed.success) {
+    throw createError.validation('A valid id query parameter (uuid) is required');
   }
 
-  const deleted = await softDeleteMediaAsset(userId, id);
+  const deleted = await softDeleteMediaAsset(userId, parsed.data.id);
   return NextResponse.json({ success: deleted }, { headers: headers(request) });
 }
 

@@ -11,14 +11,14 @@
  *   - AddSourcesModal: opened by the "Add sources" button.
  *   - File list: reuses the same rendering logic as KnowledgeFilesPanel.
  *
- * Upload logic (Vercel Blob + /api/projects/[id]/knowledge-files) lives here
- * directly, extracted from KnowledgeFilesPanel so SourcesPanel fully owns the
- * sources-tab state without prop-drilling through KnowledgeFilesPanel.
+ * Upload logic (presigned R2 upload + /api/projects/[id]/knowledge-files)
+ * lives here directly, extracted from KnowledgeFilesPanel so SourcesPanel
+ * fully owns the sources-tab state without prop-drilling through
+ * KnowledgeFilesPanel.
  */
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
-import { put } from '@vercel/blob';
 import { HardDrive, MessageSquare, Upload } from 'lucide-react';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { FilePreviewModal } from './FilePreviewModal';
@@ -144,19 +144,46 @@ export function SourcesPanel({ projectId }: Props) {
       const arrayBuffer = await file.arrayBuffer();
       const checksumSha256 = await sha256Hex(arrayBuffer);
 
-      const timestamp = Date.now();
-      const ext = file.name.split('.').pop() ?? 'bin';
-      const storagePath = `knowledge-files/projects/${projectId}/${timestamp}_${checksumSha256.slice(0, 8)}.${ext}`;
+      const csrfToken = await getCsrfToken();
 
-      const uploadedBlob = await put(storagePath, file, {
-        access: 'public',
-        contentType: file.type || 'application/octet-stream',
+      const presignRes = await fetch('/api/uploads/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+        body: JSON.stringify({
+          kind: 'knowledge-file',
+          fileName: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          byteCount: file.size,
+          projectId,
+        }),
       });
+
+      if (!presignRes.ok) {
+        const err = (await presignRes.json().catch(() => ({}))) as { message?: string };
+        throw new Error(err.message ?? `Failed to get upload URL (HTTP ${presignRes.status})`);
+      }
+
+      const presign = (await presignRes.json()) as {
+        uploadUrl: string;
+        uploadHeaders?: Record<string, string>;
+        publicUrl: string;
+      };
+
+      const putRes = await fetch(presign.uploadUrl, {
+        method: 'PUT',
+        headers: presign.uploadHeaders ?? {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file,
+      });
+
+      if (!putRes.ok) {
+        throw new Error(`Upload failed (HTTP ${putRes.status})`);
+      }
 
       setUploadState({ status: 'uploading', fileName: file.name, progress: 80 });
 
-      const storageUri = uploadedBlob.url;
-      const csrfToken = await getCsrfToken();
+      const storageUri = presign.publicUrl;
 
       const response = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`,
