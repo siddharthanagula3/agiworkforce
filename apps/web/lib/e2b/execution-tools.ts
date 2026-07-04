@@ -146,9 +146,11 @@ export function modelSupportsCodeExecution(provider: string): boolean {
 /**
  * Cap a string returned to the model (memory/context guard). Used for BOTH the success
  * output and the error string — an executor error can carry model-influenced content
- * (e.g. a runtime error `value`), so it must be bounded too.
+ * (e.g. a runtime error `value`), so it must be bounded too. Exported so other tool
+ * result paths (generic MCP tool output in tool-loop.ts) can share the same bound —
+ * see design doc §4.3 (MCP tool output is unbounded, a memory-exhaustion risk).
  */
-function capOutput(output: string): string {
+export function capOutput(output: string): string {
   if (Buffer.byteLength(output, 'utf8') <= MAX_EXECUTION_OUTPUT_BYTES) return output;
   // Slice by bytes, not chars, to honor the byte cap with multibyte content.
   const buf = Buffer.from(output, 'utf8').subarray(0, MAX_EXECUTION_OUTPUT_BYTES);
