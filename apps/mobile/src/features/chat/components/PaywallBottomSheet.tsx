@@ -4,7 +4,9 @@
  * Opens as a @gorhom/bottom-sheet modal when an ApiPaywallError is caught in
  * the chat send path. Renders the gated feature name, required tier, optional
  * reason string, and two CTAs:
- *   - "Upgrade to <Tier>" — opens the browser to /pricing?from=mobile-paywall
+ *   - "Upgrade to <Tier>" — triggers the native StoreKit/Play Billing purchase
+ *     sheet via `useIapPurchaseFlow` (never a web/browser checkout — Apple/Google
+ *     require native IAP for in-app subscription purchases).
  *   - "Try later" — dismisses the sheet
  *
  * Design mirrors the web InlinePaywallCard but uses React Native primitives.
@@ -26,8 +28,8 @@
  *   />
  */
 
-import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, Pressable } from 'react-native';
+import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { View, Pressable, ActivityIndicator } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -37,7 +39,11 @@ import { ArrowUpCircle, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import { normalizeBillingPlanTier } from '@agiworkforce/types';
+import { isPurchasableTier, type PurchasableTier } from '@/src/features/billing/iapProducts';
+import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
+import { useIapStore } from '@/src/features/billing/iapStore';
 
 // ---------------------------------------------------------------------------
 // Static lookup tables — module-level so they are never recreated on render.
@@ -70,6 +76,67 @@ const UNKNOWN_FEATURE_LABEL = 'This feature';
 
 /** Fallback label when the tier key is unrecognised. */
 const UNKNOWN_TIER_LABEL = 'a higher';
+
+// ---------------------------------------------------------------------------
+// Native IAP upgrade button — only mounted when `FEATURES.iap` is on and the
+// resolved tier has a real StoreKit/Play product. `useIapPurchaseFlow` must
+// not be called unconditionally: it lazily `require()`s `react-native-iap`,
+// whose native module isn't linked while the flag is off, so calling the hook
+// outside this gated child would crash the paywall on every render.
+// ---------------------------------------------------------------------------
+
+function IapUpgradeButton({
+  tier,
+  tierLabel,
+  onPurchased,
+}: {
+  tier: PurchasableTier;
+  tierLabel: string;
+  onPurchased: () => void;
+}) {
+  const colors = useThemeColors();
+  const { purchase } = useIapPurchaseFlow();
+  const status = useIapStore((s) => s.status);
+  const errorMessage = useIapStore((s) => s.errorMessage);
+  const isBusy = status === 'purchasing' || status === 'verifying';
+
+  useEffect(() => {
+    if (status === 'success') onPurchased();
+  }, [status, onPurchased]);
+
+  const handlePress = useCallback(() => {
+    void purchase(tier, 'monthly');
+  }, [purchase, tier]);
+
+  return (
+    <View>
+      <Button
+        title={isBusy ? 'Processing…' : `Upgrade to ${tierLabel}`}
+        variant="primary"
+        size="md"
+        onPress={isBusy ? undefined : handlePress}
+        accessibilityLabel={`Upgrade to ${tierLabel} plan`}
+      />
+      {isBusy ? (
+        <View style={{ marginTop: 8, alignItems: 'center' }}>
+          <ActivityIndicator color={colors.textMuted} />
+        </View>
+      ) : null}
+      {status === 'error' && errorMessage ? (
+        <Text
+          style={{
+            fontSize: 12,
+            color: colors.agentError,
+            marginTop: 8,
+            textAlign: 'center',
+          }}
+        >
+          {errorMessage}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -107,8 +174,12 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     const featureLabel = FEATURE_LABELS[feature] ?? UNKNOWN_FEATURE_LABEL;
     const tierLabel = TIER_LABELS[requiredTier] ?? UNKNOWN_TIER_LABEL;
 
-    // Build the pricing URL with UTM context for attribution.
-    const pricingUrl = `https://agiworkforce.com/pricing?from=mobile-paywall&tier=${encodeURIComponent(requiredTier)}&feature=${encodeURIComponent(feature)}`;
+    // Resolve the required tier to a purchasable IAP tier, if one exists.
+    // `enterprise` (contact-sales, $0 self-serve price) and any unrecognised
+    // tier string have no StoreKit/Play product — those fall through to the
+    // informational (no-CTA) branch below rather than a dead button.
+    const purchasableTier = normalizeBillingPlanTier(requiredTier);
+    const canPurchaseInApp = FEATURES.iap && isPurchasableTier(purchasableTier);
 
     const handleSheetChange = useCallback(
       (index: number) => {
@@ -119,16 +190,11 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       [onDismiss],
     );
 
-    const handleUpgrade = useCallback(async () => {
-      sheetRef.current?.close();
-      // openExternalUrl enforces the allowlist: agiworkforce.com / stripe.com only.
-      const opened = await openExternalUrl(pricingUrl);
-      if (!opened && __DEV__) {
-        console.warn('[PaywallBottomSheet] openExternalUrl refused:', pricingUrl);
-      }
-    }, [pricingUrl]);
-
     const handleDismiss = useCallback(() => {
+      sheetRef.current?.close();
+    }, []);
+
+    const handlePurchased = useCallback(() => {
       sheetRef.current?.close();
     }, []);
 
@@ -245,13 +311,24 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
           ) : null}
 
           {/* CTAs */}
-          <Button
-            title={`Upgrade to ${tierLabel}`}
-            variant="primary"
-            size="md"
-            onPress={handleUpgrade}
-            accessibilityLabel={`Upgrade to ${tierLabel} plan`}
-          />
+          {canPurchaseInApp ? (
+            <IapUpgradeButton
+              tier={purchasableTier as PurchasableTier}
+              tierLabel={tierLabel}
+              onPurchased={handlePurchased}
+            />
+          ) : (
+            <Text
+              style={{
+                fontSize: 13,
+                color: colors.textMuted,
+                lineHeight: 20,
+                marginBottom: 4,
+              }}
+            >
+              Upgrades aren't available in the app yet. Check back soon.
+            </Text>
+          )}
           <Pressable
             onPress={handleDismiss}
             style={{
