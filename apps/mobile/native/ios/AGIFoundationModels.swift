@@ -33,6 +33,9 @@ class AGIFoundationModels: RCTEventEmitter {
     resolve([
       "tier": 1,
       "available": false,
+      // Mirrors @agiworkforce/local-llm's Tier1Status union; always "unavailable"
+      // while stubbed — there's no download flow here, unlike Android AICore.
+      "status": "unavailable",
       "thermalThrottled": AGIFoundationModels.isThermallyThrottled(),
       "totalRAMMB": totalRAMMB,
       "osVersion": osVersion,
