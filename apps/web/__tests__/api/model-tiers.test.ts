@@ -58,7 +58,7 @@ describe('canAccessModel — free tier (no model access)', () => {
 
   it('denies all economy models for unrecognized tier (maps to free)', () => {
     for (const model of ECONOMY_SAMPLE) {
-      expect(canAccessModel(model, 'hobby')).toBe(false);
+      expect(canAccessModel(model, 'unknown-tier-xyz')).toBe(false);
     }
   });
 
@@ -101,6 +101,39 @@ describe('canAccessModel — pro tier', () => {
 
   it('denies claude-opus-4.8 (max/enterprise only) for pro users', () => {
     expect(canAccessModel('claude-opus-4.8', 'pro')).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('canAccessModel — basic tier', () => {
+  // Basic ($8/mo) has the same model/feature access as Pro/Max — the pricing
+  // page promises "multi-provider model routing" with no model-tier
+  // restriction, differentiated only by a lower usage budget (enforced via
+  // BILLING_PLAN_PRICING.basic.monthlyUsageBudgetUsd, not model gating).
+  it('allows economy models for basic users', () => {
+    for (const model of ECONOMY_SAMPLE) {
+      expect(canAccessModel(model, 'basic')).toBe(true);
+    }
+  });
+
+  it('allows pro-tier models for basic users', () => {
+    for (const model of PRO_MODELS) {
+      expect(canAccessModel(model, 'basic')).toBe(true);
+    }
+  });
+
+  it('allows max-only (flagship) models for basic users', () => {
+    for (const model of MAX_ONLY_MODELS) {
+      expect(canAccessModel(model, 'basic')).toBe(true);
+    }
+  });
+
+  it('is case-insensitive for the basic tier name', () => {
+    expect(canAccessModel('gpt-5.4-mini', 'BASIC')).toBe(true);
+  });
+
+  it('also accepts the legacy "hobby" tier name as an alias for basic', () => {
+    expect(canAccessModel('gpt-5.4-mini', 'hobby')).toBe(true);
   });
 });
 

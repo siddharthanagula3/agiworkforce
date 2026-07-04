@@ -2,12 +2,23 @@
  * billing-waitlist-gate.test.tsx
  *
  * Guards that free users are routed to /pricing#waitlist (not a live
- * Stripe checkout flow) when NEXT_PUBLIC_CHECKOUT_ENABLED is not set.
+ * Stripe checkout flow) when the NEXT_PUBLIC_CHECKOUT_ENABLED kill-switch
+ * is explicitly set to disable checkout.
+ *
+ * Checkout is open by default since 2026-07-04 (matching the managed-compute
+ * public-alpha decision); NEXT_PUBLIC_CHECKOUT_ENABLED=false/0/off is now an
+ * incident-response kill-switch, not the normal state, so these tests set it
+ * explicitly rather than relying on it being unset.
  *
  * FAILS without the fix (the components fire live purchase requests).
  * PASSES with the fix (all purchase paths redirect to the waitlist).
  *
- * Lane files: BillingDashboard.tsx, CreditAlertModal.tsx, Topup.tsx (indirect)
+ * Lane files: BillingDashboard.tsx, CreditAlertModal.tsx
+ *
+ * Credit top-ups (Topup.tsx, api/credit-topup, token-pack-purchase's
+ * buyTokenPack) were removed entirely — the locked product rule is "no
+ * top-ups, ever". CreditAlertModal now routes an exhausted Max user to
+ * Enterprise contact-sales instead of a purchase flow.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -15,9 +26,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
 // ---------------------------------------------------------------------------
-// Env: ensure NEXT_PUBLIC_CHECKOUT_ENABLED is absent (gated) for these tests
+// Env: explicitly set the incident-response kill-switch (gated) for these tests
 // ---------------------------------------------------------------------------
-delete process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'];
+process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] = 'false';
 
 // ---------------------------------------------------------------------------
 // Mocks: establish before static imports
@@ -46,20 +57,13 @@ vi.mock('@shared/stores/authentication-store', () => ({
   })),
 }));
 
-// buyTokenPack — we must confirm it is NOT called when the gate is closed
-const mockBuyTokenPack = vi.fn();
-vi.mock('@features/billing/services/token-pack-purchase', () => ({
-  buyTokenPack: mockBuyTokenPack,
-  addTokensToUserBalance: vi.fn(),
-  getUserTokenBalance: vi.fn(() => Promise.resolve(0)),
-}));
-
 // stripe-payments service
+const mockContactEnterpriseSales = vi.fn();
 vi.mock('@features/billing/services/stripe-payments', () => ({
   upgradeToBasicPlan: vi.fn(),
   upgradeToProPlan: vi.fn(),
   upgradeToMaxPlan: vi.fn(),
-  contactEnterpriseSales: vi.fn(),
+  contactEnterpriseSales: mockContactEnterpriseSales,
   openBillingPortal: vi.fn(),
   isStripeConfigured: vi.fn(() => false),
 }));
@@ -78,34 +82,6 @@ vi.mock('@features/billing/components/Billing/Subscription', () => ({
 }));
 vi.mock('@features/billing/components/Billing/Usage', () => ({
   Usage: () => React.createElement('div', { 'data-testid': 'stub-usage' }),
-}));
-vi.mock('@features/billing/components/Billing/Topup', () => ({
-  // Render a button that triggers onBuyTokenPack so we can test that path too
-  Topup: ({
-    onBuyTokenPack,
-    onUpgradePro,
-  }: {
-    onBuyTokenPack: (pack: { id: string; name: string; credits: number; price: number }) => void;
-    onUpgradePro: () => void;
-  }) =>
-    React.createElement(
-      'div',
-      { 'data-testid': 'stub-topup' },
-      React.createElement(
-        'button',
-        {
-          'data-testid': 'buy-token-pack-btn',
-          onClick: () =>
-            onBuyTokenPack({ id: 'pack-100', name: 'Pack 100', credits: 100000, price: 29 }),
-        },
-        'Buy Pack',
-      ),
-      React.createElement(
-        'button',
-        { 'data-testid': 'upgrade-pro-btn', onClick: onUpgradePro },
-        'Upgrade Pro',
-      ),
-    ),
 }));
 
 // ErrorBoundary — pass-through
@@ -172,10 +148,10 @@ function renderCreditAlertModal(overrides: Partial<Parameters<typeof CreditAlert
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED absent', () => {
+describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED=false (kill-switch)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'];
+    process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] = 'false';
 
     // Reset window.location.href tracking
     Object.defineProperty(window, 'location', {
@@ -185,23 +161,24 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED absent', () => 
   });
 
   // -------------------------------------------------------------------------
-  // CreditAlertModal
+  // CreditAlertModal — exhausted Max plan routes to contact-sales, not a
+  // top-up purchase (no-top-ups locked product rule).
   // -------------------------------------------------------------------------
 
-  describe('CreditAlertModal — handleBuyTopUp', () => {
-    it('routes to /pricing#waitlist, does NOT call buyTokenPack, when gate is off', async () => {
+  describe('CreditAlertModal — exhausted Max plan', () => {
+    it('calls contactEnterpriseSales instead of any purchase flow', async () => {
       renderCreditAlertModal({ alertType: 'exhausted', currentPlan: 'max' });
 
-      // The "Buy 10000 Credits" button is rendered for isMaxPlan + exhausted
-      const buyBtn = screen.getByRole('button', { name: /buy 10000 credits/i });
-      expect(buyBtn).toBeTruthy();
+      const contactBtn = screen.getByRole('button', { name: /contact sales/i });
+      expect(contactBtn).toBeTruthy();
 
-      fireEvent.click(buyBtn);
+      fireEvent.click(contactBtn);
 
       await waitFor(() => {
-        expect(mockRouterPush).toHaveBeenCalledWith('/pricing#waitlist');
+        expect(mockContactEnterpriseSales).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 'user-123' }),
+        );
       });
-      expect(mockBuyTokenPack).not.toHaveBeenCalled();
     });
   });
 
@@ -214,12 +191,7 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED absent', () => 
       render(React.createElement(BillingDashboard));
 
       // The header CTA "Upgrade to Basic" button has the gradient-primary class.
-      // Use getAllByRole and pick the button whose accessible name includes "Basic"
-      // (it contains a visible <span class="hidden sm:inline">Upgrade to Basic</span>).
-      // The Topup stub renders a separate "Upgrade Pro" button — we want the header one.
       const allUpgradeBtns = await screen.findAllByRole('button', { name: /upgrade/i });
-      // The dashboard header button contains "Basic" in its accessible name;
-      // pick it so the click fires handleUpgrade('basic').
       const upgradeBtn = allUpgradeBtns.find((btn) =>
         btn.textContent?.toLowerCase().includes('basic'),
       );
@@ -234,24 +206,6 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED absent', () => 
       // Confirm the stripe service was not called
       const { upgradeToBasicPlan } = await import('@features/billing/services/stripe-payments');
       expect(upgradeToBasicPlan).not.toHaveBeenCalled();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // BillingDashboard — handleBuyTokenPack (via Topup stub)
-  // -------------------------------------------------------------------------
-
-  describe('BillingDashboard — handleBuyTokenPack', () => {
-    it('redirects to /pricing#waitlist, does NOT call buyTokenPack, when gate is off', async () => {
-      render(React.createElement(BillingDashboard));
-
-      const buyPackBtn = await screen.findByTestId('buy-token-pack-btn');
-      fireEvent.click(buyPackBtn);
-
-      await waitFor(() => {
-        expect(window.location.href).toBe('/pricing#waitlist');
-      });
-      expect(mockBuyTokenPack).not.toHaveBeenCalled();
     });
   });
 });
