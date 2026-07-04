@@ -164,29 +164,6 @@ screen → disclosure modal appears.
 
 ---
 
-### S-08 — HealthKit permission sheet (iOS only)
-
-**Purpose:** Shows that the HealthKit permission sheet is triggered by
-the user's explicit tap (not at launch), and that the
-`NSHealthShareUsageDescription` string is visible.
-
-**What should be visible:**
-
-- Settings → Integrations → Health → tap "Connect".
-- The standard iOS HealthKit permission sheet is visible, showing the
-  AGI usage string: "AGI reads health data you choose to share with it.
-  This data is used only within your conversation on this device. AGI
-  is not a medical device and does not provide medical advice."
-- The sheet shows the individual health categories (Step Count, Heart
-  Rate, Sleep Analysis, Active Energy) and the "Allow" / "Don't Allow"
-  options.
-
-**Navigation path:** Settings → Integrations → Health → Connect.
-
-**Filename:** `S-08-healthkit-permission-sheet.png` (iOS only)
-
----
-
 ## File organization
 
 Place all captures in:
@@ -201,20 +178,17 @@ apps/mobile/store-listing/screenshots/safeguards/
 ├── S-04b-report-sheet.png
 ├── S-05-ondevice-shield-badge.png
 ├── S-06-privacy-dpdp-screen.png
-├── S-07-first-run-disclosure-modal.png
-└── S-08-healthkit-permission-sheet.png   (iOS only)
+└── S-07-first-run-disclosure-modal.png
 ```
-
-Android equivalents (where HealthKit doesn't apply): S-01 through S-07.
 
 ---
 
 ## When to attach these
 
 - **App Store Connect:** If Apple sends a "Resolution Center" message
-  citing 5.1.2(i), 2.5.2, 5.1.3 (health), or 1.1.1 (content), reply
-  with the relevant screenshots from this set attached to the reply.
-  S-07 and S-05 are the most commonly needed.
+  citing 5.1.2(i), 2.5.2, or 1.1.1 (content), reply with the relevant
+  screenshots from this set attached to the reply. S-07 and S-05 are
+  the most commonly needed.
 
 - **Play Console:** If a Google reviewer requests evidence of the
   GenAI report/flag mechanism, attach S-04a and S-04b. For age-gate

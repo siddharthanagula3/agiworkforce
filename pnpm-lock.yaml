@@ -667,9 +667,6 @@ importers:
       '@gorhom/bottom-sheet':
         specifier: ^5.1.2
         version: 5.2.8(x5iawplkmjw3ewnw2hxzkobmbm)
-      '@kingstinct/react-native-healthkit':
-        specifier: ^6.0.0
-        version: 6.1.1(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6)
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
@@ -4157,12 +4154,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@kingstinct/react-native-healthkit@6.1.1':
-    resolution: {integrity: sha512-wahjkP9OoEEkkyNwJNNgbq9kYpDcg+DxmaUhukmweIJ/0Pgm75khSYfRXcx2J2bC66GWTnlqCAzWDT6k+oH3qg==}
-    peerDependencies:
-      react: 19.2.6
-      react-native: '*'
 
   '@mermaid-js/parser@1.1.1':
     resolution: {integrity: sha512-VuHdsYMK1bT6X2JbcAaWAhugTRvRBRyuZgd+c22swUeI9g/ntaxF7CY7dYarhZovofCbUNO0G7JesfmNtjYOCw==}
@@ -19100,11 +19091,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@kingstinct/react-native-healthkit@6.1.1(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6)':
-    dependencies:
-      react: 19.2.6
-      react-native: 0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6)
 
   '@mermaid-js/parser@1.1.1':
     dependencies:

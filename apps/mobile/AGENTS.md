@@ -20,7 +20,7 @@ Read root `AGENTS.md`, then this file, then `apps/mobile/README.md`.
 
 ## High-Risk Areas
 
-- On-device data, SQLCipher/MMKV storage, HealthKit/Health Connect, Cloud invite gating, model downloads, native modules, and store-review copy.
+- On-device data, SQLCipher/MMKV storage, Cloud invite gating, model downloads, native modules, and store-review copy.
 - Mobile should not become the heavy compute surface first. Generated-file and long-running compute requests should delegate to Desktop/local host or future managed/private compute.
 - Do not route Local chats to Managed Cloud without explicit invite/subscription state, payload preview, and consent. Do not add Mobile direct provider-key entry without a new product decision.
 
