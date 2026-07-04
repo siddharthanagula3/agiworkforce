@@ -7,7 +7,7 @@
  */
 module.exports = {
   preset: 'ts-jest',
-  testEnvironment: 'node',
+  testEnvironment: 'detox/runners/jest/testEnvironment',
   testMatch: ['<rootDir>/specs/**/*.spec.ts'],
   globalSetup: 'detox/runners/jest/globalSetup',
   globalTeardown: 'detox/runners/jest/globalTeardown',
