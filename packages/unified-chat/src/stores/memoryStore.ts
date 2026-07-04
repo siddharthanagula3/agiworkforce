@@ -7,9 +7,23 @@
  * "User prefers Python over JavaScript" that the assistant should reference
  * across conversations.
  *
- * v1 LOCAL-ONLY POSTURE — facts live in MMKV/localStorage on the device.
- * Cloud sync of memory belongs to Cloud Managed (waitlist-gated) and is
- * intentionally NOT wired here; this primitive stays device-local in v1.
+ * QA fix (2026-07-02): local `localStorage`/MMKV persistence is now paired
+ * with a best-effort sync to the account-scoped `/api/memory` backend (the
+ * same contract Mobile's cloud memory store and the desktop memory-sync
+ * pipeline speak) so facts saved on the web survive across devices instead
+ * of being trapped on one browser. Local persistence stays the source of
+ * truth for the UI — every store action still applies synchronously to
+ * `facts` first — the server calls are optimistic, fire-and-forget, and
+ * never block or throw back into the caller.
+ *
+ * TRUST BOUNDARY: server sync only activates in a genuine browser context
+ * (Web / Chrome extension surfaces, which are cloud-only per the surface
+ * trust matrix). It is explicitly disabled inside a Tauri webview (Desktop)
+ * and React Native (Mobile) so this shared primitive never silently
+ * upgrades a Local-mode desktop session into a Managed Cloud one — Desktop
+ * Local and Desktop Cloud settings currently share this same component, and
+ * Desktop's own cloud memory sync is tracked separately (not wired here).
+ * See `docs/current/source-of-truth.md` "Surface Trust Modes".
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -25,11 +39,21 @@ export interface MemoryFact {
   createdAt: string;
   /** ISO timestamp the fact was last edited. */
   updatedAt: string;
+  /**
+   * Row id on the account-scoped `/api/memory` backend once this fact has
+   * been synced. Absent for facts that are local-only (sync unavailable,
+   * still in flight, or never attempted).
+   */
+  serverId?: string;
 }
+
+export type MemorySyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
 
 interface MemoryState {
   /** All remembered facts, newest first. */
   facts: MemoryFact[];
+  /** Status of the background sync to `/api/memory`. See `MemorySyncStatus`. */
+  syncStatus: MemorySyncStatus;
   /**
    * Add a new fact. The text is trimmed and short-circuits if empty or if a
    * fact with the same (case-insensitive) text already exists.
@@ -41,6 +65,12 @@ interface MemoryState {
   remove: (id: string) => void;
   /** Delete every fact. Used by "Forget everything" affordances. */
   clear: () => void;
+  /**
+   * Pull the authoritative fact list from `/api/memory` and reconcile it
+   * with local state. No-op (resolves immediately) when sync is
+   * unavailable in this runtime. Safe to call multiple times.
+   */
+  hydrateFromServer: () => Promise<void>;
 }
 
 function randomId(): string {
@@ -50,10 +80,138 @@ function randomId(): string {
   return `mem_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
 }
 
+// ── Runtime detection — gates server sync to genuine browser surfaces ──────
+
+function isTauriRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as unknown as Record<string, unknown>;
+  return Boolean(w['__TAURI__'] || w['__TAURI_INTERNALS__']);
+}
+
+function isReactNativeRuntime(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    typeof (navigator as unknown as Record<string, unknown>)['product'] === 'string' &&
+    (navigator as unknown as Record<string, unknown>)['product'] === 'ReactNative'
+  );
+}
+
+/** True only for a real web browser tab/extension page — never Desktop/Mobile. */
+function canSyncToServer(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof document !== 'undefined' &&
+    typeof fetch === 'function' &&
+    !isTauriRuntime() &&
+    !isReactNativeRuntime()
+  );
+}
+
+// ── /api/memory wire client ─────────────────────────────────────────────
+
+interface ServerMemoryRow {
+  id: string;
+  content: string;
+  category: string | null;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const MEMORY_API_BASE = '/api/memory';
+
+let cachedCsrfToken: string | null = null;
+let cachedCsrfExpiry = 0;
+
+/**
+ * Minimal client-side CSRF token fetch, mirroring `apps/web/lib/client/csrf.ts`.
+ * Duplicated (rather than imported) because this package is surface-agnostic
+ * and cannot depend on an app-local `@/` path alias.
+ */
+async function getCsrfToken(): Promise<string | null> {
+  if (cachedCsrfToken && Date.now() < cachedCsrfExpiry) {
+    return cachedCsrfToken;
+  }
+  try {
+    const res = await fetch('/api/csrf', { method: 'GET' });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { token?: string; expiresIn?: number };
+    if (!data.token) return null;
+    cachedCsrfToken = data.token;
+    cachedCsrfExpiry = Date.now() + (data.expiresIn ?? 3_600_000) - 5 * 60_000;
+    return cachedCsrfToken;
+  } catch {
+    return null;
+  }
+}
+
+async function withCsrfHeaders(
+  headers: Record<string, string> = {},
+): Promise<Record<string, string>> {
+  const token = await getCsrfToken();
+  return token ? { ...headers, 'x-csrf-token': token } : headers;
+}
+
+async function fetchServerMemories(): Promise<ServerMemoryRow[] | null> {
+  try {
+    const res = await fetch(`${MEMORY_API_BASE}?limit=100`, { method: 'GET' });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { memories?: ServerMemoryRow[] };
+    return data.memories ?? [];
+  } catch {
+    return null;
+  }
+}
+
+async function createServerMemory(text: string): Promise<ServerMemoryRow | null> {
+  try {
+    const headers = await withCsrfHeaders({ 'Content-Type': 'application/json' });
+    const res = await fetch(MEMORY_API_BASE, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content: text, source: 'web' }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { memory?: ServerMemoryRow };
+    return data.memory ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function updateServerMemory(serverId: string, text: string): Promise<boolean> {
+  try {
+    const headers = await withCsrfHeaders({ 'Content-Type': 'application/json' });
+    const res = await fetch(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ content: text }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function deleteServerMemory(serverId: string): Promise<boolean> {
+  try {
+    const headers = await withCsrfHeaders();
+    const res = await fetch(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export const useMemoryStore = create<MemoryState>()(
   persist(
     (set, get) => ({
       facts: [],
+      syncStatus: canSyncToServer() ? 'idle' : 'unavailable',
+
       add: (text, sourceConversationId) => {
         const trimmed = text.trim();
         if (!trimmed) return null;
@@ -68,22 +226,128 @@ export const useMemoryStore = create<MemoryState>()(
           updatedAt: now,
         };
         set((state) => ({ facts: [fact, ...state.facts] }));
+
+        if (canSyncToServer()) {
+          void createServerMemory(trimmed).then((row) => {
+            if (!row) return;
+            const stillLocal = get().facts.some((f) => f.id === fact.id);
+            if (!stillLocal) {
+              // Deleted locally before the create resolved — reconcile by
+              // removing the row we just created server-side instead of
+              // leaving an orphaned fact behind.
+              void deleteServerMemory(row.id);
+              return;
+            }
+            set((state) => ({
+              facts: state.facts.map((f) =>
+                f.id === fact.id ? { ...f, serverId: row.id, updatedAt: row.updatedAt } : f,
+              ),
+            }));
+          });
+        }
+
         return fact;
       },
+
       update: (id, text) => {
         const trimmed = text.trim();
         if (!trimmed) return;
+        const target = get().facts.find((f) => f.id === id);
         set((state) => ({
           facts: state.facts.map((f) =>
             f.id === id ? { ...f, text: trimmed, updatedAt: new Date().toISOString() } : f,
           ),
         }));
+        if (canSyncToServer() && target?.serverId) {
+          void updateServerMemory(target.serverId, trimmed);
+        }
       },
-      remove: (id) =>
+
+      remove: (id) => {
+        const target = get().facts.find((f) => f.id === id);
         set((state) => ({
           facts: state.facts.filter((f) => f.id !== id),
-        })),
-      clear: () => set({ facts: [] }),
+        }));
+        if (canSyncToServer() && target?.serverId) {
+          void deleteServerMemory(target.serverId);
+        }
+      },
+
+      clear: () => {
+        const toDelete = get()
+          .facts.filter((f) => f.serverId)
+          .map((f) => f.serverId as string);
+        set({ facts: [] });
+        if (canSyncToServer() && toDelete.length > 0) {
+          void Promise.allSettled(toDelete.map((serverId) => deleteServerMemory(serverId)));
+        }
+      },
+
+      hydrateFromServer: async () => {
+        if (!canSyncToServer()) {
+          set({ syncStatus: 'unavailable' });
+          return;
+        }
+        set({ syncStatus: 'syncing' });
+        const rows = await fetchServerMemories();
+        if (rows === null) {
+          // Unauthenticated or transient failure — leave local facts as-is
+          // and let the next mount retry; not a hard error for guests.
+          set({ syncStatus: 'idle' });
+          return;
+        }
+
+        set((state) => {
+          const byServerId = new Map(
+            state.facts.filter((f) => f.serverId).map((f) => [f.serverId, f]),
+          );
+          const unsynced = state.facts.filter((f) => !f.serverId);
+          const merged: MemoryFact[] = [];
+
+          for (const row of rows) {
+            const existing = byServerId.get(row.id);
+            if (existing) {
+              merged.push({
+                ...existing,
+                text: row.content,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt,
+              });
+              byServerId.delete(row.id);
+              continue;
+            }
+            // No local fact synced to this row yet — try to match it against
+            // an unsynced local fact with identical text (first-run
+            // reconciliation) so we don't create a visible duplicate.
+            const matchIdx = unsynced.findIndex(
+              (f) => f.text.toLowerCase() === row.content.toLowerCase(),
+            );
+            if (matchIdx !== -1) {
+              const [match] = unsynced.splice(matchIdx, 1);
+              if (match) {
+                merged.push({ ...match, serverId: row.id, updatedAt: row.updatedAt });
+                continue;
+              }
+            }
+            merged.push({
+              id: randomId(),
+              text: row.content,
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              serverId: row.id,
+            });
+          }
+
+          // Any remaining `byServerId` entries were synced before but are no
+          // longer on the server (deleted from another device) — drop them.
+          // Remaining `unsynced` entries are still local-only; keep them so
+          // they get pushed up on their own via `add`'s create-retry path.
+          merged.push(...unsynced);
+          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+          return { facts: merged, syncStatus: 'synced' };
+        });
+      },
     }),
     {
       name: 'agi-memory-store-v1',
@@ -95,3 +359,4 @@ export const useMemoryStore = create<MemoryState>()(
 
 export const selectMemoryFacts = (s: MemoryState): MemoryFact[] => s.facts;
 export const selectMemoryCount = (s: MemoryState): number => s.facts.length;
+export const selectMemorySyncStatus = (s: MemoryState): MemorySyncStatus => s.syncStatus;

@@ -12,8 +12,9 @@
  *   Left column (~220px): "Settings" title + search + flat nav list (no group headers)
  *   Right column: section pane rendered from sectionContent or built-in panels
  *
- * Nav items: General, Account, Privacy, Billing, Usage, Capabilities,
- *            Connectors, Skills, Plugins, Memory  (surface trims via activeKeys)
+ * Nav items: General, Account, Security, Privacy, Billing, Usage,
+ *            Capabilities, Connectors, Skills, Plugins, Memory, Notifications
+ *            (surface trims via activeKeys)
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
@@ -32,6 +33,7 @@ import {
   BookOpen,
   Puzzle,
   Brain,
+  Bell,
   Lock,
   SlidersHorizontal,
   ArrowUpDown,
@@ -54,6 +56,7 @@ interface NavEntry {
 const ALL_NAV_ENTRIES: NavEntry[] = [
   { key: 'general', label: 'General', icon: Settings2 },
   { key: 'account', label: 'Account', icon: UserCircle },
+  { key: 'security', label: 'Security', icon: Lock },
   { key: 'privacy', label: 'Privacy', icon: Shield },
   { key: 'billing', label: 'Billing', icon: CreditCard },
   { key: 'usage', label: 'Usage', icon: BarChart3 },
@@ -62,6 +65,7 @@ const ALL_NAV_ENTRIES: NavEntry[] = [
   { key: 'skills', label: 'Skills', icon: BookOpen },
   { key: 'plugins', label: 'Plugins', icon: Puzzle },
   { key: 'memory', label: 'Memory', icon: Brain },
+  { key: 'notifications', label: 'Notifications', icon: Bell },
 ];
 
 // ---------------------------------------------------------------------------
@@ -82,7 +86,13 @@ function ConnectorCard({
   onDisconnect: () => void;
 }) {
   const isReady = connector.phase <= 1 && connector.authType !== 'oauth';
-  const popularRank = connector.actionCount > 0 ? `#${connector.actionCount} popular` : null;
+  // NOTE: this is the connector's action count, not a popularity ranking —
+  // do not relabel as "#N popular". We have no real usage data to back a
+  // popularity claim, so showing one would be a fabricated badge.
+  const actionCountLabel =
+    connector.actionCount > 0
+      ? `${connector.actionCount} action${connector.actionCount === 1 ? '' : 's'}`
+      : null;
 
   return (
     <div className="group flex min-h-[108px] flex-col gap-2 rounded-lg border border-border/80 bg-card/40 p-3.5 transition-colors hover:bg-card/70">
@@ -104,8 +114,8 @@ function ConnectorCard({
                 </span>
               )}
             </div>
-            {popularRank && (
-              <span className="text-[11px] text-muted-foreground">{popularRank}</span>
+            {actionCountLabel && (
+              <span className="text-[11px] text-muted-foreground">{actionCountLabel}</span>
             )}
           </div>
         </div>
