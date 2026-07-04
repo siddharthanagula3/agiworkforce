@@ -60,7 +60,13 @@ export interface StreamHandlerOptions {
   onFinish?: (params: {
     text: string;
     reasoning?: string;
-    usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+    usage?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      cacheReadInputTokens?: number;
+      cacheCreationInputTokens?: number;
+    };
     finishReason?: string;
   }) => void;
   abortSignal?: AbortSignal;
@@ -155,6 +161,8 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
                 promptTokens: usage.inputTokens ?? 0,
                 completionTokens: usage.outputTokens ?? 0,
                 totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+                cacheReadInputTokens: usage.inputTokenDetails?.cacheReadTokens ?? undefined,
+                cacheCreationInputTokens: usage.inputTokenDetails?.cacheWriteTokens ?? undefined,
               }
             : undefined,
           finishReason,
