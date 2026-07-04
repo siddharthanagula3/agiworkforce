@@ -10,7 +10,6 @@ import {
   searchWithGoogle,
   searchWithDuckDuckGo,
   webSearch,
-  searchAndSummarize,
   isWebSearchConfigured,
   getAvailableSearchProviders,
 } from './web-search-handler';
@@ -25,13 +24,6 @@ vi.mock('@shared/utils/error-handling', () => ({
   fetchWithTimeout: vi.fn(),
   TimeoutPresets: {
     SEARCH: 30000,
-  },
-}));
-
-// Mock unified LLM service for searchAndSummarize
-vi.mock('@core/ai/llm/unified-language-model', () => ({
-  unifiedLLMService: {
-    sendMessage: vi.fn(),
   },
 }));
 
@@ -462,90 +454,6 @@ describe('Web Search Handler', () => {
 
       // Perplexity doesn't use maxResults in the same way, so just verify call succeeded
       expect(mockFetchWithTimeout).toHaveBeenCalled();
-    });
-  });
-
-  describe('searchAndSummarize', () => {
-    it('should return Perplexity answer when available', async () => {
-      mockFetchWithTimeout.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'AI-generated answer' } }],
-            citations: [{ url: 'https://source.com' }],
-          }),
-      });
-
-      const result = await searchAndSummarize('test query');
-
-      expect(result.answer).toBe('AI-generated answer');
-    });
-
-    it('should generate summary with AI when no answer available', async () => {
-      // Search without answer (DuckDuckGo)
-      mockFetchWithTimeout.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            RelatedTopics: [{ Text: 'Topic', FirstURL: 'https://example.com' }],
-          }),
-      });
-
-      const { unifiedLLMService } = await import('@core/ai/llm/unified-language-model');
-      const mockLLM = unifiedLLMService as unknown as {
-        sendMessage: ReturnType<typeof vi.fn>;
-      };
-
-      mockLLM.sendMessage.mockResolvedValueOnce({
-        content: 'AI-generated summary based on search results',
-      });
-
-      const result = await searchAndSummarize('test', 'claude');
-
-      expect(result.answer).toBe('AI-generated summary based on search results');
-      expect(mockLLM.sendMessage).toHaveBeenCalled();
-    });
-
-    it('should use correct AI provider for summarization', async () => {
-      mockFetchWithTimeout.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            RelatedTopics: [{ Text: 'Topic', FirstURL: 'https://example.com' }],
-          }),
-      });
-
-      const { unifiedLLMService } = await import('@core/ai/llm/unified-language-model');
-      const mockLLM = unifiedLLMService as unknown as {
-        sendMessage: ReturnType<typeof vi.fn>;
-      };
-      mockLLM.sendMessage.mockResolvedValueOnce({ content: 'Summary' });
-
-      await searchAndSummarize('test', 'gemini');
-
-      expect(mockLLM.sendMessage).toHaveBeenCalledWith(
-        expect.any(Array),
-        undefined,
-        undefined,
-        'google',
-      );
-    });
-
-    it('should return search results with answer from Perplexity', async () => {
-      // Use Perplexity with answer - simpler test case
-      mockFetchWithTimeout.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Perplexity answer' } }],
-            citations: [{ url: 'https://example.com', title: 'Test' }],
-          }),
-      });
-
-      const result = await searchAndSummarize('test');
-
-      expect(result.results.length).toBe(1);
-      expect(result.answer).toBe('Perplexity answer');
     });
   });
 
