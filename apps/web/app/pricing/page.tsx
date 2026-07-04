@@ -23,13 +23,21 @@ import { Reveal } from '../../components/marketing/Reveal';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { WaitlistForm } from '../byok/WaitlistForm';
 
-// Paid-plan checkout is env-gated while billing controls (metering, refunds,
-// fraud, provider terms) are proven at scale. Managed cloud access itself is
-// public-alpha-open; this only governs whether the CTA hits live Stripe
-// checkout or falls back to the early-access waitlist below. Mirrors
-// STRIPE_CHECKOUT_ENABLED server-side (app/api/checkout/route.ts) and the
-// same client convention already used in features/billing/pages/BillingDashboard.tsx.
-const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
+// Paid-plan checkout (2026-07-04): open by default, matching the
+// managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
+// The env var is retained ONLY as an incident-response kill-switch: set
+// NEXT_PUBLIC_CHECKOUT_ENABLED=0 (or 'false'/'off') to re-gate.
+//
+// NEXT_PUBLIC_CHECKOUT_ENABLED MUST be kept equal to the server-side
+// STRIPE_CHECKOUT_ENABLED flag (app/api/checkout/route.ts) and to the same
+// client flag in features/billing/pages/BillingDashboard.tsx — see the
+// comment block in apps/web/.env.example. If they diverge, the CTA and the
+// API will disagree about whether checkout is actually available.
+const CHECKOUT_ENABLED_RAW = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED']?.trim().toLowerCase();
+const CHECKOUT_ENABLED =
+  CHECKOUT_ENABLED_RAW !== '0' &&
+  CHECKOUT_ENABLED_RAW !== 'false' &&
+  CHECKOUT_ENABLED_RAW !== 'off';
 
 type Currency = 'usd' | 'inr';
 type CheckoutPlan = 'basic' | 'pro' | 'max' | 'team';
@@ -564,6 +572,7 @@ export default function PricingPage() {
                   {annual && proSavingsPct > 0
                     ? t('perMonthBilledAnnually')
                     : t('perMonthBilledMonthly')}
+                  {currency === 'inr' ? ' · USD only' : ''}
                 </span>
               </p>
               <p className="agi-tier-body">{t('proTierBody')}</p>
@@ -595,7 +604,10 @@ export default function PricingPage() {
               <h3 className="agi-tier-name">{max.label}</h3>
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">${max.monthlyPriceUsd}</span>
-                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
+                <span className="agi-tier-price-sub">
+                  {t('perMonthBilledMonthly')}
+                  {currency === 'inr' ? ' · USD only' : ''}
+                </span>
               </p>
               <p className="agi-tier-body">{t('maxTierBody')}</p>
               <ul className="agi-tier-features">

@@ -1,17 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import { AlertTriangle, Zap, CreditCard, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { buyTokenPack } from '@features/billing/services/token-pack-purchase';
-
-// Managed cloud is public-alpha-open; paid top-up checkout is env-gated. Set
-// NEXT_PUBLIC_CHECKOUT_ENABLED=true to open live checkout (mirrors server
-// AGI_MANAGED_CREDITS_PRIVATE_BETA). Defaults to off so free users are routed
-// to the early-access list, not a live purchase flow.
-const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
+import { contactEnterpriseSales } from '@features/billing/services/stripe-payments';
 
 export interface CreditAlertModalProps {
   isOpen: boolean;
@@ -34,7 +27,6 @@ export function CreditAlertModal({
 }: CreditAlertModalProps) {
   const router = useRouter();
   const { user } = useAuthStore();
-  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
@@ -46,40 +38,19 @@ export function CreditAlertModal({
     onClose();
   };
 
-  const handleBuyTopUp = async () => {
-    // Gate top-up behind the managed-credits env flag (early-access).
-    // When checkout is not enabled, redirect to the waitlist instead of hitting
-    // a live Stripe flow. The old raw fetch also had no CSRF header (403) and
-    // a hardcoded amount_cents -- replaced by the proper buyTokenPack service.
-    if (!CHECKOUT_ENABLED) {
-      router.push('/pricing#waitlist');
-      onClose();
-      return;
-    }
-
+  // No top-up purchases (locked product rule: no credit top-ups). Max is
+  // already the highest self-serve tier, so an exhausted Max user is routed
+  // to Enterprise contact-sales instead of a purchase flow.
+  const handleContactSales = async () => {
     if (!user) {
       router.push('/pricing');
       onClose();
       return;
     }
-
-    setLoading(true);
-    try {
-      // Route through the authenticated buyTokenPack service (CSRF, auth, error
-      // reporting) instead of the old bare fetch with no CSRF header.
-      // $100 / 10000-credit top-up is the single pack offered from this modal.
-      await buyTokenPack({
-        userId: user.id,
-        userEmail: user.email ?? '',
-        packId: 'topup-10000',
-        tokens: 10000,
-        price: 100,
-      });
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to initiate top-up');
-    } finally {
-      setLoading(false);
-    }
+    await contactEnterpriseSales({
+      userId: user.id,
+      userEmail: user.email ?? '',
+    });
   };
 
   const isMaxPlan = currentPlan.toLowerCase() === 'max';
@@ -162,11 +133,11 @@ export function CreditAlertModal({
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <CreditCard className="h-4 w-4 text-purple-400" />
-                    <span className="font-medium text-purple-300">Purchase Additional Credits</span>
+                    <span className="font-medium text-purple-300">Need more credits?</span>
                   </div>
                   <p className="text-xs text-zinc-400">
-                    Get a one-time 10000 credit top-up to continue your AI workflows without
-                    interruption.
+                    Max is our highest self-serve plan. Contact sales for a custom Enterprise
+                    allocation.
                   </p>
                 </div>
               ) : (
@@ -215,11 +186,10 @@ export function CreditAlertModal({
                 Not Now
               </Button>
               <Button
-                onClick={handleBuyTopUp}
-                disabled={loading}
+                onClick={handleContactSales}
                 className="flex-1 bg-purple-600 hover:bg-purple-700"
               >
-                {loading ? 'Processing...' : 'Buy 10000 Credits'}
+                Contact Sales
               </Button>
             </>
           ) : (
