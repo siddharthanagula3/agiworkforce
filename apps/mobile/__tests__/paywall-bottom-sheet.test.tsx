@@ -3,9 +3,13 @@
  *
  * Verifies:
  *  - Renders the correct feature name, tier label, and reason
- *  - "Upgrade to <Tier>" button calls openExternalUrl with /pricing URL
- *  - URL contains correct utm params (tier + feature)
- *  - "Try later" Pressable calls onDismiss
+ *  - When FEATURES.iap is off (current default), renders the
+ *    "not available yet" copy instead of a purchase CTA
+ *  - When FEATURES.iap is on and the tier is purchasable, renders the native
+ *    "Upgrade to <Tier>" button and calls `purchase()` from
+ *    `useIapPurchaseFlow` (never an external web checkout — Apple/Google
+ *    require native IAP for in-app subscription purchases)
+ *  - "Try later" Pressable does not throw
  *  - Renders without reason when reason is omitted
  */
 
@@ -38,14 +42,6 @@ jest.mock('@gorhom/bottom-sheet', () => {
 jest.mock('lucide-react-native', () => ({
   ArrowUpCircle: jest.fn().mockReturnValue(null),
   X: jest.fn().mockReturnValue(null),
-}));
-
-// safeOpenURL — use jest.fn() inside the factory (variable references are not
-// allowed in hoisted jest.mock() factories). Retrieve the mock reference after
-// import via jest.mocked().
-jest.mock('@/lib/safeOpenURL', () => ({
-  openExternalUrl: jest.fn().mockResolvedValue(true),
-  isAllowedExternalUrl: jest.fn().mockReturnValue(true),
 }));
 
 // NativeWind / theme
@@ -93,15 +89,35 @@ jest.mock('../components/ui/text', () => {
   };
 });
 
+// FEATURES.iap toggled per-test via jest.mock + jest.resetModules
+const mockPurchase = jest.fn().mockResolvedValue(undefined);
+jest.mock('../src/features/billing/useIapPurchaseFlow', () => ({
+  useIapPurchaseFlow: () => ({
+    connected: true,
+    purchase: mockPurchase,
+    restore: jest.fn(),
+    manageSubscription: jest.fn(),
+  }),
+}));
+
+jest.mock('../src/features/billing/iapStore', () => ({
+  useIapStore: (selector: (s: { status: string; errorMessage: string | null }) => unknown) =>
+    selector({ status: 'idle', errorMessage: null }),
+}));
+
+// Mutable FEATURES object so individual tests can flip `iap` without
+// jest.resetModules() (which would load a second copy of React and break
+// hooks inside the same test file).
+jest.mock('../lib/v1FeatureFlags', () => ({
+  FEATURES: { iap: false },
+}));
+
 // ---------------------------------------------------------------------------
 // Imports
 // ---------------------------------------------------------------------------
 
 import { PaywallBottomSheet } from '../src/features/chat/components/PaywallBottomSheet';
-import { openExternalUrl } from '@/lib/safeOpenURL';
-
-// Typed reference to the mocked function
-const mockOpenExternalUrl = openExternalUrl as jest.Mock;
+import { FEATURES } from '../lib/v1FeatureFlags';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -124,7 +140,7 @@ describe('PaywallBottomSheet rendering', () => {
   });
 
   it('renders at least one element with the tier label text', () => {
-    // Both the header title and the upgrade button may contain the tier label.
+    // Both the header title and the informational copy may contain the tier label.
     const { getAllByText } = render(<PaywallBottomSheet {...defaultProps} />);
     expect(getAllByText('Upgrade to Hobby').length).toBeGreaterThanOrEqual(1);
   });
@@ -164,6 +180,12 @@ describe('PaywallBottomSheet rendering', () => {
     );
     expect(getAllByText('Upgrade to Max').length).toBeGreaterThanOrEqual(1);
   });
+
+  it('shows "not available yet" copy instead of a purchase CTA while FEATURES.iap is off', () => {
+    const { getByText, queryByTestId } = render(<PaywallBottomSheet {...defaultProps} />);
+    expect(getByText(/Upgrades aren't available in the app yet/i)).toBeTruthy();
+    expect(queryByTestId('paywall-upgrade-button')).toBeNull();
+  });
 });
 
 describe('PaywallBottomSheet interactions', () => {
@@ -171,44 +193,41 @@ describe('PaywallBottomSheet interactions', () => {
     jest.clearAllMocks();
   });
 
-  it('calls openExternalUrl when upgrade button is tapped', async () => {
-    const { getByTestId } = render(<PaywallBottomSheet {...defaultProps} />);
-    await act(async () => {
-      fireEvent.press(getByTestId('paywall-upgrade-button'));
-    });
-
-    expect(mockOpenExternalUrl).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens the /pricing URL with from=mobile-paywall', async () => {
-    const { getByTestId } = render(
-      <PaywallBottomSheet {...defaultProps} feature="image_quota" requiredTier="pro" />,
-    );
-    await act(async () => {
-      fireEvent.press(getByTestId('paywall-upgrade-button'));
-    });
-
-    const calledUrl: string = mockOpenExternalUrl.mock.calls[0]?.[0] as string;
-    expect(calledUrl).toContain('from=mobile-paywall');
-    expect(calledUrl).toContain('tier=pro');
-    expect(calledUrl).toContain('feature=image_quota');
-    expect(calledUrl).toMatch(/^https:\/\/agiworkforce\.com\/pricing/);
-  });
-
   it('calls onDismiss when "Try later" is pressed', () => {
     const onDismiss = jest.fn();
     const { getByText } = render(<PaywallBottomSheet {...defaultProps} onDismiss={onDismiss} />);
-    fireEvent.press(getByText('Try later'));
+    expect(() => fireEvent.press(getByText('Try later'))).not.toThrow();
     expect(onDismiss).not.toHaveBeenCalled(); // handleDismiss calls sheetRef.close(), not onDismiss directly
     // The onDismiss is called via BottomSheet.onChange(-1) which is mocked away.
     // What we CAN verify is that pressing "Try later" doesn't throw.
   });
+});
 
-  it('pressing upgrade button calls openExternalUrl exactly once', async () => {
-    const { getByTestId } = render(<PaywallBottomSheet {...defaultProps} />);
+describe('PaywallBottomSheet interactions (FEATURES.iap on)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    FEATURES.iap = true;
+  });
+
+  afterEach(() => {
+    FEATURES.iap = false;
+  });
+
+  it('renders the native IAP button and calls purchase() when tapped, never an external URL', async () => {
+    const { getByTestId } = render(
+      <PaywallBottomSheet
+        feature="image_quota"
+        requiredTier="pro"
+        reason="2M tokens used this month"
+        onDismiss={jest.fn()}
+      />,
+    );
+
     await act(async () => {
       fireEvent.press(getByTestId('paywall-upgrade-button'));
     });
-    expect(mockOpenExternalUrl).toHaveBeenCalledTimes(1);
+
+    expect(mockPurchase).toHaveBeenCalledTimes(1);
+    expect(mockPurchase).toHaveBeenCalledWith('pro', 'monthly');
   });
 });
