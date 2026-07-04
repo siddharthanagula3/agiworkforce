@@ -34,7 +34,7 @@ apps/mobile/
 ├── stores/                       Remaining cross-feature Zustand state; feature-owned stores live in src/features/<domain>/
 ├── hooks/                        Cross-feature React hooks; feature-scoped hooks colocate in src/features/<domain>/
 ├── storage/                      SQLCipher + MMKV + sqlite-vec; SQL inlined in storage/migrations.ts
-├── native/                       Custom Swift/Kotlin native modules (Tier 1/2/3 runtime, HealthKit, voice)
+├── native/                       Custom Swift/Kotlin native modules (Tier 1/2/3 runtime, voice)
 ├── types/                        TypeScript ambient + module declarations
 ├── assets/                       Images, fonts, icons
 ├── __tests__/                    Top-level integration tests (Jest)
@@ -138,7 +138,7 @@ EAS signing runbook: `scripts/release/EAS_SIGNING_RUNBOOK.md`.
 - **iOS entitlement profile:** default `APP_ENV=development` builds use a reduced entitlement set for basic development provisioning profiles. To force full production entitlements locally (Push / SIWA / Siri / Translate), set `APP_ENV=preview|production` or `EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS=1`.
 - **Physical iPhone debug:** run `pnpm --filter @agiworkforce/mobile run ios:device:dev -- <device-udid-or-name>` to clean-regenerate ignored iOS prebuild artifacts with the reduced development entitlement set before installing. Local iPhone builds default to the company Apple team `D2PR62RLT4`; override only with `AGI_IOS_DEVELOPMENT_TEAM=<team-id>`. In Xcode, `Team: AGI AUTOMATION LLC` plus a provisioning profile that includes the device is enough even when the certificate common name shows an individual developer name. Use `ios:device:dev:no-prebuild` only after the generated `apps/mobile/ios/` project is already in the right entitlement state. If iOS reports that the profile is not explicitly trusted, open iPhone Settings -> General -> VPN & Device Management -> Developer App, trust the company developer profile, then rerun the `no-prebuild` command.
 - **Tier 1/2/3 mobile runtime** is wired in `native/` (custom Swift/Kotlin modules) — do NOT add a new on-device model path outside the tier router.
-- **Permissions** (camera/mic/photos/calendar/HealthKit) are declared in `app.config.js` -> `ios.infoPlist` and `android.permissions`. Edit Expo config first; root `ios/agiworkforce/Info.plist` is the tracked Xcode-consumed copy.
+- **Permissions** (camera/mic/photos/calendar) are declared in `app.config.js` -> `ios.infoPlist` and `android.permissions`. Edit Expo config first; root `ios/agiworkforce/Info.plist` is the tracked Xcode-consumed copy.
 - **NativeWind v4** is the styling layer; `global.css` + `tailwind.config.js` are its inputs. Don't import the React Native `StyleSheet` API for new components — use Tailwind classes.
 
 ## Known caveats (2026-05-21)

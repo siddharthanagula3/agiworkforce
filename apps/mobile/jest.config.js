@@ -4,8 +4,7 @@ module.exports = {
     '/node_modules/',
     'scripts/screenshots/specs/',
     // Excluded suites are tracked in tasks/quality-sweep-2026-05-19/squad-mobile.md
-    // and cover feature-gated Health/Auth/Billing paths that are outside this pass.
-    '__tests__/healthkit\\.test\\.ts$',
+    // and cover feature-gated Auth/Billing paths that are outside this pass.
     '__tests__/auth-401\\.test\\.ts$',
     '__tests__/api-paywall\\.test\\.ts$',
   ],

@@ -46,7 +46,6 @@
     "@clerk/expo": "^3.4.2",
     "@expo/metro-runtime": "~55.0.11",
     "@gorhom/bottom-sheet": "^5.1.2",
-    "@kingstinct/react-native-healthkit": "^6.0.0",
     "@noble/hashes": "^1.8.0",
     "@react-native-community/netinfo": "^11.5.2",
     "@react-native-community/slider": "^5.1.2",
