@@ -76,7 +76,7 @@ describe('extractProvider', () => {
 // ─── guardProviderSwitch ──────────────────────────────────────────────────────
 
 describe('guardProviderSwitch — same-provider switches are always allowed', () => {
-  const TIERS = ['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max'] as const;
+  const TIERS = ['local', 'byok', 'basic', 'pro', 'max'] as const;
 
   for (const tier of TIERS) {
     it(`allows claude→claude on tier=${tier}`, () => {
@@ -90,7 +90,7 @@ describe('guardProviderSwitch — same-provider switches are always allowed', ()
 });
 
 describe('guardProviderSwitch — auto-mode switches are always allowed', () => {
-  const TIERS = ['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max'] as const;
+  const TIERS = ['local', 'byok', 'basic', 'pro', 'max'] as const;
 
   for (const tier of TIERS) {
     it(`allows claude→auto-balanced on tier=${tier}`, () => {
@@ -104,8 +104,8 @@ describe('guardProviderSwitch — auto-mode switches are always allowed', () => 
 });
 
 describe('guardProviderSwitch — cross-provider switch gating', () => {
-  const BLOCKED_TIERS = ['local', 'byok', 'hobby', 'pro'] as const;
-  const ALLOWED_TIERS = ['pro_plus', 'max'] as const;
+  const BLOCKED_TIERS = ['local', 'byok', 'basic', 'pro'] as const;
+  const ALLOWED_TIERS = ['max'] as const;
 
   for (const tier of BLOCKED_TIERS) {
     it(`blocks claude→gpt on tier=${tier}`, () => {
@@ -147,20 +147,16 @@ describe('guardProviderSwitch — unknown provider does not trigger gate', () =>
 // ─── tierAtLeast ─────────────────────────────────────────────────────────────
 
 describe('tierAtLeast', () => {
-  it('byok is NOT at least pro_plus', () => {
-    expect(tierAtLeast('byok', 'pro_plus')).toBe(false);
+  it('byok is NOT at least max', () => {
+    expect(tierAtLeast('byok', 'max')).toBe(false);
   });
 
-  it('pro is NOT at least pro_plus', () => {
-    expect(tierAtLeast('pro', 'pro_plus')).toBe(false);
+  it('pro is NOT at least max', () => {
+    expect(tierAtLeast('pro', 'max')).toBe(false);
   });
 
-  it('pro_plus is at least pro_plus', () => {
-    expect(tierAtLeast('pro_plus', 'pro_plus')).toBe(true);
-  });
-
-  it('max is at least pro_plus', () => {
-    expect(tierAtLeast('max', 'pro_plus')).toBe(true);
+  it('max is at least max', () => {
+    expect(tierAtLeast('max', 'max')).toBe(true);
   });
 
   it('any tier is at least itself', () => {
@@ -170,6 +166,6 @@ describe('tierAtLeast', () => {
   });
 
   it('TIER_ORDER has the expected sequence', () => {
-    expect(TIER_ORDER).toEqual(['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max']);
+    expect(TIER_ORDER).toEqual(['local', 'byok', 'basic', 'pro', 'max']);
   });
 });

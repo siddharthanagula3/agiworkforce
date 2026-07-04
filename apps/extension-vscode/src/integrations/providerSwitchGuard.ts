@@ -1,10 +1,14 @@
 /**
- * providerSwitchGuard.ts — Pro+ tier enforcement for cross-provider model switches.
+ * providerSwitchGuard.ts — Max-tier enforcement for cross-provider model switches.
  *
- * Multi-provider in-thread switching is the Pro+ differentiator. When a user on
- * a tier below 'pro_plus' attempts to switch from one provider to a different one
+ * Multi-provider in-thread switching is a Max-tier differentiator. When a user on
+ * a tier below 'max' attempts to switch from one provider to a different one
  * mid-conversation, this guard returns 'upgrade-required' and the caller shows
  * the upgrade prompt.
+ *
+ * (This previously gated on the unshipped 'pro_plus' tier, which was removed
+ * with no direct successor — the gate now sits at the next tier that actually
+ * exists above it, 'max', rather than silently loosening to 'pro'.)
  *
  * Mirrors the logic in unified-chat's selectProviderSwitchGate so that behaviour
  * is consistent across surfaces.
@@ -87,8 +91,8 @@ export type SwitchGuardResult = 'allow' | 'upgrade-required';
  * Determine whether a provider switch is permitted for the given tier.
  *
  * Returns:
- *   - 'allow'            — switch is permitted (same provider, auto-mode, or pro_plus+)
- *   - 'upgrade-required' — different providers, tier < pro_plus
+ *   - 'allow'            — switch is permitted (same provider, auto-mode, or max tier)
+ *   - 'upgrade-required' — different providers, tier below max
  *
  * @param currentModelId - The currently active model ID (before the switch).
  * @param nextModelId    - The model ID the user is switching to.
@@ -111,6 +115,6 @@ export function guardProviderSwitch(
   // Unknown provider on either side → allow (don't gate on ambiguous IDs)
   if (currentProvider === 'unknown' || nextProvider === 'unknown') return 'allow';
 
-  // Cross-provider switch: require pro_plus or higher
-  return tierAtLeast(tier, 'pro_plus') ? 'allow' : 'upgrade-required';
+  // Cross-provider switch: require max tier
+  return tierAtLeast(tier, 'max') ? 'allow' : 'upgrade-required';
 }

@@ -1367,9 +1367,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   );
 
   context.subscriptions.push(
+    // AGI Cloud is public alpha and open by default (founder decision,
+    // 2026-06-27) — there is no invite/waitlist gate to unlock anymore. This
+    // command is kept only so older call sites/keybindings referencing it
+    // still do something useful: it routes straight to the real device-auth
+    // sign-in flow instead of the retired invite-code/waitlist modal, which
+    // always failed with "account_auth_not_wired" regardless of what the
+    // user entered.
     vscode.commands.registerCommand('agi-workforce.openInviteCodeModal', async () => {
-      const { openInviteCodeModal } = await import('../features/cloud-bridge/InviteCodeModal');
-      await openInviteCodeModal(context, { source: 'other' });
+      await vscode.commands.executeCommand('agi-workforce.signIn');
     }),
   );
 
@@ -1441,18 +1447,21 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       }
 
-      items.push(
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        {
-          label: '$(cloud) Cloud features locked — enter invite code',
-          description: 'Unlock cloud routing with an invitation code',
-          detail: 'open-invite',
-        },
-        {
-          label: '$(trash) Reset session counter',
-          detail: 'reset-counter',
-        },
-      );
+      items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+      // AGI Cloud is public alpha and open by default — only prompt to sign
+      // in when there's genuinely no cloud tier yet; a signed-in user has no
+      // "unlock" step left to take.
+      if (tier === 'local') {
+        items.push({
+          label: '$(cloud) Sign in to AGI Cloud',
+          description: 'Connect your AGI Cloud account',
+          detail: 'sign-in',
+        });
+      }
+      items.push({
+        label: '$(trash) Reset session counter',
+        detail: 'reset-counter',
+      });
 
       const pick = await vscode.window.showQuickPick(items, {
         title: `AGI Workforce — Account & Usage (${tier})`,
@@ -1460,8 +1469,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         matchOnDescription: true,
       });
 
-      if (pick?.detail === 'open-invite') {
-        await vscode.commands.executeCommand('agi-workforce.openInviteCodeModal');
+      if (pick?.detail === 'sign-in') {
+        await vscode.commands.executeCommand('agi-workforce.signIn');
       } else if (pick?.detail === 'reset-counter') {
         counter.reset();
         vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
