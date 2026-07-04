@@ -15,26 +15,61 @@ import { Card } from '@/components/ui/card';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import type { ThemeMode } from '@/stores/settingsStore';
+import type { ThemeMode, PersonalizationStyle } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
+import {
+  PERSONALIZATION_SLIDERS as SLIDERS,
+  PERSONALIZATION_STYLES,
+  type StyleSliderConfig as SliderConfig,
+} from './constants';
 
 // ---------------------------------------------------------------------------
-// Slider config
+// Style preset selector
 // ---------------------------------------------------------------------------
 
-interface SliderConfig {
-  key: 'warmth' | 'enthusiasm' | 'headersLists' | 'emoji';
-  label: string;
-  leftLabel: string;
-  rightLabel: string;
+function StylePresetSelector({
+  value,
+  onChange,
+}: {
+  value: PersonalizationStyle;
+  onChange: (style: PersonalizationStyle) => void;
+}) {
+  const c = useThemeColors();
+  return (
+    <View className="gap-2">
+      <Text className="text-sm" style={{ color: c.textMuted }}>
+        Style Preset
+      </Text>
+      <View className="flex-row flex-wrap gap-2">
+        {PERSONALIZATION_STYLES.map((option) => {
+          const selected = value === option.value;
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => onChange(option.value)}
+              className="px-3 py-2 rounded-xl"
+              style={{
+                backgroundColor: selected ? c.accentSurface : c.surfaceBase,
+                borderWidth: 1,
+                borderColor: selected ? c.accentBorder : c.border,
+              }}
+              accessibilityLabel={`${option.label} style`}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text
+                className="text-xs font-medium"
+                style={{ color: selected ? c.teal : c.textSecondary }}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
-
-const SLIDERS: SliderConfig[] = [
-  { key: 'warmth', label: 'Warmth', leftLabel: 'Cold', rightLabel: 'Warm' },
-  { key: 'enthusiasm', label: 'Enthusiasm', leftLabel: 'Neutral', rightLabel: 'Enthusiastic' },
-  { key: 'headersLists', label: 'Headers / Lists', leftLabel: 'Prose', rightLabel: 'Structured' },
-  { key: 'emoji', label: 'Emoji', leftLabel: 'None', rightLabel: 'Frequent' },
-];
 
 // ---------------------------------------------------------------------------
 // Labeled Input
@@ -215,6 +250,7 @@ export default function PersonalizationScreen() {
   const [nickname, setNickname] = useState(personalization.nickname);
   const [occupation, setOccupation] = useState(personalization.occupation);
   const [instructions, setInstructions] = useState(personalization.instructions);
+  const [style, setStyle] = useState(personalization.style);
   const [warmth, setWarmth] = useState(personalization.warmth);
   const [enthusiasm, setEnthusiasm] = useState(personalization.enthusiasm);
   const [headersLists, setHeadersLists] = useState(personalization.headersLists);
@@ -235,6 +271,7 @@ export default function PersonalizationScreen() {
     setNickname(personalization.nickname);
     setOccupation(personalization.occupation);
     setInstructions(personalization.instructions);
+    setStyle(personalization.style);
     setWarmth(personalization.warmth);
     setEnthusiasm(personalization.enthusiasm);
     setHeadersLists(personalization.headersLists);
@@ -265,6 +302,7 @@ export default function PersonalizationScreen() {
       nickname !== personalization.nickname ||
       occupation !== personalization.occupation ||
       instructions !== personalization.instructions ||
+      style !== personalization.style ||
       warmth !== personalization.warmth ||
       enthusiasm !== personalization.enthusiasm ||
       headersLists !== personalization.headersLists ||
@@ -275,6 +313,7 @@ export default function PersonalizationScreen() {
     nickname,
     occupation,
     instructions,
+    style,
     warmth,
     enthusiasm,
     headersLists,
@@ -299,6 +338,7 @@ export default function PersonalizationScreen() {
       nickname: nickname.trim(),
       occupation: occupation.trim(),
       instructions: instructions.trim(),
+      style,
       warmth,
       enthusiasm,
       headersLists,
@@ -310,6 +350,7 @@ export default function PersonalizationScreen() {
     nickname,
     occupation,
     instructions,
+    style,
     warmth,
     enthusiasm,
     headersLists,
@@ -402,7 +443,12 @@ export default function PersonalizationScreen() {
           />
         </Card>
 
-        {/* Response Style */}
+        {/* Base style preset */}
+        <Card className="mt-2">
+          <StylePresetSelector value={style} onChange={setStyle} />
+        </Card>
+
+        {/* Response Style dials */}
         <View>
           <Text
             className="text-[11px] uppercase tracking-wider font-semibold mb-3 px-1"

@@ -4,6 +4,7 @@ import { MessageSquare, Pin, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { ConversationItem } from './ConversationItem';
 import { useChatStore } from '@/stores/chatStore';
+import { isHistoryVisibleConversation } from '@/src/features/chat/utils/conversationMode';
 import { colors } from '@/src/ui/theme';
 import { TIME_GROUPS } from '@/lib/constants';
 import type { ConversationSummary, ConversationGroup } from '@/types/chat';
@@ -97,11 +98,15 @@ export function ConversationList({
   filterProjectId,
 }: ConversationListProps) {
   const allConversations = useChatStore((s) => s.conversations);
+  const historyVisibleConversations = useMemo(
+    () => allConversations.filter(isHistoryVisibleConversation),
+    [allConversations],
+  );
 
   // Apply project filter first, then search filter
   const projectFiltered = filterProjectId
-    ? allConversations.filter((c) => c.projectId === filterProjectId)
-    : allConversations;
+    ? historyVisibleConversations.filter((c) => c.projectId === filterProjectId)
+    : historyVisibleConversations;
 
   const conversations =
     searchQuery && !searchResults

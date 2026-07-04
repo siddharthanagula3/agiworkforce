@@ -83,9 +83,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             {
               "alignItems": "center",
               "backgroundColor": "#1a1a1a",
-              "borderColor": "#333",
               "borderRadius": 20,
-              "borderWidth": 1,
               "height": 40,
               "justifyContent": "center",
               "width": 40,
@@ -135,12 +133,10 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
           {
             "alignItems": "center",
             "backgroundColor": "#1a1a1a",
-            "borderColor": "#333",
-            "borderRadius": 16,
-            "borderWidth": 1,
+            "borderRadius": 24,
             "flexDirection": "row",
             "gap": 12,
-            "marginBottom": 18,
+            "marginBottom": 24,
             "minHeight": 72,
             "paddingHorizontal": 14,
           }
@@ -211,7 +207,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
       <View
         style={
           {
-            "marginBottom": 18,
+            "marginBottom": 24,
           }
         }
       >
@@ -221,7 +217,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               "color": "#777",
               "fontSize": 13,
               "fontWeight": "600",
-              "marginBottom": 7,
+              "marginBottom": 8,
               "paddingHorizontal": 2,
             }
           }
@@ -232,9 +228,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
           style={
             {
               "backgroundColor": "#1a1a1a",
-              "borderColor": "#333",
-              "borderRadius": 14,
-              "borderWidth": 1,
+              "borderRadius": 24,
               "overflow": "hidden",
             }
           }
@@ -756,7 +750,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
       <View
         style={
           {
-            "marginBottom": 18,
+            "marginBottom": 24,
           }
         }
       >
@@ -766,7 +760,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               "color": "#777",
               "fontSize": 13,
               "fontWeight": "600",
-              "marginBottom": 7,
+              "marginBottom": 8,
               "paddingHorizontal": 2,
             }
           }
@@ -777,9 +771,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
           style={
             {
               "backgroundColor": "#1a1a1a",
-              "borderColor": "#333",
-              "borderRadius": 14,
-              "borderWidth": 1,
+              "borderRadius": 24,
               "overflow": "hidden",
             }
           }
@@ -1061,7 +1053,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
       <View
         style={
           {
-            "marginBottom": 18,
+            "marginBottom": 24,
           }
         }
       >
@@ -1071,7 +1063,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               "color": "#777",
               "fontSize": 13,
               "fontWeight": "600",
-              "marginBottom": 7,
+              "marginBottom": 8,
               "paddingHorizontal": 2,
             }
           }
@@ -1082,9 +1074,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
           style={
             {
               "backgroundColor": "#1a1a1a",
-              "borderColor": "#333",
-              "borderRadius": 14,
-              "borderWidth": 1,
+              "borderRadius": 24,
               "overflow": "hidden",
             }
           }
@@ -1802,7 +1792,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
       <View
         style={
           {
-            "marginBottom": 18,
+            "marginBottom": 24,
           }
         }
       >
@@ -1812,7 +1802,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               "color": "#777",
               "fontSize": 13,
               "fontWeight": "600",
-              "marginBottom": 7,
+              "marginBottom": 8,
               "paddingHorizontal": 2,
             }
           }
@@ -1823,9 +1813,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
           style={
             {
               "backgroundColor": "#1a1a1a",
-              "borderColor": "#333",
-              "borderRadius": 14,
-              "borderWidth": 1,
+              "borderRadius": 24,
               "overflow": "hidden",
             }
           }

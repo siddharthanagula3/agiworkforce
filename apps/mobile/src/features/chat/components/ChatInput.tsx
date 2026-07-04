@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useImperativeHandle } from 'react';
 import { Alert, View, TextInput, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Link as LinkIcon } from 'lucide-react-native';
+import { Plus, Link as LinkIcon, AudioLines } from 'lucide-react-native';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendButton } from './SendButton';
@@ -13,7 +13,7 @@ import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useTheme } from '@/src/ui/theme';
+import { useTheme, radii } from '@/src/ui/theme';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -336,125 +336,149 @@ export function ChatInput({
         onSelectCommand={handleSelectCommand}
       />
 
+      {/* Secondary chip row -- model, temporary chat, connectors. ChatGPT's
+          reference composer has none of these (model lives in its header
+          title chip, temp-chat in its header icon); AGI's header center is
+          already spoken for by the Local/Cloud ModeToggle, so these stay
+          composer-local instead of moving to the header. */}
       <View
         style={{
-          backgroundColor: themeColors.surfaceElevated,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: themeColors.composerBorder,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          marginBottom: 8,
+          paddingLeft: 4,
         }}
       >
-        {/* Text input -- full width, top of the card */}
-        <TextInput
-          ref={inputRef}
-          testID="chat.composer.input"
-          style={{
-            color: themeColors.textPrimary,
-            fontSize: 15,
-            paddingVertical: 6,
-            paddingHorizontal: 4,
-            minHeight: 24,
-            maxHeight: 200,
-          }}
-          placeholder={placeholder}
-          placeholderTextColor={themeColors.textMuted}
-          value={text}
-          onChangeText={setText}
-          multiline
-          numberOfLines={MAX_INPUT_LINES}
-          selectionColor={themeColors.teal}
-          returnKeyType="default"
-          blurOnSubmit={false}
-          accessible={true}
-          accessibilityLabel="Message input"
-          accessibilityHint="Type your message to the AI assistant"
-        />
+        {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
+        <TemporaryChatToggle />
+        {!isStreaming && onOpenConnectors ? (
+          <Pressable
+            onPress={handleConnectorsPress}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: radii.full,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            hitSlop={6}
+            accessibilityLabel="Sources and connectors"
+            accessibilityHint="Opens connectors page"
+            accessibilityRole="button"
+          >
+            <LinkIcon size={18} color={themeColors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
 
-        {/* Bottom toolbar row */}
+      {/* Main composer row -- [+] outside-left, single-line pill with the
+          mic inside its right edge, circular send/stop/voice button
+          outside-right. Matches the ChatGPT mobile composer structure. */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+        {/* [+] Add to Chat button -- outside the pill, left */}
+        <Pressable
+          onPress={handlePlusPress}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: radii.full,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: themeColors.inputSurface,
+          }}
+          hitSlop={6}
+          accessibilityLabel="Add to chat"
+          accessibilityHint="Opens attachment, mode, and feature options"
+          accessibilityRole="button"
+        >
+          <Plus size={20} color={themeColors.textMuted} />
+        </Pressable>
+
+        {/* Pill -- text input + mic, inside the rounded border */}
         <View
           style={{
+            flex: 1,
             flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: 4,
+            alignItems: 'flex-end',
+            backgroundColor: themeColors.surfaceElevated,
+            borderRadius: radii.full,
+            borderWidth: 1,
+            borderColor: themeColors.composerBorder,
+            paddingLeft: 16,
+            paddingRight: 6,
+            paddingVertical: 4,
+            minHeight: 44,
           }}
         >
-          {/* Left group: [+] and [Model] */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1 }}>
-            {/* [+] Add to Chat button */}
+          <TextInput
+            ref={inputRef}
+            testID="chat.composer.input"
+            style={{
+              flex: 1,
+              color: themeColors.textPrimary,
+              fontSize: 15,
+              paddingVertical: 8,
+              minHeight: 24,
+              maxHeight: 160,
+            }}
+            placeholder={placeholder}
+            placeholderTextColor={themeColors.textMuted}
+            value={text}
+            onChangeText={setText}
+            multiline
+            numberOfLines={MAX_INPUT_LINES}
+            selectionColor={themeColors.teal}
+            returnKeyType="default"
+            blurOnSubmit={false}
+            accessible={true}
+            accessibilityLabel="Message input"
+            accessibilityHint="Type your message to the AI assistant"
+          />
+
+          <View testID="chat.composer.mic">
+            <VoiceInputButton
+              onTranscription={handleTranscription}
+              onRecordingStart={handleRecordingStart}
+              onRecordingStop={handleRecordingStop}
+              onMetering={handleMetering}
+              onLongPress={onOpenVoiceMode}
+              onError={handleVoiceError}
+              resetSignal={voiceResetSignal}
+              disabled={isStreaming}
+            />
+          </View>
+        </View>
+
+        {/* Right circle -- state slot: idle+empty opens voice mode (the
+            ChatGPT reference's waveform button), idle+content sends,
+            streaming stops. */}
+        <View testID="chat.composer.send">
+          {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
             <Pressable
-              onPress={handlePlusPress}
+              onPress={onOpenVoiceMode}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
+                width: 40,
+                height: 40,
+                borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
+                backgroundColor: themeColors.textPrimary,
               }}
               hitSlop={6}
-              accessibilityLabel="Add to chat"
-              accessibilityHint="Opens attachment, mode, and feature options"
+              accessibilityLabel="Start voice mode"
+              accessibilityHint="Opens hands-free voice conversation"
               accessibilityRole="button"
             >
-              <Plus size={20} color={themeColors.textMuted} />
+              <AudioLines size={18} color={themeColors.surfaceElevated} />
             </Pressable>
-
-            {/* Model pill -- hidden during streaming to save space */}
-            {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
-          </View>
-
-          {/* Right group: [temporary chat] [connectors] [mic] [send/stop] */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-            {/* Temporary chat toggle -- visible status + quick toggle. The
-                Add-to-Chat sheet's switch controls the same store value;
-                this is the always-visible indicator/shortcut for it. */}
-            <TemporaryChatToggle />
-
-            {/* Connectors link -- hidden unless the host has a real destination */}
-            {!isStreaming && onOpenConnectors ? (
-              <Pressable
-                onPress={handleConnectorsPress}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                hitSlop={6}
-                accessibilityLabel="Sources and connectors"
-                accessibilityHint="Opens connectors page"
-                accessibilityRole="button"
-              >
-                <LinkIcon size={18} color={themeColors.textMuted} />
-              </Pressable>
-            ) : null}
-
-            {/* Voice input button */}
-            <View testID="chat.composer.mic">
-              <VoiceInputButton
-                onTranscription={handleTranscription}
-                onRecordingStart={handleRecordingStart}
-                onRecordingStop={handleRecordingStop}
-                onMetering={handleMetering}
-                onLongPress={onOpenVoiceMode}
-                onError={handleVoiceError}
-                resetSignal={voiceResetSignal}
-                disabled={isStreaming}
-              />
-            </View>
-
-            {/* Send / Stop button */}
-            <View testID="chat.composer.send">
-              <SendButton
-                state={sendButtonState}
-                onPress={handleSendButtonPress}
-                disabled={!hasContent && !isStreaming}
-              />
-            </View>
-          </View>
+          ) : (
+            <SendButton
+              state={sendButtonState}
+              onPress={handleSendButtonPress}
+              disabled={!hasContent && !isStreaming}
+            />
+          )}
         </View>
       </View>
     </View>

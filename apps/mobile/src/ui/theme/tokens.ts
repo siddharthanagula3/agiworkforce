@@ -176,3 +176,8 @@ export const radii = {
   '3xl': 32,
   full: 9999,
 } as const;
+
+/** Grouped list-row cards (settings sections, profile header, info cards). */
+export const cardRadius = radii['2xl'];
+/** Top corners of full-width bottom sheets / modals. */
+export const sheetRadius = radii['3xl'];

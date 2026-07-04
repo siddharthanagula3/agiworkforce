@@ -9,6 +9,7 @@ import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import {
   executionModeForConversation,
   executionModeForModel,
@@ -573,8 +574,10 @@ export const useChatMessageStore = create<MessageState>()(
         const MAX_MESSAGES_PER_CONVERSATION = 100;
         // SEPARATION-FIX: only persist LOCAL conversations in this store.
         // Cloud conversations must never co-mingle with local storage.
+        // Temporary/incognito conversations are excluded entirely — they must
+        // not survive relaunch (never persist to the recents/history store).
         const conversations = state.conversations
-          .filter((c) => executionModeForConversation(c) === 'local')
+          .filter((c) => executionModeForConversation(c) === 'local' && !c.temporary)
           .slice(0, MAX_CONVERSATIONS);
         const conversationIds = new Set(conversations.map((c) => c.id));
         const messages: Record<string, ChatMessage[]> = {};
@@ -699,10 +702,15 @@ async function createConversationForMode(
     // conversation has a stable id the sync engine can push, independent of the
     // server round-trip. The create endpoint accepts and echoes this id.
     const id = uuidv7();
+    const isTemporary = useSettingsStore.getState().isTemporaryChat;
     const data = await api.post<{ conversation: ConversationSummary }>('/api/chat/conversations', {
       id,
       title: title ?? 'New Chat',
       projectId,
+      // Server stores this as web_conversations.is_temporary so the
+      // purge-temporary-chats cron job can bound retention (~30 days) —
+      // see apps/web/db/neon/0050_temporary_chat_retention.sql.
+      isTemporary,
     });
     const conversation: ConversationSummary = {
       ...data.conversation,
@@ -711,6 +719,9 @@ async function createConversationForMode(
       model: data.conversation.model ?? model,
       provider: data.conversation.provider ?? providerForExecutionMode('cloud'),
       executionMode: data.conversation.executionMode ?? 'cloud',
+      // Local history-visibility flag (see isHistoryVisibleConversation) — set
+      // from the same toggle value sent to the server above.
+      temporary: isTemporary,
     };
     // SEPARATION-FIX: cloud conversation goes to the cloud store, NOT the local store.
     // The local store `set` function is intentionally not called here.
@@ -748,6 +759,7 @@ function createStoredConversation(
     model,
     provider: providerForExecutionMode(executionMode),
     executionMode,
+    temporary: useSettingsStore.getState().isTemporaryChat,
   };
   set((state) => ({
     conversations: [localConversation, ...state.conversations],

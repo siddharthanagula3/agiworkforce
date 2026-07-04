@@ -13,6 +13,7 @@ const NEUTRAL: Personalization = {
   nickname: '',
   occupation: '',
   instructions: '',
+  style: 'default',
   warmth: 50,
   enthusiasm: 50,
   headersLists: 50,

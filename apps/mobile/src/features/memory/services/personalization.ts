@@ -15,10 +15,16 @@
  *     (Cold/Warm, Neutral/Enthusiastic, Prose/Structured, None/Frequent).
  *   - No store/IO access — fully unit-testable.
  */
-import type { Personalization } from '@/stores/settingsStore';
+import type { Personalization, PersonalizationStyle } from '@/stores/settingsStore';
 
 const HIGH = 75;
 const LOW = 25;
+
+const STYLE_INSTRUCTIONS: Record<Exclude<PersonalizationStyle, 'default'>, string> = {
+  concise: 'Keep responses short and to the point; avoid unnecessary elaboration.',
+  explanatory: 'Explain your reasoning and add relevant context or background detail.',
+  formal: 'Use precise, professional language; avoid slang and casual phrasing.',
+};
 
 function sliderLine(value: number, highText: string, lowText: string): string | null {
   if (value >= HIGH) return highText;
@@ -34,6 +40,8 @@ export function renderPersonalizationBlock(p: Personalization): string {
 
   const occupation = p.occupation.trim();
   if (occupation) lines.push(`The user works as: ${occupation}. Tailor examples accordingly.`);
+
+  if (p.style && p.style !== 'default') lines.push(STYLE_INSTRUCTIONS[p.style]);
 
   const warmth = sliderLine(
     p.warmth,

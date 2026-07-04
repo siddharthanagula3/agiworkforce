@@ -43,6 +43,7 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return {
+    BookImage: icon,
     Boxes: icon,
     Cloud: icon,
     FolderOpen: icon,

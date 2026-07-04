@@ -110,9 +110,14 @@ jest.mock('@/src/features/chat/components/CollapsibleSources', () => ({
 jest.mock('@/src/features/chat/components/MessageEditModal', () => ({
   MessageEditModal: () => null,
 }));
-jest.mock('@/src/features/chat/components/ProvenanceFooter', () => ({
-  ProvenanceFooter: () => null,
-}));
+jest.mock('@/src/features/chat/components/ProvenanceFooter', () => {
+  const RN = require('react-native');
+  return {
+    ProvenanceFooter: ({ provider, model }: { provider?: string; model?: string }) => (
+      <RN.Text>{[provider, model].filter(Boolean).join(' · ')}</RN.Text>
+    ),
+  };
+});
 jest.mock('@/src/features/chat/components/PerformanceChip', () => ({
   PerformanceChip: () => null,
 }));
@@ -134,7 +139,7 @@ describe('MessageBubble model label', () => {
 
     const { getByText, queryByText, getByLabelText } = render(<MessageBubble message={message} />);
 
-    expect(getByText('AGI Standard')).toBeTruthy();
+    expect(getByText(/AGI Standard/)).toBeTruthy();
     expect(queryByText('qwen3-4b-instruct-2507')).toBeNull();
     expect(getByLabelText('AGI Standard message: Local AI runs on this device.')).toBeTruthy();
   });

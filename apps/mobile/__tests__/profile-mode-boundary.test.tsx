@@ -96,6 +96,7 @@ function resetStores() {
       nickname: 'Sid',
       occupation: 'Founder',
       instructions: '',
+      style: 'default',
       warmth: 50,
       enthusiasm: 50,
       headersLists: 50,
