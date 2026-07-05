@@ -1,0 +1,442 @@
+/**
+ * ToolCallTimeline — unified, borderless vertical timeline for a message's
+ * tool calls: a thin connecting line through small icon circles, a collapsible
+ * group-header summary, and per-row inline expansion (Request/Response, or
+ * web-search result cards). Modeled on Claude's own inline tool-use UI.
+ *
+ * Named ToolCallTimeline (not ToolTimeline) to avoid colliding with the
+ * unrelated agents-feature ToolTimeline in
+ * src/features/agents/components/ToolTimeline.tsx (gated Companion feature).
+ *
+ * Supersedes the old per-tool bordered-pill rendering (InlineToolCall, now
+ * removed) for every tool call in the transcript.
+ */
+import { useMemo, useState, useCallback } from 'react';
+import { View, Pressable, Modal, ScrollView } from 'react-native';
+import { ChevronDown, ChevronRight, CircleCheck, Loader2, Maximize2, X } from 'lucide-react-native';
+import { Text } from '@/components/ui/text';
+import { useThemeColors } from '@/src/ui/theme';
+import { lucideRNToolIcon, lucideRNIconByName } from './toolIconRN';
+import { WebSearchResultCard } from './WebSearchResultCard';
+import {
+  getToolDisplayLabel,
+  getToolSourceBadge,
+  getFileExtensionIconName,
+} from '@agiworkforce/types';
+import type { ToolCall } from '@/types/chat';
+
+function TimelineConnector({
+  tone,
+  showTop,
+  showBottom,
+}: {
+  tone: string;
+  showTop: boolean;
+  showBottom: boolean;
+}) {
+  return (
+    <View style={{ width: 20, alignItems: 'center' }}>
+      <View
+        style={{ flex: 1, width: 1, backgroundColor: showTop ? tone : 'transparent', minHeight: 4 }}
+      />
+      <View
+        style={{
+          flex: 1,
+          width: 1,
+          backgroundColor: showBottom ? tone : 'transparent',
+          minHeight: 4,
+        }}
+      />
+    </View>
+  );
+}
+
+function ToolRowIcon({ tool }: { tool: ToolCall }) {
+  const colors = useThemeColors();
+  const sourceBadge = getToolSourceBadge(tool.name);
+
+  if (sourceBadge) {
+    return (
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 4,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.surfaceOverlay,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+      >
+        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary }}>
+          {sourceBadge}
+        </Text>
+      </View>
+    );
+  }
+
+  if (tool.status === 'running') {
+    return <Loader2 size={15} strokeWidth={1.75} color={colors.agentActive} />;
+  }
+
+  // A tool that created/wrote a file gets the file's own extension icon
+  // (matches the reference: build_resume.js shows a JS-file icon, not a
+  // generic write-tool icon), everything else keeps its tool-name icon.
+  const Icon = tool.filePath
+    ? lucideRNIconByName(getFileExtensionIconName(tool.filePath))
+    : lucideRNToolIcon(tool.name);
+  return <Icon size={15} strokeWidth={1.75} color={colors.textSecondary} />;
+}
+
+function trailingChipLabel(tool: ToolCall): string | null {
+  if (tool.searchResults?.length) {
+    return `${tool.searchResults.length} result${tool.searchResults.length === 1 ? '' : 's'}`;
+  }
+  if (tool.command) return 'Script';
+  if (tool.filePath) {
+    const base = tool.filePath.split('/').pop();
+    return base ?? tool.filePath;
+  }
+  if (tool.output || tool.input) return 'Result';
+  return null;
+}
+
+function ToolCallTimelineRow({
+  tool,
+  isFirst,
+  isLast,
+  onOpenFullScreen,
+}: {
+  tool: ToolCall;
+  isFirst: boolean;
+  isLast: boolean;
+  onOpenFullScreen: (tool: ToolCall) => void;
+}) {
+  const colors = useThemeColors();
+  const [expanded, setExpanded] = useState(false);
+  const label = getToolDisplayLabel(tool.name);
+  const nameText =
+    tool.status === 'running'
+      ? label.activeForm
+      : tool.status === 'completed'
+        ? label.completedForm
+        : label.displayName;
+  const chip = trailingChipLabel(tool);
+  const hasBody = Boolean(tool.searchResults?.length || tool.input || tool.output || tool.command);
+
+  const toggle = useCallback(() => {
+    if (hasBody) setExpanded((prev) => !prev);
+  }, [hasBody]);
+
+  return (
+    <View>
+      <Pressable
+        onPress={toggle}
+        disabled={!hasBody}
+        accessibilityRole={hasBody ? 'button' : 'text'}
+        accessibilityLabel={`${nameText}${chip ? `, ${chip}` : ''}`}
+        accessibilityHint={hasBody ? 'Double tap to expand details' : undefined}
+        style={{ flexDirection: 'row', alignItems: 'stretch', minHeight: 30 }}
+      >
+        <TimelineConnector
+          tone={colors.borderLight}
+          showTop={!isFirst}
+          showBottom={!isLast || expanded}
+        />
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingVertical: 5,
+          }}
+        >
+          <ToolRowIcon tool={tool} />
+          <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: colors.textSecondary }}>
+            {nameText}
+          </Text>
+          {chip ? (
+            <View
+              style={{
+                borderRadius: 6,
+                backgroundColor: colors.surfaceOverlay,
+                paddingHorizontal: 7,
+                paddingVertical: 2,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: 10.5, color: colors.textMuted, maxWidth: 160 }}
+              >
+                {chip}
+              </Text>
+            </View>
+          ) : null}
+          {hasBody ? (
+            expanded ? (
+              <ChevronDown size={13} color={colors.textMuted} />
+            ) : (
+              <ChevronRight size={13} color={colors.textMuted} />
+            )
+          ) : null}
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={{ paddingLeft: 20, paddingBottom: 8 }}>
+          {tool.searchResults?.length ? (
+            <View style={{ gap: 2 }}>
+              {tool.searchResults.map((r, i) => (
+                <WebSearchResultCard key={`${tool.id}-r${i}`} result={r} />
+              ))}
+            </View>
+          ) : (
+            <View
+              style={{
+                backgroundColor: colors.surfaceOverlay,
+                borderRadius: 8,
+                padding: 10,
+                gap: 8,
+              }}
+            >
+              {tool.command || tool.input ? (
+                <View>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '600',
+                      color: colors.textMuted,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Request
+                  </Text>
+                  <Text
+                    style={{ fontFamily: 'monospace', fontSize: 11.5, color: colors.textPrimary }}
+                  >
+                    {tool.command ?? tool.input}
+                  </Text>
+                </View>
+              ) : null}
+              {tool.output ? (
+                <View>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: '600',
+                      color: colors.textMuted,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Response
+                  </Text>
+                  <Text
+                    numberOfLines={12}
+                    style={{ fontFamily: 'monospace', fontSize: 11.5, color: colors.textPrimary }}
+                  >
+                    {tool.output}
+                  </Text>
+                </View>
+              ) : null}
+              {needsFullScreen(tool) ? (
+                <Pressable
+                  onPress={() => onOpenFullScreen(tool)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View full output for ${nameText}`}
+                  hitSlop={6}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 2 }}
+                >
+                  <Maximize2 size={11} color={colors.textMuted} />
+                  <Text style={{ fontSize: 11.5, fontWeight: '600', color: colors.textSecondary }}>
+                    View full output
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** The inline body clamps the response at 12 lines to keep the transcript
+ *  auto-fit (no nested scrolling). Offer the fullscreen viewer whenever the
+ *  clamp could be hiding content. */
+const FULLSCREEN_OUTPUT_THRESHOLD = 600;
+
+function needsFullScreen(tool: ToolCall): boolean {
+  const size = (tool.output?.length ?? 0) + (tool.command?.length ?? tool.input?.length ?? 0);
+  return size > FULLSCREEN_OUTPUT_THRESHOLD || (tool.output?.split('\n').length ?? 0) > 12;
+}
+
+/**
+ * Fullscreen tool-detail viewer — a pageSheet modal so the transcript (and the
+ * composer under it) stays reachable the moment it's dismissed. The full
+ * request/response scrolls HERE, never inline in the message list.
+ */
+function ToolCallFullScreen({ tool, onClose }: { tool: ToolCall | null; onClose: () => void }) {
+  const colors = useThemeColors();
+  if (!tool) return null;
+  const label = getToolDisplayLabel(tool.name);
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{ flex: 1, fontSize: 16, fontWeight: '600', color: colors.textPrimary }}
+          >
+            {label.displayName}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close tool details"
+            hitSlop={10}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.surfaceOverlay,
+            }}
+          >
+            <X size={16} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+          {tool.command || tool.input ? (
+            <View>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: colors.textMuted,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  marginBottom: 6,
+                }}
+              >
+                Request
+              </Text>
+              <Text
+                selectable
+                style={{ fontFamily: 'monospace', fontSize: 12.5, color: colors.textPrimary }}
+              >
+                {tool.command ?? tool.input}
+              </Text>
+            </View>
+          ) : null}
+          {tool.output ? (
+            <View>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: colors.textMuted,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  marginBottom: 6,
+                }}
+              >
+                Response
+              </Text>
+              <Text
+                selectable
+                style={{ fontFamily: 'monospace', fontSize: 12.5, color: colors.textPrimary }}
+              >
+                {tool.output}
+              </Text>
+            </View>
+          ) : null}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+export function ToolCallTimeline({
+  toolCalls,
+  summary,
+}: {
+  toolCalls: ToolCall[];
+  summary: string;
+}) {
+  const colors = useThemeColors();
+  const [collapsed, setCollapsed] = useState(false);
+  const [fullScreenTool, setFullScreenTool] = useState<ToolCall | null>(null);
+  const closeFullScreen = useCallback(() => setFullScreenTool(null), []);
+  const allDone = useMemo(
+    () => toolCalls.length > 0 && toolCalls.every((t) => t.status !== 'running'),
+    [toolCalls],
+  );
+
+  if (toolCalls.length === 0) return null;
+
+  return (
+    <View style={{ marginBottom: 4 }}>
+      <Pressable
+        onPress={() => setCollapsed((prev) => !prev)}
+        accessibilityRole="button"
+        accessibilityLabel={`${summary}${collapsed ? ', collapsed' : ', expanded'}`}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
+      >
+        <Text style={{ fontSize: 12.5, color: colors.textMuted }}>{summary}</Text>
+        {collapsed ? (
+          <ChevronRight size={12} color={colors.textMuted} />
+        ) : (
+          <ChevronDown size={12} color={colors.textMuted} />
+        )}
+      </Pressable>
+
+      {!collapsed ? (
+        <View>
+          {toolCalls.map((tool, i) => (
+            <ToolCallTimelineRow
+              key={tool.id}
+              tool={tool}
+              isFirst={i === 0}
+              isLast={i === toolCalls.length - 1 && !allDone}
+              onOpenFullScreen={setFullScreenTool}
+            />
+          ))}
+          {allDone ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30 }}>
+              <TimelineConnector tone={colors.borderLight} showTop showBottom={false} />
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 }}
+              >
+                <CircleCheck size={15} strokeWidth={1.75} color={colors.textMuted} />
+                <Text style={{ fontSize: 13, color: colors.textSecondary, fontWeight: '600' }}>
+                  Done
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {fullScreenTool ? (
+        <ToolCallFullScreen tool={fullScreenTool} onClose={closeFullScreen} />
+      ) : null}
+    </View>
+  );
+}

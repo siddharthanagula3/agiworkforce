@@ -5,7 +5,7 @@ import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanim
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { type ModelDef } from '@/src/features/model-picker/service';
+import { CLOUD_LOCK_REASON, type ModelDef } from '@/src/features/model-picker/service';
 import type { ModelInstallJob } from '@/src/features/model-picker/installStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
@@ -40,6 +40,10 @@ export function ModelRow({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const isLocked = model.availability === 'locked';
+  // Locked rows are locked either because the user isn't signed in to AGI Cloud
+  // (→ sign-in) or because their subscription tier doesn't cover this model
+  // (→ upgrade). The badge and a11y strings must match the actual unlock path.
+  const isSignInLock = isLocked && model.lockReason === CLOUD_LOCK_REASON;
   const isLocal = model.surface === 'local';
   const canToggleThinking = !isLocked && model.supportsThinking;
   const isDownloading = installStatus.status === 'downloading';
@@ -47,7 +51,7 @@ export function ModelRow({
   const isFailed = installStatus.status === 'failed';
   const isReady = installStatus.status === 'ready';
   const disabled = isDownloading || isUnavailable;
-  const visiblySelected = isSelected && (!isLocal || isReady);
+  const visiblySelected = isSelected && (!isLocal || isReady) && !isLocked;
   const progressPercent = Math.round(installStatus.progress * 100);
   const unavailableHint =
     installStatus.error ?? 'This model package/system model is unavailable on this device.';
@@ -87,11 +91,13 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         disabled={disabled}
-        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, sign in required, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
+        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : 'upgrade required'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
         accessibilityRole="button"
         accessibilityHint={
           isLocked
-            ? 'Opens AGI Cloud sign-in'
+            ? isSignInLock
+              ? 'Opens AGI Cloud sign-in'
+              : 'Opens plan upgrade options'
             : isUnavailable
               ? unavailableHint
               : isDownloading
@@ -171,7 +177,7 @@ export function ModelRow({
           {isLocal && isUnavailable ? <Badge label="Device" color="gray" /> : null}
           {isLocked ? (
             <>
-              <Badge label="Sign in" color="yellow" />
+              <Badge label={isSignInLock ? 'Sign in' : 'Upgrade'} color="yellow" />
               <Lock size={14} color={colors.agentWarning} />
             </>
           ) : null}

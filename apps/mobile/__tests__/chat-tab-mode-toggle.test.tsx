@@ -16,6 +16,13 @@ jest.mock('expo-router', () => ({
   useNavigation: () => ({}),
 }));
 
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (effect: () => void) => {
+    const React = require('react');
+    React.useEffect(effect, []);
+  },
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -30,6 +37,9 @@ jest.mock('@/stores/chatStore', () => ({
       beginImageGeneration: mockBeginImageGeneration,
       completeImageGeneration: mockCompleteImageGeneration,
       failImageGeneration: mockFailImageGeneration,
+      deleteMessage: jest.fn(),
+      setPaywallError: jest.fn(),
+      clearError: jest.fn(),
     }),
 }));
 
@@ -119,9 +129,9 @@ jest.mock('lucide-react-native', () => {
     Cloud: Icon,
     Cpu: Icon,
     Download: Icon,
+    EyeOff: Icon,
     Menu: Icon,
     Plus: Icon,
-    SquarePen: Icon,
   };
 });
 

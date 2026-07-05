@@ -1,6 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  getPlanSessionUsageBudgetCents,
+  getPlanWeeklyUsageBudgetCents,
+  getPlanFlagshipWeeklyUsageBudgetCents,
+} from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -8,7 +13,11 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { getRollingUsage } from '@/lib/server/rolling-usage';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+
+const SESSION_WINDOW_HOURS = 5;
+const WEEKLY_WINDOW_HOURS = 7 * 24;
 
 /**
  * GET /api/usage
@@ -40,6 +49,31 @@ async function handler(request: NextRequest) {
 
     const usagePercentage = creditsAllocated > 0 ? (creditsUsed / creditsAllocated) * 100 : 0;
 
+    // Session (rolling 5h) / weekly / flagship-weekly caps layer on top of
+    // the monthly credit budget above (founder decision, 2026-07-05) — see
+    // getPlanWeeklyUsageBudgetCents in billing-catalog.ts. Zero cap (e.g.
+    // free tier, which has no monthlyUsageBudgetUsd to derive from) means
+    // "not applicable"; the mobile client hides that section entirely.
+    const sessionCapCents = getPlanSessionUsageBudgetCents(planTier);
+    const weeklyCapCents = getPlanWeeklyUsageBudgetCents(planTier);
+    const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageBudgetCents(planTier);
+
+    const [session, weekly, flagshipWeekly] =
+      sessionCapCents > 0 || weeklyCapCents > 0
+        ? await Promise.all([
+            getRollingUsage(userId, SESSION_WINDOW_HOURS, false),
+            getRollingUsage(userId, WEEKLY_WINDOW_HOURS, false),
+            getRollingUsage(userId, WEEKLY_WINDOW_HOURS, true),
+          ])
+        : [
+            { usedCents: 0, oldestAt: null },
+            { usedCents: 0, oldestAt: null },
+            { usedCents: 0, oldestAt: null },
+          ];
+
+    const resetAt = (oldestAt: string | null, windowHours: number): string | null =>
+      oldestAt ? new Date(Date.parse(oldestAt) + windowHours * 60 * 60 * 1000).toISOString() : null;
+
     return NextResponse.json({
       plan_tier: planTier,
       credits_allocated_cents: creditsAllocated,
@@ -53,6 +87,15 @@ async function handler(request: NextRequest) {
       daily_remaining_cents: 0,
       has_daily_limit: false,
       subscription_status: subscription?.status ?? 'none',
+      session_used_cents: session.usedCents,
+      session_cap_cents: sessionCapCents,
+      session_reset_at: resetAt(session.oldestAt, SESSION_WINDOW_HOURS),
+      weekly_used_cents: weekly.usedCents,
+      weekly_cap_cents: weeklyCapCents,
+      weekly_reset_at: resetAt(weekly.oldestAt, WEEKLY_WINDOW_HOURS),
+      flagship_weekly_used_cents: flagshipWeekly.usedCents,
+      flagship_weekly_cap_cents: flagshipWeeklyCapCents,
+      flagship_weekly_reset_at: resetAt(flagshipWeekly.oldestAt, WEEKLY_WINDOW_HOURS),
     });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch usage data');

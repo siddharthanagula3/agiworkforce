@@ -29,6 +29,8 @@ export interface CombinedChatState {
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
   isStreaming: boolean;
+  /** Conversation ids with a live stream — scope composer streaming state to the open conversation via this, not the global isStreaming. */
+  streamingConversationIds: string[];
   streamingContent: string;
   streamingReasoning: string;
   error: string | null;
@@ -92,7 +94,7 @@ export interface CombinedChatState {
     model: string,
     attachments?: Attachment[],
     options?: SendMessageOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   stopStreaming: () => void;
   retryMessage: (conversationId: string, messageId: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
@@ -159,6 +161,7 @@ function buildCombinedState(
     resolveOfflineMessage: msg.resolveOfflineMessage,
     clearQueuedPlaceholders: msg.clearQueuedPlaceholders,
     isStreaming: exec.isStreaming,
+    streamingConversationIds: exec.streamingConversationIds,
     streamingContent: exec.streamingContent,
     streamingReasoning: exec.streamingReasoning,
     error: exec.error,

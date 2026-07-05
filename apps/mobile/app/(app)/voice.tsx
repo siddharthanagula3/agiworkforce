@@ -4,6 +4,10 @@
  * Flow: idle → Listen (STT via on-device capture) → Think (selected local model)
  *       → Speak (on-device TTS) → loop back to Listen.
  *
+ * Supports hands-free turn-taking (auto-relisten, recognizer finalizes on
+ * silence) and push-to-talk (hold the orb to talk, release to send) via the
+ * shared useVoiceConversation hook. The preference persists in settings.
+ *
  * Design: pulsing terracotta orb, dark gradient background.
  * All processing is on-device. No audio leaves the device.
  */
@@ -22,7 +26,7 @@ import Animated, {
   FadeIn,
 } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
-import { X, MicOff, Mic, Volume2 } from 'lucide-react-native';
+import { X, MicOff, Mic, Volume2, Hand } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
@@ -31,7 +35,6 @@ import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip'
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
-import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { colors } from '@/src/ui/theme';
 import { getDisplayName } from '@/src/features/model-picker/service';
@@ -39,12 +42,15 @@ import {
   createMessageIdSet,
   findNewAssistantResponse,
 } from '@/src/features/voice/utils/assistantResponse';
+import {
+  useVoiceConversation,
+  voiceCaptureErrorMessage,
+  type VoiceConversationPhase as Phase,
+} from '@/src/features/voice/hooks/useVoiceConversation';
 
 // ---------------------------------------------------------------------------
 // Phase state
 // ---------------------------------------------------------------------------
-
-type Phase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 const PHASE_LABEL: Record<Phase, string> = {
   idle: 'Tap to speak',
@@ -53,26 +59,22 @@ const PHASE_LABEL: Record<Phase, string> = {
   speaking: 'Speaking...',
 };
 
-function voiceCaptureMessage(err: unknown): string {
-  if (err instanceof VoiceInput.VoiceCaptureError) {
-    if (err.code === 'mic-permission-denied') {
-      return 'Microphone access is off. Enable microphone permission in Settings to use voice.';
-    }
-    if (err.code === 'on-device-recognition-unavailable') {
-      return 'On-device speech recognition is not available for this device or language yet.';
-    }
-    if (err.code === 'already-active') return 'Voice capture is already running.';
-    return err.message;
-  }
-  return 'Voice input could not start. Please try again.';
-}
-
 const PHASE_SUBLABEL: Record<Phase, string> = {
   idle: 'Voice companion — on-device',
   listening: 'Speak naturally',
   thinking: 'Processing on-device',
   speaking: 'AI is responding',
 };
+
+function phaseLabel(phase: Phase, pttMode: boolean): string {
+  if (pttMode && phase === 'idle') return 'Hold to talk';
+  return PHASE_LABEL[phase];
+}
+
+function phaseSublabel(phase: Phase, pttMode: boolean): string {
+  if (pttMode && phase === 'listening') return 'Release to send';
+  return PHASE_SUBLABEL[phase];
+}
 
 // terracotta for all phases (brand colour for voice companion)
 const ORB_COLOR = colors.terraCotta;
@@ -109,11 +111,19 @@ function DarkGradientBg() {
 function TerraCottaOrb({
   phase,
   audioLevel,
+  label,
+  hint,
   onPress,
+  onPressIn,
+  onPressOut,
 }: {
   phase: Phase;
   audioLevel: number;
-  onPress: () => void;
+  label: string;
+  hint: string;
+  onPress?: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
 }) {
   const scale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.15);
@@ -152,10 +162,13 @@ function TerraCottaOrb({
 
   return (
     <Pressable
+      testID="voice-companion-orb"
       onPress={onPress}
-      accessibilityLabel={PHASE_LABEL[phase]}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityHint="Tap to start or stop listening"
+      accessibilityHint={hint}
     >
       <View style={styles.orbWrapper}>
         {/* Outer glow */}
@@ -200,20 +213,15 @@ export default function VoiceScreen() {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
+  const pttMode = useSettingsStore((s) => s.voicePushToTalk);
+  const setVoicePushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
 
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [muted, setMuted] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [transcriptPreview, setTranscriptPreview] = useState('');
   const [lastResponseMs, setLastResponseMs] = useState<number | undefined>(undefined);
 
-  const activeRef = useRef(true);
-  const autoListenRef = useRef(true);
   const convIdRef = useRef<string | null>(null);
-  const captureSessionRef = useRef<VoiceInput.VoiceCaptureSession | null>(null);
 
   // Ensure a conversation is ready for the session
   useEffect(() => {
@@ -222,166 +230,66 @@ export default function VoiceScreen() {
         convIdRef.current = id;
       })
       .catch(() => {
-        // ignore — sendMessage will create one if needed
+        // ignore — surfaced as a send failure if it never resolves
       });
-    return () => {
-      activeRef.current = false;
-      autoListenRef.current = false;
-      captureSessionRef.current = null;
-      VoiceInput.cancelCapture().catch(() => {});
-      VoiceOutput.stop().catch(() => {});
-    };
   }, [createConversation]);
 
-  const startListening = useCallback(async () => {
-    if (!activeRef.current || muted) return;
-    try {
-      setTranscriptPreview('');
-      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-      const session = await VoiceInput.startCaptureSession((event) => {
-        if (!activeRef.current) return;
-        const norm = Math.max(0, Math.min(1, (event.metering + 60) / 60));
-        setAudioLevel(norm);
-      });
-      captureSessionRef.current = session;
-      session.result.catch(() => {});
-      if (activeRef.current) setPhase('listening');
-    } catch (err) {
-      if (activeRef.current) {
-        setPhase('idle');
-        Alert.alert('Voice unavailable', voiceCaptureMessage(err));
-      }
-    }
-  }, [muted, hapticsEnabled]);
-
-  const stopAndProcess = useCallback(async () => {
-    if (!activeRef.current) return;
-    try {
-      setPhase('thinking');
-      setAudioLevel(0);
-      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-      const session = captureSessionRef.current;
-      if (!session) {
-        if (activeRef.current) setPhase('idle');
-        return;
-      }
-      await VoiceInput.stopCapture();
-      const t0 = Date.now();
-      const { text } = await session.result;
-      captureSessionRef.current = null;
-      const sttMs = Date.now() - t0;
-
-      if (!activeRef.current) return;
-
-      if (!text.trim()) {
-        if (activeRef.current) setPhase('idle');
-        return;
-      }
-
-      setTranscriptPreview(text.trim());
-      setLastResponseMs(sttMs);
-
-      // Send to local model and get response
+  const sendVoiceMessage = useCallback(
+    async (text: string) => {
       const convId = convIdRef.current;
-      if (!convId) {
-        if (activeRef.current) setPhase('idle');
-        return;
-      }
+      if (!convId) throw new Error('No voice conversation available');
+      const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[convId] ?? []);
+      await sendMessage(convId, text, selectedModel);
+      return findNewAssistantResponse(
+        useChatStore.getState().messages[convId] ?? [],
+        previousMessageIds,
+      );
+    },
+    [sendMessage, selectedModel],
+  );
 
-      let aiResponse: string | null = null;
-      try {
-        const previousMessageIds = createMessageIdSet(
-          useChatStore.getState().messages[convId] ?? [],
-        );
-        await sendMessage(convId, text.trim(), selectedModel);
-        aiResponse = findNewAssistantResponse(
-          useChatStore.getState().messages[convId] ?? [],
-          previousMessageIds,
-        );
-      } catch {
-        if (activeRef.current) setPhase('idle');
-        return;
-      }
-
-      if (!activeRef.current) return;
-      if (!aiResponse) {
-        setTranscriptPreview('Sent to chat.');
-        setPhase('idle');
-        setAudioLevel(0);
-        return;
-      }
-
-      // Speak response on-device
-      setPhase('speaking');
-      await VoiceOutput.speak(aiResponse, {
+  const {
+    phase,
+    muted,
+    audioLevel,
+    transcriptPreview,
+    handleOrbPress,
+    handleOrbPressIn,
+    handleOrbPressOut,
+    toggleMute,
+    endConversation,
+  } = useVoiceConversation({
+    enabled: true,
+    pttMode,
+    hapticsEnabled,
+    sendMessage: sendVoiceMessage,
+    speak: (text, callbacks) =>
+      VoiceOutput.speak(text, {
         voice: selectedVoiceId ?? undefined,
         rate: speechRate,
-        onStart: () => {
-          if (activeRef.current) setAudioLevel(0.5);
-        },
-        onDone: () => {
-          if (activeRef.current) {
-            setAudioLevel(0);
-            if (autoListenRef.current) startListening();
-            else setPhase('idle');
-          }
-        },
-        onStopped: () => {
-          if (activeRef.current) {
-            setAudioLevel(0);
-            setPhase('idle');
-          }
-        },
-      });
-    } catch {
-      captureSessionRef.current = null;
-      if (activeRef.current) {
-        setPhase('idle');
-        setAudioLevel(0);
-      }
-    }
-  }, [hapticsEnabled, sendMessage, selectedModel, selectedVoiceId, speechRate, startListening]);
+        ...callbacks,
+      }),
+    stopSpeaking: () => VoiceOutput.stop().catch(() => {}),
+    onCaptureError: (err) => {
+      Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
+    },
+    onSttComplete: (ms) => setLastResponseMs(ms),
+  });
 
-  const handleOrbPress = useCallback(() => {
-    if (phase === 'idle') {
-      autoListenRef.current = true;
-      startListening();
-    } else if (phase === 'listening') {
-      stopAndProcess();
-    } else if (phase === 'speaking') {
-      VoiceOutput.stop();
-      autoListenRef.current = true;
-      startListening();
-    }
-  }, [phase, startListening, stopAndProcess]);
-
-  const handleMuteToggle = useCallback(() => {
-    const next = !muted;
-    setMuted(next);
+  const handlePttToggle = useCallback(() => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (next && phase === 'listening') {
-      VoiceInput.cancelCapture().catch(() => {});
-      captureSessionRef.current = null;
-      setPhase('idle');
-      setAudioLevel(0);
-    }
-  }, [muted, hapticsEnabled, phase]);
+    setVoicePushToTalk(!pttMode);
+  }, [hapticsEnabled, pttMode, setVoicePushToTalk]);
 
   const handleClose = useCallback(() => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    activeRef.current = false;
-    autoListenRef.current = false;
-    captureSessionRef.current = null;
-    VoiceInput.cancelCapture().catch(() => {});
-    VoiceOutput.stop().catch(() => {});
+    void endConversation();
     if (params.returnTo === '/(app)/settings/voice') {
       router.replace('/(app)/settings/voice' as Parameters<typeof router.replace>[0]);
       return;
     }
     if (router.canGoBack()) router.back();
-  }, [hapticsEnabled, params.returnTo, router]);
+  }, [hapticsEnabled, endConversation, params.returnTo, router]);
 
   const modelLabel = getDisplayName(selectedModel);
 
@@ -402,11 +310,19 @@ export default function VoiceScreen() {
 
       {/* Main content */}
       <View style={styles.content}>
-        <Text style={styles.sublabel}>{PHASE_SUBLABEL[phase]}</Text>
+        <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode)}</Text>
 
-        <TerraCottaOrb phase={phase} audioLevel={audioLevel} onPress={handleOrbPress} />
+        <TerraCottaOrb
+          phase={phase}
+          audioLevel={audioLevel}
+          label={phaseLabel(phase, pttMode)}
+          hint={pttMode ? 'Hold to talk, release to send' : 'Tap to start or stop listening'}
+          onPress={pttMode ? undefined : handleOrbPress}
+          onPressIn={pttMode ? handleOrbPressIn : undefined}
+          onPressOut={pttMode ? handleOrbPressOut : undefined}
+        />
 
-        <Text style={[styles.phaseLabel, { color: ORB_COLOR }]}>{PHASE_LABEL[phase]}</Text>
+        <Text style={[styles.phaseLabel, { color: ORB_COLOR }]}>{phaseLabel(phase, pttMode)}</Text>
 
         {/* Model badge */}
         <Animated.View entering={FadeIn.duration(400)} style={styles.modelBadge}>
@@ -439,7 +355,7 @@ export default function VoiceScreen() {
       <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
         {/* Mute */}
         <Pressable
-          onPress={handleMuteToggle}
+          onPress={toggleMute}
           style={[
             styles.controlBtn,
             { backgroundColor: muted ? colors.dangerSurface : colors.voiceControlSurface },
@@ -452,6 +368,21 @@ export default function VoiceScreen() {
           ) : (
             <Mic size={22} color={colors.textSecondary} />
           )}
+        </Pressable>
+
+        {/* Push-to-talk mode toggle */}
+        <Pressable
+          testID="voice-companion-ptt-toggle"
+          onPress={handlePttToggle}
+          style={[
+            styles.controlBtn,
+            { backgroundColor: pttMode ? colors.purpleSurface : colors.voiceControlSurface },
+          ]}
+          accessibilityLabel={pttMode ? 'Switch to hands-free mode' : 'Switch to push-to-talk mode'}
+          accessibilityRole="button"
+          accessibilityState={{ selected: pttMode }}
+        >
+          <Hand size={22} color={pttMode ? colors.agentThinking : colors.textSecondary} />
         </Pressable>
 
         {/* TTS indicator — static, shows TTS is always on-device */}

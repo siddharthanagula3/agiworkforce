@@ -1,6 +1,6 @@
 import { View, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { Lock, X, FileText } from 'lucide-react-native';
+import { Lock, X, FileText, ClipboardList } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
@@ -27,6 +27,12 @@ export interface Attachment {
   height?: number;
   /** File size in bytes */
   fileSize?: number;
+  /**
+   * Present for "Pasted text" attachments — a very large block dropped into
+   * the composer, held here instead of the input. Folded back into the
+   * outgoing message at send time; tapping the card expands it back inline.
+   */
+  pastedText?: string;
 }
 
 interface AttachmentPreviewProps {
@@ -34,6 +40,8 @@ interface AttachmentPreviewProps {
   attachments: Attachment[];
   /** Called when user removes an attachment */
   onRemove: (id: string) => void;
+  /** Called when the user taps a "Pasted text" card to expand it back inline */
+  onExpandPastedText?: (id: string) => void;
   /**
    * Per-file privacy label rendered as a chip on each thumbnail
    * (e.g. "Local"). Sourced from the host's SendPreviewPresentation.
@@ -57,11 +65,13 @@ function isImage(mimeType: string): boolean {
 function AttachmentThumbnail({
   attachment,
   onRemove,
+  onExpandPastedText,
   privacyShortLabel,
   colors,
 }: {
   attachment: Attachment;
   onRemove: (id: string) => void;
+  onExpandPastedText?: (id: string) => void;
   privacyShortLabel?: string;
   colors: ColorScheme;
 }) {
@@ -75,6 +85,7 @@ function AttachmentThumbnail({
   };
 
   const imageAttachment = isImage(attachment.mimeType);
+  const isPastedText = Boolean(attachment.pastedText);
 
   return (
     <Animated.View
@@ -100,6 +111,32 @@ function AttachmentThumbnail({
             recyclingKey={attachment.id}
           />
         </View>
+      ) : isPastedText ? (
+        <Pressable
+          className="rounded-xl items-center justify-center p-2"
+          style={{
+            width: 72,
+            height: 72,
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+          onPress={() => onExpandPastedText?.(attachment.id)}
+          disabled={!onExpandPastedText}
+          accessibilityLabel={`Pasted text, ${formatFileSize(attachment.fileSize ?? 0)}`}
+          accessibilityHint="Expands the pasted text back into the message input"
+          accessibilityRole="button"
+        >
+          <ClipboardList size={24} color={colors.textMuted} />
+          <Text className="text-[9px] mt-1 text-center" style={{ color: colors.textMuted }}>
+            Pasted text
+          </Text>
+          {attachment.fileSize ? (
+            <Text className="text-[8px]" style={{ color: colors.textMuted }}>
+              {formatFileSize(attachment.fileSize)}
+            </Text>
+          ) : null}
+        </Pressable>
       ) : (
         <View
           className="rounded-xl items-center justify-center p-2"
@@ -127,7 +164,7 @@ function AttachmentThumbnail({
         </View>
       )}
 
-      {/* Remove button */}
+      {/* Remove button — hitSlop 12 lifts the 20pt circle to a 44pt target */}
       <Pressable
         onPress={handleRemove}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full items-center justify-center"
@@ -138,7 +175,7 @@ function AttachmentThumbnail({
         }}
         accessibilityLabel={`Remove ${attachment.fileName}`}
         accessibilityRole="button"
-        hitSlop={8}
+        hitSlop={12}
       >
         <X size={10} color={colors.textSecondary} />
       </Pressable>
@@ -183,6 +220,7 @@ function AttachmentThumbnail({
 export function AttachmentPreview({
   attachments,
   onRemove,
+  onExpandPastedText,
   privacyShortLabel,
 }: AttachmentPreviewProps) {
   const colors = useThemeColors();
@@ -206,6 +244,7 @@ export function AttachmentPreview({
               key={attachment.id}
               attachment={attachment}
               onRemove={onRemove}
+              onExpandPastedText={onExpandPastedText}
               privacyShortLabel={privacyShortLabel}
               colors={colors}
             />

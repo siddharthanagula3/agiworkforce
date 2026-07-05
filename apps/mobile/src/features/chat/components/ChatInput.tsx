@@ -1,11 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useImperativeHandle } from 'react';
-import { Alert, View, TextInput, Pressable } from 'react-native';
+import { Alert, View, TextInput, Pressable, Keyboard, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, Link as LinkIcon, AudioLines } from 'lucide-react-native';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendButton } from './SendButton';
-import { TemporaryChatToggle } from './TemporaryChatToggle';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
@@ -21,8 +20,19 @@ import { getDraft, setDraft, clearDraft } from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
 
+/** A single text insertion at least this large (a paste, never typing) is
+ *  converted into a compact "Pasted text" attachment instead of flooding the
+ *  composer — matching ChatGPT/Claude mobile. */
+const LARGE_PASTE_THRESHOLD = 10_000;
+
 interface ChatInputProps {
-  onSend: (text: string, attachments?: Attachment[]) => void;
+  /**
+   * Send handler. May return (a promise of) a boolean: `false` means the send
+   * was REJECTED by a pre-flight gate (auth, egress, upload consent…) and the
+   * composer keeps the draft; anything else means the message was accepted
+   * and the draft clears. The composer never clears optimistically on tap.
+   */
+  onSend: (text: string, attachments?: Attachment[]) => void | boolean | Promise<void | boolean>;
   isStreaming?: boolean;
   onStop?: () => void;
   onOpenModelPicker?: () => void;
@@ -80,6 +90,7 @@ export function ChatInput({
   // Seed from a saved draft (if any) first, else the one-time initialText prop.
   const [text, setText] = useState(() => getDraft(draftKey) || (initialText ?? ''));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -87,6 +98,7 @@ export function ChatInput({
   const inputRef = useRef<TextInput>(null);
   const recordingStartTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sendPendingRef = useRef(false);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
@@ -138,17 +150,118 @@ export function ChatInput({
     setDraft(draftKey, text);
   }, [text, draftKey]);
 
+  // Collapse the home-indicator inset while the keyboard is up — with the
+  // KeyboardAvoidingView pushing the composer above the keyboard, keeping the
+  // full bottom safe-area padding leaves a dead ~34pt band between the send
+  // row and the keyboard (ChatGPT/Claude collapse it the same way).
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   const handleSend = useCallback(() => {
+    if (sendPendingRef.current) return;
     const trimmed = text.trim();
     if (!trimmed && attachments.length === 0) return;
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    onSend(trimmed, attachments.length > 0 ? attachments : undefined);
-    setText('');
-    setAttachments([]);
-    clearDraft(draftKey);
+
+    // Pasted-text attachments are composer UX, not server files — fold their
+    // content back into the outgoing message so the model always sees it.
+    const pastedBlocks = attachments
+      .map((a) => a.pastedText)
+      .filter((t): t is string => Boolean(t));
+    const fileAttachments = attachments.filter((a) => !a.pastedText);
+    const outgoing = [...pastedBlocks, trimmed].filter(Boolean).join('\n\n');
+
+    const sentText = text;
+    const sentAttachmentIds = new Set(attachments.map((a) => a.id));
+    sendPendingRef.current = true;
+
+    // Draft-safe send: the composer clears only once the send is ACCEPTED
+    // (user message committed after all pre-flight gates). A handler that
+    // resolves `false` or throws keeps the draft intact — never clear
+    // optimistically on tap.
+    Promise.resolve(onSend(outgoing, fileAttachments.length > 0 ? fileAttachments : undefined))
+      .then((accepted) => {
+        if (accepted === false) return;
+        clearDraft(draftKey);
+        setText((current) => (current === sentText ? '' : current));
+        setAttachments((current) => current.filter((a) => !sentAttachmentIds.has(a.id)));
+      })
+      .catch(() => {
+        // Send failed before acceptance — keep the draft.
+      })
+      .finally(() => {
+        sendPendingRef.current = false;
+      });
   }, [text, attachments, onSend, hapticsEnabled, draftKey]);
+
+  /**
+   * A very large block dropped into the composer (paste) becomes a compact
+   * "Pasted text" attachment — like ChatGPT/Claude mobile — instead of 10k+
+   * chars of composer scrollback. Only a single-update JUMP past the
+   * threshold converts (a paste); gradual typing never does. The content is
+   * folded back into the message at send time, and the chip can be expanded
+   * back inline (see handleExpandPastedText).
+   */
+  const handleChangeText = useCallback(
+    (next: string) => {
+      const inserted = next.length - text.length;
+      if (inserted >= LARGE_PASTE_THRESHOLD) {
+        // Isolate the pasted block: strip the longest common prefix/suffix
+        // shared with the previous text so typed text stays in the input.
+        let prefix = 0;
+        while (prefix < text.length && prefix < next.length && text[prefix] === next[prefix]) {
+          prefix++;
+        }
+        let suffix = 0;
+        while (
+          suffix < text.length - prefix &&
+          suffix < next.length - prefix &&
+          text[text.length - 1 - suffix] === next[next.length - 1 - suffix]
+        ) {
+          suffix++;
+        }
+        const pasted = next.slice(prefix, next.length - suffix);
+        if (pasted.length >= LARGE_PASTE_THRESHOLD) {
+          const id = `pasted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id,
+              uri: `pasted-text://${id}`,
+              mimeType: 'text/plain',
+              fileName: 'Pasted text',
+              fileSize: pasted.length,
+              pastedText: pasted,
+            },
+          ]);
+          return; // keep the pre-paste text in the input
+        }
+      }
+      setText(next);
+    },
+    [text],
+  );
+
+  const handleExpandPastedText = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (!target?.pastedText) return prev;
+      const pasted = target.pastedText;
+      setText((t) => (t ? `${t}\n\n${pasted}` : pasted));
+      return prev.filter((a) => a.id !== id);
+    });
+    inputRef.current?.focus();
+  }, []);
 
   const handleAttach = useCallback((newAttachments: Attachment[]) => {
     setAttachments((prev) => [...prev, ...newAttachments]);
@@ -311,7 +424,10 @@ export function ChatInput({
         : "What's on your mind?";
 
   return (
-    <View className="px-4 pt-2" style={{ paddingBottom: Math.max(insets.bottom + 6, 16) }}>
+    <View
+      className="px-4 pt-2"
+      style={{ paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 6, 16) }}
+    >
       {/* Recording overlay -- shown while recording is active */}
       <RecordingOverlay
         visible={isRecording}
@@ -325,6 +441,7 @@ export function ChatInput({
       <AttachmentPreview
         attachments={attachments}
         onRemove={handleRemoveAttachment}
+        onExpandPastedText={handleExpandPastedText}
         privacyShortLabel={attachmentPrivacyShortLabel}
       />
 
@@ -336,11 +453,9 @@ export function ChatInput({
         onSelectCommand={handleSelectCommand}
       />
 
-      {/* Secondary chip row -- model, temporary chat, connectors. ChatGPT's
-          reference composer has none of these (model lives in its header
-          title chip, temp-chat in its header icon); AGI's header center is
-          already spoken for by the Local/Cloud ModeToggle, so these stay
-          composer-local instead of moving to the header. */}
+      {/* Secondary chip row -- model + connectors. Temporary chat is a
+          pre-conversation decision only, so its toggle lives on the
+          empty-state header (chat.tsx), not here. */}
       <View
         style={{
           flexDirection: 'row',
@@ -351,7 +466,6 @@ export function ChatInput({
         }}
       >
         {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
-        <TemporaryChatToggle />
         {!isStreaming && onOpenConnectors ? (
           <Pressable
             onPress={handleConnectorsPress}
@@ -375,7 +489,7 @@ export function ChatInput({
       {/* Main composer row -- [+] outside-left, single-line pill with the
           mic inside its right edge, circular send/stop/voice button
           outside-right. Matches the ChatGPT mobile composer structure. */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {/* [+] Add to Chat button -- outside the pill, left */}
         <Pressable
           onPress={handlePlusPress}
@@ -400,7 +514,7 @@ export function ChatInput({
           style={{
             flex: 1,
             flexDirection: 'row',
-            alignItems: 'flex-end',
+            alignItems: 'center',
             backgroundColor: themeColors.surfaceElevated,
             borderRadius: radii.full,
             borderWidth: 1,
@@ -418,14 +532,14 @@ export function ChatInput({
               flex: 1,
               color: themeColors.textPrimary,
               fontSize: 15,
-              paddingVertical: 8,
+              paddingVertical: 0,
               minHeight: 24,
               maxHeight: 160,
             }}
             placeholder={placeholder}
             placeholderTextColor={themeColors.textMuted}
             value={text}
-            onChangeText={setText}
+            onChangeText={handleChangeText}
             multiline
             numberOfLines={MAX_INPUT_LINES}
             selectionColor={themeColors.teal}

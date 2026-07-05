@@ -77,11 +77,24 @@ jest.mock('../src/features/chat/components/ModelSelectorButton', () => {
   };
 });
 
+let capturedAttachmentPreviewProps:
+  | {
+      attachments: Array<{ id: string; fileName: string; pastedText?: string }>;
+      onExpandPastedText?: (id: string) => void;
+    }
+  | undefined;
+
 jest.mock('../src/features/chat/components/AttachmentPreview', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
-    AttachmentPreview: () => <View testID="attachment-preview" />,
+    AttachmentPreview: (props: {
+      attachments: Array<{ id: string; fileName: string; pastedText?: string }>;
+      onExpandPastedText?: (id: string) => void;
+    }) => {
+      capturedAttachmentPreviewProps = props;
+      return <View testID="attachment-preview" />;
+    },
   };
 });
 
@@ -207,14 +220,6 @@ jest.mock('../src/ui/theme', () => ({
   },
 }));
 
-jest.mock('../src/features/chat/components/TemporaryChatToggle', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return {
-    TemporaryChatToggle: () => <View testID="temporary-chat-toggle" />,
-  };
-});
-
 jest.mock('../lib/constants', () => ({
   MAX_INPUT_LINES: 6,
 }));
@@ -254,6 +259,7 @@ describe('ChatInput', () => {
     lastVoiceResetSignal = undefined;
     capturedOverlaySend = undefined;
     capturedOverlayCancel = undefined;
+    capturedAttachmentPreviewProps = undefined;
   });
 
   // ---- Button presence ----
@@ -286,16 +292,6 @@ describe('ChatInput', () => {
       const { getByLabelText, getByTestId } = renderInput();
       fireEvent.changeText(getByLabelText('Message input'), 'Hello');
       expect(getByTestId('send-button')).toBeTruthy();
-    });
-
-    it('renders the temporary chat toggle (visible status + shortcut in the toolbar)', () => {
-      // Regression: TemporaryChatToggle was fully built (icon, "Temporary" badge,
-      // a11y) with a docstring saying it belongs in the ChatInput toolbar, but was
-      // never actually imported/rendered anywhere — there was no way to see or
-      // toggle temporary-chat state from the main composer, only from deep inside
-      // the Add-to-Chat sheet.
-      const { getByTestId } = renderInput();
-      expect(getByTestId('temporary-chat-toggle')).toBeTruthy();
     });
   });
 
@@ -344,6 +340,135 @@ describe('ChatInput', () => {
       fireEvent.press(getByTestId('send-button'));
 
       expect(onSend).toHaveBeenCalledWith('Hello world', undefined);
+    });
+
+    it('clears the input only after the send is accepted (not on tap)', async () => {
+      let resolveSend!: (accepted: boolean) => void;
+      const onSend = jest.fn(() => new Promise<boolean>((resolve) => (resolveSend = resolve)));
+      const { getByLabelText, getByTestId } = renderInput({ onSend });
+
+      const input = getByLabelText('Message input');
+      fireEvent.changeText(input, 'Draft-safe message');
+      fireEvent.press(getByTestId('send-button'));
+
+      // Still pending — the draft must remain visible.
+      expect(input.props.value).toBe('Draft-safe message');
+
+      await act(async () => {
+        resolveSend(true);
+      });
+
+      await waitFor(() => {
+        expect(getByLabelText('Message input').props.value).toBe('');
+      });
+    });
+
+    it('keeps the draft when the send is rejected by a pre-flight gate', async () => {
+      const onSend = jest.fn(() => Promise.resolve(false));
+      const { getByLabelText, getByTestId } = renderInput({ onSend });
+
+      const input = getByLabelText('Message input');
+      fireEvent.changeText(input, 'Blocked message');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      expect(getByLabelText('Message input').props.value).toBe('Blocked message');
+    });
+
+    it('keeps the draft when the send handler throws', async () => {
+      const onSend = jest.fn(() => Promise.reject(new Error('network')));
+      const { getByLabelText, getByTestId } = renderInput({ onSend });
+
+      const input = getByLabelText('Message input');
+      fireEvent.changeText(input, 'Still here');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      expect(getByLabelText('Message input').props.value).toBe('Still here');
+    });
+
+    it('ignores a second tap while the first send is still awaiting acceptance', async () => {
+      let resolveSend!: (accepted: boolean) => void;
+      const onSend = jest.fn(() => new Promise<boolean>((resolve) => (resolveSend = resolve)));
+      const { getByLabelText, getByTestId } = renderInput({ onSend });
+
+      fireEvent.changeText(getByLabelText('Message input'), 'Once only');
+      fireEvent.press(getByTestId('send-button'));
+      fireEvent.press(getByTestId('send-button'));
+
+      expect(onSend).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveSend(true);
+      });
+    });
+  });
+
+  // ---- Large paste -> attachment ----
+
+  describe('large paste conversion', () => {
+    it('converts a >10k-char paste into a "Pasted text" attachment and keeps prior text', () => {
+      const { getByLabelText } = renderInput();
+
+      const input = getByLabelText('Message input');
+      fireEvent.changeText(input, 'Review this:');
+
+      const bigBlock = 'x'.repeat(12_000);
+      fireEvent.changeText(input, `Review this:${bigBlock}`);
+
+      // Input keeps only the pre-paste text; the block became an attachment.
+      expect(getByLabelText('Message input').props.value).toBe('Review this:');
+      const pasted = capturedAttachmentPreviewProps?.attachments.find((a) => a.pastedText);
+      expect(pasted).toBeTruthy();
+      expect(pasted!.fileName).toBe('Pasted text');
+      expect(pasted!.pastedText).toBe(bigBlock);
+    });
+
+    it('does not convert gradual typing under the paste threshold', () => {
+      const { getByLabelText } = renderInput();
+
+      const input = getByLabelText('Message input');
+      fireEvent.changeText(input, 'normal message');
+
+      expect(getByLabelText('Message input').props.value).toBe('normal message');
+      expect(capturedAttachmentPreviewProps?.attachments ?? []).toHaveLength(0);
+    });
+
+    it('folds pasted text back into the outgoing message on send', () => {
+      const onSend = jest.fn();
+      const { getByLabelText, getByTestId } = renderInput({ onSend });
+
+      const input = getByLabelText('Message input');
+      const bigBlock = 'y'.repeat(11_000);
+      fireEvent.changeText(input, bigBlock);
+      fireEvent.changeText(getByLabelText('Message input'), 'summarize this');
+      fireEvent.press(getByTestId('send-button'));
+
+      expect(onSend).toHaveBeenCalledTimes(1);
+      const [sentText, sentAttachments] = onSend.mock.calls[0];
+      expect(sentText).toBe(`${bigBlock}\n\nsummarize this`);
+      // The pasted-text pseudo-attachment is NOT sent as a file.
+      expect(sentAttachments).toBeUndefined();
+    });
+
+    it('expands the pasted text back into the composer on request', () => {
+      const { getByLabelText } = renderInput();
+
+      const input = getByLabelText('Message input');
+      const bigBlock = 'z'.repeat(10_500);
+      fireEvent.changeText(input, bigBlock);
+
+      const pasted = capturedAttachmentPreviewProps?.attachments.find((a) => a.pastedText);
+      expect(pasted).toBeTruthy();
+
+      act(() => {
+        capturedAttachmentPreviewProps!.onExpandPastedText!(pasted!.id);
+      });
+
+      expect(getByLabelText('Message input').props.value).toBe(bigBlock);
+      expect(capturedAttachmentPreviewProps?.attachments ?? []).toHaveLength(0);
     });
   });
 

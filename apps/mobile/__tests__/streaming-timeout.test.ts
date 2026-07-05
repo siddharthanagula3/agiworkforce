@@ -10,8 +10,12 @@
  * that produced no reply, no error, and no spinner for minutes).
  *
  * The fix distinguishes a user-cancel (silent) from a timeout (must surface an
- * error), and cancels the timeout once the first token arrives so a long but
- * healthy generation is never aborted mid-stream. These tests pin both halves.
+ * error). Once the first token arrives the time-to-first-token timeout is
+ * replaced by a ROLLING stall watchdog (`TIMEOUTS.STREAM_STALL`): every chunk
+ * re-arms it, so a long but healthy generation never aborts, while a stream
+ * that goes silent mid-way (iOS killing the socket during suspension) aborts
+ * and surfaces an error instead of hanging the composer forever. These tests
+ * pin all three behaviors.
  */
 
 const guardedFetchMock = jest.fn();
@@ -19,6 +23,9 @@ const getAuthTokenMock = jest.fn();
 
 // A small timeout so the response-timeout path fires within the test, not 120s.
 const TEST_TIMEOUT_MS = 100;
+// Stall window: longer than the healthy 300ms inter-chunk gap below, short
+// enough that the stall test completes quickly.
+const TEST_STALL_MS = 600;
 
 async function loadStreamingService() {
   jest.resetModules();
@@ -30,7 +37,7 @@ async function loadStreamingService() {
   jest.doMock('@/lib/constants', () => ({
     API_URL: 'https://api.agi.test',
     WS_URL: 'wss://api.agi.test',
-    TIMEOUTS: { STREAMING: TEST_TIMEOUT_MS },
+    TIMEOUTS: { STREAMING: TEST_TIMEOUT_MS, STREAM_STALL: TEST_STALL_MS },
   }));
   jest.doMock('@/lib/egressGuard', () => ({
     guardedFetch: guardedFetchMock,
@@ -155,5 +162,35 @@ describe('completions stream response timeout', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(deltas.join('')).toBe('hello world');
     expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces an error when the stream stalls mid-way (rolling watchdog)', async () => {
+    const { streamChat } = await loadStreamingService();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { ReadableStream } = require('node:stream/web');
+    const enc = new TextEncoder();
+
+    guardedFetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      const signal = init.signal;
+      const body = new ReadableStream({
+        start(c: { enqueue: (u: Uint8Array) => void; error: (e: Error) => void }) {
+          // One token, then permanent silence — the half-open-socket case iOS
+          // produces when it suspends the app mid-stream. Without the rolling
+          // watchdog this read hangs forever and the composer never recovers.
+          c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'));
+          signal?.addEventListener('abort', () => c.error(makeAbortError()), { once: true });
+        },
+      });
+      return Promise.resolve({ ok: true, status: 200, body } as unknown as Response);
+    });
+
+    const { deltas, callbacks } = makeCallbacks();
+    await streamChat({ model: 'gpt-5.4-mini', messages: [], stream: true }, callbacks);
+
+    expect(deltas.join('')).toBe('partial');
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    const errArg = callbacks.onError.mock.calls[0][0] as Error;
+    expect(errArg.message).toMatch(/timed out/i);
+    expect(callbacks.onDone).not.toHaveBeenCalled();
   });
 });

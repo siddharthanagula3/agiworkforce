@@ -292,8 +292,77 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
                 }
               }
             >
-              def fib(n):
-    return n if n &lt; 2 else fib(n-1) + fib(n-2)
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                def
+              </Text>
+               fib(n):
+    
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                return
+              </Text>
+               n 
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                if
+              </Text>
+               n &lt; 
+              <Text
+                style={
+                  {
+                    "color": "#fbbf24",
+                  }
+                }
+              >
+                2
+              </Text>
+               
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                else
+              </Text>
+               fib(n-
+              <Text
+                style={
+                  {
+                    "color": "#fbbf24",
+                  }
+                }
+              >
+                1
+              </Text>
+              ) + fib(n-
+              <Text
+                style={
+                  {
+                    "color": "#fbbf24",
+                  }
+                }
+              >
+                2
+              </Text>
+              )
             </Text>
           </View>
         </RCTScrollView>
@@ -549,8 +618,77 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
                 }
               }
             >
-              def fib(n):
-    return n if n &lt; 2 else fib(n-1) + fib(n-2)
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                def
+              </Text>
+               fib(n):
+    
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                return
+              </Text>
+               n 
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                if
+              </Text>
+               n &lt; 
+              <Text
+                style={
+                  {
+                    "color": "#fbbf24",
+                  }
+                }
+              >
+                2
+              </Text>
+               
+              <Text
+                style={
+                  {
+                    "color": "#a78bfa",
+                  }
+                }
+              >
+                else
+              </Text>
+               fib(n-
+              <Text
+                style={
+                  {
+                    "color": "#fbbf24",
+                  }
+                }
+              >
+                1
+              </Text>
+              ) + fib(n-
+              <Text
+                style={
+                  {
+                    "color": "#fbbf24",
+                  }
+                }
+              >
+                2
+              </Text>
+              )
             </Text>
           </View>
         </RCTScrollView>

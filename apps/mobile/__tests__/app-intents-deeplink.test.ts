@@ -92,7 +92,24 @@ describe('App Intents deep-link URL construction', () => {
     expect(u.searchParams.get('when')).toBeNull();
   });
 
-  it('all 8 verbs produce valid URLs', () => {
+  it('Share URL (Android ACTION_SEND/ACTION_PROCESS_TEXT rewrite) carries text param', () => {
+    // MainActivity.kt rewrites external shares to this exact shape via
+    // Uri.Builder — scheme agiworkforce, authority intent, path /share,
+    // query params text (the payload) and ts (uniqueness nonce so repeat
+    // shares of identical text still fire the JS url-change effect).
+    const u = makeIntentUrl('share', { text: 'Shared from another app', ts: '1719999999999' });
+    expect(u.pathname).toBe('/share');
+    expect(u.searchParams.get('text')).toBe('Shared from another app');
+    expect(u.searchParams.get('ts')).toBe('1719999999999');
+  });
+
+  it('Share URL roundtrips multi-line and non-ASCII shared text', () => {
+    const text = 'Line one\nLine two — précis 100%';
+    const u = makeIntentUrl('share', { text });
+    expect(u.searchParams.get('text')).toBe(text);
+  });
+
+  it('all 9 verbs produce valid URLs', () => {
     const verbs = [
       'chat',
       'ask',
@@ -102,6 +119,7 @@ describe('App Intents deep-link URL construction', () => {
       'translate',
       'scan',
       'remind',
+      'share',
     ];
     for (const verb of verbs) {
       const u = makeIntentUrl(verb);

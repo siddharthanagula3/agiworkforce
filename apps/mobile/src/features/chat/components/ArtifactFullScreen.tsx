@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
 import { shareFile, exportToText, exportToMarkdown } from '@/services/fileCreation';
+import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
 import type { Artifact } from '@/types/chat';
 import { GeneratedFileCard } from './GeneratedFileCard';
 
@@ -91,6 +92,13 @@ export function ArtifactFullScreen({
   );
   const hasGeneratedFileManifest = Boolean(
     artifact?.computeSession || artifact?.generatedFile || artifact?.artifactManifest,
+  );
+
+  // Tokenized source spans for the monospace view. Unknown languages and
+  // oversize content come back as one plain token, matching the old render.
+  const sourceTokens = useMemo(
+    () => (artifact ? tokenizeCode(artifact.content, artifact.language) : []),
+    [artifact],
   );
 
   const handleCopy = useCallback(async () => {
@@ -497,7 +505,20 @@ export function ArtifactFullScreen({
                 }}
                 selectable
               >
-                {artifact.content}
+                {isMonospace
+                  ? sourceTokens.map((token, tokenIdx) =>
+                      token.type === 'plain' ? (
+                        token.text
+                      ) : (
+                        <Text
+                          key={`src-tok-${tokenIdx}`}
+                          style={{ color: syntaxTokenColor(token.type, colors) }}
+                        >
+                          {token.text}
+                        </Text>
+                      ),
+                    )
+                  : artifact.content}
               </Text>
             </ScrollView>
 

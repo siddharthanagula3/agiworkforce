@@ -360,6 +360,99 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   clearError: () => set({ error: null }),
 }));
 
+// Words too common to signal relevance on their own (kept small — this only
+// needs to filter noise out of a short chat message, not do real NLP).
+const MEMORY_QUERY_STOPWORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'is',
+  'are',
+  'was',
+  'were',
+  'do',
+  'does',
+  'did',
+  'i',
+  'you',
+  'your',
+  'my',
+  'me',
+  'in',
+  'on',
+  'of',
+  'to',
+  'for',
+  'and',
+  'or',
+  'what',
+  'which',
+  'who',
+  'whom',
+  'this',
+  'that',
+  'these',
+  'those',
+  'be',
+  'am',
+  'it',
+  'its',
+  'with',
+  'from',
+  'at',
+  'as',
+  'but',
+  'if',
+  'so',
+  'we',
+  'they',
+  'he',
+  'she',
+  'him',
+  'her',
+  'his',
+  'their',
+  'our',
+  'can',
+  'could',
+  'would',
+  'should',
+  'will',
+  'shall',
+  'about',
+  'between',
+  'into',
+  'than',
+  'then',
+  'there',
+  'here',
+  'how',
+  'when',
+  'where',
+  'why',
+  'based',
+  'memory',
+  'prefer',
+]);
+
+/**
+ * True if `factLower` is relevant to `queryLower`. A prior version checked
+ * `fact.includes(query)` — the fact containing the ENTIRE query as a literal
+ * substring — which only ever matched a verbatim repeat of the fact text.
+ * Real chat questions ("what language do I prefer between rust and python")
+ * never contain the short stored fact ("user prefers rust over python")
+ * verbatim, so cloud memory retrieval silently returned nothing for every
+ * realistic query. Match on significant word overlap instead.
+ */
+function factMatchesQuery(factLower: string, queryLower: string): boolean {
+  if (!queryLower) return false;
+  if (factLower.includes(queryLower) || queryLower.includes(factLower)) return true;
+  const words = queryLower
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 2 && !MEMORY_QUERY_STOPWORDS.has(w));
+  return words.some((w) => factLower.includes(w));
+}
+
 // ---------------------------------------------------------------------------
 // Context retrieval — top-K facts for chat context injection
 // ---------------------------------------------------------------------------
@@ -375,18 +468,26 @@ export async function retrieveMemoryContext(
   // the mode split in fetchMemories / addMemory.
   if (useChatAppModeStore.getState().appMode === 'cloud') {
     const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return useCloudMemoryStore
-      .getState()
-      .entries.filter((e) => !e.isDeleted && e.content.toLowerCase().includes(q))
+    const activeEntries = useCloudMemoryStore.getState().entries.filter((e) => !e.isDeleted);
+    const toFact = (e: (typeof activeEntries)[number]): MemoryFact => ({
+      id: e.id,
+      fact: e.content,
+      source_conversation_id: null,
+      pinned: e.pinned,
+      created_at: new Date(e.createdAt).getTime(),
+    });
+
+    if (q) {
+      const matched = activeEntries.filter((e) => factMatchesQuery(e.content.toLowerCase(), q));
+      if (matched.length > 0) return matched.slice(0, k).map(toFact);
+    }
+
+    // Relevance gate: only inject pinned facts when no keyword match is found,
+    // mirroring the local-mode fallback below.
+    return activeEntries
+      .filter((e) => e.pinned)
       .slice(0, k)
-      .map((e) => ({
-        id: e.id,
-        fact: e.content,
-        source_conversation_id: null,
-        pinned: e.pinned,
-        created_at: new Date(e.createdAt).getTime(),
-      }));
+      .map(toFact);
   }
 
   if (embedding) {

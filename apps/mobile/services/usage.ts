@@ -19,6 +19,22 @@ export interface UsageSnapshot {
   dailyRemainingCents: number;
   hasDailyLimit: boolean;
   subscriptionStatus: string;
+  /**
+   * Session (rolling 5h) / weekly / flagship-weekly caps layer on top of the
+   * monthly credit budget above (founder decision, 2026-07-05) — see
+   * getPlanWeeklyUsageBudgetCents in @agiworkforce/types/billing-catalog.
+   * Cap of 0 means "not applicable for this tier" (e.g. free); callers
+   * should hide that section rather than show a 0/0 bar.
+   */
+  sessionUsedCents: number;
+  sessionCapCents: number;
+  sessionResetAt: string | null;
+  weeklyUsedCents: number;
+  weeklyCapCents: number;
+  weeklyResetAt: string | null;
+  flagshipWeeklyUsedCents: number;
+  flagshipWeeklyCapCents: number;
+  flagshipWeeklyResetAt: string | null;
 }
 
 interface UsageApiResponse {
@@ -34,6 +50,15 @@ interface UsageApiResponse {
   daily_remaining_cents: number;
   has_daily_limit: boolean;
   subscription_status: string;
+  session_used_cents: number;
+  session_cap_cents: number;
+  session_reset_at: string | null;
+  weekly_used_cents: number;
+  weekly_cap_cents: number;
+  weekly_reset_at: string | null;
+  flagship_weekly_used_cents: number;
+  flagship_weekly_cap_cents: number;
+  flagship_weekly_reset_at: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +71,7 @@ interface UsageApiResponse {
  * should catch and handle gracefully.
  */
 export async function fetchUsageSnapshot(): Promise<UsageSnapshot> {
-  if (!FEATURES.billing) throw new Error('usage: cloud usage not available in v1');
+  if (!FEATURES.usageDashboard) throw new Error('usage: cloud usage not available in v1');
   const data = await api.get<UsageApiResponse>('/api/usage');
   return {
     planTier: data.plan_tier,
@@ -61,5 +86,14 @@ export async function fetchUsageSnapshot(): Promise<UsageSnapshot> {
     dailyRemainingCents: data.daily_remaining_cents,
     hasDailyLimit: data.has_daily_limit,
     subscriptionStatus: data.subscription_status,
+    sessionUsedCents: data.session_used_cents,
+    sessionCapCents: data.session_cap_cents,
+    sessionResetAt: data.session_reset_at,
+    weeklyUsedCents: data.weekly_used_cents,
+    weeklyCapCents: data.weekly_cap_cents,
+    weeklyResetAt: data.weekly_reset_at,
+    flagshipWeeklyUsedCents: data.flagship_weekly_used_cents,
+    flagshipWeeklyCapCents: data.flagship_weekly_cap_cents,
+    flagshipWeeklyResetAt: data.flagship_weekly_reset_at,
   };
 }

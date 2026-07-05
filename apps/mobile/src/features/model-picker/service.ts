@@ -16,6 +16,10 @@ import type { OnDeviceModel, PickerModelTier } from '@agiworkforce/types';
 import {
   evaluateModelEnvironment,
   getModelMetadataById,
+  canAccessModelForSubscriptionTier,
+  getAllowedModelsForTier,
+  getMinimumRequiredTier,
+  normalizeModelId,
   type EnvironmentAvailability,
   type ModelEnvironment,
 } from '@agiworkforce/types';
@@ -69,6 +73,30 @@ export interface AutoModeDef {
 
 const LOCAL_PROVIDER_ID = 'local';
 export const CLOUD_LOCK_REASON = 'Sign in to use AGI Cloud chat.';
+
+function tierUpgradeLockReason(modelId: string): string {
+  const required = getMinimumRequiredTier(modelId);
+  return required === 'max'
+    ? 'Upgrade to Max to use this model.'
+    : 'Upgrade your plan to use this model.';
+}
+
+const FREE_TIER_ECONOMY_MODEL_IDS = new Set(getAllowedModelsForTier('economy'));
+
+/**
+ * Subscription-tier gate for cloud models as the SERVER actually enforces it.
+ *
+ * `canAccessModelForSubscriptionTier` alone rejects every model for tier
+ * 'free', but the server's free-trial path accepts economy-list models from
+ * free users (apps/web/lib/free-trial-config.ts FREE_TRIAL_MODELS =
+ * getAllowedModelsForTier('economy')). Mirror that allowance so the picker
+ * never locks a model the server would serve.
+ */
+export function canAccessCloudModelForTier(modelId: string, subscriptionTier: string): boolean {
+  if (canAccessModelForSubscriptionTier(modelId, subscriptionTier)) return true;
+  const canonicalModelId = normalizeModelId(modelId) ?? modelId;
+  return FREE_TIER_ECONOMY_MODEL_IDS.has(canonicalModelId);
+}
 
 // ---------------------------------------------------------------------------
 // P3 Phase A: Environment-gating helpers
@@ -373,13 +401,32 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
 const CLOUD_DISPLAY_NAME_OVERRIDES: Record<string, string> = {
   'gpt-4.1-nano': 'Super Fast', // OpenAI: no reasoning tokens — fastest, cheapest
   'gemini-3.1-flash-lite': 'Super Fast', // Google: cheapest fast chat model
-  'qwen-flash': 'Super Fast', // Qwen: cheap general-chat (cloud-only; ~403 conv/$1)
   'gpt-5-nano': 'Thinking', // OpenAI: supports reasoning tokens
 };
 /* eslint-enable no-restricted-syntax */
 
-function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef {
+function toCloudModelDef(
+  model: CloudModelDef,
+  cloudUnlocked: boolean,
+  subscriptionTier?: string,
+): ModelDef {
   const providerLabel = getCloudProviderById(model.provider)?.name ?? model.provider;
+
+  // Two independent gates: signed-in-and-cloud-unlocked (public alpha access),
+  // then subscription-tier access to THIS model specifically (e.g. Opus/flagship
+  // models require Max). A Pro user is cloud-unlocked but must still see this
+  // model as locked with an upgrade reason, not as freely selectable — this is
+  // the same catalog gate `canAccessModel` enforces server-side
+  // (apps/web/lib/model-tiers.ts), so a model rejected server-side is never
+  // shown as usable client-side.
+  const tierAccessOk =
+    !cloudUnlocked || !subscriptionTier || canAccessCloudModelForTier(model.id, subscriptionTier);
+  const availability: ModelAvailability = !cloudUnlocked || !tierAccessOk ? 'locked' : 'ready';
+  const lockReason = !cloudUnlocked
+    ? CLOUD_LOCK_REASON
+    : !tierAccessOk
+      ? tierUpgradeLockReason(model.id)
+      : undefined;
 
   const def: ModelDef = {
     id: model.id,
@@ -396,11 +443,15 @@ function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef
     supportsThinking: model.supportsThinking,
     tier: model.tier,
     surface: 'cloud_managed',
-    availability: cloudUnlocked ? 'ready' : 'locked',
+    availability,
     runtimeLabel: 'AGI Cloud',
-    detailLabel: cloudUnlocked ? `${providerLabel} provider` : 'Sign in required',
-    description: `${providerLabel} model in AGI Cloud`,
-    lockReason: cloudUnlocked ? undefined : CLOUD_LOCK_REASON,
+    detailLabel: !cloudUnlocked
+      ? 'Sign in required'
+      : !tierAccessOk
+        ? 'Upgrade required'
+        : `${providerLabel} provider`,
+    description: MODEL_DESCRIPTIONS[model.id] ?? `${providerLabel} model in AGI Cloud`,
+    lockReason,
   };
 
   // Apply environment gate LAST so env-locked models remain locked even when
@@ -463,17 +514,23 @@ export function isSelectableModelIdForCloudAccess(id: string, cloudUnlocked: boo
 export function getModelByIdForCloudAccess(
   id: string,
   cloudUnlocked: boolean,
+  subscriptionTier?: string,
 ): ModelDef | undefined {
   const cloudModel = cloudModelSourceMap.get(id);
-  if (cloudModel) return toCloudModelDef(cloudModel, cloudUnlocked);
+  if (cloudModel) return toCloudModelDef(cloudModel, cloudUnlocked, subscriptionTier);
   return getModelById(id);
 }
 
-export function getModelListForCloudAccess(cloudUnlocked: boolean): ModelDef[] {
+export function getModelListForCloudAccess(
+  cloudUnlocked: boolean,
+  subscriptionTier?: string,
+): ModelDef[] {
   if (!cloudUnlocked) return MODEL_LIST;
   return [
     ...LOCAL_MODEL_LIST,
-    ...Array.from(cloudModelSourceMap.values()).map((model) => toCloudModelDef(model, true)),
+    ...Array.from(cloudModelSourceMap.values()).map((model) =>
+      toCloudModelDef(model, true, subscriptionTier),
+    ),
   ];
 }
 

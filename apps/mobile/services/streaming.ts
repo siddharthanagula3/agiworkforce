@@ -61,7 +61,7 @@ export interface StreamDelta {
   finish_reason?: string | null;
   // Tool-calling wire fields (server already emits these; see tool-loop.ts /
   // stream-transform.ts). The mobile store accumulates them into
-  // message.toolCalls so InlineToolCall renders the agentic steps.
+  // message.toolCalls so ToolCallTimeline renders the agentic steps.
   tool_calls?: StreamToolCallFragment[];
   x_tool_status?: StreamToolStatus;
   x_tool_result?: StreamToolResult;
@@ -78,6 +78,12 @@ export interface StreamCallbacks {
   onError: (error: Error) => void;
   /** Optional: called when a reconnect attempt is starting (attempt number, 1-based) */
   onReconnecting?: (attempt: number) => void;
+  /**
+   * Optional: called whenever ANY bytes arrive on the wire — including SSE
+   * keepalive comments and long server-tool gaps that never produce a parsed
+   * delta. Drives the stall watchdog so it only fires on true silence.
+   */
+  onActivity?: () => void;
 }
 
 /** Maximum number of reconnect attempts on a network interruption */
@@ -243,6 +249,7 @@ async function attemptStream(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      callbacks.onActivity?.();
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -493,15 +500,23 @@ export async function streamChat(
     ? combineAbortSignals([signal, timeoutController.signal])
     : timeoutController.signal;
 
-  // Once the first token arrives the connection is proven alive, so cancel the
-  // per-attempt response timeout — it exists to catch a backend that never
-  // responds, NOT a backend that is slow to finish a long (but healthy) reply.
-  // Without this, a generation longer than TIMEOUTS.STREAMING would be aborted
-  // mid-stream; with it, the timeout only guards time-to-first-token.
+  // Once the first token arrives the connection is proven alive, so the
+  // per-attempt response timeout (time-to-first-token guard) is replaced by a
+  // rolling stall watchdog: every delta re-arms a shorter TIMEOUTS.STREAM_STALL
+  // timer on the SAME timeoutController. A healthy long generation keeps
+  // re-arming it; a socket that dies silently mid-stream (iOS suspension,
+  // cell handoff) stops delivering chunks, the watchdog fires, the pending
+  // `reader.read()` aborts, and the turn finalizes through onError instead of
+  // leaving the composer stuck in the streaming state forever.
+  const rearmStallWatchdog = () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
+  };
   const timedCallbacks: StreamCallbacks = {
     ...callbacks,
+    onActivity: rearmStallWatchdog,
     onDelta: (delta) => {
-      clearTimeout(timeoutId);
+      rearmStallWatchdog();
       callbacks.onDelta(delta);
     },
   };
@@ -525,8 +540,18 @@ export async function streamChat(
         return;
       }
     } catch (err) {
-      if (combinedSignal.aborted || signal?.aborted) {
+      if (signal?.aborted) {
+        // User-initiated cancel — silent by contract.
         clearTimeout(timeoutId);
+        return;
+      }
+      if (timeoutController.signal.aborted) {
+        // Timeout/stall abort must SURFACE, or the store never resets and the
+        // composer sticks in the streaming state.
+        clearTimeout(timeoutId);
+        callbacks.onError(
+          new Error('The request timed out. Please check your connection and try again.'),
+        );
         return;
       }
       // Reset the timeout for the legacy retry budget
@@ -543,9 +568,15 @@ export async function streamChat(
   let lastNetworkError: Error | null = null;
 
   for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
-    // Bail out immediately if the caller or timeout aborted
+    // Bail out immediately if the caller or timeout aborted. A timeout abort
+    // must surface via onError so the store resets; only a user cancel is silent.
     if (combinedSignal.aborted) {
       clearTimeout(timeoutId);
+      if (!signal?.aborted) {
+        callbacks.onError(
+          new Error('The request timed out. Please check your connection and try again.'),
+        );
+      }
       return;
     }
 
@@ -571,13 +602,18 @@ export async function streamChat(
           { once: true },
         );
       }).catch(() => {
-        // Aborted during backoff — exit cleanly
+        // Aborted during backoff — the combinedSignal check below decides
+        // whether to surface it (timeout) or exit silently (user cancel).
         clearTimeout(timeoutId);
-        return;
       });
 
       if (combinedSignal.aborted) {
         clearTimeout(timeoutId);
+        if (!signal?.aborted) {
+          callbacks.onError(
+            new Error('The request timed out. Please check your connection and try again.'),
+          );
+        }
         return;
       }
 

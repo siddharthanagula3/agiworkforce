@@ -13,8 +13,12 @@ import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
+import { useAgentControlStore } from '@/stores/agentControlStore';
+import { EFFORT_LABEL, type Effort } from '@agiworkforce/types';
 import {
   AUTO_MODES,
+  CLOUD_LOCK_REASON,
   getModelByIdForCloudAccess,
   getModelListForCloudAccess,
   isAutoMode,
@@ -22,6 +26,11 @@ import {
   type ModelDef,
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
+
+// Effort levels exposed on Mobile. The server accepts the full Effort axis
+// (EFFORT_VALUES in apps/web .../chat/completions/lib/request-processor.ts),
+// but the compact picker row keeps to the everyday trio.
+const EFFORT_OPTIONS: readonly Effort[] = ['low', 'medium', 'high'];
 
 function groupBySurface(
   models: ModelDef[],
@@ -99,6 +108,12 @@ interface ModelPickerSheetProps {
   onSelect?: (modelId: string) => void;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
+  /**
+   * When set, the reasoning-effort selector writes a per-conversation override
+   * via agentControlStore; otherwise it updates the '__default__' project
+   * default that chatExecutionStore resolves for conversations without one.
+   */
+  conversationId?: string;
 }
 
 export function ModelPickerSheet({
@@ -107,6 +122,7 @@ export function ModelPickerSheet({
   onSelect,
   onOpenCloudAccess,
   modelScope = 'local',
+  conversationId,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const router = useRouter();
@@ -116,6 +132,7 @@ export function ModelPickerSheet({
   const favorites = useModelStore((s) => s.favorites);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const subscriptionTier = useTierStore((s) => s.tier);
   const setModel = useModelStore((s) => s.setModel);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
@@ -128,9 +145,27 @@ export function ModelPickerSheet({
 
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
+  // Effort is independent of model choice: selecting it must not change the
+  // selected model or close the sheet. Resolution mirrors chatExecutionStore
+  // (conversation override > '__default__' project default > 'medium').
+  const selectedEffort = useAgentControlStore((s) =>
+    conversationId
+      ? s.resolve(conversationId, null).effort
+      : (s.byProject.__default__?.effort ?? 'medium'),
+  );
+  const handleSelectEffort = useCallback(
+    (effort: Effort) => {
+      if (conversationId) {
+        useAgentControlStore.getState().setEffort(conversationId, effort);
+      } else {
+        useAgentControlStore.getState().setProjectDefault('__default__', { effort });
+      }
+    },
+    [conversationId],
+  );
   const completeModelList = useMemo(
-    () => getModelListForCloudAccess(cloudUnlocked),
-    [cloudUnlocked],
+    () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier),
+    [cloudUnlocked, subscriptionTier],
   );
   const modelList = useMemo(() => {
     if (modelScope === 'local') {
@@ -204,12 +239,27 @@ export function ModelPickerSheet({
     });
   }, [onOpenCloudAccess, router, sheetRef]);
 
+  // A model can be locked for two different reasons: not signed in / cloud not
+  // unlocked (→ sign-in), or signed in but the subscription tier doesn't cover
+  // this model (→ upgrade). Route each to its own destination instead of always
+  // sending a Pro user who tapped a Max-only model to the sign-in screen.
+  const openUpgrade = useCallback(() => {
+    sheetRef.current?.close();
+    requestAnimationFrame(() => {
+      router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+    });
+  }, [router, sheetRef]);
+
   const handleSelectModel = useCallback(
     (id: string) => {
-      const chosenModel = getModelByIdForCloudAccess(id, cloudUnlocked);
+      const chosenModel = getModelByIdForCloudAccess(id, cloudUnlocked, subscriptionTier);
       if (!chosenModel) return;
       if (chosenModel.availability === 'locked') {
-        openInvite();
+        if (chosenModel.lockReason === CLOUD_LOCK_REASON) {
+          openInvite();
+        } else {
+          openUpgrade();
+        }
         return;
       }
 
@@ -224,6 +274,13 @@ export function ModelPickerSheet({
       }
 
       if (id === selectedModel && !isAutoMode(id)) {
+        // Re-tapping the already-selected cloud model toggles its options row
+        // (the per-model "With thinking" switch) instead of closing the sheet —
+        // this is the only way the thinking toggle is reachable.
+        if (chosenModel.surface === 'cloud_managed' && chosenModel.supportsThinking) {
+          setExpandedModelId((prev) => (prev === id ? null : id));
+          return;
+        }
         sheetRef.current?.close();
         return;
       }
@@ -232,7 +289,9 @@ export function ModelPickerSheet({
     },
     [
       cloudUnlocked,
+      subscriptionTier,
       openInvite,
+      openUpgrade,
       prepareModel,
       selectAndClose,
       selectedModel,
@@ -286,7 +345,7 @@ export function ModelPickerSheet({
           thinkingEnabled={thinkingEnabledPerModel[model.id] ?? false}
           installStatus={installStatus}
           onSelect={handleSelectModel}
-          onLockedPress={openInvite}
+          onLockedPress={model.lockReason === CLOUD_LOCK_REASON ? openInvite : openUpgrade}
           onToggleFavorite={toggleFavorite}
           onToggleThinking={toggleThinkingForModel}
         />
@@ -299,6 +358,7 @@ export function ModelPickerSheet({
       installJobs,
       installedModelIds,
       openInvite,
+      openUpgrade,
       readySystemModelIds,
       selectedModel,
       statusForModel,
@@ -417,6 +477,66 @@ export function ModelPickerSheet({
             </Pressable>
           ) : null}
         </View>
+
+        {modelScope === 'cloud' ? (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+              Reasoning effort
+            </Text>
+            <View
+              testID="model-picker-effort-selector"
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.surfaceElevated,
+                padding: 2,
+                gap: 2,
+              }}
+            >
+              {EFFORT_OPTIONS.map((effort) => {
+                const selected = selectedEffort === effort;
+                return (
+                  <Pressable
+                    key={effort}
+                    onPress={() => handleSelectEffort(effort)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Reasoning effort ${EFFORT_LABEL[effort]}`}
+                    accessibilityState={{ selected }}
+                    style={{
+                      flex: 1,
+                      minHeight: 30,
+                      borderRadius: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: selected ? colors.accentSurface : colors.transparent,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: selected ? colors.teal : colors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: '600',
+                      }}
+                    >
+                      {EFFORT_LABEL[effort]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         <BottomSheetScrollView
           testID="model-picker-sheet"

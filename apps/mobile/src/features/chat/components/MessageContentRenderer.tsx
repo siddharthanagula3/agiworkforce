@@ -3,12 +3,37 @@
  * No state, no hooks — these are deterministic render functions.
  */
 
-import { View, Linking, ScrollView } from 'react-native';
+import { View, Linking, ScrollView, Alert } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
-import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
+import {
+  classifyExternalLink,
+  getSystemIntentPrompt,
+} from '@/src/features/chat/utils/externalUrls';
+import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
+
+/**
+ * Opens an assistant-emitted link. http/https opens directly; system-intent
+ * schemes (mailto:/sms:/tel:/geo:) are zero-permission handoffs to the default
+ * system app but still require a confirmation tap because the URL is untrusted
+ * model output. Everything else is silently ignored.
+ */
+function openAssistantLink(url: string): void {
+  const kind = classifyExternalLink(url);
+  if (kind === 'http') {
+    Linking.openURL(url).catch(() => undefined);
+    return;
+  }
+  if (kind !== 'system-intent') return;
+  const prompt = getSystemIntentPrompt(url);
+  if (!prompt) return;
+  Alert.alert(prompt.title, prompt.message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Open', onPress: () => Linking.openURL(url).catch(() => undefined) },
+  ]);
+}
 
 /**
  * Render inline math: $...$ (not $$)
@@ -119,10 +144,7 @@ export function renderInlineMarkdown(
             color: renderColors.teal,
             textDecorationLine: 'underline',
           }}
-          onPress={() => {
-            if (!isValidExternalHttpUrl(linkUrl)) return;
-            Linking.openURL(linkUrl).catch(() => undefined);
-          }}
+          onPress={() => openAssistantLink(linkUrl)}
           accessibilityRole="link"
           accessibilityLabel={linkText}
         >
@@ -492,7 +514,7 @@ export function renderMarkdownContent(
   const elements: React.ReactNode[] = [];
   let keyCounter = 0;
 
-  const blockRegex = /(\$\$([\s\S]*?)\$\$|```(?:\w+)?\n?([\s\S]*?)```)/g;
+  const blockRegex = /(\$\$([\s\S]*?)\$\$|```(\w+)?\n?([\s\S]*?)```)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -505,8 +527,9 @@ export function renderMarkdownContent(
     if (match[2] !== undefined) {
       const mathContent = match[2].trim();
       elements.push(<MathBlock key={`bmath-${keyCounter++}`} latex={mathContent} display={true} />);
-    } else if (match[3] !== undefined) {
-      const codeContent = match[3].trim();
+    } else if (match[4] !== undefined) {
+      const codeContent = match[4].trim();
+      const codeTokens = tokenizeCode(codeContent, match[3]);
       elements.push(
         <View
           key={`code-${keyCounter++}`}
@@ -539,7 +562,18 @@ export function renderMarkdownContent(
               }}
               selectable
             >
-              {codeContent}
+              {codeTokens.map((token, tokenIdx) =>
+                token.type === 'plain' ? (
+                  token.text
+                ) : (
+                  <Text
+                    key={`code-tok-${keyCounter}-${tokenIdx}`}
+                    style={{ color: syntaxTokenColor(token.type, renderColors) }}
+                  >
+                    {token.text}
+                  </Text>
+                ),
+              )}
             </Text>
           </ScrollView>
         </View>,

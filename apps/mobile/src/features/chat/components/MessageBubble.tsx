@@ -19,7 +19,8 @@ import { StreamingIndicator } from './StreamingIndicator';
 import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
-import { InlineToolCall } from './InlineToolCall';
+import { ToolCallTimeline } from './ToolCallTimeline';
+import { getToolDisplayLabel, summarizeToolTimeline } from '@agiworkforce/types';
 import { ApprovalCard } from './ApprovalCard';
 import { StatusStep as StatusStepComponent } from './StatusStep';
 import { GeneratedImage } from './GeneratedImage';
@@ -289,12 +290,44 @@ export const MessageBubble = memo(function MessageBubble({
       actions.push({ name: 'export', label: 'Export message' });
     }
     if (onDeleteMessage) actions.push({ name: 'delete', label: 'Delete message' });
+    // Tool-call rows (ToolCallTimeline) sit inside this same accessible container,
+    // so VoiceOver never reaches their own onPress — mirror them here too, same
+    // rationale as the message actions above.
+    if (isAssistant && message.toolCalls) {
+      for (const tool of message.toolCalls) {
+        actions.push({
+          name: `tool-${tool.id}`,
+          label: `View details: ${getToolDisplayLabel(tool.name).displayName}`,
+        });
+      }
+    }
     return actions;
-  }, [isUser, isAssistant, onEditMessage, onRetryMessage, onDeleteMessage, message.content]);
+  }, [
+    isUser,
+    isAssistant,
+    onEditMessage,
+    onRetryMessage,
+    onDeleteMessage,
+    message.content,
+    message.toolCalls,
+  ]);
 
   const handleAccessibilityAction = useCallback(
     (event: AccessibilityActionEvent) => {
-      switch (event.nativeEvent.actionName) {
+      const actionName = event.nativeEvent.actionName;
+      if (actionName.startsWith('tool-')) {
+        const toolId = actionName.slice('tool-'.length);
+        const tool = message.toolCalls?.find((t) => t.id === toolId);
+        if (tool) {
+          const label = getToolDisplayLabel(tool.name);
+          Alert.alert(
+            label.displayName,
+            tool.output || tool.input || tool.command || 'No details available.',
+          );
+        }
+        return;
+      }
+      switch (actionName) {
         case 'copy':
           copyToClipboard(message.content);
           break;
@@ -317,6 +350,7 @@ export const MessageBubble = memo(function MessageBubble({
     [
       message.id,
       message.content,
+      message.toolCalls,
       onRetryMessage,
       onDeleteMessage,
       handleOpenEditModal,
@@ -450,6 +484,7 @@ export const MessageBubble = memo(function MessageBubble({
                 thinkingText={message.reasoning ?? ''}
                 isStreaming={message.isStreaming}
                 duration={message.metadata?.thinkingDuration as number | undefined}
+                startedAtMs={message.metadata?.thinkingStartedAt as number | undefined}
               />
             ) : null}
 
@@ -467,21 +502,12 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             ) : null}
 
-            {/* Tool calls — borderless inline bars per design-spec §4 */}
+            {/* Tool calls — unified connected timeline (Claude-style inline tool use) */}
             {isAssistant && message.toolCalls && message.toolCalls.length > 0 ? (
-              <View
-                style={{
-                  borderLeftWidth: 1,
-                  borderLeftColor: themeColors.borderLight,
-                  paddingLeft: 12,
-                  marginLeft: 8,
-                  gap: 4,
-                }}
-              >
-                {message.toolCalls.map((tool) => (
-                  <InlineToolCall key={tool.id} toolCall={tool} />
-                ))}
-              </View>
+              <ToolCallTimeline
+                toolCalls={message.toolCalls}
+                summary={summarizeToolTimeline(message.toolCalls)}
+              />
             ) : null}
 
             {/* Approval requests */}
