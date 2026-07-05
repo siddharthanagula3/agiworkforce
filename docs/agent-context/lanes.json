@@ -115,8 +115,8 @@
       "ownedWritePaths": [
         "apps/web/app/api/**",
         "apps/web/api/**",
-        "apps/web/core/auth/**",
-        "apps/web/core/billing/**"
+        "apps/web/features/billing/**",
+        "apps/web/app/billing/**"
       ],
       "readOnlyContextPaths": [
         "apps/web/db/neon/**",
