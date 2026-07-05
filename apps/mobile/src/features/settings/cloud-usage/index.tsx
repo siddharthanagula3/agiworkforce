@@ -9,9 +9,11 @@
  * figures are available in a collapsed "Details" section for users who want
  * them, never as the headline number.
  *
- * Gated behind FEATURES.billing — when that flag is false the screen shows a
- * placeholder directing users to the web dashboard, since v1 does not yet
- * have the billing ledger active.
+ * Gated behind FEATURES.usageDashboard — when that flag is false the screen
+ * shows a placeholder directing users to the web dashboard. Deliberately
+ * separate from FEATURES.billing, which gates the external Stripe portal
+ * link on the Billing screen (App Store Guideline 3.1.1 risk); this screen
+ * only reads a balance, so it doesn't carry that risk.
  *
  * Cloud-only surface.
  */
@@ -21,10 +23,15 @@ import { View, ActivityIndicator, Pressable } from 'react-native';
 import { BarChart3, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import {
+  CloudSyncBlockedBanner,
+  SettingsInfo,
+  SettingsScreenShell,
+} from '@/src/features/settings/common';
 import { fetchUsageSnapshot, type UsageSnapshot } from '@/services/usage';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,6 +61,30 @@ function formatResetDate(iso: string | null): string | null {
     day: 'numeric',
     year: sameYear ? undefined : 'numeric',
   });
+}
+
+/** "Wed 6:00 PM" style — used for the weekly rolling-window reset (an
+ *  absolute moment: oldest-transaction-in-window + 7 days), matching the
+ *  Claude-reference "Resets Wed 6:00 PM" pattern. */
+function formatResetWeekday(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+/** "3 hr 27 min" style countdown for the rolling 5h session window. */
+function formatResetsInDuration(iso: string | null): string | null {
+  if (!iso) return null;
+  const target = Date.parse(iso);
+  if (Number.isNaN(target)) return null;
+  const msRemaining = target - Date.now();
+  if (msRemaining <= 0) return null;
+  const totalMinutes = Math.round(msRemaining / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes} min`;
+  return `${hours} hr ${minutes} min`;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +212,9 @@ function BillingUnavailablePlaceholder() {
 
 export default function CloudUsageScreen() {
   const colors = useThemeColors();
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const isCloudModeActive = appMode === 'cloud';
 
   const [snapshot, setSnapshot] = useState<UsageSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -204,9 +238,13 @@ export default function CloudUsageScreen() {
     }
   }, []);
 
+  // guardedFetch blocks this screen's own fetch (an EgressBlockedError) while
+  // chat is set to Local — see CloudSyncBlockedBanner's doc comment. Skip the
+  // doomed request and show the banner instead of the raw technical error
+  // message; re-fetch as soon as the user switches modes.
   useEffect(() => {
-    if (FEATURES.billing) void load();
-  }, [load]);
+    if (FEATURES.usageDashboard && isCloudModeActive) void load();
+  }, [load, isCloudModeActive]);
 
   const planLabel = snapshot ? (PLAN_LABELS[snapshot.planTier] ?? snapshot.planTier) : '';
   const periodResetLabel = snapshot ? formatResetDate(snapshot.periodEnd) : null;
@@ -219,11 +257,15 @@ export default function CloudUsageScreen() {
         icon={BarChart3}
       />
 
-      {/* Billing not yet active */}
-      {!FEATURES.billing && <BillingUnavailablePlaceholder />}
+      {/* Usage backend not yet active */}
+      {!FEATURES.usageDashboard && <BillingUnavailablePlaceholder />}
+
+      {FEATURES.usageDashboard && !isCloudModeActive && (
+        <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
+      )}
 
       {/* Live usage */}
-      {FEATURES.billing && (
+      {FEATURES.usageDashboard && isCloudModeActive && (
         <>
           {loading && !snapshot && (
             <View style={{ alignItems: 'center', paddingVertical: 32 }}>
@@ -248,6 +290,85 @@ export default function CloudUsageScreen() {
 
           {snapshot && (
             <>
+              {/* Current session — rolling 5h window, layers on top of the
+                  monthly credit budget (founder decision, 2026-07-05). Hidden
+                  when the tier has no derivable session budget (e.g. free). */}
+              {snapshot.sessionCapCents > 0 && (
+                <View
+                  style={{
+                    borderRadius: 14,
+                    backgroundColor: colors.surfaceElevated,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 16,
+                    marginBottom: 18,
+                  }}
+                >
+                  <UsagePercentBar
+                    label="Current session"
+                    percentage={(snapshot.sessionUsedCents / snapshot.sessionCapCents) * 100}
+                    resetLabel={
+                      formatResetsInDuration(snapshot.sessionResetAt) === null
+                        ? null
+                        : `in ${formatResetsInDuration(snapshot.sessionResetAt)}`
+                    }
+                  />
+                </View>
+              )}
+
+              {/* Weekly limits — "All models" + flagship-only sub-bucket,
+                  both rolling 7-day windows. Same layering rationale as session. */}
+              {snapshot.weeklyCapCents > 0 && (
+                <>
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: 13,
+                      fontWeight: '600',
+                      marginBottom: 8,
+                    }}
+                  >
+                    Weekly limits
+                  </Text>
+                  <View
+                    style={{
+                      borderRadius: 14,
+                      backgroundColor: colors.surfaceElevated,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      overflow: 'hidden',
+                      marginBottom: 18,
+                    }}
+                  >
+                    <View style={{ padding: 16 }}>
+                      <UsagePercentBar
+                        label="All models"
+                        percentage={(snapshot.weeklyUsedCents / snapshot.weeklyCapCents) * 100}
+                        resetLabel={formatResetWeekday(snapshot.weeklyResetAt)}
+                      />
+                    </View>
+                    {snapshot.flagshipWeeklyCapCents > 0 && (
+                      <View
+                        style={{
+                          padding: 16,
+                          borderTopWidth: 1,
+                          borderTopColor: colors.border,
+                        }}
+                      >
+                        <UsagePercentBar
+                          label="Flagship models"
+                          percentage={
+                            (snapshot.flagshipWeeklyUsedCents / snapshot.flagshipWeeklyCapCents) *
+                            100
+                          }
+                          resetLabel={formatResetWeekday(snapshot.flagshipWeeklyResetAt)}
+                        />
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+
               {/* Primary card — percentage only, Claude-style */}
               <View
                 style={{

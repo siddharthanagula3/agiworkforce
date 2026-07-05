@@ -146,20 +146,35 @@ const config = {
       'USE_BIOMETRIC',
       'USE_FINGERPRINT',
     ],
+    // Expo prebuild prefixes `android.intent.action.` / `android.intent.category.`
+    // onto these names itself, so they MUST be the short forms. Fully-qualified
+    // names here produced doubled names in the generated manifest
+    // (android.intent.action.android.intent.action.SEND), leaving the share
+    // target and the verified App Link dead.
     intentFilters: [
+      // Share-sheet target. text/plain only — the app has no image ingestion
+      // path for shares, so image/* must not be advertised.
       {
-        action: 'android.intent.action.SEND',
-        category: ['android.intent.category.DEFAULT'],
-        data: [{ mimeType: 'text/plain' }, { mimeType: 'image/*' }],
+        action: 'SEND',
+        category: ['DEFAULT'],
+        data: [{ mimeType: 'text/plain' }],
+      },
+      // Text-selection toolbar action ("AGI Workforce" on any selected text).
+      // MainActivity.kt rewrites ACTION_PROCESS_TEXT into the
+      // agiworkforce://intent/share deep link, same as ACTION_SEND.
+      {
+        action: 'PROCESS_TEXT',
+        category: ['DEFAULT'],
+        data: [{ mimeType: 'text/plain' }],
       },
       // AUDIT-FIX: H-11 — verified Android App Link for https://agiworkforce.com/*.
       // autoVerify=true forces the OS to fetch /.well-known/assetlinks.json
       // before this filter is honored, so an unverified third-party app
       // cannot claim the same VIEW intent.
       {
-        action: 'android.intent.action.VIEW',
+        action: 'VIEW',
         autoVerify: true,
-        category: ['android.intent.category.DEFAULT', 'android.intent.category.BROWSABLE'],
+        category: ['DEFAULT', 'BROWSABLE'],
         data: [
           { scheme: 'https', host: 'agiworkforce.com' },
           { scheme: 'https', host: 'www.agiworkforce.com' },
@@ -256,6 +271,13 @@ const config = {
     // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
     // Injects com.google.mlkit:genai-common gradle dep + registers AGIAICorePackage in MainApplication.kt.
     './native/android/withAGIAICore.cjs',
+    // Share-sheet / PROCESS_TEXT ingestion: patches the generated MainActivity.kt
+    // so ACTION_SEND EXTRA_TEXT and ACTION_PROCESS_TEXT are rewritten into the
+    // agiworkforce://intent/share deep link (RN Linking never surfaces intent
+    // extras). Pairs with the SEND/PROCESS_TEXT intentFilters above. android/ is
+    // generated, so this lives as a plugin — direct android/ edits are erased by
+    // the next prebuild.
+    './native/android/withAGIShareIntent.cjs',
     // Detox e2e (Android): wires testInstrumentationRunner, androidTestImplementation('com.wix:detox:+'),
     // and the network security config needed for the Detox test server. iOS side (Podfile) is wired
     // separately by Detox's own postinstall / `detox init` step, not this plugin.

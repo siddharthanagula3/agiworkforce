@@ -5,7 +5,13 @@ import { type TaskChipType } from '@/src/features/chat/components/TaskChips';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 interface ComposerProps {
-  onSend: (text: string, attachments?: Attachment[], mode?: TaskChipType) => void;
+  /** May return (a promise of) a boolean — `false` means the send was
+   *  rejected pre-flight and the composer keeps its draft. */
+  onSend: (
+    text: string,
+    attachments?: Attachment[],
+    mode?: TaskChipType,
+  ) => void | boolean | Promise<void | boolean>;
   isStreaming?: boolean;
   onStop?: () => void;
   onOpenModelPicker?: () => void;
@@ -56,8 +62,10 @@ export function Composer({
 
   const handleSend = useCallback(
     (text: string, attachments?: Attachment[]) => {
-      onSend(text, attachments, activeChip ?? undefined);
+      // Forward the acceptance signal so ChatInput's draft-safe clearing works.
+      const result = onSend(text, attachments, activeChip ?? undefined);
       setActiveChip(null);
+      return result;
     },
     [onSend, activeChip],
   );

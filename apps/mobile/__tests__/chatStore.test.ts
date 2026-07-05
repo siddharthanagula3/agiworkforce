@@ -962,6 +962,126 @@ describe('chatStore — streaming state', () => {
     });
   });
 
+  describe('send acceptance & per-conversation streaming', () => {
+    it('resolves false and never fires onAccepted when a pre-flight gate blocks the send', async () => {
+      mockRemoteDisabledReason.mockReturnValue('Remote chat is disabled for this test');
+      const onAccepted = jest.fn();
+
+      let accepted: boolean | undefined;
+      await act(async () => {
+        accepted = await getState().sendMessage(CONV_ID, 'blocked message', MODEL, undefined, {
+          onAccepted,
+        });
+      });
+
+      // The composer keeps its draft on this contract: blocked pre-flight →
+      // false, no acceptance signal, and NO user message in the transcript.
+      expect(accepted).toBe(false);
+      expect(onAccepted).not.toHaveBeenCalled();
+      expect(getState().messages[CONV_ID] ?? []).toHaveLength(0);
+      expect(mockStreamChat).not.toHaveBeenCalled();
+    });
+
+    it('fires onAccepted when the user message commits — before the stream finishes', async () => {
+      const onAccepted = jest.fn();
+      let acceptedBeforeDone = false;
+
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              acceptedBeforeDone = onAccepted.mock.calls.length > 0;
+              callbacks.onDelta({ content: 'reply' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      let accepted: boolean | undefined;
+      await act(async () => {
+        accepted = await getState().sendMessage(CONV_ID, 'hello', MODEL, undefined, {
+          onAccepted,
+        });
+      });
+
+      expect(onAccepted).toHaveBeenCalledTimes(1);
+      expect(acceptedBeforeDone).toBe(true);
+      expect(accepted).toBe(true);
+    });
+
+    it('tracks streaming per conversation via streamingConversationIds', async () => {
+      let idsDuringStream: string[] = [];
+
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              idsDuringStream = [...getState().streamingConversationIds];
+              callbacks.onDelta({ content: 'streamed' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'scope me', MODEL);
+      });
+
+      expect(idsDuringStream).toContain(CONV_ID);
+      expect(getState().streamingConversationIds).toHaveLength(0);
+      expect(getState().isStreaming).toBe(false);
+    });
+
+    it('resets streaming state even when the stream resolves without onDone or onError', async () => {
+      // The structural finally-cleanup: a stream that silently resolves (the
+      // stuck-composer bug class) must still return the composer to rest.
+      mockStreamChat.mockImplementation(() => Promise.resolve());
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'silent stream', MODEL);
+      });
+
+      expect(getState().isStreaming).toBe(false);
+      expect(getState().streamingConversationIds).toHaveLength(0);
+      const msgs = getState().messages[CONV_ID] ?? [];
+      expect(msgs.filter((m) => m.isStreaming)).toHaveLength(0);
+    });
+
+    it('honors the per-model thinking toggle instead of forcing thinking on', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { useModelStore } = require('../src/features/model-picker/store');
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      // Toggle OFF (default) → thinking must be false and effort omitted.
+      useModelStore.setState({ thinkingEnabledPerModel: {} });
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'no thinking', MODEL);
+      });
+      expect(capturedBody?.thinking).toBe(false);
+      expect(capturedBody?.effort).toBeUndefined();
+
+      // Toggle ON for this model → thinking true, effort rides along.
+      useModelStore.setState({ thinkingEnabledPerModel: { [MODEL]: true } });
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'with thinking', MODEL);
+      });
+      expect(capturedBody?.thinking).toBe(true);
+      expect(capturedBody?.effort).toBeDefined();
+    });
+  });
+
   describe('image generation messages', () => {
     it('adds a user command and assistant progress message when image generation starts', () => {
       let assistantMessageId = '';

@@ -1,6 +1,6 @@
 /**
  * Tool-call accumulator — turns the server's tool-call SSE deltas into the
- * `ToolCall[]` that MessageBubble/InlineToolCall renders.
+ * `ToolCall[]` that MessageBubble/ToolCallTimeline renders.
  *
  * The tool-call data is already on the wire; this is the parse+accumulate layer
  * the mobile chat was missing. Two tool families arrive with different keys:
@@ -128,6 +128,24 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     const t = ensure(acc, key, { name: delta.x_search_results ? 'web_search' : 'code_execution' });
     t.output = safeStringify(resultBlock);
     t.status = 'completed';
+
+    // Preserve the structured per-result {url, title} list (not just the
+    // stringified blob) so the UI can render real favicon/title/domain cards —
+    // mirrors apps/web's useChatStream.ts parsing of the same wire shape.
+    if (delta.x_search_results) {
+      const content = (delta.x_search_results as { content?: unknown }).content;
+      if (Array.isArray(content)) {
+        const results = (content as Record<string, unknown>[])
+          .filter((r) => r['type'] === 'web_search_result' && typeof r['url'] === 'string')
+          .map((r) => ({
+            url: r['url'] as string,
+            title: (r['title'] as string) || (r['url'] as string),
+            snippet: (r['encrypted_content'] as string) || undefined,
+          }));
+        if (results.length > 0) t.searchResults = results;
+      }
+    }
+
     changed = true;
   }
 

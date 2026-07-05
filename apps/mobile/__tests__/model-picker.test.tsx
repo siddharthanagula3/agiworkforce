@@ -8,6 +8,9 @@
  *  - Locked Cloud Managed rows
  *  - Local selection behavior
  *  - Fail-closed cloud selection behavior
+ *  - Subscription-tier gating (free economy allowance, upgrade locks, downgrade revalidation)
+ *  - Reasoning-effort selector (cloud scope)
+ *  - Thinking-toggle expansion on reselect
  */
 
 import React from 'react';
@@ -120,12 +123,16 @@ import { ModelPickerSheet } from '../src/features/model-picker/components/ModelP
 import { useModelInstallStore } from '../src/features/model-picker/installStore';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useTierStore } from '../src/features/billing/store';
+import { useAgentControlStore } from '../stores/agentControlStore';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
+  DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
   LOCKED_CLOUD_MODELS,
   MODEL_LIST,
+  getModelByIdForCloudAccess,
 } from '../src/features/model-picker/service';
 
 // ---------------------------------------------------------------------------
@@ -166,6 +173,7 @@ function renderPicker(overrides?: {
   onSelect?: (id: string) => void;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
+  conversationId?: string;
 }) {
   return render(
     <ModelPickerSheet
@@ -173,6 +181,7 @@ function renderPicker(overrides?: {
       onSelect={overrides?.onSelect}
       onOpenCloudAccess={overrides?.onOpenCloudAccess}
       modelScope={overrides?.modelScope}
+      conversationId={overrides?.conversationId}
     />,
   );
 }
@@ -185,6 +194,8 @@ describe('ModelPickerSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetModelStore();
+    useTierStore.setState({ tier: 'free' });
+    useAgentControlStore.setState({ byConversation: {}, byProject: {} });
   });
 
   it('renders all local auto mode cards', () => {
@@ -344,6 +355,9 @@ describe('ModelPickerSheet', () => {
 
   it('selects cloud rows after invite access', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
+    // This model may be a Max-only flagship model — set the tier so this test's
+    // actual intent (invite/sign-in unlock, not subscription-tier gating) holds.
+    useTierStore.setState({ tier: 'max' });
     const cloudModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText, getByText } = renderPicker({ modelScope: 'cloud' });
 
@@ -354,6 +368,148 @@ describe('ModelPickerSheet', () => {
     expect(useModelStore.getState().selectedModel).toBe(cloudModel.id);
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('shows an upgrade lock (not sign-in) for a flagship model on a Pro subscription', () => {
+    // Regression: cloudUnlocked-only gating meant a Pro user could select a
+    // Max-only model (Opus-class) with no upgrade indicator at all — the server
+    // would then reject it. Being cloud-unlocked and tier-locked must show
+    // "Upgrade required" and route to billing, not the sign-in flow.
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'pro' });
+
+    const opusForFree = getModelByIdForCloudAccess('claude-opus-4.8', true, 'free');
+    const opusForPro = getModelByIdForCloudAccess('claude-opus-4.8', true, 'pro');
+    const opusForMax = getModelByIdForCloudAccess('claude-opus-4.8', true, 'max');
+    expect(opusForFree?.availability).toBe('locked');
+    expect(opusForPro?.availability).toBe('locked');
+    expect(opusForPro?.lockReason).not.toBe(CLOUD_LOCK_REASON);
+    expect(opusForPro?.detailLabel).toBe('Upgrade required');
+    expect(opusForMax?.availability).toBe('ready');
+
+    const { getByText } = renderPicker({ modelScope: 'cloud' });
+    fireEvent.press(getByText(opusForPro!.name));
+
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(mockSheetRef.current.close).toHaveBeenCalled();
+  });
+
+  it('unlocks economy-list models for a signed-in free-tier user', () => {
+    // The server's free-trial path accepts economy-list models from free users
+    // (apps/web/lib/free-trial-config.ts), so the picker must not lock them.
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'free' });
+
+    const economyModel = getModelByIdForCloudAccess('gpt-5.4-mini', true, 'free');
+    expect(economyModel?.availability).toBe('ready');
+    // Flagship models stay tier-locked for free users.
+    expect(getModelByIdForCloudAccess('claude-opus-4.8', true, 'free')?.availability).toBe(
+      'locked',
+    );
+
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+    fireEvent.press(getByLabelText(economyModel!.name));
+
+    expect(useModelStore.getState().selectedModel).toBe('gpt-5.4-mini');
+    expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
+  });
+
+  it('shows an Upgrade badge with upgrade a11y strings for tier-locked rows', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'pro' });
+
+    const opus = getModelByIdForCloudAccess('claude-opus-4.8', true, 'pro')!;
+    const { getAllByText, getByLabelText, queryByText } = renderPicker({ modelScope: 'cloud' });
+
+    const row = getByLabelText(`${opus.name}, upgrade required, ${opus.lockReason}`);
+    expect(row.props.accessibilityHint).toBe('Opens plan upgrade options');
+    expect(getAllByText('Upgrade').length).toBeGreaterThan(0);
+    // A signed-in tier lock must not masquerade as a sign-in lock.
+    expect(queryByText('Sign in')).toBeNull();
+  });
+
+  it('suppresses the selected checkmark when the selected cloud model is tier-locked', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'pro' });
+    useModelStore.setState({ selectedModel: 'claude-opus-4.8', selectedProvider: 'cloud_managed' });
+
+    const opus = getModelByIdForCloudAccess('claude-opus-4.8', true, 'pro')!;
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+
+    // No ", selected" suffix and no selected a11y state on a locked row.
+    const row = getByLabelText(`${opus.name}, upgrade required, ${opus.lockReason}`);
+    expect(row.props.accessibilityState.selected).toBe(false);
+  });
+
+  it('falls back to the default cloud model when a tier downgrade locks the selection', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.getState().setModel('claude-opus-4.8');
+    expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.8');
+
+    useTierStore.setState({ tier: 'pro' });
+
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_CLOUD_MODEL_ID);
+    expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
+  });
+
+  it('keeps an accessible selection unchanged when the tier changes', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.getState().setModel('gpt-5.4-mini');
+
+    useTierStore.setState({ tier: 'free' });
+
+    // Economy-list models survive even a downgrade to free.
+    expect(useModelStore.getState().selectedModel).toBe('gpt-5.4-mini');
+  });
+
+  it('does not render the reasoning effort selector for the local scope', () => {
+    const { queryByLabelText } = renderPicker();
+    expect(queryByLabelText('Reasoning effort High')).toBeNull();
+  });
+
+  it('sets a per-conversation effort override without changing the model or closing the sheet', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
+
+    expect(getByLabelText('Reasoning effort Medium').props.accessibilityState.selected).toBe(true);
+
+    fireEvent.press(getByLabelText('Reasoning effort High'));
+
+    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('high');
+    expect(getByLabelText('Reasoning effort High').props.accessibilityState.selected).toBe(true);
+    // Effort and model choice are independent: no selection change, no close.
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(mockSheetRef.current.close).not.toHaveBeenCalled();
+  });
+
+  it('writes the project-default effort when no conversation id is provided', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+
+    fireEvent.press(getByLabelText('Reasoning effort Low'));
+
+    expect(useAgentControlStore.getState().byProject.__default__?.effort).toBe('low');
+    expect(useAgentControlStore.getState().byConversation).toEqual({});
+  });
+
+  it('expands the thinking toggle when re-tapping the already-selected cloud model', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const thinkingModel = getModelByIdForCloudAccess('claude-opus-4.8', true, 'max')!;
+    expect(thinkingModel.supportsThinking).toBe(true);
+    useModelStore.getState().setModel(thinkingModel.id);
+
+    const { getByLabelText, queryByLabelText } = renderPicker({ modelScope: 'cloud' });
+    expect(queryByLabelText(`Thinking mode for ${thinkingModel.name}`)).toBeNull();
+
+    fireEvent.press(getByLabelText(`${thinkingModel.name}, selected`));
+
+    expect(getByLabelText(`Thinking mode for ${thinkingModel.name}`)).toBeTruthy();
+    expect(useModelStore.getState().selectedModel).toBe(thinkingModel.id);
+    expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
 
   it('selects a local auto mode when tapped', () => {

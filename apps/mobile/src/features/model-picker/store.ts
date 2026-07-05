@@ -3,7 +3,9 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { normalizeModelId } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
+  DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
+  canAccessCloudModelForTier,
   getDefaultSelectableModelId,
   getModelByIdForCloudAccess,
   isAutoMode,
@@ -12,6 +14,7 @@ import {
   isSelectableModelIdForCloudAccess,
 } from './service';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 
 /** Maximum number of entries kept in the recent-models list. */
 const MAX_RECENT = 5;
@@ -202,3 +205,30 @@ export const useModelStore = create<ModelState>()(
 );
 
 rehydrateWhenMmkvReady(useModelStore, 'model-store');
+
+/**
+ * A tier downgrade (e.g. Max → Pro) must not leave a now-locked flagship model
+ * selected and check-marked. Re-check tier access whenever the billing tier
+ * changes and fall back to the default cloud model (economy-listed, so it is
+ * accessible on every tier including free-trial).
+ */
+function revalidateSelectedModelForTier(tier: string): void {
+  const { selectedModel, thinkingEnabledPerModel } = useModelStore.getState();
+  if (!isCloudManagedModelId(selectedModel)) return;
+  if (canAccessCloudModelForTier(selectedModel, tier)) return;
+
+  const fallbackId =
+    DEFAULT_CLOUD_MODEL_ID && canAccessCloudModelForTier(DEFAULT_CLOUD_MODEL_ID, tier)
+      ? DEFAULT_CLOUD_MODEL_ID
+      : DEFAULT_LOCAL_MODEL_ID;
+  useModelStore.setState({
+    selectedModel: fallbackId,
+    selectedProvider: providerForModelId(fallbackId),
+    thinkingModeEnabled: thinkingEnabledPerModel[fallbackId] ?? false,
+  });
+}
+
+useTierStore.subscribe((state, prevState) => {
+  if (state.tier === prevState.tier) return;
+  revalidateSelectedModelForTier(state.tier);
+});

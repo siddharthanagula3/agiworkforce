@@ -44,9 +44,16 @@
 import 'server-only';
 
 import { cache } from 'react';
-import { getTierPolicy, getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  getTierPolicy,
+  getRoutingSlotModel,
+  getPlanSessionUsageBudgetCents,
+  getPlanWeeklyUsageBudgetCents,
+  getPlanFlagshipWeeklyUsageBudgetCents,
+} from '@agiworkforce/types';
 import type { ProductTier, TierPolicy, TierCapBehavior, RoutingSlot } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getRollingUsageCents } from '@/lib/server/rolling-usage';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
@@ -315,8 +322,15 @@ export async function assertQuota(opts: AssertQuotaOptions): Promise<QuotaOutcom
 
   // If a sub-feature quota check is requested, run it alongside the token
   // check in parallel (Vercel rule: async-parallel).
+  // Session (rolling 5h) and weekly caps layer on top of the monthly credit
+  // budget (founder decision, 2026-07-05) — they pace spend within the same
+  // monthly pool rather than replacing it, so they run unconditionally
+  // alongside the token check for every capped tier.
   const checks: Promise<QuotaOutcome>[] = [
     _checkTokenQuota(userId, token, tier, policy, requestedTokens),
+    _checkSessionQuota(userId, token, tier, policy),
+    _checkWeeklyQuota(userId, token, tier, policy),
+    _checkFlagshipWeeklyQuota(userId, token, tier, policy),
   ];
 
   if (feature) {
@@ -392,6 +406,74 @@ async function _checkTokenQuota(
   const pctUsed = currentUsedFraction + requestedFraction;
 
   return evaluateCapBehavior(pctUsed, capBehavior, tier, 'token_cap');
+}
+
+// ---------------------------------------------------------------------------
+// Internal: rolling-window (session / weekly) quota checks
+//
+// Derived entirely from `credit_transactions` (`transaction_type =
+// 'deduction'`, `amount_cents`, `created_at`) — no new table/migration.
+// Every credit deduction (Stripe, IAP, or the legacy increment_usage path)
+// already inserts a row there, so `sum(amount_cents)` over a rolling window
+// is a real spend total, not a derived estimate.
+// ---------------------------------------------------------------------------
+
+/**
+ * Cached per request (Vercel rule: server-cache-react) so the
+ * session/weekly/flagship-weekly checks below don't triple the DB
+ * round-trips for one assertQuota call. The underlying query lives in
+ * lib/server/rolling-usage.ts, shared with app/api/usage/route.ts so
+ * enforcement and display read the exact same window.
+ */
+const _fetchRollingUsage = cache(
+  async (
+    userId: string,
+    _token: string,
+    windowHours: number,
+    flagshipOnly: boolean,
+  ): Promise<number> => getRollingUsageCents(userId, windowHours, flagshipOnly),
+);
+
+const SESSION_WINDOW_HOURS = 5;
+const WEEKLY_WINDOW_HOURS = 7 * 24;
+
+async function _checkSessionQuota(
+  userId: string,
+  token: string,
+  tier: ProductTier | string,
+  policy: TierPolicy,
+): Promise<QuotaOutcome> {
+  const capCents = getPlanSessionUsageBudgetCents(tier);
+  if (capCents <= 0 || !policy.capBehavior) return { kind: 'ok' };
+
+  const usedCents = await _fetchRollingUsage(userId, token, SESSION_WINDOW_HOURS, false);
+  return evaluateCapBehavior(usedCents / capCents, policy.capBehavior, tier, 'session');
+}
+
+async function _checkWeeklyQuota(
+  userId: string,
+  token: string,
+  tier: ProductTier | string,
+  policy: TierPolicy,
+): Promise<QuotaOutcome> {
+  const capCents = getPlanWeeklyUsageBudgetCents(tier);
+  if (capCents <= 0 || !policy.capBehavior) return { kind: 'ok' };
+
+  const usedCents = await _fetchRollingUsage(userId, token, WEEKLY_WINDOW_HOURS, false);
+  return evaluateCapBehavior(usedCents / capCents, policy.capBehavior, tier, 'weekly');
+}
+
+async function _checkFlagshipWeeklyQuota(
+  userId: string,
+  token: string,
+  tier: ProductTier | string,
+  policy: TierPolicy,
+): Promise<QuotaOutcome> {
+  const capCents = getPlanFlagshipWeeklyUsageBudgetCents(tier);
+  if (capCents <= 0 || !policy.capBehavior) return { kind: 'ok' };
+
+  const usedCents = await _fetchRollingUsage(userId, token, WEEKLY_WINDOW_HOURS, true);
+  return evaluateCapBehavior(usedCents / capCents, policy.capBehavior, tier, 'flagship_weekly');
 }
 
 // ---------------------------------------------------------------------------

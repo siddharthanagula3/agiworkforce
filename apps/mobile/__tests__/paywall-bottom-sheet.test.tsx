@@ -125,7 +125,7 @@ import { FEATURES } from '../lib/v1FeatureFlags';
 
 const defaultProps = {
   feature: 'token_cap',
-  requiredTier: 'hobby',
+  requiredTier: 'basic',
   reason: '2M tokens used this month',
   onDismiss: jest.fn(),
 };
@@ -142,7 +142,7 @@ describe('PaywallBottomSheet rendering', () => {
   it('renders at least one element with the tier label text', () => {
     // Both the header title and the informational copy may contain the tier label.
     const { getAllByText } = render(<PaywallBottomSheet {...defaultProps} />);
-    expect(getAllByText('Upgrade to Hobby').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('Upgrade to Basic').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders the feature description text', () => {
@@ -167,11 +167,9 @@ describe('PaywallBottomSheet rendering', () => {
     expect(getByText('Try later')).toBeTruthy();
   });
 
-  it('renders correct label for pro_plus tier', () => {
-    const { getAllByText } = render(
-      <PaywallBottomSheet {...defaultProps} requiredTier="pro_plus" />,
-    );
-    expect(getAllByText('Upgrade to Pro+').length).toBeGreaterThanOrEqual(1);
+  it('renders correct label for basic tier', () => {
+    const { getAllByText } = render(<PaywallBottomSheet {...defaultProps} requiredTier="basic" />);
+    expect(getAllByText('Upgrade to Basic').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders correct label for max tier', () => {

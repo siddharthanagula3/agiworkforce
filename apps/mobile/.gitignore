@@ -12,3 +12,8 @@ expo-env.d.ts
 # Running `expo prebuild` regenerates these locally; do not commit (would diverge from top-level)
 /android/
 /ios/
+
+# Screenshot pipeline output — raw captures/artifacts uploaded directly to
+# App Store Connect / Play Console, not committed as source.
+store-listing/screenshots/captures/
+store-listing/screenshots/.detox-artifacts/

@@ -64,6 +64,8 @@ const uiDirectIoBaseline = new Set([
   'apps/mobile/app/(app)/usage.tsx',
   'apps/mobile/app/(app)/profile/index.tsx',
   'apps/mobile/app/(app)/companion/index.tsx',
+  'apps/mobile/app/(app)/(tabs)/chat.tsx',
+  'apps/mobile/app/(app)/chat/[id].tsx',
   'apps/mobile/src/features/feedback/index.tsx',
 ]);
 

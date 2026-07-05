@@ -14,7 +14,6 @@ import {
   Info,
   Link2,
   LogOut,
-  Mail,
   MessageCircleWarning,
   Mic,
   Palette,
@@ -404,14 +403,6 @@ export default function SettingsTabScreen() {
             tag: cloudAccessTag,
             tone: 'cloud',
             onPress: cloudUnlocked ? push('/(app)/settings/data-controls') : openCloudAccess,
-          },
-          {
-            key: 'email-phone',
-            label: 'Email / Phone Number',
-            icon: Mail,
-            tag: cloudAccessTag,
-            tone: 'cloud',
-            onPress: cloudUnlocked ? push('/(app)/settings/cloud-account') : openCloudAccess,
           },
           {
             key: 'privacy',

@@ -562,8 +562,8 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": true,
-        "research": true,
+        "search": false,
+        "research": false,
         "codeExecution": true,
         "caching": true
       },
@@ -2016,8 +2016,8 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": true,
-        "research": true,
+        "search": false,
+        "research": false,
         "codeExecution": true,
         "caching": true
       },

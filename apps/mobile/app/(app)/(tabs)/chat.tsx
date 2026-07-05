@@ -2,13 +2,15 @@ import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Pressable, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
-import { Download, Menu, SquarePen } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Download, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { summarizeSendPreview, type ProviderMode } from '@agiworkforce/types';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
+import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryChatToggle';
 import { AgiMark } from '@/components/ui/AgiMark';
 import {
   TASK_CHIP_SEND_CONTEXT,
@@ -30,6 +32,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
+  getShortDisplayName,
 } from '@/src/features/model-picker/service';
 import { executionModeForModel } from '@/src/features/chat/utils/conversationMode';
 import {
@@ -85,6 +88,17 @@ export default function ChatTabScreen() {
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearError = useChatStore((s) => s.clearError);
+
+  // Error state lives in the shared chat store, not scoped per-conversation --
+  // without this, a stale error banner from a previous conversation (e.g. "no
+  // on-device model ready" from a Local-mode chat) leaks into this empty-state
+  // screen whenever it regains focus (tab switch, back-nav). Previously this
+  // only cleared when the now-removed header "new chat" button was tapped.
+  useFocusEffect(
+    useCallback(() => {
+      clearError();
+    }, [clearError]),
+  );
   const { isOnline } = useNetworkStatus();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedProvider = useModelStore((s) => s.selectedProvider);
@@ -142,14 +156,16 @@ export default function ChatTabScreen() {
       text: string,
       attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
       mode?: TaskChipType,
-    ) => {
+    ): Promise<boolean> => {
+      // Returns false when a pre-flight gate blocks the send so the composer
+      // keeps the user's draft; resolves true once the message is committed.
       try {
         if (activeMode === 'cloud' && !FEATURES.cloudChat) {
           Alert.alert(
             'AGI Cloud is not ready on mobile',
             'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
           );
-          return;
+          return false;
         }
         const modelForSend =
           activeMode === 'cloud'
@@ -159,7 +175,7 @@ export default function ChatTabScreen() {
             : executionModeForModel(selectedModel) === 'local'
               ? selectedModel
               : DEFAULT_LOCAL_MODEL_ID;
-        if (!modelForSend) return;
+        if (!modelForSend) return false;
         const trimmed = text.trim();
 
         // Handle /image command from a brand-new chat — mirrors the same
@@ -173,28 +189,28 @@ export default function ChatTabScreen() {
           const prompt = trimmed.slice('/image'.length).trim();
           if (!prompt) {
             Alert.alert('Add an image prompt', 'Type what you want AGI to create after /image.');
-            return;
+            return false;
           }
           if (activeMode !== 'cloud') {
             Alert.alert(
               'Image generation uses AGI Cloud',
               'Start an AGI Cloud chat to generate images. Local Mode can attach and inspect images without uploading them.',
             );
-            return;
+            return false;
           }
           if (!FEATURES.imageGen) {
             Alert.alert(
               'Image generation uses AGI Cloud',
               'You can attach and inspect local images now. Image generation is available with Cloud access.',
             );
-            return;
+            return false;
           }
           if (!isOnline) {
             Alert.alert(
               'Network connection required',
               'Image generation needs AGI Cloud. Connect to the internet and try again.',
             );
-            return;
+            return false;
           }
 
           const title = prompt.length > 40 ? prompt.slice(0, 40).trim() + '...' : prompt;
@@ -241,7 +257,7 @@ export default function ChatTabScreen() {
               console.warn('[ChatTabScreen] Image generation failed:', err);
               failImageGeneration(conversationId, assistantMessageId, message);
             });
-          return;
+          return true;
         }
 
         const fallbackTitle = attachments?.[0]?.fileName ?? 'New chat';
@@ -251,11 +267,21 @@ export default function ChatTabScreen() {
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
         const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
-        sendMessage(conversationId, trimmed, modelForSend, attachments, sendOptions).catch(() => {
-          // Message send failed — conversation was created, user can retry from chat screen
+        // Resolve true the moment the store commits the user message so the
+        // home composer clears its "new-chat" draft on acceptance — a send
+        // blocked by a pre-flight gate keeps the text for when the user
+        // returns to this screen.
+        return await new Promise<boolean>((resolve) => {
+          sendMessage(conversationId, trimmed, modelForSend, attachments, {
+            ...(sendOptions ?? {}),
+            onAccepted: () => resolve(true),
+          })
+            .then((accepted) => resolve(accepted))
+            .catch(() => resolve(false));
         });
       } catch {
-        // Conversation creation failed — no-op (user can retry)
+        // Conversation creation failed — keep the draft so the user can retry.
+        return false;
       }
     },
     [
@@ -459,15 +485,6 @@ export default function ChatTabScreen() {
     [createConversation, sendMessage, selectedModel],
   );
 
-  const handleNewChat = useCallback(() => {
-    // Error state lives in the shared chat store, not scoped per-conversation —
-    // without this, a stale error banner from the previous conversation (e.g.
-    // "no on-device model ready" from a Local-mode chat) leaks into a brand
-    // new chat, even after switching to Cloud mode and getting a real reply.
-    clearError();
-    router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
-  }, [router, clearError]);
-
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       {/* Header */}
@@ -482,30 +499,30 @@ export default function ChatTabScreen() {
           >
             <Menu size={18} color={c.textSecondary} />
           </Pressable>
-          <View
+          <Pressable
+            onPress={() => handleOpenModelPicker()}
             className="flex-row items-center gap-1.5 rounded-full"
             style={{ backgroundColor: c.inputSurface, paddingHorizontal: 12, height: 32 }}
+            accessibilityLabel={`Model: ${getShortDisplayName(selectedModel)}. Tap to change model`}
+            accessibilityRole="button"
           >
             <AgiMark size={18} />
             <Text variant="subheading" style={{ color: c.textPrimary }}>
-              AGI
+              {getShortDisplayName(selectedModel)}
             </Text>
-          </View>
+          </Pressable>
         </View>
-        <Pressable
-          onPress={handleNewChat}
-          className="w-8 h-8 rounded-full items-center justify-center"
-          style={{ backgroundColor: c.accentSurface }}
-          accessibilityLabel="New chat"
-          accessibilityRole="button"
-        >
-          <SquarePen size={18} color={c.teal} />
-        </Pressable>
+        {/* Already in the empty new-chat state -- a "new chat" action here would
+            be a no-op, so this slot is the temporary-chat toggle instead. */}
+        <TemporaryChatToggle />
       </View>
 
+      {/* Android: adjustResize already resizes the window; stacking
+          behavior="height" double-handles the keyboard and causes resize
+          jumps. iOS keeps "padding". */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
         <ScrollView

@@ -56,6 +56,8 @@ jest.mock('expo-crypto', () => ({
 // ---------------------------------------------------------------------------
 
 import { retrieveMemoryContext } from '../src/features/memory/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useCloudMemoryStore } from '../stores/memory/cloudMemoryStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -136,5 +138,54 @@ describe('retrieveMemoryContext — relevance gate', () => {
     mockFacts = Array.from({ length: 10 }, (_, i) => makeFact(`p${i}`, `Pinned fact ${i}`, true));
     const result = await retrieveMemoryContext('irrelevant query xyz', 3);
     expect(result.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('retrieveMemoryContext — cloud mode', () => {
+  beforeEach(() => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useCloudMemoryStore.setState({ entries: [] });
+  });
+
+  afterAll(() => {
+    useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
+  function seedCloudEntry(id: string, content: string, pinned = false) {
+    useCloudMemoryStore.getState().upsertCloudMemory({
+      id,
+      content,
+      pinned,
+      source: 'mobile',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDeleted: false,
+    } as never);
+  }
+
+  // Regression: retrieveMemoryContext used to check
+  // `fact.includes(entireQuery)` — the SHORT stored fact containing the WHOLE
+  // (often long) chat message as a literal substring — which only matched a
+  // verbatim repeat of the fact and silently returned nothing for any real
+  // question. "Cloud memory stores facts but the model never uses them" was
+  // this bug in production. Word-overlap matching is the fix under test.
+  it('matches a realistic multi-word question against a short stored fact', async () => {
+    seedCloudEntry('f1', 'User prefers Rust over Python');
+    const result = await retrieveMemoryContext(
+      'Based on your memory what language do i prefer in between rust and python',
+    );
+    expect(result.map((f) => f.id)).toContain('f1');
+  });
+
+  it('does not inject an unrelated unpinned cloud fact', async () => {
+    seedCloudEntry('f1', 'User has a cat named Whiskers');
+    const result = await retrieveMemoryContext('what language do I prefer, rust or python');
+    expect(result).toEqual([]);
+  });
+
+  it('falls back to pinned cloud facts when no keyword overlap exists', async () => {
+    seedCloudEntry('f1', 'User works in fintech', true);
+    const result = await retrieveMemoryContext('unrelated query about cooking');
+    expect(result.map((f) => f.id)).toEqual(['f1']);
   });
 });

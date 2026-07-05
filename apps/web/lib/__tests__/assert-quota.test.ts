@@ -139,12 +139,31 @@ vi.mock('@agiworkforce/types', () => {
     coding_premium_pro: 'claude-sonnet-4.6',
     general_balanced_pro: 'gpt-5.4-mini',
   };
+  // Session/weekly/flagship-weekly budget helpers, mirroring the real
+  // packages/types/src/billing-catalog.ts formulas exactly (not imported via
+  // vi.importActual to avoid the broken SLOT_REGISTRY init noted above).
+  // Only 'pro'/'max' have a monthlyUsageBudgetUsd here (10 / 75) — 'free' and
+  // 'hobby' (which isn't a real BillingPlanTier and would normalize to
+  // 'free') both budget to 0, so their rolling-usage checks short-circuit
+  // before ever touching the DB mock.
+  const MONTHLY_BUDGET_CENTS: Record<string, number> = { pro: 1000, max: 7500 };
+  const weeklyBudgetCents = (tier: string) =>
+    Math.round(((MONTHLY_BUDGET_CENTS[tier] ?? 0) * 12) / 52);
+  const sessionBudgetCents = (tier: string) => Math.round(weeklyBudgetCents(tier) * 0.2);
+  const flagshipWeeklyBudgetCents = (tier: string) => Math.round(weeklyBudgetCents(tier) * 0.3);
+
   return {
     getTierPolicy: (tier: string | null | undefined) => {
       const key = (tier ?? '').toLowerCase();
       return POLICIES[key] ?? POLICIES['free'];
     },
     getRoutingSlotModel: (slot: string) => SLOT_MODELS[slot] ?? `model-for-${slot}`,
+    getPlanSessionUsageBudgetCents: (tier: string | null | undefined) =>
+      sessionBudgetCents((tier ?? '').toLowerCase()),
+    getPlanWeeklyUsageBudgetCents: (tier: string | null | undefined) =>
+      weeklyBudgetCents((tier ?? '').toLowerCase()),
+    getPlanFlagshipWeeklyUsageBudgetCents: (tier: string | null | undefined) =>
+      flagshipWeeklyBudgetCents((tier ?? '').toLowerCase()),
   };
 });
 
@@ -763,6 +782,99 @@ describe('assertQuota · Pro tier (tokenCapPerMonth = 10_000_000)', () => {
     if (result.kind === 'paywall') {
       expect(result.requiredTier).toBe('max');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Session (rolling 5h) / weekly / flagship-weekly rolling-usage tests.
+//
+// Pro's derived budgets here (from the mock above): weekly = round(1000*12/52)
+// = 231, session = round(231*0.2) = 46, flagshipWeekly = round(231*0.3) = 69.
+// These checks read `credit_transactions` (not `token_credits`), so they use
+// a SEPARATE mock resolution keyed by which query text is sent.
+// ---------------------------------------------------------------------------
+
+describe('assertQuota · session (rolling 5h) / weekly / flagship-weekly caps', () => {
+  /** Route mockQuery by SQL text: token_credits row vs. credit_transactions rolling sum. */
+  function seedRollingUsage(opts: {
+    tokenCreditsRow?: Partial<UsageRow>;
+    allModelsUsedCents?: number;
+    flagshipUsedCents?: number;
+  }) {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('from token_credits')) {
+        return Promise.resolve(
+          opts.tokenCreditsRow
+            ? [
+                {
+                  credits_used_cents: 0,
+                  credits_allocated_cents: 1_000_000,
+                  daily_used_cents: null,
+                  flagship_daily_tokens: null,
+                  flagship_daily_reset_at: null,
+                  ...opts.tokenCreditsRow,
+                },
+              ]
+            : [],
+        );
+      }
+      if (sql.includes("metadata->>'is_flagship'")) {
+        return Promise.resolve([{ used_cents: opts.flagshipUsedCents ?? 0 }]);
+      }
+      if (sql.includes('from credit_transactions')) {
+        return Promise.resolve([{ used_cents: opts.allModelsUsedCents ?? 0 }]);
+      }
+      return Promise.resolve([]);
+    });
+  }
+
+  it('returns ok when session usage is well under the 5h cap (46 cents for pro)', async () => {
+    seedRollingUsage({ allModelsUsedCents: 10 });
+    const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 100 });
+    expect(result.kind).toBe('ok');
+  });
+
+  it('returns paywall when session usage exceeds 150% of the 5h cap', async () => {
+    // Session cap for pro = 46 cents; 150% = 69 cents. allModelsUsedCents
+    // feeds both the weekly AND session rolling-sum queries in this mock
+    // (both match "from credit_transactions" without the flagship filter),
+    // so set it high enough to trip session's smaller cap specifically.
+    seedRollingUsage({ allModelsUsedCents: 100 });
+    const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 0 });
+    expect(result.kind).toBe('paywall');
+    if (result.kind === 'paywall') {
+      expect(result.feature).toBe('session');
+    }
+  });
+
+  it('returns paywall for flagship-weekly when flagship-only spend exceeds its cap, even if all-models spend is low', async () => {
+    // flagshipWeekly cap for pro = 69 cents. Keep all-models spend (which
+    // also gates session/weekly) low, but push flagship-only spend past 150%.
+    seedRollingUsage({ allModelsUsedCents: 5, flagshipUsedCents: 200 });
+    const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 0 });
+    expect(result.kind).toBe('paywall');
+    if (result.kind === 'paywall') {
+      expect(result.feature).toBe('flagship_weekly');
+    }
+  });
+
+  it('skips all rolling-window checks for tiers with no derived budget (hobby normalizes to free -> 0)', async () => {
+    seedRollingUsage({ allModelsUsedCents: 999_999, flagshipUsedCents: 999_999 });
+    const result = await assertQuota({ ...BASE_OPTS, tier: 'hobby', requestedTokens: 100 });
+    // hobby's monthly token check still runs (tokenCapPerMonth=2M) but with
+    // an empty token_credits row (0 used) that's well under 80%.
+    expect(result.kind).toBe('ok');
+  });
+
+  it('fails open (ok) when the rolling-usage query errors', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('from credit_transactions')) {
+        return Promise.reject(new Error('DB unavailable'));
+      }
+      return Promise.resolve([]);
+    });
+    const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 100 });
+    expect(result.kind).toBe('ok');
   });
 });
 

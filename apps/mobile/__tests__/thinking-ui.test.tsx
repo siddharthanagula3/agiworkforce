@@ -1,26 +1,21 @@
 /**
- * Tests for ThinkingLine, ThinkingBottomSheet, and StreamingIndicator.
+ * Tests for ThinkingChip and StreamingIndicator.
  *
- * ThinkingLine:
- *  - Shows "Thinking..." during streaming
- *  - Shows "Thought for X.Xs" after completion
- *  - Is tappable (calls onPress)
- *
- * ThinkingBottomSheet:
- *  - Renders title "Thought process"
- *  - Shows thinking text content
- *  - Strips <thinking>/<reasoning> XML tags
- *  - Appends "..." while streaming
+ * ThinkingChip:
+ *  - Ticks a LIVE "Thinking for Xs" timer while reasoning streams (real
+ *    interval-driven state, not a static label)
+ *  - Collapses to a static "Thought for Xs" once streaming completes
+ *  - Tap expands the raw reasoning text
  *
  * StreamingIndicator:
- *  - Renders teal sparkle character
- *  - Has "Generating response" accessibility label
+ *  - Renders with "Generating response" accessibility label
+ *  - Has "progressbar" accessibility role
  */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — avoid React.createElement(RN.*) inside factories to prevent
@@ -29,25 +24,17 @@ import { render, fireEvent } from '@testing-library/react-native';
 
 jest.mock('lucide-react-native', () => ({
   Clock: jest.fn().mockReturnValue(null),
+  ChevronDown: jest.fn().mockReturnValue(null),
   ChevronRight: jest.fn().mockReturnValue(null),
   X: jest.fn().mockReturnValue(null),
 }));
 
-jest.mock('@gorhom/bottom-sheet', () => {
-  const mockBottomSheet = jest.fn().mockImplementation(({ children }) => children);
-  const mockBottomSheetScrollView = jest.fn().mockImplementation(({ children }) => children);
-  return {
-    __esModule: true,
-    default: mockBottomSheet,
-    BottomSheetBackdrop: jest.fn().mockReturnValue(null),
-    BottomSheetScrollView: mockBottomSheetScrollView,
-  };
-});
-
 jest.mock('react-native-reanimated', () => {
+  const mockAnimated = jest.fn().mockImplementation(({ children, ...props }) => {
+    const { View } = require('react-native');
+    return require('react').createElement(View, props, children);
+  });
   const mockAnimatedText = jest.fn().mockImplementation(({ children, ...props }) => {
-    // Return a native Text-like element via require inside the implementation
-    // (not in the factory scope, so NativeWind won't transform it)
     const { Text } = require('react-native');
     return require('react').createElement(Text, props, children);
   });
@@ -55,14 +42,16 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: {
-      View: jest.fn().mockImplementation(({ children }) => children),
+      View: mockAnimated,
       Text: mockAnimatedText,
     },
+    FadeIn: { duration: jest.fn(() => ({})) },
+    FadeOut: { duration: jest.fn(() => ({})) },
     useSharedValue: jest.fn((initial) => ({ value: initial })),
     useAnimatedStyle: jest.fn((factory) => factory()),
     withRepeat: jest.fn(),
     withSequence: jest.fn(),
-    withTiming: jest.fn(),
+    withTiming: jest.fn((v) => v),
     Easing: { inOut: jest.fn(() => jest.fn()), ease: {} },
     cancelAnimation: jest.fn(),
   };
@@ -72,171 +61,94 @@ jest.mock('react-native-reanimated', () => {
 // Import modules under test
 // ---------------------------------------------------------------------------
 
-import { ThinkingLine } from '../src/features/chat/components/ThinkingLine';
-import { ThinkingBottomSheet } from '../src/features/chat/components/ThinkingBottomSheet';
+import { ThinkingChip } from '../src/features/chat/components/ThinkingChip';
 import { StreamingIndicator } from '../src/features/chat/components/StreamingIndicator';
 
 // ---------------------------------------------------------------------------
-// ThinkingLine tests
+// ThinkingChip tests
 // ---------------------------------------------------------------------------
 
-describe('ThinkingLine', () => {
-  it('shows "Thinking..." when isStreaming is true', () => {
-    const { getByText } = render(<ThinkingLine isStreaming onPress={jest.fn()} />);
-
-    expect(getByText('Thinking...')).toBeTruthy();
+describe('ThinkingChip', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
   });
 
-  it('shows "Thought for X.Xs" after completion with duration', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('ticks a live "Thinking for Xs" timer while streaming', () => {
+    const startedAt = Date.now();
     const { getByText } = render(
-      <ThinkingLine isStreaming={false} duration={3.5} onPress={jest.fn()} />,
+      <ThinkingChip thinkingText="Analyzing the request" isStreaming startedAtMs={startedAt} />,
     );
 
-    expect(getByText('Thought for 3.5s')).toBeTruthy();
+    expect(getByText(/Thinking for 0s/)).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(getByText(/Thinking for 3s/)).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(4000);
+    });
+    expect(getByText(/Thinking for 7s/)).toBeTruthy();
   });
 
-  it('shows "Thought for 0.0s" for zero duration', () => {
-    const { getByText } = render(
-      <ThinkingLine isStreaming={false} duration={0} onPress={jest.fn()} />,
+  it('stops ticking and shows the static measured duration once done', () => {
+    const startedAt = Date.now();
+    const { getByText, rerender } = render(
+      <ThinkingChip thinkingText="Analyzing" isStreaming startedAtMs={startedAt} />,
     );
 
-    expect(getByText('Thought for 0.0s')).toBeTruthy();
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    rerender(
+      <ThinkingChip
+        thinkingText="Analyzing"
+        isStreaming={false}
+        duration={2.4}
+        startedAtMs={startedAt}
+      />,
+    );
+
+    expect(getByText('Thought for 2s')).toBeTruthy();
+    // No interval keeps running after completion.
+    act(() => {
+      jest.advanceTimersByTime(10_000);
+    });
+    expect(getByText('Thought for 2s')).toBeTruthy();
   });
 
-  it('shows "Thought process" when not streaming and no duration', () => {
-    const { getByText } = render(<ThinkingLine isStreaming={false} onPress={jest.fn()} />);
+  it('falls back to the reasoning phrase while streaming without a start timestamp', () => {
+    const { queryByText } = render(<ThinkingChip thinkingText="Analyzing the data" isStreaming />);
 
-    expect(getByText('Thought process')).toBeTruthy();
+    expect(queryByText(/Thinking for/)).toBeNull();
   });
 
-  it('calls onPress when tapped', () => {
-    const onPress = jest.fn();
-    const { getByRole } = render(<ThinkingLine isStreaming duration={2.0} onPress={onPress} />);
+  it('expands to show the raw reasoning text on tap after completion', () => {
+    const { getByText, queryByText, getByRole } = render(
+      <ThinkingChip
+        thinkingText="Step 1: consider the constraints"
+        isStreaming={false}
+        duration={3}
+      />,
+    );
+
+    // Collapsed by default once done.
+    expect(queryByText('Step 1: consider the constraints')).toBeNull();
 
     fireEvent.press(getByRole('button'));
-    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(getByText('Step 1: consider the constraints')).toBeTruthy();
   });
 
-  it('has the correct accessibility label when streaming', () => {
-    const { getByLabelText } = render(<ThinkingLine isStreaming onPress={jest.fn()} />);
+  it('renders nothing for an empty completed thinking block', () => {
+    const { toJSON } = render(<ThinkingChip thinkingText="   " isStreaming={false} />);
 
-    expect(getByLabelText('Thinking.... Tap to view thought process.')).toBeTruthy();
-  });
-
-  it('has the correct accessibility label when completed', () => {
-    const { getByLabelText } = render(
-      <ThinkingLine isStreaming={false} duration={5.2} onPress={jest.fn()} />,
-    );
-
-    expect(getByLabelText('Thought for 5.2s. Tap to view thought process.')).toBeTruthy();
-  });
-
-  it('formats long durations correctly', () => {
-    const { getByText } = render(
-      <ThinkingLine isStreaming={false} duration={120.456} onPress={jest.fn()} />,
-    );
-
-    expect(getByText('Thought for 120.5s')).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ThinkingBottomSheet tests
-// ---------------------------------------------------------------------------
-
-describe('ThinkingBottomSheet', () => {
-  it('renders the "Thought process" title', () => {
-    const { getByText } = render(
-      <ThinkingBottomSheet
-        thinkingText="Some reasoning"
-        isStreaming={false}
-        sheetIndex={0}
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(getByText('Thought process')).toBeTruthy();
-  });
-
-  it('shows thinking text content', () => {
-    const { getByText } = render(
-      <ThinkingBottomSheet
-        thinkingText="Let me analyze this step by step."
-        isStreaming={false}
-        sheetIndex={0}
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(getByText('Let me analyze this step by step.')).toBeTruthy();
-  });
-
-  it('strips <thinking> XML tags from content', () => {
-    const { getByText, queryByText } = render(
-      <ThinkingBottomSheet
-        thinkingText="<thinking>Analysis of the problem</thinking>"
-        isStreaming={false}
-        sheetIndex={0}
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(getByText('Analysis of the problem')).toBeTruthy();
-    expect(queryByText('<thinking>')).toBeNull();
-  });
-
-  it('strips <reasoning> XML tags from content', () => {
-    const { getByText, queryByText } = render(
-      <ThinkingBottomSheet
-        thinkingText="<reasoning>Deep thought here</reasoning>"
-        isStreaming={false}
-        sheetIndex={0}
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(getByText('Deep thought here')).toBeTruthy();
-    expect(queryByText('<reasoning>')).toBeNull();
-  });
-
-  it('appends "..." while streaming', () => {
-    const { getByText } = render(
-      <ThinkingBottomSheet
-        thinkingText="Working on it"
-        isStreaming
-        sheetIndex={0}
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(getByText('Working on it...')).toBeTruthy();
-  });
-
-  it('does not append "..." after streaming completes', () => {
-    const { getByText, queryByText } = render(
-      <ThinkingBottomSheet
-        thinkingText="Final answer"
-        isStreaming={false}
-        sheetIndex={0}
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(getByText('Final answer')).toBeTruthy();
-    expect(queryByText('Final answer...')).toBeNull();
-  });
-
-  it('has a close button with proper accessibility', () => {
-    const { getByLabelText } = render(
-      <ThinkingBottomSheet
-        thinkingText="text"
-        isStreaming={false}
-        sheetIndex={0}
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(getByLabelText('Close thought process')).toBeTruthy();
+    expect(toJSON()).toBeNull();
   });
 });
 

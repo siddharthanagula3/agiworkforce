@@ -71,7 +71,7 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
     id: 'pro',
     label: 'Pro',
     monthlyPriceUsd: 20,
-    yearlyPriceUsd: 204,
+    yearlyPriceUsd: 200,
     monthlyUsageBudgetUsd: 10,
   },
   max: {
@@ -84,8 +84,8 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
   team: {
     id: 'team',
     label: 'Team',
-    monthlyPriceUsd: 25,
-    yearlyPriceUsd: 240,
+    monthlyPriceUsd: 30,
+    yearlyPriceUsd: 299,
   },
   enterprise: {
     id: 'enterprise',
@@ -186,4 +186,54 @@ export function getPlanDailyUsageBudgetUsd(plan: string | null | undefined): num
 export function getPlanPriceInr(plan: string | null | undefined): number | null {
   const pricing = getBillingPlanPricing(plan);
   return typeof pricing.monthlyPriceInr === 'number' ? pricing.monthlyPriceInr : null;
+}
+
+/**
+ * Weekly included-usage budget in cents — a rolling-window pacing layer on
+ * top of the monthly budget (founder decision, 2026-07-05), not a
+ * replacement for it. Derived as monthly × 12/52 (an even weekly slice of
+ * the monthly budget; 52 weeks ÷ 12 months ≈ 4.33 weeks/month). Monthly
+ * credits remain the real billing-period cap enforced via `token_credits`;
+ * this only paces spend within that same pool more evenly across the month.
+ */
+export function getPlanWeeklyUsageBudgetCents(plan: string | null | undefined): number {
+  return Math.round((getPlanUsageBudgetCents(plan) * 12) / 52);
+}
+
+export function getPlanWeeklyUsageBudgetUsd(plan: string | null | undefined): number {
+  return getPlanWeeklyUsageBudgetCents(plan) / 100;
+}
+
+/**
+ * Fraction of the weekly budget a single rolling 5-hour session may consume
+ * (founder decision, 2026-07-05) — mirrors Claude's session-pacing pattern.
+ */
+export const SESSION_OF_WEEKLY_BUDGET_RATIO = 0.2;
+
+/** Rolling 5-hour session budget in cents: `SESSION_OF_WEEKLY_BUDGET_RATIO` of the weekly budget. */
+export function getPlanSessionUsageBudgetCents(plan: string | null | undefined): number {
+  return Math.round(getPlanWeeklyUsageBudgetCents(plan) * SESSION_OF_WEEKLY_BUDGET_RATIO);
+}
+
+export function getPlanSessionUsageBudgetUsd(plan: string | null | undefined): number {
+  return getPlanSessionUsageBudgetCents(plan) / 100;
+}
+
+/**
+ * Fraction of the weekly budget reserved for flagship-model usage
+ * specifically (the "Fable only" style sub-bucket, distinct from the
+ * "All models" weekly bucket). Matches the existing 30%-of-parent-budget
+ * convention already used by `calculate_daily_limit` in 0020_functions.sql,
+ * for consistency with the rest of the credit system rather than inventing
+ * a new ratio.
+ */
+export const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
+
+/** Rolling weekly budget in cents for flagship-model usage only. */
+export function getPlanFlagshipWeeklyUsageBudgetCents(plan: string | null | undefined): number {
+  return Math.round(getPlanWeeklyUsageBudgetCents(plan) * FLAGSHIP_OF_WEEKLY_BUDGET_RATIO);
+}
+
+export function getPlanFlagshipWeeklyUsageBudgetUsd(plan: string | null | undefined): number {
+  return getPlanFlagshipWeeklyUsageBudgetCents(plan) / 100;
 }

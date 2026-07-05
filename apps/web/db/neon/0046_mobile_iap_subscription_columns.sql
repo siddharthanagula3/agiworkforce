@@ -18,8 +18,8 @@
 -- Both are nullable + unique: a given subscription row is either
 -- Stripe-billed, Apple-billed, or Google-billed, never more than one of each.
 --
--- NOT APPLIED — draft only, needs explicit approval before running against
--- the shared Neon database.
+-- APPLIED to production — confirmed 2026-07-04 (columns + widened
+-- plan_tier constraint verified present on the production branch).
 
 ALTER TABLE public.subscriptions
   ADD COLUMN IF NOT EXISTS apple_original_transaction_id text UNIQUE,

@@ -500,9 +500,15 @@ export default function RootLayout() {
   // C1c: App Intents / Siri deep links — agiworkforce://intent/<verb>?<params>
   // Dispatched natively from native/ios/AGIAppIntents/*.swift (AGIIntentDispatch)
   // when a user invokes a Siri phrase, Spotlight action, or Shortcuts automation.
+  // On Android, MainActivity.kt rewrites external shares (ACTION_SEND) and
+  // selected-text actions (ACTION_PROCESS_TEXT) onto the same seam as the
+  // 'share' verb, because RN's Linking only surfaces intent data URIs — the
+  // share payload lives in EXTRA_TEXT/EXTRA_PROCESS_TEXT and never reaches JS
+  // otherwise. `useLinkingURL()` covers both cold start (expo-linking captures
+  // intent.data in the activity's onCreate) and warm start (onNewIntent).
   // Text-bearing verbs route through the existing share-preview review screen
-  // (same HIGH-MOB-03 pattern as external shares) so a Siri mis-transcription
-  // is never auto-sent to the model without the user seeing it first.
+  // (HIGH-MOB-03) so shared text or a Siri mis-transcription is never
+  // auto-sent to the model without the user seeing it first.
   useEffect(() => {
     if (!url || !isInitialized) return;
 
@@ -554,6 +560,18 @@ export default function RootLayout() {
           const message = when ? `Remind me to ${reminder} at ${when}` : `Remind me to ${reminder}`;
           router.push(
             `/(app)/share-preview?text=${encodeURIComponent(message)}` as Parameters<
+              typeof router.push
+            >[0],
+          );
+        }
+        break;
+      }
+      case 'share': {
+        // Android share sheet / text selection (rewritten by MainActivity.kt).
+        const text = getParam('text');
+        if (text && text.trim()) {
+          router.push(
+            `/(app)/share-preview?text=${encodeURIComponent(text)}` as Parameters<
               typeof router.push
             >[0],
           );
@@ -612,41 +630,12 @@ export default function RootLayout() {
     router.replace({ pathname: '/(auth)/reset-password' as const });
   }, [url, isInitialized, router]);
 
-  // C1b: Share intent handling — receive text/URL shared from other apps
-  //
-  // HIGH-MOB-03 fix (2026-05-04): shared content is no longer auto-sent to the
-  // LLM. We navigate to the share-preview screen where the user reviews and
-  // explicitly taps "Send to Chat". The preview screen sanitises the content
-  // and enforces the 100 KB length cap.
-  // #386: share-to-chat is a LOCAL-first feature and must not depend on the
-  // always-null `session` (that gate made external shares silently no-op).
-  // Gate only on app readiness.
-  useEffect(() => {
-    if (!isInitialized) return;
-
-    const handleShare = async () => {
-      const initialUrl = await Linking.getInitialURL();
-      if (!initialUrl) return;
-
-      // Android share intents come as plain text content, not URLs.
-      // expo-linking captures these in the URL query params.
-      const parsed = Linking.parse(initialUrl);
-      const sharedText =
-        (parsed.queryParams?.['android.intent.extra.TEXT'] as string | undefined) ??
-        (parsed.queryParams?.text as string | undefined);
-
-      if (sharedText && sharedText.trim()) {
-        // Navigate to preview — never auto-send.
-        router.push(
-          `/(app)/share-preview?text=${encodeURIComponent(sharedText)}` as Parameters<
-            typeof router.push
-          >[0],
-        );
-      }
-    };
-
-    handleShare();
-  }, [isInitialized, router]);
+  // NOTE: external shares (Android ACTION_SEND / ACTION_PROCESS_TEXT) are
+  // handled by the C1c 'share' verb above. The previous getInitialURL()-based
+  // handler here was dead code: RN's getInitialURL() returns intent.getData(),
+  // which is null for ACTION_SEND — the payload lives in EXTRA_TEXT, which
+  // never reaches JS. MainActivity.kt now rewrites those intents to
+  // agiworkforce://intent/share?text=… before RN sees them.
 
   // C2: Android hardware back button — navigate back or double-press to exit
   useEffect(() => {
