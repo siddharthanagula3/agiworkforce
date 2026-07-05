@@ -16,6 +16,7 @@ The repo is a pnpm + cargo monorepo with seven surfaces under `apps/` (cli, desk
 - Follow `docs/engineering/agent-harness-rollout.md` for Claude Code-style context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
 - Follow `docs/engineering/naming-conventions.md` for product names, CLI command examples, file/folder names, commits, and hooks.
 - Follow `docs/engineering/service-layer-architecture.md` when extracting repeated route/action/command mechanics into shared services.
+- PR bodies: do not include footers like `🤖 Generated with [Claude Code]`. Keep PR descriptions clean and focused on the work.
 - Keep Claude memory and `.claude/` project files as tool-specific context, not the repo source of truth.
 - Do not duplicate repo maps or command lists here. Update `AGENTS.md` and `docs/agent-context/*` instead.
 - If Claude Code finds a repeated bug class, update `docs/agent-context/known-flaws.md`.
