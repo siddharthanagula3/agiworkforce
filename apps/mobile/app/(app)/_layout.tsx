@@ -103,9 +103,6 @@ export default function AppLayout() {
       {/* Notifications */}
       <Drawer.Screen name="notifications/index" options={HIDDEN} />
 
-      {/* Billing / Pricing */}
-      <Drawer.Screen name="billing/index" options={HIDDEN} />
-
       {/* Standalone screens */}
       <Drawer.Screen name="feedback" options={HIDDEN} />
       <Drawer.Screen name="about" options={HIDDEN} />

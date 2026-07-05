@@ -26,6 +26,7 @@ describe('Voice record and send — on-device STT', () => {
       delete: false,
       permissions: {
         microphone: 'YES',
+        speech: 'YES',
       },
     });
   });
