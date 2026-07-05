@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { View, Pressable, Alert, ScrollView } from 'react-native';
+import { View, Pressable, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { Download, Menu, SquarePen } from 'lucide-react-native';
@@ -503,87 +503,93 @@ export default function ChatTabScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <KeyboardAvoidingView
         style={{ flex: 1 }}
-        contentContainerStyle={{
-          // Vertically center the greeting block (mode toggle + mark + greeting)
-          // like the Claude mobile new-chat screen, instead of top-aligning it.
-          // `flexGrow:1 + justifyContent:center` is the standard RN scroll-center.
-          flexGrow: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingHorizontal: 24,
-          paddingVertical: 24,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
-        <View style={{ marginBottom: 18 }}>
-          <ModeToggle
-            mode={activeMode}
-            cloudJoined={waitlistJoined}
-            cloudUnlocked={cloudUnlocked}
-            waitlistRank={waitlistRank}
-            onTapLocal={handleTapLocalMode}
-            onTapCloud={handleTapCloudMode}
-          />
-        </View>
-        {/* Centered brand mark above the greeting — the empty-state visual anchor,
-            mirroring the Claude mobile new-chat screen (ref: claude_reference/
-            263_mobile__new-chat-empty). Uses AGI's own mark, not Claude's star. */}
-        <View style={{ marginBottom: 14 }}>
-          <AgiMark size={44} />
-        </View>
-        <Text
-          style={{
-            fontSize: 28,
-            lineHeight: 34,
-            fontWeight: '500',
-            color: c.textPrimary,
-            textAlign: 'center',
-            marginBottom: 10,
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            // Vertically center the greeting block (mode toggle + mark + greeting)
+            // like the Claude mobile new-chat screen, instead of top-aligning it.
+            // `flexGrow:1 + justifyContent:center` is the standard RN scroll-center.
+            flexGrow: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 24,
+            paddingVertical: 24,
           }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
         >
-          {getTimeOfDayGreeting()}
-        </Text>
-        {activeMode === 'cloud' ? (
+          <View style={{ marginBottom: 18 }}>
+            <ModeToggle
+              mode={activeMode}
+              cloudJoined={waitlistJoined}
+              cloudUnlocked={cloudUnlocked}
+              waitlistRank={waitlistRank}
+              onTapLocal={handleTapLocalMode}
+              onTapCloud={handleTapCloudMode}
+            />
+          </View>
+          {/* Centered brand mark above the greeting — the empty-state visual anchor,
+              mirroring the Claude mobile new-chat screen (ref: claude_reference/
+              263_mobile__new-chat-empty). Uses AGI's own mark, not Claude's star. */}
+          <View style={{ marginBottom: 14 }}>
+            <AgiMark size={44} />
+          </View>
           <Text
             style={{
-              fontSize: 14,
-              lineHeight: 20,
-              color: c.textMuted,
+              fontSize: 28,
+              lineHeight: 34,
+              fontWeight: '500',
+              color: c.textPrimary,
               textAlign: 'center',
-              maxWidth: 300,
+              marginBottom: 10,
             }}
           >
-            {modeDescription}
+            {getTimeOfDayGreeting()}
           </Text>
-        ) : (
-          <View style={{ width: '100%', marginTop: 8 }}>
-            {!hasReadyLocalModel && (
-              <DownloadModelBanner
-                onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
-              />
-            )}
-          </View>
-        )}
-      </ScrollView>
+          {activeMode === 'cloud' ? (
+            <Text
+              style={{
+                fontSize: 14,
+                lineHeight: 20,
+                color: c.textMuted,
+                textAlign: 'center',
+                maxWidth: 300,
+              }}
+            >
+              {modeDescription}
+            </Text>
+          ) : (
+            <View style={{ width: '100%', marginTop: 8 }}>
+              {!hasReadyLocalModel && (
+                <DownloadModelBanner
+                  onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
+                />
+              )}
+            </View>
+          )}
+        </ScrollView>
 
-      {/* Mode-aware: shows local projects in Local, cloud projects in Cloud. */}
-      <ProjectSelectorBar />
+        {/* Mode-aware: shows local projects in Local, cloud projects in Cloud. */}
+        <ProjectSelectorBar />
 
-      <ChatInput
-        onSend={handleSend}
-        onOpenModelPicker={handleOpenModelPicker}
-        onOpenVoiceMode={handleOpenVoiceMode}
-        onOpenCompare={handleOpenCompare}
-        onOpenAddToChat={handleOpenAddToChat}
-        onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
-        attachRef={chatInputAttachRef}
-        attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-        draftKey="new-chat"
-      />
+        <ChatInput
+          onSend={handleSend}
+          onOpenModelPicker={handleOpenModelPicker}
+          onOpenVoiceMode={handleOpenVoiceMode}
+          onOpenCompare={handleOpenCompare}
+          onOpenAddToChat={handleOpenAddToChat}
+          onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
+          attachRef={chatInputAttachRef}
+          attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+          draftKey="new-chat"
+        />
+      </KeyboardAvoidingView>
 
       {/* Add to Chat bottom sheet */}
       <AddToChatSheet
