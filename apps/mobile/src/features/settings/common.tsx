@@ -4,7 +4,7 @@ import { View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, ChevronRight, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
@@ -92,6 +92,63 @@ export function SettingsInfo({
         <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>{title}</Text>
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{body}</Text>
+    </View>
+  );
+}
+
+/**
+ * Shown on Cloud-only settings screens (Billing, Usage, etc.) when the
+ * chat's Local/Cloud egress toggle is set to Local. `guardedFetch`
+ * (lib/egressGuard.ts) blocks EVERY our-cloud API call — including this
+ * screen's own data fetch — before any network I/O while that toggle is
+ * Local, by design (a zero-leak privacy guarantee for chat content). But
+ * these settings screens are reached only while already signed in and have
+ * nothing to do with chat privacy, so silently showing stale/cached data
+ * with no explanation reads as "stuck loading" or "wrong plan" rather than
+ * "blocked by an unrelated toggle" — this banner makes that visible and
+ * actionable instead of silent.
+ */
+export function CloudSyncBlockedBanner({ onSwitchToCloud }: { onSwitchToCloud: () => void }) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        borderRadius: cardRadius,
+        backgroundColor: colors.dangerSurface,
+        borderWidth: 1,
+        borderColor: colors.dangerBorder,
+        padding: 14,
+        marginBottom: 24,
+        gap: 10,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <CloudOff size={18} color={colors.agentError} />
+        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}>
+          Chat is set to Local Mode
+        </Text>
+      </View>
+      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+        This can&apos;t sync with your real plan and usage while chat is in Local Mode. Switch to
+        AGI Cloud to see up-to-date info.
+      </Text>
+      <Pressable
+        onPress={onSwitchToCloud}
+        accessibilityRole="button"
+        accessibilityLabel="Switch to AGI Cloud"
+        style={({ pressed }) => ({
+          alignSelf: 'flex-start',
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+          borderRadius: 10,
+          backgroundColor: colors.teal,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Text style={{ color: colors.white, fontSize: 13, fontWeight: '600' }}>
+          Switch to AGI Cloud
+        </Text>
+      </Pressable>
     </View>
   );
 }

@@ -23,6 +23,13 @@ export const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'wss://signaling.agiwork
 export const TIMEOUTS = {
   DEFAULT: 30_000,
   STREAMING: 120_000,
+  /**
+   * Max silence between stream chunks once the first token has arrived. A
+   * socket killed without an error (iOS suspending the app mid-stream, cell
+   * handoff) otherwise leaves `reader.read()` pending forever with the
+   * composer stuck in the streaming state.
+   */
+  STREAM_STALL: 45_000,
   UPLOAD: 60_000,
 } as const;
 

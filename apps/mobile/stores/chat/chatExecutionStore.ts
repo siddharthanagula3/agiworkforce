@@ -1,5 +1,6 @@
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { create } from 'zustand';
+import { TIMEOUTS } from '@/lib/constants';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
 import { QueueFullError } from '@agiworkforce/runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
@@ -21,6 +22,7 @@ import {
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
 import { isCloudManagedModelId, isSelectableModelId } from '@/src/features/model-picker/service';
+import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
@@ -57,10 +59,26 @@ export interface SendMessageOptions {
   mode?: ChatMode;
   style?: ChatStyle;
   taskInstruction?: string;
+  /**
+   * Fired the moment the user message is accepted (committed to the
+   * transcript, all pre-flight gates passed). The composer clears its draft on
+   * this signal — never optimistically on tap — so a send blocked by a
+   * pre-flight gate (auth, egress, upload consent, content filter) keeps the
+   * user's text intact.
+   */
+  onAccepted?: () => void;
 }
 
 interface ExecutionState {
   isStreaming: boolean;
+  /**
+   * Conversation ids with a live stream — the reactive mirror of the
+   * module-level `streamingConversations` set. Screens must key their
+   * composer streaming state off THIS (scoped to their conversation), not the
+   * global `isStreaming`, or switching conversations mid-stream shows a stop
+   * button for a conversation that isn't streaming.
+   */
+  streamingConversationIds: string[];
   streamingContent: string;
   streamingReasoning: string;
   error: string | null;
@@ -68,13 +86,14 @@ interface ExecutionState {
   retryAttempts: Record<string, number>;
   isEditing: boolean;
 
+  /** Resolves true once the message was accepted into the transcript, false when a pre-flight gate blocked it. */
   sendMessage: (
     conversationId: string,
     content: string,
     model: string,
     attachments?: Attachment[],
     options?: SendMessageOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   stopStreaming: () => void;
   retryMessage: (conversationId: string, messageId: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
@@ -86,10 +105,45 @@ interface ExecutionState {
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const streamingConversations = new Set<string>();
+
+/** Reactive streaming flags derived from the module-level set — spread into
+ *  every `set()` that follows a `streamingConversations` add/delete so the
+ *  per-conversation `streamingConversationIds` state never drifts. */
+function streamingFlags(): { isStreaming: boolean; streamingConversationIds: string[] } {
+  return {
+    isStreaming: streamingConversations.size > 0,
+    streamingConversationIds: Array.from(streamingConversations),
+  };
+}
+
+// Foreground stall recovery: iOS suspends the app shortly after backgrounding
+// and can tear down the stream socket without ever rejecting the pending
+// read(). The rolling stall watchdog in services/streaming.ts fires eventually
+// once JS resumes; this listener makes recovery immediate on foreground —
+// any "streaming" conversation whose last delta predates the stall window is
+// aborted, which routes through sendMessage's finally cleanup and returns the
+// composer to its resting state instead of spinning forever.
+AppState.addEventListener('change', (nextState) => {
+  if (nextState !== 'active') return;
+  const now = Date.now();
+  for (const cid of Array.from(streamingConversations)) {
+    const last = lastDeltaTimes.get(cid) ?? 0;
+    if (now - last > TIMEOUTS.STREAM_STALL) {
+      abortControllers.get(cid)?.abort();
+    }
+  }
+});
 /** Tracks conversation IDs that were cancelled before streaming started. */
 const cancelledBeforeStream = new Set<string>();
 const MAX_RETRY_ATTEMPTS = 3;
 const thinkingStartTimes = new Map<string, number>();
+/** First moment display content grew AFTER reasoning started — "Thought for Xs"
+ *  measures the thinking phase only, not the whole answer stream. */
+const thinkingEndTimes = new Map<string, number>();
+/** Last wall-clock time a delta arrived per streaming conversation — the
+ *  foreground stall check below uses it to abort streams iOS silently killed
+ *  while the app was suspended. */
+const lastDeltaTimes = new Map<string, number>();
 const MAX_UPLOAD_RETRIES = 2;
 const DEFAULT_LOCAL_SYSTEM_PROMPT =
   "You are AGI, a concise helpful assistant running locally on this device. Answer the user's current request directly. Keep final answers separate from any thinking or reasoning text. Do not invent a different prompt or test unless the user explicitly asks you to create one.";
@@ -403,6 +457,42 @@ const _artifactThemeColors = agiNativeColors.dark;
  * interrupts the chat flow. Called after onDone / local finalContent — not
  * per-token.
  */
+/**
+ * Derive chat-message artifacts (the shapes InlineArtifactCard renders) from a
+ * completed assistant response. Non-mobile-renderable types (html, mermaid,
+ * react…) map to 'code' — mobile deliberately shows raw source, never executes
+ * model output. Non-blocking: failures return [] so chat flow never breaks.
+ */
+function deriveChatMessageArtifacts(
+  content: string,
+  conversationId: string,
+  messageId: string,
+  createdAt: string,
+): NonNullable<ChatMessage['artifacts']> {
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const { deriveArtifacts } =
+      require('@agiworkforce/services') as typeof import('@agiworkforce/services');
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    const shared = deriveArtifacts(content, {
+      conversationId,
+      messageId,
+      include: 'code',
+      minCodeLines: 4,
+      now: createdAt,
+    });
+    return shared.map((s) => ({
+      id: s.id,
+      type: s.type === 'chart' || s.type === 'document' || s.type === 'image' ? s.type : 'code',
+      title: s.title,
+      content: s.content,
+      ...(s.language && s.language !== 'text' ? { language: s.language } : {}),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function captureArtifactsFromMessage(
   content: string,
   messageId: string,
@@ -433,6 +523,7 @@ function captureArtifactsFromMessage(
 
 export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   isStreaming: false,
+  streamingConversationIds: [],
   streamingContent: '',
   streamingReasoning: '',
   error: null,
@@ -452,7 +543,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const verdict = checkContentFilter(content, true);
       if (!verdict.allowed) {
         Alert.alert('Content not available', verdict.refusal);
-        return;
+        return false;
       }
     }
 
@@ -465,7 +556,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           'Queue full',
           `The "${err.lane}" lane is at capacity. Please wait for prior sends to drain.`,
         );
-        return;
+        return false;
       }
       throw err;
     }
@@ -494,17 +585,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       set({
         error: 'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
         paywallError: null,
-        isStreaming: streamingConversations.size > 0,
+        ...streamingFlags(),
       });
-      return;
+      return false;
     }
     if (executionMode === 'cloud' && !isCloudModel) {
       set({
         error: 'This is an AGI Cloud chat. Start a separate Local Mode chat to use local models.',
         paywallError: null,
-        isStreaming: streamingConversations.size > 0,
+        ...streamingFlags(),
       });
-      return;
+      return false;
     }
     // C1: Cloud auth gate — checked before invite/paywall gates so "sign in"
     // takes priority. isClerkLoaded guard prevents false-rejection during the
@@ -515,26 +606,26 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         set({
           error: 'Sign in to use AGI Cloud.',
           paywallError: null,
-          isStreaming: streamingConversations.size > 0,
+          ...streamingFlags(),
         });
-        return;
+        return false;
       }
     }
     if (executionMode === 'cloud' && remoteDisabledReason) {
       set({
         error: remoteDisabledReason,
         paywallError: null,
-        isStreaming: streamingConversations.size > 0,
+        ...streamingFlags(),
       });
-      return;
+      return false;
     }
     if (!shouldUseLocalRuntime && remoteDisabledReason) {
       set({
         error: remoteDisabledReason,
         paywallError: null,
-        isStreaming: streamingConversations.size > 0,
+        ...streamingFlags(),
       });
-      return;
+      return false;
     }
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
@@ -561,9 +652,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         set({
           error: 'File upload cancelled. Re-send without files or tap Upload & Send to confirm.',
           paywallError: null,
-          isStreaming: streamingConversations.size > 0,
+          ...streamingFlags(),
         });
-        return;
+        return false;
       }
 
       try {
@@ -593,9 +684,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           set({
             error: 'Session expired. Please sign in again to upload files.',
             paywallError: null,
-            isStreaming: streamingConversations.size > 0,
+            ...streamingFlags(),
           });
-          return;
+          return false;
         }
         // For other errors, continue without attachments (transient network errors already
         // showed an Alert via uploadWithRetry). This allows the message to be sent even if
@@ -777,18 +868,27 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       mirrorCloudTurn(conversationId, [userMessage], { lastMessage: content });
     }
 
+    // The user message is now committed to the transcript — every pre-flight
+    // gate passed. Signal the composer so it clears its draft NOW (not on tap,
+    // not at stream end).
+    options?.onAccepted?.();
+
     // Guard: if stopStreaming was called before we reached this point, bail out.
+    // Remove the just-inserted empty assistant placeholder — it was committed
+    // above with isStreaming:true and stopStreaming's message sweep ran BEFORE
+    // it existed, so leaving it would strand a spinner bubble forever.
     if (cancelledBeforeStream.has(conversationId)) {
       cancelledBeforeStream.delete(conversationId);
-      return;
+      msgStore.setState((state) => ({
+        messages: {
+          ...state.messages,
+          [conversationId]: (state.messages[conversationId] ?? []).filter(
+            (m) => m.id !== assistantMessageId,
+          ),
+        },
+      }));
+      return true;
     }
-
-    // Clear any stale error from a previous turn/conversation/mode — `error` is
-    // a single shared field, not scoped per-conversation, so without this a
-    // banner like "Local Mode is active, but no on-device model is ready yet"
-    // survives a New Chat + mode switch and shows on top of a message that just
-    // streamed successfully in Cloud mode.
-    set({ isStreaming: true, streamingContent: '', streamingReasoning: '', error: null });
 
     const controller = new AbortController();
     if (abortControllers.size >= MAX_ABORT_CONTROLLERS) {
@@ -800,6 +900,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     abortControllers.set(conversationId, controller);
     streamingConversations.add(conversationId);
+    // Seed the delta clock at stream start so the foreground stall check never
+    // aborts a stream that simply hasn't produced its first token yet.
+    lastDeltaTimes.set(conversationId, Date.now());
+
+    // Clear any stale error from a previous turn/conversation/mode — `error` is
+    // a single shared field, not scoped per-conversation, so without this a
+    // banner like "Local Mode is active, but no on-device model is ready yet"
+    // survives a New Chat + mode switch and shows on top of a message that just
+    // streamed successfully in Cloud mode.
+    set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
 
     try {
       if (shouldUseLocalRuntime) {
@@ -822,6 +932,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             thinkingStartTimes.set(conversationId, Date.now());
           }
 
+          const thinkingStartedAt = thinkingStartTimes.get(conversationId);
           const currentMsgStore = getMsgStore();
           const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
           const updatedMsgs = msgs.map((m) =>
@@ -835,6 +946,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...m.metadata,
                     localMode: true,
                     localModelId: localRef.modelId,
+                    // Live thinking-timer anchor: ThinkingChip ticks elapsed
+                    // seconds from this while the reply streams.
+                    ...(thinkingStartedAt !== undefined ? { thinkingStartedAt } : {}),
                   },
                 }
               : m,
@@ -858,6 +972,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           onToken: (token) => {
             if (controller.signal.aborted) return;
             if (localFirstTokenAt === 0) localFirstTokenAt = Date.now();
+            lastDeltaTimes.set(conversationId, Date.now());
             localTokenCount += 1;
             localStreamingRaw += token;
             updateLocalStream(parseLocalThinking(localStreamingRaw));
@@ -866,7 +981,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         if (controller.signal.aborted) {
           abortControllers.delete(conversationId);
           streamingConversations.delete(conversationId);
-          return;
+          set({ ...streamingFlags() });
+          return true;
         }
         const parsedFinal = parseLocalThinking(result.text.trim() || localStreamingRaw.trim());
         const finalContent =
@@ -944,18 +1060,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ),
         }));
         set({
-          isStreaming: streamingConversations.size > 0,
+          ...streamingFlags(),
           streamingContent: '',
           streamingReasoning: '',
           error: null,
           paywallError: null,
         });
-        return;
+        return true;
       }
 
       // Per-turn agentic tool-call accumulator. The server streams tool steps
       // (web_search / code execution / MCP) as SSE deltas; we fold them into the
-      // assistant message's toolCalls so InlineToolCall renders them live.
+      // assistant message's toolCalls so ToolCallTimeline renders them live.
       const toolAcc = createToolCallAccumulator();
 
       // Per-turn web search: when the user has the web-search feature enabled
@@ -981,19 +1097,38 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // onto itself across deltas would duplicate the reasoning text.
       let cloudStructuredReasoning = '';
 
+      // Honor the user's per-model Thinking toggle — the same state that drives
+      // the Brain badge on ModelSelectorButton. Hardcoding `thinking: true`
+      // here made that toggle a dead control (thinking ran on every cloud turn
+      // regardless of choice) and broke free-trial sends on non-thinking
+      // models, which the server rejects when thinking/effort is requested
+      // without the capability. Effort rides along only when thinking is on.
+      const thinkingEnabled = useModelStore.getState().thinkingEnabledPerModel[model] ?? false;
+
       await streamChat(
         {
           model,
           messages: historyMessages,
           stream: true,
-          thinking: true,
-          effort: agentControl.effort,
+          thinking: thinkingEnabled,
+          ...(thinkingEnabled ? { effort: agentControl.effort } : {}),
           ...(webSearchEnabled ? { web_search: true } : {}),
         },
         {
           onDelta: (delta: StreamDelta) => {
-            const state = get();
+            // Regression: a chunk already in flight when the user taps Stop would
+            // still land here and unconditionally set isStreaming:true below,
+            // clobbering the false stopStreaming() had just set. Because an abort
+            // never fires onDone, nothing ever flipped it back — the Stop button
+            // and composer got stuck permanently in the "still generating" state.
+            // Every other delta-handling callback in this file already guards on
+            // this; this one didn't.
+            if (controller.signal.aborted) return;
 
+            const state = get();
+            lastDeltaTimes.set(conversationId, Date.now());
+
+            const prevContentLength = cloudContentRaw.length;
             if (delta.content) cloudContentRaw += delta.content;
             const parsedTags = parseLocalThinking(cloudContentRaw);
             const newContent = parsedTags.content;
@@ -1007,6 +1142,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (parsedTags.hasReasoning && !thinkingStartTimes.has(conversationId)) {
               thinkingStartTimes.set(conversationId, Date.now());
             }
+            // "Thought for Xs" measures the THINKING phase: mark its end the
+            // first time answer content grows after reasoning began. Without
+            // this the duration ran to end-of-stream, over-counting a 3s think
+            // + 30s answer as "Thought for 33s".
+            if (
+              delta.content &&
+              !delta.reasoning &&
+              thinkingStartTimes.has(conversationId) &&
+              !thinkingEndTimes.has(conversationId) &&
+              cloudContentRaw.length > prevContentLength &&
+              newContent.length > 0
+            ) {
+              thinkingEndTimes.set(conversationId, Date.now());
+            }
             const newReasoning = [cloudStructuredReasoning, parsedTags.reasoning]
               .filter(Boolean)
               .join('\n\n');
@@ -1014,6 +1163,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);
 
+            const thinkingStartedAt = thinkingStartTimes.get(conversationId);
             const currentMsgStore = getMsgStore();
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
             const updatedMsgs = msgs.map((m) =>
@@ -1024,6 +1174,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     reasoning: newReasoning || undefined,
                     isStreaming: true,
                     ...(toolCalls.length > 0 ? { toolCalls } : {}),
+                    // Live thinking-timer anchor: ThinkingChip ticks elapsed
+                    // seconds from this while reasoning streams.
+                    ...(thinkingStartedAt !== undefined
+                      ? { metadata: { ...m.metadata, thinkingStartedAt } }
+                      : {}),
                   }
                 : m,
             );
@@ -1036,8 +1191,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
           onDone: () => {
             const startedAt = thinkingStartTimes.get(conversationId);
-            const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
+            const endedAt = thinkingEndTimes.get(conversationId) ?? Date.now();
+            const thinkingDuration = startedAt
+              ? Math.max(0, endedAt - startedAt) / 1000
+              : undefined;
             thinkingStartTimes.delete(conversationId);
+            thinkingEndTimes.delete(conversationId);
 
             // Finalize the accumulated tool calls onto the message. mirrorCloudTurn
             // (below) reads this same finalized message, so the tool steps ride
@@ -1046,12 +1205,36 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             const currentMsgStore = getMsgStore();
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
+            // Read the finalized content from THIS turn's message, not the
+            // global streamingContent — under concurrent streams the global
+            // buffer holds whichever conversation last emitted a delta.
+            const finalContent = msgs.find((m) => m.id === assistantMessageId)?.content ?? '';
+            const completedAt = new Date().toISOString();
+            const convTitle =
+              currentMsgStore.getState().conversations.find((c) => c.id === conversationId)
+                ?.title ?? '';
+            // Attach fenced-code artifacts to the message so InlineArtifactCard
+            // renders in cloud chat (was local-only), and feed the gallery.
+            const messageArtifacts = deriveChatMessageArtifacts(
+              finalContent,
+              conversationId,
+              assistantMessageId,
+              completedAt,
+            );
+            captureArtifactsFromMessage(
+              finalContent,
+              assistantMessageId,
+              conversationId,
+              convTitle,
+              completedAt,
+            );
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
                     ...m,
                     isStreaming: false,
                     ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
+                    ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
                     metadata: {
                       ...m.metadata,
                       ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
@@ -1060,7 +1243,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 : m,
             );
 
-            const finalContent = get().streamingContent;
             const preview = finalContent.slice(0, 100);
 
             abortControllers.delete(conversationId);
@@ -1097,7 +1279,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }
 
             set({
-              isStreaming: streamingConversations.size > 0,
+              ...streamingFlags(),
               streamingContent: '',
               streamingReasoning: '',
             });
@@ -1122,7 +1304,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 messages: { ...s.messages, [conversationId]: updatedMsgs },
               }));
               set({
-                isStreaming: streamingConversations.size > 0,
+                ...streamingFlags(),
                 streamingContent: '',
                 streamingReasoning: '',
                 paywallError: {
@@ -1154,7 +1336,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
             }));
             set({
-              isStreaming: streamingConversations.size > 0,
+              ...streamingFlags(),
               streamingContent: '',
               streamingReasoning: '',
               // Surface the prominent one-tap retry (SendErrorBanner) for stream /
@@ -1168,12 +1350,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         },
         controller.signal,
       );
+      return true;
     } catch (caughtErr) {
       thinkingStartTimes.delete(conversationId);
       abortControllers.delete(conversationId);
       streamingConversations.delete(conversationId);
 
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        set({ ...streamingFlags() });
+        return true;
+      }
 
       const currentMsgStore = getMsgStore();
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
@@ -1188,13 +1374,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
         }));
         set({
-          isStreaming: streamingConversations.size > 0,
+          ...streamingFlags(),
           streamingContent: '',
           streamingReasoning: '',
           error: message,
           paywallError: null,
         });
-        return;
+        return true;
       }
 
       if (caughtErr instanceof ApiPaywallError) {
@@ -1207,7 +1393,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
         }));
         set({
-          isStreaming: streamingConversations.size > 0,
+          ...streamingFlags(),
           streamingContent: '',
           streamingReasoning: '',
           paywallError: {
@@ -1216,7 +1402,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             reason: caughtErr.reason,
           },
         });
-        return;
+        return true;
       }
 
       if (caughtErr instanceof RemoteChatDisabledError) {
@@ -1229,13 +1415,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
         }));
         set({
-          isStreaming: streamingConversations.size > 0,
+          ...streamingFlags(),
           streamingContent: '',
           streamingReasoning: '',
           error: caughtErr.message,
           paywallError: null,
         });
-        return;
+        return true;
       }
 
       const updatedMsgs = msgs.map((m) =>
@@ -1251,10 +1437,38 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         messages: { ...s.messages, [conversationId]: updatedMsgs },
       }));
       set({
-        isStreaming: streamingConversations.size > 0,
+        ...streamingFlags(),
         streamingContent: '',
         streamingReasoning: '',
       });
+      return true;
+    } finally {
+      // Structural guarantee against the stuck-composer bug class (Claude's
+      // own iOS app ships this bug): no matter which path the turn took —
+      // clean done, error, abort, or a stream that ended without ever firing
+      // onDone/onError — this turn's bookkeeping is released, the assistant
+      // bubble stops spinning, and the send button returns to rest. All
+      // operations here are idempotent re-runs of what the happy paths do.
+      thinkingStartTimes.delete(conversationId);
+      thinkingEndTimes.delete(conversationId);
+      lastDeltaTimes.delete(conversationId);
+      if (abortControllers.get(conversationId) === controller) {
+        abortControllers.delete(conversationId);
+      }
+      streamingConversations.delete(conversationId);
+      const sweepStore = getMsgStore();
+      const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
+      if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
+        sweepStore.setState((s) => ({
+          messages: {
+            ...s.messages,
+            [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+              m.id === assistantMessageId && m.isStreaming ? { ...m, isStreaming: false } : m,
+            ),
+          },
+        }));
+      }
+      set({ ...streamingFlags() });
     }
   },
 
@@ -1290,7 +1504,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // Reflect whatever is still actually streaming — background conversations
       // must keep running and keep the global flag accurate.
       set({
-        isStreaming: streamingConversations.size > 0,
+        ...streamingFlags(),
         streamingContent: '',
         streamingReasoning: '',
       });
@@ -1298,6 +1512,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
 
     thinkingStartTimes.delete(targetId);
+    thinkingEndTimes.delete(targetId);
+    lastDeltaTimes.delete(targetId);
     const ctrl = abortControllers.get(targetId);
     if (ctrl) {
       ctrl.abort();
@@ -1314,7 +1530,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }));
 
     set({
-      isStreaming: streamingConversations.size > 0,
+      ...streamingFlags(),
       streamingContent: '',
       streamingReasoning: '',
     });
@@ -1322,7 +1538,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
   retryMessage: (conversationId, messageId) => {
     const state = get();
-    if (state.isStreaming) return;
+    // Scope to THIS conversation — a background stream elsewhere must not
+    // block retrying here.
+    if (streamingConversations.has(conversationId)) return;
 
     const msgStore = getMsgStore();
     const msgs = msgStore.getState().messages[conversationId];

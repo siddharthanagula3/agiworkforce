@@ -62,3 +62,8 @@ export function lucideRNToolIcon(
 ): typeof Terminal {
   return BY_NAME[getToolIconName(toolName, category)] ?? Wrench;
 }
+
+/** Resolve an already-known icon name (e.g. from getFileExtensionIconName) directly. */
+export function lucideRNIconByName(iconName: string): typeof Terminal {
+  return BY_NAME[iconName] ?? Wrench;
+}

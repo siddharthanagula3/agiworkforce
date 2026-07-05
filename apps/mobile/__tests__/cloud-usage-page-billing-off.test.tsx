@@ -1,8 +1,8 @@
 /**
  * Companion to cloud-usage-page.test.tsx, split into its own file because it
- * needs FEATURES.billing mocked false from module load — mixing that with
- * the billing-on tests in one file via jest.resetModules() mid-suite breaks
- * React's module singleton in this test environment.
+ * needs FEATURES.usageDashboard mocked false from module load — mixing that
+ * with the dashboard-on tests in one file via jest.resetModules() mid-suite
+ * breaks React's module singleton in this test environment.
  */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -47,11 +47,11 @@ jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
 }));
 
-jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { billing: false } }));
+jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { usageDashboard: false } }));
 
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
 
-describe('Cloud Usage screen — FEATURES.billing off', () => {
+describe('Cloud Usage screen — FEATURES.usageDashboard off', () => {
   it('shows the billing-unavailable placeholder, not a fetch attempt', () => {
     const { getByText } = render(<CloudUsageScreen />);
 

@@ -13,6 +13,8 @@ interface ThinkingChipProps {
   isStreaming?: boolean;
   /** Duration in seconds shown after completion */
   duration?: number;
+  /** Wall-clock ms when thinking began — drives the live elapsed timer while streaming */
+  startedAtMs?: number;
 }
 
 /**
@@ -20,11 +22,18 @@ interface ThinkingChipProps {
  * icon + "REASONING" label + live status) with a chevron that expands the
  * full reasoning text. Mirrors apps/web ThinkingBlock.tsx for cross-surface
  * parity: auto-expanded while streaming, auto-collapses once done unless the
- * user already toggled it manually.
+ * user already toggled it manually. While streaming, a genuinely live
+ * "Thinking for Xs" timer ticks every second from `startedAtMs`.
  */
-export function ThinkingChip({ thinkingText, isStreaming, duration }: ThinkingChipProps) {
+export function ThinkingChip({
+  thinkingText,
+  isStreaming,
+  duration,
+  startedAtMs,
+}: ThinkingChipProps) {
   const colors = useThemeColors();
   const [expanded, setExpanded] = useState(!!isStreaming);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const userToggledRef = useRef(false);
   const prevStreamingRef = useRef(isStreaming);
 
@@ -37,6 +46,14 @@ export function ThinkingChip({ thinkingText, isStreaming, duration }: ThinkingCh
     }
   }, [isStreaming]);
 
+  // Live 1s tick while thinking streams — a real timer, not a static label.
+  useEffect(() => {
+    if (!isStreaming || startedAtMs === undefined) return;
+    setNowMs(Date.now());
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isStreaming, startedAtMs]);
+
   const chevronStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: withTiming(expanded ? '180deg' : '0deg', { duration: 200 }) }],
   }));
@@ -46,10 +63,14 @@ export function ThinkingChip({ thinkingText, isStreaming, duration }: ThinkingCh
     setExpanded((prev) => !prev);
   };
 
+  const liveSeconds =
+    isStreaming && startedAtMs !== undefined
+      ? Math.max(0, (nowMs - startedAtMs) / 1000)
+      : undefined;
   const durationLabel = duration !== undefined ? formatThinkingDuration(duration) : undefined;
   const headerLabel = isStreaming
-    ? durationLabel !== undefined
-      ? `${deriveReasoningPhrase(thinkingText)} • ${durationLabel}`
+    ? liveSeconds !== undefined
+      ? `${deriveReasoningPhrase(thinkingText)} • Thinking for ${formatThinkingDuration(liveSeconds)}`
       : deriveReasoningPhrase(thinkingText)
     : durationLabel !== undefined
       ? `Thought for ${durationLabel}`

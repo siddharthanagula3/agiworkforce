@@ -16,13 +16,15 @@
  * Cloud-only surface.
  */
 
-import { useCallback, useRef, useState } from 'react';
-import { View, ActivityIndicator, Alert } from 'react-native';
-import { CreditCard, ExternalLink, Zap, Check } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Alert } from 'react-native';
+import { CreditCard, ExternalLink, FileText, Check } from 'lucide-react-native';
+import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
+  CloudSyncBlockedBanner,
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
@@ -37,6 +39,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
 import { useIapStore } from '@/src/features/billing/iapStore';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 /** Ordered purchasable tiers — used to pick "the next tier up" from the user's current one. */
 const PURCHASABLE_TIER_ORDER: PurchasableTier[] = ['basic', 'pro', 'max', 'team'];
@@ -96,21 +99,20 @@ function IapManagementSection() {
   );
 }
 
-function PlanBadge({ tier }: { tier: string }) {
+function PlanBadge() {
   const colors = useThemeColors();
-  const isPaid = tier !== 'free';
   return (
     <View
       style={{
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: isPaid ? colors.teal : colors.neutralSurface,
+        backgroundColor: colors.neutralSurface,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Zap size={20} color={isPaid ? colors.white : colors.textMuted} />
+      <AgiMark size={22} mono />
     </View>
   );
 }
@@ -118,7 +120,18 @@ function PlanBadge({ tier }: { tier: string }) {
 export default function CloudBillingScreen() {
   const colors = useThemeColors();
   const tier = useTierStore((s) => s.tier);
-  const isRefreshing = useTierStore((s) => s.isRefreshing);
+  const refreshTier = useTierStore((s) => s.refreshTier);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const isCloudModeActive = appMode === 'cloud';
+
+  // guardedFetch blocks every our-cloud call (including this screen's own
+  // tier refresh) while chat is set to Local — see CloudSyncBlockedBanner's
+  // doc comment. Re-fetch as soon as the user switches modes so the banner
+  // disappearing and real data appearing happen together, not on a delay.
+  useEffect(() => {
+    if (isCloudModeActive) void refreshTier();
+  }, [isCloudModeActive, refreshTier]);
 
   const [portalLoading, setPortalLoading] = useState(false);
   const paywallSheetRef = useRef<BottomSheet>(null);
@@ -167,6 +180,8 @@ export default function CloudBillingScreen() {
         icon={CreditCard}
       />
 
+      {!isCloudModeActive && <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />}
+
       {/* Current plan card */}
       <View
         style={{
@@ -208,11 +223,7 @@ export default function CloudBillingScreen() {
             gap: 14,
           }}
         >
-          {isRefreshing ? (
-            <ActivityIndicator size="small" color={colors.teal} />
-          ) : (
-            <PlanBadge tier={tier} />
-          )}
+          <PlanBadge />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '700' }}>
               {isFreeTier ? 'Free plan' : `${tierLabel} plan`}
@@ -272,7 +283,10 @@ export default function CloudBillingScreen() {
       <SettingsGroup>
         <SettingsRow
           label={isFreeTier ? 'No invoices yet' : 'View invoices'}
-          icon={ExternalLink}
+          // FileText (not ExternalLink) for the free-tier disabled state — an
+          // "opens externally" icon on an inert, unpressable row wrongly
+          // implies there's an action to take.
+          icon={isFreeTier ? FileText : ExternalLink}
           onPress={
             isFreeTier ? undefined : () => void openExternalUrl('https://agiworkforce.com/billing')
           }

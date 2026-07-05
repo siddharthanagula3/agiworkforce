@@ -66,6 +66,8 @@ export interface SettingsState {
   selectedPresetId: string | null;
   /** TTS provider: system (free) or cloud (premium) */
   ttsProvider: TTSProvider;
+  /** Voice conversation push-to-talk: mic is live only while the orb is held */
+  voicePushToTalk: boolean;
   /** Temporary chat mode: local memory learning is disabled for new turns */
   isTemporaryChat: boolean;
   /** AI capability toggles */
@@ -80,6 +82,7 @@ export interface SettingsState {
   setSpeechPitch: (pitch: number) => void;
   setSelectedPresetId: (id: string | null) => void;
   setTtsProvider: (provider: TTSProvider) => void;
+  setVoicePushToTalk: (enabled: boolean) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
@@ -96,6 +99,7 @@ export const useSettingsStore = create<SettingsState>()(
       speechPitch: 1.0,
       selectedPresetId: null,
       ttsProvider: 'system',
+      voicePushToTalk: false,
       isTemporaryChat: false,
       capabilities: {
         webSearch: true,
@@ -117,6 +121,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
+      setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
     }),

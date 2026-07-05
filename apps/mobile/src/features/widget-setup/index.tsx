@@ -6,12 +6,17 @@ import {
   ArrowLeft,
   Smartphone,
   Mic,
-  QrCode,
   Camera,
   MessageSquare,
   Zap,
-  Settings2,
-  LayoutGrid,
+  Share2,
+  Link2,
+  HelpCircle,
+  FileText,
+  Languages,
+  ScanLine,
+  Bell,
+  TextCursorInput,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -19,40 +24,61 @@ import { Separator } from '@/components/ui/separator';
 import { useThemeColors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
-// Quick action list
+// Siri App Shortcuts (iOS) — must stay in sync with the intents that actually
+// ship in native/ios/AGIAppIntents/. Do not list an action here unless its
+// AppIntent exists there; this screen previously advertised Quick Actions,
+// Control Center tiles, and home-screen widgets that had no native target.
 // ---------------------------------------------------------------------------
 
-const QUICK_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; description: string }> = [
+const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; description: string }> = [
   {
     icon: MessageSquare,
-    label: 'New Chat',
-    description: 'Start a fresh conversation with any AI model',
+    label: 'Start Chat',
+    description: 'Open AGI Workforce and start a new conversation',
   },
   {
-    icon: Mic,
-    label: 'Voice Mode',
-    description: 'Jump straight into a real-time voice session',
+    icon: HelpCircle,
+    label: 'Ask AGI',
+    description: 'Dictate a question — review it in chat before sending',
   },
   {
-    icon: QrCode,
-    label: 'Scan QR Code',
-    description: 'Pair with your AGI Workforce desktop app',
+    icon: FileText,
+    label: 'Summarize',
+    description: 'Summarize text — review it in chat before sending',
   },
   {
     icon: Camera,
-    label: 'Camera',
-    description: 'Capture and analyse an image with AI',
+    label: 'Analyze Image',
+    description: 'Open the camera flow for image analysis',
+  },
+  {
+    icon: Mic,
+    label: 'Transcribe',
+    description: 'Open the voice flow to transcribe speech',
+  },
+  {
+    icon: Languages,
+    label: 'Translate',
+    description: 'Open the translator, optionally pre-filled with text',
+  },
+  {
+    icon: ScanLine,
+    label: 'Scan',
+    description: 'Open the document scanner',
+  },
+  {
+    icon: Bell,
+    label: 'Set Reminder',
+    description: 'Draft a reminder request in chat for you to review',
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Siri shortcut examples
-// ---------------------------------------------------------------------------
-
+// Phrases mirror native/ios/AGIAppIntents/AppShortcuts.swift.
 const SIRI_EXAMPLES: string[] = [
-  '"Hey Siri, open AGI Workforce and start a chat"',
-  '"Hey Siri, open AGI Workforce voice mode"',
-  '"Hey Siri, pair my desktop with AGI Workforce"',
+  '"Hey Siri, start chat with AGI Workforce"',
+  '"Hey Siri, summarize this with AGI Workforce"',
+  '"Hey Siri, translate with AGI Workforce"',
+  '"Hey Siri, set reminder via AGI Workforce"',
 ];
 
 // ---------------------------------------------------------------------------
@@ -86,10 +112,10 @@ function SectionHeader({
 }
 
 // ---------------------------------------------------------------------------
-// Quick action row
+// Action row
 // ---------------------------------------------------------------------------
 
-function QuickActionRow({
+function ActionRow({
   icon: Icon,
   label,
   description,
@@ -116,7 +142,14 @@ function QuickActionRow({
 }
 
 // ---------------------------------------------------------------------------
-// Widget Setup Screen
+// Quick Access Screen
+//
+// Describes ONLY integrations that actually ship:
+//   iOS      — Siri App Shortcuts (native/ios/AGIAppIntents/), universal links.
+//              There is NO iOS share extension yet — say so, don't imply one.
+//   Android  — share-sheet target (ACTION_SEND) and text-selection action
+//              (ACTION_PROCESS_TEXT), both rewritten by MainActivity.kt onto
+//              the agiworkforce://intent/share deep link; verified App Links.
 // ---------------------------------------------------------------------------
 
 export default function WidgetSetupScreen() {
@@ -146,7 +179,7 @@ export default function WidgetSetupScreen() {
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2">
-          Home Screen Access
+          Quick Access
         </Text>
       </View>
 
@@ -161,178 +194,130 @@ export default function WidgetSetupScreen() {
             className="w-16 h-16 rounded-2xl items-center justify-center"
             style={{ backgroundColor: `${colors.teal}22` }}
           >
-            <LayoutGrid size={32} color={colors.teal} />
+            <Zap size={32} color={colors.teal} />
           </View>
           <Text className="text-base font-semibold text-white text-center">
-            Quick access to AGI Workforce
+            Reach AGI Workforce from anywhere
           </Text>
           <Text className="text-sm text-white/50 text-center px-4">
-            Launch key features without opening the app. Use the options below to bring AGI
-            Workforce to your fingertips.
+            {isIOS
+              ? 'Trigger AGI Workforce with Siri and open agiworkforce.com links directly in the app.'
+              : 'Share text from any app, act on selected text, and open agiworkforce.com links directly in the app.'}
           </Text>
         </View>
 
-        {/* Section 1: Quick Actions */}
-        <Card>
-          <SectionHeader icon={Zap} title="Quick Actions" step={1} />
-          <Text className="text-xs text-white/50 mb-3">
-            Long-press the <Text className="text-xs text-white/70 font-medium">AGI Workforce</Text>{' '}
-            icon on your home screen to jump directly to:
-          </Text>
-          {QUICK_ACTIONS.map((action, index) => (
-            <View key={action.label}>
-              {index > 0 && <Separator />}
-              <QuickActionRow
-                icon={action.icon}
-                label={action.label}
-                description={action.description}
-              />
-            </View>
-          ))}
-        </Card>
-
-        {/* Section 2: Siri Shortcuts */}
-        <Card>
-          <SectionHeader icon={Mic} title="Siri Shortcuts" step={2} />
-          <Text className="text-xs text-white/50 mb-3">
-            {isIOS
-              ? 'Create Siri shortcuts in the iOS Shortcuts app to trigger AGI Workforce features by voice.'
-              : 'Create voice shortcuts via Google Assistant or the Shortcuts app to open AGI Workforce features.'}
-          </Text>
-          <View
-            className="rounded-xl p-3 gap-2"
-            style={{ backgroundColor: colors.surfaceElevated }}
-          >
-            <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
-              Example commands
-            </Text>
-            {SIRI_EXAMPLES.map((example) => (
-              <View key={example} className="flex-row items-start gap-2">
-                <Text className="text-white/30 text-xs mt-0.5">•</Text>
-                <Text className="text-xs text-white/70 flex-1 italic">{example}</Text>
+        {isIOS ? (
+          <>
+            {/* iOS Section 1: Siri & Shortcuts */}
+            <Card>
+              <SectionHeader icon={Mic} title="Siri & Shortcuts" step={1} />
+              <Text className="text-xs text-white/50 mb-3">
+                These actions register automatically in the{' '}
+                <Text className="text-xs text-white/70 font-medium">Shortcuts</Text> app under AGI
+                Workforce — no setup needed. Trigger them by voice or combine them into your own
+                shortcuts.
+              </Text>
+              <View
+                className="rounded-xl p-3 gap-2 mb-3"
+                style={{ backgroundColor: colors.surfaceElevated }}
+              >
+                <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
+                  Example phrases
+                </Text>
+                {SIRI_EXAMPLES.map((example) => (
+                  <View key={example} className="flex-row items-start gap-2">
+                    <Text className="text-white/30 text-xs mt-0.5">•</Text>
+                    <Text className="text-xs text-white/70 flex-1 italic">{example}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-          <View className="mt-3 gap-1">
-            <Text className="text-xs text-white/50 font-medium">How to set up:</Text>
-            {isIOS ? (
-              <>
-                <Text className="text-xs text-white/40">
-                  1. Open the <Text className="text-xs text-white/60 font-medium">Shortcuts</Text>{' '}
-                  app
+              {SIRI_ACTIONS.map((action, index) => (
+                <View key={action.label}>
+                  {index > 0 && <Separator />}
+                  <ActionRow
+                    icon={action.icon}
+                    label={action.label}
+                    description={action.description}
+                  />
+                </View>
+              ))}
+            </Card>
+
+            {/* iOS Section 2: Share sheet — honest not-yet-available note */}
+            <Card>
+              <SectionHeader icon={Share2} title="Share Sheet" step={2} />
+              <View
+                className="rounded-xl p-3 flex-row items-center gap-2"
+                style={{
+                  backgroundColor: `${colors.teal}11`,
+                  borderWidth: 1,
+                  borderColor: `${colors.teal}22`,
+                }}
+              >
+                <Smartphone size={14} color={colors.teal} />
+                <Text className="text-[11px] text-white/50 flex-1">
+                  Sharing into AGI Workforce from other apps is not yet available on iOS. Use the
+                  Siri actions above instead.
+                </Text>
+              </View>
+            </Card>
+          </>
+        ) : (
+          <>
+            {/* Android Section 1: Share sheet */}
+            <Card>
+              <SectionHeader icon={Share2} title="Share From Any App" step={1} />
+              <Text className="text-xs text-white/50 mb-3">
+                Send text or links to AGI Workforce through the Android share sheet. You always
+                review the content before anything is sent to a model.
+              </Text>
+              <View
+                className="rounded-xl p-3 gap-2"
+                style={{ backgroundColor: colors.surfaceElevated }}
+              >
+                <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
+                  How to share
                 </Text>
                 <Text className="text-xs text-white/40">
-                  2. Tap <Text className="text-xs text-white/60 font-medium">+ New Shortcut</Text>
+                  1. In any app, tap{' '}
+                  <Text className="text-xs text-white/60 font-medium">Share</Text> on text or a link
                 </Text>
                 <Text className="text-xs text-white/40">
-                  3. Search for{' '}
-                  <Text className="text-xs text-white/60 font-medium">AGI Workforce</Text> and
-                  choose an action
+                  2. Choose <Text className="text-xs text-white/60 font-medium">AGI Workforce</Text>{' '}
+                  from the share sheet
                 </Text>
                 <Text className="text-xs text-white/40">
-                  4. Add a <Text className="text-xs text-white/60 font-medium">Siri phrase</Text> to
-                  trigger it
+                  3. Review the preview, then tap{' '}
+                  <Text className="text-xs text-white/60 font-medium">Send to Chat</Text>
                 </Text>
-              </>
-            ) : (
-              <>
-                <Text className="text-xs text-white/40">
-                  1. Open{' '}
-                  <Text className="text-xs text-white/60 font-medium">
-                    Google Assistant settings
-                  </Text>
-                </Text>
-                <Text className="text-xs text-white/40">
-                  2. Select <Text className="text-xs text-white/60 font-medium">Shortcuts</Text> and
-                  add a custom phrase
-                </Text>
-                <Text className="text-xs text-white/40">
-                  3. Link it to{' '}
-                  <Text className="text-xs text-white/60 font-medium">AGI Workforce</Text>
-                </Text>
-              </>
-            )}
-          </View>
+              </View>
+            </Card>
+
+            {/* Android Section 2: Selected text action */}
+            <Card>
+              <SectionHeader icon={TextCursorInput} title="Act On Selected Text" step={2} />
+              <Text className="text-xs text-white/50 mb-3">
+                Select text anywhere, then pick{' '}
+                <Text className="text-xs text-white/70 font-medium">AGI Workforce</Text> from the
+                text-selection menu (it may be under the{' '}
+                <Text className="text-xs text-white/70 font-medium">⋮ More</Text> overflow). The
+                selection opens in the same review screen as a share.
+              </Text>
+            </Card>
+          </>
+        )}
+
+        {/* Both platforms: links open in the app */}
+        <Card>
+          <SectionHeader icon={Link2} title="Links Open In The App" step={3} />
+          <Text className="text-xs text-white/50">
+            Links to <Text className="text-xs text-white/70 font-medium">agiworkforce.com</Text>{' '}
+            open directly in the app when it is installed
+            {isIOS ? ' (universal links)' : ' (verified app links)'}, and{' '}
+            <Text className="text-xs text-white/70 font-medium">agiworkforce://</Text> deep links
+            work from any app that can open URLs.
+          </Text>
         </Card>
-
-        {/* Section 3: Control Center (iOS only) */}
-        {isIOS && (
-          <Card>
-            <SectionHeader icon={Settings2} title="iOS Control Center" step={3} />
-            <Text className="text-xs text-white/50 mb-3">
-              Add AGI Workforce to Control Center for one-swipe access on iOS 18 and later.
-            </Text>
-            <View
-              className="rounded-xl p-3 gap-2"
-              style={{ backgroundColor: colors.surfaceElevated }}
-            >
-              <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
-                How to add
-              </Text>
-              <Text className="text-xs text-white/40">
-                1. Open <Text className="text-xs text-white/60 font-medium">Settings</Text> on your
-                iPhone
-              </Text>
-              <Text className="text-xs text-white/40">
-                2. Tap <Text className="text-xs text-white/60 font-medium">Control Center</Text>
-              </Text>
-              <Text className="text-xs text-white/40">
-                3. Scroll to{' '}
-                <Text className="text-xs text-white/60 font-medium">More Controls</Text> and tap{' '}
-                <Text className="text-xs text-white/60 font-medium">+</Text> next to AGI Workforce
-              </Text>
-              <Text className="text-xs text-white/40">
-                4. Swipe down from the top-right corner to open Control Center and tap the AGI
-                Workforce tile
-              </Text>
-            </View>
-            <View
-              className="mt-3 rounded-xl p-3 flex-row items-center gap-2"
-              style={{
-                backgroundColor: `${colors.teal}11`,
-                borderWidth: 1,
-                borderColor: `${colors.teal}22`,
-              }}
-            >
-              <Smartphone size={14} color={colors.teal} />
-              <Text className="text-[11px] text-white/50 flex-1">
-                Control Center support requires iOS 18 or later. On older iOS versions, use Quick
-                Actions instead.
-              </Text>
-            </View>
-          </Card>
-        )}
-
-        {/* Section 3 Android: App Shortcuts widget */}
-        {!isIOS && (
-          <Card>
-            <SectionHeader icon={Settings2} title="Home Screen Widget" step={3} />
-            <Text className="text-xs text-white/50 mb-3">
-              Android supports home screen widgets. Long-press your home screen, select{' '}
-              <Text className="text-xs text-white/70 font-medium">Widgets</Text>, search for AGI
-              Workforce, and place the widget.
-            </Text>
-            <View
-              className="rounded-xl p-3 gap-2"
-              style={{ backgroundColor: colors.surfaceElevated }}
-            >
-              <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
-                How to add
-              </Text>
-              <Text className="text-xs text-white/40">
-                1. Long-press an empty area of your home screen
-              </Text>
-              <Text className="text-xs text-white/40">
-                2. Tap <Text className="text-xs text-white/60 font-medium">Widgets</Text>
-              </Text>
-              <Text className="text-xs text-white/40">
-                3. Search for{' '}
-                <Text className="text-xs text-white/60 font-medium">AGI Workforce</Text>
-              </Text>
-              <Text className="text-xs text-white/40">4. Drag the widget to your home screen</Text>
-            </View>
-          </Card>
-        )}
       </ScrollView>
     </SafeAreaView>
   );

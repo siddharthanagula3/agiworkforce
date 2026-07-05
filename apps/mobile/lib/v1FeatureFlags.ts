@@ -49,18 +49,39 @@ export const FEATURES = {
    *  `AGI_MANAGED_COMPUTE_PRIVATE_BETA` kill-switch for incident rollback. */
   cloudChat: true,
 
-  /** Billing / subscription / Stripe portal. */
+  /**
+   * Billing / subscription MANAGEMENT — specifically the "Manage billing"
+   * Stripe Customer Portal link (fetchPortalSessionUrl -> openExternalUrl).
+   * Stays false on mobile: opening an external checkout/management link for
+   * a subscription from inside the app risks Apple Guideline 3.1.1, and
+   * `FEATURES.iap` (the native alternative) isn't live yet either. Does NOT
+   * gate read-only usage display — see `usageDashboard` below.
+   */
   billing: false,
 
   /**
-   * Native in-app purchase (StoreKit 2 / Play Billing) for subscription upgrades.
-   * Stays false until: (1) real product IDs exist in App Store Connect / Play
-   * Console (iapProducts.ts SKUs are placeholders), and (2) the server-side
-   * receipt-verification endpoint exists (see useIapPurchaseFlow.ts). Flipping
-   * this on before both are true would let a real purchase be taken with no
-   * server record of it.
+   * Read-only usage/credit display (GET /api/usage — real data, not a stub;
+   * verified 2026-07-05). Deliberately split from `billing`: this only reads
+   * a balance, it never opens an external checkout/management surface, so it
+   * carries none of `billing`'s App Store Guideline 3.1.1 risk.
    */
-  iap: false,
+  usageDashboard: true,
+
+  /**
+   * Native in-app purchase (StoreKit 2) for subscription upgrades.
+   * Enabled 2026-07-04 for iOS: real App Store Connect subscription products
+   * exist (iapProducts.ts), POST /api/mobile/iap/verify is live and reconciles
+   * into the same `subscriptions` table Stripe uses (migration 0046 applied to
+   * production), the client (useIapPurchaseFlow.ts) calls it before finalizing
+   * any purchase, and the App Store Server API credentials
+   * (APPLE_APP_STORE_KEY_ID/ISSUER_ID/BUNDLE_ID/PRIVATE_KEY) are set in
+   * production. `APPLE_APP_STORE_ENVIRONMENT=sandbox` for now — flip to
+   * production once real (non-TestFlight) purchases begin.
+   * Android/Play Billing is NOT wired (no Play Console yet) — `iapProducts.ts`
+   * android SKUs are still placeholders; this flag currently only gates real
+   * behavior on iOS.
+   */
+  iap: true,
 
   /** Auth (login, OAuth, password reset). Signing in IS the Managed Cloud entitlement
    *  in public alpha — Mobile keeps a real auth gate (no demo bypass; user must sign in).

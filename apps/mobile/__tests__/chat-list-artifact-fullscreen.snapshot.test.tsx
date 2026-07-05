@@ -30,6 +30,8 @@ jest.mock('@/src/ui/theme', () => {
     accentSurface: '#162b31',
     agentError: '#ef4444',
     agentSuccess: '#22c55e',
+    agentWarning: '#fbbf24',
+    purple: '#a78bfa',
   };
   return {
     colors,

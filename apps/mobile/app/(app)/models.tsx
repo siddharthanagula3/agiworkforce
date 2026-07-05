@@ -13,6 +13,7 @@ import {
 } from '@/src/features/model-picker/installStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   AUTO_MODES,
@@ -45,6 +46,7 @@ export default function ModelsScreen() {
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const subscriptionTier = useTierStore((s) => s.tier);
   const favorites = useModelStore((s) => s.favorites);
   const recentModels = useModelStore((s) => s.recentModels);
   const installJobs = useModelInstallStore((s) => s.jobs);
@@ -76,7 +78,11 @@ export default function ModelsScreen() {
   const resolvedLabel = getDisplayName(selectedModel);
   const selectedAutoMode = AUTO_MODES.find((m) => m.id === selectedModel);
   const selectedLocalModel = LOCAL_MODEL_LIST.find((m) => m.id === selectedModel);
-  const selectedModelDef = getModelByIdForCloudAccess(selectedModel, cloudUnlocked);
+  const selectedModelDef = getModelByIdForCloudAccess(
+    selectedModel,
+    cloudUnlocked,
+    subscriptionTier,
+  );
   const statusLabelFor = useCallback(
     (model: (typeof LOCAL_MODEL_LIST)[number]) => {
       const job = installJobs[model.id];

@@ -39,6 +39,12 @@ export interface Artifact {
   metadata?: Record<string, unknown>;
 }
 
+export interface ToolSearchResult {
+  url: string;
+  title: string;
+  snippet?: string;
+}
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -48,6 +54,8 @@ export interface ToolCall {
   output?: string;
   status: 'running' | 'completed' | 'failed';
   duration?: number;
+  /** Structured web_search results (favicon/title/domain cards), when present. */
+  searchResults?: ToolSearchResult[];
 }
 
 export type RiskLevel = 'low' | 'medium' | 'high';

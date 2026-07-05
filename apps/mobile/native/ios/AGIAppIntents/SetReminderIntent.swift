@@ -1,12 +1,13 @@
 import AppIntents
 
 // "Set reminder via AGI" — routes to AGI chat with a pre-filled reminder prompt.
-// AGI's calendar/reminder agent tool handles the actual Reminders.app write.
+// The deep link only drafts the request; nothing is written to Reminders.app
+// by this intent, so the user-facing strings must not promise that.
 @available(iOS 16.0, *)
 struct SetReminderIntent: AppIntent {
     static var title: LocalizedStringResource = "Set Reminder via AGI"
     static var description = IntentDescription(
-        "Ask AGI to set a reminder on your behalf.",
+        "Opens AGI chat with a drafted reminder request for you to review and send.",
         categoryName: "Productivity"
     )
     static var openAppWhenRun: Bool = true

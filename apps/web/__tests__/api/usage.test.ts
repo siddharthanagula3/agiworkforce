@@ -65,6 +65,14 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+// Mock the rolling-usage helper (session/weekly/flagship-weekly, added
+// 2026-07-05) — real spend is 0 with no oldest transaction by default; tests
+// only assert on the monthly-credit fields this file already covers.
+const mockGetRollingUsage = vi.fn();
+vi.mock('@/lib/server/rolling-usage', () => ({
+  getRollingUsage: (...args: unknown[]) => mockGetRollingUsage(...args),
+}));
+
 // Mock error utilities
 vi.mock('@/lib/errors', () => {
   class AppError extends Error {
@@ -137,6 +145,7 @@ describe('GET /api/usage', () => {
     // Default: successful service responses
     mockGetBalance.mockResolvedValue(MOCK_BALANCE);
     mockGetSubscription.mockResolvedValue(MOCK_SUBSCRIPTION);
+    mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
   });
 
   it('should return 401 when no authorization and no Clerk session', async () => {

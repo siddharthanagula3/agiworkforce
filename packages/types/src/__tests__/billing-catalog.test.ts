@@ -4,8 +4,13 @@ import {
   getPlanPriceInr,
   getPlanUsageBudgetCents,
   getPlanDailyUsageBudgetCents,
+  getPlanWeeklyUsageBudgetCents,
+  getPlanSessionUsageBudgetCents,
+  getPlanFlagshipWeeklyUsageBudgetCents,
   getUsageBudgetCentsFromPriceCents,
   INCLUDED_USAGE_BUDGET_RATIO,
+  SESSION_OF_WEEKLY_BUDGET_RATIO,
+  FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
 } from '../billing-catalog';
 
 describe('billing catalog', () => {
@@ -20,7 +25,7 @@ describe('billing catalog', () => {
     expect(getPlanPriceCents('pro')).toBe(2000);
     expect(getPlanUsageBudgetCents('pro')).toBe(1000); // $10/mo, explicit
 
-    expect(getPlanPriceCents('pro', 'yearly')).toBe(20400);
+    expect(getPlanPriceCents('pro', 'yearly')).toBe(20000);
     expect(getPlanUsageBudgetCents('pro', 'yearly')).toBe(1000); // same $10/mo, not ratio-of-yearly-price
 
     expect(getPlanPriceCents('max')).toBe(10000);
@@ -32,7 +37,7 @@ describe('billing catalog', () => {
 
   it('falls back to the ratio for tiers with no explicit budget set (team/enterprise)', () => {
     expect(INCLUDED_USAGE_BUDGET_RATIO).toBe(0.35);
-    expect(getPlanUsageBudgetCents('team')).toBe(Math.round(2500 * 0.35));
+    expect(getPlanUsageBudgetCents('team')).toBe(Math.round(3000 * 0.35));
   });
 
   it('returns zero for free and invalid plans', () => {
@@ -53,5 +58,34 @@ describe('billing catalog', () => {
   it('exposes India-specific pricing for basic, and null for USD-only tiers', () => {
     expect(getPlanPriceInr('basic')).toBe(399);
     expect(getPlanPriceInr('pro')).toBeNull();
+  });
+
+  // 2026-07-05: session (rolling 5hr) + weekly limits layer on top of the
+  // monthly credit budget rather than replacing it — see billing-catalog.ts
+  // header comments on getPlanWeeklyUsageBudgetCents.
+  describe('weekly/session pacing budgets (layer on top of monthly)', () => {
+    it('derives the weekly budget as an even monthly/12-per-52-weeks slice', () => {
+      expect(getPlanWeeklyUsageBudgetCents('pro')).toBe(Math.round((1000 * 12) / 52)); // $10/mo -> 231
+      expect(getPlanWeeklyUsageBudgetCents('max')).toBe(Math.round((7500 * 12) / 52)); // $75/mo -> 1731
+      expect(getPlanWeeklyUsageBudgetCents('basic')).toBe(Math.round((200 * 12) / 52)); // $2/mo -> 46
+    });
+
+    it('derives the session budget as 20% of the weekly budget', () => {
+      expect(SESSION_OF_WEEKLY_BUDGET_RATIO).toBe(0.2);
+      const weeklyPro = getPlanWeeklyUsageBudgetCents('pro');
+      expect(getPlanSessionUsageBudgetCents('pro')).toBe(Math.round(weeklyPro * 0.2));
+    });
+
+    it('derives the flagship-only weekly budget as 30% of the weekly budget', () => {
+      expect(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO).toBe(0.3);
+      const weeklyMax = getPlanWeeklyUsageBudgetCents('max');
+      expect(getPlanFlagshipWeeklyUsageBudgetCents('max')).toBe(Math.round(weeklyMax * 0.3));
+    });
+
+    it('is zero for free (no monthly budget to pace from)', () => {
+      expect(getPlanWeeklyUsageBudgetCents('free')).toBe(0);
+      expect(getPlanSessionUsageBudgetCents('free')).toBe(0);
+      expect(getPlanFlagshipWeeklyUsageBudgetCents('free')).toBe(0);
+    });
   });
 });

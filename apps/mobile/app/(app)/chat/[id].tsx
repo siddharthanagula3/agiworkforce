@@ -116,7 +116,11 @@ export default function ChatScreen() {
   const conversationMessages = useChatStore((s) =>
     id ? (s.messages[id] ?? EMPTY_CHAT_MESSAGES) : EMPTY_CHAT_MESSAGES,
   );
-  const isStreaming = useChatStore((s) => s.isStreaming);
+  // Scope streaming state to THIS conversation. The global isStreaming flag
+  // covers any background stream, which showed a stop button (and locked the
+  // composer) on conversations that weren't streaming after a mid-stream
+  // conversation switch — the exact stuck-send-affordance bug this guards.
+  const isStreaming = useChatStore((s) => (id ? s.streamingConversationIds.includes(id) : false));
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
   const loadMessages = useChatStore((s) => s.loadMessages);
@@ -213,18 +217,23 @@ export default function ChatScreen() {
       text: string,
       attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
       mode?: TaskChipType,
-    ) => {
-      if (!id) return;
+    ): boolean | Promise<boolean> => {
+      // Returns false when a pre-flight gate blocks the send so the composer
+      // keeps the user's draft; true (or a promise resolving true on
+      // acceptance) once the message is genuinely committed.
+      if (!id) return false;
       stopSpeaking?.();
       if (conversationExecutionMode === 'cloud' && !FEATURES.cloudChat) {
         Alert.alert(
           'AGI Cloud is not ready on mobile',
           'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
         );
-        return;
+        return false;
       }
 
-      // Prepend quoted context if replying to a message
+      // Prepend quoted context if replying to a message. The quote bar is
+      // dismissed only after the point of no return below — a send blocked by
+      // a pre-flight gate must not consume the quote context.
       let finalText = text;
       if (quotedMessage) {
         const quoteLabel =
@@ -234,7 +243,6 @@ export default function ChatScreen() {
             ? quotedMessage.content.slice(0, 150).trim() + '...'
             : quotedMessage.content;
         finalText = `> ${quoteLabel}: ${quotePreview}\n\n${text}`;
-        setQuotedMessage(null);
       }
 
       // Handle /image command — generate an image and add result to conversation
@@ -242,30 +250,31 @@ export default function ChatScreen() {
         const prompt = finalText.trimStart().slice('/image'.length).trim();
         if (!prompt) {
           Alert.alert('Add an image prompt', 'Type what you want AGI to create after /image.');
-          return;
+          return false;
         }
         if (conversationExecutionMode !== 'cloud') {
           Alert.alert(
             'Image generation uses AGI Cloud',
             'Start an AGI Cloud chat to generate images. Local Mode can attach and inspect images without uploading them.',
           );
-          return;
+          return false;
         }
         if (!FEATURES.imageGen) {
           Alert.alert(
             'Image generation uses AGI Cloud',
             'You can attach and inspect local images now. Image generation is available with Cloud access.',
           );
-          return;
+          return false;
         }
         if (!isOnline) {
           Alert.alert(
             'Network connection required',
             'Image generation needs AGI Cloud. Connect to the internet and try again.',
           );
-          return;
+          return false;
         }
 
+        setQuotedMessage(null);
         const assistantMessageId = beginImageGeneration(id, finalText, prompt, selectedModel);
         generateImage({ prompt })
           .then((result) => {
@@ -301,23 +310,36 @@ export default function ChatScreen() {
             console.warn('[ChatScreen] Image generation failed:', err);
             failImageGeneration(id, assistantMessageId, message);
           });
-        return;
+        return true;
       }
 
       // When offline, enqueue and show an optimistic queued message bubble
       if (!isOnline) {
+        setQuotedMessage(null);
         const entry = offlineQueue.enqueue({
           conversationId: id,
           content: finalText,
           model: selectedModel,
         });
         enqueueOfflineMessage(id, finalText, selectedModel, entry.id);
-        return;
+        return true;
       }
 
       const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
 
-      sendMessage(id, finalText, selectedModel, attachments, sendOptions);
+      setQuotedMessage(null);
+      // Resolve true the moment the store commits the user message (all
+      // pre-flight gates passed) so the composer clears then — not on tap and
+      // not only at stream end. Falls back to sendMessage's own accepted/
+      // blocked return value if onAccepted never fires.
+      return new Promise<boolean>((resolve) => {
+        sendMessage(id, finalText, selectedModel, attachments, {
+          ...(sendOptions ?? {}),
+          onAccepted: () => resolve(true),
+        })
+          .then((accepted) => resolve(accepted))
+          .catch(() => resolve(false));
+      });
     },
     [
       id,
@@ -327,6 +349,8 @@ export default function ChatScreen() {
       beginImageGeneration,
       completeImageGeneration,
       failImageGeneration,
+      deleteMessage,
+      setPaywallError,
       stopSpeaking,
       quotedMessage,
       isOnline,
@@ -762,9 +786,12 @@ export default function ChatScreen() {
       style={{ backgroundColor: colors.surfaceBase }}
       edges={['top']}
     >
+      {/* Android: adjustResize (Expo default softwareKeyboardLayoutMode) already
+          resizes the window; stacking behavior="height" on top double-handles
+          the keyboard and causes resize jumps. iOS keeps "padding". */}
       <KeyboardAvoidingView
         className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
         {/* Chat header: circular hamburger left, ModeToggle center, circular
@@ -974,11 +1001,13 @@ export default function ChatScreen() {
 
         <StyleSelector openSignal={styleSelectorOpenSignal} />
 
-        {/* Model picker bottom sheet */}
+        {/* Model picker bottom sheet — conversationId scopes the reasoning-effort
+            selector to this conversation (agentControlStore override). */}
         <ModelPickerSheet
           sheetRef={modelPickerRef}
           openSignal={modelPickerOpenSignal}
           modelScope={modelPickerScope}
+          conversationId={id}
           onSelect={handleModelSelect}
           onOpenCloudAccess={handleOpenCloudSignIn}
         />

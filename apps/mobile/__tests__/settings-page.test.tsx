@@ -160,7 +160,6 @@ describe('Settings page', () => {
     const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
-    expect(getByText('Email / Phone Number')).toBeTruthy();
     expect(getByText('Billing')).toBeTruthy();
     expect(getByText('Connectors')).toBeTruthy();
     // (Skills/Plugins rows removed in MOB-6 — they were unbuilt dead-ends.)
@@ -172,7 +171,6 @@ describe('Settings page', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     const { getByLabelText, getAllByText } = render(<SettingsTabScreen />);
 
-    expect(getByLabelText('Email / Phone Number. Cloud')).toBeTruthy();
     expect(getByLabelText('Cloud Data Controls. Cloud')).toBeTruthy();
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
   });
@@ -182,7 +180,7 @@ describe('Settings page', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Email / Phone Number. Cloud'));
+    fireEvent.press(getByLabelText('Cloud Data Controls. Cloud'));
 
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
     expect(alertSpy).not.toHaveBeenCalled();
@@ -196,18 +194,16 @@ describe('Settings page', () => {
     fireEvent.press(getByLabelText('Cloud Personalization. Cloud'));
     fireEvent.press(getByLabelText('Cloud Memory. Cloud'));
     fireEvent.press(getByLabelText('Cloud Data Controls. Cloud'));
-    fireEvent.press(getByLabelText('Email / Phone Number. Cloud'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization?scope=cloud');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory?scope=cloud');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-account');
   });
 
   it('routes a signed-out cloud row tap to sign-in (public alpha, no invite/waitlist gate)', () => {
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Email / Phone Number. Sign in'));
+    fireEvent.press(getByLabelText('Cloud Data Controls. Sign in'));
 
     expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
   });

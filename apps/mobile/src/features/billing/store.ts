@@ -99,10 +99,13 @@ export const useTierStore = create<TierState>()(
           const data = await api.get<MeResponse>('/api/me');
           const tier = normalizeBillingPlanTier(data.plan?.tier ?? null);
           set({ tier, lastRefreshedAt: new Date().toISOString() });
-        } catch {
+        } catch (err) {
           // Network failure or auth error — keep the cached tier, don't clear it.
           // The paywall path on the server is the authoritative gate; the client
-          // tier is an optimistic hint only.
+          // tier is an optimistic hint only. Still log it: a fully silent catch
+          // here made a real Local-mode-egress-block bug (2026-07-05) look like
+          // an unexplained permanent "Free" plan with zero diagnostic trail.
+          console.warn('[tierStore] refreshTier failed (keeping cached tier):', err);
         } finally {
           set({ isRefreshing: false });
         }

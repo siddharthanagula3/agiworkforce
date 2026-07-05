@@ -1437,6 +1437,65 @@ export function isModelAllowedForTier(modelId: string, tier: TierKey): boolean {
   return getAllowedModelsForTier(tier).includes(canonicalModelId);
 }
 
+/**
+ * Client-safe mirror of `apps/web/lib/model-tiers.ts`'s subscription-tier gate.
+ * Both surfaces derive from the same `tierAllowedModels` catalog groups so a
+ * model that's locked server-side is never shown as freely selectable client-side.
+ */
+export type SubscriptionAccessTier = 'free' | 'pro' | 'max' | 'enterprise';
+
+function normalizeSubscriptionAccessTier(tier: string): SubscriptionAccessTier {
+  switch (tier.toLowerCase()) {
+    case 'pro':
+    case 'team':
+      return 'pro';
+    // Basic ($8/mo, formerly 'hobby') gets the same model access as Max — see
+    // apps/web/lib/model-tiers.ts for the rationale (usage budget, not model
+    // allowlist, differentiates Basic from Pro/Max).
+    case 'basic':
+    case 'hobby':
+    case 'max':
+      return 'max';
+    case 'enterprise':
+      return 'enterprise';
+    default:
+      return 'free';
+  }
+}
+
+/**
+ * Minimum subscription tier required to use `modelId`, or null if the model
+ * isn't gated behind a Pro/Max-exclusive catalog group (still requires SOME
+ * paid tier + economy-list membership — see `canAccessModelForSubscriptionTier`).
+ */
+export function getMinimumRequiredTier(modelId: string): 'pro' | 'max' | null {
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) return null;
+  if (getAllowedModelsForTier('flagship_additions').includes(canonicalModelId)) return 'max';
+  if (getAllowedModelsForTier('pro_additions').includes(canonicalModelId)) return 'pro';
+  return null;
+}
+
+/** True if a user on `subscriptionTier` can use `modelId`, per the shared catalog gate. */
+export function canAccessModelForSubscriptionTier(
+  modelId: string,
+  subscriptionTier: string,
+): boolean {
+  const tier = normalizeSubscriptionAccessTier(subscriptionTier);
+  if (tier === 'free') return false;
+
+  const canonicalModelId = normalizeModelId(modelId);
+  if (!canonicalModelId) return false;
+
+  if (getAllowedModelsForTier('flagship_additions').includes(canonicalModelId)) {
+    return tier === 'max' || tier === 'enterprise';
+  }
+  if (getAllowedModelsForTier('pro_additions').includes(canonicalModelId)) {
+    return true; // pro, max, enterprise all qualify
+  }
+  return getAllowedModelsForTier('economy').includes(canonicalModelId);
+}
+
 export function listCanonicalModels(): ModelMetadata[] {
   return Object.values(modelsCatalog.models);
 }

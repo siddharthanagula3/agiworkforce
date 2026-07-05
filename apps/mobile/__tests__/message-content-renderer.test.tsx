@@ -1,4 +1,4 @@
-import { Linking, View } from 'react-native';
+import { Alert, Linking, View } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('../src/features/chat/components/MathBlock', () => ({
@@ -53,6 +53,7 @@ describe('MessageContentRenderer', () => {
 
   it('does not open non-http markdown links from untrusted message content', () => {
     const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByText } = render(
       <View>{renderMarkdownContent('[Bad](javascript:alert(1))', lightColors)}</View>,
     );
@@ -60,6 +61,82 @@ describe('MessageContentRenderer', () => {
     fireEvent.press(getByText('Bad'));
 
     expect(openUrlSpy).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('gates mailto links behind a confirmation alert before opening', () => {
+    const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByText } = render(
+      <View>{renderMarkdownContent('[Email us](mailto:support@example.com)', lightColors)}</View>,
+    );
+
+    fireEvent.press(getByText('Email us'));
+
+    // Tap alone must not open anything — only the alert confirmation does.
+    expect(openUrlSpy).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Open in Mail?',
+      'mailto:support@example.com',
+      expect.arrayContaining([expect.objectContaining({ text: 'Cancel', style: 'cancel' })]),
+    );
+
+    const buttons = alertSpy.mock.calls[0]?.[2] ?? [];
+    const openButton = buttons.find((b) => b.text === 'Open');
+    openButton?.onPress?.();
+    expect(openUrlSpy).toHaveBeenCalledWith('mailto:support@example.com');
+  });
+
+  it('gates tel links behind a confirmation alert and blocks malformed ones', () => {
+    const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByText } = render(
+      <View>
+        {renderMarkdownContent('[Call](tel:+15551234567) or [Weird](tel:+1 555 ext9)', lightColors)}
+      </View>,
+    );
+
+    fireEvent.press(getByText('Call'));
+    expect(alertSpy).toHaveBeenCalledWith('Open in Phone?', 'tel:+15551234567', expect.anything());
+
+    // Embedded whitespace disqualifies the URL — no alert, no open.
+    fireEvent.press(getByText('Weird'));
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(openUrlSpy).not.toHaveBeenCalled();
+  });
+
+  it('opens http links directly without a confirmation alert', () => {
+    const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByText } = render(
+      <View>{renderMarkdownContent('[Docs](https://docs.example.com)', lightColors)}</View>,
+    );
+
+    fireEvent.press(getByText('Docs'));
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(openUrlSpy).toHaveBeenCalledWith('https://docs.example.com');
+  });
+
+  it('renders fenced code blocks with syntax-highlighted spans', () => {
+    const { getByText } = render(
+      <View>{renderMarkdownContent('```js\nconst x = 42; // note\n```', lightColors)}</View>,
+    );
+
+    expect(getByText('const')).toHaveStyle({ color: lightColors.purple });
+    expect(getByText('42')).toHaveStyle({ color: lightColors.agentWarning });
+    expect(getByText('// note')).toHaveStyle({ color: lightColors.textMuted });
+  });
+
+  it('renders unknown-language code blocks as plain monospace text', () => {
+    const { getByText } = render(
+      <View>{renderMarkdownContent('```\nplain block content\n```', lightColors)}</View>,
+    );
+
+    expect(getByText('plain block content')).toHaveStyle({
+      color: lightColors.textPrimary,
+      fontFamily: 'Menlo',
+    });
   });
 
   it('handles failed browser opens without throwing from the press handler', () => {

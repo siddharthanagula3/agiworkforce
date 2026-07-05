@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Alert, View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -12,7 +12,7 @@ import Animated, {
   SlideInDown,
   SlideOutDown,
 } from 'react-native-reanimated';
-import { X, MicOff, Mic, Phone } from 'lucide-react-native';
+import { X, MicOff, Mic, Phone, Hand } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Stop, Rect, Circle } from 'react-native-svg';
@@ -21,20 +21,22 @@ import { Waveform } from './Waveform';
 import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import * as VoiceService from '@/src/features/voice/services/voice';
 import * as TTS from '@/src/features/voice/services/tts';
+import {
+  useVoiceConversation,
+  voiceCaptureErrorMessage,
+  type VoiceConversationPhase as ConversationPhase,
+} from '@/src/features/voice/hooks/useVoiceConversation';
 
 /**
  * Full-screen voice conversation mode.
  * Resembles ChatGPT Advanced Voice — centered waveform, status text,
- * mute and end-call buttons. Swipe down or X to dismiss.
+ * mute, push-to-talk toggle, and end-call buttons. Swipe down or X to dismiss.
+ *
+ * Two interaction modes (persisted in settings):
+ *  - hands-free (default): tap to talk, auto-relisten after the AI speaks
+ *  - push-to-talk: hold the orb to talk, release to send
  */
-
-type ConversationPhase =
-  | 'listening' // User is speaking (blue waveform)
-  | 'thinking' // AI is processing (purple pulse)
-  | 'speaking' // AI is speaking back (teal waveform)
-  | 'idle'; // Waiting for user to start
 
 interface VoiceConversationScreenProps {
   /** Whether the full-screen overlay is visible */
@@ -69,18 +71,12 @@ const PHASE_CONFIG: Record<ConversationPhase, { label: string; color: string; su
     },
   };
 
-function voiceUnavailableMessage(err: unknown): string {
-  if (err instanceof VoiceService.VoiceCaptureError) {
-    if (err.code === 'mic-permission-denied') {
-      return 'Microphone access is off. Enable microphone permission in Settings to use voice.';
-    }
-    if (err.code === 'on-device-recognition-unavailable') {
-      return 'On-device speech recognition is not available for this device or language yet.';
-    }
-    if (err.code === 'already-active') return 'Voice capture is already running.';
-    return err.message;
-  }
-  return 'Voice input could not start. Please try again.';
+function phaseConfig(phase: ConversationPhase, pttMode: boolean) {
+  const config = PHASE_CONFIG[phase];
+  if (!pttMode) return config;
+  if (phase === 'idle') return { ...config, label: 'Hold to talk', sublabel: 'Push-to-talk mode' };
+  if (phase === 'listening') return { ...config, sublabel: 'Release to send' };
+  return config;
 }
 
 function GradientBackground() {
@@ -196,191 +192,63 @@ export function VoiceConversationScreen({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
+  const pttMode = useSettingsStore((s) => s.voicePushToTalk);
+  const setVoicePushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
   const selectedModel = useModelStore((s) => s.selectedModel);
 
-  const [phase, setPhase] = useState<ConversationPhase>('idle');
-  const [muted, setMuted] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [transcriptPreview, setTranscriptPreview] = useState('');
-
-  // Keep track of whether we should auto-listen after AI speaks
-  const autoListenRef = useRef(true);
-  const activeRef = useRef(false);
-
-  const cleanup = useCallback(async () => {
-    autoListenRef.current = false;
-    if (VoiceService.isRecording()) {
-      await VoiceService.cancelRecording();
-    }
-    await TTS.stop();
-  }, []);
-
-  // Reset state when becoming visible
-  useEffect(() => {
-    if (visible) {
-      activeRef.current = true;
-      setPhase('idle');
-      setMuted(false);
-      setAudioLevel(0);
-      setTranscriptPreview('');
-    } else {
-      activeRef.current = false;
-      cleanup();
-    }
-  }, [visible, cleanup]);
-
-  // #19: release mic/recognizer/TTS if the screen unmounts while still visible.
-  // The visibility effect above only cleans up in its else-branch (visible→false),
-  // so an unmount mid-recording would otherwise leak the recorder.
-  useEffect(() => {
-    return () => {
-      void cleanup();
-    };
-  }, [cleanup]);
-
-  const startListening = useCallback(async () => {
-    if (!activeRef.current || muted) return;
-
-    try {
-      setTranscriptPreview('');
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-
-      await VoiceService.startRecording((event) => {
-        if (!activeRef.current) return;
-        // Normalize metering from dB (-160..0) to 0..1
-        const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
-        setAudioLevel(normalized);
-      });
-      if (activeRef.current) {
-        setPhase('listening');
-      }
-    } catch (err) {
-      if (activeRef.current) {
-        setPhase('idle');
-        Alert.alert('Voice unavailable', voiceUnavailableMessage(err));
-      }
-    }
-  }, [muted, hapticsEnabled]);
-
-  const stopListeningAndProcess = useCallback(async () => {
-    if (!activeRef.current) return;
-
-    try {
-      // Stop recording
-      setPhase('thinking');
-      setAudioLevel(0);
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-
-      const uri = await VoiceService.stopRecording();
-      const { text } = await VoiceService.transcribe(uri);
-
-      if (!text.trim() || !activeRef.current) {
-        if (activeRef.current) setPhase('idle');
-        return;
-      }
-
-      setTranscriptPreview(text.trim());
-
-      // Send to AI and get response
-      let aiResponse: string | null | undefined;
-      try {
-        aiResponse = await onSendMessage(text.trim());
-      } catch {
-        setTranscriptPreview('Voice message could not be sent. Try again.');
-        if (activeRef.current) setPhase('idle');
-        return;
-      }
-
-      if (!activeRef.current) return;
-      if (!aiResponse?.trim()) {
-        setTranscriptPreview('Sent to chat.');
-        setPhase('idle');
-        setAudioLevel(0);
-        return;
-      }
-
-      // Speak AI response
-      setPhase('speaking');
-      await TTS.speak(aiResponse.trim(), {
+  const {
+    phase,
+    muted,
+    audioLevel,
+    transcriptPreview,
+    handleOrbPress,
+    handleOrbPressIn,
+    handleOrbPressOut,
+    toggleMute,
+    endConversation,
+  } = useVoiceConversation({
+    enabled: visible,
+    pttMode,
+    hapticsEnabled,
+    sendMessage: onSendMessage,
+    speak: (text, callbacks) =>
+      TTS.speak(text, {
         voice: selectedVoiceId ?? undefined,
         rate: speechRate,
-        onStart: () => {
-          if (activeRef.current) setAudioLevel(0.5);
-        },
-        onDone: () => {
-          if (activeRef.current && autoListenRef.current) {
-            setAudioLevel(0);
-            // Auto-start listening again after AI finishes speaking
-            startListening();
-          }
-        },
-        onStopped: () => {
-          if (activeRef.current) {
-            setAudioLevel(0);
-            setPhase('idle');
-          }
-        },
-      });
-    } catch {
-      if (activeRef.current) {
-        setPhase('idle');
-        setAudioLevel(0);
-      }
-    }
-  }, [hapticsEnabled, onSendMessage, startListening, selectedVoiceId, speechRate]);
+        ...callbacks,
+      }),
+    stopSpeaking: () => TTS.stop(),
+    onCaptureError: (err) => {
+      Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
+    },
+  });
 
-  const handleOrbPress = useCallback(() => {
-    if (phase === 'idle') {
-      autoListenRef.current = true;
-      startListening();
-    } else if (phase === 'listening') {
-      stopListeningAndProcess();
-    } else if (phase === 'speaking') {
-      // Interrupt AI — stop TTS and go back to listening
-      TTS.stop();
-      autoListenRef.current = true;
-      startListening();
-    }
-  }, [phase, startListening, stopListeningAndProcess]);
-
-  const handleMuteToggle = useCallback(() => {
-    const newMuted = !muted;
-    setMuted(newMuted);
+  const handlePttToggle = useCallback(() => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    if (newMuted && phase === 'listening') {
-      VoiceService.cancelRecording();
-      setPhase('idle');
-      setAudioLevel(0);
-    }
-  }, [muted, hapticsEnabled, phase]);
+    setVoicePushToTalk(!pttMode);
+  }, [hapticsEnabled, pttMode, setVoicePushToTalk]);
 
   const handleEndCall = useCallback(async () => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
-    autoListenRef.current = false;
-    await cleanup();
+    await endConversation();
     onClose();
-  }, [hapticsEnabled, cleanup, onClose]);
+  }, [hapticsEnabled, endConversation, onClose]);
 
   const handleClose = useCallback(async () => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    autoListenRef.current = false;
-    await cleanup();
+    await endConversation();
     onClose();
-  }, [hapticsEnabled, cleanup, onClose]);
+  }, [hapticsEnabled, endConversation, onClose]);
 
   if (!visible) return null;
 
-  const config = PHASE_CONFIG[phase];
+  const config = phaseConfig(phase, pttMode);
 
   return (
     <Animated.View
@@ -420,13 +288,19 @@ export function VoiceConversationScreen({
           {config.sublabel}
         </Text>
 
-        {/* Center orb — tap to interact */}
+        {/* Center orb — tap (hands-free) or hold (push-to-talk) to interact */}
         <Pressable
           testID="voice-conversation-orb"
-          onPress={handleOrbPress}
+          onPress={pttMode ? undefined : handleOrbPress}
+          onPressIn={pttMode ? handleOrbPressIn : undefined}
+          onPressOut={pttMode ? handleOrbPressOut : undefined}
           accessibilityLabel={config.label}
           accessibilityRole="button"
-          accessibilityHint="Tap to start, stop, or interrupt voice conversation"
+          accessibilityHint={
+            pttMode
+              ? 'Hold to talk, release to send'
+              : 'Tap to start, stop, or interrupt voice conversation'
+          }
         >
           <CenterOrb phase={phase} audioLevel={audioLevel} />
         </Pressable>
@@ -474,7 +348,7 @@ export function VoiceConversationScreen({
       >
         {/* Mute button */}
         <Pressable
-          onPress={handleMuteToggle}
+          onPress={toggleMute}
           className="w-14 h-14 rounded-full items-center justify-center active:opacity-80"
           style={{ backgroundColor: muted ? colors.dangerSurface : colors.voiceControlSurface }}
           accessibilityLabel={muted ? 'Unmute microphone' : 'Mute microphone'}
@@ -497,6 +371,19 @@ export function VoiceConversationScreen({
           accessibilityRole="button"
         >
           <Phone size={26} color={colors.white} style={{ transform: [{ rotate: '135deg' }] }} />
+        </Pressable>
+
+        {/* Push-to-talk mode toggle */}
+        <Pressable
+          testID="voice-conversation-ptt-toggle"
+          onPress={handlePttToggle}
+          className="w-14 h-14 rounded-full items-center justify-center active:opacity-80"
+          style={{ backgroundColor: pttMode ? colors.purpleSurface : colors.voiceControlSurface }}
+          accessibilityLabel={pttMode ? 'Switch to hands-free mode' : 'Switch to push-to-talk mode'}
+          accessibilityRole="button"
+          accessibilityState={{ selected: pttMode }}
+        >
+          <Hand size={24} color={pttMode ? colors.agentThinking : colors.textPrimary} />
         </Pressable>
       </View>
     </Animated.View>
