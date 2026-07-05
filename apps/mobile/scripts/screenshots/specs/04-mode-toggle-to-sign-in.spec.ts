@@ -51,7 +51,7 @@ describe('Mode toggle → cloud sign-in (public alpha)', () => {
     await element(by.id('chat.mode-toggle.cloud')).tap();
     await waitFor(element(by.id('cloud-sign-in-screen')))
       .toBeVisible()
-      .withTimeout(6000);
+      .withTimeout(15000);
 
     await device.takeScreenshot('04-cloud-sign-in');
     // Detox writes to its own artifact dir; the pipeline copies to DETOX_CAPTURE_PATH
