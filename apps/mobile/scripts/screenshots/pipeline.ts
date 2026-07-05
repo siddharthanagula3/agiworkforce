@@ -9,8 +9,8 @@
  * composites the locked tagline overlay.
  *
  * Usage:
- *   pnpm screenshots:ios       — iOS simulator captures (4 classes × 6 = 24)
- *   pnpm screenshots:android   — Android emulator captures (1 class × 6 = 6)
+ *   pnpm screenshots:ios       — iOS simulator captures (4 classes × 5 = 20)
+ *   pnpm screenshots:android   — Android emulator captures (1 class × 5 = 5)
  *   pnpm screenshots:composite — re-composite existing raw frames only
  *
  * Outputs:
@@ -113,13 +113,6 @@ const SCREENSHOTS: Screenshot[] = [
     spec: '04-mode-toggle-to-sign-in.spec.ts',
     heading: 'Sign in for Cloud',
     subhead: 'Cloud chat opens to any signed-in account.',
-  },
-  {
-    id: '05',
-    name: 'image-question',
-    spec: '05-image-with-question.spec.ts',
-    heading: 'Ask about images',
-    subhead: 'Attach a photo and keep the workflow in chat.',
   },
   {
     id: '06',
