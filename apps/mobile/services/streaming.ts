@@ -54,6 +54,20 @@ export interface StreamToolApprovalRequest {
   args?: unknown;
 }
 
+/**
+ * One durable file the model generated in the E2B sandbox this turn
+ * (`x_generated_files`, emitted once by the server tool loop before [DONE]).
+ * `uri` is a real media-storage download URL, not a sandbox path.
+ */
+export interface StreamGeneratedFile {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  uri: string;
+  byte_count: number;
+  kind: string;
+}
+
 export interface StreamDelta {
   content?: string;
   reasoning?: string;
@@ -70,6 +84,8 @@ export interface StreamDelta {
   x_code_result?: unknown;
   /** Whole content_block object for a finished server web-search tool. */
   x_search_results?: unknown;
+  /** Durable descriptors for files generated in the E2B sandbox this turn. */
+  x_generated_files?: { files?: StreamGeneratedFile[] };
 }
 
 export interface StreamCallbacks {

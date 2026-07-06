@@ -107,12 +107,15 @@ beforeEach(() => {
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });
   useChatAppModeStore.getState().setAppMode('local'); // onDone's auto-sync no-ops while asserting
-  mockGet.mockResolvedValue({
-    conversations: [],
-    messages: [],
-    cursor: '0',
-    hasMore: false,
-  } as never);
+  // Contract-valid empty pulls per endpoint — the engine schema-validates every
+  // response, so a chat-shaped page returned for memory/projects/settings fails
+  // the parse and flips sync status to 'error'.
+  mockGet.mockImplementation((async (path: string) => {
+    if (path.startsWith('/api/memory/sync')) return { memories: [], cursor: '0', hasMore: false };
+    if (path.startsWith('/api/projects/sync')) return { projects: [], cursor: '0', hasMore: false };
+    if (path.startsWith('/api/settings/sync')) return { settings: {}, cursor: '0', hasMore: false };
+    return { conversations: [], messages: [], artifacts: [], cursor: '0', hasMore: false };
+  }) as never);
   mockPost.mockImplementation((async (
     _p: string,
     body: { conversations?: Array<{ id: string }>; messages?: Array<{ id: string }> },
@@ -120,6 +123,7 @@ beforeEach(() => {
     applied: {
       conversations: (body?.conversations ?? []).map((c) => ({ id: c.id, server_version: '1' })),
       messages: (body?.messages ?? []).map((m) => ({ id: m.id, server_version: '1' })),
+      artifacts: [],
     },
     cursor: '1',
   })) as never);

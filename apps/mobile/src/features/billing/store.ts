@@ -19,29 +19,7 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/**
- * Shape returned by `GET /api/me` (apps/web/app/api/me/route.ts).
- * The endpoint nests subscription details under `plan`, not as a top-level field.
- */
-interface MeResponse {
-  user?: { id?: string; email?: string };
-  plan?: {
-    /** Subscription tier — 'free' | 'basic' | 'pro' | 'max' | 'team' | 'enterprise'. */
-    tier?: string | null;
-    display_name?: string;
-    status?: string;
-    current_period_end?: number | null;
-  };
-  feature_flags?: {
-    beta_features?: boolean;
-    advanced_model_access?: boolean;
-  };
-}
+import { parseMeResponse } from '@agiworkforce/services';
 
 interface TierState {
   /** Current subscription tier, normalised via `normalizeBillingPlanTier`. */
@@ -96,8 +74,12 @@ export const useTierStore = create<TierState>()(
 
         set({ isRefreshing: true });
         try {
-          const data = await api.get<MeResponse>('/api/me');
-          const tier = normalizeBillingPlanTier(data.plan?.tier ?? null);
+          // Validate against the shared /api/me contract (packages/services) —
+          // a mismatch throws into the catch below (cached tier kept, warning
+          // logged) instead of silently reading a drifted shape. This replaced
+          // a private interface that wrongly assumed a nested `user` envelope.
+          const data = parseMeResponse(await api.get<unknown>('/api/me'));
+          const tier = normalizeBillingPlanTier(data.plan.tier ?? null);
           set({ tier, lastRefreshedAt: new Date().toISOString() });
         } catch (err) {
           // Network failure or auth error — keep the cached tier, don't clear it.

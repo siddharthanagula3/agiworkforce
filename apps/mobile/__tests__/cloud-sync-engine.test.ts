@@ -101,6 +101,10 @@ function msgDelta(id: string, conversationId: string, serverVersion: string) {
     content: `body ${id}`,
     model: null,
     provider: null,
+    input_tokens: 0,
+    output_tokens: 0,
+    cost_cents: 0,
+    metadata: null,
     created_at: T,
     updated_at: T,
     deleted_at: null,
@@ -136,7 +140,14 @@ beforeEach(() => {
   useChatCloudMessageStore.getState().clearCloudData();
   useArtifactStore.getState().clearCloudArtifacts();
   useChatAppModeStore.getState().setAppMode('cloud');
-  mockGet.mockResolvedValue(emptyPull() as never);
+  // Contract-valid empty pulls per endpoint — the engine schema-validates every
+  // response, so a chat-shaped page for memory/projects/settings fails the parse.
+  mockGet.mockImplementation((async (path: string) => {
+    if (path.startsWith('/api/memory/sync')) return { memories: [], cursor: '0', hasMore: false };
+    if (path.startsWith('/api/projects/sync')) return { projects: [], cursor: '0', hasMore: false };
+    if (path.startsWith('/api/settings/sync')) return { settings: {}, cursor: '0', hasMore: false };
+    return emptyPull();
+  }) as never);
   // Default: the server ACKS exactly what was posted (a healthy round trip).
   mockPost.mockImplementation((async (
     _path: string,
@@ -145,6 +156,7 @@ beforeEach(() => {
     applied: {
       conversations: (body?.conversations ?? []).map((c) => ({ id: c.id, server_version: '1' })),
       messages: (body?.messages ?? []).map((m) => ({ id: m.id, server_version: '1' })),
+      artifacts: [],
     },
     cursor: '1',
   })) as never);
@@ -174,6 +186,7 @@ describe('syncNow — pull', () => {
     mockGet.mockResolvedValueOnce({
       conversations: [convDelta('c1', '5')],
       messages: [msgDelta('m1', 'c1', '6')],
+      artifacts: [],
       cursor: '6',
       hasMore: false,
     } as never);
@@ -196,6 +209,7 @@ describe('syncNow — pull', () => {
     mockGet.mockResolvedValueOnce({
       conversations: [convDelta('c1', '9', T)],
       messages: [],
+      artifacts: [],
       cursor: '9',
       hasMore: false,
     } as never);
@@ -256,6 +270,7 @@ describe('syncNow — pull', () => {
       .mockResolvedValueOnce({
         conversations: [convDelta('c1', '8')],
         messages: [msgDelta('m1', 'c1', '99')],
+        artifacts: [],
         cursor: '10',
         hasMore: true,
       } as never)
@@ -322,7 +337,10 @@ describe('syncNow — push', () => {
     const order: string[] = [];
     mockPost.mockImplementationOnce(async () => {
       order.push('push');
-      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+      return {
+        applied: { conversations: [], messages: [], artifacts: [] },
+        cursor: '0',
+      } as never;
     });
     mockGet.mockImplementationOnce(async () => {
       order.push('pull');
@@ -340,7 +358,7 @@ describe('syncNow — push', () => {
     markMessageForSync('c1', 'm1'); // conversation intentionally NOT marked dirty
     // Server rejects the message (parent missing → EXISTS fails): applied.messages empty.
     mockPost.mockImplementationOnce((async () => ({
-      applied: { conversations: [], messages: [] },
+      applied: { conversations: [], messages: [], artifacts: [] },
       cursor: '0',
     })) as never);
 

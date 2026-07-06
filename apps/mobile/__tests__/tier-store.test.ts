@@ -82,6 +82,26 @@ function getState() {
   return useTierStore.getState();
 }
 
+/**
+ * Build a full contract-valid /api/me payload (see packages/services
+ * cloud-contracts/me.ts). refreshTier() now validates responses with
+ * parseMeResponse, so partial payloads throw and fall back to the cached tier.
+ */
+function mePayload(tier: string) {
+  return {
+    id: 'user_test_1',
+    email: 'test@example.com',
+    name: 'Test User',
+    avatar_url: null,
+    created_at: null,
+    updated_at: 1751712000,
+    plan: { tier, display_name: tier, status: 'active', current_period_end: null },
+    feature_flags: { beta_features: true, advanced_model_access: true },
+    credits: null,
+    routing_preferences: {},
+  };
+}
+
 function resetStore() {
   useTierStore.setState({
     tier: 'free',
@@ -123,8 +143,8 @@ describe('tierStore defaults', () => {
 const describeRefreshTier = FEATURES.billing ? describe : describe.skip;
 
 describeRefreshTier('refreshTier — success cases', () => {
-  it('hydrates tier from /api/auth/me plan field', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'hobby' } });
+  it('hydrates tier from /api/me plan field', async () => {
+    mockApiGet.mockResolvedValueOnce(mePayload('hobby'));
 
     await getState().refreshTier();
 
@@ -132,31 +152,27 @@ describeRefreshTier('refreshTier — success cases', () => {
   });
 
   it('normalises "PRO" to "pro"', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'PRO' } });
+    mockApiGet.mockResolvedValueOnce(mePayload('PRO'));
 
     await getState().refreshTier();
 
     expect(getState().tier).toBe('pro');
   });
 
-  it('normalises null plan to "free"', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: null });
+  it('keeps cached tier when the payload violates the /api/me contract', async () => {
+    // Partial payloads (missing id/email/plan envelope) fail parseMeResponse —
+    // the store must degrade to the cached tier, exactly like a network error.
+    useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: null });
+    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'hobby' } });
 
     await getState().refreshTier();
 
-    expect(getState().tier).toBe('free');
-  });
-
-  it('normalises missing plan field to "free"', async () => {
-    mockApiGet.mockResolvedValueOnce({});
-
-    await getState().refreshTier();
-
-    expect(getState().tier).toBe('free');
+    expect(getState().tier).toBe('pro');
+    expect(getState().lastRefreshedAt).toBeNull();
   });
 
   it('sets lastRefreshedAt on success', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'pro_plus' } });
+    mockApiGet.mockResolvedValueOnce(mePayload('pro_plus'));
     const before = Date.now();
 
     await getState().refreshTier();
@@ -167,15 +183,15 @@ describeRefreshTier('refreshTier — success cases', () => {
   });
 
   it('sets isRefreshing back to false after success', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'max' } });
+    mockApiGet.mockResolvedValueOnce(mePayload('max'));
 
     await getState().refreshTier();
 
     expect(getState().isRefreshing).toBe(false);
   });
 
-  it('calls /api/auth/me endpoint', async () => {
-    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'hobby' } });
+  it('calls the /api/me endpoint', async () => {
+    mockApiGet.mockResolvedValueOnce(mePayload('hobby'));
 
     await getState().refreshTier();
 
@@ -233,7 +249,7 @@ describeRefreshTier('refreshTier — concurrent call de-duplication', () => {
     expect(mockApiGet).toHaveBeenCalledTimes(1);
 
     // Resolve the first call
-    resolveFirst({ plan: { tier: 'hobby' } });
+    resolveFirst(mePayload('hobby'));
     await first;
     expect(getState().tier).toBe('hobby');
   });
