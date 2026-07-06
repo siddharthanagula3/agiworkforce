@@ -34,7 +34,23 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
-import type { ArtifactWireDelta } from '@agiworkforce/services';
+// Wire shapes come from the shared cloud contracts (packages/services
+// cloud-contracts/sync.ts) — the same schemas the web routes' contract tests
+// enforce server-side. Every pull/push response is validated here, so a
+// server-shape drift throws into syncNow()'s catch (status 'error') instead
+// of silently mis-applying deltas.
+import {
+  ChatSyncPullResponseSchema,
+  ChatSyncPushResponseSchema,
+  MemorySyncPullResponseSchema,
+  MemorySyncPushResponseSchema,
+  ProjectsSyncPullResponseSchema,
+  ProjectsSyncPushResponseSchema,
+  SettingsSyncPullResponseSchema,
+  SettingsSyncPushResponseSchema,
+  type ConversationWireDelta,
+  type MessageWireDelta,
+} from '@agiworkforce/services';
 
 const SYNC_PATH = '/api/chat/sync';
 const MEMORY_SYNC_PATH = '/api/memory/sync';
@@ -42,41 +58,6 @@ const PROJECTS_SYNC_PATH = '/api/projects/sync';
 const SETTINGS_SYNC_PATH = '/api/settings/sync';
 /** Safety bound on the pull pagination loop (each page is up to 500 rows). */
 const PULL_PAGE_GUARD = 50;
-
-// ── Delta wire shapes (snake_case from /api/chat/sync) ──────────────────────────
-
-interface ConversationDelta {
-  id: string;
-  title: string;
-  model: string | null;
-  project_id: string | null;
-  pinned: boolean;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  server_version: string;
-}
-
-interface MessageDelta {
-  id: string;
-  conversation_id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  model: string | null;
-  provider: string | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  server_version: string;
-}
-
-interface PullResponse {
-  conversations: ConversationDelta[];
-  messages: MessageDelta[];
-  artifacts: ArtifactWireDelta[];
-  cursor: string;
-  hasMore: boolean;
-}
 
 /**
  * Managed-only gate: the cloud-chat feature is on AND the app is in cloud mode.
@@ -107,7 +88,7 @@ function maxCursor(base: string, ...versions: string[]): string {
 
 // ── Apply pulled deltas into the cloud store ────────────────────────────────────
 
-export function applyConversationDeltas(deltas: ConversationDelta[]): void {
+export function applyConversationDeltas(deltas: ConversationWireDelta[]): void {
   const store = useChatCloudMessageStore.getState();
   const dirtyIds = useCloudSyncStateStore.getState().dirtyConversationIds;
   const existing = new Map(store.conversations.map((c) => [c.id, c]));
@@ -147,9 +128,9 @@ export function applyConversationDeltas(deltas: ConversationDelta[]): void {
   }
 }
 
-function applyMessageDeltas(deltas: MessageDelta[]): void {
+function applyMessageDeltas(deltas: MessageWireDelta[]): void {
   const store = useChatCloudMessageStore.getState();
-  const byConv = new Map<string, MessageDelta[]>();
+  const byConv = new Map<string, MessageWireDelta[]>();
   for (const d of deltas) {
     const list = byConv.get(d.conversation_id) ?? [];
     list.push(d);
@@ -188,12 +169,14 @@ function applyMessageDeltas(deltas: MessageDelta[]): void {
 async function pull(): Promise<void> {
   let cursor = useCloudSyncStateStore.getState().cursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
-    const res = await api.get<PullResponse>(`${SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
-    applyConversationDeltas(res.conversations ?? []);
-    applyMessageDeltas(res.messages ?? []);
+    const res = ChatSyncPullResponseSchema.parse(
+      await api.get<unknown>(`${SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
+    );
+    applyConversationDeltas(res.conversations);
+    applyMessageDeltas(res.messages);
     // Artifacts (0039): mobile is a PULLER — apply pulled cloud artifacts via the shared
     // state-sync logic. Kept in a separate store slice; the gallery merges on render.
-    useArtifactStore.getState().applyCloudArtifactDeltas(res.artifacts ?? []);
+    useArtifactStore.getState().applyCloudArtifactDeltas(res.artifacts);
     // Trust the server's SAFE cursor. The two tables paginate independently and
     // share one version sequence, so taking the max of per-row server_versions
     // overshoots the lagging table's frontier and skips rows that fall in the gap
@@ -214,14 +197,6 @@ interface PushMessage {
   model: string | null;
   provider: string | null;
   createdAt?: string;
-}
-
-interface PushResponse {
-  applied: {
-    conversations: Array<{ id: string; server_version: string }>;
-    messages: Array<{ id: string; server_version: string }>;
-  };
-  cursor: string;
 }
 
 async function push(): Promise<void> {
@@ -275,8 +250,10 @@ async function push(): Promise<void> {
 
   let ackedMessageIds = new Set<string>();
   if (conversations.length > 0 || messages.length > 0) {
-    const res = await api.post<PushResponse>(SYNC_PATH, { conversations, messages });
-    ackedMessageIds = new Set((res?.applied?.messages ?? []).map((m) => m.id));
+    const res = ChatSyncPushResponseSchema.parse(
+      await api.post<unknown>(SYNC_PATH, { conversations, messages }),
+    );
+    ackedMessageIds = new Set(res.applied.messages.map((m) => m.id));
   }
 
   // Conversations are LWW and dependency-free: clearing every attempted ref is safe
@@ -291,27 +268,7 @@ async function push(): Promise<void> {
   useCloudSyncStateStore.getState().clearDirty(dirtyConversationIds, clearedMessageRefs);
 }
 
-// ── Memory wire shapes (snake_case from /api/memory/sync) ─────────────────────
-
-/** Shape returned by GET /api/memory/sync — server uses snake_case. */
-interface MemoryPullItem {
-  id: string;
-  content: string;
-  category: string | null;
-  source: 'mobile' | 'desktop' | 'web' | 'auto';
-  /** Server may not yet support pinning (pending migration) — treat missing as false. */
-  pinned?: boolean;
-  is_deleted: boolean;
-  created_at: string;
-  updated_at: string;
-  server_version: string;
-}
-
-interface MemoryPullResponse {
-  memories: MemoryPullItem[];
-  cursor: string;
-  hasMore: boolean;
-}
+// ── Memory push body (camelCase to /api/memory/sync) ──────────────────────────
 
 /** Shape for POST /api/memory/sync — server expects camelCase. */
 interface MemoryPushItem {
@@ -326,35 +283,25 @@ interface MemoryPushItem {
   updatedAt?: string;
 }
 
-interface MemoryPushResponse {
-  applied: Array<{ id: string; server_version: string }>;
-  cursor: string;
-}
-
 // ── Memory pull ────────────────────────────────────────────────────────────────
 
 async function pullMemory(): Promise<void> {
   let cursor = useMemorySyncStateStore.getState().memoryCursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
-    const res = await api.get<MemoryPullResponse>(
-      `${MEMORY_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
+    const res = MemorySyncPullResponseSchema.parse(
+      await api.get<unknown>(`${MEMORY_SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
     );
-    const memories = res.memories ?? [];
+    const memories = res.memories;
     if (memories.length > 0) {
-      // Map wire snake_case → client camelCase, then apply to store.
-      // NOTE: the server does not yet return `pinned` (pending Neon migration
-      // on user_memories + route update). Until it does, a delta never carries
-      // pinned state, so falling back to `false` would silently revert a
-      // locally-toggled pin on the next pull. Preserve the existing local
-      // value when the wire item omits the field; only adopt the server's
-      // value once it actually starts sending it.
-      const existingById = new Map(useCloudMemoryStore.getState().entries.map((e) => [e.id, e]));
+      // Map wire snake_case → client camelCase, then apply to store. The wire
+      // `source` is a free-form string; normalize unknown values to 'web'.
       const deltas: CloudMemoryEntry[] = memories.map((m) => ({
         id: m.id,
         content: m.content,
         category: m.category,
-        source: m.source,
-        pinned: m.pinned ?? existingById.get(m.id)?.pinned ?? false,
+        source:
+          m.source === 'mobile' || m.source === 'desktop' || m.source === 'auto' ? m.source : 'web',
+        pinned: m.pinned,
         isDeleted: m.is_deleted,
         createdAt: m.created_at,
         updatedAt: m.updated_at,
@@ -394,8 +341,6 @@ async function pushMemory(): Promise<void> {
       content: entry.content,
       category: entry.category,
       source: entry.source,
-      // Sent best-effort: the server ignores unknown fields until the pending
-      // Neon migration + route update land (see pinned note in pullMemory).
       pinned: entry.pinned,
       isDeleted: entry.isDeleted,
       createdAt: entry.createdAt,
@@ -406,8 +351,10 @@ async function pushMemory(): Promise<void> {
   // Dead refs: clear immediately (nothing to push).
   const ackedIds = new Set<string>();
   if (payload.length > 0) {
-    const res = await api.post<MemoryPushResponse>(MEMORY_SYNC_PATH, { memories: payload });
-    for (const applied of res?.applied ?? []) {
+    const res = MemorySyncPushResponseSchema.parse(
+      await api.post<unknown>(MEMORY_SYNC_PATH, { memories: payload }),
+    );
+    for (const applied of res.applied) {
       ackedIds.add(applied.id);
     }
   }
@@ -425,29 +372,7 @@ async function pushMemory(): Promise<void> {
   useMemorySyncStateStore.getState().clearMemoryDirty(toClear);
 }
 
-// ── Project wire shapes (snake_case from /api/projects/sync) ──────────────────
-
-/** Shape returned by GET /api/projects/sync — server uses snake_case. */
-interface ProjectPullItem {
-  id: string;
-  name: string;
-  description: string | null;
-  instructions: string | null;
-  color: string | null;
-  is_archived: boolean;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  /** Non-null = tombstone row. */
-  deleted_at: string | null;
-  server_version: string;
-}
-
-interface ProjectPullResponse {
-  projects: ProjectPullItem[];
-  cursor: string;
-  hasMore: boolean;
-}
+// ── Project push body (camelCase to /api/projects/sync) ───────────────────────
 
 /** Shape for POST /api/projects/sync — server expects camelCase. */
 interface ProjectPushItem {
@@ -463,20 +388,15 @@ interface ProjectPushItem {
   deletedAt?: string | null;
 }
 
-interface ProjectPushResponse {
-  applied: Array<{ id: string; server_version: string }>;
-  cursor: string;
-}
-
 // ── Project pull ───────────────────────────────────────────────────────────────
 
 async function pullProjects(): Promise<void> {
   let cursor = useProjectSyncStateStore.getState().projectCursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
-    const res = await api.get<ProjectPullResponse>(
-      `${PROJECTS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
+    const res = ProjectsSyncPullResponseSchema.parse(
+      await api.get<unknown>(`${PROJECTS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
     );
-    const items = res.projects ?? [];
+    const items = res.projects;
     if (items.length > 0) {
       // Map wire snake_case → client camelCase, then apply to store.
       const deltas: CloudProject[] = items.map((p) => ({
@@ -541,8 +461,10 @@ async function pushProjects(): Promise<void> {
   // Dead refs: clear immediately (nothing to push).
   const ackedIds = new Set<string>();
   if (payload.length > 0) {
-    const res = await api.post<ProjectPushResponse>(PROJECTS_SYNC_PATH, { projects: payload });
-    for (const applied of res?.applied ?? []) {
+    const res = ProjectsSyncPushResponseSchema.parse(
+      await api.post<unknown>(PROJECTS_SYNC_PATH, { projects: payload }),
+    );
+    for (const applied of res.applied) {
       ackedIds.add(applied.id);
     }
   }
@@ -558,22 +480,6 @@ async function pushProjects(): Promise<void> {
   // Clear dirty queue for: dead refs + server-acked live refs.
   const toClear = [...deadIds, ...liveIds.filter((id) => ackedIds.has(id))];
   useProjectSyncStateStore.getState().clearProjectDirty(toClear);
-}
-
-// ── Settings wire shapes (/api/settings/sync) ──────────────────────────────────
-
-/** Shape returned by GET /api/settings/sync. */
-interface SettingsPullResponse {
-  settings: Record<string, unknown>;
-  cursor: string;
-  hasMore: false;
-}
-
-/** Shape returned by POST /api/settings/sync. */
-interface SettingsPushResponse {
-  /** true = merged; false = stale (server LWW skipped this push). */
-  applied: boolean;
-  cursor: string;
 }
 
 // ── Settings push ───────────────────────────────────────────────────────────────
@@ -617,15 +523,17 @@ async function pushSettings(): Promise<void> {
   // Guard 2: Skip if the projection matches the last pushed snapshot (no change).
   if (lastPushedSnapshot === currentJson) return;
 
-  const res = await api.post<SettingsPushResponse>(SETTINGS_SYNC_PATH, {
-    settings: current,
-    // Use the real local-edit time as the LWW key (not push time). This lets the
-    // server correctly resolve concurrent edits from multiple surfaces.
-    updatedAt: settingsUpdatedAt,
-  });
+  const res = SettingsSyncPushResponseSchema.parse(
+    await api.post<unknown>(SETTINGS_SYNC_PATH, {
+      settings: current,
+      // Use the real local-edit time as the LWW key (not push time). This lets the
+      // server correctly resolve concurrent edits from multiple surfaces.
+      updatedAt: settingsUpdatedAt,
+    }),
+  );
 
   // Advance cursor regardless of applied (LWW skipped = server cursor still moves).
-  const newCursor = res?.cursor ?? useSettingsSyncStateStore.getState().settingsCursor;
+  const newCursor = res.cursor;
   useSettingsSyncStateStore
     .getState()
     .setSettingsCursor(maxCursor(useSettingsSyncStateStore.getState().settingsCursor, newCursor));
@@ -645,12 +553,12 @@ async function pushSettings(): Promise<void> {
  */
 async function pullSettings(): Promise<void> {
   const cursor = useSettingsSyncStateStore.getState().settingsCursor;
-  const res = await api.get<SettingsPullResponse>(
-    `${SETTINGS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
+  const res = SettingsSyncPullResponseSchema.parse(
+    await api.get<unknown>(`${SETTINGS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
   );
 
-  const pulledSettings = res.settings ?? {};
-  const newCursor = res.cursor ?? cursor;
+  const pulledSettings = res.settings;
+  const newCursor = res.cursor;
   const advancedCursor = maxCursor(cursor, newCursor);
 
   // Only apply if the server returned a new cursor (something changed).

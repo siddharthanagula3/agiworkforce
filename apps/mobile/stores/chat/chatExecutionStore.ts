@@ -6,7 +6,7 @@ import { QueueFullError } from '@agiworkforce/runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
-import { streamChat, type StreamDelta } from '@/services/streaming';
+import { streamChat, type StreamDelta, type StreamGeneratedFile } from '@/services/streaming';
 import {
   createToolCallAccumulator,
   accumulateToolCallDelta,
@@ -41,7 +41,8 @@ import {
   providerForExecutionMode,
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
-import type { ChatMessage, MessageAttachment, ConversationSummary } from '@/types/chat';
+import type { ChatMessage, MessageAttachment, ConversationSummary, ToolCall } from '@/types/chat';
+import type { GeneratedFile, GeneratedFileKind } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -491,6 +492,83 @@ function deriveChatMessageArtifacts(
   } catch {
     return [];
   }
+}
+
+const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set([
+  'pdf',
+  'docx',
+  'xlsx',
+  'pptx',
+  'csv',
+  'json',
+  'markdown',
+  'html',
+  'image',
+  'archive',
+  'other',
+]);
+
+/**
+ * Map the server's x_generated_files wire descriptors (durable media URLs for
+ * files the model created in the E2B sandbox) onto generated-file artifacts so
+ * InlineArtifactCard / ArtifactFullScreen / GeneratedFileCard render a
+ * downloadable file card on the message.
+ */
+export function generatedFileArtifactsFromWire(
+  files: StreamGeneratedFile[],
+  createdAt: string,
+): NonNullable<ChatMessage['artifacts']> {
+  return files.map((f) => {
+    const kind: GeneratedFileKind = GENERATED_FILE_KINDS.has(f.kind)
+      ? (f.kind as GeneratedFileKind)
+      : 'other';
+    const generatedFile: GeneratedFile = {
+      id: f.id,
+      // Sandbox sessions are server-internal; the card's presentation layer
+      // treats these as absent and falls back to file-level labels.
+      computeSessionId: '',
+      ownerUserId: '',
+      sourceSurface: 'web',
+      privacyMode: 'managed',
+      providerMode: 'ManagedGateway',
+      kind,
+      fileName: f.file_name,
+      mimeType: f.mime_type,
+      uri: f.uri,
+      byteCount: f.byte_count,
+      checksumSha256: '',
+      previewDerivatives: [],
+      createdAt,
+    };
+    return {
+      id: f.id,
+      type: kind === 'image' ? ('image' as const) : ('document' as const),
+      title: f.file_name,
+      content: '',
+      generatedFile,
+    };
+  });
+}
+
+/**
+ * Derive inline answer citations from the turn's accumulated web-search tool
+ * results, so CitationChip / CollapsibleSources render sources on the prose
+ * (ChatGPT-style) instead of only inside the collapsed tool timeline.
+ */
+export function citationsFromToolCalls(
+  toolCalls: ToolCall[],
+): NonNullable<ChatMessage['citations']> {
+  const seen = new Set<string>();
+  const citations: NonNullable<ChatMessage['citations']> = [];
+  for (const tc of toolCalls) {
+    for (const r of tc.searchResults ?? []) {
+      if (!r.url || seen.has(r.url)) continue;
+      seen.add(r.url);
+      citations.push({ url: r.url, title: r.title, ...(r.snippet ? { snippet: r.snippet } : {}) });
+      if (citations.length >= 8) return citations;
+    }
+  }
+  return citations;
 }
 
 function captureArtifactsFromMessage(
@@ -1089,6 +1167,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // Claude thinking-model replies rendered raw `<thinking>` tag soup as the
       // visible message instead of routing to the reasoning/ThinkingChip UI.
       let cloudContentRaw = '';
+      // Files the model generated in the E2B sandbox this turn — the server
+      // emits one x_generated_files delta (durable media URLs) before [DONE];
+      // onDone maps them to generated-file artifacts so GeneratedFileCard /
+      // InlineArtifactCard render a downloadable file card.
+      const turnGeneratedFiles: StreamGeneratedFile[] = [];
       // Structured delta.reasoning is a separate, genuinely incremental channel
       // (e.g. a provider's dedicated reasoning field) from the tag-embedded
       // thinking parsed out of cloudContentRaw below. Tracked separately because
@@ -1163,6 +1246,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);
 
+            if (delta.x_generated_files?.files?.length) {
+              turnGeneratedFiles.push(...delta.x_generated_files.files);
+            }
+
             const thinkingStartedAt = thinkingStartTimes.get(conversationId);
             const currentMsgStore = getMsgStore();
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
@@ -1215,12 +1302,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 ?.title ?? '';
             // Attach fenced-code artifacts to the message so InlineArtifactCard
             // renders in cloud chat (was local-only), and feed the gallery.
-            const messageArtifacts = deriveChatMessageArtifacts(
-              finalContent,
-              conversationId,
-              assistantMessageId,
-              completedAt,
-            );
+            const messageArtifacts = [
+              ...deriveChatMessageArtifacts(
+                finalContent,
+                conversationId,
+                assistantMessageId,
+                completedAt,
+              ),
+              // E2B sandbox files (durable download URLs from x_generated_files).
+              ...generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
+            ];
+            // Inline answer citations from this turn's web-search results.
+            const finalCitations = citationsFromToolCalls(finalToolCalls);
             captureArtifactsFromMessage(
               finalContent,
               assistantMessageId,
@@ -1235,6 +1328,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     isStreaming: false,
                     ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
                     ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
+                    ...(finalCitations.length > 0 ? { citations: finalCitations } : {}),
                     metadata: {
                       ...m.metadata,
                       ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
