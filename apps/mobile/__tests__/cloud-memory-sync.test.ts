@@ -72,6 +72,19 @@ function emptyChatPull() {
   return { conversations: [], messages: [], artifacts: [], cursor: '0', hasMore: false };
 }
 
+/**
+ * Contract-valid empty pull for whichever sync endpoint `path` hits. The
+ * engine now schema-validates every response, so a chat-shaped page returned
+ * for the projects/settings endpoints fails the parse and flips sync status
+ * to 'error'.
+ */
+function defaultPull(path: string) {
+  if (path.startsWith('/api/memory/sync')) return { memories: [], cursor: '0', hasMore: false };
+  if (path.startsWith('/api/projects/sync')) return { projects: [], cursor: '0', hasMore: false };
+  if (path.startsWith('/api/settings/sync')) return { settings: {}, cursor: '0', hasMore: false };
+  return emptyChatPull();
+}
+
 function memoryPullItem(
   id: string,
   serverVersion: string,
@@ -82,6 +95,7 @@ function memoryPullItem(
     content: opts.content ?? `Memory content ${id}`,
     category: null,
     source: 'web' as const,
+    pinned: false,
     is_deleted: opts.isDeleted ?? false,
     created_at: T,
     updated_at: T,
@@ -114,7 +128,7 @@ beforeEach(() => {
   // Default: chat pull returns empty; memory pull returns empty.
   mockGet.mockImplementation(async (path: string) => {
     if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
-    return emptyChatPull() as never;
+    return defaultPull(path as string) as never;
   });
 
   // Default: POST acks all submitted items.
@@ -133,6 +147,7 @@ beforeEach(() => {
       applied: {
         conversations: convs.map((c) => ({ id: c.id, server_version: '1' })),
         messages: msgs.map((m) => ({ id: m.id, server_version: '1' })),
+        artifacts: [],
       },
       cursor: '1',
     } as never;
@@ -175,7 +190,7 @@ describe('memory sync — cursor', () => {
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith('/api/memory/sync'))
         return { memories: [memoryPullItem('m1', '7')], cursor: '7', hasMore: false } as never;
-      return emptyChatPull() as never;
+      return defaultPull(path as string) as never;
     });
 
     await syncNow();
@@ -224,7 +239,7 @@ describe('memory sync — cursor', () => {
           hasMore: false,
         } as never;
       }
-      return emptyChatPull() as never;
+      return defaultPull(path as string) as never;
     });
 
     await syncNow();
@@ -251,7 +266,7 @@ describe('memory sync — tombstone application', () => {
           cursor: '9',
           hasMore: false,
         } as never;
-      return emptyChatPull() as never;
+      return defaultPull(path as string) as never;
     });
 
     await syncNow();
@@ -266,7 +281,7 @@ describe('memory sync — tombstone application', () => {
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith('/api/memory/sync'))
         return { memories: [], cursor: '5', hasMore: false } as never;
-      return emptyChatPull() as never;
+      return defaultPull(path as string) as never;
     });
 
     await syncNow();
@@ -425,25 +440,27 @@ describe('memory store — cloud pin/unpin persistence', () => {
     expect(pushedEntry?.pinned).toBe(true);
   });
 
-  it('does not revert a locally-pinned entry when the server pull omits the pinned field', async () => {
-    // Server does not yet support the pinned column — its delta omits the field.
+  it('adopts the server pinned state from a pulled delta (LWW — pinned always on the wire)', async () => {
+    // The /api/memory/sync contract (packages/services cloud-contracts/sync.ts)
+    // guarantees `pinned` on every delta, so the old "server omits pinned"
+    // preserve-local fallback is gone. A pulled pinned:true delta must pin the
+    // local entry; a locally-dirty pin is protected by push-before-pull order,
+    // not by field omission (covered by the push test above).
     mockGet.mockImplementation(async (path: string) => {
       if ((path as string).startsWith('/api/memory/sync')) {
         return {
-          memories: [memoryPullItem('m-pinned', '5', { content: 'already pinned' })],
+          memories: [
+            { ...memoryPullItem('m-pinned', '5', { content: 'pinned on web' }), pinned: true },
+          ],
           cursor: '5',
           hasMore: false,
         } as never;
       }
-      return emptyChatPull() as never;
+      return defaultPull(path as string) as never;
     });
 
     useChatAppModeStore.getState().setAppMode('cloud');
-    seedCloudMemory('m-pinned', 'already pinned');
-    useCloudMemoryStore.getState().upsertCloudMemory({
-      ...useCloudMemoryStore.getState().entries[0]!,
-      pinned: true,
-    });
+    seedCloudMemory('m-pinned', 'pinned on web');
 
     await syncNow();
 

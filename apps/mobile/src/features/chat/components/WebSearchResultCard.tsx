@@ -73,6 +73,11 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
         >
           {result.title}
         </Text>
+        {result.snippet ? (
+          <Text numberOfLines={2} style={{ fontSize: 11, color: colors.textSecondary }}>
+            {result.snippet}
+          </Text>
+        ) : null}
       </View>
       <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted, flexShrink: 0 }}>
         {hostname}

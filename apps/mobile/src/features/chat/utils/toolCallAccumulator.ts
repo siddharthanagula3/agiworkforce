@@ -129,6 +129,25 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     t.output = safeStringify(resultBlock);
     t.status = 'completed';
 
+    // Code execution: show the program's stdout/stderr as the Response — not
+    // the raw JSON envelope. A non-zero return code marks the step failed.
+    if (delta.x_code_result) {
+      const inner = (
+        delta.x_code_result as {
+          content?: { stdout?: string; stderr?: string; return_code?: number };
+        }
+      ).content;
+      if (inner && (typeof inner.stdout === 'string' || typeof inner.stderr === 'string')) {
+        const text = [inner.stdout, inner.stderr]
+          .filter((s): s is string => typeof s === 'string' && s.length > 0)
+          .join('\n');
+        if (text) t.output = text;
+        if (typeof inner.return_code === 'number' && inner.return_code !== 0) {
+          t.status = 'failed';
+        }
+      }
+    }
+
     // Preserve the structured per-result {url, title} list (not just the
     // stringified blob) so the UI can render real favicon/title/domain cards —
     // mirrors apps/web's useChatStream.ts parsing of the same wire shape.
@@ -140,7 +159,10 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
           .map((r) => ({
             url: r['url'] as string,
             title: (r['title'] as string) || (r['url'] as string),
-            snippet: (r['encrypted_content'] as string) || undefined,
+            // Only a real plaintext snippet — Anthropic's `encrypted_content`
+            // is an opaque blob for provider-side citation reconstruction and
+            // must never render as descriptive text.
+            snippet: typeof r['snippet'] === 'string' ? r['snippet'] : undefined,
           }));
         if (results.length > 0) t.searchResults = results;
       }
