@@ -116,17 +116,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agiworkforce-apply-patch"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "agiworkforce-async-utils"
 version = "0.1.0"
 dependencies = [
@@ -390,14 +379,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agiworkforce-plugin-runtime"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "agiworkforce-protocol"
 version = "0.1.0"
 dependencies = [
@@ -443,20 +424,6 @@ name = "agiworkforce-sandbox-policy"
 version = "0.1.0"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "agiworkforce-task-runtime"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "uuid 1.20.0",
 ]
 
 [[package]]
