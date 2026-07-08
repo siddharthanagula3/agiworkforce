@@ -1,5 +1,0 @@
-{
-  "name": "fixture-legacy-app",
-  "version": "0.0.5",
-  "apps": ["github", "slack"]
-}
