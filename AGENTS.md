@@ -87,7 +87,7 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 - Do not hardcode model IDs; use model catalogs and provider capability metadata.
 - Do not copy proprietary code. Open-source reuse needs compatible license handling and `THIRD_PARTY_LICENSES.md`.
 - Do not combine file moves with behavior changes.
-- Do not move `.claude`, `.codex`, `.cursor`, `.opencode`, `.agents`, or `.mcp.json` until their tool contracts are classified.
+- Tool config folders were classified on 2026-07-08 (monorepo restructure P0): `.cursor`, `.minimax`, `.opencode`, and `.superpowers` were removed; `.claude`, `.codex`, `.agents`, and `.mcp.json` remain loader-owned — do not move or delete them without reclassifying.
 - Check `docs/agent-context/known-flaws.md` before reporting a bug as new.
 - Do not add new root control docs. Use `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, `audit`, `reports`, and `docs/archive` as defined in `docs/engineering/naming-conventions.md`.
 - Keep root context lean. Put durable local rules in path-scoped `AGENTS.md` files, surface READMEs, and `docs/agent-context` maps instead of expanding this file.
