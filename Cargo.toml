@@ -4,12 +4,12 @@ members = [
   "apps/cli",
   "crates/*",
 ]
-# 2026-05-03 cleanup: 70 codex-rs port crates removed from disk (was FIX-022
-# exclude list). Original codex-cli source preserved at ~/Desktop/reference/codex-cli/
-# for future re-port if any feature is needed. Shipping binaries (apps/cli +
-# apps/desktop/src-tauri) only depend on `agiworkforce-protocol` and
-# `agiworkforce-sandbox-policy` via path. Other workspace crates (44) compile
-# cleanly via `cargo check --workspace` and may be pruned in a future pass.
+# 2026-07-08 restructure P0: dead crates removed (agiworkforce-apply-patch,
+# agiworkforce-plugin-runtime, agiworkforce-task-runtime — zero dependents).
+# Actual dependency surface: apps/cli path-depends on app-server, protocol,
+# sandbox-policy, execpolicy, command-registry, and utils-image;
+# apps/desktop/src-tauri path-depends on sandbox-policy only. CLI/desktop
+# engine convergence is tracked in docs/plans/monorepo-restructure-2026-07-08.md (P4).
 exclude = []
 resolver = "2"
 
