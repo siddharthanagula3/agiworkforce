@@ -53,23 +53,6 @@ function listFilesRecursive(relativeDir, predicate = () => true) {
   return out;
 }
 
-function collectOpencodeFileRefs(value, refs = []) {
-  if (Array.isArray(value)) {
-    for (const item of value) collectOpencodeFileRefs(item, refs);
-    return refs;
-  }
-  if (value && typeof value === 'object') {
-    for (const item of Object.values(value)) collectOpencodeFileRefs(item, refs);
-    return refs;
-  }
-  if (typeof value !== 'string') return refs;
-
-  for (const match of value.matchAll(/\{file:([^}]+)\}/g)) {
-    refs.push(match[1]);
-  }
-  return refs;
-}
-
 const requiredFiles = [
   'AGENTS.md',
   'CLAUDE.md',
@@ -118,16 +101,10 @@ const requiredFiles = [
   'apps/extension-vscode/AGENTS.md',
   'services/AGENTS.md',
   'packages/providers/AGENTS.md',
-  '.opencode/opencode.json',
-  '.opencode/instructions/INSTRUCTIONS.md',
   '.claude/README.md',
   '.codex/README.md',
-  '.cursor/README.md',
-  '.opencode/README.md',
   '.agents/README.md',
   '.agents/skills/README.md',
-  '.minimax/README.md',
-  '.superpowers/README.md',
 ];
 
 for (const file of requiredFiles) {
@@ -227,10 +204,10 @@ requireIncludes(
   '.agents/README.md',
   'Each tracked skill directory under `.agents/skills/` must include `SKILL.md`',
 );
-requireIncludes('.opencode/README.md', 'Root `opencode.json` is retired');
-
-if (exists('opencode.json')) {
-  errors.push('Root opencode.json is retired; use .opencode/opencode.json');
+if (exists('opencode.json') || exists('.opencode')) {
+  errors.push(
+    'opencode tooling was retired on 2026-07-08 (monorepo restructure P0); do not reintroduce opencode.json or .opencode/',
+  );
 }
 
 const staleToolAgentPhrases = [
@@ -252,22 +229,6 @@ for (const file of [
   for (const phrase of staleToolAgentPhrases) {
     if (body.includes(phrase)) {
       errors.push(`${file} contains stale tool-agent phrase ${JSON.stringify(phrase)}`);
-    }
-  }
-}
-
-const opencodeConfig = readJson('.opencode/opencode.json');
-if (opencodeConfig) {
-  for (const instructionPath of opencodeConfig.instructions ?? []) {
-    if (!exists(instructionPath)) {
-      errors.push(`.opencode/opencode.json instruction path does not exist: ${instructionPath}`);
-    }
-  }
-
-  for (const fileRef of collectOpencodeFileRefs(opencodeConfig)) {
-    const relativePath = path.join('.opencode', fileRef);
-    if (!exists(relativePath)) {
-      errors.push(`.opencode/opencode.json file reference does not exist: ${fileRef}`);
     }
   }
 }

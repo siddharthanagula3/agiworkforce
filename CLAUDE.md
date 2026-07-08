@@ -42,11 +42,7 @@ These rules must stay mirrored in `AGENTS.md` and guarded by `pnpm check:agent-c
 
 ## Surface Subagents
 
-Seven Claude-Code subagent definitions live in `.claude/agents/` and own their surface end-to-end: `desktop-engineer`, `web-engineer`, `mobile-engineer`, `cli-engineer`, `chrome-ext-engineer`, `vscode-ext-engineer`, and `supervisor`. Read the agent file before dispatching so you brief it with the right context.
-
-- Dispatch a single surface engineer for substantial work scoped to one surface.
-- Dispatch `supervisor` (delegate-only — does not edit code) when a task touches 2+ surfaces, needs cross-surface synthesis, or is a multi-surface release.
-- When the user has narrowed scope to a specific surface ("just apps/desktop", "your specific X"), edit directly instead of spawning the engineer for that surface.
+The seven per-surface subagent definitions previously in `.claude/agents/` were retired on 2026-07-08 during the monorepo restructure (see `docs/plans/monorepo-restructure-2026-07-08.md`). Dispatch general-purpose subagents briefed with surface context from `docs/agent-context/repo-map.json` and the nearest path-scoped `AGENTS.md`. When the user has narrowed scope to a specific surface ("just apps/desktop", "your specific X"), edit directly instead of delegating.
 
 ## Required Checks For Agent-Context Changes
 

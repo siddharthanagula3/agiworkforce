@@ -24,11 +24,10 @@ Follow AGI Workforce project rules:
 6. IPC Rule: All invoke() calls in TypeScript MUST use camelCase param keys. Tauri auto-converts from Rust snake_case. Snake_case in invoke() silently fails.
 7. Model IDs come from packages/types/src/models.json and provider capability metadata. Never invent, guess, or hardcode model IDs from training data.
 8. Next.js 16 uses proxy.ts with an exported proxy function. Do not rename it back to middleware.ts.
-9. Local, BYOK, and Managed Cloud are separate trust boundaries. Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.
-10. Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta until ledgering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls are proven.
-11. Verify fast-moving facts from repo files, official docs, web search, or configured MCP/plugins before changing APIs, models, pricing, App Store rules, provider terms, framework behavior, or release claims.
-12. Build/check commands: pnpm check:llm-operability, pnpm lint, pnpm typecheck:all, pnpm test, cargo check --workspace, plus surface commands from docs/agent-context/commands.json.
-13. Error handling: handle at every level, never swallow errors. Rust: use anyhow/thiserror. TypeScript: proper try/catch with user-facing error messages.
+9. Local(Local LLMs,BYOK), and Cloud Mode are separate trust boundaries. Never silently route Local chats, files, or developer sessions to cloud Mode.
+10. Verify fast-moving facts from repo files, official docs, web search, or configured MCP/plugins before changing APIs, models, pricing, App Store rules, provider terms, framework behavior, or release claims.
+11. Build/check commands: pnpm check:llm-operability, pnpm lint, pnpm typecheck:all, pnpm test, cargo check --workspace, plus surface commands from docs/agent-context/commands.json.
+12. Error handling: handle at every level, never swallow errors. Rust: use anyhow/thiserror. TypeScript: proper try/catch with user-facing error messages.
 """
 
 # MCP Servers
@@ -51,11 +50,4 @@ args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 [mcp_servers.sequential-thinking.tools.sequentialthinking]
 approval_mode = "approve"
 
-# Supabase MCP server is disabled — `supabase-mcp-server@latest` is not
-# published on npm (404). The hosted URL transport at https://mcp.supabase.com/mcp
-# requires OAuth and Codex doesn't yet support it as a stdio target. Re-enable
-# when either (a) a real stdio package ships on npm, or (b) Codex adds
-# transport support for URL-based MCP servers with OAuth.
-# [mcp_servers.supabase]
-# command = "npx"
-# args = ["-y", "supabase-mcp-server@latest", "--read-only"]
+
