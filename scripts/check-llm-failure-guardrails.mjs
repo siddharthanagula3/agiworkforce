@@ -10,6 +10,9 @@ const stagedMode = process.argv.includes('--staged');
 
 const SKIP_DIRS = new Set([
   '.agent',
+  // Isolated subagent git worktrees live here; scanning them double-counts
+  // the main tree (and flags this guard script's own pattern strings).
+  '.claude',
   '.git',
   '.next',
   '.vercel',
