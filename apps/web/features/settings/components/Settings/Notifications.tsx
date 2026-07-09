@@ -1,8 +1,15 @@
 import React from 'react';
 import { type UseFormReturn } from 'react-hook-form';
 import { Save, Loader2 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Switch } from '@agiworkforce/ui';
+import {
+  Switch,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@agiworkforce/ui';
 import {
   Form,
   FormControl,
@@ -11,7 +18,6 @@ import {
   FormItem,
   FormLabel,
 } from '@shared/ui/form';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import type { NotificationPreferencesFormData } from '@features/settings/schemas/settings-validation';
 
 interface NotificationsPanelProps {

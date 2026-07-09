@@ -2,15 +2,15 @@
 
 import React from 'react';
 import { Check, Ban, HelpCircle, RotateCcw } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { cn } from '@shared/lib/utils';
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@shared/ui/dialog';
+} from '@agiworkforce/ui';
+import { cn } from '@shared/lib/utils';
 import { getConnectorTools } from '../config/connector-logos';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 import { useToolPermissionsStore, type PermissionLevel } from '../stores/tool-permissions-store';

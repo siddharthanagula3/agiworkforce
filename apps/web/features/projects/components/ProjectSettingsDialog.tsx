@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,11 +10,15 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  Button,
+  Input,
+  Textarea,
 } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
 import { Label } from '@agiworkforce/ui';
-import { Textarea } from '@shared/ui/textarea';
 import { Smile, Trash2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';

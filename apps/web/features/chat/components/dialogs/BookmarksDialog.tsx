@@ -6,17 +6,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Badge,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@shared/ui/dialog';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Badge } from '@agiworkforce/ui';
-import { ScrollArea } from '@shared/ui/scroll-area';
-import { Textarea } from '@shared/ui/textarea';
+  Button,
+  Input,
+  ScrollArea,
+  Textarea,
+} from '@agiworkforce/ui';
 import { toast } from 'sonner';
 import {
   Bookmark,

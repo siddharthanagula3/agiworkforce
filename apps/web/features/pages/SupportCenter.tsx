@@ -7,11 +7,20 @@
 import React, { useState, useEffect } from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Textarea } from '@shared/ui/textarea';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@agiworkforce/ui';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Textarea,
+} from '@agiworkforce/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import {
   HelpCircle,

@@ -29,7 +29,7 @@ import {
   Sparkles,
   ChevronRight,
 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 
 // ---------------------------------------------------------------------------
 // Types

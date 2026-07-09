@@ -41,40 +41,8 @@ vi.mock('@shared/lib/utils', () => ({
   cn: (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(' '),
 }));
 
-vi.mock('@shared/ui/button', () => {
-  const Button = React.forwardRef<HTMLButtonElement, Record<string, unknown>>(
-    ({ children, onClick, disabled, ...props }, ref) => (
-      <button
-        ref={ref}
-        onClick={onClick as React.MouseEventHandler}
-        disabled={disabled as boolean | undefined}
-        {...props}
-      >
-        {children as React.ReactNode}
-      </button>
-    ),
-  );
-  Button.displayName = 'Button';
-  return { Button };
-});
-
-vi.mock('@shared/ui/input', () => {
-  const Input = React.forwardRef<HTMLInputElement, Record<string, unknown>>(
-    ({ onChange, value, placeholder, ...props }, ref) => (
-      <input
-        ref={ref}
-        onChange={onChange as React.ChangeEventHandler<HTMLInputElement>}
-        value={value as string | undefined}
-        placeholder={placeholder as string | undefined}
-        {...props}
-      />
-    ),
-  );
-  Input.displayName = 'Input';
-  return { Input };
-});
-
-vi.mock('@agiworkforce/ui', () => {
+vi.mock('@agiworkforce/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
   const Badge = ({ children, className, variant, ...props }: Record<string, unknown>) => (
     <span
       data-variant={variant as string | undefined}
@@ -84,41 +52,17 @@ vi.mock('@agiworkforce/ui', () => {
       {children as React.ReactNode}
     </span>
   );
-  return { Badge };
+  // Spread the real primitives (Button/Input/Card/Dialog/…, now sourced from
+  // @agiworkforce/ui after the Wave 3 fork consolidation) and override only Badge.
+  return { ...actual, Badge };
 });
 
-// Mock lucide-react icons used by ConnectorsPage and all sub-components it nests.
-vi.mock('lucide-react', () => {
-  const Icon = ({ className, ...props }: Record<string, unknown>) => (
-    <span className={className as string | undefined} {...props} />
-  );
-  return {
-    // ConnectorsPage direct imports
-    Search: Icon,
-    Plus: Icon,
-    Check: Icon,
-    Zap: Icon,
-    Lock: Icon,
-    ExternalLink: Icon,
-    Loader2: Icon,
-    Link2: Icon,
-    BookOpen: Icon,
-    SlidersHorizontal: Icon,
-    // ConnectorCard imports
-    MoreHorizontal: Icon,
-    // ConnectorOverviewDialog imports
-    ShieldAlert: Icon,
-    Wrench: Icon,
-    // ToolPermissionsPanel imports
-    Ban: Icon,
-    HelpCircle: Icon,
-    RotateCcw: Icon,
-    // Legacy names kept for ErrorBoundary and other possible sub-components
-    AlertTriangle: Icon,
-    RefreshCw: Icon,
-    Home: Icon,
-    X: Icon,
-  };
+// Spread the real lucide-react icon set. The real @agiworkforce/ui primitives
+// (spread into the @agiworkforce/ui mock above after Wave 3 consolidation)
+// reference a broad range of icons; enumerating them would be brittle.
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>();
+  return { ...actual };
 });
 
 // Mock CSRF token client · the connect flow calls getCsrfToken() before fetch.

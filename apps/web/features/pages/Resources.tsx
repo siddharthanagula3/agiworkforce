@@ -21,7 +21,7 @@ import {
   Settings,
   PlayCircle,
 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { Particles } from '@shared/ui/particles';
 import { SEOHead } from '@shared/components/seo/SEOHead';
 

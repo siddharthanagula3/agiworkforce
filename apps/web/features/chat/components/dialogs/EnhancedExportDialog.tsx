@@ -5,17 +5,17 @@
 
 import React, { useState } from 'react';
 import {
+  Badge,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@shared/ui/dialog';
-import { Button } from '@shared/ui/button';
-import { Badge } from '@agiworkforce/ui';
+  Button,
+  Input,
+} from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
-import { Input } from '@shared/ui/input';
 import { Checkbox } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';

@@ -1,8 +1,6 @@
 'use client';
 
-import { Badge } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
-import { Card, CardContent } from '@shared/ui/card';
+import { Badge, Button, Card, CardContent } from '@agiworkforce/ui';
 import { Switch } from '@agiworkforce/ui';
 import { Clock, Play, History, Pencil, Trash2, ChevronUp, Copy, TrendingUp } from 'lucide-react';
 import { formatDate, getNextRunCountdown, recurrenceLabel } from '../types';

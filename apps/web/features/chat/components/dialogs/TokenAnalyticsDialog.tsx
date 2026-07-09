@@ -2,7 +2,7 @@
  * TokenAnalyticsDialog - Modal wrapper for Token Analytics Dashboard
  */
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@agiworkforce/ui';
 import { TokenAnalyticsDashboard } from '../tokens/TokenAnalyticsDashboard';
 
 interface TokenAnalyticsDialogProps {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button } from '@shared/ui/button';
-import { ScrollArea } from '@shared/ui/scroll-area';
+import { Button, ScrollArea } from '@agiworkforce/ui';
 import {
   Lightbulb,
   Code,

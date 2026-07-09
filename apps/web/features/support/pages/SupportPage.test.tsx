@@ -9,84 +9,56 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
-// Mock shared UI components
-vi.mock('@shared/ui/card', () => ({
-  Card: ({ children, ...props }: Record<string, unknown>) => (
-    <div {...props}>{children as React.ReactNode}</div>
-  ),
-  CardContent: ({ children, ...props }: Record<string, unknown>) => (
-    <div {...props}>{children as React.ReactNode}</div>
-  ),
-  CardDescription: ({ children, ...props }: Record<string, unknown>) => (
-    <p {...props}>{children as React.ReactNode}</p>
-  ),
-  CardHeader: ({ children, ...props }: Record<string, unknown>) => (
-    <div {...props}>{children as React.ReactNode}</div>
-  ),
-  CardTitle: ({ children, ...props }: Record<string, unknown>) => (
-    <h3 {...props}>{children as React.ReactNode}</h3>
-  ),
-}));
-
-vi.mock('@shared/ui/button', () => ({
-  Button: ({ children, type, ...props }: Record<string, unknown>) => (
-    <button type={(type as 'submit' | 'reset' | 'button') || 'button'} {...props}>
-      {children as React.ReactNode}
-    </button>
-  ),
-}));
-
-vi.mock('@shared/ui/input', () => ({
-  Input: (props: Record<string, unknown>) => <input {...props} />,
-}));
-
-vi.mock('@shared/ui/textarea', () => ({
-  Textarea: (props: Record<string, unknown>) => <textarea {...props} />,
-}));
-
-// Accordion and Tabs are imported from the @agiworkforce/ui barrel (migrated off
-// the @shared/ui forks); SupportCenter uses only those two families from the barrel.
-// Tabs stub renders all TabsContent so tests can query content in every tab.
-vi.mock('@agiworkforce/ui', () => ({
-  Accordion: ({ children, ...props }: Record<string, unknown>) => (
-    <div data-testid="accordion" {...props}>
-      {children as React.ReactNode}
-    </div>
-  ),
-  AccordionItem: ({ children, value, ...props }: Record<string, unknown>) => (
-    <div data-testid={`accordion-item-${value as string}`} {...props}>
-      {children as React.ReactNode}
-    </div>
-  ),
-  AccordionTrigger: ({ children, ...props }: Record<string, unknown>) => (
-    <button data-testid="accordion-trigger" type="button" {...props}>
-      {children as React.ReactNode}
-    </button>
-  ),
-  AccordionContent: ({ children, ...props }: Record<string, unknown>) => (
-    <div data-testid="accordion-content" {...props}>
-      {children as React.ReactNode}
-    </div>
-  ),
-  Tabs: ({ children, ...props }: Record<string, unknown>) => (
-    <div data-testid="tabs" {...props}>
-      {children as React.ReactNode}
-    </div>
-  ),
-  TabsList: ({ children, ...props }: Record<string, unknown>) => (
-    <div data-testid="tabs-list" {...props}>
-      {children as React.ReactNode}
-    </div>
-  ),
-  TabsTrigger: ({ children, ...props }: Record<string, unknown>) => (
-    <button type="button" {...props}>
-      {children as React.ReactNode}
-    </button>
-  ),
-  TabsContent: ({ children, ...props }: Record<string, unknown>) => (
-    <div {...props}>{children as React.ReactNode}</div>
-  ),
-}));
+// SupportCenter's UI primitives (Card/Button/Input/Textarea) now resolve through
+// @agiworkforce/ui after the Wave 3 fork consolidation; the mock below spreads the
+// real package and overrides only the Accordion/Tabs families. The Tabs stub
+// renders all TabsContent so tests can query content in every tab.
+vi.mock('@agiworkforce/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  // Spread the real primitives (Button/Input/Card/Textarea/… now sourced from
+  // @agiworkforce/ui after Wave 3 consolidation); override only the stubs below.
+  return {
+    ...actual,
+    Accordion: ({ children, ...props }: Record<string, unknown>) => (
+      <div data-testid="accordion" {...props}>
+        {children as React.ReactNode}
+      </div>
+    ),
+    AccordionItem: ({ children, value, ...props }: Record<string, unknown>) => (
+      <div data-testid={`accordion-item-${value as string}`} {...props}>
+        {children as React.ReactNode}
+      </div>
+    ),
+    AccordionTrigger: ({ children, ...props }: Record<string, unknown>) => (
+      <button data-testid="accordion-trigger" type="button" {...props}>
+        {children as React.ReactNode}
+      </button>
+    ),
+    AccordionContent: ({ children, ...props }: Record<string, unknown>) => (
+      <div data-testid="accordion-content" {...props}>
+        {children as React.ReactNode}
+      </div>
+    ),
+    Tabs: ({ children, ...props }: Record<string, unknown>) => (
+      <div data-testid="tabs" {...props}>
+        {children as React.ReactNode}
+      </div>
+    ),
+    TabsList: ({ children, ...props }: Record<string, unknown>) => (
+      <div data-testid="tabs-list" {...props}>
+        {children as React.ReactNode}
+      </div>
+    ),
+    TabsTrigger: ({ children, ...props }: Record<string, unknown>) => (
+      <button type="button" {...props}>
+        {children as React.ReactNode}
+      </button>
+    ),
+    TabsContent: ({ children, ...props }: Record<string, unknown>) => (
+      <div {...props}>{children as React.ReactNode}</div>
+    ),
+  };
+});
 
 vi.mock('@shared/lib/utils', () => ({
   cn: (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(' '),

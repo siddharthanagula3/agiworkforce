@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useTransition } from 'react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { CheckCircle, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';

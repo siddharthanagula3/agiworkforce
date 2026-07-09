@@ -5,9 +5,7 @@
 
 import { useState } from 'react';
 import NextImage from 'next/image';
-import { Dialog, DialogContent, DialogTitle } from '@shared/ui/dialog';
-import { Button } from '@shared/ui/button';
-import { Badge } from '@agiworkforce/ui';
+import { Badge, Dialog, DialogContent, DialogTitle, Button } from '@agiworkforce/ui';
 import { Download, ZoomIn, ExternalLink } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 

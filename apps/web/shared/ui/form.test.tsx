@@ -25,7 +25,7 @@ import {
   FormDescription,
   FormMessage,
 } from './form';
-import { Input } from './input';
+import { Input } from '@agiworkforce/ui';
 
 // Test wrapper component that sets up react-hook-form
 interface TestFormProps {

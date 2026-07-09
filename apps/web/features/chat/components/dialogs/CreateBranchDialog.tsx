@@ -9,16 +9,16 @@
 
 import { useState } from 'react';
 import {
+  Label,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@shared/ui/dialog';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Label } from '@agiworkforce/ui';
+  Button,
+  Input,
+} from '@agiworkforce/ui';
 import { GitFork, Loader2 } from 'lucide-react';
 import { conversationBranchingService } from '../../services/conversation-branching';
 import { toast } from 'sonner';

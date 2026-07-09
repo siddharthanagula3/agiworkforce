@@ -1,6 +1,6 @@
 'use client';
 
-import { Card, CardContent } from '@shared/ui/card';
+import { Card, CardContent } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';

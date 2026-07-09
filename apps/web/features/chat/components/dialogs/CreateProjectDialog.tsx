@@ -4,15 +4,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lightbulb, Smile } from 'lucide-react';
 import {
+  Label,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@shared/ui/dialog';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Label } from '@agiworkforce/ui';
+  Button,
+  Input,
+} from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useProjectStore } from '@features/projects/stores/project-store';
@@ -110,7 +110,7 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="w-[min(94vw,26rem)] overflow-hidden border-border/70 bg-background p-0 sm:rounded-2xl"
-        closeButtonLabel="Close create project dialog"
+        closeLabel="Close create project dialog"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Create project</DialogTitle>

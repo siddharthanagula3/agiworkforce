@@ -6,8 +6,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { Download, Maximize2, X, Loader2 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Card, CardContent } from '@shared/ui/card';
+import { Button, Card, CardContent } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { googleImagenService } from '@core/integrations/google-imagen-service';
 

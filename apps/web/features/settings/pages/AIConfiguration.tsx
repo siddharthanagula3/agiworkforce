@@ -4,16 +4,22 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-import { Button } from '@shared/ui/button';
-import { Badge } from '@agiworkforce/ui';
-import { Input } from '@shared/ui/input';
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Textarea,
+  Alert,
+  AlertDescription,
+} from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
-import { Textarea } from '@shared/ui/textarea';
 import { Switch } from '@agiworkforce/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
-import { Alert, AlertDescription } from '@shared/ui/alert';
 import { getCsrfToken } from '@/lib/client/csrf';
 import {
   Bot,

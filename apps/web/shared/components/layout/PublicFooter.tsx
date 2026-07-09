@@ -1,8 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Sparkles, Mail, GitBranch, Share2, Globe } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
+import { Button, Input } from '@agiworkforce/ui';
 import { motion } from 'framer-motion';
 
 const PublicFooter: React.FC = () => {

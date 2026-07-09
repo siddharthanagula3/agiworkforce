@@ -30,7 +30,7 @@ import {
   Server,
   Globe,
 } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@shared/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@agiworkforce/ui';
 import { Button } from '@shared/components/ui/button';
 import { Badge } from '@shared/components/ui/badge';
 import { cn } from '@shared/lib/utils';

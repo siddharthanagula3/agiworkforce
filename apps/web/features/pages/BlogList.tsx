@@ -20,8 +20,7 @@ import {
   AlertCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
+import { Button, Input } from '@agiworkforce/ui';
 import { Particles } from '@shared/ui/particles';
 import { toast } from 'sonner';
 import Image from 'next/image';

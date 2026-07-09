@@ -4,18 +4,19 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Badge } from '@agiworkforce/ui';
-import { Skeleton } from '@agiworkforce/ui';
 import {
+  Badge,
+  Button,
+  Input,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@shared/ui/dialog';
+  ScrollArea,
+} from '@agiworkforce/ui';
+import { Skeleton } from '@agiworkforce/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +24,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@agiworkforce/ui';
-import { ScrollArea } from '@shared/ui/scroll-area';
 import { Label } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';

@@ -4,8 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useThemeContext } from '@shared/hooks/useThemeContext';
-import { Button } from '@shared/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
+import { Avatar, AvatarFallback, AvatarImage, Button } from '@agiworkforce/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
