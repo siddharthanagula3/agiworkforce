@@ -210,6 +210,18 @@ export interface StreamChunkUsage {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /**
+   * Subset of `cacheWriteTokens` billed at Anthropic's 1-hour cache rate
+   * (2x input) instead of the 5-minute rate (1.25x input). Anthropic only
+   * reports this breakdown (`usage.cache_creation.ephemeral_1h_input_tokens`)
+   * when a request mixes 5m and 1h TTL cache breakpoints; when absent (and
+   * `cacheWriteTokens` is set), the entire write is 5m-priced. Mirrors
+   * `LLMProviderResponse.cacheCreation1hInputTokens` in
+   * `apps/web/lib/llm-providers/base.ts`. Optional/additive — providers
+   * without TTL-tiered caching (OpenAI, most OpenAI-compatible vendors)
+   * never set this.
+   */
+  cacheWrite1hTokens?: number;
   reasoningTokens?: number;
 }
 
