@@ -57,7 +57,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';

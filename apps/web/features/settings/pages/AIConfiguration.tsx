@@ -33,7 +33,7 @@ import { toast } from 'sonner';
 // Stubs for functions not yet migrated
 
 import { settingsService } from '@features/settings/services/user-preferences';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
   getModelIdsForProvider,
   getModelMetadataById,

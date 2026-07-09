@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';
 import {
   Download,

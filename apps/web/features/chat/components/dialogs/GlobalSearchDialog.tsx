@@ -17,7 +17,7 @@ import { Button } from '@shared/ui/button';
 import { Badge } from '@agiworkforce/ui';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Label } from '@agiworkforce/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import { Calendar } from '@agiworkforce/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';

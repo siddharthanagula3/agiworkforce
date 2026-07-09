@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 import {
   AlertDialog,
   AlertDialogAction,
