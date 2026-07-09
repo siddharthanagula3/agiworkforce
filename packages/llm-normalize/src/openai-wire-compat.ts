@@ -629,6 +629,16 @@ export class OpenAIWireAssembler {
           out.push(this.chunkEnvelope({ x_code_result: chunk.payload }, null));
         } else if (payload?.type === 'web_search_tool_result') {
           out.push(this.chunkEnvelope({ x_search_results: chunk.payload }, null));
+        } else if (payload?.type === 'gemini_grounding_result') {
+          // Google's grounding payload is pre-shaped (not a verbatim vendor
+          // block like Anthropic's) -- see packages/providers/google/src/
+          // stream.ts's producer. Unwrap to the legacy web route's exact
+          // `{content: [...]}` envelope (NOT chunk.payload verbatim, which
+          // would leak the `type` discriminator onto the wire and diverge
+          // from apps/web/lib/llm-providers/google.ts's `{ content:
+          // resultContent }` byte-for-byte, key-order-sensitive shape).
+          const results = (payload as { results?: unknown }).results;
+          out.push(this.chunkEnvelope({ x_search_results: { content: results } }, null));
         }
         break;
       }
