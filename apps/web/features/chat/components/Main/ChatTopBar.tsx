@@ -3,7 +3,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Badge } from '@/shared/components/ui/badge';
 import { ArrowLeft, Settings, HelpCircle, Edit3, Check, X, BarChart3 } from 'lucide-react';
-import { ThemeToggle } from '@shared/ui/theme-toggle';
+import { ThemeToggle } from '@agiworkforce/ui';
 
 interface ChatTopBarProps {
   sessionTitle: string;

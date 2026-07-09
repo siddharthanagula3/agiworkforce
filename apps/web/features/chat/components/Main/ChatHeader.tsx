@@ -43,7 +43,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import type { ChatSession } from '../../types';
-import { ThemeToggle } from '@shared/ui/theme-toggle';
+import { ThemeToggle } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { PLAN_LABEL, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
 import { useShareConversation } from '../../hooks/use-share-conversation';
