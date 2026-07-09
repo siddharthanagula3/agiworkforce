@@ -10,6 +10,24 @@ const ET_URL_PREFIX = 'https://huggingface.co/software-mansion/react-native-exec
 // browser instead of the .pte bytes, so model download fails.
 const ET_VERSION_TAG = 'resolve/v0.8.0';
 
+// Qwen3-VL-2B-Instruct GGUF artifacts (official Qwen HuggingFace repo).
+// Verified 2026-07-09 from huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF:
+// the /raw/main LFS pointers and the /api/models/.../tree/main JSON both report
+// the sha256 + byte sizes below (cross-checked, two independent endpoints).
+// License on the repo is apache-2.0. The Q4_K_M weight file is the base GGUF;
+// the mmproj file is the SEPARATE vision projector required by llama.rn
+// `initMultimodal` — vision input is only effective once BOTH are installed.
+const QWEN3_VL_2B_GGUF_URL =
+  'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf';
+const QWEN3_VL_2B_GGUF_SHA256 =
+  '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae';
+const QWEN3_VL_2B_GGUF_BYTES = 1_107_409_952;
+const QWEN3_VL_2B_MMPROJ_URL =
+  'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf';
+const QWEN3_VL_2B_MMPROJ_SHA256 =
+  'f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82';
+const QWEN3_VL_2B_MMPROJ_BYTES = 445_053_216;
+
 const CATALOG: OnDeviceModel[] = [
   {
     id: 'qwen3-4b-instruct-2507',
@@ -53,6 +71,81 @@ const CATALOG: OnDeviceModel[] = [
     },
     // Keep hidden until exact checkpoint license and runnable artifacts are verified.
     license: 'Unverified',
+    role: 'premium-vision-pack',
+    shipsInV1: false,
+  },
+  {
+    // P6 primary local multimodal SLM (monorepo-restructure §8). Apache-2.0,
+    // official Qwen GGUF + mmproj vision projector, runs through the tier-3
+    // llama.rn path via `initMultimodal` (requires `ctx_shift:false`).
+    // `visionIn:true` here is the NOMINAL capability; the effective vision
+    // capability is gated on the mmproj artifact being installed — see
+    // `effectiveVisionIn` in ./multimodal.ts and the tier-3 runtime.
+    id: 'qwen3-vl-2b-instruct',
+    displayName: 'AGI Vision Pack',
+    family: 'qwen3-vl',
+    paramCountB: 2.0,
+    fileSizeBytes: QWEN3_VL_2B_GGUF_BYTES, // 1.11 GB Q4_K_M (verified)
+    supportedRuntimes: ['llama-rn'],
+    contextWindow: 262_144, // max_position_embeddings from the base model config (verified)
+    capabilities: {
+      text: true,
+      visionIn: true,
+      audioIn: false,
+      // Conservative: text-with-image reasoning is the verified path. Tool calls
+      // and structured output through the llama.rn multimodal GGUF route are not
+      // device-verified, so they are not advertised as capabilities here.
+      toolCalls: false,
+      structuredOutput: false,
+    },
+    license: 'Apache-2.0',
+    role: 'premium-vision-pack',
+    // Artifacts are fully verified (URLs + sha256 + byte sizes, cross-checked),
+    // BUT the mobile runtime path is not shippable yet: (1) there is no GGUF
+    // download+verify+install path in apps/mobile (installStore only handles
+    // ExecuTorch presets), (2) the model-picker filters out llama-rn-only rows
+    // (`isSelectableLocalCatalogModel` requires an executorchPreset for
+    // fileSizeBytes>0), and (3) on-device `initMultimodal` needs device QA.
+    // The tier-3 multimodal code + pure download/verify/message-assembly logic
+    // are implemented and unit-tested with a mocked native module, but the
+    // end-to-end install+run flow is device-QA-gated. Flip to true only after
+    // the mobile GGUF install path lands and on-device vision is verified.
+    shipsInV1: false,
+    downloadUrl: QWEN3_VL_2B_GGUF_URL,
+    checksum: QWEN3_VL_2B_GGUF_SHA256,
+    format: 'gguf',
+    mmprojUrl: QWEN3_VL_2B_MMPROJ_URL,
+    mmprojChecksum: QWEN3_VL_2B_MMPROJ_SHA256,
+    mmprojSizeBytes: QWEN3_VL_2B_MMPROJ_BYTES,
+  },
+  {
+    // P6 tier-2 low-RAM vision option (monorepo-restructure §8). GATED OFF.
+    // Divergence surfaced for founder review: the plan named LFM2-VL-1.6B, but
+    // the ONLY react-native-executorch-hosted preset that actually exists is the
+    // newer 2.5 variant: `software-mansion/react-native-executorch-lfm2.5-VL-1.6B`
+    // (verified 2026-07-09; quantized/lfm2_5_vl_450m_8da4w_xnnpack.pte,
+    // 648,917,376 bytes, sha256 c3aeead4499cb1c19de48d4216f3b2e9216b27770d768ea4650dbcaa1a998a9b).
+    // Held off shipping because: (a) it is the 2.5-VL variant, not the 2-VL the
+    // decision named; (b) the exact `resolve/<tag>/` URL is unverified, so no
+    // downloadUrl/executorchPreset is recorded here (no fabricated URLs); (c) the
+    // tier-2 ExecuTorch wrapper does not yet pass image input; (d) LFM Open
+    // License v1.0 permits free commercial use only up to $10M annual revenue and
+    // must be re-reviewed at scale. fileSizeBytes is the verified quantized .pte.
+    id: 'lfm2-vl-1.6b',
+    displayName: 'AGI Vision Lite',
+    family: 'lfm2-vl',
+    paramCountB: 1.6,
+    fileSizeBytes: 648_917_376, // verified quantized .pte (executorch host)
+    supportedRuntimes: ['executorch'],
+    contextWindow: 32_768,
+    capabilities: {
+      text: true,
+      visionIn: true,
+      audioIn: false,
+      toolCalls: false,
+      structuredOutput: false,
+    },
+    license: 'LFM Open License v1.0 (free commercial use capped at $10M annual revenue)',
     role: 'premium-vision-pack',
     shipsInV1: false,
   },
