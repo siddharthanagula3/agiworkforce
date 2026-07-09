@@ -1,5 +1,28 @@
 # Mobile Cloud Mode vs ChatGPT Mobile — Parity Audit
 
+## Addendum — 2026-07-09 re-score vs the founder's full mobile taxonomy
+
+Two code-grounded re-audits (UX taxonomy + runtime/tools; dead code counted as MISSING). Supersedes the 2026-06-23 findings where marked.
+
+**Fixed since 2026-06-23 (verified in code):** project-detail mislabel (cloud header now driven by `cloudProjectStore`), pinned drawer section, sign-out settings isolation (`resetSettingsSync` wired), tier no longer pinned Free (`GET /api/me`), personalization headers/lists + emoji + base-style sync, dedicated voice-mode button, invite/`ALPHATESTER` gate removed (public alpha), E2B generated-file pipeline renders/downloads, image-gen ON with paywall, tool-call timeline + syntax highlighting + KaTeX shipped, native IAP flow live (iOS).
+
+**Strongest areas:** transport/runtime (send→SSE→persist→4-surface delta-sync with LWW+tombstones, real token streaming, per-conversation cancellation), tool-call UX (`toolCallAccumulator` + `ToolCallTimeline`: web-search cards, code-exec output, MCP steps), security/storage (fail-closed egress gate, SQLCipher, encrypted MMKV, Keychain), conversation rendering (citations, tables, thinking + search blocks), settings breadth (~20 real sub-screens), turn-based voice (STT→LLM→TTS with interrupt/PTT/waveform).
+
+**Top gaps for ChatGPT/Claude-class cloud behavior (evidence in the two 2026-07-09 audit transcripts):**
+
+1. Push notification DELIVERY — tokens registered, no server sender exists (`apps/web/lib/services/notification-service.ts:23-46` writes a DB row only).
+2. Context-window management — untruncated history sent (`chatExecutionStore.ts:432`); `ContextWarningChip` dead-wired (0 importers).
+3. Non-image attachments not model-readable — PDF/DOCX/CSV/TXT reach the model as a text stub (`chatExecutionStore.ts:836-841`); no video/xlsx/pptx/zip.
+4. Cloud image/artifact surfacing — generated images local-only (`chatMessageStore.ts:470`); `mergeCloudArtifacts` comment-only (`artifacts/store.ts:53`).
+5. Rich artifact rendering — no live HTML/SVG/mermaid, charts render icon+text (`ArtifactFullScreen.tsx:155,362-404`); no PDF/video/audio viewers.
+6. Realtime/duplex voice — absent (only WebRTC is the off-flag companion channel, `connectionStore.ts:6,570`).
+7. Memory enable/disable toggle — state does not exist repo-wide.
+8. Chat-header parity — context indicator, memory badge, cloud project badge missing (`chat/[id].tsx:847` chip is local-only).
+9. Profile/account — hardcodes "AGI Cloud", no avatar/devices/org (`profile/index.tsx:82-86,172-186`); no proactive upgrade entry (reactive 429 paywall only).
+10. Infra — no version-check/force-update or server remote config; observability absent (telemetry has no network flusher, no crash reporting); live connector OAuth still 501 (`services/connectors.ts:37-43`); deep-research/URL-fetch tools are labels only.
+
+**Load-bearing risks:** IAP product-catalog contradiction (`iapProducts.ts` placeholder note vs `v1FeatureFlags.ts:71-84` claiming live App Store Connect products — reconcile before TestFlight billing tests); TLS pinning still placeholder/off (known F06); local-mode zero-egress holds except an asset-only KaTeX CDN fetch (review).
+
 > Generated 2026-06-23. Depth-first, code-grounded audit of `apps/mobile` **cloud mode** vs ChatGPT mobile.
 > Reference = 10 founder-provided ChatGPT mobile screenshots (S1–S10) only; anything not screenshot-backed is marked uncertain, not a gap.
 > Method: 6 shared-state surfaces deeply analyzed, each adversarially re-verified (every cited `file:line` re-opened), divergences triaged, then synthesized. 14 agents.
