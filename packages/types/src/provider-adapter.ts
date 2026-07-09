@@ -148,7 +148,24 @@ export type ToolChoice = 'auto' | 'none' | 'required' | { type: 'tool'; name: st
 // ============================================================================
 
 export type ThinkingConfig =
-  | { type: 'enabled'; budgetTokens?: number }
+  | {
+      type: 'enabled';
+      budgetTokens?: number;
+      /**
+       * Whether the provider should stream back a summary of its reasoning
+       * (Gemini's `generationConfig.thinkingConfig.includeThoughts`; no
+       * effect on Anthropic, which always returns thinking content when
+       * `enabled` and has no separate visibility toggle). Defaults to `true`
+       * when omitted — every existing caller that never set this field keeps
+       * today's behavior unchanged. Added so a caller can request the
+       * thinking BUDGET (quality benefit) without opting into the provider
+       * also returning the thinking TEXT, when matching a wire that never
+       * surfaced it is required (see packages/providers/google/src/
+       * translate.ts and apps/web's canonical-request.ts
+       * `toCanonicalGoogleThinking`).
+       */
+      includeThoughts?: boolean;
+    }
   | { type: 'disabled' }
   /**
    * Adaptive extended thinking: the model chooses its own thinking depth

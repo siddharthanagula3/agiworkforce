@@ -18,6 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
 import { drainToLlmResponse } from './adapter-response';
+import { toUpstreamError } from './adapter-errors';
 
 async function* chunksOf(chunks: StreamChunk[]): AsyncIterable<StreamChunk> {
   for (const chunk of chunks) yield chunk;
@@ -33,6 +34,7 @@ describe('drainToLlmResponse · content and finish reason', () => {
         { type: 'stop', reason: 'end_turn' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.content).toBe('Cats are mammals.');
@@ -56,6 +58,7 @@ describe('drainToLlmResponse · content and finish reason', () => {
         { type: 'stop', reason: 'tool_use' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.content).toBe('');
@@ -70,6 +73,7 @@ describe('drainToLlmResponse · content and finish reason', () => {
         { type: 'stop', reason: 'max_tokens' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.finishReason).toBe('max_tokens');
@@ -100,6 +104,7 @@ describe('drainToLlmResponse · tool_calls index scheme', () => {
         { type: 'stop', reason: 'tool_use' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.tool_calls).toEqual([
@@ -119,6 +124,7 @@ describe('drainToLlmResponse · tool_calls index scheme', () => {
         { type: 'stop', reason: 'end_turn' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.tool_calls).toBeUndefined();
@@ -142,6 +148,7 @@ describe('drainToLlmResponse · usage and cache fields', () => {
         { type: 'stop', reason: 'end_turn' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.promptTokens).toBe(500);
@@ -181,6 +188,7 @@ describe('drainToLlmResponse · citations and search_results', () => {
         { type: 'stop', reason: 'end_turn' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.citations).toEqual([
@@ -212,6 +220,7 @@ describe('drainToLlmResponse · citations and search_results', () => {
         { type: 'stop', reason: 'end_turn' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.search_results).toBeUndefined();
@@ -224,6 +233,7 @@ describe('drainToLlmResponse · citations and search_results', () => {
         { type: 'stop', reason: 'end_turn' },
       ]),
       'claude-opus-4-8',
+      toUpstreamError,
     );
 
     expect(result.citations).toBeUndefined();
@@ -241,6 +251,7 @@ describe('drainToLlmResponse · error handling', () => {
           { type: 'stop', reason: 'error' },
         ]),
         'claude-opus-4-8',
+        toUpstreamError,
       ),
     ).rejects.toThrow(/authentication error \(401\)/i);
   });

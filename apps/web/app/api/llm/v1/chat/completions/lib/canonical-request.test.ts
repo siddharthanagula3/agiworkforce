@@ -1,16 +1,20 @@
 import { describe, it, expect } from 'vitest';
+import { translateChatRequest } from '@agiworkforce/providers-google';
 import {
   toCanonicalChatRequest,
   toCanonicalThinking,
   toCanonicalEffort,
+  toCanonicalGoogleThinking,
+  buildGoogleChatRequest,
   computeAnthropicCacheConfig,
 } from './canonical-request';
 import type { ProcessedRequest } from './request-processor';
 
 type LlmRequest = ProcessedRequest['llmRequest'];
 
-function makeProcessed(llmRequest: Partial<LlmRequest>): ProcessedRequest {
+function makeProcessed(llmRequest: Partial<LlmRequest>, provider = 'anthropic'): ProcessedRequest {
   return {
+    provider,
     llmRequest: {
       model: 'claude-opus-4-8',
       messages: [],
@@ -215,6 +219,91 @@ describe('toCanonicalEffort', () => {
 
   it('passes an anthropic effort tier through unchanged', () => {
     expect(toCanonicalEffort('anthropic', 'xhigh')).toBe('xhigh');
+  });
+});
+
+describe('toCanonicalGoogleThinking', () => {
+  it('returns undefined for non-google providers', () => {
+    expect(toCanonicalGoogleThinking('anthropic', 'high')).toBeUndefined();
+  });
+
+  it('returns undefined when no effort was resolved', () => {
+    expect(toCanonicalGoogleThinking('google', undefined)).toBeUndefined();
+  });
+
+  it('maps low/medium/high to the fixed legacy GOOGLE_THINKING_BUDGET values, with includeThoughts explicitly suppressed', () => {
+    // includeThoughts:false is load-bearing here, not incidental -- it's
+    // what makes translateChatRequest omit the includeThoughts key entirely
+    // (see the 'buildGoogleChatRequest -> translateChatRequest wire' suite
+    // below), holding byte-stability with legacy google.ts, which never sent
+    // that key.
+    expect(toCanonicalGoogleThinking('google', 'low')).toEqual({
+      type: 'enabled',
+      budgetTokens: 1024,
+      includeThoughts: false,
+    });
+    expect(toCanonicalGoogleThinking('google', 'medium')).toEqual({
+      type: 'enabled',
+      budgetTokens: 8192,
+      includeThoughts: false,
+    });
+    expect(toCanonicalGoogleThinking('google', 'high')).toEqual({
+      type: 'enabled',
+      budgetTokens: 24576,
+      includeThoughts: false,
+    });
+  });
+
+  it('returns undefined for xhigh/max (legacy google.ts never mapped those tiers either)', () => {
+    expect(toCanonicalGoogleThinking('google', 'xhigh')).toBeUndefined();
+    expect(toCanonicalGoogleThinking('google', 'max')).toBeUndefined();
+  });
+});
+
+describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
+  // Drives the REAL packages/providers/google translateChatRequest, not just
+  // the canonical ChatRequest this file produces -- the request-direction gap
+  // this pins (includeThoughts defaulting to true in translateChatRequest,
+  // which legacy google.ts never sent) only shows up at the actual Gemini
+  // wire body, one layer past ChatRequest.thinking itself. If either
+  // toCanonicalGoogleThinking's includeThoughts:false or translate.ts's
+  // includeThoughts handling ever regresses, this fails.
+  it('sends thinkingBudget only, with NO includeThoughts key, for an effort-tier request (byte-matches legacy, which only ever sent thinkingBudget)', () => {
+    const processed = makeProcessed(
+      {
+        model: 'gemini-2.5-pro',
+        messages: [{ role: 'user', content: 'hi' }],
+        effort: 'high',
+      },
+      'google',
+    );
+
+    const chatRequest = buildGoogleChatRequest(processed);
+    expect(chatRequest.thinking).toEqual({
+      type: 'enabled',
+      budgetTokens: 24576,
+      includeThoughts: false,
+    });
+
+    const geminiBody = translateChatRequest(chatRequest);
+    expect(geminiBody.generationConfig?.thinkingConfig).toEqual({ thinkingBudget: 24576 });
+    expect(geminiBody.generationConfig?.thinkingConfig).not.toHaveProperty('includeThoughts');
+  });
+
+  it('omits thinkingConfig entirely when no effort is set (no gratuitous includeThoughts for a plain request)', () => {
+    const processed = makeProcessed(
+      {
+        model: 'gemini-2.5-pro',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+      'google',
+    );
+
+    const chatRequest = buildGoogleChatRequest(processed);
+    expect(chatRequest.thinking).toBeUndefined();
+
+    const geminiBody = translateChatRequest(chatRequest);
+    expect(geminiBody.generationConfig?.thinkingConfig).toBeUndefined();
   });
 });
 
