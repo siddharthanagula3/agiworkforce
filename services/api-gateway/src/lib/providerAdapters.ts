@@ -21,7 +21,7 @@ import { createOpenAIAdapter, type OpenAIAdapterConfig } from '@agiworkforce/pro
 import { createOllamaAdapter, type OllamaAdapterConfig } from '@agiworkforce/providers-ollama';
 import { createGoogleAdapter, type GoogleAdapterConfig } from '@agiworkforce/providers-google';
 import { createDeepSeekAdapter } from '@agiworkforce/providers-deepseek';
-import { createXaiAdapter } from '@agiworkforce/providers-xai';
+import { createXAIAdapter } from '@agiworkforce/providers-xai';
 import { createPerplexityAdapter } from '@agiworkforce/providers-perplexity';
 import { createGroqAdapter } from '@agiworkforce/providers-groq';
 import { createMistralAdapter } from '@agiworkforce/providers-mistral';
@@ -70,7 +70,7 @@ const ENV_KEYED_PROVIDERS: Partial<
     envVars: ['DEEPSEEK_API_KEY'],
     create: (apiKey) => createDeepSeekAdapter({ apiKey }),
   },
-  xai: { envVars: ['XAI_API_KEY'], create: (apiKey) => createXaiAdapter({ apiKey }) },
+  xai: { envVars: ['XAI_API_KEY'], create: (apiKey) => createXAIAdapter({ apiKey }) },
   perplexity: {
     envVars: ['PERPLEXITY_API_KEY'],
     create: (apiKey) => createPerplexityAdapter({ apiKey }),
