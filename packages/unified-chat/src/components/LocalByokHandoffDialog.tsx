@@ -1,5 +1,32 @@
-'use client';
+// packages/unified-chat/src/components/LocalByokHandoffDialog.tsx
+//
+// Canonical Local-to-BYOK handoff ceremony dialog, shared by web and desktop.
+// Structural consolidation of apps/web/features/chat/components/dialogs/
+// LocalByokHandoffDialog.tsx (candidate/preview state fully controlled by the
+// caller) and apps/desktop/src/features/chat/LocalByokHandoffDialog.tsx (owns
+// its own data-fetching, no context selection). This component is
+// presentational: it owns no transport of its own — building the redacted
+// preview and confirming the fork are both the caller's responsibility,
+// injected via props/callbacks.
+//
+// Ceremony semantics (founder decision 2026-07-08, refines
+// docs/decisions/CURRENT_DECISIONS.md #6): Local mode is one UI bucket
+// (on-device + BYOK), but the FIRST send of an existing on-device chat to an
+// external BYOK provider must show this full ceremony — context, secret
+// scan, payload preview, visible provider label, explicit consent. Chats
+// started on a BYOK model need no ceremony. This component only renders the
+// ceremony UI; WHEN to trigger it is entirely the caller's decision (see
+// each surface's wrapper for its trigger logic).
+//
+// `candidates` is optional: pass it (with `selectedContextIds` +
+// `onToggleContext`) to render the context-selection sidebar (web's current
+// flow, where the user picks which messages to include). Omit it for
+// surfaces that auto-include context without letting the user pick
+// (desktop's current flow: last 20 messages, no selection UI).
 
+import type { LocalToByokHandoffPreview } from '@agiworkforce/utils';
+import type { HandoffContextItem } from '@agiworkforce/types';
+import { formatPrivacyModeLabel, formatProviderModeLabel } from '@agiworkforce/types';
 import { AlertTriangle, CheckCircle2, FileCheck2, Fingerprint, ShieldCheck } from 'lucide-react';
 import {
   Badge,
@@ -12,24 +39,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@agiworkforce/ui';
-import { cn } from '@shared/lib/utils';
-import {
-  getProviderModeInfo,
-  type WebHandoffContextCandidate,
-  type WebLocalToByokPreview,
-} from '../../lib/localByokHandoff';
+import { cn } from '../lib/utils';
 
-interface LocalByokHandoffDialogProps {
+export interface HandoffContextCandidate extends HandoffContextItem {
+  /** Required items (e.g. the outgoing draft message) render as non-deselectable. */
+  required?: boolean;
+}
+
+export interface LocalByokHandoffDialogProps {
   open: boolean;
-  candidates: WebHandoffContextCandidate[];
-  selectedContextIds: string[];
-  preview: WebLocalToByokPreview | null;
-  isBuilding: boolean;
-  isConfirming: boolean;
-  error: string | null;
   onOpenChange: (open: boolean) => void;
-  onToggleContext: (contextId: string) => void;
-  onConfirm: () => void;
+  preview: LocalToByokHandoffPreview | null;
+  /** True while the redacted preview is being built. */
+  isBuilding: boolean;
+  /** True while the confirm action's own async work is in flight. Defaults to false. */
+  isConfirming?: boolean;
+  error?: string | null;
+  onConfirm: () => void | Promise<void>;
+  /**
+   * Context items the user can include/exclude. When omitted, the
+   * context-selection sidebar is not rendered and the dialog assumes the
+   * caller already selected context automatically before building `preview`.
+   */
+  candidates?: HandoffContextCandidate[];
+  selectedContextIds?: string[];
+  onToggleContext?: (contextId: string) => void;
+  /** Overrides the default confirm-button label (defaults to "Create {byok} fork" / "Creating fork..."). */
+  confirmLabel?: string;
+  confirmingLabel?: string;
 }
 
 function formatBytes(bytes: number | undefined): string {
@@ -45,21 +82,26 @@ function shortHash(hash: string | undefined): string {
 
 export function LocalByokHandoffDialog({
   open,
-  candidates,
-  selectedContextIds,
+  onOpenChange,
   preview,
   isBuilding,
-  isConfirming,
-  error,
-  onOpenChange,
-  onToggleContext,
+  isConfirming = false,
+  error = null,
   onConfirm,
+  candidates,
+  selectedContextIds = [],
+  onToggleContext,
+  confirmLabel,
+  confirmingLabel = 'Creating fork...',
 }: LocalByokHandoffDialogProps) {
-  const local = getProviderModeInfo('Local');
-  const byok = getProviderModeInfo('DirectByok');
+  const localLabel = formatProviderModeLabel('Local');
+  const byokLabel = formatProviderModeLabel('DirectByok');
+  const localPrivacyLabel = formatPrivacyModeLabel('local');
+  const byokPrivacyLabel = formatPrivacyModeLabel('byok');
   const findings = preview?.redactionReport.findings ?? [];
   const blocked = Boolean(preview?.redactionReport.blocked);
   const canConfirm = Boolean(preview) && !blocked && !isBuilding && !isConfirming && !error;
+  const showContextPanel = candidates != null && onToggleContext != null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -69,59 +111,66 @@ export function LocalByokHandoffDialog({
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-300">
                 <ShieldCheck className="h-3 w-3" />
-                {local.label}
+                {localLabel}
               </Badge>
               <span className="text-muted-foreground">to</span>
               <Badge variant="outline" className="gap-1 border-cyan-500/40 text-cyan-300">
                 <FileCheck2 className="h-3 w-3" />
-                {byok.label}
+                {byokLabel}
               </Badge>
             </div>
             <DialogTitle>Review BYOK fork</DialogTitle>
             <DialogDescription>
-              This creates a separate {byok.privacyLabel} conversation. The original{' '}
-              {local.privacyLabel} thread is left unchanged.
+              This creates a separate {byokPrivacyLabel} conversation. The original{' '}
+              {localPrivacyLabel} thread is left unchanged.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid min-h-0 gap-0 overflow-hidden md:grid-cols-[18rem,1fr]">
-            <section className="min-h-0 overflow-y-auto border-b border-border/60 p-4 md:border-b-0 md:border-r">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">Context</h3>
-                <span className="text-xs text-muted-foreground">
-                  {selectedContextIds.length}/{candidates.length}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {candidates.map((candidate) => {
-                  const checked = selectedContextIds.includes(candidate.id);
-                  return (
-                    <label
-                      key={candidate.id}
-                      className={cn(
-                        'flex cursor-pointer gap-3 rounded-lg border border-border/60 p-3 text-sm transition-colors hover:bg-muted/50',
-                        checked && 'border-primary/40 bg-primary/5',
-                        candidate.required && 'cursor-default',
-                      )}
-                    >
-                      <Checkbox
-                        checked={checked}
-                        disabled={candidate.required || isBuilding || isConfirming}
-                        onCheckedChange={() => onToggleContext(candidate.id)}
-                        aria-label={`Include ${candidate.label}`}
-                        className="mt-0.5"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{candidate.label}</span>
-                        <span className="mt-1 block truncate text-xs text-muted-foreground">
-                          {candidate.sourceUri ?? candidate.kind}
+          <div
+            className={cn(
+              'grid min-h-0 gap-0 overflow-hidden',
+              showContextPanel && 'md:grid-cols-[18rem,1fr]',
+            )}
+          >
+            {showContextPanel && (
+              <section className="min-h-0 overflow-y-auto border-b border-border/60 p-4 md:border-b-0 md:border-r">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-medium">Context</h3>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedContextIds.length}/{candidates!.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {candidates!.map((candidate) => {
+                    const checked = selectedContextIds.includes(candidate.id);
+                    return (
+                      <label
+                        key={candidate.id}
+                        className={cn(
+                          'flex cursor-pointer gap-3 rounded-lg border border-border/60 p-3 text-sm transition-colors hover:bg-muted/50',
+                          checked && 'border-primary/40 bg-primary/5',
+                          candidate.required && 'cursor-default',
+                        )}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          disabled={candidate.required || isBuilding || isConfirming}
+                          onCheckedChange={() => onToggleContext!(candidate.id)}
+                          aria-label={`Include ${candidate.label}`}
+                          className="mt-0.5"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{candidate.label}</span>
+                          <span className="mt-1 block truncate text-xs text-muted-foreground">
+                            {candidate.sourceUri ?? candidate.kind}
+                          </span>
                         </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </section>
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <section className="min-h-0 overflow-y-auto p-4">
               <div className="grid gap-3 sm:grid-cols-3">
@@ -164,8 +213,10 @@ export function LocalByokHandoffDialog({
                 <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    Secret findings block this BYOK fork. Deselect the flagged context or edit the
-                    outgoing prompt before continuing.
+                    Secret findings block this BYOK fork.{' '}
+                    {showContextPanel
+                      ? 'Deselect the flagged context or edit the outgoing prompt before continuing.'
+                      : 'Edit the outgoing prompt before continuing.'}
                   </span>
                 </div>
               )}
@@ -221,7 +272,7 @@ export function LocalByokHandoffDialog({
               Cancel
             </Button>
             <Button onClick={onConfirm} disabled={!canConfirm}>
-              {isConfirming ? 'Creating fork...' : `Create ${byok.label} fork`}
+              {isConfirming ? confirmingLabel : (confirmLabel ?? `Create ${byokLabel} fork`)}
             </Button>
           </DialogFooter>
         </div>

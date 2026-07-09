@@ -2,11 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ComparisonResponse } from '../messages/ComparisonResponse';
 
-vi.mock('../messages/MarkdownContent', () => ({
-  default: ({ content }: { content: string }) => (
-    <span data-testid="markdown-content">{content}</span>
-  ),
-}));
+vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  return {
+    ...actual,
+    MarkdownContent: ({ content }: { content: string }) => (
+      <span data-testid="markdown-content">{content}</span>
+    ),
+  };
+});
 
 const OPTION_A = { label: 'Builder-focused', content: 'Build AGI quickly with Rust and Tauri.' };
 const OPTION_B = { label: 'Vision-forward', content: 'Think big: multi-surface, agent-native.' };

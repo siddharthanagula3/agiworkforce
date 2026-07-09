@@ -97,8 +97,8 @@ export function TaskPhaseTimeline({
         {entries.map((entry) => (
           <ToolCallCard
             key={entry.id}
-            toolCallId={entry.id}
-            toolName={entry.displayName}
+            id={entry.id}
+            name={entry.displayName}
             args={argsFromDisplayArgs(entry.displayArgs)}
             error={entry.error}
             status={toToolCallStatus(entry.status)}
@@ -142,8 +142,8 @@ export function TaskPhaseTimeline({
       {ungrouped.map((entry) => (
         <ToolCallCard
           key={entry.id}
-          toolCallId={entry.id}
-          toolName={entry.displayName}
+          id={entry.id}
+          name={entry.displayName}
           args={argsFromDisplayArgs(entry.displayArgs)}
           error={entry.error}
           status={toToolCallStatus(entry.status)}

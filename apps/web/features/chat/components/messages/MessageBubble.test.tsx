@@ -3,12 +3,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MessageBubble, messageListVariants, messageBubbleVariants } from './MessageBubble';
 
 // Inline stub for the dynamically-imported markdown renderer so tests don't
-// depend on next/dynamic async resolution.
-vi.mock('./MarkdownContent', () => ({
-  default: ({ content }: { content: string }) => (
-    <span data-testid="markdown-content">{content}</span>
-  ),
-}));
+// depend on next/dynamic async resolution. importOriginal preserves every
+// other @agiworkforce/unified-chat export this file's import graph needs.
+vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  return {
+    ...actual,
+    MarkdownContent: ({ content }: { content: string }) => (
+      <span data-testid="markdown-content">{content}</span>
+    ),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Minimal message factory

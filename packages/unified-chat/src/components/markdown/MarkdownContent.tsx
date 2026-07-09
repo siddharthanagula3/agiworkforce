@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,7 +10,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import type { Components } from 'react-markdown';
-import { Button } from '@/shared/components/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { Copy, Check } from 'lucide-react';
 // KaTeX CSS must be loaded alongside rehype-katex so rendered math is styled.
 import 'katex/dist/katex.min.css';
@@ -95,12 +93,21 @@ const markdownComponents: Components = {
   ),
 };
 
-interface MarkdownContentProps {
+export interface MarkdownContentProps {
   content: string;
   isStreaming?: boolean;
 }
 
-export default function MarkdownContent({ content, isStreaming }: MarkdownContentProps) {
+/**
+ * Canonical chat markdown renderer, shared by web and desktop.
+ *
+ * Source of truth ported from apps/web/features/chat/components/messages/
+ * MarkdownContent.tsx (round-consolidated into unified-chat). Plugin order
+ * (raw HTML -> sanitize -> KaTeX -> syntax highlight) and the KaTeX CSS
+ * import are both load-bearing — see inline comments below and
+ * markdownSanitizeSchema.ts.
+ */
+export function MarkdownContent({ content, isStreaming }: MarkdownContentProps) {
   // Convert \[...\] and \(...\) to $$...$$/$...$ before remark-math runs,
   // since remark-math only recognises dollar-sign delimiters by default.
   const processedContent = preprocessMath(content);

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
-import MarkdownContent from '@/features/chat/components/messages/MarkdownContent';
+import { MarkdownContent } from '@agiworkforce/unified-chat';
 
 interface Props {
   file: ProjectKnowledgeFile | null;
