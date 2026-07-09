@@ -78,28 +78,32 @@ vi.mock('../../src/lib/neonClients', () => {
     return query;
   }
 
+  // P1-GW-RLS (Wave 4): organizations/organization_members/
+  // organization_admin_policies/support_cases have no RLS policy coverage
+  // (RLS-GAP), so routes/enterprise.ts now calls getServiceClient() for
+  // everything, same as middleware/auth.ts's kill-switch profiles lookup.
+  // Dispatch on table name so both see the right chain.
   const serviceClient = {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn().mockResolvedValue({
-            data: { account_status: 'active' },
-            error: null,
-          }),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })),
-      })),
-    })),
-  };
-
-  const userClient = {
-    from: vi.fn((table: string) => createQuery(table)),
+    from: vi.fn((table: string) => {
+      if (table === 'profiles') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({
+                data: { account_status: 'active' },
+                error: null,
+              }),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            })),
+          })),
+        };
+      }
+      return createQuery(table);
+    }),
   };
 
   return {
     getServiceClient: vi.fn(() => serviceClient),
-    getUserClient: vi.fn(() => userClient),
-    getUserScopedClient: vi.fn(() => userClient),
   };
 });
 

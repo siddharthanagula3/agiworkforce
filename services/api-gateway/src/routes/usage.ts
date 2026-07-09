@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/neonClients';
+import { getServiceClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -134,8 +134,11 @@ function formatPeriodLabel(date: Date): string {
 }
 
 async function fetchUsageRows(userId: string, start: Date, end: Date): Promise<UsageRow[]> {
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getUserScopedClient(userId);
+  // RLS-GAP: usage_events has no RLS policy (0016_misc.sql enables none) —
+  // migration TODO. The `.eq('user_id', …)` filter is the SOLE
+  // tenant-isolation mechanism until a policy ships. Same gap applies to the
+  // /history route's getServiceClient() call below.
+  const db = getServiceClient();
   const { data, error } = await db
     .from('usage_events')
     .select('*')
@@ -284,7 +287,7 @@ router.get('/history', createRateLimiter('usage-history'), async (req: Request, 
   const limit = Math.max(1, Math.min(100, Number(req.query['limit'] ?? 50)));
   const offset = Math.max(0, Number(req.query['offset'] ?? 0));
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: usage_events — see fetchUsageRows() above
   const { data, error } = await db
     .from('usage_events')
     .select('*')

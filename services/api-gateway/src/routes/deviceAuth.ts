@@ -167,7 +167,27 @@ router.post('/token', createRateLimiter('device-register'), async (req: Request,
   // revocation check in middleware/auth.ts is a no-op (no jti to look up) and
   // logout bails to `{ revoked: false }`. `jwtid` sets the standard `jti`
   // claim that the revocation path + revoked_jwts table key on.
-  const accessToken = jwt.sign({ userId, email }, JWT_SECRET, {
+  //
+  // SECURITY (P1-GW-RLS): also mint the standard `sub` claim (additive —
+  // existing claims/consumers are unchanged, so pre-existing tokens keep
+  // verifying fine, they just lack `sub` until they're replaced). data-layer's
+  // NeonDatabaseAdapter.withUser(token) (used by getUserScopedClient in
+  // lib/neonClients.ts) decodes `sub` from the token to bind Postgres RLS —
+  // without it, requests authenticated via a device-paired gateway token
+  // would fail withUser() and fall back to the service client.
+  //
+  // COMPAT WINDOW: tokens minted before this change (shipped 2026-07-09) lack
+  // `sub`. getUserScopedClient() falls back safely (logged, not a crash) for
+  // any of them it still sees. ACCESS_TOKEN_EXPIRES_SECONDS is 604800s (7
+  // days) — not short enough to justify forcing mass re-auth/bumping a token
+  // version, so the fallback (not a forced-reauth cutover) is the deliberate
+  // choice here. The window closes on its own: every gateway-issued token is
+  // guaranteed to carry `sub` by 2026-07-16 (7 days after ship), after which
+  // this comment block and the withUser() fallback-on-missing-sub path (see
+  // lib/neonClients.ts's getUserScopedClient) can be treated as dead code for
+  // this specific cause — the fallback should stay regardless, since it also
+  // covers the unrelated app_rls-provisioning failure mode documented there.
+  const accessToken = jwt.sign({ userId, email, sub: userId }, JWT_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
     issuer: 'agiworkforce-api-gateway',
     audience: 'agiworkforce',

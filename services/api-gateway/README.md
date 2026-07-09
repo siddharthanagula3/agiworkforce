@@ -57,11 +57,16 @@ Reusable schemas must live in `packages/types`; provider calls must go through p
 
 Use `.env.example` as the template. Never commit JWT secrets, Neon service-role keys, provider keys, webhook secrets, managed compute tokens, or production URLs that imply secret access.
 
+`NEON_DATABASE_URL` now backs two separate connection strategies out of `src/lib/neonClients.ts`:
+
+- `getServiceClient()` — the existing one-shot `@neondatabase/serverless` `neon()` HTTP client (service-role, `.eq()`-filtered).
+- `getUserScopedClient({ userId, token })` — a pooled `@neondatabase/serverless` `Pool` (WebSocket) via `@agiworkforce/data-layer`'s `NeonDatabaseAdapter`, which binds Postgres RLS per request (`SET LOCAL ROLE app_rls` + `request.jwt.claim.sub`). Use the **pooled** Neon connection string (dashboard → Connection Details → "Pooled connection"), not the direct one — same value works for both clients. This requires the `app_rls` role and RLS policies from `apps/web/db/neon/0037_rls_user_isolation.sql` to already exist on the target database; most gateway tables don't have a policy yet (see `SVC-GATEWAY-RLS-NOOP-01` / the Wave-4 coverage audit), so `getUserScopedClient` is only called for `subscriptions`, `token_credits`, and `credit_transactions` today — every other call site intentionally stays on `getServiceClient()` with an `// RLS-GAP:` comment.
+
 ## Security, Privacy, Data Boundaries
 
 Security/privacy review is required for auth, JWT handling, CORS, rate limits, provider routing, Managed mode, file handling, retention, logging, Neon service-role use, and any customer usage/credit flow.
 
-Managed cloud must stay private beta/waitlisted until abuse, metering, fraud, refunds, disputes, retention, and provider terms are solved.
+Managed cloud is in public alpha and open by default — the private-beta/waitlist launch gate was removed (2026-06-27). `AGI_MANAGED_COMPUTE_PRIVATE_BETA` remains only as an incident-response kill-switch.
 
 ## Tests Required For Changes
 

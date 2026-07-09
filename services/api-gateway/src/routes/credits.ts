@@ -68,10 +68,13 @@ router.get(
       throw new AppError('Unauthorized', 401);
     }
 
-    // P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
-    // RLS — see lib/neonClients.ts). Tenant isolation rests SOLELY on the
-    // explicit user filter passed into the RPC below; there is no RLS backstop.
-    const userDb = getUserScopedClient(user.userId);
+    // P1-GW-RLS: get_credit_balance runs with caller privileges (no SECURITY
+    // DEFINER — 0020_functions.sql), reading public.token_credits, which has
+    // RLS enabled+forced with a policy keyed on `user_id =
+    // current_app_user_id()` (0037_rls_user_isolation.sql). getUserScopedClient
+    // binds the verified token via withUser(), so this RPC now runs under real
+    // Postgres RLS as a backstop behind the explicit p_user_id parameter below.
+    const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
     const { data, error } = await userDb.rpc('get_credit_balance', {
       p_user_id: user.userId,
     });
@@ -131,9 +134,11 @@ router.post('/check', createRateLimiter('credits-check'), async (req: Request, r
   // SECURITY: Use strict schema to reject unexpected fields
   const { amount_cents } = checkCreditsSchema.parse(req.body);
 
-  // P1-GW-RLS: service-role client (no DB-level RLS — see lib/neonClients.ts).
-  // Isolation rests SOLELY on the explicit user id passed into the RPC below.
-  const userDb = getUserScopedClient(user.userId);
+  // P1-GW-RLS: check_credits_available runs with caller privileges (no
+  // SECURITY DEFINER — 0020_functions.sql) over RLS-protected token_credits
+  // (0037_rls_user_isolation.sql). See get_credit_balance above for the full
+  // rationale — same table, same policy, same withUser() binding.
+  const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
   const { data, error } = await userDb.rpc('check_credits_available', {
     p_user_id: user.userId,
     p_amount_cents: amount_cents,
@@ -167,9 +172,12 @@ router.post('/deduct', createRateLimiter('credits-deduct'), async (req: Request,
     req.body,
   );
 
-  // P1-GW-RLS: service-role client (no DB-level RLS — see lib/neonClients.ts).
-  // Isolation rests SOLELY on the explicit user id passed into the RPC below.
-  const userDb = getUserScopedClient(user.userId);
+  // P1-GW-RLS: deduct_credits runs with caller privileges (no SECURITY
+  // DEFINER — 0020_functions.sql) over RLS-protected token_credits /
+  // credit_transactions (0037_rls_user_isolation.sql). See get_credit_balance
+  // above for the full rationale — same withUser() binding, financial write
+  // path, so the DB-level backstop matters most here.
+  const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
   const { data, error } = await userDb.rpc('deduct_credits', {
     p_user_id: user.userId,
     p_amount_cents: amount_cents,
