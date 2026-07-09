@@ -39,7 +39,7 @@ import {
   normalizeModelId,
   resolveAutoModeModel,
 } from '@agiworkforce/types';
-import type { RoutingSlot } from '@agiworkforce/types';
+import type { RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
   applyConversationContext,
   classifyTaskLocally,
@@ -170,6 +170,15 @@ export type ProcessedRequest = {
       multimodal_content?: unknown[];
       tool_calls?: unknown[];
       tool_call_id?: string;
+      /**
+       * INTERNAL, tool-loop-only: signed thinking blocks re-attached to an
+       * assistant tool_use turn the agentic loop replays to Anthropic under
+       * extended thinking. Set only by tool-loop.ts, forwarded to the request
+       * builder by canonical-request.ts's `toWireMessage`, and never present
+       * on a client-supplied message nor serialized onto any client wire.
+       * Fixes known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
+       */
+      __canonicalThinking?: ThinkingBlock[];
     }>;
     temperature?: number;
     max_tokens: number;
