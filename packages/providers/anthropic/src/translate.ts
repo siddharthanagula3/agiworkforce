@@ -190,7 +190,10 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     .map(translateMessage)
     .filter((m): m is AnthropicMessageParam => m !== null);
   const system = translateSystem(req.messages, req.system);
-  const tools = req.tools?.map(translateTool);
+  const translatedTools = req.tools?.map(translateTool) ?? [];
+  // rawVendorTools are provider-native payloads (server tools like
+  // web_search_20260209) appended verbatim — the caller owns their shape.
+  const tools = [...translatedTools, ...((req.rawVendorTools ?? []) as AnthropicToolParam[])];
   const toolChoice = translateToolChoice(req.toolChoice);
 
   const thinking =
