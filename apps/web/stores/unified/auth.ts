@@ -13,6 +13,7 @@
 
 import React from 'react';
 import { create } from 'zustand';
+import { parseMeResponse } from '@agiworkforce/services';
 import { hasClerkSessionCookie } from '@/lib/clerk-session';
 
 // Minimal user shape retained for backward compatibility with components reading user.email/id.
@@ -52,23 +53,8 @@ export interface FeatureFlags {
   advanced_model_access: boolean;
 }
 
-/** Shape returned by /api/me */
-interface MeResponse {
-  id: string;
-  email: string;
-  name: string;
-  avatar_url: string | null;
-  created_at: number;
-  updated_at: number;
-  plan: {
-    tier: string;
-    display_name: string;
-    status: string;
-    current_period_end: number | null;
-  };
-  feature_flags: FeatureFlags;
-  credits: CreditBalance | null;
-}
+// /api/me wire shape comes from the shared cloud contract (restructure Wave 4);
+// `credits` is contract-typed as unknown and narrowed to CreditBalance here.
 
 // ---------------------------------------------------------------------------
 // Auth + Billing store state shape
@@ -155,7 +141,8 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
           throw new Error(`/api/me returned ${response.status}`);
         }
 
-        const data: MeResponse = await response.json();
+        const data = parseMeResponse(await response.json());
+        const credits = (data.credits ?? null) as CreditBalance | null;
 
         const tier = (data.plan.tier || 'free') as SubscriptionPlan['tier'];
         const plan: SubscriptionPlan = {
@@ -168,9 +155,9 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
 
         set({
           subscription: plan,
-          creditBalance_cents: data.credits?.balance_cents ?? null,
-          dailyUsage_cents: data.credits?.daily_usage_cents ?? 0,
-          dailyLimit_cents: data.credits?.daily_limit_cents ?? null,
+          creditBalance_cents: credits?.balance_cents ?? null,
+          dailyUsage_cents: credits?.daily_usage_cents ?? 0,
+          dailyLimit_cents: credits?.daily_limit_cents ?? null,
           featureFlags: data.feature_flags,
           isLoading: false,
           error: null,

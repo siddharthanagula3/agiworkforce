@@ -35,19 +35,9 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 const MAX_PROJECTS_PULL = 500;
 const MAX_PROJECTS_PUSH = 500;
 
-type ProjectDelta = {
-  id: string;
-  name: string;
-  description: string | null;
-  instructions: string | null;
-  color: string | null;
-  is_archived: boolean;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  server_version: string;
-};
+// Wire shape from the shared cloud contract (restructure Wave 4) — enforced
+// by route.contract.test.ts, consumed at runtime by mobile's cloudSyncEngine.
+type ProjectDelta = import('@agiworkforce/services').ProjectWireDelta;
 
 // ---------------------------------------------------------------------------
 // Pull

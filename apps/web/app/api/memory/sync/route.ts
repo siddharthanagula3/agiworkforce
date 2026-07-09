@@ -35,17 +35,9 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 const MAX_MEMORIES_PULL = 1000;
 const MAX_MEMORIES_PUSH = 1000;
 
-type MemoryDelta = {
-  id: string;
-  content: string;
-  category: string | null;
-  source: string | null;
-  pinned: boolean;
-  is_deleted: boolean;
-  created_at: string;
-  updated_at: string;
-  server_version: string;
-};
+// Wire shape from the shared cloud contract (restructure Wave 4) — enforced
+// by route.contract.test.ts, consumed at runtime by mobile's cloudSyncEngine.
+type MemoryDelta = import('@agiworkforce/services').MemoryWireDelta;
 
 // ---------------------------------------------------------------------------
 // GET — delta pull (?since=) OR legacy status (no since)
