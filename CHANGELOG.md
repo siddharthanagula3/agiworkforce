@@ -2,9 +2,18 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-22
+Last updated: 2026-07-08
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — monorepo restructure P0: audit + hygiene + coming-soon site] — 2026-07-08
+
+Branch `chore/repo-restructure-2026-07`. Full-repo audit executed as six parallel file-level maps; consolidation plan now governs package/crate ownership.
+
+- **Architecture:** `docs/plans/monorepo-restructure-2026-07-08.md` (maturity map, five duplication findings, target tree, dependency graph, Local/Cloud mode architecture, migration phases P0-P6) plus external-brief adjudication in `docs/architecture/shared-packages-decision-log.md` (ACCEPT/REJECT/MODIFY with evidence; repo-truth answers to the brief's open questions).
+- **Hygiene (P0):** retired `.cursor`/`.minimax`/`.opencode`/`.superpowers` and the `.claude`/`.codex` surface-subagent files with coupled guard-script updates (`check-agent-context`, `check-repo-organization`); deleted dead crates `agiworkforce-apply-patch`, `agiworkforce-plugin-runtime`, `agiworkforce-task-runtime` and `crates/node-version.txt` (`cargo check --workspace` green); removed superseded v1 mobile marketing screenshots; cleared ~240MB of gitignored local cruft. `THIRD_PARTY_LICENSES.md` deletion found in the worktree was reverted (license compliance).
+- **Marketing site:** all six surfaces presented as "Coming soon" with every install/download CTA removed (config-driven via `SURFACE_STATUS` in `lib/marketing-constants.ts`, 42 files); mobile hero imagery kept; SoftwareApplication JSON-LD availability/pricing assertions removed; web login and waitlist forms kept.
+- **Ledger:** four new known-flaws rows (`SVC-GATEWAY-RLS-NOOP-01`, `XSURF-PROVIDER-STREAM-DUP-01`, `MOBILE-IOS-PREBUILD-DRIFT-01`, `WEB-SANDBOX-ORIGIN-ENV-01`); stale mobile-BYOK wording fixed in `CURRENT_DECISIONS.md` #5; mobile rows refreshed in `AGENTS.md`/`repo-map.json`.
 
 ## [Unreleased — agi-alpha setup: clean + structure + SSOT reconciliation] — 2026-06-28
 
