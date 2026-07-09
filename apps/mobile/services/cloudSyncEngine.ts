@@ -19,6 +19,16 @@
  * client routes through `guardedFetch`, which independently refuses any network I/O
  * in Local mode. Local-mode conversations live in a separate store and are never
  * touched here. IDs are UUIDv7 (client-generated, collision-free, time-ordered).
+ *
+ * Wave 4: the PURE apply/cursor logic below (conversation/message delta apply,
+ * memory delta apply, push-item mapping, cursor arithmetic, settings push/pull
+ * gating) delegates to @agiworkforce/services' sync-apply module — the same
+ * rules desktop's Rust cloud_sync.rs implements natively and keeps in sync
+ * with via golden-fixture replay (packages/services/src/sync-apply/__fixtures__).
+ * What stays here is mobile-only glue: Zustand store access (the "port"
+ * adapters below), scheduling, egress-guarded transport, and Zod validation.
+ * Project apply and memory/project push mapping were intentionally NOT
+ * extracted — see the inline scope notes at each call site.
  */
 import { api } from './api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -33,12 +43,13 @@ import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStor
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
-import type { ChatMessage, ConversationSummary } from '@/types/chat';
-// Wire shapes come from the shared cloud contracts (packages/services
-// cloud-contracts/sync.ts) — the same schemas the web routes' contract tests
-// enforce server-side. Every pull/push response is validated here, so a
-// server-shape drift throws into syncNow()'s catch (status 'error') instead
-// of silently mis-applying deltas.
+import type { ChatMessage } from '@/types/chat';
+// Wire shapes + pure apply/cursor logic come from the shared cloud contracts
+// and sync-apply modules (packages/services) — the same schemas the web
+// routes' contract tests enforce server-side, and the same apply rules
+// desktop's Rust engine replays via golden fixtures. Every pull/push response
+// is still validated here, so a server-shape drift throws into syncNow()'s
+// catch (status 'error') instead of silently mis-applying deltas.
 import {
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
@@ -50,6 +61,21 @@ import {
   SettingsSyncPushResponseSchema,
   type ConversationWireDelta,
   type MessageWireDelta,
+  applyConversationDeltas as applyConversationDeltasCore,
+  applyMessageDeltas as applyMessageDeltasCore,
+  toConversationPushItem,
+  toMessagePushItem,
+  isSyncableMessageRole,
+  mapMemoryWireDelta,
+  applyMemoryDeltas,
+  mapProjectWireDelta,
+  shouldPushSettings,
+  shouldApplyPulledSettings,
+  selectNextCursor,
+  type ConversationStorePort,
+  type SyncConversationRecord,
+  type MessageStorePort,
+  type MessagePushItem,
 } from '@agiworkforce/services';
 
 const SYNC_PATH = '/api/chat/sync';
@@ -72,96 +98,125 @@ export function isManagedSyncEnabled(): boolean {
   }
 }
 
-/** Compare two non-negative integer strings (bigint server_version) without precision loss. */
-function bigintGreater(a: string, b: string): boolean {
-  const na = a.replace(/^0+/, '') || '0';
-  const nb = b.replace(/^0+/, '') || '0';
-  if (na.length !== nb.length) return na.length > nb.length;
-  return na > nb;
+// ── Port adapters over the Zustand cloud stores ─────────────────────────────
+//
+// The pure apply rules live in @agiworkforce/services' sync-apply module;
+// these adapters are the mobile-specific glue that satisfies its port
+// interfaces against chatCloudMessageStore. Each method does a live
+// `.getState()` read/write (never a cached snapshot), so a mutation from an
+// earlier delta in the same apply call is visible to a later one — matching
+// the original single-pass implementation's behavior.
+
+const conversationPort: ConversationStorePort = {
+  get: (id) => {
+    const c = useChatCloudMessageStore.getState().conversations.find((x) => x.id === id);
+    if (!c) return undefined;
+    return {
+      id: c.id,
+      title: c.title,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      messageCount: c.messageCount,
+      pinned: c.pinned,
+      model: c.model,
+      projectId: c.projectId,
+    };
+  },
+  insert: (record) => {
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: record.id,
+      title: record.title,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      messageCount: record.messageCount,
+      pinned: record.pinned,
+      model: record.model,
+      projectId: record.projectId,
+    });
+  },
+  patch: (id, patch) => {
+    useChatCloudMessageStore.getState().patchCloudConversation(id, patch);
+  },
+  remove: (id) => {
+    useChatCloudMessageStore.getState().removeCloudConversation(id);
+  },
+};
+
+/**
+ * Normalize a possibly-non-string ChatMessage content field to the wire's
+ * `content: string` requirement. Used ONLY at the push (wire) boundary,
+ * matching the original push()'s guard exactly — NOT in the port's
+ * getMessages below, where `content` must pass through byte-for-byte
+ * unchanged for any message not targeted by the current delta batch (see
+ * that comment for why).
+ */
+function messageContentToString(content: unknown): string {
+  return typeof content === 'string' ? content : JSON.stringify(content);
 }
 
-function maxCursor(base: string, ...versions: string[]): string {
-  let max = base;
-  for (const v of versions) if (v && bigintGreater(v, max)) max = v;
-  return max;
-}
+const messagePort: MessageStorePort = {
+  getMessages: (conversationId) => {
+    const msgs = useChatCloudMessageStore.getState().messages[conversationId] ?? [];
+    // NOTE: `content` is passed through AS-IS (never stringified here), even
+    // though ChatMessage.content is typed as string. applyMessageDeltas only
+    // overwrites `content` for ids present in the delta batch (from the
+    // wire, always a real string); every OTHER message in this list is a
+    // pure pass-through — getMessages → (unmodified) → setMessages's
+    // `{...existing}` overlay writes the exact original value back. The
+    // original single-pass applyMessageDeltas never touched a non-delta'd
+    // message's content at all, so this round-trip must be lossless,
+    // regardless of what content actually holds at runtime.
+    return msgs.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      model: (m as { model?: string }).model,
+      provider: (m as { provider?: string }).provider,
+      createdAt: (m as { createdAt?: string }).createdAt,
+    }));
+  },
+  setMessages: (conversationId, records) => {
+    // Re-attach each record onto its EXISTING full ChatMessage (if any) so
+    // rich, sync-irrelevant fields (attachments, artifacts, toolCalls, steps,
+    // image-gen state, ...) survive an apply — the shared apply function only
+    // ever sees the minimal SyncMessageRecord projection above, never the
+    // full local message shape.
+    const existingById = new Map(
+      (useChatCloudMessageStore.getState().messages[conversationId] ?? []).map((m) => [m.id, m]),
+    );
+    const chatMessages = records.map((record) => {
+      const existing = existingById.get(record.id);
+      return {
+        ...(existing ?? {}),
+        id: record.id,
+        role: record.role,
+        content: record.content,
+        ...(record.model ? { model: record.model } : {}),
+        ...(record.provider ? { provider: record.provider } : {}),
+        createdAt: record.createdAt,
+      } as ChatMessage;
+    });
+    useChatCloudMessageStore.getState().setCloudMessages(conversationId, chatMessages);
+  },
+};
 
 // ── Apply pulled deltas into the cloud store ────────────────────────────────────
 
+/**
+ * Applies pulled conversation deltas via the shared sync-apply rule (see
+ * @agiworkforce/services' conversations.ts: tombstone-remove, LWW upsert,
+ * dirty-title preserve). Exported (not just used internally) — kept as a
+ * named export with this exact one-argument signature because
+ * apps/mobile/__tests__/cloud-delete-rename-durability.test.ts imports and
+ * calls it directly.
+ */
 export function applyConversationDeltas(deltas: ConversationWireDelta[]): void {
-  const store = useChatCloudMessageStore.getState();
   const dirtyIds = useCloudSyncStateStore.getState().dirtyConversationIds;
-  const existing = new Map(store.conversations.map((c) => [c.id, c]));
-  for (const d of deltas) {
-    if (d.deleted_at) {
-      // A remote delete ALWAYS wins, even over a locally-dirty rename — the
-      // dirty-title guard below runs only on the live (non-deleted) branch so
-      // a tombstone is never suppressed.
-      store.removeCloudConversation(d.id);
-      existing.delete(d.id);
-      continue;
-    }
-    const summary: ConversationSummary = {
-      id: d.id,
-      title: d.title,
-      createdAt: d.created_at,
-      updatedAt: d.updated_at,
-      messageCount: existing.get(d.id)?.messageCount ?? 0,
-      pinned: d.pinned,
-      model: d.model ?? undefined,
-      projectId: d.project_id ?? undefined,
-      executionMode: 'cloud',
-    };
-    // DATA-LOSS FIX: preserve a locally-dirty (un-pushed) title against a
-    // server snapshot that predates the next push, so a concurrent pull can't
-    // revert the user's rename before push() persists it.
-    if (dirtyIds.includes(d.id)) {
-      const localTitle = existing.get(d.id)?.title;
-      if (localTitle) summary.title = localTitle;
-    }
-    if (existing.has(d.id)) {
-      store.patchCloudConversation(d.id, summary);
-    } else {
-      store.addCloudConversation(summary);
-    }
-    existing.set(d.id, summary);
-  }
+  applyConversationDeltasCore(conversationPort, deltas, dirtyIds);
 }
 
 function applyMessageDeltas(deltas: MessageWireDelta[]): void {
-  const store = useChatCloudMessageStore.getState();
-  const byConv = new Map<string, MessageWireDelta[]>();
-  for (const d of deltas) {
-    const list = byConv.get(d.conversation_id) ?? [];
-    list.push(d);
-    byConv.set(d.conversation_id, list);
-  }
-  for (const [conversationId, convDeltas] of byConv) {
-    const current = useChatCloudMessageStore.getState().messages[conversationId] ?? [];
-    const merged = new Map(current.map((m) => [m.id, m]));
-    for (const d of convDeltas) {
-      if (d.deleted_at) {
-        merged.delete(d.id);
-        continue;
-      }
-      const existing = merged.get(d.id);
-      merged.set(d.id, {
-        ...(existing ?? {}),
-        id: d.id,
-        role: d.role,
-        content: d.content,
-        ...(d.model ? { model: d.model } : {}),
-        ...(d.provider ? { provider: d.provider } : {}),
-        createdAt: d.created_at,
-      } as ChatMessage);
-    }
-    const ordered = Array.from(merged.values()).sort((a, b) => {
-      const at = (a as { createdAt?: string }).createdAt ?? '';
-      const bt = (b as { createdAt?: string }).createdAt ?? '';
-      return at === bt ? a.id.localeCompare(b.id) : at.localeCompare(bt);
-    });
-    store.setCloudMessages(conversationId, ordered);
-  }
+  applyMessageDeltasCore(messagePort, deltas);
 }
 
 // ── Pull ────────────────────────────────────────────────────────────────────────
@@ -181,7 +236,7 @@ async function pull(): Promise<void> {
     // share one version sequence, so taking the max of per-row server_versions
     // overshoots the lagging table's frontier and skips rows that fall in the gap
     // (the server now bounds the cursor to that frontier). Only ever move forward.
-    cursor = maxCursor(cursor, res.cursor ?? '0');
+    cursor = selectNextCursor(cursor, res.cursor);
     useCloudSyncStateStore.getState().setCursor(cursor);
     if (!res.hasMore) break;
   }
@@ -189,63 +244,43 @@ async function pull(): Promise<void> {
 
 // ── Push ────────────────────────────────────────────────────────────────────────
 
-interface PushMessage {
-  id: string;
-  conversationId: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  model: string | null;
-  provider: string | null;
-  createdAt?: string;
-}
-
 async function push(): Promise<void> {
   const { dirtyConversationIds, dirtyMessages } = useCloudSyncStateStore.getState();
   if (dirtyConversationIds.length === 0 && dirtyMessages.length === 0) return;
 
-  const cloud = useChatCloudMessageStore.getState();
-  const convById = new Map(cloud.conversations.map((c) => [c.id, c]));
-
   // Conversations are sent first (the server upserts them before messages, so a
   // new conversation's messages pass the ownership EXISTS check in one round-trip).
   const conversations = dirtyConversationIds
-    .map((id) => convById.get(id))
-    .filter((c): c is ConversationSummary => Boolean(c))
-    .map((c) => ({
-      id: c.id,
-      title: c.title,
-      model: c.model ?? null,
-      projectId: c.projectId ?? null,
-      pinned: c.pinned ?? false,
-      createdAt: c.createdAt,
-      // The server REQUIRES updatedAt (string) as the LWW key. Cloud conversation
-      // summaries don't always carry it, so fall back to createdAt, then now — never
-      // push undefined (that 400s the whole chat-sync push with a Zod error).
-      updatedAt: c.updatedAt ?? c.createdAt ?? new Date().toISOString(),
-    }));
+    .map((id) => conversationPort.get(id))
+    .filter((c): c is SyncConversationRecord => Boolean(c))
+    .map((c) => toConversationPushItem(c));
+
+  const cloud = useChatCloudMessageStore.getState();
 
   // Split message refs into buildable (a syncable local row exists) and dead (the
   // row vanished locally, or is a non-syncable 'tool' record). Dead refs are dropped
   // unconditionally; buildable refs are only cleared once the server ACKS them.
   const buildableRefs: DirtyMessageRef[] = [];
   const deadRefs: DirtyMessageRef[] = [];
-  const messages: PushMessage[] = [];
+  const messages: MessagePushItem[] = [];
   for (const ref of dirtyMessages) {
     const msg = (cloud.messages[ref.conversationId] ?? []).find((m) => m.id === ref.messageId);
-    if (!msg || (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system')) {
+    const role = msg?.role;
+    if (!msg || !role || !isSyncableMessageRole(role)) {
       deadRefs.push(ref);
       continue;
     }
     buildableRefs.push(ref);
-    messages.push({
-      id: msg.id,
-      conversationId: ref.conversationId,
-      role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-      model: (msg as { model?: string }).model ?? null,
-      provider: (msg as { provider?: string }).provider ?? null,
-      createdAt: (msg as { createdAt?: string }).createdAt,
-    });
+    messages.push(
+      toMessagePushItem(ref.conversationId, {
+        id: msg.id,
+        role,
+        content: messageContentToString(msg.content),
+        model: (msg as { model?: string }).model,
+        provider: (msg as { provider?: string }).provider,
+        createdAt: (msg as { createdAt?: string }).createdAt,
+      }),
+    );
   }
 
   let ackedMessageIds = new Set<string>();
@@ -293,22 +328,14 @@ async function pullMemory(): Promise<void> {
     );
     const memories = res.memories;
     if (memories.length > 0) {
-      // Map wire snake_case → client camelCase, then apply to store. The wire
-      // `source` is a free-form string; normalize unknown values to 'web'.
-      const deltas: CloudMemoryEntry[] = memories.map((m) => ({
-        id: m.id,
-        content: m.content,
-        category: m.category,
-        source:
-          m.source === 'mobile' || m.source === 'desktop' || m.source === 'auto' ? m.source : 'web',
-        pinned: m.pinned,
-        isDeleted: m.is_deleted,
-        createdAt: m.created_at,
-        updatedAt: m.updated_at,
-      }));
-      useCloudMemoryStore.getState().applyCloudMemoryDeltas(deltas);
+      // Map wire snake_case → client camelCase, then upsert/tombstone by id —
+      // both steps are the shared sync-apply rule (memory.ts); the engine's
+      // only job is to read the current entries and write the merged result.
+      const current: CloudMemoryEntry[] = useCloudMemoryStore.getState().entries;
+      const merged = applyMemoryDeltas(current, memories.map(mapMemoryWireDelta));
+      useCloudMemoryStore.setState({ entries: merged });
     }
-    cursor = maxCursor(cursor, res.cursor ?? '0');
+    cursor = selectNextCursor(cursor, res.cursor);
     useMemorySyncStateStore.getState().setMemoryCursor(cursor);
     if (!res.hasMore) break;
   }
@@ -398,25 +425,13 @@ async function pullProjects(): Promise<void> {
     );
     const items = res.projects;
     if (items.length > 0) {
-      // Map wire snake_case → client camelCase, then apply to store.
-      const deltas: CloudProject[] = items.map((p) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        instructions: p.instructions,
-        color: p.color,
-        isArchived: p.is_archived,
-        metadata: p.metadata,
-        // Pulled rows may come from any surface; use 'web' as the fallback source
-        // since the wire format does not include a source field.
-        source: 'web' as const,
-        createdAt: p.created_at,
-        updatedAt: p.updated_at,
-        deletedAt: p.deleted_at,
-      }));
+      // Map wire snake_case → client camelCase via the shared mapping (projects.ts).
+      // The upsert/tombstone REDUCER stays store-owned (cloudProjectStore also
+      // clears activeProjectId on a tombstone — see projects.ts's scope note).
+      const deltas: CloudProject[] = items.map(mapProjectWireDelta);
       useCloudProjectStore.getState().applyCloudProjectDeltas(deltas);
     }
-    cursor = maxCursor(cursor, res.cursor ?? '0');
+    cursor = selectNextCursor(cursor, res.cursor);
     useProjectSyncStateStore.getState().setProjectCursor(cursor);
     if (!res.hasMore) break;
   }
@@ -486,7 +501,7 @@ async function pushProjects(): Promise<void> {
 
 /**
  * Push the cloud-safe settings projection if a real local edit has been made since
- * the last push. Uses two guards in combination:
+ * the last push. Gated by the shared `shouldPushSettings` rule (settings.ts):
  *
  * 1. `settingsUpdatedAt !== null` — null means this device has never changed any
  *    cloud-safe setting (factory defaults). A fresh device must NOT push defaults
@@ -509,19 +524,12 @@ async function pushProjects(): Promise<void> {
  */
 async function pushSettings(): Promise<void> {
   const storeSnapshot = useCloudSettingsStore.getState();
-
-  // Guard 1: Never push if no cloud-safe setting has ever been locally edited.
-  // settingsUpdatedAt is null on a fresh install or after a settings reset.
-  // The pull path (pullSettings) will adopt the server state instead.
   const { settingsUpdatedAt } = storeSnapshot;
-  if (settingsUpdatedAt === null) return;
-
   const current = toCloudSettings(storeSnapshot);
   const currentJson = JSON.stringify(current);
   const { lastPushedSnapshot } = useSettingsSyncStateStore.getState();
 
-  // Guard 2: Skip if the projection matches the last pushed snapshot (no change).
-  if (lastPushedSnapshot === currentJson) return;
+  if (!shouldPushSettings(settingsUpdatedAt, currentJson, lastPushedSnapshot)) return;
 
   const res = SettingsSyncPushResponseSchema.parse(
     await api.post<unknown>(SETTINGS_SYNC_PATH, {
@@ -536,7 +544,9 @@ async function pushSettings(): Promise<void> {
   const newCursor = res.cursor;
   useSettingsSyncStateStore
     .getState()
-    .setSettingsCursor(maxCursor(useSettingsSyncStateStore.getState().settingsCursor, newCursor));
+    .setSettingsCursor(
+      selectNextCursor(useSettingsSyncStateStore.getState().settingsCursor, newCursor),
+    );
   // Mark the snapshot as pushed so we don't re-push on the next cycle.
   useSettingsSyncStateStore.getState().setLastPushedSnapshot(currentJson);
 }
@@ -558,11 +568,10 @@ async function pullSettings(): Promise<void> {
   );
 
   const pulledSettings = res.settings;
-  const newCursor = res.cursor;
-  const advancedCursor = maxCursor(cursor, newCursor);
+  const advancedCursor = selectNextCursor(cursor, res.cursor);
 
   // Only apply if the server returned a new cursor (something changed).
-  if (advancedCursor !== cursor && Object.keys(pulledSettings).length > 0) {
+  if (shouldApplyPulledSettings(advancedCursor, cursor, Object.keys(pulledSettings).length)) {
     // Apply pulled cloud-safe namespaces into the live settings store (LWW).
     applyCloudSettings(pulledSettings as CloudSettings);
 
