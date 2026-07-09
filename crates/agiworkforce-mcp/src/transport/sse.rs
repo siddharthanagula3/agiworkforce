@@ -1,42 +1,36 @@
-//! SSE transport bringup (Sprint B1).
+//! SSE transport bringup.
 //!
-//! Long-lived `GET <url>` with `Accept: text/event-stream` for
-//! server→client frames; outbound JSON-RPC requests go via POST to either
-//! the same URL or to a server-supplied `endpoint` hint.
+//! Long-lived `GET <url>` with `Accept: text/event-stream` for server→client
+//! frames; outbound JSON-RPC requests go via POST to either the same URL or to
+//! a server-supplied `endpoint` hint.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use futures_util::StreamExt;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-use super::{
-    elicitation::AutoDeclineHandler, find_subsequence, McpConnection, McpServerConfig, McpTimeouts,
-    McpTransportConn,
-};
+use crate::client::TransportConn;
+use crate::config::McpTimeouts;
+use crate::jsonrpc::find_subsequence;
+use crate::notification::McpNotification;
 
-/// Connect to an SSE-based MCP server.
+/// Open an SSE-based MCP transport and return the live [`TransportConn`].
 ///
-/// Opens a long-lived GET request to `url` with `Accept: text/event-stream`,
-/// spawns a background task that parses SSE frames and forwards JSON-RPC
-/// payloads through an mpsc channel, then runs the standard `initialize`
-/// handshake.
-///
-/// SSE protocol detail: the official MCP "everything" server (and most
-/// reference implementations) emit an `event: endpoint` message early in
-/// the stream that carries the URL to POST outbound requests to. We honor
-/// that hint when present; otherwise we POST back to the same URL.
-pub(super) async fn connect_sse(
+/// Spawns a background task that parses SSE frames, forwards JSON-RPC payloads
+/// through an mpsc channel (the request correlator drains it), and best-effort
+/// forwards server *notifications* to `notif_tx`. The initialize handshake is
+/// run by the caller ([`crate::client::McpClient::connect`]).
+pub(crate) async fn connect(
     name: &str,
     url: &str,
     headers: &HashMap<String, String>,
     timeouts: McpTimeouts,
-    config: McpServerConfig,
-) -> Result<McpConnection> {
-    // Build the long-lived reqwest client. Do NOT set `.timeout()` here —
-    // the SSE GET stays open indefinitely and any per-request cap kills it.
-    // Per-call timeouts are applied via `tokio::time::timeout` in send_request.
+    notif_tx: mpsc::Sender<McpNotification>,
+) -> Result<TransportConn> {
+    // Build the long-lived reqwest client. Do NOT set `.timeout()` here — the
+    // SSE GET stays open indefinitely and any per-request cap kills it. Per-call
+    // timeouts are applied via `tokio::time::timeout` in send_request.
     let client = reqwest::Client::builder()
         .build()
         .context("build reqwest client")?;
@@ -50,9 +44,9 @@ pub(super) async fn connect_sse(
     let resp = req
         .send()
         .await
-        .context(format!("[{}] SSE GET failed", name))?;
+        .with_context(|| format!("[{name}] SSE GET failed"))?;
     if !resp.status().is_success() {
-        bail!("[{}] SSE server returned {}", name, resp.status());
+        bail!("[{name}] SSE server returned {}", resp.status());
     }
 
     let session_id = resp
@@ -61,13 +55,14 @@ pub(super) async fn connect_sse(
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    // Spawn a task that owns the stream and forwards parsed JSON-RPC frames
-    // (and endpoint hints) through channels.
+    // Spawn a task that owns the stream and forwards parsed JSON-RPC frames (and
+    // endpoint hints) through channels.
     let (tx, rx) = mpsc::channel::<serde_json::Value>(64);
     let (endpoint_tx, mut endpoint_rx) = mpsc::channel::<String>(1);
     let mut stream = resp.bytes_stream();
     let server_name = name.to_string();
     let base_url = url.to_string();
+    let max_frame = timeouts.max_frame_bytes;
     tokio::spawn(async move {
         let mut buf: Vec<u8> = Vec::new();
         let mut current_event: Option<String> = None;
@@ -75,11 +70,19 @@ pub(super) async fn connect_sse(
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("[{}] SSE stream error: {}", server_name, e);
+                    eprintln!("[{server_name}] SSE stream error: {e}");
                     break;
                 }
             };
             buf.extend_from_slice(&chunk);
+            // Optional hardening: reject a single unbounded frame instead of
+            // growing the buffer without limit. Off by default (CLI parity).
+            if let Some(cap) = max_frame {
+                if buf.len() > cap && find_subsequence(&buf, b"\n\n").is_none() {
+                    eprintln!("[{server_name}] SSE frame exceeded {cap} bytes; closing stream");
+                    break;
+                }
+            }
             // SSE frames are separated by "\n\n"; data lines start with "data: ".
             while let Some(pos) = find_subsequence(&buf, b"\n\n") {
                 let frame = buf.drain(..pos + 2).collect::<Vec<u8>>();
@@ -89,8 +92,8 @@ pub(super) async fn connect_sse(
                     if let Some(rest) = line.strip_prefix("event:") {
                         current_event = Some(rest.trim().to_string());
                     } else if let Some(rest) = line.strip_prefix("data:") {
-                        // SSE allows data fields to be split across multiple
-                        // `data:` lines — concatenate with newlines per spec.
+                        // SSE allows data fields split across multiple `data:`
+                        // lines — concatenate with newlines per spec.
                         if !data_buf.is_empty() {
                             data_buf.push('\n');
                         }
@@ -112,6 +115,18 @@ pub(super) async fn connect_sse(
                 }
                 match serde_json::from_str::<serde_json::Value>(&data_buf) {
                     Ok(v) => {
+                        // Best-effort: surface true server notifications
+                        // (method present, no id) out-of-band. Never blocks the
+                        // drain — a full/absent receiver just drops the notice.
+                        if v.get("method").is_some() && v.get("id").is_none() {
+                            if let Some(method) =
+                                v.get("method").and_then(|m| m.as_str()).map(String::from)
+                            {
+                                let params =
+                                    v.get("params").cloned().unwrap_or(serde_json::Value::Null);
+                                let _ = notif_tx.try_send(McpNotification { method, params });
+                            }
+                        }
                         if tx.send(v).await.is_err() {
                             // Receiver dropped — connection closed.
                             return;
@@ -119,8 +134,7 @@ pub(super) async fn connect_sse(
                     }
                     Err(e) => {
                         eprintln!(
-                            "[{}] SSE: invalid JSON in data frame: {} (payload: {})",
-                            server_name, e, data_buf
+                            "[{server_name}] SSE: invalid JSON in data frame: {e} (payload: {data_buf})"
                         );
                         return;
                     }
@@ -130,47 +144,32 @@ pub(super) async fn connect_sse(
         }
     });
 
-    // Wait briefly for an endpoint hint. Most MCP SSE servers emit it
-    // within a few hundred ms; if we time out, fall back to the original
-    // URL for outbound POSTs.
-    let post_url = match tokio::time::timeout(Duration::from_millis(500), endpoint_rx.recv()).await
-    {
+    // Wait briefly for an endpoint hint. Most MCP SSE servers emit it within a
+    // few hundred ms; on timeout, fall back to the original URL for POSTs.
+    let post_url = match tokio::time::timeout(Duration::from_millis(500), endpoint_rx.recv()).await {
         Ok(Some(ep)) => ep,
         _ => url.to_string(),
     };
 
-    let mut conn = McpConnection {
-        server_name: name.to_string(),
-        config,
-        inner: McpTransportConn::Sse {
-            post_url,
-            headers: headers.clone(),
-            client,
-            rx,
-            session_id,
-        },
-        request_id: 0,
-        timeouts,
-        stderr_buf: Arc::new(Mutex::new(Vec::new())),
-        elicitation_handler: Arc::new(AutoDeclineHandler),
-    };
-
-    conn.initialize().await?;
-    Ok(conn)
+    Ok(TransportConn::Sse {
+        post_url,
+        headers: headers.clone(),
+        client,
+        rx,
+        session_id,
+    })
 }
 
-/// Resolve the SSE-supplied endpoint hint against the original SSE URL.
-/// Hints may be absolute (`https://...`) or relative paths (`/messages?id=…`).
+/// Resolve the SSE-supplied endpoint hint against the original SSE URL. Hints
+/// may be absolute (`https://...`) or relative paths (`/messages?id=…`).
 fn resolve_endpoint(base_url: &str, hint: &str) -> String {
     if hint.starts_with("http://") || hint.starts_with("https://") {
         return hint.to_string();
     }
-    // Relative — resolve against base URL's origin.
     if let Ok(base) = reqwest::Url::parse(base_url) {
         if let Ok(joined) = base.join(hint) {
             return joined.into();
         }
     }
-    // Fallback: return hint as-is. Server will reject if malformed.
     hint.to_string()
 }

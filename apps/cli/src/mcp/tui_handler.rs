@@ -1,5 +1,7 @@
 //! `TuiElicitationHandler` — bridges incoming MCP `elicitation/create`
-//! requests to a TUI overlay. Used by [`McpConnection::set_elicitation_handler`].
+//! requests to a TUI overlay. Implements the shared
+//! `agiworkforce_mcp::elicitation::ElicitationHandler` trait so it can be wired
+//! into the engine via `ClientHooks`.
 //!
 //! Architecture: when an MCP server sends elicitation/create, the handler's
 //! `handle()` method (running in the MCP read-loop's tokio task) pushes a
