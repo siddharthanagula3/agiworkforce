@@ -38,6 +38,7 @@ pub mod error;
 pub mod hooks;
 pub mod notification;
 pub mod oauth;
+pub mod security;
 
 mod jsonrpc;
 mod transport;
