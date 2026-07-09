@@ -377,6 +377,37 @@ export interface StreamChunkVendorRaw {
   payload: unknown;
 }
 
+/**
+ * Stream-level identity/metadata some vendors report on every chunk of a
+ * response (OpenAI's real `chat.completion.chunk`: `id`, `created`,
+ * `system_fingerprint`, `service_tier` — all stable across the whole
+ * stream). Distinct from `StreamChunkVendorRaw`: that type's contract is
+ * "re-serialize this payload verbatim onto the wire"; this one is "extract
+ * these fields for the consumer's OWN envelope construction" — a consumer
+ * that doesn't understand `response-meta` should simply ignore it (no wire
+ * output), not attempt to serialize it.
+ *
+ * Producer: `packages/providers/openai/src/stream.ts`'s `translateOpenAIStream`,
+ * emitted once from the first raw upstream chunk (task #34's OpenAI slice —
+ * `buildStreamResponse`'s legacy raw-fetch passthrough carries OpenAI's real
+ * `id`/`created`/etc. on every chunk; the StreamChunk round-trip has no other
+ * way to recover them). Consumer: `OpenAIWireAssembler`'s `wireMode:
+ * 'openai-passthrough'`, which uses these values (when present) instead of
+ * synthesizing its own `id`/`created`, and includes `system_fingerprint`/
+ * `service_tier` on its reconstructed envelope when present. Every field is
+ * optional and every consumer treats absence as "fall back to synthesized
+ * values" — a compat provider whose SDK/wire doesn't carry these (or a
+ * caller in `wireMode: 'default'`/`'legacy-web'`, which never reads this
+ * chunk type at all) is unaffected.
+ */
+export interface StreamChunkResponseMeta {
+  type: 'response-meta';
+  id?: string;
+  created?: number;
+  systemFingerprint?: string;
+  serviceTier?: string;
+}
+
 export interface StreamChunkUsage {
   type: 'usage';
   inputTokens?: number;
@@ -428,6 +459,7 @@ export type StreamChunk =
   | StreamChunkServerToolResult
   | StreamChunkCitation
   | StreamChunkVendorRaw
+  | StreamChunkResponseMeta
   | StreamChunkUsage
   | StreamChunkError
   | StreamChunkStop;

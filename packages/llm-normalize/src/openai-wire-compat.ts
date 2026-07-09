@@ -319,8 +319,51 @@ export interface OpenAIWireAssemblerOptions {
    *   - both: finish_reason uses the legacy web mapping (tool_use ->
    *     tool_calls, end_turn -> stop, everything else passed through
    *     as-is -- e.g. max_tokens stays 'max_tokens', not 'length').
+   *
+   * `'openai-passthrough'`: reproduces the web v1 route's OpenAI wire (task
+   * #34's OpenAI slice). Unlike Anthropic/Google, OpenAI's legacy provider
+   * (apps/web/lib/llm-providers/openai.ts) does NO internal reshaping --
+   * `streamRequest()` returns `response.body` untouched, and stream-
+   * transform.ts's `buildStreamResponse` only rewrites the top-level `model`
+   * field for any non-Anthropic provider. So the legacy wire is near-
+   * verbatim real OpenAI Chat Completions SSE, not a hand-built shape --
+   * confirmed via `stream-transform.openai-byte-parity.test.ts`'s captured
+   * bytes, not assumed. This mode:
+   *   - emits the FULL `chat.completion.chunk` envelope (`id`, `object`,
+   *     `created`, `model`, `system_fingerprint`?, `service_tier`?,
+   *     `choices`) on every chunk, using REAL values from a
+   *     `StreamChunkResponseMeta` chunk when the producer supplied one
+   *     (packages/providers/openai/src/stream.ts), falling back to
+   *     synthesized `id`/`created` when absent (compat providers may not
+   *     carry these uniformly);
+   *   - deterministically emits a `delta:{role:"assistant",content:""}`
+   *     announcement chunk FIRST, before any other wire output -- real
+   *     OpenAI always sends this as the opening chunk of every stream, but
+   *     `translateOpenAIStream` never yields a StreamChunk for it (empty
+   *     `content` is falsy), so nothing else in the pipeline could
+   *     reconstruct it; this was the first of two confirmed regressions if
+   *     OpenAI shipped through `wireMode: 'legacy-web'`/`'default'`
+   *     unchanged (team-lead ruling, task #34);
+   *   - emits a trailing usage-only chunk (`choices: []`, `usage: {...}`)
+   *     after the finish-reason chunk, whenever usage was captured -- real
+   *     OpenAI sends this as a separate terminal SSE event when the request
+   *     set `stream_options.include_usage` (which `translateChatRequest`
+   *     always does when `compat.supportsUsageInStreaming`); this was the
+   *     second confirmed regression;
+   *   - includes a static `logprobs: null` on every non-usage-only choice --
+   *     real OpenAI always returns this when the caller never requested
+   *     `logprobs: true` (which `translateChatRequest` never sets), so it's
+   *     a constant, not per-token data threaded through the StreamChunk
+   *     pipeline (team-lead's ruling: best-effort/cheap only, no
+   *     over-engineering -- this qualifies, per-token logprobs values do
+   *     not);
+   *   - finish_reason uses the STANDARD mapping (`stopReasonToFinishReason`
+   *     -- max_tokens -> 'length', tool_use -> 'tool_calls', etc.), matching
+   *     real OpenAI's own finish_reason vocabulary -- NOT `legacyWebFinish
+   *     Reason`'s Anthropic-specific "never map max_tokens" quirk, which has
+   *     nothing to do with OpenAI's wire.
    */
-  wireMode?: 'default' | 'legacy-web';
+  wireMode?: 'default' | 'legacy-web' | 'openai-passthrough';
 }
 
 /**
@@ -339,7 +382,7 @@ export class OpenAIWireAssembler {
   private readonly now: () => number;
   private readonly id: string;
   private readonly emitReasoning: boolean;
-  private readonly wireMode: 'default' | 'legacy-web';
+  private readonly wireMode: 'default' | 'legacy-web' | 'openai-passthrough';
 
   private readonly toolIndexById = new Map<string, number>();
   /** `sseChunks()`-only, `wireMode: 'legacy-web'`-only: `tool-use-start`'s
@@ -351,7 +394,12 @@ export class OpenAIWireAssembler {
   private readonly toolCalls: Array<{ id: string; name: string; args: string }> = [];
   private text = '';
   private reasoning = '';
-  private usage: { input?: number; output?: number } = {};
+  /** `cacheRead`/`reasoning` are `wireMode: 'openai-passthrough'`-only --
+   *  `usageOrNull()` (used by `response()`, both other modes) never reads
+   *  them, only `usageOnlyEnvelope()` does, to reconstruct real OpenAI's
+   *  nested `prompt_tokens_details.cached_tokens`/`completion_tokens_
+   *  details.reasoning_tokens` shape. */
+  private usage: { input?: number; output?: number; cacheRead?: number; reasoning?: number } = {};
   private finishReason: OpenAIWireFinishReason | null = null;
   private legacyFinishReason: string | null = null;
   private errorMessage: string | null = null;
@@ -363,6 +411,23 @@ export class OpenAIWireAssembler {
   /** `wireMode: 'legacy-web'`-only aggregation for `response()`. */
   private readonly citations: unknown[] = [];
   private readonly searchResults: unknown[] = [];
+
+  /** `wireMode: 'openai-passthrough'`-only: real values captured from a
+   *  `StreamChunkResponseMeta` chunk (see that type's docstring), used
+   *  instead of the synthesized `id`/`created`/absent `system_fingerprint`/
+   *  `service_tier` when present. */
+  private realId: string | undefined;
+  private realCreated: number | undefined;
+  private systemFingerprint: string | undefined;
+  private serviceTier: string | undefined;
+  /** `sseChunks()`-only, `wireMode: 'openai-passthrough'`-only: has the
+   *  deterministic `delta:{role:"assistant",content:""}` opening chunk been
+   *  emitted yet? Real OpenAI always sends this first; the StreamChunk
+   *  pipeline has no chunk type that maps to it (an empty-content delta is
+   *  indistinguishable from "no content this chunk"), so it's synthesized
+   *  here on the first `sseChunks()` call instead of derived from any
+   *  particular canonical chunk. */
+  private openaiPassthroughAnnounced = false;
 
   constructor(options: OpenAIWireAssemblerOptions) {
     this.model = options.model;
@@ -412,12 +477,75 @@ export class OpenAIWireAssembler {
         finish !== null ? { delta, finish_reason: finish, index: 0 } : { delta, index: 0 };
       return { choices: [choice], model: this.model };
     }
+    if (this.wireMode === 'openai-passthrough') {
+      // Real id/created when a StreamChunkResponseMeta supplied them (see
+      // ingest()'s 'response-meta' case), synthesized fallback otherwise.
+      // system_fingerprint/service_tier included only when present -- key
+      // order (id, object, created, model, system_fingerprint?,
+      // service_tier?, choices) and the static logprobs:null on every choice
+      // both verified against real captured OpenAI bytes, see stream-
+      // transform.openai-byte-parity.test.ts.
+      return {
+        id: this.realId ?? this.id,
+        object: 'chat.completion.chunk' as const,
+        created: this.realCreated ?? Math.floor(this.now() / 1000),
+        model: this.model,
+        ...(this.systemFingerprint !== undefined
+          ? { system_fingerprint: this.systemFingerprint }
+          : {}),
+        ...(this.serviceTier !== undefined ? { service_tier: this.serviceTier } : {}),
+        choices: [{ index: 0, delta, logprobs: null, finish_reason: finish }],
+      };
+    }
     return {
       id: this.id,
       object: 'chat.completion.chunk' as const,
       created: Math.floor(this.now() / 1000),
       model: this.model,
       choices: [{ index: 0, delta, finish_reason: finish }],
+    };
+  }
+
+  /**
+   * `wireMode: 'openai-passthrough'`-only: the trailing usage-only SSE event
+   * real OpenAI sends (`choices: []`, top-level `usage`) when the request
+   * set `stream_options.include_usage` -- `translateChatRequest` always sets
+   * it when `compat.supportsUsageInStreaming`. Distinct shape from
+   * `chunkEnvelope`'s (empty `choices`, no `delta`/`logprobs`/`finish_
+   * reason`), so it's a dedicated method rather than another `chunkEnvelope`
+   * branch. Returns null when no usage was ever ingested (nothing to emit --
+   * this IS the "gated on include_usage" behavior: if the upstream call
+   * never returned usage, there's no terminal event to reconstruct).
+   */
+  private usageOnlyEnvelope(): Record<string, unknown> | null {
+    const usage = this.usageOrNull();
+    if (usage === null) return null;
+    // Real OpenAI's usage object nests cache/reasoning token counts under
+    // prompt_tokens_details/completion_tokens_details (see textFixture in
+    // stream-transform.openai-byte-parity.test.ts) -- usageOrNull()'s
+    // {prompt_tokens, completion_tokens, total_tokens} alone is the shape
+    // response()/other wireModes have always used; this reconstructs the
+    // fuller shape ONLY for openai-passthrough's own trailing usage event,
+    // reading this.usage.cacheRead/.reasoning directly rather than widening
+    // usageOrNull()'s return type (which other callers depend on staying as-is).
+    const fullUsage: Record<string, unknown> = { ...usage };
+    if (this.usage.cacheRead !== undefined) {
+      fullUsage['prompt_tokens_details'] = { cached_tokens: this.usage.cacheRead };
+    }
+    if (this.usage.reasoning !== undefined) {
+      fullUsage['completion_tokens_details'] = { reasoning_tokens: this.usage.reasoning };
+    }
+    return {
+      id: this.realId ?? this.id,
+      object: 'chat.completion.chunk' as const,
+      created: this.realCreated ?? Math.floor(this.now() / 1000),
+      model: this.model,
+      ...(this.systemFingerprint !== undefined
+        ? { system_fingerprint: this.systemFingerprint }
+        : {}),
+      ...(this.serviceTier !== undefined ? { service_tier: this.serviceTier } : {}),
+      choices: [],
+      usage: fullUsage,
     };
   }
 
@@ -488,9 +616,20 @@ export class OpenAIWireAssembler {
         // structured meaning to; only their streaming raw-passthrough
         // bytes (sseChunks()) are reproduced.
         return;
+      case 'response-meta':
+        // Captured unconditionally (not gated on wireMode) -- harmless for
+        // 'default'/'legacy-web', which never read these fields back out;
+        // see StreamChunkResponseMeta's docstring.
+        if (chunk.id !== undefined) this.realId = chunk.id;
+        if (chunk.created !== undefined) this.realCreated = chunk.created;
+        if (chunk.systemFingerprint !== undefined) this.systemFingerprint = chunk.systemFingerprint;
+        if (chunk.serviceTier !== undefined) this.serviceTier = chunk.serviceTier;
+        return;
       case 'usage':
         if (chunk.inputTokens !== undefined) this.usage.input = chunk.inputTokens;
         if (chunk.outputTokens !== undefined) this.usage.output = chunk.outputTokens;
+        if (chunk.cacheReadTokens !== undefined) this.usage.cacheRead = chunk.cacheReadTokens;
+        if (chunk.reasoningTokens !== undefined) this.usage.reasoning = chunk.reasoningTokens;
         return;
       case 'error':
         this.errorMessage = chunk.message;
@@ -560,6 +699,7 @@ export class OpenAIWireAssembler {
       case 'server-tool-result':
       case 'citation-delta':
       case 'vendor-raw':
+      case 'response-meta':
         return null;
       case 'error':
         // Error surfaces as a terminal finish chunk; HTTP-level handling is
@@ -584,6 +724,23 @@ export class OpenAIWireAssembler {
     this.ingest(chunk);
     const out: Record<string, unknown>[] = [];
     const legacyWeb = this.wireMode === 'legacy-web';
+    const openaiPassthrough = this.wireMode === 'openai-passthrough';
+
+    // Deterministic role-announcement opening chunk: real OpenAI always
+    // sends `delta:{role:"assistant",content:""}` as the FIRST chunk of
+    // every stream. No canonical StreamChunk maps to it (translateOpenAIStream
+    // never yields a text-delta for empty content, and even if it did, an
+    // empty-content chunk is indistinguishable from "no content this
+    // chunk") -- synthesized here, unconditionally, before whatever
+    // triggered this first sseChunks() call (including a 'response-meta'
+    // chunk, which produces no wire output of its own -- see below -- so
+    // this still fires as the very first thing on the wire). One of the two
+    // confirmed regressions if OpenAI shipped through legacy-web/default
+    // unchanged (team-lead ruling, task #34).
+    if (openaiPassthrough && !this.openaiPassthroughAnnounced) {
+      this.openaiPassthroughAnnounced = true;
+      out.push(this.chunkEnvelope({ role: 'assistant', content: '' }, null));
+    }
 
     // Inline <thinking>/</thinking> tag boundary, detected from the
     // thinking-delta <-> anything-else transition (the canonical stream has
@@ -713,8 +870,26 @@ export class OpenAIWireAssembler {
       case 'error':
         out.push(this.chunkEnvelope({}, legacyWeb ? (this.legacyFinishReason ?? 'stop') : 'stop'));
         break;
-      case 'tool-use-end':
       case 'usage':
+        // Trailing usage-only event (choices:[], top-level usage). Handled
+        // HERE, not in the 'stop' case above: translateOpenAIStream yields
+        // the canonical `usage` chunk AFTER `stop` when real OpenAI sends
+        // usage on its own separate, finish_reason-less trailing chunk (the
+        // `stream_options.include_usage` shape) -- confirmed by tracing
+        // stream.ts's control flow, not assumed. Emitting on 'stop' would
+        // have missed usage that arrives later, in the common real-OpenAI
+        // case. usageOnlyEnvelope() returns null when no usage was ever
+        // ingested, which is the "gated on stream_options.include_usage"
+        // behavior: nothing to reconstruct if the upstream call never
+        // returned usage. The second of the two confirmed regressions
+        // (team-lead ruling, task #34).
+        if (openaiPassthrough) {
+          const usageChunk = this.usageOnlyEnvelope();
+          if (usageChunk !== null) out.push(usageChunk);
+        }
+        break;
+      case 'tool-use-end':
+      case 'response-meta':
         break;
     }
     return out;

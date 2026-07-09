@@ -218,12 +218,22 @@ export function translateChatRequestToResponses(
   const tools = req.tools?.map((t) => translateTool(t, strict));
   const toolChoice = translateToolChoice(req.toolChoice);
 
+  // An explicit `req.effort` bypasses the budgetTokens-derived heuristic, same rationale
+  // and precedence as packages/providers/openai/src/translate.ts's Chat Completions
+  // reasoning_effort handling -- thinkingBudgetToEffort's thresholds don't round-trip
+  // `Effort` tiers losslessly (see `ChatRequest.effort`'s docstring in packages/types/src/
+  // provider-adapter.ts, which names this file directly).
   const reasoning: ResponsesReasoningConfig | undefined =
-    req.thinking?.type === 'enabled' && compat.supportsReasoningEffort
+    (req.effort !== undefined || req.thinking?.type === 'enabled') && compat.supportsReasoningEffort
       ? (() => {
+          const requested =
+            req.effort ??
+            thinkingBudgetToEffort(
+              req.thinking?.type === 'enabled' ? req.thinking.budgetTokens : undefined,
+            );
           const resolved = resolveOpenAIReasoningEffortForModel({
             model: { provider: 'openai', id: req.model },
-            effort: thinkingBudgetToEffort(req.thinking.budgetTokens),
+            effort: requested,
           });
           return resolved
             ? {

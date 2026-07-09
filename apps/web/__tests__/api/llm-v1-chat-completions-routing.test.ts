@@ -83,10 +83,19 @@ vi.mock('@/utils/env', () => ({
   // sends `model: 'auto-balanced'` -- that now routes through
   // adapter-factory.ts's buildAnthropicAdapter, which reads ANTHROPIC_API_KEY
   // via getOptionalEnv. Fake key so it doesn't throw "not configured";
-  // ANTHROPIC_BASE_URL stays unset so the (unmocked, pure) llm-runtime
-  // validateBaseUrl path is simply never reached.
+  // ANTHROPIC_BASE_URL/GOOGLE_BASE_URL/OPENAI_BASE_URL stay unset so the
+  // (unmocked, pure) llm-runtime validateBaseUrl path is simply never reached.
+  //
+  // GOOGLE_API_KEY is faked too for the explicit-gemini-model route-level
+  // test below (task #34) -- buildGoogleAdapter reads it the same way
+  // buildAnthropicAdapter reads ANTHROPIC_API_KEY. OPENAI_API_KEY is faked
+  // for the same reason -- auto-balanced can resolve some prompts to an
+  // OpenAI model, which now routes through buildOpenAIAdapter (task #34's
+  // OpenAI slice); without this, those requests 500 with "not configured".
   getOptionalEnv: vi.fn((key: string) =>
-    key === 'ANTHROPIC_API_KEY' ? 'mock-anthropic-key' : undefined,
+    key === 'ANTHROPIC_API_KEY' || key === 'GOOGLE_API_KEY' || key === 'OPENAI_API_KEY'
+      ? `mock-${key}`
+      : undefined,
   ),
 }));
 
@@ -109,6 +118,54 @@ vi.mock('@agiworkforce/providers-anthropic', () => ({
     async *stream() {
       yield { type: 'text-delta', delta: 'Here is the implementation...' };
       yield { type: 'usage', inputTokens: 120, outputTokens: 80 };
+      yield { type: 'stop', reason: 'end_turn' };
+    },
+  })),
+}));
+
+// Google's sibling of the Anthropic mock above -- proves route.ts's
+// ADAPTER_PROVIDERS['google'] branch is really reached end-to-end (adapter
+// construction, buildGoogleChatRequest, drainToLlmResponse/startProviderStream,
+// response-builder), not just unit-tested in isolation the way packages/
+// providers/google's own tests + stream-transform.google-byte-parity.test.ts
+// already do. Every OTHER test in this file bypasses provider dispatch
+// entirely for a directly-addressed gemini-* model, so without this the
+// Google adapter path had zero route-level coverage (task #34 disclosed gap).
+vi.mock('@agiworkforce/providers-google', () => ({
+  createGoogleAdapter: vi.fn(() => ({
+    id: 'google',
+    label: 'Google',
+    auth: [],
+    config: {},
+    async catalog() {
+      return [];
+    },
+    async *stream() {
+      yield { type: 'text-delta', delta: 'Gemini says hello.' };
+      yield { type: 'usage', inputTokens: 50, outputTokens: 10 };
+      yield { type: 'stop', reason: 'end_turn' };
+    },
+  })),
+}));
+
+// OpenAI's sibling of the Anthropic/Google mocks above (task #34's OpenAI
+// slice). Required for this file, not just additive: auto-balanced can
+// resolve some of these tests' prompts to an OpenAI model, which now routes
+// through ADAPTER_PROVIDERS['openai'] -- without this mock, those requests
+// would try to construct a real openai SDK client. Also proves the
+// route-level dispatch for an explicit OpenAI model below.
+vi.mock('@agiworkforce/providers-openai', () => ({
+  createOpenAIAdapter: vi.fn(() => ({
+    id: 'openai',
+    label: 'OpenAI',
+    auth: [],
+    config: {},
+    async catalog() {
+      return [];
+    },
+    async *stream() {
+      yield { type: 'text-delta', delta: 'GPT says hi.' };
+      yield { type: 'usage', inputTokens: 30, outputTokens: 8 };
       yield { type: 'stop', reason: 'end_turn' };
     },
   })),
@@ -191,6 +248,24 @@ function makeRequest(message: string, stream = false): NextRequest {
     },
     body: JSON.stringify({
       model: 'auto-balanced',
+      messages: [{ role: 'user', content: message }],
+      stream,
+    }),
+  });
+}
+
+/** Like `makeRequest`, but with an explicit model instead of 'auto-balanced'
+ *  -- for exercising a specific ADAPTER_PROVIDERS branch directly rather than
+ *  going through auto-mode resolution. */
+function makeRequestForModel(model: string, message: string, stream = false): NextRequest {
+  return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer test-pro-token',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
       messages: [{ role: 'user', content: message }],
       stream,
     }),
@@ -393,5 +468,59 @@ describe('POST /api/llm/v1/chat/completions — Pro-tier routing wiring (Task #2
     // assertQuota is NOT imported/called by this route (the gap)
     // When Task #21 gap is closed, this test should be updated to assert
     // mockAssertQuota was called with { tier: 'pro', userId: 'pro-user-id' }
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 9: Google adapter dispatch is really reached end-to-end (task #34)
+  //
+  // An explicit gemini-* model routes through route.ts's
+  // ADAPTER_PROVIDERS['google'] branch: buildGoogleAdapter (reads
+  // GOOGLE_API_KEY, mocked above), buildGoogleChatRequest, drainToLlmResponse
+  // (non-streaming, matching every other test in this file), and
+  // response-builder.ts. Asserting the response content came from the
+  // MOCKED GOOGLE STREAM specifically ('Gemini says hello.', distinct from
+  // the Anthropic mock's 'Here is the implementation...' and the legacy
+  // LLMProviderFactory mock's canned content) proves this test would fail if
+  // the request silently fell through to a different dispatch path instead
+  // of really reaching the Google branch.
+  // -------------------------------------------------------------------------
+  it('routes an explicit gemini model through the Google adapter path', async () => {
+    const request = makeRequestForModel('gemini-3.5-flash', 'hello');
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      x_agi_workforce?: { provider?: string };
+    };
+
+    expect(data.x_agi_workforce?.provider).toBe('google');
+    expect(data.choices?.[0]?.message?.content).toBe('Gemini says hello.');
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 10: OpenAI adapter dispatch is really reached end-to-end (task #34)
+  //
+  // Google's sibling test above, for OpenAI: an explicit gpt-* model routes
+  // through route.ts's ADAPTER_PROVIDERS['openai'] branch (buildOpenAIAdapter,
+  // reading OPENAI_API_KEY mocked above; buildOpenAIChatRequest;
+  // drainToLlmResponse). Distinct canned content ('GPT says hi.') proves
+  // this reaches the OpenAI branch specifically, not Anthropic's or
+  // Google's mocked streams or the legacy LLMProviderFactory fallback.
+  // -------------------------------------------------------------------------
+  it('routes an explicit gpt model through the OpenAI adapter path', async () => {
+    const request = makeRequestForModel('gpt-5.5', 'hello');
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      x_agi_workforce?: { provider?: string };
+    };
+
+    expect(data.x_agi_workforce?.provider).toBe('openai');
+    expect(data.choices?.[0]?.message?.content).toBe('GPT says hi.');
   });
 });

@@ -96,6 +96,15 @@ export interface OpenAIChatCompletionChunk {
   object: 'chat.completion.chunk';
   created: number;
   model: string;
+  /** Present on real OpenAI responses when the request set `service_tier`
+   *  (or by server default) -- the openai SDK's own `ChatCompletionChunk`
+   *  type declares this; added here so `translateOpenAIStream` can read it
+   *  for `StreamChunkResponseMeta` (task #34's OpenAI slice). */
+  service_tier?: string;
+  /** Present on every real OpenAI chunk; identifies the backend
+   *  configuration that generated the response. Same rationale as
+   *  `service_tier` above. */
+  system_fingerprint?: string;
   choices: Array<{
     index: number;
     delta: {
