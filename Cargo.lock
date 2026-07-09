@@ -212,6 +212,7 @@ dependencies = [
  "accessibility-sys",
  "aes-gcm",
  "agiworkforce-execpolicy",
+ "agiworkforce-mcp",
  "agiworkforce-sandbox-policy",
  "anyhow",
  "arboard",
