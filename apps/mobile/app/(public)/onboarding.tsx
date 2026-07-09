@@ -363,6 +363,11 @@ export default function OnboardingScreen() {
           fileSizeBytes: recommendedModel.fileSizeBytes,
           runtime: 'local',
           format: recommendedModel.format,
+          // Multimodal models ship a second mmproj artifact; passing the catalog
+          // fields through makes downloadModel install + verify both files.
+          mmprojUrl: recommendedModel.mmprojUrl,
+          mmprojChecksum: recommendedModel.mmprojChecksum,
+          mmprojSizeBytes: recommendedModel.mmprojSizeBytes,
           wifiOnly: !cellularEnabled,
           onProgress(downloaded, total, speedBps) {
             setDownloadProgress((downloaded / total) * 100);
