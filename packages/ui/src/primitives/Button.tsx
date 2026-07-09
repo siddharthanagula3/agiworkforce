@@ -48,12 +48,71 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /**
+   * Indicates the button is in a loading state. Sets `aria-busy`, disables the
+   * button, and (for text buttons) announces "Loading, please wait" to
+   * assistive technologies. Additive and opt-in: defaults to `false`, so
+   * existing callers render exactly as before.
+   */
+  isLoading?: boolean;
   ref?: React.Ref<HTMLButtonElement>;
 }
 
-function Button({ className, variant, size, asChild = false, ref, ...props }: ButtonProps) {
+function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  isLoading = false,
+  disabled,
+  children,
+  ref,
+  'aria-label': ariaLabel,
+  ...props
+}: ButtonProps) {
   const Comp = asChild ? Slot : 'button';
-  return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+  const classes = cn(buttonVariants({ variant, size, className }));
+  const inert = disabled || isLoading;
+
+  // Radix Slot requires exactly one child element, so when composing (`asChild`)
+  // we must not inject the loading / sr-only spans — only forward a11y state.
+  if (asChild) {
+    return (
+      <Comp
+        className={classes}
+        ref={ref}
+        aria-label={ariaLabel}
+        aria-busy={isLoading || undefined}
+        aria-disabled={inert || undefined}
+        disabled={inert}
+        {...props}
+      >
+        {children}
+      </Comp>
+    );
+  }
+
+  // Icon-only buttons (no visible text) need an accessible name; fall back to a
+  // visually-hidden label when the caller supplied neither text nor aria-label.
+  const hasTextContent = React.Children.toArray(children).some(
+    (child) => typeof child === 'string' && child.trim() !== '',
+  );
+
+  return (
+    <Comp
+      className={classes}
+      ref={ref}
+      aria-label={ariaLabel}
+      aria-busy={isLoading || undefined}
+      aria-disabled={inert || undefined}
+      disabled={inert}
+      {...props}
+    >
+      {children}
+      {isLoading && <span className="sr-only">Loading, please wait</span>}
+      {!hasTextContent && !ariaLabel && <span className="sr-only">Button</span>}
+    </Comp>
+  );
 }
 Button.displayName = 'Button';
 

@@ -15,10 +15,15 @@ import { cn } from '../cn';
  */
 // React 19 ref-as-prop pattern - no forwardRef needed
 interface SliderProps extends React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> {
+  /**
+   * Human-readable description of the current value, announced by screen
+   * readers via `aria-valuetext` on the thumb. Additive and opt-in.
+   */
+  valueLabel?: string;
   ref?: React.Ref<React.ElementRef<typeof SliderPrimitive.Root>>;
 }
 
-function Slider({ className, ref, ...props }: SliderProps) {
+function Slider({ className, valueLabel, ref, ...props }: SliderProps) {
   return (
     <SliderPrimitive.Root
       ref={ref}
@@ -30,6 +35,7 @@ function Slider({ className, ref, ...props }: SliderProps) {
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
         aria-label="Slider thumb"
+        aria-valuetext={valueLabel}
         className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
       />
     </SliderPrimitive.Root>
