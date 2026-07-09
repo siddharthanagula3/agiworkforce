@@ -1,3 +1,144 @@
+/// Roundtrip smoke through the NEW desktop → `agiworkforce-mcp` engine path
+/// (Wave 5 stage d2): `McpSession::connect` (stdio engine transport) →
+/// host-driven `initialize` (protocolVersion 2025-11-25) →
+/// `notifications/initialized` → `tools/list` → `tools/call` against a real
+/// child-process MCP server scripted in python3. Skips when python3 is absent.
+#[cfg(test)]
+mod stdio_engine_smoke {
+    use crate::core::mcp::{config::McpServerConfig, session::McpSession};
+    use std::collections::HashMap;
+
+    const PY_SERVER: &str = r#"
+import json
+import sys
+
+def read_frame():
+    line = sys.stdin.readline()
+    if not line:
+        sys.exit(0)
+    return json.loads(line)
+
+def write_frame(frame):
+    print(json.dumps(frame), flush=True)
+
+while True:
+    frame = read_frame()
+    method = frame.get("method", "")
+    rid = frame.get("id")
+    if method == "initialize":
+        pv = frame["params"]["protocolVersion"]
+        client_name = frame["params"]["clientInfo"]["name"]
+        write_frame({
+            "jsonrpc": "2.0", "id": rid,
+            "result": {
+                "protocolVersion": pv,
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "py-smoke:" + client_name, "version": "0.0.1"},
+            },
+        })
+    elif method == "notifications/initialized":
+        assert "id" not in frame, "notification must not carry an id"
+    elif method == "tools/list":
+        write_frame({
+            "jsonrpc": "2.0", "id": rid,
+            "result": {"tools": [{
+                "name": "echo",
+                "description": "Echo the input back.",
+                "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
+            }]},
+        })
+    elif method == "tools/call":
+        text = frame["params"]["arguments"].get("text", "")
+        write_frame({
+            "jsonrpc": "2.0", "id": rid,
+            "result": {"content": [{"type": "text", "text": text}], "isError": False},
+        })
+    elif method == "notifications/cancelled":
+        sys.exit(0)
+"#;
+
+    /// Removes the temp server script even if the test panics.
+    struct ScriptCleanup(std::path::PathBuf);
+    impl Drop for ScriptCleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn python3_available() -> bool {
+        std::process::Command::new("python3")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    #[tokio::test]
+    async fn stdio_engine_roundtrip_initialize_list_call() {
+        if !python3_available() {
+            eprintln!("python3 unavailable; skipping stdio engine smoke");
+            return;
+        }
+
+        // The transport's arg validation (kept desktop-side) rejects newlines,
+        // so the script goes through a temp file rather than `-c`.
+        let script_path = std::env::temp_dir().join(format!(
+            "agiworkforce-mcp-stdio-smoke-{}.py",
+            std::process::id()
+        ));
+        std::fs::write(&script_path, PY_SERVER).expect("write smoke server script");
+        let _cleanup = ScriptCleanup(script_path.clone());
+
+        let config = McpServerConfig {
+            command: "python3".to_string(),
+            args: vec![
+                "-u".to_string(),
+                script_path.to_string_lossy().into_owned(),
+            ],
+            env: HashMap::new(),
+            enabled: true,
+            transport: None,
+        };
+
+        let session = McpSession::connect("py-smoke".to_string(), config)
+            .await
+            .expect("connect via engine stdio transport");
+        assert_eq!(session.transport_type(), "stdio");
+
+        // Host-driven handshake: the session sends its own initialize with
+        // protocolVersion 2025-11-25; the scripted server echoes it back and
+        // reports the clientInfo name it received, proving the handshake bytes
+        // came from McpSession (not the engine's built-in handshake).
+        let init = session.initialize().await.expect("initialize");
+        assert_eq!(init.protocol_version, "2025-11-25");
+        assert_eq!(init.server_info.name, "py-smoke:AGI Workforce");
+
+        let tools = session.list_tools().await.expect("tools/list");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "echo");
+
+        let mut args = HashMap::new();
+        args.insert(
+            "text".to_string(),
+            serde_json::Value::String("engine-roundtrip".to_string()),
+        );
+        let result = session.call_tool("echo", args).await.expect("tools/call");
+        assert_eq!(result.is_error, Some(false));
+        let first = result.content.first().expect("tool content");
+        assert_eq!(
+            serde_json::to_value(first).unwrap()["text"],
+            "engine-roundtrip"
+        );
+
+        // Liveness snapshot reports the running child as alive.
+        assert!(session.is_alive(), "session should be alive mid-roundtrip");
+
+        session.shutdown().await.expect("shutdown");
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use crate::core::mcp::{
@@ -240,7 +381,10 @@ mod unit_tests {
 
         let init_result = session.initialize().await.unwrap();
         assert!(!init_result.server_info.name.is_empty());
-        assert_eq!(init_result.protocol_version, "2024-11-05");
+        // The negotiated version tracks whatever @modelcontextprotocol/server-filesystem
+        // npx fetches (current releases echo the client's 2025-11-25); only
+        // assert a version came back, not a pinned value.
+        assert!(!init_result.protocol_version.is_empty());
 
         let tools = session.list_tools().await.unwrap();
         assert!(!tools.is_empty());
