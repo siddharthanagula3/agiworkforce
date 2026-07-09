@@ -58,6 +58,14 @@ export {
   type WatchdogHooks,
 } from './watchdog';
 
+// ----- base URL SSRF allowlist -----
+export {
+  validateBaseUrl,
+  resolveValidatedBaseUrl,
+  type ValidateBaseUrlOptions,
+  type ValidateBaseUrlResult,
+} from './base-url';
+
 // ----- headers -----
 export {
   LatchedHeaderStore,
@@ -86,3 +94,10 @@ export {
 
 // ----- shared retry-after helpers (also re-exported here for consumer migration) -----
 export { parseRetryAfter, parseRetryAfterFromError } from './retry-after-internal';
+
+// ----- client (browser-safe SSE provider-stream client) -----
+export {
+  streamFromProvider,
+  type StreamFromProviderOptions,
+  type StreamIdleWatchdogOptions,
+} from './client/streamFromProvider';

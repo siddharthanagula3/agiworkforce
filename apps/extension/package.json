@@ -36,6 +36,7 @@
   "dependencies": {
     "@agiworkforce/browser-tool": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
+    "@agiworkforce/llm-runtime": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",

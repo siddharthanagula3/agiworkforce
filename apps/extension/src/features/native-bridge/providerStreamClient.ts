@@ -1,8 +1,14 @@
 /**
  * Chrome extension provider stream client.
  *
+ * Thin wrapper around the shared `@agiworkforce/llm-runtime` SSE client
+ * (`packages/llm-runtime/src/client/streamFromProvider.ts`). Keeps this
+ * surface's public API (types + `streamFromProvider` signature) stable for
+ * its callers, and turns on structured paywall (429) detection, which this
+ * surface has always had.
+ *
  * MV3 service workers have global fetch + ReadableStream. Same SSE frame
- * parser as `apps/web/lib/providerStreamClient.ts`.
+ * parser as the other surfaces.
  *
  * CORS note: the api-gateway's CORS config must allow the extension's
  * origin (`chrome-extension://<id>`) for the fetch to succeed. If you're
@@ -10,6 +16,8 @@
  * set `gatewayUrl` to `https://www.agiworkforce.com` and let the existing
  * `/api/v1/providers/*` Next.js proxy forward to the api-gateway.
  */
+
+import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/llm-runtime';
 
 export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
 
@@ -98,85 +106,13 @@ export interface StreamFromProviderParams {
 export async function* streamFromProvider(
   params: StreamFromProviderParams,
 ): AsyncIterable<StreamChunk> {
-  const url = `${params.gatewayUrl.replace(/\/+$/, '')}/api/v1/providers/${encodeURIComponent(
-    params.providerId,
-  )}/stream`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${params.authToken}`,
-      'x-requested-with': 'agiworkforce-chrome-extension',
-    },
-    body: JSON.stringify(params.request),
+  yield* sharedStreamFromProvider<ProviderStreamRequest, StreamChunk>({
+    providerId: params.providerId,
+    authToken: params.authToken,
+    request: params.request,
     ...(params.signal ? { signal: params.signal } : {}),
+    baseUrl: params.gatewayUrl,
+    clientTag: 'agiworkforce-chrome-extension',
+    detectPaywall: true,
   });
-
-  if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => '');
-
-    // 429 with a structured paywall body — yield as a first-class paywall chunk
-    // rather than an error so callers can present upgrade UI instead of an error
-    // message.  Shape check: {kind:'paywall', feature, requiredTier}.
-    if (res.status === 429 && text) {
-      try {
-        const parsed = JSON.parse(text) as Partial<PaywallPayload>;
-        if (
-          parsed.kind === 'paywall' &&
-          typeof parsed.feature === 'string' &&
-          typeof parsed.requiredTier === 'string'
-        ) {
-          yield {
-            type: 'paywall',
-            feature: parsed.feature as PaywallFeature,
-            requiredTier: parsed.requiredTier as PaywallRequiredTier,
-            ...(parsed.reason ? { reason: parsed.reason } : {}),
-          };
-          yield { type: 'stop', reason: 'error' };
-          return;
-        }
-      } catch {
-        // Not JSON — fall through to generic error
-      }
-    }
-
-    yield {
-      type: 'error',
-      message: text || `Upstream error ${res.status}`,
-      ...(res.status >= 500 ? { retryable: true } : {}),
-    };
-    yield { type: 'stop', reason: 'error' };
-    return;
-  }
-
-  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
-
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let frameEnd: number;
-      while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
-        const frame = buffer.slice(0, frameEnd);
-        buffer = buffer.slice(frameEnd + 2);
-        const dataLines = frame
-          .split('\n')
-          .filter((l) => l.startsWith('data:'))
-          .map((l) => l.slice(5).trimStart());
-        const data = dataLines.join('\n').trim();
-        if (!data) continue;
-        if (data === '[DONE]') return;
-        try {
-          yield JSON.parse(data) as StreamChunk;
-        } catch {
-          // ignore malformed
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
 }
