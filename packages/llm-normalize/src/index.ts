@@ -115,3 +115,22 @@ export type {
   AnthropicToolChoiceMode,
   GenericStreamFn,
 } from './anthropic-tool-payload-compat';
+
+// OpenAI Chat Completions wire compat (public /v1/chat/completions contract):
+// OpenAI-wire request -> canonical ChatRequest, canonical StreamChunks ->
+// OpenAI-wire chunks/response. Consumed by api-gateway and the web v1 route.
+export {
+  openAIWireRequestToChatRequest,
+  OpenAIWireAssembler,
+  assembleOpenAIWireResponse,
+} from './openai-wire-compat';
+export type {
+  OpenAIWireChatRequest,
+  OpenAIWireMessage,
+  OpenAIWireToolCall,
+  OpenAIWireToolDefinition,
+  OpenAIWireToolChoice,
+  OpenAIWireAssemblerOptions,
+  OpenAIWireUsage,
+  OpenAIWireFinishReason,
+} from './openai-wire-compat';
