@@ -133,6 +133,7 @@ dependencies = [
  "agiworkforce-command-registry",
  "agiworkforce-execpolicy",
  "agiworkforce-llm",
+ "agiworkforce-mcp",
  "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",
  "agiworkforce-utils-image",
@@ -363,6 +364,27 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "agiworkforce-mcp"
+version = "0.1.0"
+dependencies = [
+ "agiworkforce-protocol",
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "futures-util",
+ "nix 0.29.0",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid 1.20.0",
 ]
 
 [[package]]
