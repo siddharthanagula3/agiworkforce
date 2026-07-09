@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Copy, Wrench } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button } from './ui/Button';
+import { Button } from '@agiworkforce/ui';
 import { ActionBar } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
 import { LegacyWebSearchCard } from './WebSearchCard';

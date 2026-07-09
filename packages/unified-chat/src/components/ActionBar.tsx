@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react';
-import { Button } from './ui/Button';
+import { Button } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 
 interface ActionBarProps {
@@ -44,7 +44,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
         aria-label={copied ? 'Copied' : 'Copy message'}
         onClick={handleCopy}
         className={cn(
-          'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+          'h-8 w-8 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
           copied && 'text-[var(--chat-accent-secondary)]',
         )}
       >
@@ -57,7 +57,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
         aria-label="Thumbs up"
         onClick={() => handleFeedback('up')}
         className={cn(
-          'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+          'h-8 w-8 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
           feedback === 'up' && 'text-[var(--chat-accent-primary)]',
         )}
       >
@@ -70,7 +70,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
         aria-label="Thumbs down"
         onClick={() => handleFeedback('down')}
         className={cn(
-          'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+          'h-8 w-8 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
           feedback === 'down' && 'text-[var(--chat-destructive)]',
         )}
       >
@@ -82,7 +82,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
         size="icon"
         aria-label="Retry"
         onClick={handleRetry}
-        className="text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+        className="h-8 w-8 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
       >
         <RotateCcw size={14} />
       </Button>

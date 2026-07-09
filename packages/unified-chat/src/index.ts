@@ -57,11 +57,9 @@ export { useKeyboard } from './hooks/useKeyboard';
 export { useModel } from './hooks/useModel';
 
 // UI Primitives
-export { Button } from './components/ui/Button';
-export type { ButtonProps } from './components/ui/Button';
+export { Button, type ButtonProps, ScrollArea } from '@agiworkforce/ui';
 export { Tooltip } from './components/ui/Tooltip';
-export { Badge } from './components/ui/Badge';
-export { ScrollArea } from './components/ui/ScrollArea';
+export { ChatBadge } from './components/ui/ChatBadge';
 
 // Top-level orchestrator
 //
