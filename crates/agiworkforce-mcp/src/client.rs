@@ -84,81 +84,95 @@ impl McpClient {
         timeouts: McpTimeouts,
         hooks: ClientHooks,
     ) -> Result<Self> {
+        let kind = config.kind();
+        let mut conn = Self::bringup(server_name, config, timeouts, hooks).await?;
+
+        if kind == "stdio" {
+            conn.initialize().await.map_err(|e| {
+                let lines = conn
+                    .stderr_buf
+                    .lock()
+                    .map(|l| l.join("\n"))
+                    .unwrap_or_default();
+                if lines.is_empty() {
+                    e
+                } else {
+                    e.context(format!("[{}] server stderr:\n{lines}", conn.server_name))
+                }
+            })?;
+        } else {
+            conn.initialize().await?;
+        }
+
+        conn.hooks
+            .log(&format!("[{server_name}] MCP connected via {kind}"));
+        Ok(conn)
+    }
+
+    /// Connect and bring up the transport WITHOUT running the MCP `initialize`
+    /// handshake. The host drives its own `initialize` /
+    /// `notifications/initialized` via [`Self::request`] / [`Self::notify`].
+    ///
+    /// Used by hosts (desktop) that own a different protocol version, client
+    /// capabilities, and `InitializeResult` capture than this crate's built-in
+    /// handshake — the exact handshake bytes stay host-controlled while the
+    /// JSON-RPC transport mechanics (framing, id correlation, timeouts,
+    /// transports, OAuth) are shared.
+    pub async fn connect_without_handshake(
+        server_name: &str,
+        config: TransportConfig,
+        timeouts: McpTimeouts,
+        hooks: ClientHooks,
+    ) -> Result<Self, McpError> {
+        let kind = config.kind();
+        let conn = Self::bringup(server_name, config, timeouts, hooks)
+            .await
+            .map_err(McpError::from)?;
+        conn.hooks.log(&format!(
+            "[{server_name}] MCP transport up (no handshake) via {kind}"
+        ));
+        Ok(conn)
+    }
+
+    /// Build the connected client with the transport brought up but the MCP
+    /// `initialize` handshake NOT yet sent. Shared by [`Self::connect_inner`]
+    /// (which then calls [`Self::initialize`]) and
+    /// [`Self::connect_without_handshake`] (which leaves the handshake to the
+    /// host).
+    async fn bringup(
+        server_name: &str,
+        config: TransportConfig,
+        timeouts: McpTimeouts,
+        hooks: ClientHooks,
+    ) -> Result<Self> {
         let (notif_tx, notif_rx) = mpsc::channel::<McpNotification>(128);
         let stderr_buf: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
-        match &config {
+        let inner = match &config {
             TransportConfig::Stdio { command, args, env } => {
                 let mut child = Self::spawn_stdio_child(server_name, command, args, env)?;
                 Self::spawn_stderr_drain(&mut child, &stderr_buf, server_name);
-
-                let mut conn = Self {
-                    server_name: server_name.to_string(),
-                    transport_config: config.clone(),
-                    inner: TransportConn::Stdio { child },
-                    request_id: 0,
-                    timeouts,
-                    stderr_buf: Arc::clone(&stderr_buf),
-                    hooks,
-                    notif_tx,
-                    notif_rx: Some(notif_rx),
-                };
-
-                conn.initialize().await.map_err(|e| {
-                    let lines = conn
-                        .stderr_buf
-                        .lock()
-                        .map(|l| l.join("\n"))
-                        .unwrap_or_default();
-                    if lines.is_empty() {
-                        e
-                    } else {
-                        e.context(format!(
-                            "[{}] server stderr:\n{lines}",
-                            conn.server_name
-                        ))
-                    }
-                })?;
-                conn.hooks.log(&format!("[{server_name}] MCP connected via stdio"));
-                Ok(conn)
+                TransportConn::Stdio { child }
             }
             TransportConfig::Sse { url, headers } => {
-                let inner =
-                    sse::connect(server_name, url, headers, timeouts.clone(), notif_tx.clone())
-                        .await?;
-                let mut conn = Self {
-                    server_name: server_name.to_string(),
-                    transport_config: config.clone(),
-                    inner,
-                    request_id: 0,
-                    timeouts,
-                    stderr_buf,
-                    hooks,
-                    notif_tx,
-                    notif_rx: Some(notif_rx),
-                };
-                conn.initialize().await?;
-                conn.hooks.log(&format!("[{server_name}] MCP connected via sse"));
-                Ok(conn)
+                sse::connect(server_name, url, headers, timeouts.clone(), notif_tx.clone()).await?
             }
             TransportConfig::Http { url, headers, oauth } => {
-                let inner = http::connect(url, headers, oauth.as_ref())?;
-                let mut conn = Self {
-                    server_name: server_name.to_string(),
-                    transport_config: config.clone(),
-                    inner,
-                    request_id: 0,
-                    timeouts,
-                    stderr_buf,
-                    hooks,
-                    notif_tx,
-                    notif_rx: Some(notif_rx),
-                };
-                conn.initialize().await?;
-                conn.hooks.log(&format!("[{server_name}] MCP connected via http"));
-                Ok(conn)
+                http::connect(url, headers, oauth.as_ref())?
             }
-        }
+        };
+
+        Ok(Self {
+            server_name: server_name.to_string(),
+            transport_config: config,
+            inner,
+            request_id: 0,
+            timeouts,
+            stderr_buf,
+            hooks,
+            notif_tx,
+            notif_rx: Some(notif_rx),
+        })
     }
 
     /// Spawn the child process for a stdio MCP server.
@@ -695,6 +709,21 @@ impl McpClient {
             .cloned()
             .unwrap_or(serde_json::Value::Null);
         Some((method, id, params))
+    }
+
+    /// Public wrapper over the transport notification dispatch. Fire-and-forget
+    /// (no response). Used by hosts that drive their own handshake / lifecycle
+    /// notifications (e.g. `notifications/initialized`,
+    /// `notifications/cancelled`) after
+    /// [`Self::connect_without_handshake`].
+    pub async fn notify(
+        &mut self,
+        method: &str,
+        params: Option<serde_json::Value>,
+    ) -> Result<(), McpError> {
+        self.send_notification(method, params)
+            .await
+            .map_err(McpError::from)
     }
 
     /// Send a JSON-RPC notification (no response expected). Dispatches on transport.
