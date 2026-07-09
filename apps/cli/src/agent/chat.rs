@@ -1,6 +1,13 @@
+use std::collections::HashSet;
+
+use agiworkforce_agent_core::{
+    Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, MAX_AGENTIC_ITERATIONS,
+    Prepared, PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent,
+    TurnHost, TurnParams, TurnPhase, run_turn,
+};
 use anyhow::Result;
+use async_trait::async_trait;
 use colored::Colorize;
-use futures_util::future::join_all;
 
 use crate::compaction;
 use crate::config::CliConfig;
@@ -9,10 +16,7 @@ use crate::hooks;
 use crate::models::{self, ContentBlock, Message, StreamCallback, ToolCallResponse};
 use crate::terminal_style as ts;
 
-use super::executor::{
-    detect_content_loop, hash_tool_call, value_to_legacy_args, LOOP_DETECTION_THRESHOLD,
-    MAX_AGENTIC_ITERATIONS,
-};
+use super::executor::value_to_legacy_args;
 use super::history::build_assistant_message;
 use super::tools::{execute_mcp_tool, execute_team_tool, is_team_tool};
 use super::{AgentSession, TurnResult};
@@ -129,6 +133,49 @@ async fn run_pre_tool_use_hooks(
     }
 }
 
+/// Map the CLI's `CompletionResult` onto the engine's `Completion` (the
+/// authoritative assembled outcome + the subscription flag the shared
+/// `ChatOutcome` does not carry).
+fn completion_from_result(result: models::CompletionResult) -> Completion {
+    Completion {
+        outcome: agiworkforce_llm::ChatOutcome {
+            text: result.text,
+            tool_calls: result.tool_calls,
+            usage: agiworkforce_llm::Usage {
+                input_tokens: result.input_tokens,
+                output_tokens: result.output_tokens,
+                cache_read_input_tokens: result.cache_read_input_tokens,
+                cache_creation_input_tokens: result.cache_creation_input_tokens,
+                reasoning_output_tokens: result.reasoning_output_tokens,
+            },
+            stop_reason: result.stop_reason,
+        },
+        via_subscription: result.via_subscription,
+    }
+}
+
+/// Convert a CLI `ContentBlock::ToolResult` into the engine's `ResultBlock`.
+fn content_block_to_result(block: ContentBlock) -> ResultBlock {
+    match block {
+        ContentBlock::ToolResult {
+            tool_use_id,
+            content,
+            is_error,
+        } => ResultBlock {
+            tool_use_id,
+            content,
+            is_error,
+        },
+        // `invalid_tool_arguments_block` only ever produces a ToolResult; other
+        // variants are unreachable, but map defensively rather than panic.
+        other => ResultBlock {
+            tool_use_id: String::new(),
+            content: format!("{other:?}"),
+            is_error: true,
+        },
+    }
+}
+
 impl AgentSession {
     /// Build a streaming chunk callback that is json-events-aware.
     ///
@@ -170,6 +217,15 @@ impl AgentSession {
     }
 
     /// Send a user message and run the full agentic loop.
+    ///
+    /// This is the thin orchestrator (Wave 5e1): consent + privacy boundary,
+    /// context compaction, plan-mode prefixing, the user-message push, and the
+    /// pre-/post-turn hooks stay here (CLI-local, trust-boundary and
+    /// presentation concerns). The turn-loop MECHANICS — model-stream driving,
+    /// tool scheduling, runaway/iteration/budget guards, and event cadence —
+    /// live in `agiworkforce_agent_core::run_turn`, driven through the
+    /// `TurnHostAdapter` below. The public signature and the emitted event
+    /// cadence are byte-for-byte unchanged.
     pub async fn send(
         &mut self,
         config: &CliConfig,
@@ -322,8 +378,20 @@ message -- revise and call `update_plan` again.\n\n",
         let tool_defs = self.effective_tool_definitions();
         let available_tool_names = tool_defs
             .iter()
-            .map(|tool_definition| tool_definition.name.as_str())
-            .collect::<std::collections::HashSet<_>>();
+            .map(|tool_definition| tool_definition.name.clone())
+            .collect::<HashSet<_>>();
+        let concurrency_safe_names: HashSet<String> = tool_defs
+            .iter()
+            .filter(|t| t.is_concurrency_safe)
+            .map(|t| t.name.clone())
+            .collect();
+        let plan_mode_mutating_names: HashSet<String> = tool_defs
+            .iter()
+            .filter(|tool_definition| {
+                crate::runtime::tool_catalog::is_plan_mode_mutating_tool_definition(tool_definition)
+            })
+            .map(|tool_definition| tool_definition.name.clone())
+            .collect();
 
         let pre_call_hcfg = self.hooks_config.clone();
         hooks::run_hooks(
@@ -361,1254 +429,46 @@ message -- revise and call `update_plan` again.\n\n",
         )
         .await;
 
-        // First LLM call (with user's streaming callback).
-        let first_call_result = if self.demo_force_rate_limit {
-            self.demo_force_rate_limit = false;
-            eprintln!(
-                "  {}",
-                "DEMO: synthesizing rate-limit on primary model".dimmed()
-            );
-            Err(anyhow::Error::new(CliError::RateLimited {
-                provider: format!("{:?}", self.provider).to_lowercase(),
-                retry_after: Some(0),
-            }))
-        } else {
-            models::stream_completion(
-                config,
-                &self.provider,
-                &self.model,
-                &self.messages,
-                max_tokens,
-                Some(&tool_defs),
-                on_chunk,
-                self.thinking_budget_tokens,
-            )
-            .await
+        // Lift the persistent runaway state out of the session for the turn; the
+        // engine owns the detection algorithm while the state stays session-owned
+        // (a second strike auto-stops across turns). Restored below.
+        let mut tracker = RunawayTracker {
+            recent_tool_calls: std::mem::take(&mut self.recent_tool_calls),
+            loop_strike_count: self.loop_strike_count,
         };
-        let result = match first_call_result {
-            Ok(r) => r,
-            Err(e) => {
-                let mut last_err = e;
-                let mut recovered: Option<_> = None;
-                let prefer_fallback = self
-                    .fallback_chain
-                    .as_ref()
-                    .zip(last_err.downcast_ref::<CliError>())
-                    .map(|(chain, err)| chain.should_rotate(err))
-                    .unwrap_or(false);
-                if !prefer_fallback {
-                    if let Some(cli_err) = last_err.downcast_ref::<CliError>() {
-                        if cli_err.is_retryable() {
-                            let delay = cli_err.retry_delay();
-                            // Suppress the raw stderr notice while the full-screen
-                            // TUI owns the terminal (it would bleed into the live
-                            // spinner frame); exec/REPL still surface it.
-                            if !crate::tui::tui_active() {
-                                eprintln!(
-                                    "  {}",
-                                    ts::warning(format!(
-                                        "Retrying in {}s: {}",
-                                        delay.as_secs(),
-                                        cli_err
-                                    ))
-                                );
-                            }
-                            tokio::time::sleep(delay).await;
-                            match models::stream_completion(
-                                config,
-                                &self.provider,
-                                &self.model,
-                                &self.messages,
-                                max_tokens,
-                                Some(&tool_defs),
-                                self.continuation_sink(),
-                                self.thinking_budget_tokens,
-                            )
-                            .await
-                            {
-                                Ok(r) => recovered = Some(r),
-                                Err(retry_err) => last_err = retry_err,
-                            }
-                        }
-                    }
-                }
-                if recovered.is_none() {
-                    if let Some(chain) = self.fallback_chain.clone() {
-                        let cli_err_kind = last_err
-                            .downcast_ref::<CliError>()
-                            .map(|c| (c.kind(), chain.should_rotate(c)));
-                        if let Some((kind, true)) = cli_err_kind {
-                            for fallback_model in chain.tail() {
-                                let prev_model = self.model.clone();
-                                let prev_provider = self.provider.clone();
-                                // Privacy-boundary guard: mutate provider/model and then
-                                // validate the boundary BEFORE calling stream_completion.
-                                // If the session is Local and the fallback is a cloud provider,
-                                // restore state and break fail-closed — never egress Local
-                                // session history to the network silently.
-                                let Some(fallback_provider) =
-                                    crate::models::try_detect_provider(fallback_model)
-                                else {
-                                    last_err = anyhow::anyhow!(
-                                        "Fallback model '{}' is not recognized; refusing silent provider routing.",
-                                        fallback_model
-                                    );
-                                    continue;
-                                };
-                                self.model = fallback_model.clone();
-                                self.provider = fallback_provider;
-                                if let Err(boundary_err) = self.validate_privacy_boundary() {
-                                    // Restore state so the session remains coherent.
-                                    self.model = prev_model;
-                                    self.provider = prev_provider;
-                                    last_err = boundary_err;
-                                    break;
-                                }
-                                eprintln!(
-                                    "  {}",
-                                    ts::warning(format!(
-                                        "↘ Falling back: {} → {} ({})",
-                                        prev_model, fallback_model, kind
-                                    ))
-                                );
-                                if let Some(sink) = self.on_fallback.as_ref() {
-                                    (sink.0)(&prev_model, fallback_model, kind);
-                                }
-                                let fallback_call = if self.demo_mode {
-                                    let demo_text = format!(
-                                        "[DEMO MODE] Synthesized response from `{}` — no real \
-                                         API call was made. The fallback chain is exercised but \
-                                         the upstream provider was not contacted.",
-                                        fallback_model
-                                    );
-                                    // In json-events mode emit as a MessageDelta;
-                                    // in human mode use the raw print! path.
-                                    if self.json_events {
-                                        crate::agent_events::AgentEvent::MessageDelta {
-                                            session_id: self.json_session_id.clone(),
-                                            text: demo_text.clone(),
-                                        }
-                                        .emit_stdout();
-                                    } else {
-                                        print!("{}", demo_text);
-                                    }
-                                    Ok(crate::models::CompletionResult {
-                                        text: demo_text,
-                                        tool_calls: vec![],
-                                        input_tokens: 0,
-                                        output_tokens: 0,
-                                        cache_read_input_tokens: 0,
-                                        cache_creation_input_tokens: 0,
-                                        via_subscription: true,
-                                        stop_reason: Some("end_turn".to_string()),
-                                        reasoning_output_tokens: 0,
-                                    })
-                                } else {
-                                    models::stream_completion(
-                                        config,
-                                        &self.provider,
-                                        &self.model,
-                                        &self.messages,
-                                        max_tokens,
-                                        Some(&tool_defs),
-                                        self.continuation_sink(),
-                                        self.thinking_budget_tokens,
-                                    )
-                                    .await
-                                };
-                                match fallback_call {
-                                    Ok(r) => {
-                                        recovered = Some(r);
-                                        break;
-                                    }
-                                    Err(rotate_err) => last_err = rotate_err,
-                                }
-                            }
-                        }
-                    }
-                }
-                match recovered {
-                    Some(r) => r,
-                    None => return Err(last_err),
-                }
-            }
+        let params = TurnParams {
+            effective_max: self.max_turns.unwrap_or(MAX_AGENTIC_ITERATIONS),
+            max_budget_usd: self.max_budget_usd,
         };
 
-        let assistant_msg = build_assistant_message(&result.text, &result.tool_calls);
-        self.messages.push(assistant_msg);
-
-        let mut total_input = result.input_tokens;
-        let mut total_output = result.output_tokens;
-        let mut total_cache_read = result.cache_read_input_tokens;
-        let mut total_cache_creation = result.cache_creation_input_tokens;
-        let mut result_reasoning = result.reasoning_output_tokens;
-        let via_subscription = result.via_subscription;
-        let mut final_response = result.text;
-        let mut current_tool_calls = result.tool_calls;
-
-        // Agentic loop
-        let effective_max = self.max_turns.unwrap_or(MAX_AGENTIC_ITERATIONS);
-        for iteration in 0..effective_max {
-            if current_tool_calls.is_empty() {
-                break;
-            }
-
-            // Doom loop detection
-            let call_hashes: Vec<u64> = current_tool_calls
-                .iter()
-                .map(|tc| hash_tool_call(&tc.name, &tc.arguments))
-                .collect();
-
-            self.recent_tool_calls.extend(&call_hashes);
-
-            if self.recent_tool_calls.len() >= LOOP_DETECTION_THRESHOLD {
-                let tail = &self.recent_tool_calls
-                    [self.recent_tool_calls.len() - LOOP_DETECTION_THRESHOLD..];
-                if tail.windows(2).all(|w| w[0] == w[1]) {
-                    self.loop_strike_count += 1;
-
-                    if self.loop_strike_count >= 2 {
-                        eprintln!(
-                            "\n{}",
-                            ts::danger("  Auto-stopping: second loop detected in this session.")
-                        );
-                        hooks::run_hooks(
-                            &self.hooks_config,
-                            hooks::HookEvent::StopFailure,
-                            &hooks::HookInput {
-                                event: "StopFailure".to_string(),
-                                session_id: None,
-                                model: Some(self.model.clone()),
-                                tool_name: None,
-                                tool_args: None,
-                                tool_output: None,
-                                message: Some("loop-detection auto-stop".to_string()),
-                                tool_execution: None,
-                            },
-                        )
-                        .await;
-                        break;
-                    }
-
-                    let loop_msg = format!(
-                        "  Warning: Detected {} identical consecutive tool calls ({}). Possible loop. [strike {}/2]",
-                        LOOP_DETECTION_THRESHOLD,
-                        current_tool_calls
-                            .first()
-                            .map(|tc| tc.name.as_str())
-                            .unwrap_or("unknown"),
-                        self.loop_strike_count
-                    );
-                    eprintln!("\n{}", ts::warning(&loop_msg));
-                    hooks::run_hooks(
-                        &self.hooks_config,
-                        hooks::HookEvent::Notification,
-                        &hooks::HookInput {
-                            event: "Notification".to_string(),
-                            session_id: None,
-                            model: Some(self.model.clone()),
-                            tool_name: None,
-                            tool_args: None,
-                            tool_output: None,
-                            message: Some(loop_msg),
-                            tool_execution: None,
-                        },
-                    )
-                    .await;
-
-                    hooks::run_hooks(
-                        &self.hooks_config,
-                        hooks::HookEvent::PermissionRequest,
-                        &hooks::HookInput {
-                            event: "PermissionRequest".to_string(),
-                            session_id: None,
-                            model: Some(self.model.clone()),
-                            tool_name: current_tool_calls.first().map(|tc| tc.name.clone()),
-                            tool_args: current_tool_calls.first().map(|tc| tc.arguments.clone()),
-                            tool_output: None,
-                            message: Some("loop-detection confirmation".to_string()),
-                            tool_execution: None,
-                        },
-                    )
-                    .await;
-
-                    let confirmed = dialoguer::Confirm::new()
-                        .with_prompt("Continue with these tool calls?")
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false);
-
-                    if !confirmed {
-                        eprintln!("{}", "  Agentic loop stopped by user.".dimmed());
-                        hooks::run_hooks(
-                            &self.hooks_config,
-                            hooks::HookEvent::PermissionDenied,
-                            &hooks::HookInput {
-                                event: "PermissionDenied".to_string(),
-                                session_id: None,
-                                model: Some(self.model.clone()),
-                                tool_name: current_tool_calls.first().map(|tc| tc.name.clone()),
-                                tool_args: current_tool_calls
-                                    .first()
-                                    .map(|tc| tc.arguments.clone()),
-                                tool_output: None,
-                                message: Some(
-                                    "user rejected loop-detection confirmation".to_string(),
-                                ),
-                                tool_execution: None,
-                            },
-                        )
-                        .await;
-                        break;
-                    }
-
-                    self.recent_tool_calls.clear();
-                }
-            }
-
-            eprintln!(
-                "\n{}",
-                format!(
-                    "  Executing {} tool{}... (iteration {}/{})",
-                    current_tool_calls.len(),
-                    if current_tool_calls.len() == 1 {
-                        ""
-                    } else {
-                        "s"
-                    },
-                    iteration + 1,
-                    effective_max
-                )
-                .dimmed()
-            );
-
-            let hcfg = self.hooks_config.clone();
-            let mut result_blocks = Vec::new();
-
-            let concurrency_safe_names: std::collections::HashSet<String> = tool_defs
-                .iter()
-                .filter(|t| t.is_concurrency_safe)
-                .map(|t| t.name.clone())
-                .collect();
-            let plan_mode_mutating_names: std::collections::HashSet<&str> = tool_defs
-                .iter()
-                .filter(|tool_definition| {
-                    crate::runtime::tool_catalog::is_plan_mode_mutating_tool_definition(
-                        tool_definition,
-                    )
-                })
-                .map(|tool_definition| tool_definition.name.as_str())
-                .collect();
-            let concurrent_eligible = |name: &str| -> bool {
-                self.skip_permissions
-                    && concurrency_safe_names.contains(name)
-                    && !is_team_tool(name)
-                    && !name.starts_with("mcp_")
-                    && name != "task"
-            };
-
-            let task_calls: Vec<_> = current_tool_calls
-                .iter()
-                .filter(|tc| tc.name == "task")
-                .collect();
-            let concurrent_calls: Vec<_> = current_tool_calls
-                .iter()
-                .filter(|tc| tc.name != "task" && concurrent_eligible(&tc.name))
-                .collect();
-            let other_calls: Vec<_> = current_tool_calls
-                .iter()
-                .filter(|tc| tc.name != "task" && !concurrent_eligible(&tc.name))
-                .collect();
-
-            // Spawn all task tool calls concurrently via subagent manager
-            let mut task_spawn_results = Vec::new();
-            for tc in &task_calls {
-                if !available_tool_names.contains(tc.name.as_str()) {
-                    result_blocks.push(ContentBlock::ToolResult {
-                        tool_use_id: tc.id.clone(),
-                        content: format!("Tool '{}' is not available in this session.", tc.name),
-                        is_error: true,
-                    });
-                    continue;
-                }
-                if let Some(block) = invalid_tool_arguments_block(tc) {
-                    result_blocks.push(block);
-                    continue;
-                }
-
-                if matches!(
-                    self.permission_mode,
-                    crate::cli_options::PermissionMode::Plan
-                ) && !self.plan_approved
-                {
-                    let payload = serde_json::json!({
-                        "ok": false,
-                        "error": "plan_mode_unapproved",
-                        "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` first; subagent tasks are blocked until the user approves."
-                    });
-                    result_blocks.push(ContentBlock::ToolResult {
-                        tool_use_id: tc.id.clone(),
-                        content: payload.to_string(),
-                        is_error: true,
-                    });
-                    continue;
-                }
-
-                let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.model, tc).await {
-                    PreToolUseOutcome::Proceed(args) => args,
-                    PreToolUseOutcome::Blocked(reason_text) => {
-                        if !self.quiet {
-                            eprintln!(
-                                "  {} {} blocked by hook: {}",
-                                "->".dimmed(),
-                                tc.name.bold(),
-                                ts::danger(&reason_text)
-                            );
-                        }
-                        result_blocks.push(ContentBlock::ToolResult {
-                            tool_use_id: tc.id.clone(),
-                            content: format!("Tool execution blocked by hook: {reason_text}"),
-                            is_error: true,
-                        });
-                        continue;
-                    }
-                    PreToolUseOutcome::Stopped => {
-                        if !self.quiet {
-                            eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
-                        }
-                        result_blocks.push(ContentBlock::ToolResult {
-                            tool_use_id: tc.id.clone(),
-                            content: "Tool execution stopped by hook.".to_string(),
-                            is_error: true,
-                        });
-                        continue;
-                    }
-                };
-
-                let legacy_args = value_to_legacy_args(&effective_args);
-                if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
-                    &tc.name,
-                    &legacy_args,
-                    self.allowed_tools.as_deref(),
-                    &self.disallowed_tools,
-                ) {
-                    result_blocks.push(ContentBlock::ToolResult {
-                        tool_use_id: tc.id.clone(),
-                        content: serde_json::json!({
-                            "ok": false,
-                            "error": "tool_filter_violation",
-                            "rule": violation.rule,
-                            "message": violation.reason,
-                        })
-                        .to_string(),
-                        is_error: true,
-                    });
-                    continue;
-                }
-
-                let description = effective_args
-                    .get("description")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("subagent task")
-                    .to_string();
-                let prompt = effective_args
-                    .get("prompt")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-
-                if self.subagent_manager.is_none() {
-                    self.subagent_manager = Some(crate::subagent::SubagentManager::new(
-                        config.clone(),
-                        self.model.clone(),
-                        crate::context::gather_system_context(),
-                        self.skip_permissions,
-                    ));
-                }
-
-                hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::SubagentStart,
-                    &hooks::HookInput {
-                        event: "SubagentStart".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tc.name.clone()),
-                        tool_args: Some(tc.arguments.clone()),
-                        tool_output: None,
-                        message: Some(format!(
-                            "subagent_spawn description={:?} prompt_len={}",
-                            description,
-                            prompt.len()
-                        )),
-                        tool_execution: None,
-                    },
-                )
-                .await;
-
-                let mgr = self
-                    .subagent_manager
-                    .as_ref()
-                    .expect("subagent_manager was just initialized above");
-                let id_result = mgr.spawn(&description, &prompt).await;
-
-                hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::SubagentStop,
-                    &hooks::HookInput {
-                        event: "SubagentStop".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tc.name.clone()),
-                        tool_args: Some(tc.arguments.clone()),
-                        tool_output: id_result
-                            .as_ref()
-                            .ok()
-                            .map(|id| format!("subagent_id={}", id)),
-                        message: id_result
-                            .as_ref()
-                            .err()
-                            .map(|err| format!("spawn_error: {:#}", err)),
-                        tool_execution: None,
-                    },
-                )
-                .await;
-
-                task_spawn_results.push((
-                    tc.id.clone(),
-                    tc.name.clone(),
-                    effective_args,
-                    id_result,
-                ));
-            }
-
-            if !task_spawn_results.is_empty() {
-                if let Some(ref mgr) = self.subagent_manager {
-                    mgr.wait_all().await;
-                }
-            }
-
-            for (tool_use_id, tool_name, tool_args, id_result) in task_spawn_results {
-                let tool_result = match id_result {
-                    Ok(ref id) => {
-                        if let Some(ref mgr) = self.subagent_manager {
-                            if let Some(sa_result) = mgr.get_result(id).await {
-                                let mut output = sa_result.output;
-                                if !sa_result.files_modified.is_empty() {
-                                    output.push_str("\n\nFiles modified:\n");
-                                    for f in &sa_result.files_modified {
-                                        output.push_str(&format!("  - {}\n", f));
-                                    }
-                                }
-                                crate::tools::ToolResult {
-                                    tool_name: "task".to_string(),
-                                    success: true,
-                                    output,
-                                }
-                            } else if let Some(sa_status) = mgr.get_status(id).await {
-                                crate::tools::ToolResult {
-                                    tool_name: "task".to_string(),
-                                    success: false,
-                                    output: format!(
-                                        "Subagent {} finished with status: {}",
-                                        id, sa_status
-                                    ),
-                                }
-                            } else {
-                                crate::tools::ToolResult {
-                                    tool_name: "task".to_string(),
-                                    success: false,
-                                    output: format!("Subagent {} not found.", id),
-                                }
-                            }
-                        } else {
-                            crate::tools::ToolResult {
-                                tool_name: "task".to_string(),
-                                success: false,
-                                output: "Subagent manager not initialized.".to_string(),
-                            }
-                        }
-                    }
-                    Err(e) => crate::tools::ToolResult {
-                        tool_name: "task".to_string(),
-                        success: false,
-                        output: format!("Failed to spawn subagent: {:#}", e),
-                    },
-                };
-
-                let sa_display_status = if tool_result.success {
-                    ts::success("success").to_string()
-                } else {
-                    ts::danger("failed").to_string()
-                };
-                eprintln!(
-                    "  {} {} [{}]",
-                    "->".dimmed(),
-                    tool_name.bold(),
-                    sa_display_status
-                );
-
-                hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::PostToolUse,
-                    &hooks::HookInput {
-                        event: "PostToolUse".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tool_name.clone()),
-                        tool_args: Some(tool_args.clone()),
-                        tool_output: Some(tool_result.output.clone()),
-                        message: None,
-                        tool_execution: None,
-                    },
-                )
-                .await;
-
-                hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::ToolResultPersist,
-                    &hooks::HookInput {
-                        event: "ToolResultPersist".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tool_name),
-                        tool_args: Some(tool_args),
-                        tool_output: Some(tool_result.output.clone()),
-                        message: None,
-                        tool_execution: None,
-                    },
-                )
-                .await;
-
-                result_blocks.push(ContentBlock::ToolResult {
-                    tool_use_id,
-                    content: tool_result.output,
-                    is_error: !tool_result.success,
-                });
-            }
-
-            // Execute the concurrent batch via join_all
-            if !concurrent_calls.is_empty() {
-                if !self.quiet {
-                    eprintln!(
-                        "  {} ({})",
-                        format!(
-                            "running {} read-only tools in parallel",
-                            concurrent_calls.len()
-                        )
-                        .dimmed(),
-                        concurrent_calls
-                            .iter()
-                            .map(|tc| tc.name.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    );
-                }
-
-                let mut runnable: Vec<(String, String, serde_json::Value)> = Vec::new();
-                for tc in &concurrent_calls {
-                    if !available_tool_names.contains(tc.name.as_str()) {
-                        result_blocks.push(ContentBlock::ToolResult {
-                            tool_use_id: tc.id.clone(),
-                            content: format!(
-                                "Tool '{}' is not available in this session.",
-                                tc.name
-                            ),
-                            is_error: true,
-                        });
-                        continue;
-                    }
-                    if let Some(block) = invalid_tool_arguments_block(tc) {
-                        result_blocks.push(block);
-                        continue;
-                    }
-
-                    let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.model, tc).await
-                    {
-                        PreToolUseOutcome::Proceed(args) => args,
-                        PreToolUseOutcome::Blocked(reason_text) => {
-                            if !self.quiet {
-                                eprintln!(
-                                    "  {} {} blocked by hook: {}",
-                                    "->".dimmed(),
-                                    tc.name.bold(),
-                                    ts::danger(&reason_text)
-                                );
-                            }
-                            result_blocks.push(ContentBlock::ToolResult {
-                                tool_use_id: tc.id.clone(),
-                                content: format!("Tool execution blocked by hook: {reason_text}"),
-                                is_error: true,
-                            });
-                            continue;
-                        }
-                        PreToolUseOutcome::Stopped => {
-                            if !self.quiet {
-                                eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
-                            }
-                            result_blocks.push(ContentBlock::ToolResult {
-                                tool_use_id: tc.id.clone(),
-                                content: "Tool execution stopped by hook.".to_string(),
-                                is_error: true,
-                            });
-                            continue;
-                        }
-                    };
-
-                    let legacy_args = value_to_legacy_args(&effective_args);
-                    if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
-                        &tc.name,
-                        &legacy_args,
-                        self.allowed_tools.as_deref(),
-                        &self.disallowed_tools,
-                    ) {
-                        result_blocks.push(ContentBlock::ToolResult {
-                            tool_use_id: tc.id.clone(),
-                            content: serde_json::json!({
-                                "ok": false,
-                                "error": "tool_filter_violation",
-                                "rule": violation.rule,
-                                "message": violation.reason,
-                            })
-                            .to_string(),
-                            is_error: true,
-                        });
-                        continue;
-                    }
-                    emit_tool_event(
-                        self.on_tool_event.as_ref(),
-                        crate::tui::app_event::TuiAppEvent::ToolStarted {
-                            call_id: tc.id.clone(),
-                            name: tc.name.clone(),
-                            summary: tool_event_summary(&tc.name, &effective_args),
-                        },
-                    );
-                    if self.json_events {
-                        crate::agent_events::AgentEvent::RunningTool {
-                            session_id: self.json_session_id.clone(),
-                            name: tc.name.clone(),
-                            args_redacted: crate::agent_events::redact_args(
-                                &effective_args.to_string(),
-                            ),
-                        }
-                        .emit_stdout();
-                    }
-                    runnable.push((tc.id.clone(), tc.name.clone(), effective_args));
-                }
-
-                let exec_opts = crate::tools::ToolExecOptions {
-                    require_confirmation: !self.skip_permissions,
-                    auto_approve_safe: self.auto_approve_safe,
-                    quiet: self.quiet,
-                    approval_callback: self.on_tool_approval.as_ref().map(|sink| sink.0.clone()),
-                };
-                let futures = runnable.iter().map(|tc| {
-                    let legacy = super::executor::ToolCall {
-                        name: tc.1.clone(),
-                        args: value_to_legacy_args(&tc.2),
-                    };
-                    let opts = exec_opts.clone();
-                    let id = tc.0.clone();
-                    let name = tc.1.clone();
-                    let args = tc.2.clone();
-                    async move {
-                        let result = crate::tools::execute_tool_with_opts(&legacy, &opts).await;
-                        (id, name, args, result)
-                    }
-                });
-                let outcomes = join_all(futures).await;
-
-                for (tool_use_id, tool_name, tool_args, exec_result) in outcomes {
-                    let started_ms = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as u64)
-                        .unwrap_or(0);
-                    let tool_result = match exec_result {
-                        Ok(r) => r,
-                        Err(e) => crate::tools::ToolResult {
-                            tool_name: tool_name.clone(),
-                            success: false,
-                            output: format!("tool error: {:#}", e),
-                        },
-                    };
-                    let elapsed_ms = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as u64)
-                        .unwrap_or(0)
-                        .saturating_sub(started_ms);
-
-                    if !self.quiet {
-                        let status = if tool_result.success {
-                            ts::success("success").to_string()
-                        } else {
-                            ts::danger("failed").to_string()
-                        };
-                        eprintln!("  {} {} [{}]", "->".dimmed(), tool_name.bold(), status);
-                    }
-
-                    if self.json_events {
-                        crate::agent_events::AgentEvent::ToolResult {
-                            session_id: self.json_session_id.clone(),
-                            name: tool_name.clone(),
-                            duration_ms: elapsed_ms,
-                            ok: tool_result.success,
-                        }
-                        .emit_stdout();
-                    }
-
-                    emit_tool_event(
-                        self.on_tool_event.as_ref(),
-                        crate::tui::app_event::TuiAppEvent::ToolCompleted {
-                            call_id: tool_use_id.clone(),
-                            status: if tool_result.success {
-                                crate::tui::app_event::ToolStatus::Succeeded
-                            } else {
-                                crate::tui::app_event::ToolStatus::Failed
-                            },
-                            output: tool_result.output.chars().take(200).collect::<String>(),
-                        },
-                    );
-
-                    hooks::run_hooks(
-                        &hcfg,
-                        hooks::HookEvent::PostToolUse,
-                        &hooks::HookInput {
-                            event: "PostToolUse".to_string(),
-                            session_id: None,
-                            model: Some(self.model.clone()),
-                            tool_name: Some(tool_name.clone()),
-                            tool_args: Some(tool_args.clone()),
-                            tool_output: Some(tool_result.output.clone()),
-                            message: None,
-                            tool_execution: None,
-                        },
-                    )
-                    .await;
-
-                    hooks::run_hooks(
-                        &hcfg,
-                        hooks::HookEvent::ToolResultPersist,
-                        &hooks::HookInput {
-                            event: "ToolResultPersist".to_string(),
-                            session_id: None,
-                            model: Some(self.model.clone()),
-                            tool_name: Some(tool_name),
-                            tool_args: Some(tool_args),
-                            tool_output: Some(tool_result.output.clone()),
-                            message: None,
-                            tool_execution: None,
-                        },
-                    )
-                    .await;
-
-                    result_blocks.push(ContentBlock::ToolResult {
-                        tool_use_id,
-                        content: tool_result.output,
-                        is_error: !tool_result.success,
-                    });
-                }
-            }
-
-            let mut hook_additional_contexts: Vec<String> = Vec::new();
-
-            // Execute non-task tool calls sequentially
-            for tc in &other_calls {
-                if !available_tool_names.contains(tc.name.as_str()) {
-                    result_blocks.push(ContentBlock::ToolResult {
-                        tool_use_id: tc.id.clone(),
-                        content: format!("Tool '{}' is not available in this session.", tc.name),
-                        is_error: true,
-                    });
-                    continue;
-                }
-                if let Some(block) = invalid_tool_arguments_block(tc) {
-                    result_blocks.push(block);
-                    continue;
-                }
-
-                if matches!(
-                    self.permission_mode,
-                    crate::cli_options::PermissionMode::Plan
-                ) && !self.plan_approved
-                    && plan_mode_mutating_names.contains(tc.name.as_str())
-                {
-                    let payload = serde_json::json!({
-                        "ok": false,
-                        "error": "plan_mode_unapproved",
-                        "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` with a complete ordered plan, then await user approval. Do NOT call mutating tools yet."
-                    });
-                    result_blocks.push(ContentBlock::ToolResult {
-                        tool_use_id: tc.id.clone(),
-                        content: payload.to_string(),
-                        is_error: true,
-                    });
-                    continue;
-                }
-
-                let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.model, tc).await {
-                    PreToolUseOutcome::Proceed(args) => args,
-                    PreToolUseOutcome::Blocked(reason_text) => {
-                        if !self.quiet {
-                            eprintln!(
-                                "  {} {} blocked by hook: {}",
-                                "->".dimmed(),
-                                tc.name.bold(),
-                                ts::danger(&reason_text)
-                            );
-                        }
-                        result_blocks.push(ContentBlock::ToolResult {
-                            tool_use_id: tc.id.clone(),
-                            content: format!("Tool execution blocked by hook: {reason_text}"),
-                            is_error: true,
-                        });
-                        continue;
-                    }
-                    PreToolUseOutcome::Stopped => {
-                        if !self.quiet {
-                            eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
-                        }
-                        result_blocks.push(ContentBlock::ToolResult {
-                            tool_use_id: tc.id.clone(),
-                            content: "Tool execution stopped by hook.".to_string(),
-                            is_error: true,
-                        });
-                        continue;
-                    }
-                };
-
-                let legacy = super::executor::ToolCall {
-                    name: tc.name.clone(),
-                    args: value_to_legacy_args(&effective_args),
-                };
-
-                if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
-                    &tc.name,
-                    &legacy.args,
-                    self.allowed_tools.as_deref(),
-                    &self.disallowed_tools,
-                ) {
-                    result_blocks.push(ContentBlock::ToolResult {
-                        tool_use_id: tc.id.clone(),
-                        content: serde_json::json!({
-                            "ok": false,
-                            "error": "tool_filter_violation",
-                            "rule": violation.rule,
-                            "message": violation.reason,
-                        })
-                        .to_string(),
-                        is_error: true,
-                    });
-                    continue;
-                }
-
-                emit_tool_event(
-                    self.on_tool_event.as_ref(),
-                    crate::tui::app_event::TuiAppEvent::ToolStarted {
-                        call_id: tc.id.clone(),
-                        name: tc.name.clone(),
-                        summary: tool_event_summary(&tc.name, &effective_args),
-                    },
-                );
-
-                if self.json_events {
-                    crate::agent_events::AgentEvent::RunningTool {
-                        session_id: self.json_session_id.clone(),
-                        name: tc.name.clone(),
-                        args_redacted: crate::agent_events::redact_args(
-                            &effective_args.to_string(),
-                        ),
-                    }
-                    .emit_stdout();
-                }
-
-                let seq_tool_start_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as u64)
-                    .unwrap_or(0);
-
-                let tool_result = if tc.name == "update_plan" {
-                    let payload = self.handle_update_plan(&effective_args);
-                    let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-                    let message = payload
-                        .get("message")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("plan handled")
-                        .to_string();
-                    if !self.quiet {
-                        let path_disp = self
-                            .current_plan_path
-                            .as_ref()
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_default();
-                        eprintln!(
-                            "  {} {} ({}{})",
-                            "->".dimmed(),
-                            "update_plan".bold(),
-                            message,
-                            if path_disp.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" -> {path_disp}")
-                            }
-                        );
-                    }
-                    crate::tools::ToolResult {
-                        tool_name: "update_plan".to_string(),
-                        success,
-                        output: payload.to_string(),
-                    }
-                } else if is_team_tool(&tc.name) {
-                    // `None`: this orchestrator session has no per-teammate
-                    // identity yet. Pass the executing teammate's name here once
-                    // teammate-scoped sessions exist to enforce the message sender.
-                    execute_team_tool(&self.team_manager, &tc.name, &legacy.args, None).await?
-                } else if tc.name.starts_with("mcp_") {
-                    execute_mcp_tool(&mut self.mcp_manager, &tc.name, effective_args.clone())
-                        .await?
-                } else {
-                    let opts = crate::tools::ToolExecOptions {
-                        require_confirmation: !self.skip_permissions,
-                        auto_approve_safe: self.auto_approve_safe,
-                        quiet: self.quiet,
-                        approval_callback: self
-                            .on_tool_approval
-                            .as_ref()
-                            .map(|sink| sink.0.clone()),
-                    };
-                    crate::tools::execute_tool_with_opts(&legacy, &opts).await?
-                };
-
-                if !self.quiet {
-                    let status = if tool_result.success {
-                        ts::success("success").to_string()
-                    } else {
-                        ts::danger("failed").to_string()
-                    };
-                    eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
-                }
-
-                if self.json_events {
-                    let seq_elapsed_ms = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as u64)
-                        .unwrap_or(0)
-                        .saturating_sub(seq_tool_start_ms);
-                    crate::agent_events::AgentEvent::ToolResult {
-                        session_id: self.json_session_id.clone(),
-                        name: tc.name.clone(),
-                        duration_ms: seq_elapsed_ms,
-                        ok: tool_result.success,
-                    }
-                    .emit_stdout();
-                }
-
-                emit_tool_event(
-                    self.on_tool_event.as_ref(),
-                    crate::tui::app_event::TuiAppEvent::ToolCompleted {
-                        call_id: tc.id.clone(),
-                        status: if tool_result.success {
-                            crate::tui::app_event::ToolStatus::Succeeded
-                        } else {
-                            crate::tui::app_event::ToolStatus::Failed
-                        },
-                        output: tool_result.output.chars().take(200).collect::<String>(),
-                    },
-                );
-
-                let post_results = hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::PostToolUse,
-                    &hooks::HookInput {
-                        event: "PostToolUse".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tc.name.clone()),
-                        tool_args: Some(effective_args.clone()),
-                        tool_output: Some(tool_result.output.clone()),
-                        message: None,
-                        tool_execution: None,
-                    },
-                )
-                .await;
-
-                let post_t = hooks::aggregate_transformers(&post_results);
-                let final_output = post_t.updated_mcp_tool_output.unwrap_or(tool_result.output);
-                if let Some(ctx) = post_t.additional_context {
-                    hook_additional_contexts.push(ctx);
-                }
-
-                hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::ToolResultPersist,
-                    &hooks::HookInput {
-                        event: "ToolResultPersist".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tc.name.clone()),
-                        tool_args: Some(effective_args.clone()),
-                        tool_output: Some(final_output.clone()),
-                        message: None,
-                        tool_execution: None,
-                    },
-                )
-                .await;
-
-                result_blocks.push(ContentBlock::ToolResult {
-                    tool_use_id: tc.id.clone(),
-                    content: final_output,
-                    is_error: !tool_result.success,
-                });
-            }
-
-            self.messages.push(Message::blocks("user", result_blocks));
-
-            hooks::run_hooks(
-                &hcfg,
-                hooks::HookEvent::PostToolBatch,
-                &hooks::HookInput {
-                    event: "PostToolBatch".to_string(),
-                    session_id: None,
-                    model: Some(self.model.clone()),
-                    tool_name: None,
-                    tool_args: None,
-                    tool_output: None,
-                    message: Some(format!("iteration={iteration}")),
-                    tool_execution: None,
-                },
-            )
-            .await;
-
-            if !hook_additional_contexts.is_empty() {
-                let merged = hook_additional_contexts.join("\n\n");
-                self.messages.push(Message::text("system", merged));
-            }
-
-            eprintln!();
-            // Privacy-boundary guard: re-validate before every continuation call.
-            // The provider may have been mutated by the fallback loop on the first
-            // call; we must never stream Local session history to a cloud provider.
-            self.validate_privacy_boundary()?;
-            let continuation = match models::stream_completion(
+        let run_result = {
+            let mut adapter = TurnHostAdapter {
+                session: &mut *self,
                 config,
-                &self.provider,
-                &self.model,
-                &self.messages,
+                tool_defs,
+                available_tool_names,
+                concurrency_safe_names,
+                plan_mode_mutating_names,
                 max_tokens,
-                Some(&tool_defs),
-                self.continuation_sink(),
-                self.thinking_budget_tokens,
-            )
-            .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    if let Some(cli_err) = e.downcast_ref::<CliError>() {
-                        if cli_err.is_retryable() {
-                            let delay = cli_err.retry_delay();
-                            // Suppress the raw stderr notice under the TUI (would
-                            // corrupt the live spinner frame); exec/REPL print it.
-                            if !crate::tui::tui_active() {
-                                eprintln!(
-                                    "  {}",
-                                    ts::warning(format!(
-                                        "Retrying in {}s: {}",
-                                        delay.as_secs(),
-                                        cli_err
-                                    ))
-                                );
-                            }
-                            tokio::time::sleep(delay).await;
-                            models::stream_completion(
-                                config,
-                                &self.provider,
-                                &self.model,
-                                &self.messages,
-                                max_tokens,
-                                Some(&tool_defs),
-                                self.continuation_sink(),
-                                self.thinking_budget_tokens,
-                            )
-                            .await?
-                        } else {
-                            return Err(e);
-                        }
-                    } else {
-                        return Err(e);
-                    }
-                }
+                first_on_chunk: Some(on_chunk),
+                hook_additional_contexts: Vec::new(),
             };
+            run_turn(&mut adapter, params, &mut tracker).await
+        };
 
-            let cont_msg = build_assistant_message(&continuation.text, &continuation.tool_calls);
-            self.messages.push(cont_msg);
+        // Restore runaway state regardless of turn outcome.
+        self.recent_tool_calls = tracker.recent_tool_calls;
+        self.loop_strike_count = tracker.loop_strike_count;
 
-            total_input += continuation.input_tokens;
-            total_output += continuation.output_tokens;
-            total_cache_read += continuation.cache_read_input_tokens;
-            total_cache_creation += continuation.cache_creation_input_tokens;
-            result_reasoning += continuation.reasoning_output_tokens;
-            final_response = continuation.text;
-            current_tool_calls = continuation.tool_calls;
+        let outcome = run_result?;
 
-            // Budget enforcement: stop the agent loop when cumulative spend exceeds the cap.
-            if let Some(budget_cap) = self.max_budget_usd {
-                let cumulative = crate::cost_ledger::dollars_for(
-                    &self.model,
-                    total_input,
-                    total_output,
-                    total_cache_read,
-                    total_cache_creation,
-                );
-                if cumulative >= budget_cap {
-                    eprintln!(
-                        "\n{}",
-                        ts::warning(format!(
-                            "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
-                            cumulative, budget_cap
-                        ))
-                    );
-                    // Emit the machine-readable event via the injected callback.
-                    // lib.rs wires this only when --json-events is active so that
-                    // stdout is never polluted in text/json-pretty output modes.
-                    if let Some(ref sink) = self.on_budget_exhausted {
-                        (sink.0)(cumulative, budget_cap);
-                    }
-                    break;
-                }
-            }
-
-            if detect_content_loop(&final_response) {
-                self.loop_strike_count += 1;
-
-                if self.loop_strike_count >= 2 {
-                    eprintln!(
-                        "\n{}",
-                        ts::danger(
-                            "  Auto-stopping: second content loop detected in this session."
-                        )
-                    );
-                    break;
-                }
-
-                eprintln!(
-                    "\n{}",
-                    ts::warning(format!(
-                        "  Warning: Detected repetitive content in LLM response. Possible content loop. [strike {}/2]",
-                        self.loop_strike_count
-                    ))
-                );
-
-                let confirmed = dialoguer::Confirm::new()
-                    .with_prompt("Continue the agentic loop?")
-                    .default(false)
-                    .interact()
-                    .unwrap_or(false);
-
-                if !confirmed {
-                    eprintln!("{}", "  Agentic loop stopped by user.".dimmed());
-                    break;
-                }
-            }
-        }
+        let total_input = outcome.totals.input_tokens;
+        let total_output = outcome.totals.output_tokens;
+        let total_cache_read = outcome.totals.cache_read_tokens;
+        let total_cache_creation = outcome.totals.cache_creation_tokens;
+        let result_reasoning = outcome.totals.reasoning_tokens;
+        let via_subscription = outcome.via_subscription;
+        let final_response = outcome.response;
 
         // Update session counters
         self.total_input_tokens += total_input;
@@ -1752,6 +612,1204 @@ message -- revise and call `update_plan` again.\n\n",
     }
 }
 
+/// Turn-scoped adapter binding the CLI session to the shared turn engine.
+///
+/// Holds the mutable session plus the turn context the engine's `TurnHost`
+/// callbacks need (config, tool definitions, scheduling name-sets, the caller's
+/// first-turn stream callback, and the sequential-path `additional_context`
+/// accrual). Each trait method holds the CLI-local work moved verbatim out of
+/// the old `Session::send` loop — hooks, plan-mode gating, tool-filters, MCP/
+/// team/subagent dispatch, approval prompts, and the json/TUI/stderr routing —
+/// so the emitted cadence is byte-for-byte preserved.
+struct TurnHostAdapter<'a> {
+    session: &'a mut AgentSession,
+    config: &'a CliConfig,
+    tool_defs: Vec<models::ToolDefinition>,
+    available_tool_names: HashSet<String>,
+    concurrency_safe_names: HashSet<String>,
+    plan_mode_mutating_names: HashSet<String>,
+    max_tokens: u32,
+    /// The caller's stream callback, used for the first completion only (the
+    /// continuation turns use `continuation_sink()`), matching the historical
+    /// first-vs-continuation text routing.
+    first_on_chunk: Option<StreamCallback>,
+    /// `PostToolUse` additional-context fragments accrued during the sequential
+    /// dispatch, flushed as a system message in `commit_tool_results`.
+    hook_additional_contexts: Vec<String>,
+}
+
+impl TurnHostAdapter<'_> {
+    /// First completion: primary stream (or the `--demo` synthesized rate-limit)
+    /// with the retry-then-fallback recovery ladder. Byte-for-byte the historical
+    /// first-call block, including the privacy-boundary re-validation after each
+    /// provider mutation and the demo-mode synthesis.
+    async fn complete_first(&mut self) -> Result<Completion> {
+        let on_chunk = self
+            .first_on_chunk
+            .take()
+            .expect("complete_first is called exactly once per turn");
+
+        let first_call_result = if self.session.demo_force_rate_limit {
+            self.session.demo_force_rate_limit = false;
+            eprintln!(
+                "  {}",
+                "DEMO: synthesizing rate-limit on primary model".dimmed()
+            );
+            Err(anyhow::Error::new(CliError::RateLimited {
+                provider: format!("{:?}", self.session.provider).to_lowercase(),
+                retry_after: Some(0),
+            }))
+        } else {
+            models::stream_completion(
+                self.config,
+                &self.session.provider,
+                &self.session.model,
+                &self.session.messages,
+                self.max_tokens,
+                Some(&self.tool_defs),
+                on_chunk,
+                self.session.thinking_budget_tokens,
+            )
+            .await
+        };
+
+        let result = match first_call_result {
+            Ok(r) => r,
+            Err(e) => {
+                let mut last_err = e;
+                let mut recovered: Option<_> = None;
+                let prefer_fallback = self
+                    .session
+                    .fallback_chain
+                    .as_ref()
+                    .zip(last_err.downcast_ref::<CliError>())
+                    .map(|(chain, err)| chain.should_rotate(err))
+                    .unwrap_or(false);
+                if !prefer_fallback {
+                    if let Some(cli_err) = last_err.downcast_ref::<CliError>() {
+                        if cli_err.is_retryable() {
+                            let delay = cli_err.retry_delay();
+                            // Suppress the raw stderr notice while the full-screen
+                            // TUI owns the terminal (it would bleed into the live
+                            // spinner frame); exec/REPL still surface it.
+                            if !crate::tui::tui_active() {
+                                eprintln!(
+                                    "  {}",
+                                    ts::warning(format!(
+                                        "Retrying in {}s: {}",
+                                        delay.as_secs(),
+                                        cli_err
+                                    ))
+                                );
+                            }
+                            tokio::time::sleep(delay).await;
+                            match models::stream_completion(
+                                self.config,
+                                &self.session.provider,
+                                &self.session.model,
+                                &self.session.messages,
+                                self.max_tokens,
+                                Some(&self.tool_defs),
+                                self.session.continuation_sink(),
+                                self.session.thinking_budget_tokens,
+                            )
+                            .await
+                            {
+                                Ok(r) => recovered = Some(r),
+                                Err(retry_err) => last_err = retry_err,
+                            }
+                        }
+                    }
+                }
+                if recovered.is_none() {
+                    if let Some(chain) = self.session.fallback_chain.clone() {
+                        let cli_err_kind = last_err
+                            .downcast_ref::<CliError>()
+                            .map(|c| (c.kind(), chain.should_rotate(c)));
+                        if let Some((kind, true)) = cli_err_kind {
+                            for fallback_model in chain.tail() {
+                                let prev_model = self.session.model.clone();
+                                let prev_provider = self.session.provider.clone();
+                                // Privacy-boundary guard: mutate provider/model and then
+                                // validate the boundary BEFORE calling stream_completion.
+                                // If the session is Local and the fallback is a cloud provider,
+                                // restore state and break fail-closed — never egress Local
+                                // session history to the network silently.
+                                let Some(fallback_provider) =
+                                    crate::models::try_detect_provider(fallback_model)
+                                else {
+                                    last_err = anyhow::anyhow!(
+                                        "Fallback model '{}' is not recognized; refusing silent provider routing.",
+                                        fallback_model
+                                    );
+                                    continue;
+                                };
+                                self.session.model = fallback_model.clone();
+                                self.session.provider = fallback_provider;
+                                if let Err(boundary_err) = self.session.validate_privacy_boundary() {
+                                    // Restore state so the session remains coherent.
+                                    self.session.model = prev_model;
+                                    self.session.provider = prev_provider;
+                                    last_err = boundary_err;
+                                    break;
+                                }
+                                eprintln!(
+                                    "  {}",
+                                    ts::warning(format!(
+                                        "↘ Falling back: {} → {} ({})",
+                                        prev_model, fallback_model, kind
+                                    ))
+                                );
+                                if let Some(sink) = self.session.on_fallback.as_ref() {
+                                    (sink.0)(&prev_model, fallback_model, kind);
+                                }
+                                let fallback_call = if self.session.demo_mode {
+                                    let demo_text = format!(
+                                        "[DEMO MODE] Synthesized response from `{}` — no real \
+                                         API call was made. The fallback chain is exercised but \
+                                         the upstream provider was not contacted.",
+                                        fallback_model
+                                    );
+                                    // In json-events mode emit as a MessageDelta;
+                                    // in human mode use the raw print! path.
+                                    if self.session.json_events {
+                                        crate::agent_events::AgentEvent::MessageDelta {
+                                            session_id: self.session.json_session_id.clone(),
+                                            text: demo_text.clone(),
+                                        }
+                                        .emit_stdout();
+                                    } else {
+                                        print!("{}", demo_text);
+                                    }
+                                    Ok(crate::models::CompletionResult {
+                                        text: demo_text,
+                                        tool_calls: vec![],
+                                        input_tokens: 0,
+                                        output_tokens: 0,
+                                        cache_read_input_tokens: 0,
+                                        cache_creation_input_tokens: 0,
+                                        via_subscription: true,
+                                        stop_reason: Some("end_turn".to_string()),
+                                        reasoning_output_tokens: 0,
+                                    })
+                                } else {
+                                    models::stream_completion(
+                                        self.config,
+                                        &self.session.provider,
+                                        &self.session.model,
+                                        &self.session.messages,
+                                        self.max_tokens,
+                                        Some(&self.tool_defs),
+                                        self.session.continuation_sink(),
+                                        self.session.thinking_budget_tokens,
+                                    )
+                                    .await
+                                };
+                                match fallback_call {
+                                    Ok(r) => {
+                                        recovered = Some(r);
+                                        break;
+                                    }
+                                    Err(rotate_err) => last_err = rotate_err,
+                                }
+                            }
+                        }
+                    }
+                }
+                match recovered {
+                    Some(r) => r,
+                    None => return Err(last_err),
+                }
+            }
+        };
+
+        Ok(completion_from_result(result))
+    }
+
+    /// Continuation completion after a tool batch: retry-only recovery (no
+    /// fallback rotation) with the privacy-boundary re-validated first — the
+    /// provider may have been mutated by the first call's fallback loop, and a
+    /// Local session must never stream its history to a cloud provider.
+    async fn complete_continuation(&mut self) -> Result<Completion> {
+        self.session.validate_privacy_boundary()?;
+        let continuation = match models::stream_completion(
+            self.config,
+            &self.session.provider,
+            &self.session.model,
+            &self.session.messages,
+            self.max_tokens,
+            Some(&self.tool_defs),
+            self.session.continuation_sink(),
+            self.session.thinking_budget_tokens,
+        )
+        .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                if let Some(cli_err) = e.downcast_ref::<CliError>() {
+                    if cli_err.is_retryable() {
+                        let delay = cli_err.retry_delay();
+                        // Suppress the raw stderr notice under the TUI (would
+                        // corrupt the live spinner frame); exec/REPL print it.
+                        if !crate::tui::tui_active() {
+                            eprintln!(
+                                "  {}",
+                                ts::warning(format!(
+                                    "Retrying in {}s: {}",
+                                    delay.as_secs(),
+                                    cli_err
+                                ))
+                            );
+                        }
+                        tokio::time::sleep(delay).await;
+                        models::stream_completion(
+                            self.config,
+                            &self.session.provider,
+                            &self.session.model,
+                            &self.session.messages,
+                            self.max_tokens,
+                            Some(&self.tool_defs),
+                            self.session.continuation_sink(),
+                            self.session.thinking_budget_tokens,
+                        )
+                        .await?
+                    } else {
+                        return Err(e);
+                    }
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+        Ok(completion_from_result(continuation))
+    }
+
+    /// Shared per-tool pre-dispatch check (availability, invalid args, plan-mode
+    /// gate on the sequential path, `PreToolUse` hooks, and tool-filters).
+    async fn prepare_tool_inner(&mut self, call: &ToolCallResponse, mode: DispatchMode) -> Prepared {
+        if !self.available_tool_names.contains(call.name.as_str()) {
+            return Prepared::PreEmpted {
+                block: ResultBlock {
+                    tool_use_id: call.id.clone(),
+                    content: format!("Tool '{}' is not available in this session.", call.name),
+                    is_error: true,
+                },
+            };
+        }
+        if let Some(block) = invalid_tool_arguments_block(call) {
+            return Prepared::PreEmpted {
+                block: content_block_to_result(block),
+            };
+        }
+
+        // Plan-mode mutating-tool gate applies to the sequential path (the
+        // concurrent read-only batch never contains mutating tools).
+        if mode == DispatchMode::Sequential
+            && matches!(
+                self.session.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            )
+            && !self.session.plan_approved
+            && self.plan_mode_mutating_names.contains(call.name.as_str())
+        {
+            let payload = serde_json::json!({
+                "ok": false,
+                "error": "plan_mode_unapproved",
+                "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` with a complete ordered plan, then await user approval. Do NOT call mutating tools yet."
+            });
+            return Prepared::PreEmpted {
+                block: ResultBlock {
+                    tool_use_id: call.id.clone(),
+                    content: payload.to_string(),
+                    is_error: true,
+                },
+            };
+        }
+
+        let hcfg = self.session.hooks_config.clone();
+        let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.session.model, call).await {
+            PreToolUseOutcome::Proceed(args) => args,
+            PreToolUseOutcome::Blocked(reason_text) => {
+                if !self.session.quiet {
+                    eprintln!(
+                        "  {} {} blocked by hook: {}",
+                        "->".dimmed(),
+                        call.name.bold(),
+                        ts::danger(&reason_text)
+                    );
+                }
+                return Prepared::PreEmpted {
+                    block: ResultBlock {
+                        tool_use_id: call.id.clone(),
+                        content: format!("Tool execution blocked by hook: {reason_text}"),
+                        is_error: true,
+                    },
+                };
+            }
+            PreToolUseOutcome::Stopped => {
+                if !self.session.quiet {
+                    eprintln!("  {} {} stopped by hook", "->".dimmed(), call.name.bold());
+                }
+                return Prepared::PreEmpted {
+                    block: ResultBlock {
+                        tool_use_id: call.id.clone(),
+                        content: "Tool execution stopped by hook.".to_string(),
+                        is_error: true,
+                    },
+                };
+            }
+        };
+
+        let legacy_args = value_to_legacy_args(&effective_args);
+        if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
+            &call.name,
+            &legacy_args,
+            self.session.allowed_tools.as_deref(),
+            &self.session.disallowed_tools,
+        ) {
+            return Prepared::PreEmpted {
+                block: ResultBlock {
+                    tool_use_id: call.id.clone(),
+                    content: serde_json::json!({
+                        "ok": false,
+                        "error": "tool_filter_violation",
+                        "rule": violation.rule,
+                        "message": violation.reason,
+                    })
+                    .to_string(),
+                    is_error: true,
+                },
+            };
+        }
+
+        Prepared::Proceed {
+            args: effective_args,
+        }
+    }
+}
+
+#[async_trait]
+impl TurnHost for TurnHostAdapter<'_> {
+    async fn complete(
+        &mut self,
+        phase: TurnPhase,
+        _sink: &mut (dyn FnMut(StreamEvent) + Send),
+    ) -> Result<Completion> {
+        // The CLI renders assistant text app-locally inside these calls (the
+        // caller's `on_chunk` for the first completion, `continuation_sink()`
+        // thereafter) to preserve byte-for-byte incremental output, so the
+        // engine's stream sink is intentionally unused here.
+        match phase {
+            TurnPhase::First => self.complete_first().await,
+            TurnPhase::Continuation => self.complete_continuation().await,
+        }
+    }
+
+    fn record_assistant(&mut self, completion: &Completion) {
+        let msg = build_assistant_message(&completion.outcome.text, &completion.outcome.tool_calls);
+        self.session.messages.push(msg);
+    }
+
+    fn classify(&self, call: &ToolCallResponse) -> ToolClass {
+        if call.name == "task" {
+            return ToolClass::Task;
+        }
+        let concurrent_eligible = self.session.skip_permissions
+            && self.concurrency_safe_names.contains(&call.name)
+            && !is_team_tool(&call.name)
+            && !call.name.starts_with("mcp_")
+            && call.name != "task";
+        if concurrent_eligible {
+            ToolClass::ConcurrentEligible
+        } else {
+            ToolClass::Other
+        }
+    }
+
+    async fn run_task_batch(&mut self, calls: &[ToolCallResponse]) -> Vec<ResultBlock> {
+        let hcfg = self.session.hooks_config.clone();
+        let mut result_blocks: Vec<ResultBlock> = Vec::new();
+
+        // Spawn all task tool calls concurrently via subagent manager
+        let mut task_spawn_results = Vec::new();
+        for tc in calls {
+            if !self.available_tool_names.contains(tc.name.as_str()) {
+                result_blocks.push(ResultBlock {
+                    tool_use_id: tc.id.clone(),
+                    content: format!("Tool '{}' is not available in this session.", tc.name),
+                    is_error: true,
+                });
+                continue;
+            }
+            if let Some(block) = invalid_tool_arguments_block(tc) {
+                result_blocks.push(content_block_to_result(block));
+                continue;
+            }
+
+            if matches!(
+                self.session.permission_mode,
+                crate::cli_options::PermissionMode::Plan
+            ) && !self.session.plan_approved
+            {
+                let payload = serde_json::json!({
+                    "ok": false,
+                    "error": "plan_mode_unapproved",
+                    "message": "Plan mode is active and the current plan has not been approved. Call `update_plan` first; subagent tasks are blocked until the user approves."
+                });
+                result_blocks.push(ResultBlock {
+                    tool_use_id: tc.id.clone(),
+                    content: payload.to_string(),
+                    is_error: true,
+                });
+                continue;
+            }
+
+            let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.session.model, tc).await {
+                PreToolUseOutcome::Proceed(args) => args,
+                PreToolUseOutcome::Blocked(reason_text) => {
+                    if !self.session.quiet {
+                        eprintln!(
+                            "  {} {} blocked by hook: {}",
+                            "->".dimmed(),
+                            tc.name.bold(),
+                            ts::danger(&reason_text)
+                        );
+                    }
+                    result_blocks.push(ResultBlock {
+                        tool_use_id: tc.id.clone(),
+                        content: format!("Tool execution blocked by hook: {reason_text}"),
+                        is_error: true,
+                    });
+                    continue;
+                }
+                PreToolUseOutcome::Stopped => {
+                    if !self.session.quiet {
+                        eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
+                    }
+                    result_blocks.push(ResultBlock {
+                        tool_use_id: tc.id.clone(),
+                        content: "Tool execution stopped by hook.".to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+            };
+
+            let legacy_args = value_to_legacy_args(&effective_args);
+            if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
+                &tc.name,
+                &legacy_args,
+                self.session.allowed_tools.as_deref(),
+                &self.session.disallowed_tools,
+            ) {
+                result_blocks.push(ResultBlock {
+                    tool_use_id: tc.id.clone(),
+                    content: serde_json::json!({
+                        "ok": false,
+                        "error": "tool_filter_violation",
+                        "rule": violation.rule,
+                        "message": violation.reason,
+                    })
+                    .to_string(),
+                    is_error: true,
+                });
+                continue;
+            }
+
+            let description = effective_args
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("subagent task")
+                .to_string();
+            let prompt = effective_args
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            if self.session.subagent_manager.is_none() {
+                self.session.subagent_manager = Some(crate::subagent::SubagentManager::new(
+                    self.config.clone(),
+                    self.session.model.clone(),
+                    crate::context::gather_system_context(),
+                    self.session.skip_permissions,
+                ));
+            }
+
+            hooks::run_hooks(
+                &hcfg,
+                hooks::HookEvent::SubagentStart,
+                &hooks::HookInput {
+                    event: "SubagentStart".to_string(),
+                    session_id: None,
+                    model: Some(self.session.model.clone()),
+                    tool_name: Some(tc.name.clone()),
+                    tool_args: Some(tc.arguments.clone()),
+                    tool_output: None,
+                    message: Some(format!(
+                        "subagent_spawn description={:?} prompt_len={}",
+                        description,
+                        prompt.len()
+                    )),
+                    tool_execution: None,
+                },
+            )
+            .await;
+
+            let mgr = self
+                .session
+                .subagent_manager
+                .as_ref()
+                .expect("subagent_manager was just initialized above");
+            let id_result = mgr.spawn(&description, &prompt).await;
+
+            hooks::run_hooks(
+                &hcfg,
+                hooks::HookEvent::SubagentStop,
+                &hooks::HookInput {
+                    event: "SubagentStop".to_string(),
+                    session_id: None,
+                    model: Some(self.session.model.clone()),
+                    tool_name: Some(tc.name.clone()),
+                    tool_args: Some(tc.arguments.clone()),
+                    tool_output: id_result
+                        .as_ref()
+                        .ok()
+                        .map(|id| format!("subagent_id={}", id)),
+                    message: id_result
+                        .as_ref()
+                        .err()
+                        .map(|err| format!("spawn_error: {:#}", err)),
+                    tool_execution: None,
+                },
+            )
+            .await;
+
+            task_spawn_results.push((tc.id.clone(), tc.name.clone(), effective_args, id_result));
+        }
+
+        if !task_spawn_results.is_empty() {
+            if let Some(ref mgr) = self.session.subagent_manager {
+                mgr.wait_all().await;
+            }
+        }
+
+        for (tool_use_id, tool_name, tool_args, id_result) in task_spawn_results {
+            let tool_result = match id_result {
+                Ok(ref id) => {
+                    if let Some(ref mgr) = self.session.subagent_manager {
+                        if let Some(sa_result) = mgr.get_result(id).await {
+                            let mut output = sa_result.output;
+                            if !sa_result.files_modified.is_empty() {
+                                output.push_str("\n\nFiles modified:\n");
+                                for f in &sa_result.files_modified {
+                                    output.push_str(&format!("  - {}\n", f));
+                                }
+                            }
+                            crate::tools::ToolResult {
+                                tool_name: "task".to_string(),
+                                success: true,
+                                output,
+                            }
+                        } else if let Some(sa_status) = mgr.get_status(id).await {
+                            crate::tools::ToolResult {
+                                tool_name: "task".to_string(),
+                                success: false,
+                                output: format!("Subagent {} finished with status: {}", id, sa_status),
+                            }
+                        } else {
+                            crate::tools::ToolResult {
+                                tool_name: "task".to_string(),
+                                success: false,
+                                output: format!("Subagent {} not found.", id),
+                            }
+                        }
+                    } else {
+                        crate::tools::ToolResult {
+                            tool_name: "task".to_string(),
+                            success: false,
+                            output: "Subagent manager not initialized.".to_string(),
+                        }
+                    }
+                }
+                Err(e) => crate::tools::ToolResult {
+                    tool_name: "task".to_string(),
+                    success: false,
+                    output: format!("Failed to spawn subagent: {:#}", e),
+                },
+            };
+
+            let sa_display_status = if tool_result.success {
+                ts::success("success").to_string()
+            } else {
+                ts::danger("failed").to_string()
+            };
+            eprintln!(
+                "  {} {} [{}]",
+                "->".dimmed(),
+                tool_name.bold(),
+                sa_display_status
+            );
+
+            hooks::run_hooks(
+                &hcfg,
+                hooks::HookEvent::PostToolUse,
+                &hooks::HookInput {
+                    event: "PostToolUse".to_string(),
+                    session_id: None,
+                    model: Some(self.session.model.clone()),
+                    tool_name: Some(tool_name.clone()),
+                    tool_args: Some(tool_args.clone()),
+                    tool_output: Some(tool_result.output.clone()),
+                    message: None,
+                    tool_execution: None,
+                },
+            )
+            .await;
+
+            hooks::run_hooks(
+                &hcfg,
+                hooks::HookEvent::ToolResultPersist,
+                &hooks::HookInput {
+                    event: "ToolResultPersist".to_string(),
+                    session_id: None,
+                    model: Some(self.session.model.clone()),
+                    tool_name: Some(tool_name),
+                    tool_args: Some(tool_args),
+                    tool_output: Some(tool_result.output.clone()),
+                    message: None,
+                    tool_execution: None,
+                },
+            )
+            .await;
+
+            result_blocks.push(ResultBlock {
+                tool_use_id,
+                content: tool_result.output,
+                is_error: !tool_result.success,
+            });
+        }
+
+        result_blocks
+    }
+
+    async fn prepare_tool(&mut self, call: &ToolCallResponse, mode: DispatchMode) -> Prepared {
+        self.prepare_tool_inner(call, mode).await
+    }
+
+    fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
+        let opts = crate::tools::ToolExecOptions {
+            require_confirmation: !self.session.skip_permissions,
+            auto_approve_safe: self.session.auto_approve_safe,
+            quiet: self.session.quiet,
+            approval_callback: self
+                .session
+                .on_tool_approval
+                .as_ref()
+                .map(|sink| sink.0.clone()),
+        };
+        let legacy = super::executor::ToolCall {
+            name: prepared.name.clone(),
+            args: value_to_legacy_args(&prepared.args),
+        };
+        Box::pin(async move {
+            match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
+                Ok(r) => ExecResult {
+                    ok: r.success,
+                    output: r.output,
+                },
+                Err(e) => ExecResult {
+                    ok: false,
+                    output: format!("tool error: {:#}", e),
+                },
+            }
+        })
+    }
+
+    async fn finish_parallel_tool(
+        &mut self,
+        prepared: PreparedCall,
+        result: ExecResult,
+    ) -> ResultBlock {
+        let hcfg = self.session.hooks_config.clone();
+        hooks::run_hooks(
+            &hcfg,
+            hooks::HookEvent::PostToolUse,
+            &hooks::HookInput {
+                event: "PostToolUse".to_string(),
+                session_id: None,
+                model: Some(self.session.model.clone()),
+                tool_name: Some(prepared.name.clone()),
+                tool_args: Some(prepared.args.clone()),
+                tool_output: Some(result.output.clone()),
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
+
+        hooks::run_hooks(
+            &hcfg,
+            hooks::HookEvent::ToolResultPersist,
+            &hooks::HookInput {
+                event: "ToolResultPersist".to_string(),
+                session_id: None,
+                model: Some(self.session.model.clone()),
+                tool_name: Some(prepared.name),
+                tool_args: Some(prepared.args),
+                tool_output: Some(result.output.clone()),
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
+
+        ResultBlock {
+            tool_use_id: prepared.id,
+            content: result.output,
+            is_error: !result.ok,
+        }
+    }
+
+    async fn execute_sequential_tool(
+        &mut self,
+        call: &ToolCallResponse,
+        args: serde_json::Value,
+    ) -> ExecResult {
+        let legacy = super::executor::ToolCall {
+            name: call.name.clone(),
+            args: value_to_legacy_args(&args),
+        };
+
+        let tool_result = if call.name == "update_plan" {
+            let payload = self.session.handle_update_plan(&args);
+            let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+            let message = payload
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("plan handled")
+                .to_string();
+            if !self.session.quiet {
+                let path_disp = self
+                    .session
+                    .current_plan_path
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default();
+                eprintln!(
+                    "  {} {} ({}{})",
+                    "->".dimmed(),
+                    "update_plan".bold(),
+                    message,
+                    if path_disp.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" -> {path_disp}")
+                    }
+                );
+            }
+            crate::tools::ToolResult {
+                tool_name: "update_plan".to_string(),
+                success,
+                output: payload.to_string(),
+            }
+        } else if is_team_tool(&call.name) {
+            // `None`: this orchestrator session has no per-teammate identity yet.
+            // Pass the executing teammate's name here once teammate-scoped
+            // sessions exist to enforce the message sender.
+            match execute_team_tool(&self.session.team_manager, &call.name, &legacy.args, None).await
+            {
+                Ok(r) => r,
+                Err(e) => crate::tools::ToolResult {
+                    tool_name: call.name.clone(),
+                    success: false,
+                    output: format!("tool error: {:#}", e),
+                },
+            }
+        } else if call.name.starts_with("mcp_") {
+            match execute_mcp_tool(&mut self.session.mcp_manager, &call.name, args.clone()).await {
+                Ok(r) => r,
+                Err(e) => crate::tools::ToolResult {
+                    tool_name: call.name.clone(),
+                    success: false,
+                    output: format!("tool error: {:#}", e),
+                },
+            }
+        } else {
+            let opts = crate::tools::ToolExecOptions {
+                require_confirmation: !self.session.skip_permissions,
+                auto_approve_safe: self.session.auto_approve_safe,
+                quiet: self.session.quiet,
+                approval_callback: self
+                    .session
+                    .on_tool_approval
+                    .as_ref()
+                    .map(|sink| sink.0.clone()),
+            };
+            match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
+                Ok(r) => r,
+                Err(e) => crate::tools::ToolResult {
+                    tool_name: call.name.clone(),
+                    success: false,
+                    output: format!("tool error: {:#}", e),
+                },
+            }
+        };
+
+        ExecResult {
+            ok: tool_result.success,
+            output: tool_result.output,
+        }
+    }
+
+    async fn finish_sequential_tool(
+        &mut self,
+        call: &ToolCallResponse,
+        args: serde_json::Value,
+        result: ExecResult,
+    ) -> ResultBlock {
+        let hcfg = self.session.hooks_config.clone();
+        let post_results = hooks::run_hooks(
+            &hcfg,
+            hooks::HookEvent::PostToolUse,
+            &hooks::HookInput {
+                event: "PostToolUse".to_string(),
+                session_id: None,
+                model: Some(self.session.model.clone()),
+                tool_name: Some(call.name.clone()),
+                tool_args: Some(args.clone()),
+                tool_output: Some(result.output.clone()),
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
+
+        let post_t = hooks::aggregate_transformers(&post_results);
+        let final_output = post_t.updated_mcp_tool_output.unwrap_or(result.output);
+        if let Some(ctx) = post_t.additional_context {
+            self.hook_additional_contexts.push(ctx);
+        }
+
+        hooks::run_hooks(
+            &hcfg,
+            hooks::HookEvent::ToolResultPersist,
+            &hooks::HookInput {
+                event: "ToolResultPersist".to_string(),
+                session_id: None,
+                model: Some(self.session.model.clone()),
+                tool_name: Some(call.name.clone()),
+                tool_args: Some(args.clone()),
+                tool_output: Some(final_output.clone()),
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
+
+        ResultBlock {
+            tool_use_id: call.id.clone(),
+            content: final_output,
+            is_error: !result.ok,
+        }
+    }
+
+    async fn commit_tool_results(&mut self, blocks: Vec<ResultBlock>, iteration: usize) {
+        let content_blocks: Vec<ContentBlock> = blocks
+            .into_iter()
+            .map(|b| ContentBlock::ToolResult {
+                tool_use_id: b.tool_use_id,
+                content: b.content,
+                is_error: b.is_error,
+            })
+            .collect();
+        self.session
+            .messages
+            .push(Message::blocks("user", content_blocks));
+
+        hooks::run_hooks(
+            &self.session.hooks_config,
+            hooks::HookEvent::PostToolBatch,
+            &hooks::HookInput {
+                event: "PostToolBatch".to_string(),
+                session_id: None,
+                model: Some(self.session.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: Some(format!("iteration={iteration}")),
+                tool_execution: None,
+            },
+        )
+        .await;
+
+        if !self.hook_additional_contexts.is_empty() {
+            let merged = std::mem::take(&mut self.hook_additional_contexts).join("\n\n");
+            self.session.messages.push(Message::text("system", merged));
+        }
+
+        eprintln!();
+    }
+
+    async fn confirm_tool_runaway(
+        &mut self,
+        tracker: &mut RunawayTracker,
+        calls: &[ToolCallResponse],
+    ) -> LoopControl {
+        let strike = tracker.bump_strike();
+
+        if strike >= 2 {
+            eprintln!(
+                "\n{}",
+                ts::danger("  Auto-stopping: second loop detected in this session.")
+            );
+            hooks::run_hooks(
+                &self.session.hooks_config,
+                hooks::HookEvent::StopFailure,
+                &hooks::HookInput {
+                    event: "StopFailure".to_string(),
+                    session_id: None,
+                    model: Some(self.session.model.clone()),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some("loop-detection auto-stop".to_string()),
+                    tool_execution: None,
+                },
+            )
+            .await;
+            return LoopControl::Break;
+        }
+
+        let loop_msg = format!(
+            "  Warning: Detected {} identical consecutive tool calls ({}). Possible loop. [strike {}/2]",
+            agiworkforce_agent_core::LOOP_DETECTION_THRESHOLD,
+            calls.first().map(|tc| tc.name.as_str()).unwrap_or("unknown"),
+            strike
+        );
+        eprintln!("\n{}", ts::warning(&loop_msg));
+        hooks::run_hooks(
+            &self.session.hooks_config,
+            hooks::HookEvent::Notification,
+            &hooks::HookInput {
+                event: "Notification".to_string(),
+                session_id: None,
+                model: Some(self.session.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: Some(loop_msg),
+                tool_execution: None,
+            },
+        )
+        .await;
+
+        hooks::run_hooks(
+            &self.session.hooks_config,
+            hooks::HookEvent::PermissionRequest,
+            &hooks::HookInput {
+                event: "PermissionRequest".to_string(),
+                session_id: None,
+                model: Some(self.session.model.clone()),
+                tool_name: calls.first().map(|tc| tc.name.clone()),
+                tool_args: calls.first().map(|tc| tc.arguments.clone()),
+                tool_output: None,
+                message: Some("loop-detection confirmation".to_string()),
+                tool_execution: None,
+            },
+        )
+        .await;
+
+        let confirmed = dialoguer::Confirm::new()
+            .with_prompt("Continue with these tool calls?")
+            .default(false)
+            .interact()
+            .unwrap_or(false);
+
+        if !confirmed {
+            eprintln!("{}", "  Agentic loop stopped by user.".dimmed());
+            hooks::run_hooks(
+                &self.session.hooks_config,
+                hooks::HookEvent::PermissionDenied,
+                &hooks::HookInput {
+                    event: "PermissionDenied".to_string(),
+                    session_id: None,
+                    model: Some(self.session.model.clone()),
+                    tool_name: calls.first().map(|tc| tc.name.clone()),
+                    tool_args: calls.first().map(|tc| tc.arguments.clone()),
+                    tool_output: None,
+                    message: Some("user rejected loop-detection confirmation".to_string()),
+                    tool_execution: None,
+                },
+            )
+            .await;
+            return LoopControl::Break;
+        }
+
+        tracker.clear_recent();
+        LoopControl::Continue
+    }
+
+    async fn confirm_content_loop(
+        &mut self,
+        tracker: &mut RunawayTracker,
+        _text: &str,
+    ) -> LoopControl {
+        let strike = tracker.bump_strike();
+
+        if strike >= 2 {
+            eprintln!(
+                "\n{}",
+                ts::danger("  Auto-stopping: second content loop detected in this session.")
+            );
+            return LoopControl::Break;
+        }
+
+        eprintln!(
+            "\n{}",
+            ts::warning(format!(
+                "  Warning: Detected repetitive content in LLM response. Possible content loop. [strike {}/2]",
+                strike
+            ))
+        );
+
+        let confirmed = dialoguer::Confirm::new()
+            .with_prompt("Continue the agentic loop?")
+            .default(false)
+            .interact()
+            .unwrap_or(false);
+
+        if !confirmed {
+            eprintln!("{}", "  Agentic loop stopped by user.".dimmed());
+            return LoopControl::Break;
+        }
+
+        LoopControl::Continue
+    }
+
+    fn turn_cost_usd(&self, totals: &agiworkforce_agent_core::UsageTotals) -> f64 {
+        crate::cost_ledger::dollars_for(
+            &self.session.model,
+            totals.input_tokens,
+            totals.output_tokens,
+            totals.cache_read_tokens,
+            totals.cache_creation_tokens,
+        )
+    }
+
+    fn on_event(&mut self, event: &TurnEvent) {
+        match event {
+            TurnEvent::IterationStarted {
+                tool_count,
+                iteration,
+                max,
+            } => {
+                eprintln!(
+                    "\n{}",
+                    format!(
+                        "  Executing {} tool{}... (iteration {}/{})",
+                        tool_count,
+                        if *tool_count == 1 { "" } else { "s" },
+                        iteration + 1,
+                        max
+                    )
+                    .dimmed()
+                );
+            }
+            TurnEvent::ParallelBatchStarted { names } => {
+                if !self.session.quiet {
+                    eprintln!(
+                        "  {} ({})",
+                        format!("running {} read-only tools in parallel", names.len()).dimmed(),
+                        names.join(", ")
+                    );
+                }
+            }
+            TurnEvent::ToolStarted { id, name, args, .. } => {
+                emit_tool_event(
+                    self.session.on_tool_event.as_ref(),
+                    crate::tui::app_event::TuiAppEvent::ToolStarted {
+                        call_id: id.clone(),
+                        name: name.clone(),
+                        summary: tool_event_summary(name, args),
+                    },
+                );
+                if self.session.json_events {
+                    crate::agent_events::AgentEvent::RunningTool {
+                        session_id: self.session.json_session_id.clone(),
+                        name: name.clone(),
+                        args_redacted: crate::agent_events::redact_args(&args.to_string()),
+                    }
+                    .emit_stdout();
+                }
+            }
+            TurnEvent::ToolFinished {
+                id,
+                name,
+                ok,
+                output,
+                duration_ms,
+                ..
+            } => {
+                if !self.session.quiet {
+                    let status = if *ok {
+                        ts::success("success").to_string()
+                    } else {
+                        ts::danger("failed").to_string()
+                    };
+                    eprintln!("  {} {} [{}]", "->".dimmed(), name.bold(), status);
+                }
+                if self.session.json_events {
+                    crate::agent_events::AgentEvent::ToolResult {
+                        session_id: self.session.json_session_id.clone(),
+                        name: name.clone(),
+                        duration_ms: *duration_ms,
+                        ok: *ok,
+                    }
+                    .emit_stdout();
+                }
+                emit_tool_event(
+                    self.session.on_tool_event.as_ref(),
+                    crate::tui::app_event::TuiAppEvent::ToolCompleted {
+                        call_id: id.clone(),
+                        status: if *ok {
+                            crate::tui::app_event::ToolStatus::Succeeded
+                        } else {
+                            crate::tui::app_event::ToolStatus::Failed
+                        },
+                        output: output.chars().take(200).collect::<String>(),
+                    },
+                );
+            }
+            TurnEvent::BudgetExceeded {
+                cumulative_usd,
+                cap_usd,
+            } => {
+                eprintln!(
+                    "\n{}",
+                    ts::warning(format!(
+                        "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
+                        cumulative_usd, cap_usd
+                    ))
+                );
+                // Emit the machine-readable event via the injected callback.
+                // lib.rs wires this only when --json-events is active so that
+                // stdout is never polluted in text/json-pretty output modes.
+                if let Some(ref sink) = self.session.on_budget_exhausted {
+                    (sink.0)(*cumulative_usd, *cap_usd);
+                }
+            }
+            // Text/reasoning deltas are rendered app-locally inside `complete`;
+            // the fallback rotation fires the session's own `on_fallback` sink
+            // there; `TurnComplete` is observed post-loop by the orchestrator.
+            TurnEvent::TextDelta { .. }
+            | TurnEvent::ReasoningDelta { .. }
+            | TurnEvent::FallbackRotated { .. }
+            | TurnEvent::TurnComplete { .. } => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1792,8 +1850,8 @@ mod tests {
     //
     // Before the fix, the fallback loop mutated self.provider and called
     // stream_completion without re-running validate_privacy_boundary.  The
-    // guards added in the fallback loop and before every continuation call are
-    // what these tests exercise as regression verifiers.
+    // guards in the fallback loop and before every continuation call are what
+    // these tests exercise as regression verifiers.
     // -----------------------------------------------------------------------
 
     fn make_local_session() -> AgentSession {
@@ -1820,10 +1878,6 @@ mod tests {
     /// to Anthropic on a Local session) and asserts that validate_privacy_boundary
     /// returns an error — proving the guard prevents stream_completion from being
     /// reached with cloud credentials on a Local session.
-    ///
-    /// Without the fix: the fallback loop mutated self.provider and called
-    /// stream_completion unconditionally.  With the fix: validate_privacy_boundary()
-    /// is called after mutation; if it fails, state is restored and the loop breaks.
     #[test]
     fn local_session_cloud_fallback_blocked_by_privacy_boundary() {
         let mut session = make_local_session();
