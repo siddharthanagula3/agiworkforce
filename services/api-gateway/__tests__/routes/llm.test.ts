@@ -82,28 +82,38 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
     expect(() => resolveProvider('totally-bogus-model-id')).toThrow(/Unsupported model/);
   });
 
-  it('throws 400 for catalog-known models from non-proxied providers', () => {
-    // The api-gateway only proxies anthropic/openai/google. Other
-    // providers in models.json (xAI, DeepSeek, Perplexity, Qwen,
-    // Moonshot, Zhipu, LM Studio, Ollama) reach users via desktop BYOK
-    // or providerStream — never via this proxy. The route must reject
-    // them explicitly rather than silently route to the wrong upstream.
-    //
-    // grok-4.3 is xAI; deepseek-v4-flash is DeepSeek; sonar is Perplexity.
-    // All three are catalog-known but NOT proxied here.
-    expect(() => resolveProvider('grok-4.3')).toThrow(/does not proxy/);
-    expect(() => resolveProvider('deepseek-v4-flash')).toThrow(/does not proxy/);
-    expect(() => resolveProvider('sonar')).toThrow(/does not proxy/);
+  it('resolves the Wave-2-widened cloud providers via the catalog', () => {
+    // Restructure Wave 2 step 2 wired every cloud adapter from
+    // packages/providers into the gateway, so models from xAI, DeepSeek,
+    // and Perplexity now resolve instead of failing closed. Local-device
+    // providers (lmstudio, and ollama unless the server deploys one)
+    // remain outside the managed proxy; catalog-unknown models still 400.
+    expect(resolveProvider('grok-4.3')).toBe('xai');
+    expect(resolveProvider('deepseek-v4-flash')).toBe('deepseek');
+    expect(resolveProvider('sonar')).toBe('perplexity');
   });
 
   it('lookup is consistent with the catalog provider field for every Hobby model', () => {
     // For each model in the Hobby allow-list, verify that:
-    //   - if its catalog provider is anthropic/openai/google, resolveProvider() succeeds
+    //   - if its catalog provider is a proxied cloud provider, resolveProvider() succeeds
     //   - otherwise resolveProvider() throws (gateway can't proxy it).
     // This keeps the proxy honest: any new economy-tier model that
     // joins models.json must EITHER be on a proxied provider OR be
     // explicitly rejected — there's no silent fallthrough.
-    const proxiedProviders = new Set(['anthropic', 'openai', 'google']);
+    const proxiedProviders = new Set([
+      'anthropic',
+      'openai',
+      'google',
+      'deepseek',
+      'xai',
+      'perplexity',
+      'groq',
+      'mistral',
+      'moonshot',
+      'qwen',
+      'zhipu',
+      'open_router',
+    ]);
     for (const id of HOBBY_ALLOWED_MODELS) {
       const meta = modelsCatalog.models[id];
       if (!meta) continue;
