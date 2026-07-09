@@ -322,17 +322,28 @@ impl PolicyEngine {
         cwd: &Path,
         context: &PolicyContext,
     ) -> Result<PolicyDecision> {
-        let dangerous_patterns = ["rm -rf /", "format ", "del /s", "deltree", "mkfs", "dd if="];
-
-        let command_lower = command.to_lowercase();
-        for pattern in &dangerous_patterns {
-            if command_lower.contains(pattern) {
+        // Command-content decision core: the shared execpolicy gate
+        // (`sys/security/exec_gate`), replacing this engine's bespoke
+        // dangerous-pattern list (Wave 5a). Mapping is same-or-stricter than
+        // the old list: previously-prompted patterns still prompt (or are now
+        // denied outright when catastrophic); nothing previously blocked or
+        // prompted becomes allowed. `Allow` only means "no content-based
+        // objection" — the cwd scope / trust-level checks below still apply.
+        match crate::sys::security::exec_gate::evaluate_command(command) {
+            agiworkforce_execpolicy::Decision::Forbidden => {
+                return Ok(PolicyDecision::Deny {
+                    reason: format!("Command blocked by execution policy: {}", command),
+                    can_elevate: false,
+                });
+            }
+            agiworkforce_execpolicy::Decision::Prompt => {
                 return Ok(PolicyDecision::RequireApproval {
                     risk_level: RiskLevel::Critical,
                     reason: format!("Potentially destructive command: {}", command),
                     allow_remember: false,
                 });
             }
+            agiworkforce_execpolicy::Decision::Allow => {}
         }
 
         match self.scope_manager.check_path_scope(cwd, false)? {

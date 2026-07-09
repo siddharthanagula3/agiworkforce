@@ -15,6 +15,9 @@ pub mod dispatch_hmac;
 pub mod dm_protection;
 pub mod encryption;
 pub mod env_filter;
+pub mod exec_gate;
+#[cfg(test)]
+mod exec_gate_parity_tests;
 pub mod guardrails;
 pub mod log_redaction;
 pub mod machine_key;
