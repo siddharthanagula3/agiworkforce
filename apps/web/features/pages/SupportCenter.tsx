@@ -11,8 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shar
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Textarea } from '@shared/ui/textarea';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@shared/ui/accordion';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@agiworkforce/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import {
   HelpCircle,
   Book,

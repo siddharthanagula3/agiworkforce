@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Progress } from '@shared/ui/progress';
+import { Progress } from '@agiworkforce/ui';
 import { useBillingStore } from '@/stores/unified/auth';
 
 type UsageResponse = {
