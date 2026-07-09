@@ -231,3 +231,168 @@ describe('assembleOpenAIWireResponse (non-streaming)', () => {
     ).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01: signed thinking continuity across
+// a server-side tool-loop step.
+// ---------------------------------------------------------------------------
+
+describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
+  /** Anthropic streams a thinking block as text-carrying thinking-deltas then
+   *  one signature-carrying delta with empty text, then the tool_use. */
+  const thinkingThenToolUse: StreamChunk[] = [
+    { type: 'thinking-delta', delta: 'Let me ' },
+    { type: 'thinking-delta', delta: 'check the time.' },
+    { type: 'thinking-delta', delta: '', signature: 'sig-abc123' },
+    { type: 'text-delta', delta: 'Checking now.' },
+    { type: 'tool-use-start', toolUseId: 'call_1', name: 'get_time', vendorIndex: 1 },
+    { type: 'tool-use-delta', toolUseId: 'call_1', deltaJson: '{}' },
+    { type: 'tool-use-end', toolUseId: 'call_1' },
+    { type: 'stop', reason: 'tool_use' },
+  ];
+
+  it('reconstructs signed thinking blocks and tag-free text without altering the wire', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: 'claude-x',
+      wireMode: 'legacy-web',
+      now: NOW,
+    });
+    const wire: Record<string, unknown>[] = [];
+    for (const chunk of thinkingThenToolUse) wire.push(...assembler.sseChunks(chunk));
+
+    // Side-channel: one closed block, text + signature intact.
+    expect(assembler.canonicalThinkingBlocks()).toEqual([
+      { type: 'thinking', thinking: 'Let me check the time.', signature: 'sig-abc123' },
+    ]);
+    // Tag-free assistant text (NO <thinking> markers — those are wire-only).
+    expect(assembler.canonicalText()).toBe('Checking now.');
+
+    // The CLIENT-facing wire is unchanged: it still renders the thinking as
+    // inline <thinking>/</thinking> content deltas and never leaks the
+    // signature. This is the locked public contract.
+    const contents = wire
+      .map(
+        (e) =>
+          (e as { choices?: Array<{ delta?: { content?: string } }> }).choices?.[0]?.delta?.content,
+      )
+      .filter((c): c is string => typeof c === 'string');
+    expect(contents).toEqual([
+      '<thinking>',
+      'Let me ',
+      'check the time.',
+      '',
+      '</thinking>',
+      'Checking now.',
+    ]);
+    expect(JSON.stringify(wire)).not.toContain('sig-abc123');
+  });
+
+  it('captures multiple signed thinking blocks, delimited by their signatures', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: 'claude-x',
+      wireMode: 'legacy-web',
+      now: NOW,
+    });
+    const chunks: StreamChunk[] = [
+      { type: 'thinking-delta', delta: 'first' },
+      { type: 'thinking-delta', delta: '', signature: 'sig-1' },
+      { type: 'thinking-delta', delta: 'second' },
+      { type: 'thinking-delta', delta: '', signature: 'sig-2' },
+      { type: 'stop', reason: 'tool_use' },
+    ];
+    for (const chunk of chunks) assembler.ingest(chunk);
+    expect(assembler.canonicalThinkingBlocks()).toEqual([
+      { type: 'thinking', thinking: 'first', signature: 'sig-1' },
+      { type: 'thinking', thinking: 'second', signature: 'sig-2' },
+    ]);
+  });
+
+  it('omits a dangling unsigned thinking block (only signed blocks round-trip)', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: 'claude-x',
+      wireMode: 'legacy-web',
+      now: NOW,
+    });
+    assembler.ingest({ type: 'thinking-delta', delta: 'no signature here' });
+    assembler.ingest({ type: 'stop', reason: 'end_turn' });
+    expect(assembler.canonicalThinkingBlocks()).toEqual([]);
+  });
+
+  it('captures nothing for a non-thinking stream (behavior-identical path)', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: 'gpt-x',
+      wireMode: 'openai-passthrough',
+      now: NOW,
+    });
+    assembler.ingest({ type: 'text-delta', delta: 'hello' });
+    assembler.ingest({ type: 'stop', reason: 'end_turn' });
+    expect(assembler.canonicalThinkingBlocks()).toEqual([]);
+    expect(assembler.canonicalText()).toBe('hello');
+  });
+});
+
+describe('openAIWireRequestToChatRequest __canonicalThinking reconstruction', () => {
+  it('prepends signed ThinkingBlocks before text and tool_use on the assistant turn', () => {
+    const req = openAIWireRequestToChatRequest({
+      model: 'claude-x',
+      messages: [
+        { role: 'user', content: 'what time is it?' },
+        {
+          role: 'assistant',
+          content: 'Checking now.',
+          tool_calls: [
+            { id: 'call_1', type: 'function', function: { name: 'get_time', arguments: '{}' } },
+          ],
+          __canonicalThinking: [
+            { type: 'thinking', thinking: 'Let me check the time.', signature: 'sig-abc123' },
+          ],
+        },
+        { role: 'tool', tool_call_id: 'call_1', content: '12:00' },
+      ],
+    });
+
+    const assistant = req.messages.find((m) => m.role === 'assistant');
+    expect(assistant?.content).toEqual([
+      { type: 'thinking', thinking: 'Let me check the time.', signature: 'sig-abc123' },
+      { type: 'text', text: 'Checking now.' },
+      { type: 'tool_use', id: 'call_1', name: 'get_time', input: {} },
+    ]);
+  });
+
+  it('drops unsigned thinking blocks (an unsigned block would be rejected by Anthropic)', () => {
+    const req = openAIWireRequestToChatRequest({
+      model: 'claude-x',
+      messages: [
+        {
+          role: 'assistant',
+          content: 'hi',
+          tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }],
+          __canonicalThinking: [{ type: 'thinking', thinking: 'unsigned' }],
+        },
+      ],
+    });
+    const assistant = req.messages.find((m) => m.role === 'assistant');
+    expect(assistant?.content).toEqual([
+      { type: 'text', text: 'hi' },
+      { type: 'tool_use', id: 'c1', name: 'f', input: {} },
+    ]);
+  });
+
+  it('is unchanged for an assistant message without __canonicalThinking', () => {
+    const req = openAIWireRequestToChatRequest({
+      model: 'claude-x',
+      messages: [
+        {
+          role: 'assistant',
+          content: 'hi',
+          tool_calls: [{ id: 'c1', type: 'function', function: { name: 'f', arguments: '{}' } }],
+        },
+      ],
+    });
+    const assistant = req.messages.find((m) => m.role === 'assistant');
+    expect(assistant?.content).toEqual([
+      { type: 'text', text: 'hi' },
+      { type: 'tool_use', id: 'c1', name: 'f', input: {} },
+    ]);
+  });
+});
