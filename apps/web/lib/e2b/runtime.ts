@@ -30,7 +30,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import type { E2BExecutor, ExecutionResult } from './types';
+import type { E2BExecutor, ExecutionResult, SandboxFileEntry } from './types';
 import { e2bExecutionEnabled } from './gate';
 import {
   getE2BSession,
@@ -250,6 +250,28 @@ export async function getE2BExecutor(conversationId?: string): Promise<E2BExecut
         return { ok: true, output: `Created ${path}` };
       } catch (err) {
         return fail(err);
+      }
+    },
+    async listFiles(path): Promise<SandboxFileEntry[] | null> {
+      try {
+        const entries = await sandbox.files.list(path);
+        return entries.map((e) => ({
+          path: e.path,
+          name: e.name,
+          isDir: e.type === 'dir',
+          byteSize: typeof e.size === 'number' ? e.size : 0,
+        }));
+      } catch (err) {
+        logger.warn({ err, path }, '[e2b] listFiles failed');
+        return null;
+      }
+    },
+    async readFileBytes(path): Promise<Uint8Array | null> {
+      try {
+        return await sandbox.files.read(path, { format: 'bytes' });
+      } catch (err) {
+        logger.warn({ err, path }, '[e2b] readFileBytes failed');
+        return null;
       }
     },
     async dispose(): Promise<void> {
