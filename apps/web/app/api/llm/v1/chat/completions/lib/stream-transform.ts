@@ -550,17 +550,30 @@ export async function buildStreamResponse(
  * shapes per provider.
  *
  * `[DONE]` is emitted unconditionally once the adapter's AsyncIterable is
- * exhausted -- safe for every provider wired through this function SO FAR,
- * but not automatically safe for every future one: the canonical `Stream
- * Chunk` layer has no `[DONE]`-equivalent chunk type at all (it's purely an
- * OpenAI-WIRE-LEVEL sentinel `OpenAIWireAssembler` never emits on its own),
- * so appending it here unconditionally is only correct because NEITHER
- * Anthropic's nor Google's raw wire ever contained its own `[DONE]` for
- * `translateAnthropicStream`/`translateGeminiStream` to preserve or
- * duplicate (confirmed for Google via stream-transform.google-byte-parity.
- * test.ts's `[DONE]` assertion). A provider whose raw wire already contains
- * its own `[DONE]` (OpenAI's Chat Completions SSE does) WOULD double it up
- * -- revisit this before wiring OpenAI through this function.
+ * exhausted -- the canonical `StreamChunk` layer has no `[DONE]`-equivalent
+ * chunk type at all (it's purely an OpenAI-WIRE-LEVEL sentinel
+ * `OpenAIWireAssembler` never emits on its own), so appending it here
+ * unconditionally was only verified safe for Anthropic/Google's raw wires,
+ * neither of which ever contained their own `[DONE]` (confirmed for Google
+ * via stream-transform.google-byte-parity.test.ts's `[DONE]` assertion).
+ * CONFIRMED SAFE for OpenAI too (task #34's OpenAI slice), for a different
+ * reason: OpenAI's real Chat Completions SSE DOES contain its own `[DONE]`,
+ * but `createOpenAIAdapter` consumes it via the official `openai` SDK's
+ * `sdk.chat.completions.create()` stream helper, which parses SSE internally
+ * and treats `[DONE]` as "end the async iterable" -- it never surfaces as a
+ * yielded chunk object for `translateOpenAIStream` to see or re-emit. So
+ * `[DONE]` never reaches this function's input side for ANY provider wired
+ * through it; the one appended here is always the only one on the wire.
+ *
+ * `wireMode` is caller-supplied (route.ts's `ADAPTER_PROVIDERS` table, one
+ * per provider) rather than hardcoded, because OpenAI's byte-stable wire is
+ * NOT `'legacy-web'` -- unlike Anthropic/Google, whose legacy providers
+ * reshape their vendor's native wire into an OpenAI-like shape, OpenAI's
+ * legacy provider (apps/web/lib/llm-providers/openai.ts) does zero internal
+ * reshaping and returns real upstream SSE near-verbatim (confirmed via
+ * stream-transform.openai-byte-parity.test.ts's captured bytes) -- see
+ * `OpenAIWireAssemblerOptions.wireMode`'s `'openai-passthrough'` docs for
+ * what that mode reconstructs.
  *
  * `streamStartedAt` is a CALLER-supplied timestamp, not computed internally
  * with `Date.now()` here -- unlike `buildStreamResponse`, which can safely
@@ -584,6 +597,11 @@ export async function buildAdapterStreamResponse(
   // See buildStreamResponse's identical parameter for why this is unused.
   _token: string,
   streamStartedAt: number,
+  // Defaults to 'legacy-web' so every existing call site (Anthropic/Google,
+  // both wired before this parameter existed) is unaffected. New/updated
+  // call sites pass the provider's own wireMode explicitly (route.ts reads
+  // it off ADAPTER_PROVIDERS).
+  wireMode: 'legacy-web' | 'openai-passthrough' = 'legacy-web',
 ): Promise<NextResponse> {
   const {
     requestId,
@@ -605,7 +623,7 @@ export async function buildAdapterStreamResponse(
   // Wire-visible model id -- identical rule to buildStreamResponse.
   const responseModelName = usedFallback ? chatRequest.model : requestedModel;
 
-  const assembler = new OpenAIWireAssembler({ model: responseModelName, wireMode: 'legacy-web' });
+  const assembler = new OpenAIWireAssembler({ model: responseModelName, wireMode });
   const usage = createUsageAccumulator();
   const encoder = new TextEncoder();
   let firstTokenTimestampMs: number | null = null;

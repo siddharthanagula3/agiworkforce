@@ -64,6 +64,22 @@ describe('translateChatRequestToResponses', () => {
 
     expect(params.reasoning?.effort).toBe('high');
   });
+
+  it('uses an explicit req.effort directly, bypassing the budgetTokens-derived heuristic', () => {
+    // thinkingBudgetToEffort would map a 32000-token budget to 'xhigh' (>= 30000) --
+    // req.effort:'medium' must win when both are present.
+    const params = translateChatRequestToResponses(
+      {
+        ...request,
+        model: 'gpt-5.5',
+        effort: 'medium',
+        thinking: { type: 'enabled', budgetTokens: 32000 },
+      },
+      { compat },
+    );
+
+    expect(params.reasoning?.effort).toBe('medium');
+  });
 });
 
 describe('translateChatRequest', () => {

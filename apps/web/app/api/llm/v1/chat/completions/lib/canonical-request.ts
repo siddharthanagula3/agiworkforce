@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   openAIWireRequestToChatRequest,
+  supportsOpenAIReasoningEffort,
   type OpenAIWireChatRequest,
   type OpenAIWireMessage,
   type OpenAIWireToolCall,
@@ -306,6 +307,76 @@ export function buildGoogleChatRequest(processed: ProcessedRequest): ChatRequest
   const chatRequest = toCanonicalChatRequest(processed);
   const thinking = toCanonicalGoogleThinking(processed.provider, processed.llmRequest.effort);
   if (thinking !== undefined) chatRequest.thinking = thinking;
+  return chatRequest;
+}
+
+/**
+ * Reproduces `apps/web/lib/llm-providers/openai.ts`'s `normalizeReasoningEffort` exactly:
+ * `low`/`medium`/`high` pass through UNCONDITIONALLY (legacy never model-gates these three
+ * tiers at all); `xhigh` requires the model to support it (`supportsOpenAIReasoningEffort`)
+ * or is DROPPED to `undefined` -- never downgraded. `effort` here is `llmRequest.effort`,
+ * which request-processor.ts already pre-remapped through `OPENAI_REASONING_EFFORT` (a
+ * same-valued lookup for low/medium/high/xhigh, `undefined` for 'max' -- OpenAI has no Max
+ * tier), so this only ever sees one of those four tiers or undefined.
+ *
+ * FOUND while wiring OpenAI (task #34's OpenAI slice): `packages/providers/openai/src/
+ * translate.ts`'s `resolveOpenAIReasoningEffortForModel` (used generally, including by this
+ * function's own caller further down) has a DIFFERENT, richer fallback ladder than legacy --
+ * on a model that doesn't support `xhigh`, it DOWNGRADES to `high` instead of dropping the
+ * field entirely (see packages/providers/openai/src/__tests__/translate-responses.test.ts's
+ * "downgrades xhigh budgets to high" test, which intentionally locks that richer behavior
+ * for translateChatRequest's OTHER callers). That's a real, response-affecting divergence
+ * for the web v1 route specifically (a different reasoning_effort value is a materially
+ * different request to OpenAI, not just a wire-shape nuance) -- NOT reproduced here or
+ * changed in the shared function; this dedicated resolver exists so the web v1 route gets
+ * legacy's exact tier-or-nothing behavior without altering `resolveOpenAIReasoningEffortForModel`
+ * for api-gateway/CLI/desktop, who may genuinely want the graceful-degrade behavior.
+ *
+ * Uses `processed.llmRequest.model` (the ORIGINAL, pre-apiModelId-mapped id) rather than
+ * `toApiModelId`'s output, matching legacy exactly -- `openai.ts`'s `normalizeReasoningEffort`
+ * was always called with `request.model`, the un-mapped id `LLMProviderFactory` only rewrites
+ * on a local copy immediately before the HTTP call (see `toApiModelId`'s docstring above).
+ */
+export function resolveWebOpenAIReasoningEffort(
+  provider: string,
+  effort: ProcessedRequest['llmRequest']['effort'],
+  model: string,
+): 'low' | 'medium' | 'high' | 'xhigh' | undefined {
+  if (provider !== 'openai') return undefined;
+  const normalized = typeof effort === 'string' ? effort.toLowerCase() : undefined;
+  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+    return normalized;
+  }
+  if (normalized === 'xhigh') {
+    const supportsXhigh = supportsOpenAIReasoningEffort(
+      { provider: 'openai', id: normalizeModelId(model) ?? model },
+      'xhigh',
+    );
+    return supportsXhigh ? 'xhigh' : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Compose the canonical `ChatRequest` for an OpenAI dispatch. OpenAI's sibling of
+ * `buildAnthropicChatRequest`/`buildGoogleChatRequest` -- same `toCanonicalChatRequest`
+ * base, but sets `chatRequest.effort` (not `thinking`: legacy `openai.ts` only ever sent a
+ * categorical `reasoning_effort` string, never a budget/thinking object) from
+ * `resolveWebOpenAIReasoningEffort`. `packages/providers/openai/src/translate.ts`'s
+ * `translateChatRequest` reads `ChatRequest.effort` directly when present, bypassing its
+ * own `thinking.budgetTokens`-derived heuristic (task #34's OpenAI slice) -- since
+ * `resolveWebOpenAIReasoningEffort` already applied legacy's exact model-gating, the value
+ * set here is passed straight through by `resolveOpenAIReasoningEffortForModel`'s "already
+ * supported" fast path with no further remapping.
+ */
+export function buildOpenAIChatRequest(processed: ProcessedRequest): ChatRequest {
+  const chatRequest = toCanonicalChatRequest(processed);
+  const effort = resolveWebOpenAIReasoningEffort(
+    processed.provider,
+    processed.llmRequest.effort,
+    processed.llmRequest.model,
+  );
+  if (effort !== undefined) chatRequest.effort = effort;
   return chatRequest;
 }
 

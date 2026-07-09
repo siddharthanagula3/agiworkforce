@@ -47,8 +47,30 @@ export async function* translateOpenAIStream(
   const toolCalls = new Map<number, ToolCallState>();
   let lastUsage: OpenAIChatCompletionChunk['usage'] | undefined;
   let stopEmitted = false;
+  let metaEmitted = false;
 
   for await (const chunk of chunks) {
+    // id/created/system_fingerprint/service_tier are stable across a whole
+    // OpenAI stream (every real chunk repeats the same values) -- emit once,
+    // from the first chunk seen, as a StreamChunkResponseMeta. Task #34's
+    // OpenAI slice: OpenAIWireAssembler's wireMode:'openai-passthrough' uses
+    // these instead of synthesizing its own id/created, closing the gap
+    // between the StreamChunk round-trip and legacy's near-verbatim raw
+    // passthrough. A consumer that doesn't recognize this chunk type simply
+    // ignores it (see StreamChunkResponseMeta's docstring).
+    if (!metaEmitted) {
+      metaEmitted = true;
+      yield {
+        type: 'response-meta',
+        ...(chunk.id !== undefined ? { id: chunk.id } : {}),
+        ...(chunk.created !== undefined ? { created: chunk.created } : {}),
+        ...(chunk.system_fingerprint !== undefined
+          ? { systemFingerprint: chunk.system_fingerprint }
+          : {}),
+        ...(chunk.service_tier !== undefined ? { serviceTier: chunk.service_tier } : {}),
+      };
+    }
+
     if (chunk.usage) {
       lastUsage = chunk.usage;
     }
