@@ -10,6 +10,7 @@ import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
 import type { ProcessedRequest } from './request-processor';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
+import { withSseHeartbeat } from './sse-heartbeat';
 // ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. · no extra imports needed
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
@@ -519,7 +520,9 @@ export async function buildStreamResponse(
     streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
   }
 
-  return new NextResponse(reconciledStream, { headers: streamHeaders });
+  // Idle heartbeat, provider-independent (see sse-heartbeat.ts) -- covers
+  // every provider dispatched through this function, not just Anthropic.
+  return new NextResponse(withSseHeartbeat(reconciledStream), { headers: streamHeaders });
 }
 
 /**
@@ -770,5 +773,10 @@ export async function buildAdapterStreamResponse(
     streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
   }
 
-  return new NextResponse(body, { headers: streamHeaders });
+  // Idle heartbeat, provider-independent (see sse-heartbeat.ts) -- the
+  // Anthropic SDK swallows the vendor's own event:ping keepalive frames
+  // before translateAnthropicStream ever sees them, so this is the only
+  // mechanism this path has to keep a long-silent connection (e.g. extended
+  // thinking with no visible output) alive.
+  return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }
