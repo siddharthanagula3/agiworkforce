@@ -13,7 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@agiworkforce/types": "workspace:*"
+    "@agiworkforce/types": "workspace:*",
+    "zod": "^4.4.2"
   },
   "devDependencies": {
     "vitest": "^4.1.8"

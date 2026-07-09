@@ -13,6 +13,7 @@
  */
 
 import type { SharedArtifact } from '@agiworkforce/types';
+import type { ArtifactWireDelta } from './cloud-contracts/sync';
 
 /**
  * A pulled cloud artifact: the canonical `SharedArtifact` plus the sync tombstone. Surfaces map
@@ -65,23 +66,10 @@ export function selectArtifactsToPush(artifacts: ReadonlyArray<SharedArtifact>):
   return artifacts.filter((a) => !isDerivedArtifact(a));
 }
 
-/** The snake_case artifact delta returned by `GET /api/chat/sync` (migration 0039). */
-export interface ArtifactWireDelta {
-  id: string;
-  conversation_id: string;
-  message_id: string | null;
-  title: string | null;
-  artifact_type: string;
-  language: string | null;
-  content: string;
-  current_version: number;
-  pinned: boolean;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  server_version: string;
-}
+// The snake_case artifact delta returned by `GET /api/chat/sync` (migration 0039)
+// is now defined once as a Zod schema in cloud-contracts/sync.ts; re-exported here
+// so existing `ArtifactWireDelta` importers keep working.
+export type { ArtifactWireDelta };
 
 /** Map a sync wire delta to the client-domain `CloudArtifact` (SharedArtifact + tombstone). */
 export function wireToCloudArtifact(d: ArtifactWireDelta): CloudArtifact {

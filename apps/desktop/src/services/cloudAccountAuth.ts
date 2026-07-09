@@ -7,6 +7,7 @@ import {
   asPlanTier,
 } from '../lib/cloudAccountTypes';
 import { API_BASE_URL, WEB_APP_URL } from '../api/config';
+import { parseMeResponse, type MeResponse } from '@agiworkforce/services';
 import { invoke } from '../lib/tauri-mock';
 // `isTauri` from the zero-import leaf, not the barrel: this module runs during
 // auth-store init (checkSession → isLocalDevBrowser), and pulling `isTauri`
@@ -82,21 +83,6 @@ interface AccountSnapshot {
   subscription: Subscription | null;
   featureFlags: Record<string, boolean>;
 }
-
-type ApiMeResponse = {
-  id?: string;
-  email?: string | null;
-  name?: string | null;
-  avatar_url?: string | null;
-  created_at?: string | number | null;
-  updated_at?: string | number | null;
-  plan?: {
-    tier?: string | null;
-    status?: string | null;
-    current_period_end?: string | number | null;
-  } | null;
-  feature_flags?: Record<string, unknown> | null;
-};
 
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
 const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
@@ -223,7 +209,7 @@ function buildSession(accessToken: string, refreshToken?: string | null): Sessio
   };
 }
 
-function buildSubscription(userId: string, plan: ApiMeResponse['plan']): Subscription | null {
+function buildSubscription(userId: string, plan: MeResponse['plan'] | null): Subscription | null {
   if (!plan) return null;
   const now = new Date().toISOString();
   const tier = asPlanTier(plan.tier);
@@ -246,7 +232,7 @@ function buildSubscription(userId: string, plan: ApiMeResponse['plan']): Subscri
   };
 }
 
-function normalizeFeatureFlags(raw: ApiMeResponse['feature_flags']): Record<string, boolean> {
+function normalizeFeatureFlags(raw: MeResponse['feature_flags'] | null): Record<string, boolean> {
   const flags: Record<string, boolean> = {};
   if (!raw) return flags;
   for (const [key, value] of Object.entries(raw)) {
@@ -537,8 +523,11 @@ class CloudAccountAuthService {
       throw new Error(`Account API returned ${response.status}`);
     }
 
-    const data = (await response.json()) as ApiMeResponse;
-    const userId = data.id ?? this.currentState.user?.id ?? userFromAccessToken(accessToken).id;
+    // Validate against the shared /api/me contract (packages/services) — a
+    // mismatch throws into refreshUserData's catch (fetch status 'failed',
+    // cached snapshot kept) instead of silently mis-mapping account fields.
+    const data = parseMeResponse(await response.json());
+    const userId = data.id || (this.currentState.user?.id ?? userFromAccessToken(accessToken).id);
     const now = new Date().toISOString();
     const profile: Profile = {
       id: userId,

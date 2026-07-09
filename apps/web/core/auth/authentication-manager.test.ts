@@ -15,6 +15,27 @@ vi.mock('@shared/lib/logger', () => ({
   },
 }));
 
+/**
+ * Contract-valid /api/me payload (packages/services cloud-contracts/me.ts).
+ * getCurrentUser() validates responses with parseMeResponse, so partial
+ * payloads throw and surface as an error result instead of a drifted user.
+ */
+function mePayload(overrides: Record<string, unknown> = {}) {
+  return {
+    id: '1',
+    email: 'test@example.com',
+    name: 'Test User',
+    avatar_url: null,
+    created_at: null,
+    updated_at: 1751712000,
+    plan: { tier: 'free', display_name: 'Free', status: 'none', current_period_end: null },
+    feature_flags: { beta_features: true, advanced_model_access: false },
+    credits: null,
+    routing_preferences: {},
+    ...overrides,
+  };
+}
+
 describe('AuthService', () => {
   let mockFetch: ReturnType<typeof vi.fn>;
 
@@ -26,17 +47,9 @@ describe('AuthService', () => {
 
   describe('getCurrentUser', () => {
     it('should return user when authenticated', async () => {
-      const mockData = {
-        id: '1',
-        email: 'test@example.com',
-        name: 'Test User',
-        avatar_url: undefined,
-        plan: { tier: 'free' },
-      };
-
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(mockData),
+        json: () => Promise.resolve(mePayload()),
       });
 
       const result = await authService.getCurrentUser();
@@ -68,6 +81,20 @@ describe('AuthService', () => {
 
       expect(result.user).toBeNull();
       expect(result.error).toBe('Network error');
+    });
+
+    it('should return an error when the payload violates the /api/me contract', async () => {
+      // Partial payload (missing plan envelope, timestamps, flags) must fail
+      // parseMeResponse and surface as an error, not a half-populated user.
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: '1', email: 'test@example.com' }),
+      });
+
+      const result = await authService.getCurrentUser();
+
+      expect(result.user).toBeNull();
+      expect(result.error).not.toBeNull();
     });
   });
 
@@ -122,20 +149,24 @@ describe('AuthService', () => {
 
   describe('updateProfile', () => {
     it('should update profile successfully via fetch', async () => {
-      const mockData = {
-        id: '1',
-        email: 'test@example.com',
-        name: 'Updated Name',
-        avatar_url: 'new-avatar.jpg',
-        plan: { tier: 'pro' },
-      };
-
       // PATCH call succeeds
       mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
       // getCurrentUser() re-fetch
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockData),
+        json: () =>
+          Promise.resolve(
+            mePayload({
+              name: 'Updated Name',
+              avatar_url: 'new-avatar.jpg',
+              plan: {
+                tier: 'pro',
+                display_name: 'Pro',
+                status: 'active',
+                current_period_end: null,
+              },
+            }),
+          ),
       });
 
       const result = await authService.updateProfile({

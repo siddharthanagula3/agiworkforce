@@ -7,6 +7,7 @@
  */
 
 import { logger } from '@shared/lib/logger';
+import { parseMeResponse } from '@agiworkforce/services';
 
 export interface AuthUser {
   id: string;
@@ -46,14 +47,16 @@ class AuthService {
       if (!response.ok) {
         return { user: null, error: 'Not authenticated' };
       }
-      const data = await response.json();
+      // Validate against the shared /api/me contract (packages/services) —
+      // a mismatch throws into the catch below instead of drifting silently.
+      const data = parseMeResponse(await response.json());
       const authUser: AuthUser = {
         id: data.id,
         email: data.email || '',
         name: data.name,
-        avatar: data.avatar_url,
+        avatar: data.avatar_url ?? undefined,
         role: 'user',
-        plan: data.plan?.tier || 'free',
+        plan: data.plan.tier || 'free',
       };
       return { user: authUser, error: null };
     } catch (error) {
