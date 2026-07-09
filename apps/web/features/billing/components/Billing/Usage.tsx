@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@agiworkforce/ui';
-import { Progress } from '@shared/ui/progress';
+import { Progress } from '@agiworkforce/ui';
 import {
   DollarSign,
   Download,

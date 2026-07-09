@@ -12,7 +12,7 @@ import { Input } from '@shared/ui/input';
 import { Label } from '@agiworkforce/ui';
 import { Textarea } from '@shared/ui/textarea';
 import { Switch } from '@agiworkforce/ui';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import { Alert, AlertDescription } from '@shared/ui/alert';
 import { getCsrfToken } from '@/lib/client/csrf';
 import {

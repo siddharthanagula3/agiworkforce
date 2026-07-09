@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import { Code, Key, BookOpen, ExternalLink, Copy, CheckCircle2 } from 'lucide-react';
 import { SEOHead } from '@shared/components/seo/SEOHead';
 import { toast } from 'sonner';
