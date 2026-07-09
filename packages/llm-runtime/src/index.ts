@@ -62,6 +62,7 @@ export {
 export {
   validateBaseUrl,
   resolveValidatedBaseUrl,
+  ALLOWED_MANAGED_PROVIDER_HOSTS,
   type ValidateBaseUrlOptions,
   type ValidateBaseUrlResult,
 } from './base-url';

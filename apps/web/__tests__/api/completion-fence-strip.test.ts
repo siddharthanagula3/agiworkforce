@@ -63,15 +63,29 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   },
 }));
 
-// Capture what messages are passed to the LLM
-const mockSendRequest = vi.fn();
-const mockGetProviderFromModel = vi.fn();
+// Capture the ChatRequest passed to the adapter's stream() -- this is where
+// the fenced messages actually land post-migration (task #34: completion
+// route now goes through packages/providers/* adapters, not
+// lib/llm-providers). `openAIWireRequestToChatRequest` itself is NOT mocked
+// -- it's a real, pure function from @agiworkforce/llm-normalize -- so the
+// route's actual message-fencing + wire-shape conversion both run for real;
+// only the network-calling boundary (adapter construction / stream drain) is
+// stubbed.
+const mockAdapterStream = vi.fn();
+const mockBuildServerProviderAdapter = vi.fn();
+const mockResolveProviderFromModel = vi.fn();
+const mockDrainToLlmResponse = vi.fn();
 
-vi.mock('@/lib/llm-providers/factory', () => ({
-  LLMProviderFactory: {
-    getProviderFromModel: (...args: unknown[]) => mockGetProviderFromModel(...args),
-    sendRequest: (...args: unknown[]) => mockSendRequest(...args),
-  },
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  buildServerProviderAdapter: (...args: unknown[]) => mockBuildServerProviderAdapter(...args),
+  resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
+  toApiModelId: (modelId: string) => modelId,
+  toGenericUpstreamError: (providerId: string, chunk: { message: string }) =>
+    new Error(`${providerId} API error: ${chunk.message}`),
+}));
+
+vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
+  drainToLlmResponse: (...args: unknown[]) => mockDrainToLlmResponse(...args),
 }));
 
 // Mock @agiworkforce/types catalog helpers used by the route (use importOriginal
@@ -118,10 +132,19 @@ describe('POST /api/completion — fence-strip regression', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockGetProviderFromModel.mockReturnValue('anthropic');
-    mockSendRequest.mockResolvedValue({
+    mockResolveProviderFromModel.mockReturnValue('anthropic');
+    mockBuildServerProviderAdapter.mockReturnValue({
+      stream: (...args: unknown[]) => {
+        mockAdapterStream(...args);
+        return (async function* () {})();
+      },
+    });
+    mockDrainToLlmResponse.mockResolvedValue({
       content: 'A helpful completion.',
       model: 'claude-haiku-4-5',
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
     });
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'test-user-id', email: 'test@example.com' });
     mockRequireCsrfToken.mockResolvedValue(null);
@@ -151,14 +174,13 @@ describe('POST /api/completion — fence-strip regression', () => {
     expect(response.status).toBe(200);
 
     // The route must have called the LLM exactly once
-    expect(mockSendRequest).toHaveBeenCalledTimes(1);
+    expect(mockDrainToLlmResponse).toHaveBeenCalledTimes(1);
 
-    // Extract the messages array that was passed to the LLM
-    const [, requestPayload] = mockSendRequest.mock.calls[0] as [
-      string,
+    // Extract the ChatRequest that was passed to the adapter's stream()
+    const [chatRequest] = mockAdapterStream.mock.calls[0] as [
       { messages: Array<{ role: string; content: string }> },
     ];
-    const messages = requestPayload.messages;
+    const messages = chatRequest.messages;
 
     // Find the user message that wraps the fenced context
     const fencedMessage = messages.find(
@@ -191,7 +213,7 @@ describe('POST /api/completion — fence-strip regression', () => {
 
     expect(response.status).toBe(403);
     expect(mockRequireCsrfToken).toHaveBeenCalledWith(request, 'test-user-id');
-    expect(mockSendRequest).not.toHaveBeenCalled();
+    expect(mockAdapterStream).not.toHaveBeenCalled();
   });
 
   it('blocks prompt completions when subscription is missing', async () => {
@@ -207,7 +229,7 @@ describe('POST /api/completion — fence-strip regression', () => {
 
     expect(response.status).toBe(403);
     expect(data.error.code).toBe('FORBIDDEN');
-    expect(mockSendRequest).not.toHaveBeenCalled();
+    expect(mockAdapterStream).not.toHaveBeenCalled();
   });
 
   it('blocks prompt completions when credits are exhausted', async () => {
@@ -224,7 +246,7 @@ describe('POST /api/completion — fence-strip regression', () => {
     expect(response.status).toBe(402);
     expect(data.code).toBe('MONTHLY_CREDIT_LIMIT_REACHED');
     expect(mockCheckAvailable).toHaveBeenCalledWith('test-user-id', 1);
-    expect(mockSendRequest).not.toHaveBeenCalled();
+    expect(mockAdapterStream).not.toHaveBeenCalled();
   });
 
   it('handles benign context without mutation', async () => {
@@ -238,11 +260,10 @@ describe('POST /api/completion — fence-strip regression', () => {
     const response = await POST(request);
     expect(response.status).toBe(200);
 
-    const [, requestPayload] = mockSendRequest.mock.calls[0] as [
-      string,
+    const [chatRequest] = mockAdapterStream.mock.calls[0] as [
       { messages: Array<{ role: string; content: string }> },
     ];
-    const fencedMessage = requestPayload.messages.find(
+    const fencedMessage = chatRequest.messages.find(
       (m) => m.role === 'user' && m.content.includes('<untrusted_context>'),
     );
     expect(fencedMessage).toBeDefined();
@@ -264,11 +285,10 @@ describe('POST /api/completion — fence-strip regression', () => {
 
     await POST(request);
 
-    const [, requestPayload] = mockSendRequest.mock.calls[0] as [
-      string,
+    const [chatRequest] = mockAdapterStream.mock.calls[0] as [
       { messages: Array<{ role: string; content: string }> },
     ];
-    const fencedMessage = requestPayload.messages.find(
+    const fencedMessage = chatRequest.messages.find(
       (m) => m.role === 'user' && m.content.includes('<untrusted_context>'),
     );
     expect(fencedMessage).toBeDefined();

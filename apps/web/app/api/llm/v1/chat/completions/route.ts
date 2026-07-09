@@ -2,14 +2,13 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { refundFreeTrialPrompt } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest, getSecurityHeaders, getCorsHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { runAuthGate } from './lib/auth-gate';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
-import { buildStreamResponse, buildAdapterStreamResponse } from './lib/stream-transform';
+import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
@@ -69,10 +68,15 @@ import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/ty
  * Wave 2, task #34): Anthropic, Google, OpenAI, and the 9 openai-compat
  * providers (groq, mistral, moonshot, zhipu, qwen, openrouter, deepseek,
  * xai, perplexity) go through `packages/providers/*` adapters
- * (`ADAPTER_PROVIDERS` below) -- every remaining provider still goes through
- * `LLMProviderFactory` (apps/web/lib/llm-providers), unchanged. The agentic
- * tool-loop path (MCP/E2B, `runToolLoop`) has its own, separate per-step
- * dispatch -- Anthropic-only so far, see tool-loop-anthropic.ts.
+ * (`ADAPTER_PROVIDERS` below) -- that is every provider `processed.provider`
+ * (request-processor.ts's catalog lookup + heuristic fallback chain) can
+ * resolve to, so there is no longer a `LLMProviderFactory` (apps/web/lib/
+ * llm-providers, retired) dispatch fallback below; an unlisted provider id
+ * is treated as an explicit unsupported-provider failure instead. The
+ * agentic tool-loop path (MCP/E2B, `runToolLoop`) has its own, separate
+ * per-step dispatch -- Anthropic-only so far, see tool-loop-anthropic.ts
+ * (its non-Anthropic branch still calls `LLMProviderFactory` -- open
+ * residual, not yet migrated).
  */
 
 /**
@@ -351,23 +355,24 @@ async function handleChatCompletions(request: NextRequest) {
       );
     }
 
-    let stream: ReadableStream;
-    try {
-      stream = await LLMProviderFactory.streamRequest(processed.provider, processed.llmRequest);
-    } catch (error) {
-      await refundFailedReservation(userId, processed, 'streaming_failure');
-      return buildUpstreamErrorResponse(
-        error,
-        processed.provider,
-        processed.chatRequest.model,
-        processed.requestedModel,
-        userId,
-        processed.requestId,
-        'streaming',
-      );
-    }
-
-    return buildStreamResponse(request, stream, processed, userId, token);
+    // `processed.provider` is resolved via `getProviderFromModel`'s catalog
+    // lookup + heuristic fallback chain (request-processor.ts), which never
+    // produces anything outside the 12 providers in `ADAPTER_PROVIDERS`
+    // above -- so this is unreachable in practice, not a live dispatch path.
+    // Kept as an explicit, typed failure (refund + normal error response)
+    // rather than silently falling through to a removed module, so a future
+    // catalog change that somehow produces an unlisted provider id fails
+    // loud instead of throwing an unhandled "not a function" at runtime.
+    await refundFailedReservation(userId, processed, 'streaming_failure');
+    return buildUpstreamErrorResponse(
+      new Error(`Provider "${processed.provider}" is not supported.`),
+      processed.provider,
+      processed.chatRequest.model,
+      processed.requestedModel,
+      userId,
+      processed.requestId,
+      'streaming',
+    );
   }
 
   // Non-streaming path
@@ -400,23 +405,19 @@ async function handleChatCompletions(request: NextRequest) {
     return buildNonStreamResponse(request, llmResponse, processed, userId, token);
   }
 
-  let llmResponse;
-  try {
-    llmResponse = await LLMProviderFactory.sendRequest(processed.provider, processed.llmRequest);
-  } catch (error) {
-    await refundFailedReservation(userId, processed, 'request_failure');
-    return buildUpstreamErrorResponse(
-      error,
-      processed.provider,
-      processed.chatRequest.model,
-      processed.requestedModel,
-      userId,
-      processed.requestId,
-      'non-streaming',
-    );
-  }
-
-  return buildNonStreamResponse(request, llmResponse, processed, userId, token);
+  // See the streaming branch's identical comment above: `processed.provider`
+  // can never fall outside `ADAPTER_PROVIDERS`, so this is an explicit,
+  // typed failure guard, not a live dispatch path.
+  await refundFailedReservation(userId, processed, 'request_failure');
+  return buildUpstreamErrorResponse(
+    new Error(`Provider "${processed.provider}" is not supported.`),
+    processed.provider,
+    processed.chatRequest.model,
+    processed.requestedModel,
+    userId,
+    processed.requestId,
+    'non-streaming',
+  );
 }
 
 export const POST = withErrorHandler(handleChatCompletions);
