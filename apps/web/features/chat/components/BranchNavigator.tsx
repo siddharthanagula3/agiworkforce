@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import {
   Dialog,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';
 import { Card } from '@shared/ui/card';
 import {

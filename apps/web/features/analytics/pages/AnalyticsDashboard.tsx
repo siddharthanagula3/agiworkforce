@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { getProviderDefaultModel } from '@agiworkforce/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   BarChart3,

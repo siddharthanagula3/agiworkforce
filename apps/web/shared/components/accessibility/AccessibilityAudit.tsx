@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Alert, AlertDescription } from '@shared/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { ScrollArea } from '@shared/ui/scroll-area';

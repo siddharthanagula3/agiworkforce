@@ -1,6 +1,6 @@
 import React from 'react';
 import { Label } from '@agiworkforce/ui';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Users, Code, Search, Zap, User } from 'lucide-react';
 import type { ChatMode } from '../../types';
 

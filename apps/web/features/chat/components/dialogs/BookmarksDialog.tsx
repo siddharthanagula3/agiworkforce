@@ -14,7 +14,7 @@ import {
 } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Textarea } from '@shared/ui/textarea';
 import { toast } from 'sonner';

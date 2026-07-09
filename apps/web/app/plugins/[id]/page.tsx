@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Layers, Link2, CheckCircle2, Circle, Puzzle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
 import type { Plugin } from '@/features/plugins/types';

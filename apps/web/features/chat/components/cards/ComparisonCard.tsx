@@ -13,7 +13,7 @@
 import { useMemo } from 'react';
 import { Trophy, ThumbsUp, ThumbsDown, Scale } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@shared/ui/card';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface ComparisonItem {

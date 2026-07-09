@@ -12,7 +12,7 @@
 
 import { ShieldAlert, Wrench } from 'lucide-react';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import {
   Dialog,
   DialogContent,
