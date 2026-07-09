@@ -1,31 +1,30 @@
-//! OAuth 2.0 + PKCE flow for MCP servers (Sprint B3).
+//! OAuth 2.0 + PKCE flow for MCP servers.
 //!
 //! Implements the happy paths of:
 //!
-//! * RFC 9728 — OAuth 2.0 Protected Resource Metadata (server tells us
-//!   where its authorization server lives, either via the
-//!   `WWW-Authenticate: Bearer resource_metadata="<url>"` challenge or via
+//! * RFC 9728 — OAuth 2.0 Protected Resource Metadata (server tells us where
+//!   its authorization server lives, either via the `WWW-Authenticate: Bearer
+//!   resource_metadata="<url>"` challenge or via
 //!   `<server>/.well-known/oauth-protected-resource`).
 //! * RFC 8414 — OAuth 2.0 Authorization Server Metadata (discovers the
 //!   `authorization_endpoint`, `token_endpoint`, optional
 //!   `registration_endpoint`).
-//! * RFC 7591 — Dynamic Client Registration (only used when the user
-//!   doesn't supply a `client_id` in their config).
+//! * RFC 7591 — Dynamic Client Registration (only when the caller doesn't
+//!   supply a `client_id`).
 //! * RFC 6749 / RFC 7636 — Authorization-Code grant with PKCE.
 //!
-//! PKCE primitives (`generate_pkce`, `generate_random_string`) are reused
-//! from `crate::oauth` — we don't re-implement S256 here.
+//! Browser launch is delegated to the host via [`BrowserAuthorizer`] so the
+//! CLI's user-action chokepoint stays authoritative.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 
-use crate::oauth::{generate_pkce, generate_random_string};
-
-use super::oauth_store::McpOAuthToken;
-use super::McpOAuthConfig;
+use super::pkce::{generate_pkce, generate_random_string};
+use crate::config::OAuthConfig;
+use crate::hooks::{BrowserAuthorizer, OAuthToken};
 
 /// Hard cap on the loopback wait so headless invocations fail fast.
 const OAUTH_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(120);
@@ -34,23 +33,19 @@ const OAUTH_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(120);
 // Discovery types
 // ---------------------------------------------------------------------------
 
-/// RFC 9728 protected-resource metadata. Tells us which authorization
-/// server(s) protect this resource. Spec defines more fields, but
-/// `authorization_servers` and `resource` are the two we need.
+/// RFC 9728 protected-resource metadata.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProtectedResourceMetadata {
     #[serde(default)]
     pub authorization_servers: Vec<String>,
-    /// Resource identifier the AS will issue tokens for. Captured for
-    /// future audience-binding work; not consumed yet.
+    /// Resource identifier the AS will issue tokens for. Captured for future
+    /// audience-binding work; not consumed yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[allow(dead_code)]
     pub resource: Option<String>,
 }
 
-/// RFC 8414 authorization-server metadata. Same observation: spec defines
-/// many fields; we only depend on `authorization_endpoint` + `token_endpoint`,
-/// plus the optional `registration_endpoint` for RFC 7591 fallback.
+/// RFC 8414 authorization-server metadata.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AsMetadata {
     pub authorization_endpoint: String,
@@ -62,8 +57,7 @@ pub struct AsMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[allow(dead_code)]
     pub revocation_endpoint: Option<String>,
-    /// Scopes the AS advertises support for. Captured for future
-    /// validation / scope-narrowing logic; not consumed yet.
+    /// Scopes the AS advertises. Captured for future scope-narrowing; unused.
     #[serde(default)]
     #[allow(dead_code)]
     pub scopes_supported: Vec<String>,
@@ -73,9 +67,8 @@ pub struct AsMetadata {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RegisteredClient {
     pub client_id: String,
-    /// Confidential-client secret. Captured because some servers always
-    /// return it even for `token_endpoint_auth_method=none`; not consumed
-    /// (we register as a public client).
+    /// Confidential-client secret. Captured because some servers always return
+    /// it even for `token_endpoint_auth_method=none`; not consumed (public client).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[allow(dead_code)]
     pub client_secret: Option<String>,
@@ -93,10 +86,9 @@ pub fn parse_resource_metadata_url(www_authenticate: Option<&str>) -> Option<Str
 }
 
 /// Extract a single quoted parameter value from a Bearer challenge string.
-/// Best-effort; we don't try to handle every escape sequence.
+/// Best-effort; does not try to handle every escape sequence.
 fn parse_param(header: &str, key: &str) -> Option<String> {
-    // Look for `<key>="<value>"` (case-insensitive on the key).
-    let needle = format!("{}=", key);
+    let needle = format!("{key}=");
     let lower = header.to_ascii_lowercase();
     let needle_lower = needle.to_ascii_lowercase();
     let idx = lower.find(&needle_lower)?;
@@ -105,7 +97,6 @@ fn parse_param(header: &str, key: &str) -> Option<String> {
         let end = stripped.find('"')?;
         Some(stripped[..end].to_string())
     } else {
-        // Unquoted — read until comma or whitespace.
         let end = after
             .find(|c: char| c == ',' || c.is_whitespace())
             .unwrap_or(after.len());
@@ -113,8 +104,8 @@ fn parse_param(header: &str, key: &str) -> Option<String> {
     }
 }
 
-/// Detect a step-up auth challenge per RFC 9470 / RFC 6750 §3.1.
-/// Returns the `scope` parameter from the challenge if `error="insufficient_scope"`.
+/// Detect a step-up auth challenge per RFC 9470 / RFC 6750 §3.1. Returns the
+/// `scope` parameter from the challenge if `error="insufficient_scope"`.
 pub fn parse_insufficient_scope(www_authenticate: Option<&str>) -> Option<String> {
     let raw = www_authenticate?;
     let err = parse_param(raw, "error")?;
@@ -130,9 +121,6 @@ pub fn parse_insufficient_scope(www_authenticate: Option<&str>) -> Option<String
 // ---------------------------------------------------------------------------
 
 /// Discover the protected-resource metadata for an MCP server (RFC 9728).
-/// Prefers the URL from `WWW-Authenticate: Bearer resource_metadata="..."`
-/// if available, otherwise falls back to
-/// `<server>/.well-known/oauth-protected-resource`.
 pub async fn discover_protected_resource(
     server_url: &str,
     www_authenticate: Option<&str>,
@@ -150,29 +138,21 @@ pub async fn discover_protected_resource(
         .header("Accept", "application/json")
         .send()
         .await
-        .with_context(|| format!("fetch protected-resource metadata at {}", metadata_url))?;
+        .with_context(|| format!("fetch protected-resource metadata at {metadata_url}"))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        bail!(
-            "protected-resource metadata at {} returned {} — {}",
-            metadata_url,
-            status,
-            body
-        );
+        bail!("protected-resource metadata at {metadata_url} returned {status} — {body}");
     }
 
     let meta: ProtectedResourceMetadata = resp
         .json()
         .await
-        .with_context(|| format!("parse protected-resource metadata at {}", metadata_url))?;
+        .with_context(|| format!("parse protected-resource metadata at {metadata_url}"))?;
 
     if meta.authorization_servers.is_empty() {
-        bail!(
-            "protected-resource metadata at {} contains no authorization_servers",
-            metadata_url
-        );
+        bail!("protected-resource metadata at {metadata_url} contains no authorization_servers");
     }
 
     Ok((metadata_url, meta))
@@ -192,36 +172,30 @@ pub async fn discover_authorization_server(as_url: &str) -> Result<AsMetadata> {
         .header("Accept", "application/json")
         .send()
         .await
-        .with_context(|| format!("fetch AS metadata at {}", metadata_url))?;
+        .with_context(|| format!("fetch AS metadata at {metadata_url}"))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        bail!(
-            "AS metadata at {} returned {} — {}",
-            metadata_url,
-            status,
-            body
-        );
+        bail!("AS metadata at {metadata_url} returned {status} — {body}");
     }
 
     resp.json::<AsMetadata>()
         .await
-        .with_context(|| format!("parse AS metadata at {}", metadata_url))
+        .with_context(|| format!("parse AS metadata at {metadata_url}"))
 }
 
 /// Build a `<scheme>://<host>/.well-known/<suffix>` URL from any URL.
 fn well_known(base: &str, suffix: &str) -> String {
-    // Strip any trailing path; .well-known lives at the host root.
     let trimmed = base.trim_end_matches('/');
     if let Some(scheme_end) = trimmed.find("://") {
         let after_scheme = &trimmed[scheme_end + 3..];
         if let Some(slash) = after_scheme.find('/') {
             let host = &trimmed[..scheme_end + 3 + slash];
-            return format!("{}/.well-known/{}", host, suffix);
+            return format!("{host}/.well-known/{suffix}");
         }
     }
-    format!("{}/.well-known/{}", trimmed, suffix)
+    format!("{trimmed}/.well-known/{suffix}")
 }
 
 // ---------------------------------------------------------------------------
@@ -258,81 +232,56 @@ pub async fn dynamic_register(reg_endpoint: &str, redirect_uri: &str) -> Result<
         .json(&body)
         .send()
         .await
-        .with_context(|| format!("dynamic-register POST {}", reg_endpoint))?;
+        .with_context(|| format!("dynamic-register POST {reg_endpoint}"))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        bail!(
-            "dynamic registration at {} returned {} — {}",
-            reg_endpoint,
-            status,
-            body
-        );
+        bail!("dynamic registration at {reg_endpoint} returned {status} — {body}");
     }
 
     resp.json::<RegisteredClient>()
         .await
-        .with_context(|| format!("parse registration response from {}", reg_endpoint))
+        .with_context(|| format!("parse registration response from {reg_endpoint}"))
 }
 
 // ---------------------------------------------------------------------------
 // PKCE flow
 // ---------------------------------------------------------------------------
 
-/// Bind a loopback listener for the OAuth callback and derive the
-/// redirect URI that matches it.
+/// Bind a loopback listener for the OAuth callback and derive the redirect URI
+/// that matches it.
 ///
-/// CLI-NEW-MCP-OAUTH-PORT-MISMATCH fix (2026-05-05): centralized so that
-/// dynamic registration and the PKCE flow can both be driven by the SAME
-/// (listener, redirect_uri) pair — eliminating the prior bug where
-/// `dynamic_register` was called with a port-less placeholder
-/// (`http://127.0.0.1/callback`) while `start_pkce_flow` then bound a
-/// fresh random port (`http://127.0.0.1:55237/callback`). Authorization
-/// servers that don't strictly follow RFC 8252 §7.3 (any-port for
-/// loopback) would reject the request as a `redirect_uri` mismatch, and
-/// any AS that did honour the registered port-less URI would route the
-/// browser to port 80 — which our random-port listener never sees.
-///
-/// Behaviour:
-///   * If the user pinned a loopback URI in `oauth_cfg.redirect_uri`,
-///     we attempt to bind that exact host:port. Useful when the AS
-///     pre-registers a fixed port.
-///   * Otherwise we bind 127.0.0.1:0 and synthesize the URI from the
-///     OS-assigned port.
-async fn prepare_loopback_callback(oauth_cfg: &McpOAuthConfig) -> Result<(TcpListener, String)> {
+/// Centralized so dynamic registration and the PKCE flow are both driven by the
+/// SAME (listener, redirect_uri) pair — eliminating the prior bug where
+/// `dynamic_register` used a port-less placeholder while `start_pkce_flow`
+/// bound a fresh random port, producing a `redirect_uri` mismatch on
+/// authorization servers that don't honour RFC 8252 §7.3.
+async fn prepare_loopback_callback(oauth_cfg: &OAuthConfig) -> Result<(TcpListener, String)> {
     if let Some(uri) = oauth_cfg.redirect_uri.as_deref() {
         let parsed = reqwest::Url::parse(uri)
-            .with_context(|| format!("invalid redirect_uri in config: {}", uri))?;
+            .with_context(|| format!("invalid redirect_uri in config: {uri}"))?;
         let host = parsed.host_str().unwrap_or("");
         let is_loopback = host == "127.0.0.1" || host == "[::1]" || host == "localhost";
         if is_loopback {
             if let Some(port) = parsed.port() {
-                let bind_host = if host == "[::1]" {
-                    "[::1]"
-                } else {
-                    "127.0.0.1"
-                };
-                let listener = TcpListener::bind(format!("{}:{}", bind_host, port))
+                let bind_host = if host == "[::1]" { "[::1]" } else { "127.0.0.1" };
+                let listener = TcpListener::bind(format!("{bind_host}:{port}"))
                     .await
                     .with_context(|| {
-                        format!("bind loopback listener at configured redirect_uri {}", uri)
+                        format!("bind loopback listener at configured redirect_uri {uri}")
                     })?;
                 return Ok((listener, uri.to_string()));
             }
-            // Loopback with no port — placeholder pattern. Honour the spirit of
-            // the user's config (loopback) but bind a real port and rewrite the
-            // URI to match. The AS will see the port-bearing URI from the very
-            // first request, so RFC-strict implementations are happy.
+            // Loopback with no port — placeholder pattern. Bind a real port and
+            // rewrite the URI so RFC-strict AS implementations are happy.
         }
-        // Non-loopback redirect_uri: this binary can't actually receive the
-        // callback (we only listen on loopback). Refuse rather than burn the
-        // user's time on an OAuth flow that can never complete.
+        // Non-loopback redirect_uri: this binary can only receive the callback
+        // on loopback. Refuse rather than burn the user's time.
         if !is_loopback {
             bail!(
-                "redirect_uri {} is not a loopback address; \
-                 the agiworkforce CLI can only receive OAuth callbacks on 127.0.0.1 / [::1]",
-                uri
+                "redirect_uri {uri} is not a loopback address; \
+                 the agiworkforce client can only receive OAuth callbacks on 127.0.0.1 / [::1]"
             );
         }
     }
@@ -350,32 +299,25 @@ async fn prepare_loopback_callback(oauth_cfg: &McpOAuthConfig) -> Result<(TcpLis
 
 /// Run the OAuth-2.0 authorization-code-with-PKCE flow against `as_meta`.
 ///
-/// Steps:
-///   1. Use the supplied (listener, redirect_uri) pair (already bound by
-///      the caller) — see `prepare_loopback_callback`.
-///   2. Build the authorize URL with `code_challenge_method=S256`.
-///   3. Open the user's browser.
-///   4. Block (≤ 2 minutes) waiting for the redirect with `?code=...&state=...`.
-///   5. POST the code to `as_meta.token_endpoint`.
-///   6. Return the resulting `McpOAuthToken`.
-///
-/// `client_id` may be either pre-supplied (`oauth_cfg.client_id`) or the
-/// output of dynamic registration; this function doesn't care which.
-/// `scope_override` lets callers force a specific scope on step-up auth.
+/// `client_id` may be either pre-supplied or the output of dynamic
+/// registration; this function doesn't care which. `scope_override` lets
+/// callers force a scope on step-up auth. Browser launch goes through
+/// `browser` so the host's user-action gate stays authoritative.
+#[allow(clippy::too_many_arguments)]
 pub async fn start_pkce_flow(
     server_url: &str,
-    oauth_cfg: &McpOAuthConfig,
+    oauth_cfg: &OAuthConfig,
     as_meta: &AsMetadata,
     client_id: &str,
     scope_override: Option<&str>,
     listener: TcpListener,
     redirect_uri: String,
-) -> Result<McpOAuthToken> {
-    // 2. Build authorize URL.
+    browser: &dyn BrowserAuthorizer,
+) -> Result<OAuthToken> {
     let pkce = generate_pkce();
     let state = generate_random_string(32);
     let scope = scope_override
-        .map(|s| s.to_string())
+        .map(str::to_string)
         .or_else(|| oauth_cfg.scope.clone())
         .unwrap_or_default();
 
@@ -391,35 +333,19 @@ pub async fn start_pkce_flow(
         &state,
     );
 
-    // 3. Open browser; if it fails, print the URL so the user can copy it.
-    //
-    // CLI-NEW-009 fix (2026-05-04 audit): the previous code printed the full
-    // authorize URL — including the `state=` parameter — to stderr in every
-    // case. A local sibling process that reads this terminal output (or a CI
-    // log scraper) could observe `state` and race the loopback callback to
-    // inject its own `code` (the state mismatch check at line 354 is bypassed
-    // because the attacker has the state value). We now only print the full
-    // URL when the browser failed to open AND we genuinely need the user to
-    // copy it manually. In the success path the user only sees an opaque
-    // "opening browser" line.
-    // Explicit user-initiated MCP-connect auth flow: route through the open
-    // chokepoint so non-user paths can never launch a browser.
-    if crate::oauth::open_external_url(
-        &authorize_url,
-        crate::oauth::UserActionContext::user_initiated(),
-    ) {
-        eprintln!(
-            "\n  [mcp oauth] opened browser for {} (waiting for callback)\n",
-            server_url
-        );
+    // Open browser through the host chokepoint; if it declines/fails, print the
+    // URL so the user can copy it. Only print the full URL (including `state`)
+    // in that fallback path — never on the success path — so a sibling process
+    // reading the terminal can't race the loopback callback.
+    if browser.open_url(&authorize_url) {
+        eprintln!("\n  [mcp oauth] opened browser for {server_url} (waiting for callback)\n");
     } else {
         eprintln!(
-            "\n  [mcp oauth] could not open browser for {} — copy this URL manually:\n  {}\n",
-            server_url, authorize_url
+            "\n  [mcp oauth] could not open browser for {server_url} — copy this URL manually:\n  {authorize_url}\n"
         );
     }
 
-    // 4. Wait for the redirect (with timeout so headless CI fails fast).
+    // Wait for the redirect (with timeout so headless CI fails fast).
     let (code, returned_state) =
         tokio::time::timeout(OAUTH_INTERACTIVE_TIMEOUT, wait_for_callback(listener))
             .await
@@ -435,7 +361,7 @@ pub async fn start_pkce_flow(
         bail!("oauth state mismatch — possible CSRF, refusing to continue");
     }
 
-    // 5. Exchange the code at the token endpoint.
+    // Exchange the code at the token endpoint.
     let token_url = oauth_cfg
         .token_url
         .as_deref()
@@ -451,23 +377,19 @@ pub async fn start_pkce_flow(
     )
     .await?;
 
-    // 6. Build the persisted token record.
     Ok(token_response_to_record(
         token_resp,
         Some(token_url.to_string()),
         Some(client_id.to_string()),
         scope_override
-            .map(|s| s.to_string())
+            .map(str::to_string)
             .or_else(|| oauth_cfg.scope.clone()),
     ))
 }
 
-/// Refresh an existing access token via `grant_type=refresh_token`. Reuses
-/// the cached `token_url` + `client_id` from the prior authorization.
-pub async fn refresh_token(
-    token: &McpOAuthToken,
-    oauth_cfg: &McpOAuthConfig,
-) -> Result<McpOAuthToken> {
+/// Refresh an existing access token via `grant_type=refresh_token`. Reuses the
+/// cached `token_url` + `client_id` from the prior authorization.
+pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Result<OAuthToken> {
     let refresh = token
         .refresh_token
         .as_deref()
@@ -505,23 +427,18 @@ pub async fn refresh_token(
         .form(&form)
         .send()
         .await
-        .with_context(|| format!("refresh POST {}", token_url))?;
+        .with_context(|| format!("refresh POST {token_url}"))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        bail!(
-            "token refresh at {} returned {} — {}",
-            token_url,
-            status,
-            body
-        );
+        bail!("token refresh at {token_url} returned {status} — {body}");
     }
 
     let parsed: TokenResponseRaw = resp
         .json()
         .await
-        .with_context(|| format!("parse refresh response from {}", token_url))?;
+        .with_context(|| format!("parse refresh response from {token_url}"))?;
 
     Ok(token_response_to_record(
         parsed,
@@ -553,13 +470,13 @@ fn token_response_to_record(
     token_url: Option<String>,
     client_id: Option<String>,
     requested_scope: Option<String>,
-) -> McpOAuthToken {
+) -> OAuthToken {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let expires_at = raw.expires_in.map(|e| now.saturating_add(e));
-    McpOAuthToken {
+    OAuthToken {
         access_token: raw.access_token,
         refresh_token: raw.refresh_token,
         token_type: raw.token_type.or_else(|| Some("Bearer".to_string())),
@@ -601,22 +518,17 @@ async fn exchange_code_form(
         .form(&form)
         .send()
         .await
-        .with_context(|| format!("exchange POST {}", token_url))?;
+        .with_context(|| format!("exchange POST {token_url}"))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        bail!(
-            "code exchange at {} returned {} — {}",
-            token_url,
-            status,
-            body
-        );
+        bail!("code exchange at {token_url} returned {status} — {body}");
     }
 
     resp.json::<TokenResponseRaw>()
         .await
-        .with_context(|| format!("parse code-exchange response from {}", token_url))
+        .with_context(|| format!("parse code-exchange response from {token_url}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -624,8 +536,8 @@ async fn exchange_code_form(
 // ---------------------------------------------------------------------------
 
 /// Block until exactly one HTTP request hits the loopback listener, parse
-/// `?code=…&state=…` out of the request line, send a tiny "you can close
-/// this tab" 200 OK response, and return the pair.
+/// `?code=…&state=…` out of the request line, send a tiny "you can close this
+/// tab" 200 OK response, and return the pair.
 async fn wait_for_callback(listener: TcpListener) -> Result<(String, String)> {
     let (mut stream, _peer) = listener
         .accept()
@@ -639,8 +551,8 @@ async fn wait_for_callback(listener: TcpListener) -> Result<(String, String)> {
         .await
         .context("read OAuth callback request line")?;
 
-    // Drain the rest of the headers so the client doesn't see a connection
-    // reset before we send our response.
+    // Drain the rest of the headers so the client doesn't see a connection reset
+    // before we send our response.
     let mut header_line = String::new();
     loop {
         header_line.clear();
@@ -653,8 +565,8 @@ async fn wait_for_callback(listener: TcpListener) -> Result<(String, String)> {
         }
     }
 
-    // Send response before processing so the browser shows the success page
-    // even if extraction fails.
+    // Send response before processing so the browser shows the success page even
+    // if extraction fails.
     let body = "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:3rem;\">\
                 <h1>Authorization complete</h1>\
                 <p>You can close this tab and return to your terminal.</p>\
@@ -674,7 +586,6 @@ async fn wait_for_callback(listener: TcpListener) -> Result<(String, String)> {
 /// Pull `code` and `state` out of the GET request line:
 ///   "GET /callback?code=ABC&state=XYZ HTTP/1.1\r\n"
 fn parse_query_from_request_line(request_line: &str) -> Result<(String, String)> {
-    // Tokenize: METHOD PATH HTTP/x.y
     let mut parts = request_line.split_whitespace();
     let _method = parts
         .next()
@@ -709,10 +620,9 @@ fn parse_query_from_request_line(request_line: &str) -> Result<(String, String)>
 
     if let Some(err) = error {
         bail!(
-            "authorization server returned error: {}{}",
-            err,
+            "authorization server returned error: {err}{}",
             error_description
-                .map(|d| format!(" — {}", d))
+                .map(|d| format!(" — {d}"))
                 .unwrap_or_default()
         );
     }
@@ -723,7 +633,6 @@ fn parse_query_from_request_line(request_line: &str) -> Result<(String, String)>
 }
 
 fn percent_decode(input: &str) -> String {
-    // Lightweight inline decoder so we don't pull in a dep just for this.
     let bytes = input.as_bytes();
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -788,7 +697,7 @@ fn url_encode(input: &str) -> String {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 out.push(b as char);
             }
-            _ => out.push_str(&format!("%{:02X}", b)),
+            _ => out.push_str(&format!("%{b:02X}")),
         }
     }
     out
@@ -802,16 +711,17 @@ fn url_encode(input: &str) -> String {
 ///
 /// 1. Discover the protected resource (RFC 9728).
 /// 2. Discover the authorization server (RFC 8414).
-/// 3. If `oauth_cfg.client_id` is unset and the AS exposes
+/// 3. If `oauth_cfg.client_id` is unset and the AS exposes a
 ///    `registration_endpoint`, dynamically register (RFC 7591).
 /// 4. Run the PKCE flow.
-/// 5. Return the persisted token record (caller is responsible for saving).
+/// 5. Return the token record (caller persists via the host token store).
 pub async fn perform_full_oauth(
     server_url: &str,
-    oauth_cfg: &McpOAuthConfig,
+    oauth_cfg: &OAuthConfig,
     www_authenticate: Option<&str>,
     scope_override: Option<&str>,
-) -> Result<McpOAuthToken> {
+    browser: &dyn BrowserAuthorizer,
+) -> Result<OAuthToken> {
     // 1. Resource metadata.
     let (metadata_url, prm) = discover_protected_resource(server_url, www_authenticate).await?;
 
@@ -822,16 +732,11 @@ pub async fn perform_full_oauth(
         .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?;
     let as_meta = discover_authorization_server(as_url).await?;
 
-    // 3. Bind the loopback callback BEFORE registration so we can give the
-    //    AS the *exact* redirect_uri (with the real port) we'll be listening
-    //    on. CLI-NEW-MCP-OAUTH-PORT-MISMATCH fix (2026-05-05): previously a
-    //    port-less placeholder was registered and `start_pkce_flow` rebound
-    //    on a random port, producing a registered ≠ requested redirect_uri
-    //    mismatch on AS implementations that don't honour RFC 8252 §7.3.
+    // 3. Bind the loopback callback BEFORE registration so the AS is given the
+    //    exact redirect_uri (with the real port) we'll be listening on.
     let (listener, redirect_uri) = prepare_loopback_callback(oauth_cfg).await?;
 
-    // 4. Client id: pre-supplied wins; otherwise try dynamic registration
-    //    using the real redirect_uri we just bound.
+    // 4. Client id: pre-supplied wins; otherwise try dynamic registration.
     let client_id = if let Some(cid) = oauth_cfg.client_id.clone() {
         cid
     } else if let Some(reg_url) = as_meta.registration_endpoint.as_deref() {
@@ -854,9 +759,9 @@ pub async fn perform_full_oauth(
         scope_override,
         listener,
         redirect_uri,
+        browser,
     )
     .await?;
-    // Stash the metadata URL so refresh skips re-discovery next time.
     token.auth_server_metadata_url = Some(metadata_url);
     Ok(token)
 }
@@ -899,25 +804,13 @@ mod tests {
         assert!(parse_insufficient_scope(Some(h)).is_none());
     }
 
-    // ---- prepare_loopback_callback (CLI-NEW-MCP-OAUTH-PORT-MISMATCH) ----
-
-    /// Helper: build an `McpOAuthConfig` with only `redirect_uri` set.
-    /// `McpOAuthConfig` has no `Default` impl so we enumerate fields here;
-    /// any new field added to the struct will surface as a compile error
-    /// in this helper, which is the right place to be reminded.
-    fn cfg_with_redirect(redirect: Option<&str>) -> McpOAuthConfig {
-        McpOAuthConfig {
-            authorize_url: None,
-            token_url: None,
-            scope: None,
-            client_id: None,
-            client_secret: None,
+    fn cfg_with_redirect(redirect: Option<&str>) -> OAuthConfig {
+        OAuthConfig {
             redirect_uri: redirect.map(String::from),
+            ..Default::default()
         }
     }
 
-    /// No redirect_uri configured → bind random loopback port and return a
-    /// matching URI. The URI's port must equal the listener's bound port.
     #[tokio::test]
     async fn prepare_loopback_callback_default_uses_random_port() {
         let cfg = cfg_with_redirect(None);
@@ -927,29 +820,17 @@ mod tests {
         let bound_port = listener.local_addr().unwrap().port();
         let parsed = reqwest::Url::parse(&uri).expect("returned uri must parse");
         assert_eq!(parsed.host_str(), Some("127.0.0.1"));
-        assert_eq!(
-            parsed.port(),
-            Some(bound_port),
-            "uri port {} must match bound listener port {}",
-            uri,
-            bound_port
-        );
+        assert_eq!(parsed.port(), Some(bound_port));
         assert_eq!(parsed.path(), "/callback");
     }
 
-    /// Explicit loopback redirect_uri WITH a port → bind that exact port
-    /// and round-trip the URI verbatim. Asserts the registered URI and the
-    /// listener's port are identical, which is the whole point of this fix.
     #[tokio::test]
     async fn prepare_loopback_callback_honours_explicit_loopback_port() {
-        // Pick a port at random by binding a temp socket, releasing it,
-        // and using its number — avoids hard-coding a port that might be
-        // in use on some dev's machine.
         let scratch = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let chosen_port = scratch.local_addr().unwrap().port();
         drop(scratch);
 
-        let configured = format!("http://127.0.0.1:{}/callback", chosen_port);
+        let configured = format!("http://127.0.0.1:{chosen_port}/callback");
         let cfg = cfg_with_redirect(Some(&configured));
         let (listener, uri) = super::prepare_loopback_callback(&cfg)
             .await
@@ -958,27 +839,18 @@ mod tests {
         assert_eq!(listener.local_addr().unwrap().port(), chosen_port);
     }
 
-    /// Non-loopback redirect_uri → refuse, since we can only listen on
-    /// loopback. Prevents the user from kicking off an OAuth flow whose
-    /// callback could never reach them.
     #[tokio::test]
     async fn prepare_loopback_callback_rejects_non_loopback() {
         let cfg = cfg_with_redirect(Some("https://example.com/oauth/callback"));
         let err = super::prepare_loopback_callback(&cfg)
             .await
             .expect_err("non-loopback redirect_uri must error");
-        let msg = err.to_string();
         assert!(
-            msg.contains("not a loopback address"),
-            "expected loopback rejection, got: {}",
-            msg
+            err.to_string().contains("not a loopback address"),
+            "expected loopback rejection, got: {err}"
         );
     }
 
-    /// Loopback redirect_uri WITHOUT a port (the legacy placeholder
-    /// pattern `http://127.0.0.1/callback`) → fall through to random port
-    /// rather than honouring the URI verbatim. Prevents the AS from being
-    /// registered with port 80 (which we never listen on).
     #[tokio::test]
     async fn prepare_loopback_callback_rebinds_portless_placeholder() {
         let cfg = cfg_with_redirect(Some("http://127.0.0.1/callback"));
@@ -987,12 +859,9 @@ mod tests {
             .expect("portless placeholder should fall through to random bind");
         let bound_port = listener.local_addr().unwrap().port();
         assert!(
-            uri.contains(&format!(":{}/callback", bound_port)),
-            "returned URI {} should include real bound port {}",
-            uri,
-            bound_port
+            uri.contains(&format!(":{bound_port}/callback")),
+            "returned URI {uri} should include real bound port {bound_port}"
         );
-        // Crucially: NOT the port-less placeholder.
         assert_ne!(uri, "http://127.0.0.1/callback");
     }
 
@@ -1030,7 +899,7 @@ mod tests {
         let line =
             "GET /callback?error=access_denied&error_description=user%20declined HTTP/1.1\r\n";
         let err = parse_query_from_request_line(line).unwrap_err();
-        let msg = format!("{}", err);
+        let msg = format!("{err}");
         assert!(msg.contains("access_denied"));
         assert!(msg.contains("user declined"));
     }
@@ -1061,7 +930,6 @@ mod tests {
             "state123",
         );
         assert!(u.starts_with("https://example.com/auth?response_type=code"));
-        // No scope param when scope is empty.
         assert!(!u.contains("scope="));
     }
 }
