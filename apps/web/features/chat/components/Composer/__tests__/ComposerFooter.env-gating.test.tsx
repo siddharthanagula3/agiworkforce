@@ -138,26 +138,32 @@ vi.mock('@shared/stores/thinking-store', () => ({
     selector({ enabled: false, effort: 'medium' }),
 }));
 
-// Popover always renders content (simulates open state)
-vi.mock('@shared/ui/popover', () => ({
+// ComposerFooter imports Popover, Switch, Tooltip and AlertDialog from the
+// @agiworkforce/ui barrel (migrated off the @shared/ui forks). Stub the whole
+// barrel: Popover always renders content (simulates open state); AlertDialog is
+// open-gated so it stays closed by default (matching the real primitive).
+vi.mock('@agiworkforce/ui', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
     asChild ? <>{children}</> : <div>{children}</div>,
   PopoverContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="popover-content">{children}</div>
   ),
-}));
-
-vi.mock('@shared/ui/switch', () => ({
   Switch: () => <div data-testid="switch" />,
-}));
-
-vi.mock('@shared/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
     asChild ? <>{children}</> : <div>{children}</div>,
   TooltipContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  AlertDialog: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
+    open ? <>{children}</> : null,
+  AlertDialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AlertDialogAction: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
+  AlertDialogCancel: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
 }));
 
 vi.mock('@shared/components/ProviderMark', () => ({

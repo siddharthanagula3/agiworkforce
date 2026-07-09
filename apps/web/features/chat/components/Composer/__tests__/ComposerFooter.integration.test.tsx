@@ -51,29 +51,18 @@ vi.mock('../StyleSelector', () => ({
   StyleSelector: () => <div data-testid="style-selector" />,
 }));
 
-// Shared popover primitives · minimal pass-through
-vi.mock('@shared/ui/popover', () => ({
+// ComposerFooter (and the wider tree it renders here — BudgetTrackerDisplay etc.)
+// pulls many exports from the @agiworkforce/ui barrel. This integration test only
+// needs Radix Popover stubbed so its content renders inline in jsdom; keep every
+// other barrel export real via importOriginal (matches the pre-migration behavior,
+// which stubbed only @shared/ui/popover).
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
     asChild ? <>{children}</> : <div>{children}</div>,
   PopoverContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="popover-content">{children}</div>
-  ),
-}));
-
-// Command components · minimal stubs
-vi.mock('@shared/ui/command', () => ({
-  Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  CommandInput: ({ placeholder }: { placeholder: string }) => <input placeholder={placeholder} />,
-  CommandList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  CommandGroup: ({ children, heading }: { children: React.ReactNode; heading: string }) => (
-    <div>
-      <div>{heading}</div>
-      {children}
-    </div>
-  ),
-  CommandItem: ({ children, onSelect }: { children: React.ReactNode; onSelect: () => void }) => (
-    <button onClick={onSelect}>{children}</button>
   ),
 }));
 

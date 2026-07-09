@@ -74,7 +74,7 @@ vi.mock('@shared/ui/input', () => {
   return { Input };
 });
 
-vi.mock('@shared/ui/badge', () => {
+vi.mock('@agiworkforce/ui', () => {
   const Badge = ({ children, className, variant, ...props }: Record<string, unknown>) => (
     <span
       data-variant={variant as string | undefined}
