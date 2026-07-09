@@ -118,6 +118,12 @@ export interface OpenAIChatCompletionChunk {
         function?: { name?: string; arguments?: string };
       }>;
     };
+    /** Per-token logprob data for this chunk's delta, present when the
+     *  request set `logprobs: true` (we never do today, so this is `null`
+     *  in every real response `translateChatRequest` produces -- declared
+     *  and read anyway for full passthrough fidelity, see
+     *  StreamChunkText.logprobs's docstring in @agiworkforce/types). */
+    logprobs?: unknown;
     finish_reason?: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call' | null;
   }>;
   usage?: {

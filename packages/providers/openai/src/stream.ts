@@ -78,8 +78,18 @@ export async function* translateOpenAIStream(
     if (!choice) continue;
     const delta = choice.delta;
 
+    // Per-chunk logprobs (task #34's OpenAI slice, team-lead's full-passthrough
+    // upgrade): unlike id/created/system_fingerprint/service_tier above,
+    // logprobs is NOT stream-stable -- OpenAI reports different per-token
+    // data on every chunk, so it rides along on the content/tool-call
+    // StreamChunk itself rather than the once-per-stream response-meta
+    // chunk. Only OpenAIWireAssembler's wireMode:'openai-passthrough' reads
+    // it; every other consumer (including this package's own wireMode:
+    // 'default' callers) ignores the field.
+    const logprobs = choice.logprobs !== undefined ? { logprobs: choice.logprobs } : {};
+
     if (delta.content) {
-      yield { type: 'text-delta', delta: delta.content };
+      yield { type: 'text-delta', delta: delta.content, ...logprobs };
     }
     if (delta.reasoning_content) {
       yield { type: 'thinking-delta', delta: delta.reasoning_content };
@@ -96,11 +106,16 @@ export async function* translateOpenAIStream(
           }
         }
         if (state && !state.emittedStart) {
-          yield { type: 'tool-use-start', toolUseId: state.id, name: state.name };
+          yield { type: 'tool-use-start', toolUseId: state.id, name: state.name, ...logprobs };
           state.emittedStart = true;
         }
         if (state && tc.function?.arguments) {
-          yield { type: 'tool-use-delta', toolUseId: state.id, deltaJson: tc.function.arguments };
+          yield {
+            type: 'tool-use-delta',
+            toolUseId: state.id,
+            deltaJson: tc.function.arguments,
+            ...logprobs,
+          };
         }
       }
     }
