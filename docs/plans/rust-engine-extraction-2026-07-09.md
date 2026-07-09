@@ -38,7 +38,9 @@ Replace the decision core (`sys/security/command_validator.rs` 687 + `sys/securi
 
 ### (b) Protocol ts-rs codegen -> packages/types — M
 
-Export test `crates/agiworkforce-protocol/tests/export_bindings.rs` using `export_all_to` on root envelope types (recursive — no need to annotate all 200+). Committed tree at `packages/types/src/generated/protocol/` (web builds can't run cargo) + generated barrel + prettier/eslint ignores. Subpath export `"./protocol"` — NOT root re-export (name collisions with hand-authored `Provider`/`ToolEvent`). Drift guard `pnpm check:protocol-types` (regenerate + `git diff --exit-code`) in the cargo-capable CI job. Adoption proof: convert exactly ONE hand-mirror (tool-events or MCP types) with an `Expect<Equal<Hand, Generated>>` shim; the remaining mirrors are a tracked per-file campaign outside this pass.
+Export test `crates/agiworkforce-protocol/tests/export_bindings.rs` using `export_all_to` on root envelope types (recursive — no need to annotate all 200+). Committed tree at `packages/types/src/generated/protocol/` (web builds can't run cargo) + generated barrel + prettier/eslint ignores. Subpath export `"./protocol"` — NOT root re-export (name collisions with hand-authored `Provider`/`ToolEvent`). Drift guard `pnpm check:protocol-types` (regenerate + `git diff --exit-code`) in the cargo-capable CI job.
+
+STATUS 2026-07-09: **b1 SHIPPED** (commit `feat(types): wire dormant ts-rs codegen...`, 216 modules; roots = EventMsg + mcp Tool — the `Op` envelope does not derive TS today, tracked follow-up). **b2 adoption proof DEFERRED with evidence:** the anticipated hand-mirrors do not actually mirror the protocol crate — `packages/types/src/tool-events.ts` mirrors DESKTOP's tauri enum (`apps/desktop/src-tauri/src/sys/commands/chat/tool_events.rs`), and no packages/types file hand-mirrors the protocol MCP types 1:1. The first honest adoption lands with stage (d)/(e), when desktop's wire types converge on `agiworkforce-protocol`; forcing one now would fabricate equivalence that doesn't exist.
 
 ### (c) Extract agiworkforce-llm (provider HTTP + SSE) — XL
 
