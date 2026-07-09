@@ -1,25 +1,14 @@
 import { z } from 'zod';
 
-import { ToolCallResponseSchema } from './tool-calls';
-
-/** WEB-1 (audit 2026-05-03): hard cap on a single completion's max_tokens.
- *  Without this, a single authenticated request can drain a billing
- *  period - both via inflated credit reservation and via the actual
- *  upstream LLM call (which honours whatever cap we forward). 32k is
- *  larger than any current model's per-request output ceiling that we
- *  serve through this endpoint; raise per-model in MODEL_TIER_REQUIREMENTS
- *  rather than here. */
-const MAX_OUTPUT_TOKENS = 32_768;
-
 /**
  * Hard cap on per-message content length at any LLM API gateway. Prevents
  * prompt-bomb abuse (single 10MB string drains credit reservation +
  * triggers quadratic provider parsing). 100k characters is generous
  * (≈ 25k tokens before tokenization, larger than the legal/contract
  * extracts users typically paste) but short enough to bound parse + bill
- * cost. Used by `/api/llm/completion` and the OpenAI-compat
- * `/api/llm/v1/chat/completions` gateways · both gates must enforce the
- * same limit; this constant is the single source of truth.
+ * cost. Enforced by the OpenAI-compat `/api/llm/v1/chat/completions`
+ * gateway; this constant is the single source of truth.
+ * (`/api/llm/completion` was retired in restructure Wave 2 — orphaned route.)
  *
  * 2026-05-22 ultrathink audit unified two duplicate inline definitions.
  */
@@ -57,29 +46,3 @@ export const ToolChoiceSchema = z.union([
     }),
   }),
 ]);
-
-export const LLMCompletionRequestSchema = z.object({
-  model: z.string().min(1, 'Model is required'),
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(['system', 'user', 'assistant', 'tool']),
-        content: z.string(),
-        // WEB-21 (audit 2026-05-19): tool_calls strictly typed; previously
-        // `z.array(z.unknown())` let arbitrary payloads land in chat history.
-        tool_calls: z.array(ToolCallResponseSchema).max(32).optional(),
-        tool_call_id: z.string().max(256).optional(),
-        multimodal_content: z.array(z.unknown()).optional(),
-      }),
-    )
-    .min(1, 'At least one message is required'),
-  temperature: z.number().min(0).max(2).optional(),
-  max_tokens: z.number().int().positive().max(MAX_OUTPUT_TOKENS).optional(),
-  stream: z.boolean().optional().default(false),
-  tools: z.array(ToolDefinitionSchema).max(64).optional(),
-  tool_choice: ToolChoiceSchema.optional(),
-  thinking_mode: z.boolean().optional(),
-  usePromptCache: z.boolean().optional().default(false),
-});
-
-export type LLMCompletionRequest = z.infer<typeof LLMCompletionRequestSchema>;

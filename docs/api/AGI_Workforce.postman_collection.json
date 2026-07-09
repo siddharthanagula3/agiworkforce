@@ -517,42 +517,6 @@
           }
         },
         {
-          "name": "LLM Completion",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/llm/completion",
-              "host": ["{{base_url}}"],
-              "path": ["llm", "completion"]
-            },
-            "description": "Direct LLM completion endpoint."
-          }
-        },
-        {
-          "name": "Chat v2",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/llm/v2/chat",
-              "host": ["{{base_url}}"],
-              "path": ["llm", "v2", "chat"]
-            },
-            "description": "Enhanced v2 chat completion endpoint."
-          }
-        },
-        {
           "name": "Audio Transcription",
           "request": {
             "method": "POST",
