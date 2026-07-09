@@ -434,6 +434,30 @@ impl McpClient {
         self.notif_rx.take()
     }
 
+    /// Cheap, non-RPC liveness check. For stdio, polls the child process with
+    /// `try_wait` (no I/O on the protocol pipes); SSE/HTTP report `true` — their
+    /// failures surface on the next request. Used by hosts (desktop health
+    /// monitor) that keep a synchronous liveness snapshot; the RPC-based
+    /// [`Self::is_alive`] stays for hosts that want a real round-trip probe.
+    pub fn transport_alive(&mut self) -> bool {
+        match &mut self.inner {
+            TransportConn::Stdio { child } => matches!(child.try_wait(), Ok(None)),
+            TransportConn::Sse { .. } | TransportConn::Http { .. } => true,
+        }
+    }
+
+    /// Drain and return any buffered stderr lines from a stdio child, oldest
+    /// first. Hosts can stream these into their own per-server log stores
+    /// (desktop's MCP server-log viewer). Always empty for SSE/HTTP. Draining
+    /// does not affect the connect-time stderr context (that is attached before
+    /// the client is handed to the host).
+    pub fn drain_stderr(&self) -> Vec<String> {
+        self.stderr_buf
+            .lock()
+            .map(|mut lines| lines.drain(..).collect())
+            .unwrap_or_default()
+    }
+
     /// Core request/response dispatch across the three transports. No reconnect.
     async fn send_rpc(
         &mut self,
