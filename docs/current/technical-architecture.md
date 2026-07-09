@@ -2,7 +2,11 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-07-08
+
+## Monorepo Restructure (2026-07)
+
+The 2026-07-08 full-repo audit confirmed the monorepo shape below and produced the consolidation plan that governs package/crate ownership going forward: `docs/plans/monorepo-restructure-2026-07-08.md` (maturity map, duplication findings, target tree, dependency graph, mode architecture, migration phases P0-P6). External-brief adjudication lives in `docs/architecture/shared-packages-decision-log.md`. When this file and the plan disagree on target package ownership, the plan wins until its phases land here.
 
 ## Monorepo Shape
 

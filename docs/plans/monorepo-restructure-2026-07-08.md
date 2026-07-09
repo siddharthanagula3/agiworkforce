@@ -238,7 +238,7 @@ Tracked deletions (shrink repo ~35.6 MB) — each coupled with the guard-script 
 
 - `.minimax/` (31.4 MB vendored skill binaries), `.cursor/`, `.codex/` agents + config, `.claude/agents/*` (founder-initiated deletions already in worktree; committed together with guard updates and CLAUDE.md/AGENTS.md subagent-section updates).
 - `apps/web/public/screenshots/mobile-{light,dark}.png` (v1, zero references; `-v2` kept — used by the marketing hero).
-- `docs/visual-verification/` historical round-17/18/r22 evidence (3.84 MB) -> `docs/archive/` per the repo's own artifact-status rule.
+- `docs/visual-verification/` round-17/18/r22 captures: **deferred, not archived** — live Playwright specs (`apps/web/e2e/round-1{7,8}-visual-verification.spec.ts`) regenerate these stems and the folder README registers them as capture baselines. Archiving requires a coordinated spec + README + ledger change (queued in P1), not a mechanical move.
 - Dead build artifacts: `apps/web/public/chat/`, `apps/desktop/dist-web/`, `apps/desktop/src-tauri/test.db`.
 
 Local-only (gitignored, regenerable, ~240 MB): `.code-review-graph/` 174M, `apps/desktop/apps/` 35M stray copy, `.remember/logs` 18M, `apps/desktop/logs/` 7.8M, root `.expo/*.log` 4.3M, `ios/build/`, `_archive/`, empty `.agent/ .agiworkforce/ .worktrees/`, `apps/extension-vscode/{out,coverage}`, `apps/web/playwright-report/`.
