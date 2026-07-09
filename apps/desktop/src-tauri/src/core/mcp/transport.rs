@@ -6,12 +6,9 @@ use crate::core::mcp::{McpError, McpResult};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot};
 
 /// Maximum age for pending requests before they are considered stale (5 minutes)
@@ -97,35 +94,83 @@ struct PendingRequest {
 // STDIO Transport Implementation
 // ============================================================================
 
+/// Interval for the stdio liveness snapshot + stderr drain in the engine actor.
+const STDIO_LIVENESS_POLL_SECS: u64 = 5;
+
+/// stdio MCP transport — a thin facade over the shared
+/// [`agiworkforce_mcp::McpClient`] engine (Wave 5 stage d2 of
+/// `docs/plans/rust-engine-extraction-2026-07-09.md`).
+///
+/// The engine owns the child process, JSON-RPC framing, id correlation, and
+/// per-request timeouts. Desktop-side POLICY stays here in [`StdioTransport::new`]:
+/// the executor allowlist + metachar validation, PATH augmentation/resolution
+/// for Finder-launched apps, and the canonical env blocklist filter.
+///
+/// A background actor task exclusively owns the engine client; the
+/// [`McpTransport`] methods talk to it over a FIFO command channel, which
+/// preserves the notification/request ordering guarantees of the old
+/// writer-task design (`notifications/initialized` is written before any
+/// later request). Requests are serialized through the engine (the old
+/// transport could interleave concurrent requests, but no production caller
+/// issues concurrent RPCs on one session — verified during the d2 swap).
+///
+/// The engine's connection is host-handshake-driven
+/// ([`agiworkforce_mcp::McpClient::connect_without_handshake`]): `McpSession`
+/// keeps building the exact `initialize` wire frames (protocolVersion
+/// 2025-11-25, desktop clientInfo) it always sent.
 pub struct StdioTransport {
-    child: Arc<Mutex<Option<Child>>>,
+    /// FIFO command channel into the engine actor.
+    tx: mpsc::UnboundedSender<EngineCommand>,
 
-    request_id: Arc<AtomicU64>,
+    /// Liveness snapshot maintained by the actor (child `try_wait` poll every
+    /// [`STDIO_LIVENESS_POLL_SECS`], plus refresh on request errors).
+    alive: Arc<AtomicBool>,
 
-    pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>>,
-
-    tx: mpsc::UnboundedSender<McpMessage>,
-
-    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
-
-    /// Shared flag to signal shutdown to all tasks
+    /// Set by [`McpTransport::shutdown`]; rejects new requests immediately.
     is_shutdown: Arc<AtomicBool>,
+
+    /// Wakes the actor out of an in-flight request when shutdown is requested,
+    /// so the child is killed promptly (the old transport killed on shutdown
+    /// without waiting for in-flight requests).
+    shutdown_signal: Arc<tokio::sync::Notify>,
 }
 
-impl Drop for StdioTransport {
-    fn drop(&mut self) {
-        // Ensure child process is killed on drop to prevent zombie processes.
-        // This handles the case where the transport is dropped due to a panic or
-        // unexpected shutdown without calling shutdown() first.
-        if let Some(ref mut child) = *self.child.lock() {
-            if let Err(e) = child.start_kill() {
-                tracing::warn!(
-                    "[MCP Stdio Transport] Failed to kill child process on drop: {}",
-                    e
-                );
-            }
-        }
-        self.is_shutdown.store(true, Ordering::SeqCst);
+/// Commands processed by the engine actor. FIFO order is the ordering contract.
+enum EngineCommand {
+    Request {
+        method: String,
+        params: Option<serde_json::Value>,
+        reply: oneshot::Sender<McpResult<JsonRpcResponse>>,
+    },
+    Notify {
+        method: String,
+        params: Option<serde_json::Value>,
+    },
+    Shutdown {
+        reply: oneshot::Sender<()>,
+    },
+}
+
+/// Map an engine error onto the desktop error taxonomy. JSON-RPC error frames
+/// surface from the engine as "MCP error {code}: {message}" (the same server
+/// error the old transport mapped to [`McpError::RmcpError`]); everything else
+/// (I/O, timeout, closed pipe) was a [`McpError::ConnectionError`] before and
+/// stays one.
+fn map_engine_error(e: agiworkforce_mcp::McpError) -> McpError {
+    let msg = format!("{:#}", e.as_anyhow());
+    if msg.contains("MCP error ") {
+        McpError::RmcpError(msg)
+    } else {
+        McpError::ConnectionError(msg)
+    }
+}
+
+/// Drain buffered child stderr lines into the desktop per-server log store —
+/// the same `[stderr]`-prefixed stream the old dedicated stderr task produced.
+fn drain_engine_stderr(server_name: &str, client: &agiworkforce_mcp::McpClient) {
+    for line in client.drain_stderr() {
+        tracing::debug!("[MCP Server stderr] {}", line);
+        append_server_log(server_name, format!("[stderr] {}", line));
     }
 }
 
@@ -449,231 +494,191 @@ impl StdioTransport {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
-        let mut cmd = Command::new(&resolved);
-        cmd.args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .envs(filtered_env)
-            .env("PATH", &final_path);
+        // Hand the spawn + JSON-RPC mechanics to the shared engine. The engine's
+        // stdio spawn is env_clear + safe-parent-allowlist + manifest env (with
+        // its own loader-injection blocklist on top of ours), so the child gets
+        // a same-or-stricter environment than before. The augmented PATH is
+        // passed through the manifest env so command discovery behavior
+        // (Finder-launched apps) is preserved exactly.
+        let mut engine_env = filtered_env;
+        engine_env.insert("PATH".to_string(), final_path);
 
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| McpError::ConnectionError(format!("Failed to spawn process: {}", e)))?;
+        let engine_config = agiworkforce_mcp::TransportConfig::Stdio {
+            command: resolved,
+            args: args.to_vec(),
+            env: engine_env,
+        };
+        let hooks = agiworkforce_mcp::ClientHooks {
+            token_store: Arc::new(agiworkforce_mcp::hooks::InMemoryTokenStore::new()),
+            // Desktop's elicitation UI plumbing is not wired to the transport
+            // today (the old read loop ignored server-initiated requests); the
+            // engine's auto-decline handler answers `elicitation/create` with a
+            // decline instead of leaving the server hanging.
+            elicitation: Arc::new(agiworkforce_mcp::AutoDeclineHandler),
+            browser: Arc::new(agiworkforce_mcp::hooks::DenyBrowserAuthorizer),
+            client_info: agiworkforce_mcp::ClientInfo {
+                name: "AGI Workforce".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            on_log: {
+                let name = server_name.clone();
+                Arc::new(move |msg: &str| {
+                    tracing::info!("[MCP Transport] [{}] {}", name, msg);
+                })
+            },
+        };
 
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| McpError::ConnectionError("Failed to get stdin handle".to_string()))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| McpError::ConnectionError("Failed to get stdout handle".to_string()))?;
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or_else(|| McpError::ConnectionError("Failed to get stderr handle".to_string()))?;
+        // No handshake here: McpSession drives its own `initialize` (protocol
+        // version 2025-11-25, desktop clientInfo) through send_request, exactly
+        // as it did against the old transport.
+        let client = agiworkforce_mcp::McpClient::connect_without_handshake(
+            &server_name,
+            engine_config,
+            agiworkforce_mcp::McpTimeouts::default(),
+            hooks,
+        )
+        .await
+        .map_err(map_engine_error)?;
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<McpMessage>();
-        let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
-
-        let pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-
-        let child_arc = Arc::new(Mutex::new(Some(child)));
+        let (tx, rx) = mpsc::unbounded_channel::<EngineCommand>();
+        let response_seq = Arc::new(AtomicU64::new(1));
+        let alive = Arc::new(AtomicBool::new(true));
         let is_shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_signal = Arc::new(tokio::sync::Notify::new());
 
-        // Writer task
-        let pending_write = pending.clone();
-        let is_shutdown_write = is_shutdown.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Some(msg) = rx.recv() => {
-                        // Extract request ID only for Request variants (for error tracking)
-                        let request_id = match &msg {
-                            McpMessage::Request(req) => Some(req.id.clone()),
-                            _ => None,
-                        };
-                        match msg.to_string() {
-                            Ok(json) => {
-                                let line = format!("{}\n", json);
-                                if let Err(e) = stdin.write_all(line.as_bytes()).await {
-                                    tracing::error!("[MCP Transport] Failed to write to stdin: {}", e);
-
-                                    // Notify the specific request about the failure
-                                    let mut pending = pending_write.lock();
-                                    if let Some(id) = request_id {
-                                        if let Some(pending_req) = pending.remove(&id) {
-                                            let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                                                format!("Failed to write request: {}", e)
-                                            )));
-                                        }
-                                    }
-
-                                    // Notify all remaining pending requests about the connection failure
-                                    tracing::warn!("[MCP Transport] Notifying {} pending requests of connection failure", pending.len());
-                                    for (_, pending_req) in pending.drain() {
-                                        let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                                            "Transport connection lost".to_string()
-                                        )));
-                                    }
-
-                                    is_shutdown_write.store(true, Ordering::SeqCst);
-                                    break;
-                                }
-                                if let Err(e) = stdin.flush().await {
-                                    tracing::error!("[MCP Transport] Failed to flush stdin: {}", e);
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!("[MCP Transport] Failed to serialize message: {}", e);
-                            }
-                        }
-                    }
-                    _ = &mut shutdown_rx => {
-                        tracing::info!("[MCP Transport] Shutdown signal received");
-                        is_shutdown_write.store(true, Ordering::SeqCst);
-
-                        // Clean up any remaining pending requests
-                        let mut pending = pending_write.lock();
-                        for (_, pending_req) in pending.drain() {
-                            let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                                "Transport shutting down".to_string()
-                            )));
-                        }
-                        break;
-                    }
-                }
-            }
-        });
-
-        // Reader task (stdout: protocol + potential stray logs)
-        let pending_read = pending.clone();
-        let is_shutdown_read = is_shutdown.clone();
-        let server_name_for_stdout = server_name.clone();
-        tokio::spawn(async move {
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
-
-            while let Ok(Some(line)) = lines.next_line().await {
-                if line.trim().is_empty() {
-                    continue;
-                }
-
-                tracing::debug!("[MCP Transport] Received: {}", line);
-
-                match McpMessage::from_str(&line) {
-                    Ok(McpMessage::Response(response)) => {
-                        let mut pending = pending_read.lock();
-                        if let Some(pending_req) = pending.remove(&response.id) {
-                            let _ = pending_req.sender.send(Ok(response));
-                        } else {
-                            tracing::warn!(
-                                "[MCP Transport] Received response for unknown request: {:?}",
-                                response.id
-                            );
-                        }
-                    }
-                    Ok(McpMessage::Error(error)) => {
-                        let mut pending = pending_read.lock();
-                        if let Some(pending_req) = pending.remove(&error.id) {
-                            let _ = pending_req
-                                .sender
-                                .send(Err(McpError::RmcpError(error.error.message)));
-                        } else {
-                            tracing::warn!(
-                                "[MCP Transport] Received error for unknown request: {:?}",
-                                error.id
-                            );
-                        }
-                    }
-                    Ok(McpMessage::Notification(notif)) => {
-                        tracing::info!("[MCP Transport] Received notification: {}", notif.method);
-                    }
-                    Ok(McpMessage::Request(_)) => {
-                        tracing::warn!("[MCP Transport] Received request from server (not supported in client mode)");
-                    }
-                    Err(e) => {
-                        tracing::error!("[MCP Transport] Failed to parse message: {}", e);
-                        append_server_log(&server_name_for_stdout, format!("[stdout] {}", line));
-                    }
-                }
-            }
-
-            tracing::info!("[MCP Transport] stdout reader finished");
-
-            // Signal shutdown and clean up pending requests when reader exits
-            is_shutdown_read.store(true, Ordering::SeqCst);
-            let mut pending = pending_read.lock();
-            if !pending.is_empty() {
-                tracing::warn!(
-                    "[MCP Transport] Reader exited, notifying {} pending requests",
-                    pending.len()
-                );
-                for (_, pending_req) in pending.drain() {
-                    let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                        "Transport reader disconnected".to_string(),
-                    )));
-                }
-            }
-        });
-
-        // Stderr reader task (server logs)
-        let server_name_for_stderr = server_name.clone();
-        tokio::spawn(async move {
-            let reader = BufReader::new(stderr);
-            let mut lines = reader.lines();
-
-            while let Ok(Some(line)) = lines.next_line().await {
-                tracing::debug!("[MCP Server stderr] {}", line);
-                append_server_log(&server_name_for_stderr, format!("[stderr] {}", line));
-            }
-        });
-
-        // Periodic cleanup task for stale pending requests
-        let pending_cleanup = pending.clone();
-        let is_shutdown_cleanup = is_shutdown.clone();
-        tokio::spawn(async move {
-            let mut interval =
-                tokio::time::interval(tokio::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
-            loop {
-                interval.tick().await;
-
-                if is_shutdown_cleanup.load(Ordering::SeqCst) {
-                    tracing::debug!("[MCP Transport] Cleanup task stopping due to shutdown");
-                    break;
-                }
-
-                let mut pending = pending_cleanup.lock();
-                let now = Instant::now();
-                let stale_keys: Vec<RequestId> = pending
-                    .iter()
-                    .filter(|(_, req)| {
-                        now.duration_since(req.created_at).as_secs() > MAX_REQUEST_AGE_SECS
-                    })
-                    .map(|(id, _)| id.clone())
-                    .collect();
-
-                for key in stale_keys {
-                    if let Some(pending_req) = pending.remove(&key) {
-                        tracing::warn!("[MCP Transport] Cleaning up stale request: {:?}", key);
-                        let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                            "Request expired due to age".to_string(),
-                        )));
-                    }
-                }
-            }
-        });
+        Self::spawn_engine_actor(
+            server_name,
+            client,
+            rx,
+            response_seq,
+            alive.clone(),
+            is_shutdown.clone(),
+            shutdown_signal.clone(),
+        );
 
         Ok(Self {
-            child: child_arc,
-            request_id: Arc::new(AtomicU64::new(1)),
-            pending,
             tx,
-            shutdown_tx: Mutex::new(Some(shutdown_tx)),
+            alive,
             is_shutdown,
+            shutdown_signal,
         })
+    }
+
+    /// The engine actor: exclusively owns the engine client, processes commands
+    /// in FIFO order, keeps the liveness snapshot fresh, and streams child
+    /// stderr into the per-server log store.
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_engine_actor(
+        server_name: String,
+        mut client: agiworkforce_mcp::McpClient,
+        mut rx: mpsc::UnboundedReceiver<EngineCommand>,
+        response_seq: Arc<AtomicU64>,
+        alive: Arc<AtomicBool>,
+        is_shutdown: Arc<AtomicBool>,
+        shutdown_signal: Arc<tokio::sync::Notify>,
+    ) {
+        tokio::spawn(async move {
+            let mut liveness = tokio::time::interval(
+                std::time::Duration::from_secs(STDIO_LIVENESS_POLL_SECS),
+            );
+            liveness.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+            loop {
+                tokio::select! {
+                    cmd = rx.recv() => match cmd {
+                        Some(EngineCommand::Request { method, params, reply }) => {
+                            if is_shutdown.load(Ordering::SeqCst) {
+                                let _ = reply.send(Err(McpError::ConnectionError(
+                                    "Transport shutting down".to_string(),
+                                )));
+                                continue;
+                            }
+
+                            let outcome = {
+                                let request = client.request(
+                                    &method,
+                                    params,
+                                    std::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS),
+                                );
+                                tokio::pin!(request);
+                                tokio::select! {
+                                    result = &mut request => Some(result),
+                                    _ = shutdown_signal.notified() => None,
+                                }
+                                // `request` (and its &mut client borrow) drops here.
+                            };
+
+                            match outcome {
+                                Some(result) => {
+                                    drain_engine_stderr(&server_name, &client);
+                                    let mapped = match result {
+                                        Ok(value) => {
+                                            let seq = response_seq.fetch_add(1, Ordering::SeqCst);
+                                            Ok(JsonRpcResponse {
+                                                jsonrpc: "2.0".to_string(),
+                                                result: value.unwrap_or(serde_json::Value::Null),
+                                                id: RequestId::Number((seq % i64::MAX as u64) as i64),
+                                            })
+                                        }
+                                        Err(e) => {
+                                            alive.store(
+                                                client.transport_alive(),
+                                                Ordering::SeqCst,
+                                            );
+                                            Err(map_engine_error(e))
+                                        }
+                                    };
+                                    let _ = reply.send(mapped);
+                                }
+                                None => {
+                                    // Shutdown requested mid-request: abandon it and
+                                    // kill the child promptly (the old transport
+                                    // killed on shutdown without waiting).
+                                    let _ = reply.send(Err(McpError::ConnectionError(
+                                        "Transport shutting down".to_string(),
+                                    )));
+                                    let _ = client.shutdown().await;
+                                    drain_engine_stderr(&server_name, &client);
+                                    alive.store(false, Ordering::SeqCst);
+                                    break;
+                                }
+                            }
+                        }
+                        Some(EngineCommand::Notify { method, params }) => {
+                            if let Err(e) = client.notify(&method, params).await {
+                                tracing::warn!(
+                                    "[MCP Transport] Notification '{}' failed: {:#}",
+                                    method,
+                                    e.as_anyhow()
+                                );
+                            }
+                            drain_engine_stderr(&server_name, &client);
+                        }
+                        Some(EngineCommand::Shutdown { reply }) => {
+                            let _ = client.shutdown().await;
+                            drain_engine_stderr(&server_name, &client);
+                            alive.store(false, Ordering::SeqCst);
+                            let _ = reply.send(());
+                            break;
+                        }
+                        None => {
+                            // Transport dropped without shutdown(): kill the child
+                            // so no zombie process is left (the old transport
+                            // killed the child in Drop).
+                            let _ = client.shutdown().await;
+                            alive.store(false, Ordering::SeqCst);
+                            break;
+                        }
+                    },
+                    _ = liveness.tick() => {
+                        alive.store(client.transport_alive(), Ordering::SeqCst);
+                        drain_engine_stderr(&server_name, &client);
+                    }
+                }
+            }
+
+            tracing::info!("[MCP Transport] Engine actor for '{}' stopped", server_name);
+        });
     }
 }
 
@@ -697,147 +702,70 @@ impl McpTransport for StdioTransport {
             ));
         }
 
-        // Generate a unique request ID with collision detection
-        let id = loop {
-            let next_id = self.request_id.fetch_add(1, Ordering::SeqCst);
-            // Handle potential wrap-around at u64::MAX
-            let candidate = RequestId::Number((next_id % i64::MAX as u64) as i64);
-            let pending = self.pending.lock();
-            if !pending.contains_key(&candidate) {
-                break candidate;
-            }
-            // If collision detected, try next ID
-            tracing::debug!("[MCP Transport] Request ID collision detected, trying next ID");
-        };
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(EngineCommand::Request {
+                method,
+                params,
+                reply: reply_tx,
+            })
+            .map_err(|_| {
+                McpError::ConnectionError("Failed to send request: channel closed".to_string())
+            })?;
 
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method,
-            params,
-            id: id.clone(),
-        };
-
-        let (response_tx, response_rx) = oneshot::channel();
-
-        {
-            let mut pending = self.pending.lock();
-            pending.insert(
-                id.clone(),
-                PendingRequest {
-                    sender: response_tx,
-                    created_at: Instant::now(),
-                },
-            );
-        }
-
-        self.tx.send(McpMessage::Request(request)).map_err(|_| {
-            // Clean up pending request if send fails
-            self.pending.lock().remove(&id);
-            McpError::ConnectionError("Failed to send request: channel closed".to_string())
-        })?;
-
+        // The engine enforces the same per-request timeout internally; this
+        // outer bound also caps time spent queued behind an in-flight request.
         match tokio::time::timeout(
             tokio::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS),
-            response_rx,
+            reply_rx,
         )
         .await
         {
             Ok(Ok(result)) => result,
-            Ok(Err(_)) => {
-                self.pending.lock().remove(&id);
-                Err(McpError::ConnectionError(
-                    "Response channel closed".to_string(),
-                ))
-            }
-            Err(_) => {
-                // Remove timed out request and return error
-                self.pending.lock().remove(&id);
-                Err(McpError::ConnectionError(format!(
-                    "Request timeout after {} seconds",
-                    STDIO_REQUEST_TIMEOUT_SECS
-                )))
-            }
+            Ok(Err(_)) => Err(McpError::ConnectionError(
+                "Response channel closed".to_string(),
+            )),
+            Err(_) => Err(McpError::ConnectionError(format!(
+                "Request timeout after {} seconds",
+                STDIO_REQUEST_TIMEOUT_SECS
+            ))),
         }
     }
 
     fn send_notification(&self, method: String, params: Option<serde_json::Value>) {
-        // BUG 1 FIX: Use JsonRpcNotification (no id field) per JSON-RPC 2.0 spec.
-        // Notifications MUST NOT include an id member. Previously this incorrectly
-        // created a JsonRpcRequest with id: RequestId::Null which serializes to
-        // {"id": null, ...}, causing MCP servers to reject the notification.
-        let notification = JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method,
-            params,
-        };
-
-        let _ = self.tx.send(McpMessage::Notification(notification));
+        if self.is_shutdown.load(Ordering::SeqCst) {
+            return;
+        }
+        // FIFO with requests through the actor channel, so lifecycle
+        // notifications keep their ordering guarantees (e.g.
+        // `notifications/initialized` is written before any later request).
+        // The engine serializes notifications without an `id` member per the
+        // JSON-RPC 2.0 spec (BUG 1 FIX preserved).
+        let _ = self.tx.send(EngineCommand::Notify { method, params });
     }
 
     fn is_alive(&self) -> bool {
-        if self.is_shutdown.load(Ordering::SeqCst) {
-            return false;
-        }
-        let mut child = self.child.lock();
-        let Some(process) = child.as_mut() else {
-            return false;
-        };
-
-        match process.try_wait() {
-            Ok(Some(status)) => {
-                tracing::warn!(
-                    "[MCP Transport] Child process exited while checking health: {}",
-                    status
-                );
-                self.is_shutdown.store(true, Ordering::SeqCst);
-                child.take();
-                false
-            }
-            Ok(None) => true,
-            Err(e) => {
-                tracing::warn!("[MCP Transport] Failed to poll child process health: {}", e);
-                false
-            }
-        }
+        !self.is_shutdown.load(Ordering::SeqCst) && self.alive.load(Ordering::SeqCst)
     }
 
     async fn shutdown(&self) -> McpResult<()> {
         tracing::info!("[MCP Transport] Shutting down");
         self.is_shutdown.store(true, Ordering::SeqCst);
 
-        if let Some(tx) = self.shutdown_tx.lock().take() {
-            let _ = tx.send(());
-        }
-
+        // Wake the actor out of any in-flight request so the child is killed
+        // promptly, then ask it to shut the engine down (SIGTERM, then SIGKILL).
+        self.shutdown_signal.notify_waiters();
+        let (reply_tx, reply_rx) = oneshot::channel();
+        if self
+            .tx
+            .send(EngineCommand::Shutdown { reply: reply_tx })
+            .is_ok()
         {
-            let mut pending = self.pending.lock();
-            if !pending.is_empty() {
-                tracing::warn!(
-                    "[MCP Transport] Shutdown draining {} pending requests",
-                    pending.len()
-                );
-            }
-            for (_, pending_req) in pending.drain() {
-                let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                    "Transport shutting down".to_string(),
-                )));
-            }
+            // Bounded wait: if the actor already exited via the shutdown signal,
+            // the reply sender is dropped and this returns immediately.
+            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), reply_rx).await;
         }
-
-        let child = {
-            let mut guard = self.child.lock();
-            guard.take()
-        };
-        if let Some(mut c) = child {
-            match c.kill().await {
-                Ok(_) => {
-                    tracing::info!("[MCP Transport] Process killed");
-                }
-                Err(e) => {
-                    tracing::warn!("[MCP Transport] Failed to kill process: {}", e);
-                }
-            }
-        }
+        self.alive.store(false, Ordering::SeqCst);
 
         Ok(())
     }
