@@ -18,7 +18,16 @@ export interface ExecutorchPreset {
 export interface OnDeviceModel {
   id: string;
   displayName: string;
-  family: 'qwen3' | 'qwen2.5-vl' | 'gemma4' | 'llama3.2' | 'phi4-mini' | 'apple-fm' | 'gemini-nano';
+  family:
+    | 'qwen3'
+    | 'qwen3-vl'
+    | 'qwen2.5-vl'
+    | 'lfm2-vl'
+    | 'gemma4'
+    | 'llama3.2'
+    | 'phi4-mini'
+    | 'apple-fm'
+    | 'gemini-nano';
   paramCountB: number;
   fileSizeBytes: number;
   supportedRuntimes: OnDeviceRuntime[];
@@ -48,4 +57,16 @@ export interface OnDeviceModel {
   checksum?: string;
   /** File format: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx'. Required when downloadUrl is present. */
   format?: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx';
+  /**
+   * Vision projector (mmproj) artifact for multimodal GGUF models run through
+   * llama.rn `initMultimodal`. This is a SECOND downloadable file alongside the
+   * base `downloadUrl` GGUF — vision input is only effective when it is
+   * installed. Present only for models whose `capabilities.visionIn` is a real,
+   * mmproj-backed capability (see `effectiveVisionIn` in @agiworkforce/local-llm).
+   */
+  mmprojUrl?: string;
+  /** SHA-256 hex digest of the mmproj vision-projector file. */
+  mmprojChecksum?: string;
+  /** Byte size of the mmproj vision-projector file. */
+  mmprojSizeBytes?: number;
 }
