@@ -28,6 +28,7 @@ unused_results = "allow"
 await_holding_lock = "warn"
 
 [dependencies]
+agiworkforce-execpolicy = { path = "../../../crates/agiworkforce-execpolicy" }
 agiworkforce-sandbox-policy = { path = "../../../crates/agiworkforce-sandbox-policy" }
 
 tauri = { version = "2.11.0", features = ["tray-icon"] }
