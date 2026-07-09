@@ -14,7 +14,7 @@ import React, { useEffect, useCallback } from 'react';
 import { Keyboard, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../lib/utils';
-import { Button } from './ui/Button';
+import { Button } from '@agiworkforce/ui';
 
 // ---------------------------------------------------------------------------
 // Types

@@ -1,6 +1,6 @@
 import { Code2, FileText, FlaskConical, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button } from './ui/Button';
+import { Button } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 
 export interface DownloadCardProps {

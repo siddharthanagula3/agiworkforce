@@ -13,6 +13,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/ui": "workspace:*",

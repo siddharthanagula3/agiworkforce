@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import type { GeneratedFileKind, GeneratedFilePresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
-import { Button } from './ui/Button';
+import { Button } from '@agiworkforce/ui';
 
 export interface GeneratedFileCardProps {
   presentation: GeneratedFilePresentation;

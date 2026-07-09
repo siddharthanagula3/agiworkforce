@@ -16,7 +16,7 @@ import { useSidebar } from '../hooks/useSidebar';
 import { useChatStore } from '../stores/chatStore';
 import { useUIStore } from '../stores/uiStore';
 import { useTierStore, selectTier } from '../stores/tierStore';
-import { ScrollArea } from './ui/ScrollArea';
+import { ScrollArea } from '@agiworkforce/ui';
 import { Tooltip } from './ui/Tooltip';
 import { ConversationItem } from './ConversationItem';
 import { UserProfile } from './UserProfile';
