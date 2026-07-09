@@ -17,7 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@shared/ui/alert-dialog';
+} from '@agiworkforce/ui';
 import { assessModelSwitchCache } from '@agiworkforce/services';
 import { useChatStore } from '@/stores/chatStore';
 import {

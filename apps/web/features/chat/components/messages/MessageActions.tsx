@@ -20,7 +20,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@shared/ui/alert-dialog';
+} from '@agiworkforce/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';

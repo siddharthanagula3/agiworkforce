@@ -12,7 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@shared/ui/alert-dialog';
+} from '@agiworkforce/ui';
 import { Download, UserX, Loader2 } from 'lucide-react';
 
 interface ExportDataPanelProps {
