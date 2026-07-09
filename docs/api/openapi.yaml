@@ -598,30 +598,6 @@ paths:
         '200':
           description: Transcription result
 
-  /llm/v2/chat:
-    post:
-      operationId: createV2Chat
-      summary: Chat completion (v2 enhanced)
-      description: Enhanced chat completion endpoint with additional features
-      tags: [LLM]
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Chat response
-
-  /llm/completion:
-    post:
-      operationId: createLlmCompletion
-      summary: LLM completion
-      description: Direct LLM completion endpoint
-      tags: [LLM]
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Completion response
-
   /completion:
     post:
       operationId: createPromptCompletion

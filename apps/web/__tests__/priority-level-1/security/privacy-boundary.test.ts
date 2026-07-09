@@ -31,7 +31,7 @@ import {
 } from '@/lib/managed-compute-gate';
 
 function makeRequest(): NextRequest {
-  return new NextRequest('http://localhost/api/llm/v2/chat', { method: 'POST' });
+  return new NextRequest('http://localhost/api/llm/v1/chat/completions', { method: 'POST' });
 }
 
 describe('L1 Security - Privacy Boundaries (Local)', () => {
