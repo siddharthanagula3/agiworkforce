@@ -93,17 +93,26 @@ const chatCompletionSchema = z
 // HELPERS
 // =============================================================================
 
-// Providers this proxy actually forwards to. The shared catalog
-// (`@agiworkforce/types` -> models.json) knows about ~12 providers; this
-// route currently proxies the 3 first-party managed ones. Widening this set
-// is a deliberate contract change (restructure Wave 2 step 2/3) done together
-// with adapter wiring + test updates — not implicitly.
-type Provider = Extract<ProviderId, 'anthropic' | 'openai' | 'google'>;
+// Providers this proxy forwards to: every cloud adapter wired in
+// lib/providerAdapters.ts (restructure Wave 2 step 2 widened this from the
+// first-party trio to all eleven cloud providers). Local-device providers
+// (ollama unless the server deploys one, lmstudio always) stay out of the
+// managed proxy; models from unwired providers fail closed with a 400.
+type Provider = Exclude<ProviderId, 'ollama'>;
 
 const PROXIED_PROVIDERS: ReadonlySet<CatalogProvider> = new Set<CatalogProvider>([
   'anthropic',
   'openai',
   'google',
+  'deepseek',
+  'xai',
+  'perplexity',
+  'groq',
+  'mistral',
+  'moonshot',
+  'qwen',
+  'zhipu',
+  'open_router',
 ]);
 
 /**
