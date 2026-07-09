@@ -14,8 +14,8 @@
 /// Accumulates bytes across stream chunks and yields only the valid-UTF-8
 /// prefix on each `push`, holding back any partial trailing codepoint until the
 /// rest of its bytes arrive.
-#[derive(Default)]
-pub(crate) struct Utf8StreamDecoder {
+#[derive(Debug, Default)]
+pub struct Utf8StreamDecoder {
     /// Bytes received but not yet emitted because they form an incomplete
     /// trailing codepoint. Empty between codepoint boundaries.
     buf: Vec<u8>,

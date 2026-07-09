@@ -1,9 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 pub mod openrouter_models;
 pub mod provider_dispatch;
-pub mod serialization;
-pub(crate) mod sse_decoder;
 pub mod streaming;
 
 pub use provider_dispatch::{
@@ -12,13 +8,19 @@ pub use provider_dispatch::{
 };
 pub use streaming::{parse_paywall_body, stream_completion};
 
-/// Maximum time to wait between successive stream chunks before giving up.
-pub(crate) const STREAM_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+// Chat wire types are shared with other surfaces through the extracted
+// `agiworkforce-llm` crate (Wave 5c1). Re-exported here so every existing
+// `crate::models::*` path keeps working unchanged.
+pub use agiworkforce_llm::ToolCall as ToolCallResponse;
+pub use agiworkforce_llm::{ContentBlock, Message, MessageContent, ToolDefinition};
 
 /// Internal marker attached to tool-call arguments when a provider streams
 /// malformed function-call JSON. The agent loop turns this into a tool error
-/// before any executor sees the arguments.
-pub(crate) const INVALID_TOOL_ARGS_MARKER: &str = "__agi_invalid_tool_args";
+/// before any executor sees the arguments. (Defined in `agiworkforce-llm`.)
+pub(crate) use agiworkforce_llm::INVALID_TOOL_ARGS_MARKER;
+
+/// Maximum time to wait between successive stream chunks before giving up.
+pub(crate) const STREAM_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +46,11 @@ pub enum OllamaMode {
 /// through the `OpenAICompatible` variant. The variant carries the canonical
 /// base URL and the env var name for the API key (or `None` for unauthenticated
 /// local endpoints like LM Studio).
+///
+/// This enum is the CLI's provider-selection surface (config names, login
+/// flows, key env vars). The transport mechanics live in `agiworkforce-llm`;
+/// `streaming::stream_completion` maps each variant onto a
+/// `agiworkforce_llm::ProviderSpec` at the call boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Provider {
@@ -170,154 +177,6 @@ pub fn nvidia_provider() -> Provider {
         name: "nvidia",
         base_url: "https://integrate.api.nvidia.com/v1/chat/completions",
         api_key_env: Some("NVIDIA_API_KEY"),
-    }
-}
-
-/// A content block within a message (supports text, images, and tool interactions).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum ContentBlock {
-    #[serde(rename = "text")]
-    Text { text: String },
-    /// Base64-encoded image with MIME type (e.g. "image/png"). Created by the
-    /// `--file / -f` flag when an image extension is detected.  Provider
-    /// serializers translate this into the correct provider-specific format.
-    #[serde(rename = "image")]
-    Image {
-        /// MIME type, e.g. "image/png", "image/jpeg", "image/webp", "image/gif".
-        mime: String,
-        /// Raw base64-encoded bytes (no `data:` prefix — that is added by the
-        /// serializer so each provider receives the format it expects).
-        data_b64: String,
-    },
-    #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: serde_json::Value,
-    },
-    #[serde(rename = "tool_result")]
-    ToolResult {
-        tool_use_id: String,
-        content: String,
-        #[serde(default)]
-        is_error: bool,
-    },
-}
-
-/// A tool definition to send to the API.
-///
-/// Note: only `name`, `description`, and `input_schema` are forwarded to the
-/// model. The remaining fields are LOCAL metadata for the executor —
-/// concurrency hints (Phase 6) and per-tool size caps (Phase 8). Each provider
-/// stream function explicitly picks the API-bound fields by name, so these
-/// extra fields stay client-side.
-#[derive(Debug, Clone, Serialize)]
-pub struct ToolDefinition {
-    pub name: String,
-    pub description: String,
-    pub input_schema: serde_json::Value,
-    /// Tool only reads filesystem / network state; never mutates. Read-only
-    /// tools are safe to batch concurrently (Phase 7).
-    #[serde(skip)]
-    #[serde(default)]
-    pub is_read_only: bool,
-    /// Tool can run concurrently with other concurrency-safe tools without
-    /// races. Defaults to false; only set true after auditing the tool for
-    /// shared mutable state.
-    #[serde(skip)]
-    #[serde(default)]
-    pub is_concurrency_safe: bool,
-    /// Per-tool override for output truncation in chars. None falls back to
-    /// the global `MAX_OUTPUT_BYTES` (50 KB). Larger for `web_fetch`,
-    /// smaller for status-only tools (Phase 8).
-    #[serde(skip)]
-    #[serde(default)]
-    pub max_result_size_chars: Option<usize>,
-    /// Phase E (W2-W6): when `true`, this tool's schema is NOT included in
-    /// the model's initial system-prompt tool list. Instead the model must
-    /// call `tool_search` to load the schema on demand. Defaults to `false`
-    /// (always-loaded). Set `true` for niche tools: Memory, Notebook,
-    /// Computer, MCP extensions, skills — keeping the initial payload small.
-    /// The tool remains fully executable once its schema is loaded.
-    #[serde(skip)]
-    #[serde(default)]
-    pub should_defer: bool,
-    /// Compatibility aliases accepted by executor/schema lookup. Kept local so
-    /// reference-compatible names (`Read`, `Bash`, etc.) do not leak into provider
-    /// schemas.
-    #[serde(skip)]
-    #[serde(default)]
-    pub aliases: Vec<String>,
-    /// Owning runtime lane/module for diagnostics and future delegated work.
-    #[serde(skip)]
-    #[serde(default)]
-    pub owner: String,
-    /// Permission intent used by diagnostics and guardrail tests.
-    #[serde(skip)]
-    #[serde(default)]
-    pub permission_class: String,
-    /// Stable tags for doctor output, metrics, and future tool-management UI.
-    #[serde(skip)]
-    #[serde(default)]
-    pub diagnostic_tags: Vec<String>,
-}
-
-/// A tool call parsed from the API response.
-#[derive(Debug, Clone)]
-pub struct ToolCallResponse {
-    pub id: String,
-    pub name: String,
-    pub arguments: serde_json::Value,
-}
-
-/// Message content — either a simple string or structured content blocks.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MessageContent {
-    Text(String),
-    Blocks(Vec<ContentBlock>),
-}
-
-/// A single message in a conversation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub role: String,
-    pub content: MessageContent,
-}
-
-impl Message {
-    /// Create a simple text message.
-    pub fn text(role: &str, text: impl Into<String>) -> Self {
-        Self {
-            role: role.to_string(),
-            content: MessageContent::Text(text.into()),
-        }
-    }
-
-    /// Create a message with content blocks.
-    pub fn blocks(role: &str, blocks: Vec<ContentBlock>) -> Self {
-        Self {
-            role: role.to_string(),
-            content: MessageContent::Blocks(blocks),
-        }
-    }
-
-    /// Extract text content from this message (concatenates all text blocks).
-    pub fn text_content(&self) -> String {
-        match &self.content {
-            MessageContent::Text(t) => t.clone(),
-            MessageContent::Blocks(blocks) => blocks
-                .iter()
-                .filter_map(|b| match b {
-                    ContentBlock::Text { text } => Some(text.as_str()),
-                    ContentBlock::Image { .. }
-                    | ContentBlock::ToolUse { .. }
-                    | ContentBlock::ToolResult { .. } => None,
-                })
-                .collect::<Vec<_>>()
-                .join(""),
-        }
     }
 }
 
