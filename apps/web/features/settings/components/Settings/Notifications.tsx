@@ -2,7 +2,7 @@ import React from 'react';
 import { type UseFormReturn } from 'react-hook-form';
 import { Save, Loader2 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
-import { Switch } from '@shared/ui/switch';
+import { Switch } from '@agiworkforce/ui';
 import {
   Form,
   FormControl,

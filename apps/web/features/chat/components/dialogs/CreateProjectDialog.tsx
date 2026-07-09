@@ -12,7 +12,7 @@ import {
 } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useProjectStore } from '@features/projects/stores/project-store';

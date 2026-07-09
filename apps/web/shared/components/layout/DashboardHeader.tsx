@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useThemeContext } from '@shared/hooks/useThemeContext';
 import { Button } from '@shared/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,

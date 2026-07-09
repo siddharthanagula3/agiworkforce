@@ -15,7 +15,7 @@ import { Check, ChevronDown, ChevronRight, ListChecks, Circle } from 'lucide-rea
 import { Card, CardContent, CardHeader } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
 import { Progress } from '@shared/ui/progress';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface ParsedStep {

@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Check } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
+import { Popover, PopoverTrigger, PopoverContent } from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
-import { Switch } from '@shared/ui/switch';
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@shared/ui/tooltip';
+import { Switch } from '@agiworkforce/ui';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
 import {
   AlertDialog,
   AlertDialogAction,

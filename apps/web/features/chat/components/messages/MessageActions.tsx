@@ -21,8 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@shared/ui/alert-dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@shared/ui/popover';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';
 import {
   MoreVertical,

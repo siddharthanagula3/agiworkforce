@@ -2,8 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AgentModeSwitcher } from './AgentModeSwitcher';
 
-// Stub Radix Popover so it renders inline in jsdom
-vi.mock('@shared/ui/popover', () => ({
+// Stub Radix Popover so it renders inline in jsdom.
+// Popover is imported from the @agiworkforce/ui barrel (migrated off the @shared/ui fork).
+// AgentModeSwitcher imports only Popover* from the barrel, so a full-module stub is safe.
+vi.mock('@agiworkforce/ui', () => ({
   Popover: ({ children, open }: { children: React.ReactNode; open: boolean }) => (
     <div data-open={open}>{children}</div>
   ),

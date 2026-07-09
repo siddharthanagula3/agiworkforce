@@ -4,7 +4,7 @@ import { Slot } from '@radix-ui/react-slot';
 import { Controller, ControllerProps, FieldPath, FieldValues, FormProvider } from 'react-hook-form';
 
 import { cn } from '@shared/lib/utils';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { FormFieldContext, FormItemContext, useFormField } from '@shared/ui/form-hooks';
 
 const Form = FormProvider;

@@ -1,6 +1,6 @@
 import React, { forwardRef, useId } from 'react';
 import { Input, InputProps } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { useAccessibility } from '@shared/hooks/useAccessibility';
 import { useAriaAttributes } from '@shared/hooks/useAccessibility';
 

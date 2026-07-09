@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Switch } from '@shared/ui/switch';
+import { Switch } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { useBillingStore } from '@/stores/unified/auth';
 import {
