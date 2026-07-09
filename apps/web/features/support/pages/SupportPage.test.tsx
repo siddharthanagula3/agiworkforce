@@ -44,7 +44,10 @@ vi.mock('@shared/ui/textarea', () => ({
   Textarea: (props: Record<string, unknown>) => <textarea {...props} />,
 }));
 
-vi.mock('@shared/ui/accordion', () => ({
+// Accordion and Tabs are imported from the @agiworkforce/ui barrel (migrated off
+// the @shared/ui forks); SupportCenter uses only those two families from the barrel.
+// Tabs stub renders all TabsContent so tests can query content in every tab.
+vi.mock('@agiworkforce/ui', () => ({
   Accordion: ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="accordion" {...props}>
       {children as React.ReactNode}
@@ -65,10 +68,6 @@ vi.mock('@shared/ui/accordion', () => ({
       {children as React.ReactNode}
     </div>
   ),
-}));
-
-// Mock Tabs · render all TabsContent so tests can query content in all tabs
-vi.mock('@shared/ui/tabs', () => ({
   Tabs: ({ children, ...props }: Record<string, unknown>) => (
     <div data-testid="tabs" {...props}>
       {children as React.ReactNode}

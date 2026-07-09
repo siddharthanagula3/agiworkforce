@@ -170,8 +170,11 @@ vi.mock('@/stores/settingsStore', () => ({
 // Mock shared/ui primitives
 // ---------------------------------------------------------------------------
 
-vi.mock('@shared/ui/switch', () => ({
-  Switch: ({
+// AdvancedModeToggle imports Switch, Select*, Label, and Badge from the
+// @agiworkforce/ui barrel (migrated off the @shared/ui forks). These are the only
+// barrel exports it uses, so a full-module stub is safe.
+vi.mock('@agiworkforce/ui', () => {
+  const Switch = ({
     checked,
     onCheckedChange,
     id,
@@ -192,10 +195,7 @@ vi.mock('@shared/ui/switch', () => ({
       data-testid="advanced-mode-switch"
       {...rest}
     />
-  ),
-}));
-
-vi.mock('@shared/ui/select', () => {
+  );
   const Select = ({
     children,
     value,
@@ -258,22 +258,16 @@ vi.mock('@shared/ui/select', () => {
       {children}
     </div>
   );
-  return { Select, SelectTrigger, SelectValue, SelectContent, SelectItem };
-});
-
-vi.mock('@shared/ui/label', () => ({
-  Label: ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
+  const Label = ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
     <label htmlFor={htmlFor}>{children}</label>
-  ),
-}));
-
-vi.mock('@shared/ui/badge', () => ({
-  Badge: ({ children, ...rest }: { children: React.ReactNode }) => (
+  );
+  const Badge = ({ children, ...rest }: { children: React.ReactNode }) => (
     <span data-testid="tier-badge" {...rest}>
       {children}
     </span>
-  ),
-}));
+  );
+  return { Switch, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Label, Badge };
+});
 
 // ---------------------------------------------------------------------------
 // Import component under test (after all mocks are set up)

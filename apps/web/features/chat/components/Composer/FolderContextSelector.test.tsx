@@ -15,7 +15,7 @@ vi.mock('@features/chat/services/folder-management-service', () => ({
 }));
 
 // Stub Radix Popover
-vi.mock('@shared/ui/popover', () => ({
+vi.mock('@agiworkforce/ui', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
     asChild ? <>{children}</> : <div>{children}</div>,
