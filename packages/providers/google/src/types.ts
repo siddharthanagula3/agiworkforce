@@ -87,6 +87,19 @@ export interface GeminiStreamChunk {
       | string;
     index?: number;
     safetyRatings?: Array<{ category: string; probability: string; blocked?: boolean }>;
+    /**
+     * Google Search grounding sources attached to this candidate. Present
+     * only when the request used the native `google_search` tool and the
+     * model actually grounded its answer. `web.uri`/`web.title` are the
+     * fields the legacy apps/web/lib/llm-providers/google.ts reshaped into
+     * the web v1 route's `x_search_results` delta (source cards) — see
+     * `translateGeminiStream`'s `server-tool-result` producer in stream.ts.
+     */
+    groundingMetadata?: {
+      groundingChunks?: Array<{
+        web?: { uri: string; title?: string };
+      }>;
+    };
   }>;
   promptFeedback?: {
     blockReason?: string;
