@@ -37,7 +37,6 @@ export * from './Table';
 export * from './Tabs';
 export * from './Textarea';
 export * from './Toast';
-export * from './Toaster';
 export * from './Tooltip';
 
 // Enhanced Components (Accessibility & UX Improvements)
