@@ -24,6 +24,7 @@
 
 import type { Provider } from './provider';
 import type { ModelMetadata, ModelCapabilities } from './model-catalog';
+import type { Effort } from './design-system/effort';
 
 // ============================================================================
 // Auth
@@ -146,7 +147,20 @@ export type ToolChoice = 'auto' | 'none' | 'required' | { type: 'tool'; name: st
 // Thinking / reasoning
 // ============================================================================
 
-export type ThinkingConfig = { type: 'enabled'; budgetTokens?: number } | { type: 'disabled' };
+export type ThinkingConfig =
+  | { type: 'enabled'; budgetTokens?: number }
+  | { type: 'disabled' }
+  /**
+   * Adaptive extended thinking: the model chooses its own thinking depth
+   * with no client-specified budget. Anthropic-specific today (newer Claude
+   * models where `anthropicUsesAdaptiveThinking()`-style capability checks
+   * apply, see apps/web's request-processor.ts `buildThinkingConfig`) —
+   * `packages/providers/anthropic/src/translate.ts` maps this straight to
+   * Anthropic's `thinking: {type:'adaptive'}` request field. Other adapters
+   * that don't support adaptive thinking should treat this the same as
+   * `{type:'enabled'}` with no explicit budget (their own default applies).
+   */
+  | { type: 'adaptive' };
 
 // ============================================================================
 // Chat request
@@ -176,6 +190,20 @@ export interface ChatRequest {
   topK?: number;
   stopSequences?: string[];
   thinking?: ThinkingConfig;
+  /**
+   * UI-facing reasoning-effort level, independent of `thinking`. Some
+   * providers accept both simultaneously as distinct request fields —
+   * Anthropic sends `thinking` (budget/adaptive control) AND a separate
+   * `output_config: {effort}` when both are set (see
+   * `packages/providers/anthropic/src/translate.ts`); OpenAI derives
+   * `reasoning_effort`/`reasoning.effort` directly from this when present,
+   * bypassing its budget-derived heuristic (which does not round-trip
+   * `Effort` tiers losslessly — see `packages/providers/openai/src/
+   * translate-responses.ts`'s `thinkingBudgetToEffort`). Adapters that
+   * support only one of `thinking`/`effort` should honor whichever they
+   * understand and ignore the other.
+   */
+  effort?: Effort;
   /** Free-form metadata for tracing / billing tags. */
   metadata?: Record<string, unknown>;
 }
@@ -199,6 +227,17 @@ export interface StreamChunkToolUseStart {
   type: 'tool-use-start';
   toolUseId: string;
   name: string;
+  /**
+   * The vendor's own position for this tool call within its content-block
+   * sequence (Anthropic: `content_block_start.index`), when the adapter has
+   * one. Optional and NOT used to key normal cross-vendor consumers (which
+   * should assign their own stable 0-based index by order of appearance,
+   * as `packages/llm-normalize`'s `OpenAIWireAssembler` does by default) —
+   * it exists only so a byte-stable-wire consumer that needs to reproduce a
+   * legacy vendor-index-keyed wire (the web v1 route's `tool_calls[].index`,
+   * see `OpenAIWireAssembler`'s `wireMode: 'legacy-web'`) can.
+   */
+  vendorIndex?: number;
 }
 
 export interface StreamChunkToolUseDelta {
@@ -211,6 +250,114 @@ export interface StreamChunkToolUseDelta {
 export interface StreamChunkToolUseEnd {
   type: 'tool-use-end';
   toolUseId: string;
+}
+
+/**
+ * A provider-managed ("server-side") tool invocation started — distinct
+ * from `tool-use-start` because the tool executes on the VENDOR's
+ * infrastructure (Anthropic web_search/web_fetch/code_execution, Google
+ * google_search/code_execution grounding), not via the caller's own
+ * tool-execution loop. Emitted once per invocation, when the vendor stream
+ * signals the tool call started (input, if the vendor streams it
+ * incrementally, is not tracked here — no known consumer needs it; the
+ * paired `server-tool-result` carries the outcome).
+ *
+ * Producer: `packages/providers/anthropic/src/stream.ts` (Anthropic
+ * `content_block_start` where `content_block.type === 'server_tool_use'`),
+ * `packages/providers/google/src/stream.ts` (Gemini grounding /
+ * code-execution function-call parts).
+ * Consumer: `packages/llm-normalize/src/openai-wire-compat.ts`'s
+ * `OpenAIWireAssembler`, which reconstructs the web v1 route's
+ * `x_tool_status` delta from it.
+ */
+export interface StreamChunkServerToolUse {
+  type: 'server-tool-use';
+  toolUseId: string;
+  name: string;
+}
+
+/**
+ * The result of a provider-managed tool invocation — arrives as one
+ * complete event (vendors resolve server-side tools before streaming the
+ * result to the client; there is no incremental delta form to track).
+ * `payload` carries the vendor's result object verbatim and untranslated:
+ * callers that need to distinguish result kinds (web search vs. code
+ * execution) inspect its shape themselves (e.g. Anthropic's
+ * `web_search_tool_result`/`code_execution_tool_result` content blocks are
+ * passed through byte-for-byte as `payload`) rather than this type
+ * normalizing across vendors — there is no shared cross-vendor result
+ * schema today.
+ *
+ * Producer: `packages/providers/anthropic/src/stream.ts` (`content_block_
+ * start` where `content_block.type` is `web_search_tool_result` /
+ * `code_execution_tool_result`), `packages/providers/google/src/stream.ts`
+ * (grounding metadata / code-execution results).
+ * Consumer: `OpenAIWireAssembler`, which reconstructs the web v1 route's
+ * `x_search_results` / `x_code_result` deltas and the non-streaming
+ * `search_results` response field from it.
+ */
+export interface StreamChunkServerToolResult {
+  type: 'server-tool-result';
+  toolUseId: string;
+  payload: unknown;
+  isError?: boolean;
+}
+
+/**
+ * One citation attached to the text block currently being streamed.
+ * `payload` carries the vendor's citation object verbatim (there is no
+ * shared cross-vendor citation schema yet — same rationale as
+ * `StreamChunkServerToolResult.payload`). `blockIndex` is the vendor's own
+ * content-block index (Anthropic: `content_block_delta.index`), needed by
+ * consumers that must correlate a citation back to the specific vendor SSE
+ * event it came from.
+ *
+ * Producer: `packages/providers/anthropic/src/stream.ts`
+ * (`content_block_delta` where `delta.type === 'citations_delta'`).
+ * Consumer: `OpenAIWireAssembler`, which (for the web v1 route only, via
+ * its `citationsMode` option) reconstructs the exact raw Anthropic-shaped
+ * `content_block_delta`/`citations_delta` event the legacy wire leaked
+ * verbatim (captured via golden fixture, not redesigned — see
+ * apps/web/app/api/llm/v1/chat/completions/__tests__/stream-transform.
+ * golden.test.ts) for streaming, and aggregates into the non-streaming
+ * `citations` response field.
+ */
+export interface StreamChunkCitation {
+  type: 'citation-delta';
+  blockIndex: number;
+  payload: unknown;
+}
+
+/**
+ * Safety-net passthrough for an upstream stream event a provider adapter
+ * does not (yet) have a dedicated translation for. `payload` is the
+ * COMPLETE raw vendor event, untouched.
+ *
+ * Why this exists: the legacy web wire (stream-transform.ts, pre-Wave-2)
+ * reshapes only the Anthropic event shapes it explicitly recognizes;
+ * anything else falls through its `if/else if` chain unchanged and is
+ * serialized straight onto the SSE stream as-is. Byte-stability for the
+ * web v1 route means reproducing that default-passthrough behavior for
+ * event types this migration didn't explicitly account for — for example
+ * Anthropic's `web_fetch_tool_result` content block (unlike
+ * `web_search_tool_result`/`code_execution_tool_result`, the legacy code
+ * never added a case for it) — rather than silently dropping them, which
+ * `packages/providers/anthropic/src/stream.ts`'s translator would
+ * otherwise do for any content-block/delta type outside its known set.
+ *
+ * Producer: any adapter's `stream.ts`, for vendor event types it
+ * recognizes as "exists but not (yet) worth a dedicated StreamChunk
+ * variant" — currently `packages/providers/anthropic/src/stream.ts` for
+ * `content_block_start` block types outside {text, thinking, tool_use,
+ * server_tool_use, web_search_tool_result, code_execution_tool_result}.
+ * Consumer: `OpenAIWireAssembler` (web v1 route only, matching its
+ * `citationsMode`-style opt-in), which re-serializes `payload` verbatim.
+ * Surfaces without a legacy raw-passthrough wire to match should ignore
+ * this chunk type.
+ */
+export interface StreamChunkVendorRaw {
+  type: 'vendor-raw';
+  payload: unknown;
 }
 
 export interface StreamChunkUsage {
@@ -260,6 +407,10 @@ export type StreamChunk =
   | StreamChunkToolUseStart
   | StreamChunkToolUseDelta
   | StreamChunkToolUseEnd
+  | StreamChunkServerToolUse
+  | StreamChunkServerToolResult
+  | StreamChunkCitation
+  | StreamChunkVendorRaw
   | StreamChunkUsage
   | StreamChunkError
   | StreamChunkStop;
