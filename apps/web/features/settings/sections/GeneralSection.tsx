@@ -18,7 +18,7 @@ import {
   AlertDialogDescription,
   AlertDialogCancel,
   AlertDialogAction,
-} from '@/components/ui/AlertDialog';
+} from '@agiworkforce/ui';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
 import {
   fetchPreferenceNamespace,

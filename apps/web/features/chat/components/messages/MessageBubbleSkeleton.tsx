@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@shared/lib/utils';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Skeleton } from '@agiworkforce/ui';
 
 interface MessageBubbleSkeletonProps {
   /** Whether this skeleton represents a user message (right-aligned). */
