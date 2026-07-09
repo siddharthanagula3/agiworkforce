@@ -142,7 +142,7 @@ export default function ProvidersPage() {
               Run AGI Locally
             </Link>
             <Link href="/download" className="agi-fl-cta agi-fl-cta--ghost">
-              Download AGI
+              Get notified
             </Link>
           </div>
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
@@ -207,9 +207,9 @@ export default function ProvidersPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Pick the model after you start, not before."
-          body="Install AGI, add a key or a local runtime, and change your mind mid-thread whenever the work changes shape."
+          body="Get notified when Desktop and CLI open, add a key or a local runtime, and change your mind mid-thread whenever the work changes shape."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/byok', label: 'Set Up BYOK' },
             { href: '/local', label: 'Run AGI Locally' },
           ]}

@@ -89,7 +89,7 @@ export default function ChromeExtensionPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI in Chrome · Desktop-bridge scoped</p>
+              <p className="agi-fl-eyebrow">AGI in Chrome · coming soon</p>
               <h1 id="agi-fl-chrome-hero-title" className="agi-fl-h1">
                 <span className="agi-fl-h1-line">Your browser,</span>
                 <span className="agi-fl-h1-line">
@@ -103,7 +103,7 @@ export default function ChromeExtensionPage() {
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="/desktop" className="agi-fl-cta agi-fl-cta--primary">
-                  Pair with AGI Desktop
+                  See AGI Desktop
                 </Link>
                 <Link href="/get-started" className="agi-fl-cta agi-fl-cta--secondary">
                   Get Started
@@ -195,7 +195,7 @@ export default function ChromeExtensionPage() {
           title="Put AGI beside the page."
           body="Start with AGI Desktop. The extension hands every job to it across one paired, signed bridge. AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist."
           ctas={[
-            { href: '/desktop', label: 'Pair with AGI Desktop' },
+            { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/get-started', label: 'Get Started' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}

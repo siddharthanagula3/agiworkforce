@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
+import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Documentation | AGI',
@@ -119,7 +120,7 @@ const FEATURE_CARDS = [
     href: '/mobile',
     title: 'AGI Mobile',
     body: 'iPhone and Android. On-device Local Mode by default. Dispatch tasks to Desktop for heavier work.',
-    cta: 'App Store / Play Store',
+    cta: COMING_SOON_LABEL,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
         <rect x="5" y="2" width="14" height="20" rx="2" />
@@ -144,7 +145,7 @@ const FEATURE_CARDS = [
     href: '/chrome-extension',
     title: 'Chrome Extension',
     body: 'Side panel UI in Chrome MV3. The paired Desktop handles the real work; no keys stored in the browser.',
-    cta: 'Chrome Web Store',
+    cta: COMING_SOON_LABEL,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
         <circle cx="12" cy="12" r="10" />
@@ -159,7 +160,7 @@ const FEATURE_CARDS = [
     href: '/vscode-extension',
     title: 'VS Code Extension',
     body: '@agi chat participant, diff review, inline completions, and slash commands inside VS Code.',
-    cta: 'VS Code Marketplace',
+    cta: COMING_SOON_LABEL,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
         <polyline points="16 18 22 12 16 6" />
@@ -297,7 +298,13 @@ export default function DocsPage() {
                   <strong className="agi-docs-card-title">{card.title}</strong>
                   <p className="agi-docs-card-body">{card.body}</p>
                   <p className="agi-docs-card-cta">
-                    Get started with <code>{card.cta}</code> ›
+                    {card.cta === COMING_SOON_LABEL ? (
+                      <>{COMING_SOON_LABEL} ›</>
+                    ) : (
+                      <>
+                        Get started with <code>{card.cta}</code> ›
+                      </>
+                    )}
                   </p>
                 </Link>
               ))}

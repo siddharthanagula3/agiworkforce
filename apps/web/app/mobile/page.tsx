@@ -103,7 +103,7 @@ export default function MobilePage() {
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-                  Get Launch Access
+                  Get notified
                 </Link>
                 <WaitlistTrigger
                   label="Team & Enterprise access"
@@ -256,7 +256,7 @@ export default function MobilePage() {
           title="Take AGI with you."
           body="AGI Mobile launches on iPhone and Android. Local Mode is the default. AGI managed cloud is in public alpha — sign in to use it."
           ctas={[
-            { href: '/download', label: 'Get Launch Access' },
+            { href: '/download', label: 'Get notified' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`iPhone & Android · ${LAUNCH.date}`}

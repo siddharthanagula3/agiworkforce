@@ -32,7 +32,7 @@ export default function AgiCodePage() {
           ctas={[
             { href: '/cli', label: 'See the CLI' },
             { href: '/vscode-extension', label: 'Get the VS Code Extension' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
           ]}
           modeRibbon={['Local · offline-capable', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -154,9 +154,9 @@ export default function AgiCodePage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Bring the agent to your repo."
-          body="Install the CLI, request the VS Code extension preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
+          body="The CLI and VS Code extension are coming soon. Get notified, request the VS Code preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/cli', label: 'See the CLI' },
             { href: '/get-started', label: 'Get Started' },
           ]}

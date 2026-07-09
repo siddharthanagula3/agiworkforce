@@ -155,19 +155,15 @@ export default async function RootLayout({
     },
   };
 
-  // JSON-LD Schema for SoftwareApplication
+  // JSON-LD Schema for SoftwareApplication. No `offers` or `operatingSystem`:
+  // every surface (Web, Desktop, Mobile, CLI, Chrome, VS Code) is coming soon,
+  // and neither field should assert current availability or pricing.
   const softwareAppSchema = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: 'AGI',
     description: 'AI workspace with explicit Local, BYOK, and open managed cloud modes',
     applicationCategory: 'Business Application',
-    operatingSystem: 'macOS, Windows, Linux, Web',
-    offers: {
-      '@type': 'Offer',
-      price: '0',
-      priceCurrency: 'USD',
-    },
     url: APP_URL,
   };
 

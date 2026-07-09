@@ -7,6 +7,7 @@ import { useUser, useClerk } from '@clerk/nextjs';
 import { useTheme } from 'next-themes';
 import { Moon, Sun } from 'lucide-react';
 import { AgiMark } from '../agi/AgiMark';
+import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -43,11 +44,11 @@ function ThemeToggle() {
  */
 
 const PRODUCT_ITEMS = [
-  { href: '/desktop', label: 'AGI Desktop', hint: 'Local + BYOK host' },
-  { href: '/mobile', label: 'AGI Mobile', hint: 'Private AI in your pocket' },
-  { href: '/cli', label: 'AGI CLI', hint: 'Agent in your terminal' },
-  { href: '/chrome-extension', label: 'AGI in Chrome', hint: 'Browser side panel' },
-  { href: '/vscode-extension', label: 'AGI in VS Code', hint: 'IDE-native assistance' },
+  { href: '/desktop', label: 'AGI Desktop', hint: COMING_SOON_LABEL },
+  { href: '/mobile', label: 'AGI Mobile', hint: COMING_SOON_LABEL },
+  { href: '/cli', label: 'AGI CLI', hint: COMING_SOON_LABEL },
+  { href: '/chrome-extension', label: 'AGI in Chrome', hint: COMING_SOON_LABEL },
+  { href: '/vscode-extension', label: 'AGI in VS Code', hint: COMING_SOON_LABEL },
   { href: '/agi-code', label: 'AGI Code', hint: 'The developer stack' },
   { href: '/apps', label: 'Apps & Connectors', hint: 'MCP tools & integrations' },
 ] as const;

@@ -24,7 +24,7 @@ export default function AgiWorkPage() {
           em="on schedule."
           lede="AGI Work is the Desktop mode for scheduled work and dispatched tasks: set routines that run on your own machine, send a task from your phone to the Desktop host, and approve the steps that matter before they run. The compute is yours, and so is every decision."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/mobile', label: 'See Mobile Dispatch' },
           ]}
@@ -96,9 +96,9 @@ export default function AgiWorkPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Put your desktop on the roster."
-          body="Install AGI Desktop, schedule the first routine, and dispatch work from your phone. Every sensitive action stays visible and approved before it runs."
+          body="AGI Desktop is coming: schedule the first routine and dispatch work from your phone the moment it opens. Every sensitive action stays visible and approved before it runs."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/desktop', label: 'See AGI Desktop' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}

@@ -99,7 +99,7 @@ export default function TeamsPage() {
           title="Pilot the workspace before you buy compute."
           body="Start the team on free Local and BYOK modes today, then move selected users onto AGI managed cloud, which is open in public alpha."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/contact-sales', label: 'Contact Sales' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
