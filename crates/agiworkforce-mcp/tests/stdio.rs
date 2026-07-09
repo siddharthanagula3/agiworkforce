@@ -47,6 +47,57 @@ async fn stdio_list_and_call() {
 }
 
 #[tokio::test]
+async fn stdio_connect_without_handshake_host_drives_initialize() {
+    // The desktop d2 adoption path: bring the transport up WITHOUT the crate's
+    // built-in `initialize`, then have the host drive its own handshake with a
+    // host-chosen protocol version + client capabilities via `request` /
+    // `notify`. The sim echoes back whatever `protocolVersion` it is sent, so a
+    // "2025-11-25" round-trip proves the handshake bytes stay host-controlled.
+    let mut client = McpClient::connect_without_handshake(
+        "stdio-nohs",
+        stdio_cfg("normal"),
+        McpTimeouts::default(),
+        support::decline_hooks(),
+    )
+    .await
+    .expect("connect_without_handshake");
+
+    let init = client
+        .request(
+            "initialize",
+            Some(serde_json::json!({
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": { "name": "AGI Workforce", "version": "9.9.9" }
+            })),
+            Duration::from_secs(3),
+        )
+        .await
+        .expect("host initialize")
+        .expect("initialize result");
+    assert_eq!(init["protocolVersion"], "2025-11-25");
+    assert_eq!(init["serverInfo"]["name"], "mcp-sim-stdio");
+
+    client
+        .notify("notifications/initialized", None)
+        .await
+        .expect("initialized notification");
+
+    let tools = client.list_tools().await.expect("list_tools");
+    assert_eq!(tools.len(), 1);
+    assert_eq!(tools[0].name, "echo");
+
+    let raw = client
+        .call_tool_value("echo", serde_json::json!({ "text": "host-driven" }))
+        .await
+        .expect("call_tool_value")
+        .expect("result");
+    assert_eq!(raw["content"][0]["text"], "host-driven");
+
+    let _ = client.shutdown().await;
+}
+
+#[tokio::test]
 async fn stdio_elicitation_reply_unblocks_response() {
     // The server sends `elicitation/create` before answering tools/list. The
     // AutoDecline handler must reply so the sim proceeds — if the reply were
