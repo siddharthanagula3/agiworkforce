@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Button } from '@shared/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import {
   Code,
   Eye,
