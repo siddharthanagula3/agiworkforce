@@ -53,6 +53,7 @@ export async function* translateAnthropicStream(
   let inputTokens: number | undefined;
   let cacheReadTokens: number | undefined;
   let cacheWriteTokens: number | undefined;
+  let cacheWrite1hTokens: number | undefined;
   let stopEmitted = false;
 
   try {
@@ -65,6 +66,12 @@ export async function* translateAnthropicStream(
             inputTokens = usage.input_tokens;
             cacheReadTokens = usage.cache_read_input_tokens ?? undefined;
             cacheWriteTokens = usage.cache_creation_input_tokens ?? undefined;
+            // 1h/5m TTL breakdown only appears on the full `Usage` shape
+            // (message_start), not on the cumulative `MessageDeltaUsage`
+            // (message_delta) — capture it here alongside the other cache
+            // counters. Anthropic omits `cache_creation` entirely for
+            // requests with no cache breakpoints or a single 5m breakpoint.
+            cacheWrite1hTokens = usage.cache_creation?.ephemeral_1h_input_tokens ?? undefined;
           }
           break;
         }
@@ -125,6 +132,7 @@ export async function* translateAnthropicStream(
             ...(outputTokens !== undefined ? { outputTokens } : {}),
             ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
             ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+            ...(cacheWrite1hTokens !== undefined ? { cacheWrite1hTokens } : {}),
           };
           yield usageChunk;
           yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };

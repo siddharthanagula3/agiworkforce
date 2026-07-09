@@ -1,9 +1,11 @@
 /**
  * VS Code provider stream client.
  *
- * Mirrors `apps/web/lib/providerStreamClient.ts` for the VS Code extension
- * runtime. Uses Node's global fetch (available in VS Code's Node 18+ host)
- * and a manual SSE frame parser — same as the web client.
+ * Thin wrapper around the shared `@agiworkforce/llm-runtime` SSE client
+ * (`packages/llm-runtime/src/client/streamFromProvider.ts`). Keeps this
+ * surface's public API (types + `streamFromProvider` signature) stable for
+ * its callers. Uses Node's global fetch (available in VS Code's Node 18+
+ * host) and the same SSE frame parser as the other surfaces.
  *
  * Auth: caller passes a bearer token sourced from VS Code secret storage
  * (the AGI Cloud account token from `signInToAgiCloud`, via `getAccountToken`).
@@ -11,6 +13,8 @@
  * `https://api.agiworkforce.com` for production. Override per-machine via
  * VS Code settings.
  */
+
+import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/llm-runtime';
 
 export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
 
@@ -58,59 +62,12 @@ export interface StreamFromProviderParams {
 export async function* streamFromProvider(
   params: StreamFromProviderParams,
 ): AsyncIterable<StreamChunk> {
-  const url = `${params.gatewayUrl.replace(/\/+$/, '')}/api/v1/providers/${encodeURIComponent(
-    params.providerId,
-  )}/stream`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${params.authToken}`,
-      'x-requested-with': 'agiworkforce-vscode',
-    },
-    body: JSON.stringify(params.request),
+  yield* sharedStreamFromProvider<ProviderStreamRequest, StreamChunk>({
+    providerId: params.providerId,
+    authToken: params.authToken,
+    request: params.request,
     ...(params.signal ? { signal: params.signal } : {}),
+    baseUrl: params.gatewayUrl,
+    clientTag: 'agiworkforce-vscode',
   });
-
-  if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => '');
-    yield {
-      type: 'error',
-      message: text || `Upstream error ${res.status}`,
-      ...(res.status >= 500 ? { retryable: true } : {}),
-    };
-    yield { type: 'stop', reason: 'error' };
-    return;
-  }
-
-  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
-
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let frameEnd: number;
-      while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
-        const frame = buffer.slice(0, frameEnd);
-        buffer = buffer.slice(frameEnd + 2);
-        const dataLines = frame
-          .split('\n')
-          .filter((l) => l.startsWith('data:'))
-          .map((l) => l.slice(5).trimStart());
-        const data = dataLines.join('\n').trim();
-        if (!data) continue;
-        if (data === '[DONE]') return;
-        try {
-          yield JSON.parse(data) as StreamChunk;
-        } catch {
-          // ignore malformed
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
 }
