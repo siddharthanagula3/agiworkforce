@@ -45,7 +45,7 @@
       "path": "apps/mobile",
       "owner": "Mobile lead",
       "stack": "Expo, React Native",
-      "purpose": "Small Local LLM mobile app, Cloud invite/waitlist, continuity, capture, approvals, preview/download/share",
+      "purpose": "Small Local LLM mobile app plus public-alpha Cloud chat (no BYOK), continuity, capture, approvals, preview/download/share",
       "primaryChecks": [
         "pnpm --filter @agiworkforce/mobile typecheck",
         "pnpm --filter @agiworkforce/mobile test"
