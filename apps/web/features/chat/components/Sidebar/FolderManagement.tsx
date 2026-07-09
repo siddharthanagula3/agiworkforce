@@ -22,10 +22,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Label } from '@agiworkforce/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import { Folder, FolderOpen, MoreVertical, Edit, Trash2, FolderPlus, Loader2 } from 'lucide-react';

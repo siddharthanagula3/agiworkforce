@@ -19,7 +19,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 import {
   AlertDialog,
   AlertDialogAction,
