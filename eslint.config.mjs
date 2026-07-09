@@ -20,6 +20,8 @@ export default [
       '**/.next/**',
       'node_modules/**',
       '**/node_modules/**',
+      // ts-rs generated protocol bindings (see scripts/generate-protocol-types.mjs)
+      'packages/types/src/generated/**',
       '**/src-tauri/**',
       'target/**',
       '**/target/**',

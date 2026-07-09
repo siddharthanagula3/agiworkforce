@@ -130,7 +130,8 @@
     "dev:desktop": "pnpm --filter @agiworkforce/desktop dev",
     "docs:check": "pnpm check:doc-status && pnpm check:agent-context && pnpm check:non-md-artifacts",
     "typecheck:all": "pnpm -r --if-present typecheck",
-    "demo:multi-provider": "tsx examples/multi-provider-chat.ts"
+    "demo:multi-provider": "tsx examples/multi-provider-chat.ts",
+    "check:protocol-types": "node scripts/generate-protocol-types.mjs && git diff --exit-code -- packages/types/src/generated"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
