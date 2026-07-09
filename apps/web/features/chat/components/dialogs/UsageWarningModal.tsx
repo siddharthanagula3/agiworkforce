@@ -6,7 +6,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@shared/ui/alert-dialog';
+} from '@agiworkforce/ui';
 import { AlertTriangle, CreditCard } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { useRouter } from 'next/navigation';
