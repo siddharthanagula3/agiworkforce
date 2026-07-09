@@ -14,6 +14,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { canAccessManualModelSelection } from '@agiworkforce/types';
+import type { MeResponse } from '@agiworkforce/services';
 
 const PatchMeSchema = z.object({
   display_name: z.string().min(1).max(120).optional(),
@@ -100,7 +101,10 @@ async function handleGetMe(request: NextRequest) {
         : null,
     };
 
-    return NextResponse.json({
+    // Typed against the shared /api/me contract (packages/services
+    // cloud-contracts) — the contract test in __tests__/route.contract.test.ts
+    // asserts the runtime output parses against the same schema.
+    const responseBody: MeResponse = {
       id: userId,
       email: resolvedEmail ?? null,
       name: clerkName || resolvedEmail?.split('@')[0] || 'User',
@@ -111,7 +115,8 @@ async function handleGetMe(request: NextRequest) {
       feature_flags,
       credits,
       routing_preferences,
-    });
+    };
+    return NextResponse.json(responseBody);
   } catch (error) {
     logger.error(
       {

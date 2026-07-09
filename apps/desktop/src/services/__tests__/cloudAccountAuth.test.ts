@@ -21,22 +21,31 @@ describe('cloudAccountAuth', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
+        // Contract-valid /api/me payload (packages/services cloud-contracts/me.ts):
+        // the route returns unix-second numbers for updated_at/current_period_end
+        // and always includes display_name, the two base flags, credits, and
+        // routing_preferences. Extra feature flags exercise normalizeFeatureFlags.
         json: vi.fn().mockResolvedValue({
           id: 'user_123',
           email: 'user@example.com',
           name: 'Example User',
           avatar_url: null,
-          created_at: '2026-05-28T00:00:00.000Z',
-          updated_at: '2026-05-28T00:00:00.000Z',
+          created_at: null,
+          updated_at: 1751712000,
           plan: {
             tier: 'pro',
+            display_name: 'Pro',
             status: 'active',
-            current_period_end: '2026-07-12T00:00:00.000Z',
+            current_period_end: 1752278400,
           },
           feature_flags: {
+            beta_features: true,
+            advanced_model_access: true,
             cloud_managed: true,
             local_only: false,
           },
+          credits: null,
+          routing_preferences: {},
         }),
       }),
     );
