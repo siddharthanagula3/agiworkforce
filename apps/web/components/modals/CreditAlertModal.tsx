@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertTriangle, Zap, CreditCard, TrendingUp } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button } from '@agiworkforce/ui';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { contactEnterpriseSales } from '@features/billing/services/stripe-payments';
