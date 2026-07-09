@@ -30,6 +30,11 @@ import {
 import NetInfo from '@react-native-community/netinfo';
 // It hashes raw bytes correctly; expo-crypto's digestStringAsync hashes the string representation.
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
+import {
+  ensureMultimodalArtifacts,
+  ChecksumMismatchError,
+  type FileSystemDeps,
+} from '@agiworkforce/local-llm';
 import { insertInstalledModel, getInstalledModel } from '@/storage/installedModels';
 import type { InstalledModel, ModelRuntime, ModelFormat } from '@/storage/types';
 
@@ -72,6 +77,16 @@ export interface ModelDownloadOpts {
   wifiOnly?: boolean;
   /** Called during download: bytes downloaded so far, total bytes, speed in bytes/s */
   onProgress?: (downloaded: number, total: number, speedBps: number) => void;
+  /**
+   * Vision projector (mmproj) second artifact for multimodal GGUF models.
+   * When all three fields are present, the mmproj is downloaded side-by-side
+   * as `<modelPath>.mmproj.gguf` (the convention the vision routing service
+   * reads) and both files are checksum-verified before the install record is
+   * written. Values come straight from the OnDeviceModel catalog entry.
+   */
+  mmprojUrl?: string;
+  mmprojChecksum?: string;
+  mmprojSizeBytes?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,9 +121,38 @@ function assertValidDownloadOptions(opts: ModelDownloadOpts): void {
       'Model file size must be a positive safe integer.',
     );
   }
+  assertHttpsUrl(opts.downloadUrl);
+
+  const mmprojFieldCount = [opts.mmprojUrl, opts.mmprojChecksum, opts.mmprojSizeBytes].filter(
+    (v) => v !== undefined,
+  ).length;
+  if (mmprojFieldCount > 0 && mmprojFieldCount < 3) {
+    throw new ModelDownloadError(
+      'network_error',
+      'Multimodal download requires mmprojUrl, mmprojChecksum, and mmprojSizeBytes together.',
+    );
+  }
+  if (opts.mmprojUrl) {
+    assertHttpsUrl(opts.mmprojUrl);
+    if (!SHA256_HEX.test(opts.mmprojChecksum ?? '')) {
+      throw new ModelDownloadError(
+        'checksum_mismatch',
+        'Vision projector checksum must be a SHA-256 hex digest.',
+      );
+    }
+    if (!Number.isSafeInteger(opts.mmprojSizeBytes) || (opts.mmprojSizeBytes ?? 0) <= 0) {
+      throw new ModelDownloadError(
+        'storage_full',
+        'Vision projector file size must be a positive safe integer.',
+      );
+    }
+  }
+}
+
+function assertHttpsUrl(url: string): void {
   let parsed: URL;
   try {
-    parsed = new URL(opts.downloadUrl);
+    parsed = new URL(url);
   } catch {
     throw new ModelDownloadError('network_error', 'Model download URL is invalid.');
   }
@@ -122,8 +166,14 @@ function modelFilePath(modelId: string, format: ModelFormat): string {
   return `${modelDir(modelId)}model.${ext}`;
 }
 
-function resumeFilePath(modelId: string, format: ModelFormat): string {
-  return `${modelFilePath(modelId, format)}.partial`;
+/**
+ * Side-by-side vision projector path. MUST stay `<basePath>.mmproj.gguf` — the
+ * vision routing service (features/image/services/vision.ts) derives this same
+ * sibling path from InstalledModel.local_path to decide whether the on-device
+ * VL route is runnable.
+ */
+function mmprojFilePath(modelId: string, format: ModelFormat): string {
+  return `${modelFilePath(modelId, format)}.mmproj.gguf`;
 }
 
 async function ensureDir(dir: string): Promise<void> {
@@ -213,12 +263,128 @@ async function sha256OfFile(fileUri: string): Promise<string> {
 
 const _activeDownloads = new Map<string, DownloadResumable>();
 
-export function cancelDownload(modelId: string): void {
-  const d = _activeDownloads.get(modelId);
-  if (d) {
-    d.pauseAsync().catch(() => undefined);
-    _activeDownloads.delete(modelId);
+function hasActiveDownload(modelId: string): boolean {
+  for (const key of _activeDownloads.keys()) {
+    if (key === modelId || key.startsWith(`${modelId}::`)) return true;
   }
+  return false;
+}
+
+export function cancelDownload(modelId: string): void {
+  for (const [key, d] of _activeDownloads) {
+    if (key === modelId || key.startsWith(`${modelId}::`)) {
+      d.pauseAsync().catch(() => undefined);
+      _activeDownloads.delete(key);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single-file resumable download (shared by the base model and mmproj paths)
+// ---------------------------------------------------------------------------
+
+/**
+ * Download one file with HTTP-Range resume support. Persists the opaque
+ * resumeData token to `<destPath>.partial` on failure and restores it on the
+ * next attempt. Throws ModelDownloadError with the same kind mapping the
+ * single-file path always used. Deletes the partial marker on success.
+ */
+async function downloadFileWithResume(params: {
+  activeKey: string;
+  url: string;
+  destPath: string;
+  onBytes?: (written: number, total: number) => void;
+}): Promise<void> {
+  const { activeKey, url, destPath, onBytes } = params;
+  const resumePath = `${destPath}.partial`;
+
+  let resumeData: string | undefined;
+  const partialInfo = await getInfoAsync(resumePath);
+  if (partialInfo.exists && (partialInfo as FileInfo & { size?: number }).size) {
+    resumeData = await readAsStringAsync(resumePath, {
+      encoding: EncodingType.UTF8,
+    }).catch(() => undefined);
+  }
+
+  const progressCallback = onBytes
+    ? ({ totalBytesWritten, totalBytesExpectedToWrite }: DownloadProgressData) => {
+        onBytes(totalBytesWritten, totalBytesExpectedToWrite ?? 0);
+      }
+    : undefined;
+
+  const downloadResumable: DownloadResumable = resumeData
+    ? createDownloadResumable(url, destPath, {}, progressCallback, resumeData)
+    : createDownloadResumable(url, destPath, {}, progressCallback);
+
+  _activeDownloads.set(activeKey, downloadResumable);
+
+  let result: FileSystemDownloadResult | undefined;
+  try {
+    result = await downloadResumable.downloadAsync();
+  } catch (err) {
+    // Save resume state for next attempt. createDownloadResumable expects the
+    // OPAQUE resumeData token string (used to set the HTTP Range header), not the
+    // whole serialized DownloadPauseState object — storing the full JSON broke
+    // HTTP Range resume (download restarted from 0).
+    try {
+      const snapshot = await downloadResumable.savable();
+      if (snapshot && snapshot.resumeData) {
+        await writeAsStringAsync(resumePath, snapshot.resumeData, {
+          encoding: EncodingType.UTF8,
+        });
+      }
+    } catch {
+      // Best-effort
+    }
+    _activeDownloads.delete(activeKey);
+
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort')) {
+      throw new ModelDownloadError('cancelled', 'Download was cancelled.');
+    }
+    if (msg.toLowerCase().includes('disk') || msg.toLowerCase().includes('space')) {
+      throw new ModelDownloadError(
+        'storage_full',
+        'Not enough storage space to download this model.',
+      );
+    }
+    throw new ModelDownloadError('network_error', `Download failed: ${msg}`);
+  }
+
+  _activeDownloads.delete(activeKey);
+
+  if (!result || (result.status !== 200 && result.status !== 206)) {
+    throw new ModelDownloadError(
+      'network_error',
+      `Download failed: server returned ${result?.status ?? 'unknown status'}`,
+    );
+  }
+
+  // Clean up the partial file on success
+  await deleteAsync(resumePath, { idempotent: true });
+}
+
+/**
+ * FileSystemDeps adapter over expo-file-system for the shared
+ * `ensureMultimodalArtifacts` orchestration in @agiworkforce/local-llm
+ * (exists-skip, corrupt-file re-download, delete-on-mismatch semantics).
+ */
+function expoFileSystemDeps(modelId: string): FileSystemDeps {
+  return {
+    fileExists: async (path) => (await getInfoAsync(path)).exists === true,
+    sha256OfFile,
+    deleteFile: async (path) => deleteAsync(path, { idempotent: true }),
+    downloadToFile: async (url, dest, onFraction) => {
+      await downloadFileWithResume({
+        activeKey: `${modelId}::${dest}`,
+        url,
+        destPath: dest,
+        onBytes: (written, total) => {
+          if (total > 0) onFraction?.(written / total);
+        },
+      });
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -241,7 +407,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     onProgress,
   } = opts;
 
-  if (_activeDownloads.has(modelId)) {
+  if (hasActiveDownload(modelId)) {
     throw new ModelDownloadError('already_installed', `Model ${modelId} is already downloading`);
   }
 
@@ -268,90 +434,67 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   await ensureDir(modelDir(modelId));
 
   const destPath = modelFilePath(modelId, format);
-  const resumePath = resumeFilePath(modelId, format);
 
-  // Check for an existing partial download to resume
-  let resumeData: string | undefined;
-  const partialInfo = await getInfoAsync(resumePath);
-  if (partialInfo.exists && (partialInfo as FileInfo & { size?: number }).size) {
-    resumeData = await readAsStringAsync(resumePath, {
-      encoding: EncodingType.UTF8,
-    }).catch(() => undefined);
-  }
-
+  // Speed-tracking progress wrapper shared by both branches.
   let startTime = Date.now();
   let lastBytes = 0;
+  const reportBytes = (written: number, total: number): void => {
+    if (!onProgress) return;
+    const now = Date.now();
+    const elapsedSec = (now - startTime) / 1000;
+    const speedBps = elapsedSec > 0 ? (written - lastBytes) / elapsedSec : 0;
+    lastBytes = written;
+    startTime = now;
+    onProgress(written, total, speedBps);
+  };
 
-  const progressCallback = onProgress
-    ? ({ totalBytesWritten, totalBytesExpectedToWrite }: DownloadProgressData) => {
-        const now = Date.now();
-        const elapsedSec = (now - startTime) / 1000;
-        const speedBps = elapsedSec > 0 ? (totalBytesWritten - lastBytes) / elapsedSec : 0;
-        lastBytes = totalBytesWritten;
-        startTime = now;
-        onProgress(totalBytesWritten, totalBytesExpectedToWrite ?? fileSizeBytes, speedBps);
-      }
-    : undefined;
-
-  const downloadResumable: DownloadResumable = resumeData
-    ? createDownloadResumable(downloadUrl, destPath, {}, progressCallback, resumeData)
-    : createDownloadResumable(downloadUrl, destPath, {}, progressCallback);
-
-  _activeDownloads.set(modelId, downloadResumable);
-
-  let result: FileSystemDownloadResult | undefined;
-  try {
-    result = await downloadResumable.downloadAsync();
-  } catch (err) {
-    // Save resume state for next attempt. createDownloadResumable expects the
-    // OPAQUE resumeData token string (used to set the HTTP Range header), not the
-    // whole serialized DownloadPauseState object — storing the full JSON broke
-    // HTTP Range resume (download restarted from 0).
+  if (opts.mmprojUrl && opts.mmprojChecksum && opts.mmprojSizeBytes) {
+    // Multimodal path: base GGUF + side-by-side mmproj vision projector, both
+    // checksum-verified via the shared local-llm orchestration (idempotent
+    // exists-skip, corrupt re-download, delete-on-mismatch).
+    const mmprojPath = mmprojFilePath(modelId, format);
+    const totalBytes = fileSizeBytes + opts.mmprojSizeBytes;
     try {
-      const snapshot = await downloadResumable.savable();
-      if (snapshot && snapshot.resumeData) {
-        await writeAsStringAsync(resumePath, snapshot.resumeData, {
-          encoding: EncodingType.UTF8,
-        });
+      await ensureMultimodalArtifacts({
+        artifacts: {
+          model: { url: downloadUrl, checksum, sizeBytes: fileSizeBytes },
+          mmproj: {
+            url: opts.mmprojUrl,
+            checksum: opts.mmprojChecksum,
+            sizeBytes: opts.mmprojSizeBytes,
+          },
+        },
+        modelPath: destPath,
+        mmprojPath,
+        deps: expoFileSystemDeps(modelId),
+        onProgress: (fraction) => reportBytes(Math.round(fraction * totalBytes), totalBytes),
+      });
+    } catch (err) {
+      if (err instanceof ChecksumMismatchError) {
+        throw new ModelDownloadError(
+          'checksum_mismatch',
+          `Integrity check failed for ${displayName}. The downloaded file is corrupt. Please try again.`,
+        );
       }
-    } catch {
-      // Best-effort
+      throw err; // ModelDownloadError kinds from downloadFileWithResume pass through.
     }
-    _activeDownloads.delete(modelId);
+  } else {
+    await downloadFileWithResume({
+      activeKey: modelId,
+      url: downloadUrl,
+      destPath,
+      onBytes: (written, total) => reportBytes(written, total > 0 ? total : fileSizeBytes),
+    });
 
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.toLowerCase().includes('cancel') || msg.toLowerCase().includes('abort')) {
-      throw new ModelDownloadError('cancelled', 'Download was cancelled.');
-    }
-    if (msg.toLowerCase().includes('disk') || msg.toLowerCase().includes('space')) {
+    // Checksum verification
+    const actualChecksum = await sha256OfFile(destPath);
+    if (actualChecksum.toLowerCase() !== checksum.toLowerCase()) {
+      await deleteAsync(destPath, { idempotent: true });
       throw new ModelDownloadError(
-        'storage_full',
-        'Not enough storage space to download this model.',
+        'checksum_mismatch',
+        `Integrity check failed for ${displayName}. The downloaded file is corrupt. Please try again.`,
       );
     }
-    throw new ModelDownloadError('network_error', `Download failed: ${msg}`);
-  }
-
-  _activeDownloads.delete(modelId);
-
-  if (!result || (result.status !== 200 && result.status !== 206)) {
-    throw new ModelDownloadError(
-      'network_error',
-      `Download failed: server returned ${result?.status ?? 'unknown status'}`,
-    );
-  }
-
-  // Clean up the partial file on success
-  await deleteAsync(resumePath, { idempotent: true });
-
-  // Checksum verification
-  const actualChecksum = await sha256OfFile(destPath);
-  if (actualChecksum.toLowerCase() !== checksum.toLowerCase()) {
-    await deleteAsync(destPath, { idempotent: true });
-    throw new ModelDownloadError(
-      'checksum_mismatch',
-      `Integrity check failed for ${displayName}. The downloaded file is corrupt. Please try again.`,
-    );
   }
 
   // Record in SQLCipher

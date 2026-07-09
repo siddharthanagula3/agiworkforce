@@ -2,8 +2,11 @@ import { create } from 'zustand';
 import {
   getCapabilities,
   getModelById as getCatalogModelById,
+  hasRunnableGgufArtifacts,
   tier2LoadModel,
 } from '@agiworkforce/local-llm';
+import type { OnDeviceModel } from '@agiworkforce/types';
+import { downloadModel } from '@/services/modelDownload';
 import {
   getInstalledModel,
   listInstalledModels,
@@ -67,8 +70,10 @@ function defaultStatusForModel(
     };
   }
 
-  const preset = model.executorchPreset ?? getCatalogModelById(model.id)?.executorchPreset;
-  if (!preset && model.availability === 'download_required') {
+  const catalogModel = getCatalogModelById(model.id);
+  const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
+  const ggufInstallable = catalogModel ? hasRunnableGgufArtifacts(catalogModel) : false;
+  if (!preset && !ggufInstallable && model.availability === 'download_required') {
     return {
       status: 'unavailable',
       progress: 0,
@@ -77,6 +82,38 @@ function defaultStatusForModel(
   }
 
   return { status: model.availability, progress: 0 };
+}
+
+/**
+ * Download + verify a llama-rn GGUF model (base weights and, for vision models,
+ * the side-by-side mmproj projector) through services/modelDownload — resumable,
+ * checksum-verified, Wi-Fi-gated, and recorded in installed_models with a real
+ * local_path so the tier-3 runtime can load it.
+ */
+async function installGgufModel(
+  catalogModel: OnDeviceModel,
+  onProgress: (fraction: number) => void,
+): Promise<void> {
+  await downloadModel({
+    modelId: catalogModel.id,
+    displayName: catalogModel.displayName,
+    downloadUrl: catalogModel.downloadUrl!,
+    checksum: catalogModel.checksum!,
+    fileSizeBytes: catalogModel.fileSizeBytes,
+    runtime: 'local',
+    format: 'gguf',
+    mmprojUrl: catalogModel.mmprojUrl,
+    mmprojChecksum: catalogModel.mmprojChecksum,
+    mmprojSizeBytes: catalogModel.mmprojSizeBytes,
+    capabilities: JSON.stringify({
+      ...catalogModel.capabilities,
+      supportedRuntimes: catalogModel.supportedRuntimes,
+      managedBy: 'llama.rn',
+    }),
+    onProgress: (downloaded, total) => {
+      onProgress(total > 0 ? downloaded / total : 0);
+    },
+  });
 }
 
 function installedRecordFor(model: ModelDef): InstalledModel {
@@ -161,7 +198,8 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
 
     const catalogModel = getCatalogModelById(model.id);
     const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
-    if (!preset) {
+    const ggufInstallable = !preset && catalogModel && hasRunnableGgufArtifacts(catalogModel);
+    if (!preset && !ggufInstallable) {
       const error = 'The native package for this model is not bundled yet.';
       set((state) => ({
         jobs: { ...state.jobs, [model.id]: { status: 'unavailable', progress: 0, error } },
@@ -173,21 +211,29 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
       jobs: { ...state.jobs, [model.id]: { status: 'downloading', progress: 0.01 } },
     }));
 
-    try {
-      await tier2LoadModel(preset, (progress) => {
-        set((state) => ({
-          jobs: {
-            ...state.jobs,
-            [model.id]: {
-              status: 'downloading',
-              progress: Math.max(0.01, clampProgress(progress)),
-            },
+    const reportProgress = (progress: number): void => {
+      set((state) => ({
+        jobs: {
+          ...state.jobs,
+          [model.id]: {
+            status: 'downloading',
+            progress: Math.max(0.01, clampProgress(progress)),
           },
-        }));
-      });
+        },
+      }));
+    };
 
-      const record = installedRecordFor(model);
-      await recordInstalledModel(record);
+    try {
+      if (preset) {
+        await tier2LoadModel(preset, reportProgress);
+        // The ExecuTorch module manages the files itself — record local_path null.
+        const record = installedRecordFor(model);
+        await recordInstalledModel(record);
+      } else {
+        // llama-rn GGUF path — downloadModel verifies checksums and writes the
+        // installed_models record (with a real local_path) itself.
+        await installGgufModel(catalogModel!, reportProgress);
+      }
 
       set((state) => ({
         installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),

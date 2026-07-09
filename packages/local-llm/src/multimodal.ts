@@ -52,6 +52,21 @@ export function isMultimodalModel(model: OnDeviceModel): boolean {
 }
 
 /**
+ * True when a catalog model can be downloaded and run through the tier-3
+ * llama.rn GGUF path with VERIFIED artifacts: base url + sha256 + size, and —
+ * for vision models — the full mmproj triple as well. This is the installability
+ * predicate the mobile picker/installer uses for llama-rn-only rows (mirror of
+ * the `executorchPreset` requirement on the tier-2 path).
+ */
+export function hasRunnableGgufArtifacts(model: OnDeviceModel): boolean {
+  if (model.format !== 'gguf') return false;
+  if (!model.supportedRuntimes.includes('llama-rn')) return false;
+  if (!model.downloadUrl || !model.checksum || !model.fileSizeBytes) return false;
+  if (model.capabilities.visionIn) return resolveMultimodalArtifacts(model) !== null;
+  return true;
+}
+
+/**
  * Effective vision capability. Per restructure §8: `visionIn` is true only when
  * the mmproj projector artifact is actually installed. The catalog `visionIn`
  * flag is the NOMINAL capability; this is the honest, installed-state capability

@@ -12,10 +12,12 @@ export {
   tier3Generate,
   tier3Release,
   tier3IsMultimodalReady,
+  _setLlamaModuleForTesting,
 } from './tier3';
 export {
   resolveMultimodalArtifacts,
   isMultimodalModel,
+  hasRunnableGgufArtifacts,
   effectiveVisionIn,
   ensureVerifiedArtifact,
   ensureMultimodalArtifacts,
