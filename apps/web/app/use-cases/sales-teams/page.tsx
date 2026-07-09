@@ -36,7 +36,7 @@ export default function SalesTeamsPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Download AGI
+              Get notified
             </Link>
             <Link href="/byok" className="agi-fl-cta agi-fl-cta--ghost">
               Set Up BYOK
@@ -105,9 +105,9 @@ export default function SalesTeamsPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Brief better, route deliberately."
-          body="Install AGI, bring your keys, and keep account context under your control while the team works."
+          body="Get notified, bring your keys, and keep account context under your control while the team works."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/byok', label: 'Set Up BYOK' },
             { href: '/apps', label: 'Browse Apps & Connectors' },
           ]}

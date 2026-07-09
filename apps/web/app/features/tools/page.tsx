@@ -110,7 +110,7 @@ export default function FeaturesToolsPage() {
           body="Browse the connector directory, wire up your own MCP servers, and keep every tool call behind a permission you set."
           ctas={[
             { href: '/connectors', label: 'Browse Connectors' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

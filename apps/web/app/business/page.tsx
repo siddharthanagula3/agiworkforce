@@ -27,7 +27,7 @@ export default function BusinessPage() {
           lede="AGI gives teams the working surface they expect: projects, files, artifacts, cited research, and coding agents. With routing policy on top. Local work stays on the device, BYOK routes to the provider you choose on Desktop and CLI, and AGI managed cloud is in public alpha — open by default."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
@@ -140,7 +140,7 @@ export default function BusinessPage() {
           body="Begin with Local and BYOK at no platform cost, evaluate public-alpha AGI managed cloud today, and talk to sales about workspace policy and Team & Enterprise controls."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}

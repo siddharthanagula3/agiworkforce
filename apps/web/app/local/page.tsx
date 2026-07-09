@@ -36,7 +36,7 @@ export default function LocalPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Get AGI
+              Get notified
             </Link>
             <Link href="/desktop" className="agi-fl-cta agi-fl-cta--secondary">
               See AGI Desktop
@@ -188,7 +188,7 @@ export default function LocalPage() {
           title="Own the whole stack."
           body="Follow the Desktop and CLI pages for current install routes, point AGI at Ollama or LM Studio, and keep your work on your machine."
           ctas={[
-            { href: '/download', label: 'Get AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/desktop', label: 'See AGI Desktop' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}

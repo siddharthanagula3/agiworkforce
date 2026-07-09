@@ -10,7 +10,7 @@ import {
 import { FeatureGrid, LedgerSection } from '../../components/marketing/LandingSections';
 import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
-import { LAUNCH } from '../../lib/marketing-constants';
+import { LAUNCH, COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'AGI Desktop | Runs on Your Machine',
@@ -41,7 +41,7 @@ export default function DesktopPage() {
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-                  Get Launch Access
+                  Get notified
                 </Link>
                 <Link href="/local" className="agi-fl-cta agi-fl-cta--secondary">
                   Run AGI Locally
@@ -158,19 +158,19 @@ export default function DesktopPage() {
             {
               meta: 'macOS',
               title: 'Apple Silicon & Intel',
-              body: 'Universal, aarch64, and x86_64 bundles. Signed installers post here at launch.',
+              body: `Universal, aarch64, and x86_64 bundles. ${COMING_SOON_LABEL}.`,
               href: '/download',
             },
             {
               meta: 'Windows',
               title: 'Windows x64',
-              body: 'The same Rust app, on x64. Planned for public launch.',
+              body: `The same Rust app, on x64. ${COMING_SOON_LABEL}.`,
               href: '/download',
             },
             {
               meta: 'Linux',
               title: 'Linux x64',
-              body: 'An x64 AppImage. The installer opens when release assets publish.',
+              body: `An x64 AppImage. ${COMING_SOON_LABEL}.`,
               href: '/download',
             },
           ]}
@@ -189,7 +189,7 @@ export default function DesktopPage() {
             { k: 'MCP transports', v: 'stdio · SSE · streamable HTTP' },
             { k: 'Skills', v: 'Markdown + frontmatter' },
             { k: 'Bundles', v: 'macOS universal · Windows x64 · Linux x64' },
-            { k: 'Installers', v: 'Release assets open at public launch' },
+            { k: 'Installers', v: COMING_SOON_LABEL },
             { k: 'Launch', v: LAUNCH.date },
           ]}
         />
@@ -199,7 +199,7 @@ export default function DesktopPage() {
           title="Put AGI on your desktop."
           body="Point it at Ollama, LM Studio, or your own keys. Installers open at public launch."
           ctas={[
-            { href: '/download', label: 'Get Launch Access' },
+            { href: '/download', label: 'Get notified' },
             { href: '/byok', label: 'Set Up BYOK' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}

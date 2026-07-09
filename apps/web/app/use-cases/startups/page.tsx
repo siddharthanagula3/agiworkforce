@@ -46,7 +46,7 @@ export default function StartupsPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Download AGI
+              Get notified
             </Link>
             <Link href="/pricing" className="agi-fl-cta agi-fl-cta--ghost">
               See Pricing
@@ -109,9 +109,9 @@ export default function StartupsPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Start free, route deliberately."
-          body="Install AGI, run Local and BYOK from day one, and turn on public-alpha managed cloud whenever you want hosted compute."
+          body="Get notified, run Local and BYOK from day one, and turn on public-alpha managed cloud whenever you want hosted compute."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/pricing', label: 'See Pricing' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}

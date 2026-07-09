@@ -98,7 +98,7 @@ export default function EnterprisePage() {
           body="A real human answers, on a real contract. Evaluate Local, BYOK, and public-alpha managed cloud today. Enterprise controls (org seats, SSO, admin) are rolling out — request access."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { label: 'Request Enterprise Access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}

@@ -53,7 +53,7 @@ export default function ByokPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Get AGI Desktop
+              Get notified
             </Link>
             <Link href="/cli" className="agi-fl-cta agi-fl-cta--secondary">
               Set Up the CLI
@@ -190,7 +190,7 @@ export default function ByokPage() {
           title="Your keys are ready when you are."
           body="Follow the Desktop and CLI pages for current install routes, add a provider key, and route work on your own account. Local Mode stays available the whole time."
           ctas={[
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/download', label: 'Get notified' },
             { href: '/cli', label: 'Explore the CLI' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}

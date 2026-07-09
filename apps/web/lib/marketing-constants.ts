@@ -31,6 +31,28 @@ export const LAUNCH = {
   ctaLabel: 'Get launch access',
 } as const;
 
+/**
+ * All six surfaces are pre-launch. Marketing pages show "Coming soon"
+ * instead of install/download claims; every notify CTA routes to the
+ * /download page, which acts as the coming-soon hub with the waitlist form.
+ */
+export const COMING_SOON_LABEL = 'Coming soon';
+
+export const SURFACE_STATUS = {
+  web: COMING_SOON_LABEL,
+  desktop: COMING_SOON_LABEL,
+  mobile: COMING_SOON_LABEL,
+  cli: COMING_SOON_LABEL,
+  vscode: COMING_SOON_LABEL,
+  chrome: COMING_SOON_LABEL,
+} as const;
+
+/** Default CTA for surfaces that are not yet available: routes to the notify hub. */
+export const NOTIFY_CTA = {
+  label: 'Get notified',
+  href: '/download',
+} as const;
+
 export const POSITIONING = {
   wedge:
     'Try AGI on the web. Local and BYOK for serious work. Managed cloud, open in public alpha.',

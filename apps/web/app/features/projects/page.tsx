@@ -156,10 +156,10 @@ export default function ProjectsFeaturePage() {
         <FinalCta
           eyebrow="Start now"
           title="Start your first project."
-          body="Try AGI Web in the browser, or install the apps for Local and BYOK work. Give the work you repeat a place to live."
+          body="Try AGI Web in the browser. Get notified when the apps open for Local and BYOK work. Give the work you repeat a place to live."
           ctas={[
             { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
           ]}
         />
 

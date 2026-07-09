@@ -28,7 +28,7 @@ export default function SolutionsPage() {
           em="Many ways in."
           lede="Developers come for the terminal. Teams come for governance. Operators come for scheduled desktop work. Everyone gets the same rule: Local, BYOK, and AGI Cloud are separate, visible routes. Nothing moves between them silently."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/business', label: 'See AGI for Business' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
@@ -120,7 +120,7 @@ export default function SolutionsPage() {
           title="Pick a door. The workspace is the same inside."
           body="Whichever page brings you in, you land in one product with visible routes, your choice of providers, and a managed cloud in public alpha, open by default."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/use-cases', label: 'Browse Use Cases' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}

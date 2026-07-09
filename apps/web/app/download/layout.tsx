@@ -1,9 +1,9 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Download',
+  title: 'Coming Soon',
   description:
-    'Download AGI for macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and AI skills. Free during early access.',
+    'AGI is coming to macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and AI skills. Leave your email to get notified.',
   keywords: [
     'download AI app',
     'AGI download',
@@ -14,9 +14,9 @@ export const metadata: Metadata = {
     'desktop automation',
   ],
   openGraph: {
-    title: 'Download AGI Desktop App',
+    title: 'AGI Desktop App: Coming Soon',
     description:
-      'Get the native desktop AI assistant for macOS, Windows, and Linux. Free to download during early access.',
+      'The native desktop AI assistant for macOS, Windows, and Linux is in development. Get notified when it opens.',
     type: 'website',
     url: 'https://agiworkforce.com/download',
     images: [
@@ -24,15 +24,14 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1200,
         height: 630,
-        alt: 'Download AGI for macOS, Windows, and Linux',
+        alt: 'AGI for macOS, Windows, and Linux — coming soon',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Download AGI Desktop App',
-    description:
-      'Native AI desktop assistant for macOS, Windows, and Linux. Free during early access.',
+    title: 'AGI Desktop App: Coming Soon',
+    description: 'Native AI desktop assistant for macOS, Windows, and Linux. Coming soon.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -41,24 +40,6 @@ export const metadata: Metadata = {
   },
 };
 
-const downloadJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'AGI',
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'macOS, Windows, Linux',
-  downloadUrl: 'https://agiworkforce.com/download',
-  offers: {
-    '@type': 'Offer',
-    price: '0',
-    priceCurrency: 'USD',
-    availability: 'https://schema.org/InStock',
-  },
-  description:
-    'Native desktop AI assistant with browser automation, multi-model chat, and AI skills.',
-};
-
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {
-  void downloadJsonLd;
   return <>{children}</>;
 }

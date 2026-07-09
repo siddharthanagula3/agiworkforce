@@ -162,10 +162,10 @@ export default function MemoryFeaturePage() {
         <FinalCta
           eyebrow="Start now"
           title="Make it personal. Keep it yours."
-          body="Try AGI Web in the browser, or install the apps for Local and BYOK work. Memory stays in your hands either way."
+          body="Try AGI Web in the browser. Get notified when the apps open for Local and BYOK work. Memory stays in your hands either way."
           ctas={[
             { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
           ]}
         />
 

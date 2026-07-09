@@ -17,7 +17,7 @@ import {
   TrustTriptych,
 } from '../components/marketing/FlagshipSections';
 import { PublicWaitlistForm } from '../components/marketing/PublicWaitlistForm';
-import { LAUNCH } from '../lib/marketing-constants';
+import { LAUNCH, SURFACE_STATUS } from '../lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
@@ -65,8 +65,7 @@ export default function Home() {
           eyebrow="the AI application suite"
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Download AGI Desktop' },
-            { href: '/cli', label: 'Install CLI' },
+            { href: '/download', label: 'Get notified' },
           ]}
           ctas2={[
             { href: '/vscode-extension', label: 'VS Code Extension' },
@@ -102,7 +101,7 @@ export default function Home() {
                 'Scheduled work with AGI Work',
               ],
               platforms: 'macOS · Windows · Linux',
-              status: 'Local + BYOK host',
+              status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Workforce', badge: 'Local' },
             },
@@ -119,7 +118,7 @@ export default function Home() {
                 'Account & managed cloud',
               ],
               platforms: 'Any modern browser',
-              status: 'Available in browser',
+              status: SURFACE_STATUS.web,
               href: WEB_CHAT_ENTRY_HREF,
               visual: <HeroAppWindow />,
             },
@@ -136,7 +135,7 @@ export default function Home() {
                 'Offline with local models',
               ],
               platforms: 'macOS · Linux',
-              status: 'Developer preview',
+              status: SURFACE_STATUS.cli,
               href: '/cli',
               frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
             },
@@ -153,7 +152,7 @@ export default function Home() {
                 'Workflow recording',
               ],
               platforms: 'Chrome (MV3)',
-              status: 'Desktop-bridge scoped',
+              status: SURFACE_STATUS.chrome,
               href: '/chrome-extension',
               visual: <ChromeMockup />,
             },
@@ -170,7 +169,7 @@ export default function Home() {
                 'Explicit handoffs',
               ],
               platforms: 'VS Code',
-              status: 'Developer preview',
+              status: SURFACE_STATUS.vscode,
               href: '/vscode-extension',
               visual: <VSCodeMockup />,
             },
@@ -186,7 +185,7 @@ export default function Home() {
                 'Cloud · public alpha',
               ],
               platforms: 'iPhone · Android',
-              status: 'Local + Cloud (public alpha)',
+              status: SURFACE_STATUS.mobile,
               href: '/mobile',
               visual: <MobileMockup />,
             },
@@ -331,10 +330,10 @@ export default function Home() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Start where you work."
-          body="Try the web app now. Install Desktop or the CLI for local work."
+          body="Try the web app now. Get notified when Desktop and the CLI open for Local and BYOK work."
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Download AGI Desktop' },
+            { href: '/download', label: 'Get notified' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

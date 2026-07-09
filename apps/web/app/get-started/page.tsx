@@ -36,9 +36,9 @@ export default function GetStartedPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Desktop &amp; CLI: Local and BYOK hosts</h3>
               <p className="agi-reason-p">
-                Grab the right build for your platform from the{' '}
-                <Link href="/download">download page</Link>. Desktop covers macOS, Windows, and
-                Linux; the <code>agi</code> CLI covers macOS and Linux.
+                Coming soon for macOS, Windows, and Linux (the <code>agi</code> CLI: macOS and
+                Linux). Leave your email on the <Link href="/download">download page</Link> and
+                we&rsquo;ll tell you when they&rsquo;re ready.
               </p>
             </li>
             <li className="agi-reason">
@@ -77,16 +77,14 @@ export default function GetStartedPage() {
           </ul>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">03 / Try it</p>
-          <div className="agi-terminal">
-            <div className="agi-terminal-bar">first command</div>
-            <pre className="agi-terminal-pre">{`$ agi exec "sketch a Rust HTTP router"
-$ agi
-# interactive TUI`}</pre>
-          </div>
+          <p className="agi-section-eyebrow">03 / What&rsquo;s next</p>
+          <p className="agi-reason-p">
+            Desktop and the CLI open for Local and BYOK work at public launch. Leave your email on
+            the download page and we will tell you the moment they are ready.
+          </p>
           <div className="agi-cta-row" style={{ marginTop: 28 }}>
             <Link href="/download" className="agi-cta-primary">
-              Download desktop
+              Get notified
             </Link>
             <Link href="/cli" className="agi-cta-ghost">
               CLI reference →
