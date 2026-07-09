@@ -78,6 +78,40 @@ vi.mock('@/lib/cors', () => ({
 
 vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `mock-${key}`),
+  // resolveAutoModel can pick a Claude model for coding-classified prompts
+  // (see this file's docstring / Task #17 note) even though every test here
+  // sends `model: 'auto-balanced'` -- that now routes through
+  // adapter-factory.ts's buildAnthropicAdapter, which reads ANTHROPIC_API_KEY
+  // via getOptionalEnv. Fake key so it doesn't throw "not configured";
+  // ANTHROPIC_BASE_URL stays unset so the (unmocked, pure) llm-runtime
+  // validateBaseUrl path is simply never reached.
+  getOptionalEnv: vi.fn((key: string) =>
+    key === 'ANTHROPIC_API_KEY' ? 'mock-anthropic-key' : undefined,
+  ),
+}));
+
+// Coding-classified prompts route to a Claude model (Task #17 auto-routing),
+// which now dispatches through packages/providers/anthropic's adapter
+// (task #34) instead of the mocked LLMProviderFactory below. This suite is
+// about routing/classification metadata, not provider wire-shape (see
+// packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts for
+// that), so a minimal fake stream is enough to reach a 200 with routing
+// fields populated.
+vi.mock('@agiworkforce/providers-anthropic', () => ({
+  createAnthropicAdapter: vi.fn(() => ({
+    id: 'anthropic',
+    label: 'Anthropic',
+    auth: [],
+    config: {},
+    async catalog() {
+      return [];
+    },
+    async *stream() {
+      yield { type: 'text-delta', delta: 'Here is the implementation...' };
+      yield { type: 'usage', inputTokens: 120, outputTokens: 80 };
+      yield { type: 'stop', reason: 'end_turn' };
+    },
+  })),
 }));
 
 // Mock Clerk auth — auth-gate.ts uses getClerkAuthUser

@@ -145,8 +145,14 @@ export class LLMProviderFactory {
    *  but only if they resolve to a hostname we explicitly recognise.
    *  An attacker who compromises a Vercel preview env var can no
    *  longer redirect LLM traffic - including the user's prompts - to
-   *  an arbitrary attacker-controlled host. */
-  private static readonly ALLOWED_BASE_HOSTS: ReadonlySet<string> = new Set([
+   *  an arbitrary attacker-controlled host.
+   *
+   *  Exposed (not private) so `../../app/api/llm/v1/chat/completions/lib/
+   *  adapter-factory.ts` can validate `ANTHROPIC_BASE_URL` against the exact
+   *  same allowlist via `@agiworkforce/llm-runtime`'s `validateBaseUrl`,
+   *  rather than duplicating this list -- a second copy could silently drift
+   *  and reopen the SSRF gap this set closes. */
+  static readonly ALLOWED_BASE_HOSTS: ReadonlySet<string> = new Set([
     'api.openai.com',
     'api.anthropic.com',
     'generativelanguage.googleapis.com',

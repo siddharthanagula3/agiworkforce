@@ -7,10 +7,26 @@
  * Anthropic event types we map:
  *   - `message_start` → ignored (usage emitted separately)
  *   - `content_block_start` (text|tool_use|thinking) → tool-use-start (tools only)
+ *   - `content_block_start` (server_tool_use) → server-tool-use
+ *   - `content_block_start` (web_search_tool_result|code_execution_tool_result) → server-tool-result
+ *   - `content_block_start` (anything else, e.g. web_fetch_tool_result) → vendor-raw (whole event)
  *   - `content_block_delta` (text_delta|input_json_delta|thinking_delta|signature_delta) → text-delta | tool-use-delta | thinking-delta
- *   - `content_block_stop` → tool-use-end (when block was tool_use)
+ *   - `content_block_delta` (input_json_delta on a server_tool_use block) → dropped (no known consumer)
+ *   - `content_block_delta` (citations_delta) → citation-delta
+ *   - `content_block_delta` (anything else) → vendor-raw (whole event)
+ *   - `content_block_stop` → tool-use-end (when block was tool_use); otherwise no chunk
  *   - `message_delta` (stop_reason + usage) → usage + stop
  *   - `message_stop` → ignored (we already emitted stop)
+ *
+ * The `vendor-raw` / raw-passthrough choices above exist to reproduce the
+ * legacy web route's default behavior (apps/web/app/api/llm/v1/chat/
+ * completions/lib/stream-transform.ts, pre-Wave-2): its Anthropic-event
+ * reshaping only special-cased a specific set of block/delta types; every
+ * OTHER type it saw fell through untouched onto the SSE wire. Byte-stable
+ * migration means reproducing that passthrough here, not silently dropping
+ * newly-noticed cases — see the golden fixtures in apps/web/app/api/llm/
+ * v1/chat/completions/__tests__/stream-transform.golden.test.ts, which
+ * capture the exact bytes for citations_delta.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -42,9 +58,22 @@ function mapStopReason(
 }
 
 interface BlockState {
-  type: 'text' | 'tool_use' | 'thinking';
+  type: 'text' | 'tool_use' | 'thinking' | 'server_tool_use';
   toolUseId?: string;
 }
+
+/** `content_block_start.content_block.type` values with a dedicated
+ *  translation below. Anything outside this set (e.g. `web_fetch_tool_
+ *  result`, `redacted_thinking`, `bash_code_execution_tool_result`) yields
+ *  `vendor-raw` — see the module docstring. */
+const KNOWN_BLOCK_START_TYPES: ReadonlySet<string> = new Set([
+  'tool_use',
+  'text',
+  'thinking',
+  'server_tool_use',
+  'web_search_tool_result',
+  'code_execution_tool_result',
+]);
 
 export async function* translateAnthropicStream(
   stream: AsyncIterable<MessageStreamEvent>,
@@ -84,11 +113,25 @@ export async function* translateAnthropicStream(
               type: 'tool-use-start',
               toolUseId: block.id,
               name: block.name,
+              vendorIndex: idx,
             };
           } else if (block.type === 'text') {
             blocksByIndex.set(idx, { type: 'text' });
           } else if (block.type === 'thinking') {
             blocksByIndex.set(idx, { type: 'thinking' });
+          } else if (block.type === 'server_tool_use') {
+            blocksByIndex.set(idx, { type: 'server_tool_use', toolUseId: block.id });
+            yield { type: 'server-tool-use', toolUseId: block.id, name: block.name };
+          } else if (
+            block.type === 'web_search_tool_result' ||
+            block.type === 'code_execution_tool_result'
+          ) {
+            // Result blocks arrive complete -- no delta form, no
+            // content_block_stop follow-up needed, so we don't register
+            // block state for them.
+            yield { type: 'server-tool-result', toolUseId: block.tool_use_id, payload: block };
+          } else if (!KNOWN_BLOCK_START_TYPES.has(block.type)) {
+            yield { type: 'vendor-raw', payload: event };
           }
           break;
         }
@@ -98,12 +141,18 @@ export async function* translateAnthropicStream(
           const delta = event.delta;
           if (delta.type === 'text_delta') {
             yield { type: 'text-delta', delta: delta.text };
-          } else if (delta.type === 'input_json_delta' && state?.toolUseId) {
-            yield {
-              type: 'tool-use-delta',
-              toolUseId: state.toolUseId,
-              deltaJson: delta.partial_json,
-            };
+          } else if (delta.type === 'input_json_delta') {
+            if (state?.type === 'tool_use' && state.toolUseId) {
+              yield {
+                type: 'tool-use-delta',
+                toolUseId: state.toolUseId,
+                deltaJson: delta.partial_json,
+              };
+            }
+            // else: input deltas on a server_tool_use block are dropped,
+            // not passed through -- matches stream-transform.ts's explicit
+            // `continue` for blockType === 'server_tool_use', which
+            // forwards nothing for these at all (not even raw).
           } else if (delta.type === 'thinking_delta') {
             yield { type: 'thinking-delta', delta: delta.thinking };
           } else if (delta.type === 'signature_delta') {
@@ -111,6 +160,10 @@ export async function* translateAnthropicStream(
             // We surface it on the next thinking-delta with empty content; callers
             // that care about round-tripping signatures should observe both.
             yield { type: 'thinking-delta', delta: '', signature: delta.signature };
+          } else if (delta.type === 'citations_delta') {
+            yield { type: 'citation-delta', blockIndex: idx, payload: delta.citation };
+          } else {
+            yield { type: 'vendor-raw', payload: event };
           }
           break;
         }

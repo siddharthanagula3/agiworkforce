@@ -32,7 +32,15 @@ interface AnthropicTranslatedRequest {
   top_p?: number;
   top_k?: number;
   stop_sequences?: string[];
-  thinking?: { type: 'enabled'; budget_tokens: number } | { type: 'disabled' };
+  thinking?:
+    | { type: 'enabled'; budget_tokens: number }
+    | { type: 'disabled' }
+    | { type: 'adaptive' };
+  /**
+   * Independent of `thinking` — Anthropic accepts both on the same request.
+   * See `translateChatRequest`'s `req.effort` handling below.
+   */
+  output_config?: { effort: string };
   metadata?: Record<string, unknown>;
 }
 
@@ -204,7 +212,9 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
         }
       : req.thinking?.type === 'disabled'
         ? { type: 'disabled' as const }
-        : undefined;
+        : req.thinking?.type === 'adaptive'
+          ? { type: 'adaptive' as const }
+          : undefined;
 
   return {
     model: req.model,
@@ -218,6 +228,10 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     ...(req.topK !== undefined ? { top_k: req.topK } : {}),
     ...(req.stopSequences ? { stop_sequences: req.stopSequences } : {}),
     ...(thinking ? { thinking } : {}),
+    // Independent of `thinking` -- matches the old web-internal adapter
+    // (apps/web/lib/llm-providers/anthropic.ts), which sends both when
+    // `request.effort` is set. See ChatRequest.effort's JSDoc.
+    ...(req.effort ? { output_config: { effort: req.effort } } : {}),
     ...(req.metadata ? { metadata: req.metadata } : {}),
   };
 }
