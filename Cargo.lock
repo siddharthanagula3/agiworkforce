@@ -103,6 +103,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "agiworkforce-agent-core"
+version = "0.1.0"
+dependencies = [
+ "agiworkforce-llm",
+ "anyhow",
+ "async-trait",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "agiworkforce-app-server"
 version = "0.1.0"
 dependencies = [
@@ -129,6 +142,7 @@ dependencies = [
 name = "agiworkforce-cli"
 version = "1.7.1"
 dependencies = [
+ "agiworkforce-agent-core",
  "agiworkforce-app-server",
  "agiworkforce-command-registry",
  "agiworkforce-execpolicy",

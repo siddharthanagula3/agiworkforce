@@ -1069,10 +1069,13 @@ mod tests {
     use crate::models::MessageContent;
 
     use crate::models::ContentBlock;
-    use executor::{
-        detect_content_loop, hash_tool_call, tool_call_to_legacy, CONTENT_CHUNK_SIZE,
-        CONTENT_LOOP_CHUNK_THRESHOLD, LOOP_DETECTION_THRESHOLD,
+    // Loop-guard primitives moved to `agiworkforce-agent-core` (Wave 5e1); the
+    // `tool_call_to_legacy` conversion helper stays app-local in `executor`.
+    use agiworkforce_agent_core::{
+        detect_content_loop, hash_tool_call, CONTENT_CHUNK_SIZE, CONTENT_LOOP_CHUNK_THRESHOLD,
+        LOOP_DETECTION_THRESHOLD,
     };
+    use executor::tool_call_to_legacy;
     use history::build_assistant_message;
     use tools::is_team_tool;
 
