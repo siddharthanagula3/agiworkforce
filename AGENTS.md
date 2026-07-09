@@ -57,22 +57,22 @@ Managed cloud is in public alpha and open by default (founder decision, 2026-06-
 
 ## Repo Map
 
-| Area          | Path                           | Role                                                              |
-| ------------- | ------------------------------ | ----------------------------------------------------------------- |
-| CLI           | `apps/cli`                     | Developer engine and terminal surface.                            |
-| Desktop       | `apps/desktop`                 | Local-private compute host and rich app shell.                    |
-| Web           | `apps/web`                     | Account, projects, synced app chats, artifacts, billing/waitlist. |
-| Mobile        | `apps/mobile` plus root `ios/` | Local/BYOK onboarding, continuity, approvals, preview/share.      |
-| Chrome        | `apps/extension`               | Browser context, capture, native messaging.                       |
-| VS Code       | `apps/extension-vscode`        | IDE-native developer surface.                                     |
-| Sandbox       | `apps/sandbox`                 | Cross-origin artifact renderer.                                   |
-| Shared TS     | `packages`                     | Contracts, providers, runtime, UI, tools.                         |
-| Shared Rust   | `crates`                       | Protocol, command registry, sandbox, runtime utilities.           |
-| Services      | `services`                     | API gateway, signaling, future managed compute.                   |
-| Database      | `apps/web/db/neon`             | Canonical Neon migrations.                                        |
-| Evidence      | `audit`                        | Source-backed parity and audit ledgers.                           |
-| Durable docs  | `docs`                         | Current product, architecture, decisions, launch, security.       |
-| Working notes | `tasks`                        | Execution notes and temporary research.                           |
+| Area          | Path                           | Role                                                                                       |
+| ------------- | ------------------------------ | ------------------------------------------------------------------------------------------ |
+| CLI           | `apps/cli`                     | Developer engine and terminal surface.                                                     |
+| Desktop       | `apps/desktop`                 | Local-private compute host and rich app shell.                                             |
+| Web           | `apps/web`                     | Account, projects, synced app chats, artifacts, billing/waitlist.                          |
+| Mobile        | `apps/mobile` plus root `ios/` | Local on-device chat + public-alpha Cloud (no BYOK), continuity, approvals, preview/share. |
+| Chrome        | `apps/extension`               | Browser context, capture, native messaging.                                                |
+| VS Code       | `apps/extension-vscode`        | IDE-native developer surface.                                                              |
+| Sandbox       | `apps/sandbox`                 | Cross-origin artifact renderer.                                                            |
+| Shared TS     | `packages`                     | Contracts, providers, runtime, UI, tools.                                                  |
+| Shared Rust   | `crates`                       | Protocol, command registry, sandbox, runtime utilities.                                    |
+| Services      | `services`                     | API gateway, signaling, future managed compute.                                            |
+| Database      | `apps/web/db/neon`             | Canonical Neon migrations.                                                                 |
+| Evidence      | `audit`                        | Source-backed parity and audit ledgers.                                                    |
+| Durable docs  | `docs`                         | Current product, architecture, decisions, launch, security.                                |
+| Working notes | `tasks`                        | Execution notes and temporary research.                                                    |
 
 Machine-readable version: `docs/agent-context/repo-map.json`.
 
