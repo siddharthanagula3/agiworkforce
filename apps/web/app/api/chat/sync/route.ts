@@ -34,51 +34,12 @@ const MAX_CONVERSATIONS_PUSH = 500;
 const MAX_MESSAGES_PUSH = 2000;
 const MAX_ARTIFACTS_PUSH = 500;
 
-type ConversationDelta = {
-  id: string;
-  title: string;
-  model: string | null;
-  project_id: string | null;
-  pinned: boolean;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  server_version: string;
-};
-
-type MessageDelta = {
-  id: string;
-  conversation_id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  model: string | null;
-  provider: string | null;
-  input_tokens: number;
-  output_tokens: number;
-  cost_cents: number;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  server_version: string;
-};
-
-type ArtifactDelta = {
-  id: string;
-  conversation_id: string;
-  message_id: string | null;
-  title: string | null;
-  artifact_type: string;
-  language: string | null;
-  content: string;
-  current_version: number;
-  pinned: boolean;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  server_version: string;
-};
+// Wire shapes come from the shared cloud contract (single source of truth,
+// enforced by route.contract.test.ts and consumed at runtime by mobile's
+// cloudSyncEngine). Do not redeclare row types here — restructure Wave 4.
+type ConversationDelta = import('@agiworkforce/services').ConversationWireDelta;
+type MessageDelta = import('@agiworkforce/services').MessageWireDelta;
+type ArtifactDelta = import('@agiworkforce/services').ArtifactWireDelta;
 
 // ---------------------------------------------------------------------------
 // Pull
