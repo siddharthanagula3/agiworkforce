@@ -132,6 +132,7 @@ dependencies = [
  "agiworkforce-app-server",
  "agiworkforce-command-registry",
  "agiworkforce-execpolicy",
+ "agiworkforce-llm",
  "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",
  "agiworkforce-utils-image",
@@ -345,6 +346,22 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "ts-rs",
+]
+
+[[package]]
+name = "agiworkforce-llm"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "futures-util",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
