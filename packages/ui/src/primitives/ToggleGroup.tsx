@@ -1,0 +1,74 @@
+'use client';
+
+import * as React from 'react';
+import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
+import { type VariantProps } from 'class-variance-authority';
+import { cn } from '../cn';
+import { toggleVariants } from './Toggle';
+
+const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariants>>({
+  size: 'default',
+  variant: 'default',
+});
+
+// React 19 ref-as-prop pattern - no forwardRef needed.
+// Root's real props are a discriminated union (single vs. multiple selection
+// mode: ToggleGroupSingleProps | ToggleGroupMultipleProps), so this must be a
+// `type` intersection rather than `interface extends` — interfaces cannot
+// extend a union type.
+type ToggleGroupProps = React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
+  VariantProps<typeof toggleVariants> & {
+    ref?: React.Ref<React.ElementRef<typeof ToggleGroupPrimitive.Root>>;
+  };
+
+function ToggleGroup({ className, variant, size, children, ref, ...props }: ToggleGroupProps) {
+  return (
+    <ToggleGroupPrimitive.Root
+      ref={ref}
+      className={cn('flex items-center justify-center gap-1', className)}
+      {...props}
+    >
+      <ToggleGroupContext.Provider value={{ variant, size }}>
+        {children}
+      </ToggleGroupContext.Provider>
+    </ToggleGroupPrimitive.Root>
+  );
+}
+ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName;
+
+interface ToggleGroupItemProps
+  extends
+    React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item>,
+    VariantProps<typeof toggleVariants> {
+  ref?: React.Ref<React.ElementRef<typeof ToggleGroupPrimitive.Item>>;
+}
+
+function ToggleGroupItem({
+  className,
+  children,
+  variant,
+  size,
+  ref,
+  ...props
+}: ToggleGroupItemProps) {
+  const context = React.useContext(ToggleGroupContext);
+
+  return (
+    <ToggleGroupPrimitive.Item
+      ref={ref}
+      className={cn(
+        toggleVariants({
+          variant: context.variant || variant,
+          size: context.size || size,
+        }),
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </ToggleGroupPrimitive.Item>
+  );
+}
+ToggleGroupItem.displayName = ToggleGroupPrimitive.Item.displayName;
+
+export { ToggleGroup, ToggleGroupItem };
