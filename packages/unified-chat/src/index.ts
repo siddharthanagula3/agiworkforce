@@ -61,6 +61,20 @@ export { Button, type ButtonProps, ScrollArea } from '@agiworkforce/ui';
 export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
+// Markdown renderer (canonical chain: react-markdown + remark-gfm/math/breaks
+// + rehype-highlight/katex/raw+sanitize). Source of truth ported from
+// apps/web/features/chat/components/messages/.
+export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
+export { MARKDOWN_SANITIZE_SCHEMA } from './components/markdown/markdownSanitizeSchema';
+export { preprocessMath } from './components/markdown/preprocessMath';
+
+// Local-to-BYOK handoff ceremony dialog (founder decision 2026-07-08)
+export {
+  LocalByokHandoffDialog,
+  type LocalByokHandoffDialogProps,
+  type HandoffContextCandidate,
+} from './components/LocalByokHandoffDialog';
+
 // Top-level orchestrator
 //
 // NOTE: `ChatInterface` is the legacy unified-chat orchestrator. As of the
@@ -200,7 +214,7 @@ export { TaskPhaseSection } from './components/TaskPhaseSection';
 export type { TaskPhase, TaskPhaseSectionProps } from './components/TaskPhaseSection';
 export { ToolTimeline } from './components/ToolTimeline';
 export type { ToolTimelineProps } from './components/ToolTimeline';
-export { ToolCallCard } from './components/ToolCallCard';
+export { ToolCallCard, detectCodeBlock } from './components/ToolCallCard';
 export type { ToolCallCardProps, ToolCallStatus } from './components/ToolCallCard';
 export {
   InlineToolCall,

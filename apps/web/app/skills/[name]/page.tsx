@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type React from 'react';
 import { ArrowLeft, FileText, Code, Tag, Database, Terminal, Hash, User } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import MarkdownContent from '@/features/chat/components/messages/MarkdownContent';
+import { MarkdownContent } from '@agiworkforce/unified-chat';
 
 // ─── API types ────────────────────────────────────────────────────────────────
 

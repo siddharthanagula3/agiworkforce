@@ -3,7 +3,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import { Check } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import MarkdownContent from './MarkdownContent';
+import { MarkdownContent } from '@agiworkforce/unified-chat';
 
 export interface ComparisonOption {
   label?: string;
