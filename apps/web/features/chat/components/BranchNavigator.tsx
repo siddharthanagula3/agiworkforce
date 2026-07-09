@@ -9,21 +9,21 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Button } from '@shared/ui/button';
-import { Badge } from '@agiworkforce/ui';
-import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import {
+  Badge,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@shared/ui/dialog';
+  Input,
+  ScrollArea,
+} from '@agiworkforce/ui';
+import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
-import { Input } from '@shared/ui/input';
 import { Label } from '@agiworkforce/ui';
-import { ScrollArea } from '@shared/ui/scroll-area';
 import {
   GitBranch,
   GitFork,

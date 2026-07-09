@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { ArrowDown } from 'lucide-react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { useAutoScroll } from '@shared/hooks/useAutoScroll';
 
 interface ChatMessageListProps extends React.HTMLAttributes<HTMLDivElement> {

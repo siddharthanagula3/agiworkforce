@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Button,
 } from '@agiworkforce/ui';
 import {
   AlertDialog,
@@ -23,7 +24,6 @@ import {
 } from '@agiworkforce/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
 import {
   MoreVertical,
   Copy,

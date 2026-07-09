@@ -1,6 +1,14 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Button } from '@shared/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Button,
+  ScrollArea,
+  Alert,
+  AlertDescription,
+} from '@agiworkforce/ui';
 import {
   Code,
   Eye,
@@ -23,7 +31,6 @@ import {
 } from '@agiworkforce/types';
 import { GeneratedFileCard } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
-import { ScrollArea } from '@shared/ui/scroll-area';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +43,6 @@ import {
   hasXSSRisk,
   buildSandboxSrcDoc,
 } from '@shared/utils/html-sanitizer';
-import { Alert, AlertDescription } from '@shared/ui/alert';
 import { SandboxedIframe } from '../SandboxedIframe';
 import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox';
 

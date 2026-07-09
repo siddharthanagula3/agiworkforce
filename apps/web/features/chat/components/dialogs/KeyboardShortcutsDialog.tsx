@@ -5,13 +5,13 @@
 
 import React from 'react';
 import {
+  Badge,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@shared/ui/dialog';
-import { Badge } from '@agiworkforce/ui';
+} from '@agiworkforce/ui';
 import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
 import { safePlatform } from '@shared/utils/browser-utils';

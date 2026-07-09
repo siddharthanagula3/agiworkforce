@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Button } from './button';
+import { Button } from '@agiworkforce/ui';
 
 describe('Button Component', () => {
   beforeEach(() => {
@@ -28,7 +28,10 @@ describe('Button Component', () => {
       render(<Button>Click me</Button>);
       const button = screen.getByRole('button', { name: /click me/i });
       expect(button).toBeInTheDocument();
-      expect(button).toHaveAttribute('type', 'button');
+      // The canonical @agiworkforce/ui Button does not force a default `type`
+      // attribute (the old web fork defaulted to "button"); the browser default
+      // applies unless a `type` is passed explicitly.
+      expect(button).not.toHaveAttribute('type');
     });
 
     it('should render children correctly', () => {
@@ -120,7 +123,7 @@ describe('Button Component', () => {
     it('should render small size', () => {
       render(<Button size="sm">Small</Button>);
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('h-10');
+      expect(button).toHaveClass('h-9');
     });
 
     it('should render large size', () => {
@@ -136,8 +139,8 @@ describe('Button Component', () => {
         </Button>,
       );
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('h-11');
-      expect(button).toHaveClass('w-11');
+      expect(button).toHaveClass('h-10');
+      expect(button).toHaveClass('w-10');
     });
   });
 
@@ -224,7 +227,7 @@ describe('Button Component', () => {
     it('should have focus ring styles for keyboard navigation', () => {
       render(<Button>Focus me</Button>);
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('focus-visible:outline-none');
+      expect(button).toHaveClass('focus-visible:outline-hidden');
       expect(button).toHaveClass('focus-visible:ring-2');
       expect(button).toHaveClass('focus-visible:ring-ring');
     });

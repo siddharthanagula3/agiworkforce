@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 import { cn } from '@shared/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
+import { Avatar, AvatarFallback, AvatarImage, Button } from '@agiworkforce/ui';
 import { MessageLoading } from '@shared/ui/message-loading';
 
 interface ChatBubbleProps {

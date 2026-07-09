@@ -14,7 +14,7 @@
  */
 
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 
 interface ErrorCardProps {
   title?: string;

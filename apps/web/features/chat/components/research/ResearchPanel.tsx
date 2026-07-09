@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import { Globe, X, ExternalLink, Search, PanelRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { useChatStore } from '@/stores/chatStore';
 

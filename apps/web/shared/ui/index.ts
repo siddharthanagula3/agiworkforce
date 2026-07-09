@@ -1,25 +1,31 @@
 // Shared UI Components - Public API
 //
-// NOTE: Primitives with a canonical counterpart in @agiworkforce/ui have been
-// migrated off this fork and their re-exports removed here (restructure Wave 3).
-// The dead leaf forks (a pkg counterpart existed and they had zero importers)
-// were deleted 2026-07-09. What remains: web-divergent primitives pending a pkg
-// enhancement decision (Button/Input/Textarea/Card/Dialog/Alert/Slider/
-// ScrollArea), the form and imperative-toast systems (open decisions), the
-// bespoke/aceternity components, and the no-counterpart shadcn sidebar island.
+// NOTE: Primitives with a canonical counterpart in @agiworkforce/ui are
+// re-exported from the package (restructure Wave 3). The previously
+// web-divergent forks (Button/Input/Textarea/Card/ScrollArea/Dialog/Alert/
+// Slider) were migrated onto the enhanced canonical primitives and their local
+// copies deleted 2026-07-09. What remains web-local: the form and imperative-
+// toast systems (open decisions), the bespoke/aceternity components, and the
+// no-counterpart shadcn sidebar island.
 
-// Core form components (web-divergent: a11y/error props pkg lacks — pending decision)
-export { Button, type ButtonProps } from './button';
-export { buttonVariants } from './button-variants';
-export { Input, type InputProps } from './input';
-export { Textarea, type TextareaProps } from './textarea';
-export { Slider } from './slider';
+// Core form components (canonical @agiworkforce/ui)
+export { Button, buttonVariants, type ButtonProps } from '@agiworkforce/ui';
+export { Input, type InputProps } from '@agiworkforce/ui';
+export { Textarea, type TextareaProps } from '@agiworkforce/ui';
+export { Slider } from '@agiworkforce/ui';
 
-// Layout components (web-divergent)
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './card';
-export { ScrollArea, ScrollBar } from './scroll-area';
+// Layout components (canonical @agiworkforce/ui)
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@agiworkforce/ui';
+export { ScrollArea, ScrollBar } from '@agiworkforce/ui';
 
-// Overlay components (web-divergent: closeButtonLabel/hideCloseButton)
+// Overlay components (canonical @agiworkforce/ui)
 export {
   Dialog,
   DialogPortal,
@@ -31,10 +37,10 @@ export {
   DialogFooter,
   DialogTitle,
   DialogDescription,
-} from './dialog';
+} from '@agiworkforce/ui';
 
-// Feedback components (web-divergent alert + legacy imperative toast — decision pending)
-export { Alert, AlertTitle, AlertDescription } from './alert';
+// Feedback components (Alert canonical @agiworkforce/ui; legacy imperative toast below — decision pending)
+export { Alert, AlertTitle, AlertDescription } from '@agiworkforce/ui';
 export {
   Toast,
   ToastAction,

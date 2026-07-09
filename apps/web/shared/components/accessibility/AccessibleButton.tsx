@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { Button, ButtonProps } from '@shared/ui/button';
+import { Button, ButtonProps } from '@agiworkforce/ui';
 import { useAccessibility } from '@shared/hooks/useAccessibility';
 
 interface AccessibleButtonProps extends ButtonProps {

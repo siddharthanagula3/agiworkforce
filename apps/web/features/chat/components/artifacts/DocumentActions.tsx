@@ -13,8 +13,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  Button,
 } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
 import {
   Download,
   FileText,

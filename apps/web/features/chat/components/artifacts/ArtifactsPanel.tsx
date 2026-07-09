@@ -2,7 +2,7 @@
 
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { useChatStore } from '@/stores/chatStore';
 import { ArtifactPreview } from './ArtifactPreview';

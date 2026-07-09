@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import {
+  Label,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@shared/ui/dialog';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Label } from '@agiworkforce/ui';
-import { Textarea } from '@shared/ui/textarea';
+  Button,
+  Input,
+  Textarea,
+} from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 

@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
-import { Button } from '@shared/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
-import { Badge } from '@agiworkforce/ui';
-import { Alert, AlertDescription } from '@shared/ui/alert';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Alert,
+  AlertDescription,
+  ScrollArea,
+} from '@agiworkforce/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
-import { ScrollArea } from '@shared/ui/scroll-area';
 import { AlertTriangle, CheckCircle, Info, Eye, Download } from 'lucide-react';
 // Mock accessibility service and types since monitoring was archived
 interface AccessibilityIssue {

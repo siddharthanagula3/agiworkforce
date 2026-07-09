@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Badge } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
+import { Badge, Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   ChevronUp,

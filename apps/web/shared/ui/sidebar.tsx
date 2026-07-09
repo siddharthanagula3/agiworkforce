@@ -5,9 +5,7 @@ import { PanelLeft } from 'lucide-react';
 
 import { useIsMobile } from '@shared/hooks/use-mobile';
 import { cn } from '@shared/lib/utils';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Separator } from '@agiworkforce/ui';
+import { Separator, Button, Input } from '@agiworkforce/ui';
 import { Sheet, SheetContent } from '@agiworkforce/ui';
 import { Skeleton } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';

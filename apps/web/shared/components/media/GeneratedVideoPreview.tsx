@@ -5,10 +5,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Download, Maximize2, X, Play, Pause, Volume2, VolumeX, Loader2 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Card, CardContent } from '@shared/ui/card';
-import { Progress } from '@agiworkforce/ui';
-import { Slider } from '@shared/ui/slider';
+import { Progress, Button, Card, CardContent, Slider } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { googleVeoService } from '@core/integrations/google-veo-service';
 

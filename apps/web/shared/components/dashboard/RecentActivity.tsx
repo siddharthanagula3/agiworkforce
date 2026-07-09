@@ -1,6 +1,5 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
-import { Badge } from '@agiworkforce/ui';
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@agiworkforce/ui';
 import { Clock, User, CheckCircle, XCircle } from 'lucide-react';
 
 interface ActivityItem {

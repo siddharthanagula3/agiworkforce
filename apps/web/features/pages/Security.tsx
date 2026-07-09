@@ -6,9 +6,7 @@
 import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
-import { Badge } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
+import { Badge, Card, CardContent, CardHeader, CardTitle, Button } from '@agiworkforce/ui';
 import {
   Shield,
   Lock,

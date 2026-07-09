@@ -1,10 +1,16 @@
 import React from 'react';
 import { type UseFormReturn } from 'react-hook-form';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Label } from '@agiworkforce/ui';
-import { Textarea } from '@shared/ui/textarea';
+import {
+  Label,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Textarea,
+} from '@agiworkforce/ui';
 import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {

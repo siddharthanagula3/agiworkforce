@@ -4,7 +4,7 @@ import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
 import { Server, Shield, Clock, CheckCircle2, ArrowRight, BarChart3 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { Particles } from '@shared/ui/particles';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
