@@ -12,43 +12,10 @@ import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
-import {
-  buildAnthropicAdapter,
-  buildGoogleAdapter,
-  buildOpenAIAdapter,
-  buildGroqAdapter,
-  buildMistralAdapter,
-  buildMoonshotAdapter,
-  buildZhipuAdapter,
-  buildQwenAdapter,
-  buildOpenRouterAdapter,
-  buildDeepSeekAdapter,
-  buildXAIAdapter,
-  buildPerplexityAdapter,
-  startProviderStream,
-} from './lib/adapter-factory';
-import {
-  buildAnthropicChatRequest,
-  buildGoogleChatRequest,
-  buildOpenAIChatRequest,
-  toCanonicalChatRequest,
-} from './lib/canonical-request';
-import {
-  toUpstreamError,
-  toGoogleUpstreamError,
-  toOpenAIUpstreamError,
-  toGroqUpstreamError,
-  toMistralUpstreamError,
-  toMoonshotUpstreamError,
-  toZhipuUpstreamError,
-  toQwenUpstreamError,
-  toOpenRouterUpstreamError,
-  toDeepSeekUpstreamError,
-  toXAIUpstreamError,
-  toPerplexityUpstreamError,
-} from './lib/adapter-errors';
+import { startProviderStream } from './lib/adapter-factory';
+import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
-import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
+import type { StreamChunk } from '@agiworkforce/types';
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -68,126 +35,15 @@ import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/ty
  * Wave 2, task #34): Anthropic, Google, OpenAI, and the 9 openai-compat
  * providers (groq, mistral, moonshot, zhipu, qwen, openrouter, deepseek,
  * xai, perplexity) go through `packages/providers/*` adapters
- * (`ADAPTER_PROVIDERS` below) -- that is every provider `processed.provider`
- * (request-processor.ts's catalog lookup + heuristic fallback chain) can
- * resolve to, so there is no longer a `LLMProviderFactory` (apps/web/lib/
- * llm-providers, retired) dispatch fallback below; an unlisted provider id
- * is treated as an explicit unsupported-provider failure instead. The
- * agentic tool-loop path (MCP/E2B, `runToolLoop`) has its own, separate
- * per-step dispatch -- Anthropic-only so far, see tool-loop-anthropic.ts
- * (its non-Anthropic branch still calls `LLMProviderFactory` -- open
- * residual, not yet migrated).
+ * (`ADAPTER_PROVIDERS`, ./lib/adapter-providers.ts) -- that is every provider
+ * `processed.provider` (request-processor.ts's catalog lookup + heuristic
+ * fallback chain) can resolve to, so there is no longer a `LLMProviderFactory`
+ * (apps/web/lib/llm-providers, retired) dispatch fallback below; an unlisted
+ * provider id is treated as an explicit unsupported-provider failure instead.
+ * The agentic tool-loop path (MCP/E2B, `runToolLoop`) shares the SAME
+ * `ADAPTER_PROVIDERS` table via its own table-driven per-step dispatch, see
+ * tool-loop-anthropic.ts.
  */
-
-/**
- * One entry per provider wired onto the `packages/providers/*` adapter path.
- * Keeps the streaming/non-streaming branches below identical in shape for
- * every adapter-backed provider instead of duplicating a provider-specific
- * try/catch block per provider (Anthropic's was hand-duplicated for Google
- * when this table didn't exist yet -- pulled out here so a third provider
- * is one entry, not another duplicated block).
- *
- * `wireMode` (task #34's OpenAI slice): Anthropic/Google's legacy providers
- * reshape their vendor's native wire into an OpenAI-like shape, so
- * `OpenAIWireAssembler`'s `wireMode: 'legacy-web'` -- reverse-engineered from
- * that hand-built shape -- reproduces both. OpenAI's legacy provider does no
- * such reshaping (near-verbatim real upstream SSE passthrough, confirmed via
- * stream-transform.openai-byte-parity.test.ts), so it needs the DIFFERENT
- * `'openai-passthrough'` mode (team-lead RULING: Option B, preserve
- * fidelity). The 9 openai-compat providers join OpenAI on the same
- * `'openai-passthrough'` mode: each `packages/providers/{provider}` package
- * is a thin config wrapper around the SAME `@agiworkforce/providers-openai`
- * translate/stream layer (see adapter-factory.ts's `buildCompatAdapter`
- * docstring), and none of their legacy files reshape their vendor's own
- * near-OpenAI-shaped wire any more than `openai.ts` does (confirmed by
- * reading each legacy provider file directly). None of the 9 need a
- * `buildChatRequest` wrapper either -- none set `effort`/`reasoning_effort`
- * or `thinking` in any form (grepped every legacy compat file), so the base
- * `toCanonicalChatRequest` (no thinking/effort folded in) already reproduces
- * their exact request shape.
- */
-const ADAPTER_PROVIDERS: Record<
-  string,
-  {
-    buildAdapter: (processed: ProcessedRequest) => ProviderAdapter;
-    buildChatRequest: (processed: ProcessedRequest) => ChatRequest;
-    mapError: (chunk: Extract<StreamChunk, { type: 'error' }>) => Error;
-    wireMode: 'legacy-web' | 'openai-passthrough';
-  }
-> = {
-  anthropic: {
-    buildAdapter: buildAnthropicAdapter,
-    buildChatRequest: buildAnthropicChatRequest,
-    mapError: toUpstreamError,
-    wireMode: 'legacy-web',
-  },
-  google: {
-    buildAdapter: buildGoogleAdapter,
-    buildChatRequest: buildGoogleChatRequest,
-    mapError: toGoogleUpstreamError,
-    wireMode: 'legacy-web',
-  },
-  openai: {
-    buildAdapter: buildOpenAIAdapter,
-    buildChatRequest: buildOpenAIChatRequest,
-    mapError: toOpenAIUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  groq: {
-    buildAdapter: buildGroqAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toGroqUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  mistral: {
-    buildAdapter: buildMistralAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toMistralUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  moonshot: {
-    buildAdapter: buildMoonshotAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toMoonshotUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  zhipu: {
-    buildAdapter: buildZhipuAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toZhipuUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  qwen: {
-    buildAdapter: buildQwenAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toQwenUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  openrouter: {
-    buildAdapter: buildOpenRouterAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toOpenRouterUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  deepseek: {
-    buildAdapter: buildDeepSeekAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toDeepSeekUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  xai: {
-    buildAdapter: buildXAIAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toXAIUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  perplexity: {
-    buildAdapter: buildPerplexityAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toPerplexityUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-};
 
 async function refundFailedReservation(
   userId: string,

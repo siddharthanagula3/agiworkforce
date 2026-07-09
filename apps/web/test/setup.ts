@@ -31,11 +31,6 @@ if (typeof HTMLElement !== 'undefined') {
 process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
 process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_test_secret';
 process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';
-// Disable provider fetch retry/backoff by default in tests so existing
-// provider suites assert transient-status errors immediately (no real backoff
-// delay). The retry loop itself is covered by llm-providers/__tests__/retry.test.ts,
-// which passes explicit maxRetries options that override this default.
-process.env['LLM_PROVIDER_MAX_RETRIES'] = '0';
 
 // Mock Next.js headers
 vi.mock('next/headers', () => ({

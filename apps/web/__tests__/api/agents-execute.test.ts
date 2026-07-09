@@ -88,15 +88,22 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// Mock LLMProviderFactory
-const mockStreamRequest = vi.fn();
-const mockCreateProvider = vi.fn();
-vi.mock('@/lib/llm-providers/factory', () => ({
-  LLMProviderFactory: {
-    getProviderFromModel: vi.fn(() => 'anthropic'),
-    createProvider: (...args: unknown[]) => mockCreateProvider(...args),
-    mapModelIdToApiId: vi.fn((id: string) => id),
-  },
+// Mock the server-key adapter construction service (task #34: agents/execute
+// normalized off LLMProviderFactory onto packages/providers/* adapters, wire
+// normalized onto the v1 chat-completions shape). `buildServerProviderAdapter`
+// returns a fake ProviderAdapter whose `.stream()` yields canonical
+// StreamChunks -- `chunksToOpenAiSse` (real, not mocked) turns those into the
+// OpenAI-shaped SSE bytes the route actually streams to the client, so these
+// tests exercise the real wire-normalization path, not a shortcut around it.
+const mockAdapterStream = vi.fn();
+const mockBuildServerProviderAdapter = vi.fn();
+const mockResolveProviderFromModel = vi.fn();
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  buildServerProviderAdapter: (...args: unknown[]) => mockBuildServerProviderAdapter(...args),
+  resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
+  toApiModelId: (modelId: string) => modelId,
+  toGenericUpstreamError: (providerId: string, chunk: { message: string }) =>
+    new Error(`${providerId} API error: ${chunk.message}`),
 }));
 
 // Mock error utilities
@@ -167,15 +174,20 @@ vi.mock('@/lib/error-handler', () => {
   };
 });
 
-// Build a minimal SSE readable stream for the LLM provider mock
-function makeFakeStream(): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    start(controller) {
-      controller.enqueue(encoder.encode('data: {"content":"hello"}\n\n'));
-      controller.close();
-    },
-  });
+/** Turn an array of canonical StreamChunks into an async generator, matching
+ *  `ProviderAdapter.stream()`'s signature (req, signal) => AsyncIterable. */
+function fakeAdapterStream(chunks: unknown[]) {
+  return async function* () {
+    for (const chunk of chunks) yield chunk;
+  };
+}
+
+/** Default happy-path fixture: a single text delta then a normal stop. */
+function makeFakeChunks() {
+  return fakeAdapterStream([
+    { type: 'text-delta', delta: 'hello' },
+    { type: 'stop', reason: 'end_turn' },
+  ]);
 }
 
 function makeRequest(body: Record<string, unknown>, authHeader?: string) {
@@ -217,10 +229,13 @@ describe('POST /api/agents/execute', () => {
     });
     mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 950 });
 
-    // Default: provider returns a stream
-    mockStreamRequest.mockResolvedValue(makeFakeStream());
-    mockCreateProvider.mockReturnValue({
-      streamRequest: mockStreamRequest,
+    // Default: adapter returns a happy-path StreamChunk sequence.
+    mockResolveProviderFromModel.mockReturnValue('anthropic');
+    mockBuildServerProviderAdapter.mockReturnValue({
+      stream: (...args: unknown[]) => {
+        mockAdapterStream(...args);
+        return makeFakeChunks()();
+      },
     });
   });
 
@@ -280,7 +295,14 @@ describe('POST /api/agents/execute', () => {
   });
 
   it('should return 400 when provider is not configured', async () => {
-    mockCreateProvider.mockReturnValueOnce(null); // provider not configured
+    // buildServerProviderAdapter throws synchronously when the provider's
+    // *_API_KEY env var is unset -- same failure mode the pre-migration
+    // LLMProviderFactory.createProvider null-return branch covered.
+    mockBuildServerProviderAdapter.mockImplementationOnce(() => {
+      throw new Error(
+        'Provider "unknown-provider" is not configured. Please ensure the env var is set.',
+      );
+    });
 
     const request = makeRequest(
       { message: 'Hello', provider: 'unknown-provider', employeeId: 'test-employee' },
@@ -332,14 +354,20 @@ describe('POST /api/agents/execute', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(200);
-    expect(mockStreamRequest).toHaveBeenCalledOnce();
+    expect(mockAdapterStream).toHaveBeenCalledOnce();
 
-    // Verify the messages array was built correctly
-    const streamCallArgs = mockStreamRequest.mock.calls[0]![0] as {
+    // Verify the ChatRequest was built correctly. openAIWireRequestToChatRequest
+    // extracts role:'system' messages into the separate `system` field (not
+    // left in `.messages` -- see provider-adapter.ts's ChatRequest shape).
+    const chatRequest = mockAdapterStream.mock.calls[0]?.[0] as {
+      system?: string;
       messages: Array<{ role: string; content: string }>;
     };
-    const roles = streamCallArgs.messages.map((m) => m.role);
-    expect(roles).toContain('system');
+    // The canonical employee prompt (mocked fs/promises fixture), not the
+    // caller-supplied systemPrompt field -- that travels as a separate,
+    // fenced <caller_context> user-role message (H16), never as system role.
+    expect(chatRequest.system).toBe('You are a helpful AI assistant.');
+    const roles = chatRequest.messages.map((m) => m.role);
     expect(roles).toContain('user');
     expect(roles).toContain('assistant');
   });
@@ -349,13 +377,24 @@ describe('POST /api/agents/execute', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(200);
-    const streamCallArgs = mockStreamRequest.mock.calls[0]![0] as { model: string };
-    // Default model is claude-haiku-4.5 (mapped through mapModelIdToApiId)
-    expect(typeof streamCallArgs.model).toBe('string');
+    const chatRequest = mockAdapterStream.mock.calls[0]?.[0] as { model: string };
+    // Default model is the catalog's anthropic chat default (mapped through toApiModelId)
+    expect(typeof chatRequest.model).toBe('string');
+    expect(chatRequest.model.length).toBeGreaterThan(0);
   });
 
   it('should return 500 when LLM provider throws an error', async () => {
-    mockStreamRequest.mockRejectedValueOnce(new Error('Provider upstream error'));
+    // ProviderAdapter.stream() never throws directly -- upstream failures
+    // become a {type:'error'} chunk (same contract startProviderStream's
+    // eager-peek-and-throw relies on elsewhere in this migration).
+    mockBuildServerProviderAdapter.mockReturnValueOnce({
+      stream: (...args: unknown[]) => {
+        mockAdapterStream(...args);
+        return fakeAdapterStream([
+          { type: 'error', message: 'Provider upstream error', code: '500' },
+        ])();
+      },
+    });
 
     const request = makeRequest({ message: 'Hello', employeeId: 'test-employee' }, FAKE_BEARER);
     const response = await POST(request);

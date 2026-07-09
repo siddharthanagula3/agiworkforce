@@ -8,13 +8,22 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import {
+  buildServerProviderAdapter,
+  toApiModelId,
+  resolveProviderFromModel,
+  toGenericUpstreamError,
+} from '@/lib/services/provider-adapter-service';
+import { startProviderStream } from '@/app/api/llm/v1/chat/completions/lib/adapter-factory';
+import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
+import { chunksToOpenAiSse } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic';
 import { CreditService } from '@/lib/services/credit-service';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getTaskModelForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -214,7 +223,7 @@ async function handler(request: NextRequest) {
   messages.push({ role: 'user', content: message });
 
   const selectedModel = model || DEFAULT_EMPLOYEE_MODEL;
-  const selectedProvider = provider || LLMProviderFactory.getProviderFromModel(selectedModel);
+  const selectedProvider = provider || resolveProviderFromModel(selectedModel);
   const managedGateResponse = buildManagedComputeGateResponse(request, {
     provider: selectedProvider,
     model: selectedModel,
@@ -235,19 +244,22 @@ async function handler(request: NextRequest) {
   }
 
   try {
-    const llmProvider = LLMProviderFactory.createProvider(selectedProvider);
-
-    if (!llmProvider) {
-      throw createError.badRequest(
-        `Provider "${selectedProvider}" is not configured. Check API key configuration.`,
-      );
-    }
-
     // Generate a unique request ID for idempotency
     const requestId = crypto.randomUUID();
 
-    const stream = await llmProvider.streamRequest({
-      model: LLMProviderFactory.mapModelIdToApiId(selectedModel),
+    // Normalized onto the v1 chat-completions wire shape (restructure Wave
+    // 2, task #34 completion gate): no known consumer of this endpoint --
+    // no in-repo caller, not in vercel.json's public rewrites or
+    // openapi.yaml as a documented contract -- and its previous raw
+    // per-provider SSE was never a stable, normalized wire to begin with,
+    // so this is a shape normalization, not a change to a proven external
+    // contract. Same adapter dispatch + eager-first-chunk-error-peek
+    // (startProviderStream) route.ts/tool-loop.ts use, so a request that
+    // fails before producing any content still fails the whole request
+    // instead of silently becoming a 200 stream with an inline error chunk.
+    const adapter = buildServerProviderAdapter(selectedProvider);
+    const chatRequest = openAIWireRequestToChatRequest({
+      model: toApiModelId(selectedModel),
       messages: messages as Array<{
         role: 'system' | 'user' | 'assistant' | 'tool';
         content: string;
@@ -255,6 +267,11 @@ async function handler(request: NextRequest) {
       temperature: 0.7,
       max_tokens: 4096,
     });
+    const chunks = await startProviderStream(adapter, chatRequest, request.signal, (chunk) =>
+      toGenericUpstreamError(selectedProvider, chunk),
+    );
+    const wireMode = ADAPTER_PROVIDERS[selectedProvider]?.wireMode ?? 'legacy-web';
+    const stream = chunksToOpenAiSse(chunks, selectedModel, wireMode);
 
     logger.info(
       { userId, employeeId, model: selectedModel, provider: selectedProvider },
@@ -328,6 +345,17 @@ async function handler(request: NextRequest) {
   } catch (error) {
     // Re-throw AppErrors (400 BAD_REQUEST, 403 FORBIDDEN, etc.) with their original status
     if (isAppError(error)) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    // buildServerProviderAdapter throws this synchronously (before any
+    // network call) when the provider's *_API_KEY env var is unset --
+    // preserve the same 400 (not the generic 500 below) and message shape
+    // the pre-migration `LLMProviderFactory.createProvider` null-return
+    // branch returned directly.
+    if (message.includes('is not configured')) {
+      throw createError.badRequest(
+        `Provider "${selectedProvider}" is not configured. Check API key configuration.`,
+      );
+    }
     logger.error({ userId, employeeId, error }, 'Agent execution failed');
     throw createError.internal('Agent execution failed');
   }

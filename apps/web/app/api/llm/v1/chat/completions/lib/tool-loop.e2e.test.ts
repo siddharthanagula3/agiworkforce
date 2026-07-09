@@ -11,11 +11,16 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockStreamRequest = vi.fn();
-vi.mock('@/lib/llm-providers/factory', () => ({
-  LLMProviderFactory: {
-    streamRequest: (...args: unknown[]) => mockStreamRequest(...args),
-  },
+// buildToolLoopStream (tool-loop-anthropic.ts) is the table-driven adapter
+// dispatch every provider now goes through (task #34's tool-loop slice) --
+// mocked here at its own `Promise<ReadableStream>` boundary, same contract
+// the old LLMProviderFactory.streamRequest mock stood in for, so the SSE
+// fixtures below (raw OpenAI-shaped chunks) still exercise the SAME
+// downstream mechanics (collectProviderStream, E2B routing, tool-call
+// round-tripping) this file actually tests.
+const mockBuildToolLoopStream = vi.fn();
+vi.mock('./tool-loop-anthropic', () => ({
+  buildToolLoopStream: (...args: unknown[]) => mockBuildToolLoopStream(...args),
 }));
 
 const mockGetE2BExecutor = vi.fn();
@@ -87,7 +92,7 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
 
 describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () => {
   beforeEach(() => {
-    mockStreamRequest.mockReset();
+    mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
   });
@@ -112,7 +117,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     // Step 2: after the tool result is fed back, the model returns a final answer.
     const step2 = sseStreamFrom([chunk({ content: 'The answer is 2.' }), chunk({}, 'stop')]);
 
-    mockStreamRequest.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
 
     const runCode = vi.fn().mockResolvedValue({ ok: true, output: '2\n' });
     const dispose = vi.fn().mockResolvedValue(undefined);
@@ -133,8 +138,10 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(dispose).toHaveBeenCalled();
 
     // The provider was re-invoked a second time with the tool result appended.
-    expect(mockStreamRequest).toHaveBeenCalledTimes(2);
-    const secondCallRequest = mockStreamRequest.mock.calls[1]?.[1] as {
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    // buildToolLoopStream(provider, processed, stepRequest, responseModel) --
+    // stepRequest is the 3rd positional arg (index 2), not the 2nd.
+    const secondCallRequest = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
       messages: Array<{ role: string; content: string; tool_call_id?: string }>;
     };
     const toolResultMessage = secondCallRequest.messages.find((m) => m.role === 'tool');
@@ -168,7 +175,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       chunk({}, 'stop'),
     ]);
 
-    mockStreamRequest.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
     mockGetE2BExecutor.mockResolvedValue(null);
 
     const processed = makeProcessed();
@@ -178,7 +185,9 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(output).toContain('Execution environment unavailable');
 
     // Never silently falls through -- the tool result message carries the explicit error.
-    const secondCallRequest = mockStreamRequest.mock.calls[1]?.[1] as {
+    // buildToolLoopStream(provider, processed, stepRequest, responseModel) --
+    // stepRequest is the 3rd positional arg (index 2), not the 2nd.
+    const secondCallRequest = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     const toolResultMessage = secondCallRequest.messages.find((m) => m.role === 'tool');
@@ -198,7 +207,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       chunk({}, 'tool_calls'),
     ]);
     const step2 = sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]);
-    mockStreamRequest.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
 
     const dispose = vi.fn().mockResolvedValue(undefined);
     const executor: E2BExecutor = {
@@ -223,7 +232,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
 
   it('never touches E2B when no execution tool is invoked in the turn', async () => {
     const step1 = sseStreamFrom([chunk({ content: 'Hi there.' }), chunk({}, 'stop')]);
-    mockStreamRequest.mockResolvedValueOnce(step1);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1);
 
     const processed = makeProcessed('conv-789');
     await drain(runToolLoop(processed, { approvalMode: 'auto' }));
@@ -246,7 +255,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       }),
       chunk({}, 'tool_calls'),
     ]);
-    mockStreamRequest.mockResolvedValueOnce(step1);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1);
 
     const processed = makeProcessed('conv-manual');
     // Manual approval mode never calls the executor (it suspends on the approval
