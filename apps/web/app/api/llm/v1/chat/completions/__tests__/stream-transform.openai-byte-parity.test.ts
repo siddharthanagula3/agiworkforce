@@ -407,6 +407,79 @@ describe('byte parity: legacy buildStreamResponse vs adapter buildAdapterStreamR
     expect(firstLine).toContain('"service_tier":"default"');
   });
 
+  it('real per-chunk logprobs survive the round-trip when the request set logprobs:true (full passthrough, not a static null)', async () => {
+    // Unlike id/created/system_fingerprint/service_tier (stream-stable,
+    // captured once), logprobs varies PER CHUNK -- OpenAI reports different
+    // token-level data on every chunk. translateChatRequest never sets
+    // logprobs:true today, so every OTHER fixture in this file legitimately
+    // has logprobs:null throughout; this fixture proves the plumbing
+    // reproduces a REAL non-null value too, not just "null stays null."
+    const realLogprobs = {
+      content: [{ token: 'Cats', logprob: -0.1, bytes: [67, 97, 116, 115], top_logprobs: [] }],
+    };
+    const logprobsFixture: OpenAIChatCompletionChunk[] = [
+      {
+        id: 'chatcmpl-logprobs-test',
+        object: 'chat.completion.chunk',
+        created: 1750000300,
+        model: 'gpt-5.5-2026-01-01',
+        choices: [
+          {
+            index: 0,
+            delta: { role: 'assistant', content: '' },
+            logprobs: null,
+            finish_reason: null,
+          },
+        ],
+      } as unknown as OpenAIChatCompletionChunk,
+      {
+        id: 'chatcmpl-logprobs-test',
+        object: 'chat.completion.chunk',
+        created: 1750000300,
+        model: 'gpt-5.5-2026-01-01',
+        choices: [
+          {
+            index: 0,
+            delta: { content: 'Cats' },
+            logprobs: realLogprobs,
+            finish_reason: null,
+          },
+        ],
+      } as unknown as OpenAIChatCompletionChunk,
+      {
+        id: 'chatcmpl-logprobs-test',
+        object: 'chat.completion.chunk',
+        created: 1750000300,
+        model: 'gpt-5.5-2026-01-01',
+        choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: 'stop' }],
+      } as unknown as OpenAIChatCompletionChunk,
+    ];
+
+    const legacyResponse = await buildStreamResponse(
+      makeRequest() as any,
+      rawOpenAISseStream(logprobsFixture),
+      makeProcessed(),
+      'user-parity',
+      'token-parity',
+    );
+    const legacyBody = await collectBody(legacyResponse as any);
+    const legacyContentLine = dataLines(legacyBody).find((l) => l.includes('"content":"Cats"'));
+    expect(legacyContentLine).toContain('"logprobs":{"content":[{"token":"Cats"');
+
+    const adapterResponse = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      translateOpenAIStream(asChunks(logprobsFixture)) as AsyncIterable<StreamChunk>,
+      makeProcessed(),
+      'user-parity',
+      'token-parity',
+      Date.now(),
+      'openai-passthrough',
+    );
+    const adapterBody = await collectBody(adapterResponse as any);
+    const adapterContentLine = dataLines(adapterBody).find((l) => l.includes('"content":"Cats"'));
+    expect(adapterContentLine).toBe(legacyContentLine);
+  });
+
   it('falls back to a synthesized id/created when the producer supplies none (compat providers)', async () => {
     // No StreamChunkResponseMeta at all -- simulates a provider whose stream
     // never carries a stable id/created (or a future compat vendor whose
