@@ -6,7 +6,7 @@ import { Input } from '@shared/ui/input';
 import { Label } from '@agiworkforce/ui';
 import { Textarea } from '@shared/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
   Form,
   FormControl,

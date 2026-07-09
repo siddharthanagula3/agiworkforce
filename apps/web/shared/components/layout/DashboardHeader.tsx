@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   LogOut,

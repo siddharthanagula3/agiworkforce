@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Card } from '@shared/ui/card';
 import { Badge } from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { TrendingUp, DollarSign, Zap, Calendar, BarChart3, Activity, Download } from 'lucide-react';
 import { format } from 'date-fns';

@@ -4,7 +4,7 @@ import { Save, Loader2, Trash2, Bot } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Switch } from '@agiworkforce/ui';
 import { Badge } from '@agiworkforce/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
   Form,
   FormControl,

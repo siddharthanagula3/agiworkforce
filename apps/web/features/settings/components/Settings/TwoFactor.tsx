@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shar
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Switch } from '@agiworkforce/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
   Form,
   FormControl,

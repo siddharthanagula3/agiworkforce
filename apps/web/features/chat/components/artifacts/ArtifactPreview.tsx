@@ -29,7 +29,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 import {
   sanitizeArtifact,
   sanitizeSVG,
