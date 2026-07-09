@@ -3,7 +3,7 @@ import * as NavigationMenuPrimitive from '@radix-ui/react-navigation-menu';
 import { ChevronDown } from 'lucide-react';
 
 import { cn } from '@shared/lib/utils';
-import { navigationMenuTriggerStyle } from '@shared/ui/navigation-menu-variants';
+import { navigationMenuTriggerStyle } from '@agiworkforce/ui';
 
 const NavigationMenu = React.forwardRef<
   React.ElementRef<typeof NavigationMenuPrimitive.Root>,
