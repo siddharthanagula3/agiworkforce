@@ -11,7 +11,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Badge } from './ui/Badge';
+import { ChatBadge } from './ui/ChatBadge';
 import { buildCompactSummary } from '../lib/compactToolSummary';
 import type { ThinkingBlock as ThinkingBlockType, ThinkingStep } from '../lib/types';
 
@@ -121,10 +121,14 @@ function Timeline({ steps, isRunning }: TimelineProps) {
                 {/* Badge pill */}
                 {step.badgeType && (
                   <div className="mt-1">
-                    {step.badgeType === 'result' && <Badge variant="result">[Result]</Badge>}
-                    {step.badgeType === 'script' && <Badge variant="script">[Script]</Badge>}
+                    {step.badgeType === 'result' && (
+                      <ChatBadge variant="result">[Result]</ChatBadge>
+                    )}
+                    {step.badgeType === 'script' && (
+                      <ChatBadge variant="script">[Script]</ChatBadge>
+                    )}
                     {step.badgeType === 'file' && (
-                      <Badge variant="file">{step.badge ?? '[File]'}</Badge>
+                      <ChatBadge variant="file">{step.badge ?? '[File]'}</ChatBadge>
                     )}
                   </div>
                 )}

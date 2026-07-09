@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Palette, Copy, Download, MoreHorizontal } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Button } from './ui/Button';
+import { Button } from '@agiworkforce/ui';
 
 export interface ImageGenCardProps {
   status: 'generating' | 'complete' | 'error';
