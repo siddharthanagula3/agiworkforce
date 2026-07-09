@@ -226,7 +226,13 @@ export function translateChatRequest(
   const messages = prependExplicitSystem(baseMessages, req.system, systemRole);
 
   const strict = compat.supportsStrictMode && (req.tools?.some((t) => t.strict) ?? false);
-  const tools = req.tools?.map((t) => translateTool(t, strict, provider));
+  const translatedTools = req.tools?.map((t) => translateTool(t, strict, provider)) ?? [];
+  // rawVendorTools are provider-native payloads (e.g. web_search_preview)
+  // appended verbatim — the caller owns their wire shape.
+  const tools = [
+    ...translatedTools,
+    ...((req.rawVendorTools ?? []) as OpenAIChatCompletionCreateParams['tools'] & unknown[]),
+  ];
   const toolChoice = translateToolChoice(req.toolChoice);
 
   const params: OpenAIChatCompletionCreateParams = {
