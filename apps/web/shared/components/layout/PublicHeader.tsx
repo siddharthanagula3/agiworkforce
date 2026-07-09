@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@shared/ui/button';
-import { ThemeToggle } from '@shared/ui/theme-toggle';
+import { ThemeToggle } from '@agiworkforce/ui';
 import {
   Bot,
   Menu,
