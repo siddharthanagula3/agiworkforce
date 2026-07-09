@@ -2,11 +2,19 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
 ## Monorepo Restructure (2026-07)
 
-The 2026-07-08 full-repo audit confirmed the monorepo shape below and produced the consolidation plan that governs package/crate ownership going forward: `docs/plans/monorepo-restructure-2026-07-08.md` (maturity map, duplication findings, target tree, dependency graph, mode architecture, migration phases P0-P6). External-brief adjudication lives in `docs/architecture/shared-packages-decision-log.md`. When this file and the plan disagree on target package ownership, the plan wins until its phases land here.
+The 2026-07-08 full-repo audit confirmed the monorepo shape below and produced the consolidation plan that governs package/crate ownership going forward: `docs/plans/monorepo-restructure-2026-07-08.md` (maturity map, duplication findings, target tree, dependency graph, mode architecture, migration phases P0-P6). The Rust engine-extraction sub-plan is `docs/plans/rust-engine-extraction-2026-07-09.md`. External-brief adjudication lives in `docs/architecture/shared-packages-decision-log.md`. When this file and a plan disagree on target ownership, the plan wins until its phases land here.
+
+### Execution status (2026-07-09)
+
+- **P0 hygiene, P1 dead-code:** done (dead chat variants, marketing components, SPA build pipeline, dead crates removed; the 4 "dead" provider packages were kept — they are complete adapters, wired in P2).
+- **P2 one TS ai-client:** the canonical provider layer is now the single path for the gateway and every satellite surface. `packages/llm-runtime` exports one `streamFromProvider` SSE client (replacing four near-duplicates in mobile/extensions/web); `packages/providers` gained six OpenAI-compat adapters (groq, mistral, moonshot, zhipu, qwen, openrouter) and all eleven cloud adapters are wired into the api-gateway proxy via `lib/providerAdapters.ts`; the gateway `llm.ts` + `cloudChat.ts` proxies run on those adapters through the shared `@agiworkforce/llm-normalize` `openai-wire-compat` layer, keeping the public `/v1/chat/completions` contract byte-stable. `ChatRequest.rawVendorTools` carries provider-native built-in tools. **In progress:** migrating the `apps/web` v1 route stack off its private `lib/llm-providers` layer (needs canonical-layer extensions for Anthropic/Google server-tool events + thinking/effort round-trip — additive, tracked).
+- **P3 UI layering:** web adopted `@agiworkforce/ui` (private primitive fork deleted); `unified-chat` consumes `ui` + `design-tokens` (forked primitives + parallel token layer removed); one shared markdown/tool-call renderer and BYOK handoff dialog; 18 missing shadcn primitives ported into `packages/ui`. **Remaining:** web's `@shared/ui` 116-importer tree migrates onto `packages/ui` batch-by-batch (deferred follow-on, never big-bang).
+- **P5 data seam:** web sync routes + auth store derive from the `cloud-contracts` Zod schemas (one wire truth); the api-gateway runs real Postgres RLS through `@agiworkforce/data-layer` for policied tables (gap tables stay on explicit `getServiceClient` with `RLS-GAP` markers — see `SVC-GATEWAY-RLS-NOOP-01`, plus a pre-deploy `app_rls` probe gate); a shared `packages/services/src/sync-apply` engine holds the pure apply + bigint-cursor logic, consumed by mobile at runtime and pinned to desktop's Rust apply via cross-language golden fixtures.
+- **P4/Wave 5 Rust:** `crates/sandbox-policy` renamed to `crates/agiworkforce-sandbox-policy`; ts-rs codegen wired (216 protocol types generated into `packages/types/src/generated/protocol`, `@agiworkforce/types/protocol` subpath, `pnpm check:protocol-types` drift guard). Desktop execpolicy adoption in progress. The XL provider-HTTP/MCP/agent-loop crate extractions (stages c/d/e) are staged in the sub-plan and gated on live-provider + desktop-device verification — tracked follow-on PRs, not landed.
 
 ## Monorepo Shape
 
