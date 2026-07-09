@@ -57,11 +57,16 @@ const nextConfig: NextConfig = {
       'class-variance-authority',
     ],
   },
-  // Chat app is served as static files from public/chat/ (built from apps/desktop Vite app)
-  // SPA fallback rewrite is in vercel.json: /chat/:path* → /chat/index.html
-  // Permanent redirect: /cowork → /agi-work (brand rename 2026-06-13)
+  // /chat is a native Next.js route (app/chat). The old static-SPA-from-public/chat
+  // architecture was removed in restructure Wave 1 (2026-07-09).
   async redirects() {
-    return [{ source: '/cowork', destination: '/agi-work', permanent: true }];
+    return [
+      // Brand rename 2026-06-13
+      { source: '/cowork', destination: '/agi-work', permanent: true },
+      // Retired route aliases (restructure Wave 1): keep old URLs working
+      { source: '/chats', destination: '/chat', permanent: false },
+      { source: '/chat-multi', destination: '/chat', permanent: false },
+    ];
   },
 
   // Security headers
