@@ -11,6 +11,7 @@ import {
   getDefaultModel as getCatalogDefaultModel,
   getModelById as getCatalogModelById,
   getShippableModels as getCatalogShippableModels,
+  hasRunnableGgufArtifacts,
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel, PickerModelTier } from '@agiworkforce/types';
 import {
@@ -218,7 +219,8 @@ const FALLBACK_LOCAL_MODEL: OnDeviceModel = {
  * The catalog includes future local models before all native packages are
  * shippable on Mobile. The picker only shows rows that can actually be used:
  * system-runtime rows when their runtime is active, or downloadable rows with
- * an ExecuTorch preset.
+ * either an ExecuTorch preset (tier 2) or verified llama-rn GGUF artifacts
+ * (tier 3, incl. multimodal base+mmproj pairs).
  */
 const SYSTEM_RUNTIME_ONLY = new Set(['apple-foundation-models', 'aicore']);
 
@@ -229,10 +231,22 @@ function isSystemRuntimeOnly(model: OnDeviceModel): boolean {
   return model.supportedRuntimes.every((r) => SYSTEM_RUNTIME_ONLY.has(r));
 }
 
-function isSelectableLocalCatalogModel(model: OnDeviceModel): boolean {
+/**
+ * Exported for unit tests. Note this predicate is applied to SHIPPABLE catalog
+ * rows only (`getShippableModels()` already filters `shipsInV1`) — a
+ * `shipsInV1:false` row like the qwen3-vl vision pack never reaches it in
+ * production listing, regardless of what it returns.
+ */
+export function isSelectableLocalCatalogModel(model: OnDeviceModel): boolean {
   if (isSystemRuntimeOnly(model)) return false;
   if (model.fileSizeBytes <= 0) return true;
-  return Boolean(model.executorchPreset);
+  if (model.executorchPreset) return true;
+  try {
+    return hasRunnableGgufArtifacts(model);
+  } catch {
+    // Tests may mock @agiworkforce/local-llm partially; keep the picker stable.
+    return false;
+  }
 }
 
 function safeGetShippableModels(): OnDeviceModel[] {

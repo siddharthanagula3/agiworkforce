@@ -6,6 +6,7 @@ import {
   effectiveVisionIn,
   ensureMultimodalArtifacts,
   ensureVerifiedArtifact,
+  hasRunnableGgufArtifacts,
   isMultimodalModel,
   resolveMultimodalArtifacts,
   type FileSystemDeps,
@@ -176,5 +177,37 @@ describe('multimodal: buildMultimodalMessages', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('multimodal: hasRunnableGgufArtifacts (picker installability predicate)', () => {
+  it('is true for the qwen3-vl entry (verified base + mmproj artifacts)', () => {
+    expect(hasRunnableGgufArtifacts(getModelById('qwen3-vl-2b-instruct')!)).toBe(true);
+  });
+
+  it('is false for non-gguf catalog rows (default qwen3-4b, ExecuTorch-managed)', () => {
+    expect(hasRunnableGgufArtifacts(getModelById('qwen3-4b-instruct-2507')!)).toBe(false);
+  });
+
+  it('is false for the gated lfm2-vl row (no verified download url)', () => {
+    expect(hasRunnableGgufArtifacts(getModelById('lfm2-vl-1.6b')!)).toBe(false);
+  });
+
+  it('is false for a vision gguf row missing its mmproj triple', () => {
+    const base = getModelById('qwen3-vl-2b-instruct')!;
+    const broken: OnDeviceModel = { ...base, mmprojChecksum: undefined };
+    expect(hasRunnableGgufArtifacts(broken)).toBe(false);
+  });
+
+  it('is true for a text-only gguf row with just the base triple', () => {
+    const base = getModelById('qwen3-vl-2b-instruct')!;
+    const textOnly: OnDeviceModel = {
+      ...base,
+      capabilities: { ...base.capabilities, visionIn: false },
+      mmprojUrl: undefined,
+      mmprojChecksum: undefined,
+      mmprojSizeBytes: undefined,
+    };
+    expect(hasRunnableGgufArtifacts(textOnly)).toBe(true);
   });
 });
