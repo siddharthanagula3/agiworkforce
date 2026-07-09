@@ -2,8 +2,7 @@ import 'server-only';
 
 import { getOptionalEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
-import { validateBaseUrl } from '@agiworkforce/llm-runtime';
+import { validateBaseUrl, ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/llm-runtime';
 import { createAnthropicAdapter } from '@agiworkforce/providers-anthropic';
 import { createGoogleAdapter } from '@agiworkforce/providers-google';
 import { createOpenAIAdapter } from '@agiworkforce/providers-openai';
@@ -29,8 +28,11 @@ import type { ProcessedRequest } from './request-processor';
  *
  * Anthropic, Google, OpenAI, and the 9 openai-compat providers (groq,
  * mistral, moonshot, zhipu, qwen, openrouter, deepseek, xai, perplexity) are
- * wired through the adapter path -- see task #34. Every other provider still
- * dispatches through `LLMProviderFactory` in route.ts.
+ * wired through the adapter path -- see task #34. That is every provider the
+ * model catalog resolves a chat request to (`getProviderFromModel`'s catalog
+ * lookup + heuristic fallback chain never produces anything outside this
+ * set), so route.ts no longer carries a `LLMProviderFactory` dispatch
+ * fallback for "every other provider".
  */
 
 /**
@@ -44,10 +46,12 @@ import type { ProcessedRequest } from './request-processor';
  *     branch on message text, but keeping it identical avoids surprises for
  *     any log-scraping or alerting keyed on it).
  *   - `ANTHROPIC_BASE_URL` optional override, validated via
- *     `@agiworkforce/llm-runtime`'s `validateBaseUrl` against
- *     `LLMProviderFactory.ALLOWED_BASE_HOSTS` (the exact set the legacy path
- *     enforces -- WEB-2 SSRF gate) instead of a hardcoded default: an absent
- *     or rejected override means `baseUrl` stays `undefined`, so the SDK
+ *     `@agiworkforce/llm-runtime`'s `validateBaseUrl` against that package's
+ *     own `ALLOWED_MANAGED_PROVIDER_HOSTS` (WEB-2 SSRF gate; canonicalized
+ *     there from the legacy `LLMProviderFactory.ALLOWED_BASE_HOSTS` during
+ *     lib/llm-providers's retirement, task #34) instead of a hardcoded
+ *     default: an absent or rejected override means `baseUrl` stays
+ *     `undefined`, so the SDK
  *     (inside `createAnthropicAdapter`) falls back to ITS OWN trusted
  *     default rather than this file guessing/hardcoding one.
  *
@@ -71,7 +75,7 @@ export function buildAnthropicAdapter(processed: ProcessedRequest): ProviderAdap
   const candidateBaseUrl = getOptionalEnv('ANTHROPIC_BASE_URL');
   if (candidateBaseUrl) {
     const validated = validateBaseUrl(candidateBaseUrl, {
-      allowedHosts: LLMProviderFactory.ALLOWED_BASE_HOSTS,
+      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
     });
     if (validated.ok) {
       baseUrl = validated.url;
@@ -116,7 +120,7 @@ export function buildGoogleAdapter(): ProviderAdapter {
   const candidateBaseUrl = getOptionalEnv('GOOGLE_BASE_URL');
   if (candidateBaseUrl) {
     const validated = validateBaseUrl(candidateBaseUrl, {
-      allowedHosts: LLMProviderFactory.ALLOWED_BASE_HOSTS,
+      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
     });
     if (validated.ok) {
       baseUrl = validated.url;
@@ -167,7 +171,7 @@ export function buildOpenAIAdapter(): ProviderAdapter {
   const candidateBaseUrl = getOptionalEnv('OPENAI_BASE_URL');
   if (candidateBaseUrl) {
     const validated = validateBaseUrl(candidateBaseUrl, {
-      allowedHosts: LLMProviderFactory.ALLOWED_BASE_HOSTS,
+      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
     });
     if (validated.ok) {
       baseUrl = validated.url;
@@ -222,7 +226,7 @@ function buildCompatAdapter(spec: {
   const candidateBaseUrl = getOptionalEnv(`${spec.envKeyPrefix}_BASE_URL`);
   if (candidateBaseUrl) {
     const validated = validateBaseUrl(candidateBaseUrl, {
-      allowedHosts: LLMProviderFactory.ALLOWED_BASE_HOSTS,
+      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
     });
     if (validated.ok) {
       baseUrl = validated.url;

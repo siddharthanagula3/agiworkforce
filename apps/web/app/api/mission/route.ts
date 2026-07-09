@@ -9,13 +9,16 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import { buildServerProviderAdapter, toApiModelId } from '@/lib/services/provider-adapter-service';
+import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
+import { toUpstreamError } from '@/app/api/llm/v1/chat/completions/lib/adapter-errors';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getTaskModelForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
 
 /**
  * Mission Control API
@@ -280,12 +283,18 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   // Call the LLM to decompose the mission
   let llmResponseText: string;
   try {
-    const llmResponse = await LLMProviderFactory.sendRequest(missionProvider, {
-      model: missionModel,
+    const adapter = buildServerProviderAdapter(missionProvider);
+    const chatRequest = openAIWireRequestToChatRequest({
+      model: toApiModelId(missionModel),
       messages,
       temperature: 0.4,
       max_tokens: 2048,
     });
+    const llmResponse = await drainToLlmResponse(
+      adapter.stream(chatRequest, request.signal),
+      missionModel,
+      toUpstreamError,
+    );
     llmResponseText = llmResponse.content;
 
     // Reconcile actual cost

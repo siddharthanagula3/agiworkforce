@@ -22,6 +22,35 @@
 
 const DEFAULT_INSECURE_HOSTS: readonly string[] = ['localhost', '127.0.0.1'];
 
+/**
+ * Canonical managed-provider SSRF allowlist (WEB-2 audit 2026-05-03).
+ * Originally defined only in `apps/web/lib/llm-providers/factory.ts`'s
+ * `LLMProviderFactory.ALLOWED_BASE_HOSTS`; that module is being retired
+ * (restructure Wave 2, task #34), so this is now the single canonical copy
+ * every server-key adapter-construction call site validates `*_BASE_URL`
+ * overrides against. A second, drifted copy would silently reopen the SSRF
+ * gap this list closes, so treat this as the one source of truth rather than
+ * inlining a provider's allowed host elsewhere.
+ */
+export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
+  'api.openai.com',
+  'api.anthropic.com',
+  'generativelanguage.googleapis.com',
+  'api.x.ai',
+  'dashscope.aliyuncs.com',
+  'api.mulerouter.ai',
+  'api.moonshot.cn',
+  'api.deepseek.com',
+  'api.perplexity.ai',
+  'open.bigmodel.cn',
+  'api.groq.com',
+  'api.mistral.ai',
+  'openrouter.ai',
+  'gateway.ai.cloudflare.com',
+  'localhost',
+  '127.0.0.1',
+]);
+
 export interface ValidateBaseUrlOptions {
   /** Hostnames this base URL is allowed to resolve to (exact match, case-insensitive). */
   allowedHosts: ReadonlySet<string> | readonly string[];

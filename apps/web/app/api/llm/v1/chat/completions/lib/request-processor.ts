@@ -26,7 +26,7 @@ import {
   type FreeTrialReservation,
 } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
@@ -693,7 +693,7 @@ export async function processRequest(
   let usedFallback = false;
   let fallbackReason: string | undefined;
 
-  let provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
+  let provider = resolveProviderFromModel(chatRequest.model);
 
   // Tier-aware quota gate
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
@@ -766,7 +766,7 @@ export async function processRequest(
       '[assertQuota] downgrade applied',
     );
     chatRequest.model = quotaOutcome.modelOverride;
-    provider = LLMProviderFactory.getProviderFromModel(chatRequest.model);
+    provider = resolveProviderFromModel(chatRequest.model);
     usedFallback = true;
     fallbackReason = quotaOutcome.reason;
   } else if (quotaOutcome.kind === 'warn') {
@@ -1045,7 +1045,7 @@ export async function processRequest(
       );
 
       if (fallbackModel) {
-        const fallbackProvider = LLMProviderFactory.getProviderFromModel(fallbackModel.model);
+        const fallbackProvider = resolveProviderFromModel(fallbackModel.model);
         const fallbackCostCents = LLMCostCalculator.estimateCost(
           fallbackProvider,
           fallbackModel.model,

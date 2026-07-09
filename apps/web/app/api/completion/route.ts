@@ -6,7 +6,13 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import {
+  buildServerProviderAdapter,
+  toApiModelId,
+  resolveProviderFromModel,
+  toGenericUpstreamError,
+} from '@/lib/services/provider-adapter-service';
+import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -19,6 +25,7 @@ import {
   getTaskModelForProvider,
   requireProviderDefaultModel,
 } from '@agiworkforce/types';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
 
 /**
  * Prompt Completion API
@@ -112,7 +119,7 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
     getTaskModelForProvider('anthropic', 'fast_completion') ??
     getProviderDefaultModel('anthropic') ??
     requireProviderDefaultModel('anthropic');
-  const provider = LLMProviderFactory.getProviderFromModel(completionModel);
+  const provider = resolveProviderFromModel(completionModel);
 
   const managedGateResponse = buildManagedComputeGateResponse(request, {
     provider,
@@ -184,8 +191,9 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
 
   let suggestion = '';
   try {
-    const llmResponse = await LLMProviderFactory.sendRequest(provider, {
-      model: completionModel,
+    const adapter = buildServerProviderAdapter(provider);
+    const chatRequest = openAIWireRequestToChatRequest({
+      model: toApiModelId(completionModel),
       messages: [
         { role: 'system', content: systemContent },
         ...(fencedContext ? [{ role: 'user' as const, content: fencedContext }] : []),
@@ -195,6 +203,11 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
       temperature: 0.3,
       stream: false,
     });
+    const llmResponse = await drainToLlmResponse(
+      adapter.stream(chatRequest, request.signal),
+      completionModel,
+      (chunk) => toGenericUpstreamError(provider, chunk),
+    );
 
     suggestion = llmResponse.content?.trim() ?? '';
   } catch (error) {

@@ -5,12 +5,18 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import {
+  buildServerProviderAdapter,
+  toApiModelId,
+  toGenericUpstreamError,
+} from '@/lib/services/provider-adapter-service';
+import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getProviderProbeModel, normalizeModelId, type Provider } from '@agiworkforce/types';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
 
 const SETTINGS_PROVIDER_ALIASES: Record<string, Provider> = {
   anthropic: 'anthropic',
@@ -90,26 +96,17 @@ async function handleTestProvider(request: NextRequest) {
 
   // Send a minimal test completion to verify the provider is reachable
   try {
-    const llmProvider = LLMProviderFactory.createProvider(provider);
-
-    if (!llmProvider) {
-      return NextResponse.json(
-        {
-          success: false,
-          provider: providerKey,
-          error: `Provider "${providerKey}" is not configured - missing API key on server`,
-        },
-        { status: 502 },
-      );
-    }
-
-    await llmProvider.sendRequest({
-      model: probeModel,
+    const adapter = buildServerProviderAdapter(provider);
+    const chatRequest = openAIWireRequestToChatRequest({
+      model: toApiModelId(probeModel),
       messages: [{ role: 'user', content: 'Reply with the single word: OK' }],
       max_tokens: 10,
       temperature: 0,
       stream: false,
     });
+    await drainToLlmResponse(adapter.stream(chatRequest, request.signal), probeModel, (chunk) =>
+      toGenericUpstreamError(provider, chunk),
+    );
 
     logger.info({ provider, model: probeModel, userId }, 'Provider test succeeded');
 
@@ -131,7 +128,15 @@ async function handleTestProvider(request: NextRequest) {
     // and a numeric status to the caller.
     const lowered = message.toLowerCase();
     let clientError: string;
-    if (
+    if (lowered.includes('is not configured')) {
+      // buildServerProviderAdapter throws this synchronously (before any
+      // network call) when the provider's *_API_KEY env var is unset --
+      // check it first since it's an explicit signal from our own code, not
+      // a heuristic guess about upstream error text. Matches the message
+      // the pre-migration `LLMProviderFactory.createProvider` null-return
+      // branch used to return directly.
+      clientError = `Provider "${providerKey}" is not configured - missing API key on server`;
+    } else if (
       lowered.includes('401') ||
       lowered.includes('unauthorized') ||
       lowered.includes('invalid api key')

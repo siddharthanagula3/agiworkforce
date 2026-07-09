@@ -1,8 +1,23 @@
 import 'server-only';
 
 import { getModelMetadataById } from '@agiworkforce/types';
-import { LLMProviderRequest } from './llm-providers/base';
 import { logger } from './logger';
+
+/**
+ * Minimal request shape this module needs: a message list with a findable
+ * system entry. Deliberately NOT the canonical `ChatRequest` (its `system`
+ * field is separate from `messages`, so a `role === 'system'` scan would
+ * never match) and NOT `lib/llm-providers`' `LLMProviderRequest` (that
+ * module is being retired). Structural typing means any caller whose
+ * request shape includes a `messages` array with role/content entries
+ * satisfies this without a cast.
+ */
+export interface PromptCacheRequest {
+  messages: Array<{
+    role: string;
+    content: string;
+  }>;
+}
 
 /**
  * Determines if a model supports prompt caching, driven by the model catalog.
@@ -32,7 +47,7 @@ function modelSupportsCaching(model: string): boolean {
  * 2. Context will be reused (documents, RAG)
  * 3. The model supports caching (catalog `capabilities.caching`)
  */
-export function shouldEnablePromptCache(request: LLMProviderRequest, model: string): boolean {
+export function shouldEnablePromptCache(request: PromptCacheRequest, model: string): boolean {
   if (!modelSupportsCaching(model)) {
     return false;
   }

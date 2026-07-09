@@ -167,15 +167,20 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-const mockSendRequest = vi.fn();
+// request-processor.ts resolves `processed.provider` via
+// resolveProviderFromModel (task #34 -- lib/llm-providers retirement, not
+// LLMProviderFactory.getProviderFromModel any more). Mocked per-case below
+// so each synthetic test model id (e.g. 'moonshot-v1-8k', 'openrouter-auto')
+// deterministically maps to its intended provider regardless of whether the
+// real catalog/heuristic chain would also happen to resolve it that way.
 const mockGetProviderFromModel = vi.fn();
-vi.mock('@/lib/llm-providers/factory', () => ({
-  LLMProviderFactory: {
-    getProviderFromModel: (...args: unknown[]) => mockGetProviderFromModel(...args),
-    sendRequest: (...args: unknown[]) => mockSendRequest(...args),
-    streamRequest: vi.fn(),
-  },
-}));
+vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/services/provider-adapter-service')>();
+  return {
+    ...actual,
+    resolveProviderFromModel: (...args: unknown[]) => mockGetProviderFromModel(...args),
+  };
+});
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
     estimateCost: vi.fn(() => 5),
