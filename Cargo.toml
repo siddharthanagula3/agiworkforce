@@ -6,10 +6,11 @@ members = [
 ]
 # 2026-07-08 restructure P0: dead crates removed (agiworkforce-apply-patch,
 # agiworkforce-plugin-runtime, agiworkforce-task-runtime — zero dependents).
-# Actual dependency surface: apps/cli path-depends on app-server, protocol,
-# sandbox-policy, execpolicy, command-registry, and utils-image;
+# Actual dependency surface: apps/cli path-depends on app-server, llm,
+# protocol, sandbox-policy, execpolicy, command-registry, and utils-image;
 # apps/desktop/src-tauri path-depends on sandbox-policy only. CLI/desktop
-# engine convergence is tracked in docs/plans/monorepo-restructure-2026-07-08.md (P4).
+# engine convergence is tracked in docs/plans/rust-engine-extraction-2026-07-09.md
+# (agiworkforce-llm shipped in stage c1; desktop adoption lands in c2+).
 exclude = []
 resolver = "2"
 

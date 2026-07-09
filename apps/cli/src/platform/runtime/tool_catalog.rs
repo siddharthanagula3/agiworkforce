@@ -22,7 +22,18 @@ fn def(name: &str, description: &str, input_schema: serde_json::Value) -> ToolDe
     }
 }
 
-impl ToolDefinition {
+/// Builder extension for the catalog. `ToolDefinition` moved into the shared
+/// `agiworkforce-llm` crate (Wave 5c1), so these CLI-local builder helpers
+/// live on an extension trait instead of an inherent impl.
+trait ToolDefinitionCatalogExt: Sized {
+    fn read_only(self) -> Self;
+    fn control(self) -> Self;
+    fn interactive(self) -> Self;
+    fn with_size_cap(self, max_chars: usize) -> Self;
+    fn deferred(self) -> Self;
+}
+
+impl ToolDefinitionCatalogExt for ToolDefinition {
     /// Mark a tool as read-only and concurrency-safe (Phase 6). Read-only
     /// tools never mutate filesystem / network state and can run in parallel.
     fn read_only(mut self) -> Self {
