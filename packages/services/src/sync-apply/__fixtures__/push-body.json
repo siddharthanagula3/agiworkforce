@@ -1,0 +1,107 @@
+{
+  "description": "Golden push-body mapping cases (suite c). Each case's `record` is mapped through toConversationPushItem/toMessagePushItem and must equal `expectedWireItem` AND parse against a schema mirroring the web route's PushBodySchema (apps/web/app/api/chat/sync/route.ts:128-168, read-only reference — see fixtures.test.ts for the local mirror schema).",
+  "conversationCases": [
+    {
+      "name": "full_record_maps_camelCase",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000001",
+        "title": "Quarterly plan",
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-02T00:00:00.000Z",
+        "messageCount": 2,
+        "pinned": true,
+        "model": "gpt-5.4",
+        "projectId": "018f6f2a-0000-7000-8000-000000000099"
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000001",
+        "title": "Quarterly plan",
+        "model": "gpt-5.4",
+        "projectId": "018f6f2a-0000-7000-8000-000000000099",
+        "pinned": true,
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-02T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "missing_optional_fields_null_out",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000002",
+        "title": "No model, no project",
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-01T00:00:00.000Z",
+        "messageCount": 0,
+        "pinned": false
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000002",
+        "title": "No model, no project",
+        "model": null,
+        "projectId": null,
+        "pinned": false,
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-01T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "missing_updatedAt_falls_back_to_createdAt",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000003",
+        "title": "No updatedAt",
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "messageCount": 0,
+        "pinned": false
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000003",
+        "title": "No updatedAt",
+        "model": null,
+        "projectId": null,
+        "pinned": false,
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-01T00:00:00.000Z"
+      },
+      "note": "The `updatedAt` key is OMITTED (not empty-string) so the field is actually `undefined` at runtime, matching `??`'s nullish-only semantics: toConversationPushItem falls back to createdAt — mirrors mobile's `c.updatedAt ?? c.createdAt ?? new Date().toISOString()` guard against pushing undefined (a 400 on the whole batch). An empty string is NOT nullish and would NOT trigger this fallback — that was an earlier bug in this fixture, caught by the TS replay test."
+    }
+  ],
+  "messageCases": [
+    {
+      "name": "full_record_maps_camelCase",
+      "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000010",
+        "role": "assistant",
+        "content": "Here is the plan",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "createdAt": "2026-07-02T00:00:01.000Z"
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000010",
+        "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+        "role": "assistant",
+        "content": "Here is the plan",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "createdAt": "2026-07-02T00:00:01.000Z"
+      }
+    },
+    {
+      "name": "missing_optional_fields_null_out",
+      "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000011",
+        "role": "user",
+        "content": "hi there"
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000011",
+        "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+        "role": "user",
+        "content": "hi there",
+        "model": null,
+        "provider": null
+      }
+    }
+  ]
+}
