@@ -71,7 +71,6 @@ import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { UpgradePlanDialog } from '../components/dialogs/UpgradePlanDialog';
 import { toast } from 'sonner';
 import { upgradeToProPlan, upgradeToMaxPlan } from '@features/billing/services/stripe-payments';
-import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
   buildHandoffContextCandidates,
@@ -88,7 +87,7 @@ import {
   type PendingEditRollback,
 } from '../lib/pendingEdit';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
-import type { ChatMessage } from '@agiworkforce/unified-chat';
+import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';

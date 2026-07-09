@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import MarkdownContent from './MarkdownContent';
+import { MarkdownContent } from '@agiworkforce/unified-chat';
 
 const HOSTILE_CONTENT = [
   'Hello **world**',

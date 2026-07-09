@@ -46,9 +46,12 @@ import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 
-const MarkdownContent = dynamic(() => import('./MarkdownContent'), {
-  loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
-});
+const MarkdownContent = dynamic(
+  () => import('@agiworkforce/unified-chat').then((mod) => mod.MarkdownContent),
+  {
+    loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
+  },
+);
 
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
