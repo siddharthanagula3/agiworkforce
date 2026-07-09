@@ -100,16 +100,14 @@ const CATALOG: OnDeviceModel[] = [
     },
     license: 'Apache-2.0',
     role: 'premium-vision-pack',
-    // Artifacts are fully verified (URLs + sha256 + byte sizes, cross-checked),
-    // BUT the mobile runtime path is not shippable yet: (1) there is no GGUF
-    // download+verify+install path in apps/mobile (installStore only handles
-    // ExecuTorch presets), (2) the model-picker filters out llama-rn-only rows
-    // (`isSelectableLocalCatalogModel` requires an executorchPreset for
-    // fileSizeBytes>0), and (3) on-device `initMultimodal` needs device QA.
-    // The tier-3 multimodal code + pure download/verify/message-assembly logic
-    // are implemented and unit-tested with a mocked native module, but the
-    // end-to-end install+run flow is device-QA-gated. Flip to true only after
-    // the mobile GGUF install path lands and on-device vision is verified.
+    // Artifacts are fully verified (URLs + sha256 + byte sizes, cross-checked)
+    // and the full software path is wired and tested with mocked native layers:
+    // gguf+mmproj install (apps/mobile services/modelDownload + installStore),
+    // picker selectability (`isSelectableLocalCatalogModel` accepts verified
+    // llama-rn GGUF rows), tier-3 `initMultimodal` lifecycle, and vision
+    // routing. The ONLY remaining ship gate is device QA: real on-device
+    // `initMultimodal` execution, vision output quality, and the RAM/thermal
+    // matrix (restructure §8 checklist). Flip to true after device QA passes.
     shipsInV1: false,
     downloadUrl: QWEN3_VL_2B_GGUF_URL,
     checksum: QWEN3_VL_2B_GGUF_SHA256,
