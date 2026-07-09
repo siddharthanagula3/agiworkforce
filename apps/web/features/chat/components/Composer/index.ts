@@ -1,4 +1,3 @@
-export { ChatComposer } from './ChatComposer';
 export { ChatComposerNew } from './ChatComposerNew';
 export { FocusModeButtons } from './FocusModeButtons';
 export { ActiveModeTags } from './ActiveModeTags';

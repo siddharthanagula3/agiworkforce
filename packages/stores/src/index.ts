@@ -11,29 +11,6 @@
  */
 
 // ---------------------------------------------------------------------------
-// Chat store (platform-agnostic, transport-injected)
-// ---------------------------------------------------------------------------
-export { createChatStore } from './chat/chatStore';
-export type {
-  ChatStore,
-  ChatStoreState,
-  CreateChatStoreOptions,
-  SendUserMessageParams,
-} from './chat/chatStore';
-export type {
-  ChatMessage,
-  ChatConversation,
-  ChatToolEntry,
-  ChatToolStatus,
-  ChatSearchResult,
-  ChatCodeExecutionResult,
-  CreateConversationOptions,
-  ChatStorePort,
-  SendChatParams,
-  SendChatCallbacks,
-} from './chat/types';
-
-// ---------------------------------------------------------------------------
 // Artifact store (platform-agnostic; canonical SharedArtifact; Step 1b consolidation)
 // ---------------------------------------------------------------------------
 export { createArtifactStore } from './artifacts/artifactStore';
