@@ -2,9 +2,19 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — monorepo restructure P1-P5 + Rust codegen] — 2026-07-09
+
+Branch `chore/repo-restructure-2026-07`, stacked on the P0 work below. All commits gate-verified (typecheck, targeted tests, cargo check where relevant); `main` fast-forwarded throughout.
+
+- **Wave 1 dead code:** deleted superseded chat variants (3 message lists, 3 composers, EnhancedMarkdownRenderer, MultiAgentChatInterface cluster), dead marketing components, the lost-race `packages/stores` chat store, the dead SPA build pipeline; folded `/chats` + `/chat-multi` stubs into config redirects. The 4 "dead" provider packages were spared — they are complete tested adapters (wired in Wave 2).
+- **Wave 2 one TS ai-client:** `packages/llm-runtime` `streamFromProvider` (replaces 4 duplicate SSE clients); six new OpenAI-compat provider packages; `@agiworkforce/llm-normalize` `openai-wire-compat` (OpenAI-wire ⇄ canonical ChatRequest/StreamChunk); gateway `llm.ts`+`cloudChat.ts` migrated onto `packages/providers` with all 11 cloud adapters wired; `ChatRequest.rawVendorTools` passthrough; retired orphaned `/api/llm/v2/chat` + `/api/llm/completion`. Web v1 route migration in progress.
+- **Wave 3 UI layering:** web onto `@agiworkforce/ui` (39-primitive fork deleted); `unified-chat` consumes `ui`+`design-tokens`; one shared markdown/tool-call renderer + BYOK dialog; 18 shadcn primitives ported into `packages/ui` with its own vitest rig.
+- **Wave 4 data seam:** web sync routes + auth store derive from `cloud-contracts` (z.infer); gateway real Postgres RLS via `data-layer` for policied tables (+ gateway-issued-JWT `sub` claim, deploy-gate probe, `RLS-GAP` markers); shared `packages/services/sync-apply` engine + cross-language golden fixtures (mobile runtime + desktop Rust replay).
+- **Wave 5 Rust:** `sandbox-policy` → `agiworkforce-sandbox-policy` (move-only); ts-rs codegen wired — 216 protocol types generated into `packages/types/src/generated/protocol`, `@agiworkforce/types/protocol` subpath, `pnpm check:protocol-types` drift guard. Desktop execpolicy adoption + the XL provider/MCP/agent-loop crate extractions staged in `docs/plans/rust-engine-extraction-2026-07-09.md`.
 
 ## [Unreleased — monorepo restructure P0: audit + hygiene + coming-soon site] — 2026-07-08
 
