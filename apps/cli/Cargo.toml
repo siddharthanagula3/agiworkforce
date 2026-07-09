@@ -38,7 +38,7 @@ await_holding_lock = "warn"
 [dependencies]
 agiworkforce-app-server = { path = "../../crates/agiworkforce-app-server" }
 agiworkforce-protocol = { path = "../../crates/agiworkforce-protocol" }
-agiworkforce-sandbox-policy = { path = "../../crates/sandbox-policy" }
+agiworkforce-sandbox-policy = { path = "../../crates/agiworkforce-sandbox-policy" }
 agiworkforce-execpolicy = { path = "../../crates/agiworkforce-execpolicy" }
 agiworkforce-command-registry = { path = "../../crates/agiworkforce-command-registry" }
 agiworkforce-utils-image = { path = "../../crates/agiworkforce-utils-image" }
