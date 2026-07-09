@@ -84,6 +84,12 @@ function toWireMessage(msg: InternalMessage): OpenAIWireMessage {
   };
   if (msg.tool_call_id !== undefined) wire.tool_call_id = msg.tool_call_id;
   if (msg.tool_calls !== undefined) wire.tool_calls = msg.tool_calls as OpenAIWireToolCall[];
+  // Forward the tool-loop's internal signed-thinking side-channel so
+  // openAIWireRequestToChatRequest can reconstruct real ThinkingBlocks before
+  // the tool_use blocks (known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01).
+  // Absent on every client-supplied message, so non-tool-loop callers are
+  // unaffected.
+  if (msg.__canonicalThinking !== undefined) wire.__canonicalThinking = msg.__canonicalThinking;
   return wire;
 }
 

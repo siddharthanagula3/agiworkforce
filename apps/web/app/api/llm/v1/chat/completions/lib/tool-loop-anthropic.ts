@@ -1,10 +1,25 @@
 import 'server-only';
 
-import type { StreamChunk } from '@agiworkforce/types';
+import type { StreamChunk, ThinkingBlock } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
 import { startProviderStream } from './adapter-factory';
 import { ADAPTER_PROVIDERS } from './adapter-providers';
 import type { ProcessedRequest } from './request-processor';
+
+/**
+ * Side-channel a per-step stream fills in as it is drained, carrying the
+ * canonical continuity data `collectProviderStream` (tool-loop.ts) cannot
+ * recover from the OpenAI-shaped bytes alone: the signed thinking blocks (the
+ * `legacy-web` wire renders `thinking-delta`s as literal `<thinking>` text and
+ * drops the signature entirely) and the tag-free assistant text. Populated by
+ * `chunksToOpenAiSse` from the underlying `StreamChunk`s just before the
+ * stream closes, so it is complete by the time the consumer finishes draining.
+ * Fixes known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
+ */
+export interface ToolLoopStepSink {
+  thinkingBlocks: ThinkingBlock[];
+  text: string;
+}
 
 /**
  * Table-driven per-provider dispatch for the agentic tool-loop (MCP/E2B),
@@ -98,6 +113,7 @@ export async function buildToolLoopStream(
   processed: ProcessedRequest,
   stepRequest: ProcessedRequest['llmRequest'],
   responseModel: string,
+  sink?: ToolLoopStepSink,
 ): Promise<ReadableStream> {
   const adapterProvider = ADAPTER_PROVIDERS[provider];
   if (!adapterProvider) {
@@ -114,7 +130,7 @@ export async function buildToolLoopStream(
   const chatRequest = adapterProvider.buildChatRequest(stepProcessed);
   const signal = new AbortController().signal;
   const chunks = await startProviderStream(adapter, chatRequest, signal, adapterProvider.mapError);
-  return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode);
+  return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode, sink);
 }
 
 /**
@@ -151,6 +167,10 @@ export function chunksToOpenAiSse(
   chunks: AsyncIterable<StreamChunk>,
   model: string,
   wireMode: 'legacy-web' | 'openai-passthrough',
+  // Optional continuity side-channel (see ToolLoopStepSink). Filled from the
+  // assembler's structured capture just before the stream closes — the wire
+  // bytes emitted are byte-identical whether or not a sink is passed.
+  sink?: ToolLoopStepSink,
 ): ReadableStream<Uint8Array> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });
   const encoder = new TextEncoder();
@@ -162,6 +182,15 @@ export function chunksToOpenAiSse(
           if (wireEvents.length === 0) continue;
           const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
           controller.enqueue(encoder.encode(lines + '\n\n'));
+        }
+        // Populate the continuity sink BEFORE close(): the consumer sees the
+        // stream's `done` only after close(), so this guarantees the sink is
+        // complete by the time it finishes draining. On the error path below
+        // the sink stays empty — correct, since the loop breaks on error and
+        // never builds the assistant message that would read it.
+        if (sink) {
+          sink.thinkingBlocks = assembler.canonicalThinkingBlocks();
+          sink.text = assembler.canonicalText();
         }
         controller.close();
       } catch (err) {

@@ -38,7 +38,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import { buildToolLoopStream } from './tool-loop-anthropic';
+import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
   executeWebMcpTool,
@@ -551,6 +551,14 @@ export async function* runToolLoop(
       // Build the request for this step.
       const stepRequest = { ...llmRequest, messages };
 
+      // Per-step continuity side-channel: captures the signed thinking blocks
+      // (text + Anthropic signature) and the tag-free assistant text from the
+      // underlying StreamChunks, which the OpenAI-shaped wire bytes
+      // collectProviderStream reads have already stripped/flattened. Fresh per
+      // step (like the assembler that fills it). Fixes known-flaw
+      // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
+      const stepSink: ToolLoopStepSink = { thinkingBlocks: [], text: '' };
+
       // Call the provider through the shared, table-driven adapter dispatch
       // (restructure Wave 2, task #34's tool-loop slice, see
       // tool-loop-anthropic.ts's buildToolLoopStream / ADAPTER_PROVIDERS).
@@ -561,6 +569,7 @@ export async function* runToolLoop(
           processed,
           stepRequest,
           responseModel,
+          stepSink,
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -602,11 +611,26 @@ export async function* runToolLoop(
         type: 'function' as const,
         function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
       }));
-      messages.push({
+      // Anthropic extended-thinking continuity (known-flaw
+      // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01): when this step produced
+      // signed thinking blocks, replay them on the assistant tool_use turn
+      // (via the internal `__canonicalThinking` field, reconstructed into real
+      // ThinkingBlocks before the tool_use blocks by openAIWireRequestToChat
+      // Request) and use the TAG-FREE assistant text so the follow-up request
+      // never double-represents reasoning as literal <thinking> tag text.
+      // Strictly gated on signed blocks being present: every other case (non-
+      // Anthropic providers, thinking-disabled Anthropic, or thinking without
+      // tool_use) sees the identical `content: textContent` push as before.
+      const signedThinking = stepSink.thinkingBlocks.filter((block) => block.signature);
+      const assistantMessage: (typeof messages)[number] = {
         role: 'assistant',
-        content: textContent,
+        content: signedThinking.length > 0 ? stepSink.text : textContent,
         tool_calls: assistantToolCalls as unknown[],
-      });
+      };
+      if (signedThinking.length > 0) {
+        assistantMessage.__canonicalThinking = signedThinking;
+      }
+      messages.push(assistantMessage);
 
       // In manual approval mode, emit an approval request for each tool and
       // stop the stream -- the client resumes via the approve endpoint.

@@ -26,6 +26,7 @@ import type {
   ProviderMessage,
   StreamChunk,
   TextBlock,
+  ThinkingBlock,
   ToolChoice,
   ToolDef,
   ToolResultBlock,
@@ -49,6 +50,23 @@ export interface OpenAIWireMessage {
   name?: string;
   tool_call_id?: string;
   tool_calls?: OpenAIWireToolCall[];
+  /**
+   * INTERNAL, never part of the public `/v1/chat/completions` request wire:
+   * canonical signed thinking blocks (text + Anthropic `signature`) captured
+   * from a previous streamed assistant turn, carried here only so a
+   * server-side agentic tool-loop can round-trip an assistant `tool_use` turn
+   * back to Anthropic with its preceding signed thinking block(s) intact.
+   *
+   * Populated exclusively by the web v1 tool-loop (see apps/web/app/api/llm/
+   * v1/chat/completions/lib/tool-loop.ts + canonical-request.ts's
+   * `toWireMessage`), and read only by `openAIWireRequestToChatRequest`'s
+   * assistant branch below, which reconstructs proper `ThinkingBlock`s
+   * BEFORE the tool_use blocks. External OpenAI-compatible clients never send
+   * this field; when absent (the default for every other caller), behavior is
+   * byte-identical to before it existed. Fixes known-flaw
+   * TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
+   */
+  __canonicalThinking?: ThinkingBlock[];
 }
 
 export interface OpenAIWireToolDefinition {
@@ -170,6 +188,21 @@ export function openAIWireRequestToChatRequest(body: OpenAIWireChatRequest): Cha
 
     if (msg.role === 'assistant') {
       const blocks: ContentBlock[] = [];
+      // Signed thinking blocks (internal `__canonicalThinking`, never the
+      // public wire) must lead the assistant turn: Anthropic requires an
+      // assistant `tool_use` turn under extended thinking to begin with its
+      // preceding signed thinking block(s), and only blocks that carry a
+      // `signature` round-trip (an unsigned/degraded block would be rejected,
+      // so it is dropped rather than replayed as fabricated reasoning). See
+      // known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
+      for (const thinkingBlock of msg.__canonicalThinking ?? []) {
+        if (!thinkingBlock.signature) continue;
+        blocks.push({
+          type: 'thinking',
+          thinking: thinkingBlock.thinking,
+          signature: thinkingBlock.signature,
+        });
+      }
       const text = typeof msg.content === 'string' ? msg.content : wireContentToText(msg.content);
       if (text) {
         const textBlock: TextBlock = { type: 'text', text };
@@ -394,6 +427,19 @@ export class OpenAIWireAssembler {
   private readonly toolCalls: Array<{ id: string; name: string; args: string }> = [];
   private text = '';
   private reasoning = '';
+  /**
+   * Structured, signature-preserving reconstruction of the canonical thinking
+   * blocks seen in `thinking-delta` chunks — the side-channel that fixes
+   * known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01. Independent of
+   * `reasoning`/`emitReasoning` and of all wire-emitting methods: accumulated
+   * in `ingest()` only, read only via `canonicalThinkingBlocks()`, and never
+   * serialized onto any wire. Anthropic streams a thinking block as N text-
+   * carrying `thinking-delta`s followed by one signature-carrying delta
+   * (empty text); the signature delta closes the current block, so a fresh
+   * block starts on the next delta — this cleanly delimits multiple blocks.
+   */
+  private readonly thinkingBlocks: ThinkingBlock[] = [];
+  private openThinkingBlock: { thinking: string; signature?: string } | null = null;
   /** `cacheRead`/`reasoning` are `wireMode: 'openai-passthrough'`-only --
    *  `usageOrNull()` (used by `response()`, both other modes) never reads
    *  them, only `usageOnlyEnvelope()` does, to reconstruct real OpenAI's
@@ -580,9 +626,25 @@ export class OpenAIWireAssembler {
       case 'text-delta':
         this.text += chunk.delta;
         return;
-      case 'thinking-delta':
+      case 'thinking-delta': {
         this.reasoning += chunk.delta;
+        // Structured side-channel accumulation (see `thinkingBlocks` field).
+        // Never touches wire output — `ingest` produces none.
+        const open = this.openThinkingBlock ?? { thinking: '' };
+        open.thinking += chunk.delta;
+        if (chunk.signature) {
+          open.signature = chunk.signature;
+          this.thinkingBlocks.push({
+            type: 'thinking',
+            thinking: open.thinking,
+            signature: chunk.signature,
+          });
+          this.openThinkingBlock = null;
+        } else {
+          this.openThinkingBlock = open;
+        }
         return;
+      }
       case 'tool-use-start': {
         if (!this.toolIndexById.has(chunk.toolUseId)) {
           this.toolIndexById.set(chunk.toolUseId, this.toolCalls.length);
@@ -908,6 +970,34 @@ export class OpenAIWireAssembler {
         break;
     }
     return out;
+  }
+
+  /**
+   * The canonical signed thinking blocks reconstructed from this stream's
+   * `thinking-delta` chunks (see the `thinkingBlocks` field). Returns only
+   * closed, signature-bearing blocks — a dangling unsigned partial (mid-block
+   * at stream end) is intentionally omitted, since only signed blocks
+   * round-trip to Anthropic. Empty for every stream with no thinking content
+   * (all non-Anthropic providers, thinking-disabled Anthropic), so a caller
+   * gating on `.length > 0` sees zero behavior change there. Read by the web
+   * v1 tool-loop to re-attach signed thinking to the assistant `tool_use`
+   * turn it replays (known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01).
+   */
+  canonicalThinkingBlocks(): ThinkingBlock[] {
+    return this.thinkingBlocks.map((block) => ({ ...block }));
+  }
+
+  /**
+   * The plain assistant text (from `text-delta` chunks only), with NO inline
+   * `<thinking>`/`</thinking>` tag markers — those are a `legacy-web` WIRE
+   * rendering of `thinking-delta`s and never enter `this.text`. The tool-loop
+   * replays this (instead of the tag-polluted client-facing text) as the
+   * assistant `tool_use` turn's content when it re-attaches signed thinking,
+   * so the follow-up request never double-represents reasoning as literal
+   * tags. Client-facing SSE is unaffected (it forwards the raw wire lines).
+   */
+  canonicalText(): string {
+    return this.text;
   }
 
   usageOrNull(): OpenAIWireUsage | null {

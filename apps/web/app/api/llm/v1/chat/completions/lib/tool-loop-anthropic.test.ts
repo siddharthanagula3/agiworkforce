@@ -293,4 +293,86 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     expect(output).toContain('Hi there.');
     expect(output).toContain('data: [DONE]');
   });
+
+  // ─── TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01 ───────────────────────────
+  // Extended thinking + tool_use in the same turn: the signed thinking block
+  // must survive the tool-loop round-trip and be replayed to Anthropic before
+  // the tool_use blocks, WITHOUT any literal <thinking> tag text.
+
+  it('replays the signed thinking block before tool_use on the follow-up request, with tag-free text', async () => {
+    mockAnthropicStream
+      .mockImplementationOnce(
+        fakeAdapterStream([
+          { type: 'thinking-delta', delta: 'I should ' },
+          { type: 'thinking-delta', delta: 'call get_time.' },
+          { type: 'thinking-delta', delta: '', signature: 'sig-live-001' },
+          { type: 'text-delta', delta: 'Let me check.' },
+          {
+            type: 'tool-use-start',
+            toolUseId: 'call_1',
+            name: 'mcp__clock__get_time',
+            vendorIndex: 1,
+          },
+          { type: 'tool-use-delta', toolUseId: 'call_1', deltaJson: '{}' },
+          { type: 'tool-use-end', toolUseId: 'call_1' },
+          { type: 'stop', reason: 'tool_use' },
+        ]),
+      )
+      .mockImplementationOnce(
+        fakeAdapterStream([
+          { type: 'text-delta', delta: 'It is noon.' },
+          { type: 'stop', reason: 'end_turn' },
+        ]),
+      );
+
+    mockExecuteWebMcpTool.mockResolvedValue({ content: [{ type: 'text', text: '12:00' }] });
+
+    const processed = makeProcessed();
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    // Follow-up (step 2) request carries the reconstructed signed thinking
+    // block FIRST, then the tag-free assistant text, then the tool_use block.
+    expect(mockAnthropicStream).toHaveBeenCalledTimes(2);
+    const step2 = mockAnthropicStream.mock.calls[1]?.[0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const assistant = step2.messages.find((m) => m.role === 'assistant');
+    expect(assistant?.content).toEqual([
+      { type: 'thinking', thinking: 'I should call get_time.', signature: 'sig-live-001' },
+      { type: 'text', text: 'Let me check.' },
+      { type: 'tool_use', id: 'call_1', name: 'mcp__clock__get_time', input: {} },
+    ]);
+    // No literal <thinking> tag text replayed into the assistant content.
+    expect(JSON.stringify(assistant?.content)).not.toContain('<thinking>');
+
+    // Client-facing SSE is unchanged: the thinking is still rendered inline as
+    // <thinking>/</thinking> content deltas (locked public wire contract), and
+    // the loop completes with the final answer + a clean [DONE].
+    expect(output).toContain('<thinking>');
+    expect(output).toContain('It is noon.');
+    expect(output).toContain('data: [DONE]');
+    // The signature never reaches the client wire.
+    expect(output).not.toContain('sig-live-001');
+  });
+
+  it('does not attach thinking continuity when the thinking turn has no tool_use', async () => {
+    // Thinking but no tool call: the loop terminates on end_turn and never
+    // pushes an assistant message, so there is nothing to reconstruct — and a
+    // single provider call, exactly as before this fix.
+    mockAnthropicStream.mockImplementationOnce(
+      fakeAdapterStream([
+        { type: 'thinking-delta', delta: 'pondering' },
+        { type: 'thinking-delta', delta: '', signature: 'sig-x' },
+        { type: 'text-delta', delta: 'Final answer.' },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+    );
+
+    const processed = makeProcessed();
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockAnthropicStream).toHaveBeenCalledTimes(1);
+    expect(output).toContain('Final answer.');
+    expect(output).toContain('data: [DONE]');
+  });
 });
