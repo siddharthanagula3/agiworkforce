@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { _setLlamaModuleForTesting, tier3Generate, tier3Release } from '../tier3.js';
+import {
+  _setLlamaModuleForTesting,
+  tier3Generate,
+  tier3IsMultimodalReady,
+  tier3Release,
+} from '../tier3.js';
+import type { LlamaMessage } from '../multimodal.js';
 
 describe('tier3 llama.rn adapter', () => {
   afterEach(async () => {
@@ -97,5 +103,74 @@ describe('tier3 llama.rn adapter', () => {
     const result = await pending;
     expect(stopCompletion).toHaveBeenCalledOnce();
     expect(result).toEqual({ text: '', runtime: 'llama_rn', aborted: true });
+  });
+});
+
+describe('tier3 llama.rn multimodal (vision) path', () => {
+  afterEach(async () => {
+    await tier3Release();
+    _setLlamaModuleForTesting(null);
+  });
+
+  it('loads with ctx_shift:false, attaches the mmproj, and sends an image content array', async () => {
+    const initMultimodal = vi.fn(async () => true);
+    const completion = vi.fn(async (_p: { messages: LlamaMessage[]; stop: string[] }) => ({
+      text: 'A cat on a mat.',
+    }));
+    const initLlama = vi.fn(async () => ({ completion, initMultimodal, release: vi.fn() }));
+    _setLlamaModuleForTesting(initLlama);
+
+    const result = await tier3Generate('/models/qwen3-vl.gguf', {
+      modelId: 'qwen3-vl-2b-instruct',
+      prompt: 'What is in this photo?',
+      images: ['file:///tmp/photo.jpg'],
+      mmprojPath: '/models/qwen3-vl.mmproj.gguf',
+    });
+
+    // ctx_shift disabled for multimodal so media token positions stay valid.
+    expect(initLlama).toHaveBeenCalledWith(
+      expect.objectContaining({ model: '/models/qwen3-vl.gguf', ctx_shift: false }),
+    );
+    // mmproj projector attached via initMultimodal.
+    expect(initMultimodal).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/models/qwen3-vl.mmproj.gguf' }),
+    );
+    expect(tier3IsMultimodalReady()).toBe(true);
+
+    // The current user turn carries a text+image_url content array.
+    const sentMessages = completion.mock.calls[0]![0].messages;
+    expect(sentMessages[sentMessages.length - 1]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'What is in this photo?' },
+        { type: 'image_url', image_url: { url: 'file:///tmp/photo.jpg' } },
+      ],
+    });
+    expect(result.text).toBe('A cat on a mat.');
+  });
+
+  it('does not send image parts when the mmproj fails to attach (initMultimodal false)', async () => {
+    const initMultimodal = vi.fn(async () => false);
+    const completion = vi.fn(async (_p: { messages: LlamaMessage[]; stop: string[] }) => ({
+      text: 'text only',
+    }));
+    _setLlamaModuleForTesting(
+      vi.fn(async () => ({ completion, initMultimodal, release: vi.fn() })),
+    );
+
+    await tier3Generate('/models/qwen3-vl.gguf', {
+      modelId: 'qwen3-vl-2b-instruct',
+      prompt: 'Describe this',
+      images: ['file:///tmp/photo.jpg'],
+      mmprojPath: '/models/qwen3-vl.mmproj.gguf',
+    });
+
+    expect(tier3IsMultimodalReady()).toBe(false);
+    // Vision unavailable -> user content is a plain string, never a broken image array.
+    const sentMessages = completion.mock.calls[0]![0].messages;
+    expect(sentMessages[sentMessages.length - 1]).toEqual({
+      role: 'user',
+      content: 'Describe this',
+    });
   });
 });

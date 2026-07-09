@@ -1,18 +1,29 @@
 /**
  * Vision routing service — routes image queries to the best available backend.
  *
- * Current Local Mode route:
- *   1. Native OCR over the selected image.
- *   2. Local text-only LLM reasoning over the extracted text.
+ * Local Mode routes, in priority order:
+ *   1. On-device VL pack (tier-3 llama.rn multimodal): used ONLY when a
+ *      multimodal GGUF model AND its mmproj vision projector are both installed
+ *      on disk. This passes the real image into the model via `images` +
+ *      `mmprojPath` (llama.rn `initMultimodal`). Effective vision is gated on the
+ *      projector actually being present — never on a catalog flag alone (§8).
+ *   2. Native OCR over the image + local text-only LLM reasoning (fallback).
  *
- * Do not advertise on-device VL or Apple/Gemini image input until the native
- * bridge exposes an actual image parameter and the route is verified manually.
+ * The VL route stays dormant until the mobile GGUF+mmproj install path lands and
+ * writes the artifacts to disk; today that path is device-QA-gated, so real
+ * devices resolve to OCR. The routing is honest about which one actually ran.
  *
  * The service never throws on routing fallback — it always returns a result or
  * a descriptive error string so the caller can surface it to the user.
  */
 
-import { getDefaultModel, localGenerate } from '@agiworkforce/local-llm';
+import {
+  getDefaultModel,
+  getModelById,
+  isMultimodalModel,
+  localGenerate,
+} from '@agiworkforce/local-llm';
+import { listInstalledModels } from '@/storage/installedModels';
 import { recognizeText } from './ocr';
 
 export type VisionRoute =
@@ -36,11 +47,92 @@ export interface VisionResult {
   ttftMs: number;
 }
 
+interface RunnableVisionModel {
+  modelId: string;
+  displayName: string;
+  modelPath: string;
+  mmprojPath: string;
+}
+
+/**
+ * Convention for where the mmproj projector is stored relative to the base GGUF.
+ * The (future) GGUF install path writes `<base>.gguf` and `<base>.gguf.mmproj.gguf`
+ * side by side; keeping the convention here means the VL route lights up
+ * automatically once that path lands, with no further change to this file.
+ */
+function mmprojSiblingPath(modelPath: string): string {
+  return `${modelPath}.mmproj.gguf`;
+}
+
+/** Best-effort file existence check via expo-file-system (legacy API). */
+async function fileExists(uri: string): Promise<boolean> {
+  try {
+    // Lazy require so unit tests / non-native runtimes never fail at import time.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('expo-file-system/legacy') as {
+      getInfoAsync: (u: string) => Promise<{ exists?: boolean }>;
+    };
+    if (typeof fs?.getInfoAsync !== 'function') return false;
+    const info = await fs.getInfoAsync(uri);
+    return Boolean(info?.exists);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Find an installed on-device multimodal model whose base weights AND mmproj
+ * projector are both present on disk. Returns null when none is runnable — in
+ * which case the caller uses the OCR fallback. Defensive against partial module
+ * mocks (the OCR fallback test mocks `@agiworkforce/local-llm` and storage).
+ */
+async function resolveInstalledMultimodalModel(): Promise<RunnableVisionModel | null> {
+  if (typeof listInstalledModels !== 'function') return null;
+  if (typeof getModelById !== 'function' || typeof isMultimodalModel !== 'function') return null;
+
+  const installed = await listInstalledModels().catch(() => []);
+  for (const entry of installed) {
+    if (!entry.local_path) continue;
+
+    let catalogModel;
+    try {
+      catalogModel = getModelById(entry.id);
+    } catch {
+      catalogModel = undefined;
+    }
+    if (!catalogModel) continue;
+
+    let multimodal = false;
+    try {
+      multimodal = isMultimodalModel(catalogModel);
+    } catch {
+      multimodal = false;
+    }
+    if (!multimodal) continue;
+
+    const mmprojPath = mmprojSiblingPath(entry.local_path);
+    if (!(await fileExists(entry.local_path))) continue;
+    if (!(await fileExists(mmprojPath))) continue;
+
+    return {
+      modelId: entry.id,
+      displayName: catalogModel.displayName,
+      modelPath: entry.local_path,
+      mmprojPath,
+    };
+  }
+  return null;
+}
+
 /** Resolve which vision route to use, in priority order. */
 export async function resolveVisionRoute(): Promise<VisionRoute> {
-  // The current local inference API accepts text prompts only. Until the Apple
-  // Foundation Models / AICore bridge exposes a real image input, keep this
-  // route honest and use native OCR plus local text reasoning.
+  const vl = await resolveInstalledMultimodalModel();
+  if (vl) {
+    return { kind: 'vl-pack', modelId: vl.modelId, displayName: vl.displayName };
+  }
+  // No runnable on-device VL model installed — use native OCR + local text
+  // reasoning. This is the honest route on every device until the GGUF+mmproj
+  // install path ships.
   return { kind: 'ocr-fallback', displayName: 'AGI Standard (OCR)' };
 }
 
@@ -60,8 +152,24 @@ async function runNativeOCR(imageUri: string): Promise<string> {
 
 /** Execute a vision query and return the model's response. */
 export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> {
-  const route = await resolveVisionRoute();
   const t0 = Date.now();
+
+  // Preferred path: a real on-device VL model with its mmproj installed.
+  const vl = await resolveInstalledMultimodalModel();
+  if (vl) {
+    const result = await localGenerate(vl.modelPath, {
+      modelId: vl.modelId,
+      prompt: query.question,
+      images: [query.imageUri],
+      mmprojPath: vl.mmprojPath,
+      onToken: query.onToken,
+    });
+    return {
+      text: result.text,
+      route: { kind: 'vl-pack', modelId: vl.modelId, displayName: vl.displayName },
+      ttftMs: Date.now() - t0,
+    };
+  }
 
   // OCR fallback path:
   const ocrText = await runNativeOCR(query.imageUri);
