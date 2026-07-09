@@ -6,6 +6,15 @@ Last updated: 2026-06-21 (post R27-PARITY Phase D complete — 5 stages shipped)
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 
+## 2026-07-08 Monorepo Restructure — active queue (P0 done; see docs/plans/monorepo-restructure-2026-07-08.md)
+
+- [ ] **P1 dead code:** dead TS provider packages (`providers-{deepseek,lmstudio,perplexity,xai}`, zero importers — deferred from P0 only because pruning touches `pnpm-lock.yaml` carrying in-flight work), dormant `packages/stores` chat store, orphaned `apps/web/src/` tree, stale `next.config.ts` chat-SPA comment + `VITE_BUILD_TARGET` build line + `build-with-chat.sh` path, visual-verification round archiving (coordinated with the round-17/18 e2e specs).
+- [ ] **P2 one TS ai-client:** collapse gateway `llm.ts`+`cloudChat.ts` onto `packages/providers`; move web's three LLM endpoints onto the v1 pattern and retire `apps/web/lib/llm-providers/`; publish one browser-safe SSE client for mobile/extensions.
+- [ ] **P3 UI layering:** web adopts `@agiworkforce/ui` (delete its 39 private primitives); `unified-chat` consumes `ui`+`design-tokens` (drop the `--chat-*` fork and no-op Tooltip); promote one markdown/code/tool-call renderer set; collapse web's 4 message lists.
+- [ ] **P4 Rust engine:** desktop adopts `agiworkforce-execpolicy`; extract `agiworkforce-llm`/`agent-core`/`mcp` crates from desktop+CLI; desktop links `protocol`; wire dormant ts-rs codegen into `packages/types`; rename `crates/sandbox-policy` dir.
+- [ ] **P5 data:** derive web row types from cloud-contracts; gateway onto a real RLS client (`SVC-GATEWAY-RLS-NOOP-01`); shared sync-apply engine + contract fixtures.
+- [ ] **P6 mobile multimodal + native path:** ship Qwen3-VL-2B-Instruct (primary, Apache 2.0, llama.rn mmproj) and/or LFM2-VL-1.6B (RN-executorch tier 2); resolve root `ios/` vs prebuild divergence (`MOBILE-IOS-PREBUILD-DRIFT-01`); decide dormant health-context client (HealthKit re-implementation is a tracked product gap).
+
 ## 2026-06-21 Deferred — tackle AFTER the P2 sync engine ships
 
 - [ ] **BILL-01 — Agentic credit reconciliation.** Reconcile metered agent/compute usage against the credit ledger so managed-cloud agentic runs can't under-bill or double-spend credits (a revenue-leak risk at scale). **Sequencing decision (founder, 2026-06-21):** intentionally deferred until after the P2 cross-device sync engine is built — it does NOT gate the current P2 objective, but must land before managed-cloud agentic billing is exposed at scale. Scope when picked up: per-run usage→ledger reconciliation, idempotent debit on retries/partial runs, and a drift audit between `usage_events`/metering and `token_credits`/`credit_transactions`.
