@@ -33,7 +33,7 @@ export default function CareersPage() {
           <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <div className="agi-fl-cta-row">
               <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-                Download AGI
+                Get notified
               </Link>
               <Link href="/changelog" className="agi-fl-cta agi-fl-cta--secondary">
                 Follow the Changelog

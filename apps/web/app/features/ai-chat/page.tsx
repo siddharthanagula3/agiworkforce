@@ -142,10 +142,10 @@ export default function AiChatFeaturePage() {
         <FinalCta
           eyebrow="Start now"
           title="Start the conversation."
-          body="Try AGI Web in the browser, or install the apps for Local and BYOK work."
+          body="Try AGI Web in the browser. Get notified when the apps open for Local and BYOK work."
           ctas={[
             { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
           ]}
         />
 

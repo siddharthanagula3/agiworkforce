@@ -24,7 +24,7 @@ export default function UseCasesPage() {
           em="you already work."
           lede="AGI is a routeable AI workspace for people with real constraints: private local work, provider choice through your own keys on Desktop and CLI, and managed cloud, open in public alpha, when you're ready to scale."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/solutions', label: 'See the Solutions Map' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
@@ -108,7 +108,7 @@ export default function UseCasesPage() {
           title="Start with your job, not our feature list."
           body="Each use-case page gives you the shortest path from a real problem to the AGI surface you should try first."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/business', label: 'See AGI for Business' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}

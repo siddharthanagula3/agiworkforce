@@ -3,10 +3,10 @@ import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Getting Started',
   description:
-    'Download AGI and start chatting with AI in seconds. No setup required - just open the app and describe what you want done.',
+    'AGI Web works today in the browser. Desktop, Mobile, CLI, Chrome, and VS Code are coming soon — get notified when each surface opens.',
   openGraph: {
     title: 'Getting Started',
-    description: 'Download and start using AGI in seconds. No configuration needed.',
+    description: 'Start with AGI Web today. Other surfaces are coming soon.',
     type: 'website',
     url: 'https://agiworkforce.com/get-started',
     images: [

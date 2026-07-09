@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Sitemap',
@@ -35,7 +36,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/cli', label: 'CLI' },
       { href: '/chrome-extension', label: 'Chrome extension' },
       { href: '/vscode-extension', label: 'VS Code extension' },
-      { href: '/download', label: 'Download' },
+      { href: '/download', label: COMING_SOON_LABEL },
     ],
   },
   {

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AgiMark } from '../agi/AgiMark';
+import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 /*
  * Site-wide marketing footer. Compact product, surface, capability, and
@@ -28,7 +29,7 @@ const SURFACES = [
   { href: '/cli', label: 'CLI' },
   { href: '/chrome-extension', label: 'Chrome' },
   { href: '/vscode-extension', label: 'VS Code' },
-  { href: '/download', label: 'Download' },
+  { href: '/download', label: COMING_SOON_LABEL },
 ];
 
 const CAPABILITIES = [

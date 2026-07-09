@@ -3,7 +3,7 @@
   "pageTitle": "Private by default. Built for teams.",
   "heroLedePart1": "{{localLabel}} and {{byokLabel}} run entirely on your device: any open model, or your own OpenAI-compatible API keys, with zero data leaving your laptop. Free forever, no seat and no card required.",
   "heroLedePart2": "When your team's data is shareable and you want frontier-model intelligence for everyone, AGI Cloud Team and Enterprise plans give every seat managed access with centralized billing and governance. Managed cloud is already open in public alpha today, not invite-only.",
-  "installCta": "Get AGI free",
+  "installCta": "Get notified",
   "talkToSalesCta": "Talk to sales",
   "tryAgiCta": "Try AGI Web",
   "modeRibbonLabel": "Trust modes",

@@ -5,13 +5,14 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { DevBand, FinalCta, SurfaceIndex } from '../../components/marketing/FlagshipSections';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
-import { LAUNCH } from '../../lib/marketing-constants';
+import { PublicWaitlistForm } from '../../components/marketing/PublicWaitlistForm';
+import { LAUNCH, COMING_SOON_LABEL, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
 export const metadata: Metadata = {
-  title: 'Download AGI: Apps for Every Surface',
-  description: `Get AGI on six surfaces: Web in the browser today, Desktop and CLI for Local and BYOK, Mobile with managed cloud (public alpha), plus Chrome and VS Code extensions. ${LAUNCH.publicLabel}.`,
+  title: 'AGI: Coming Soon on Every Surface',
+  description: `AGI is coming to six surfaces: Web, Desktop, CLI, Mobile, Chrome, and VS Code. All are in development toward public launch. ${LAUNCH.publicLabel}. Leave your email to get notified.`,
   alternates: { canonical: 'https://agiworkforce.com/download' },
 };
 
@@ -23,24 +24,21 @@ export default function DownloadPage() {
 
         <section className="agi-fl-hero" aria-labelledby="agi-download-hero-title">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">Get AGI</p>
+          <p className="agi-fl-eyebrow">{COMING_SOON_LABEL}</p>
           <h1 id="agi-download-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Get AGI</span>
+            <span className="agi-fl-h1-line">AGI is coming</span>
             <span className="agi-fl-h1-line">
-              <em className="agi-fl-h1-em">everywhere you work.</em>
+              <em className="agi-fl-h1-em">to every surface.</em>
             </span>
           </h1>
           <p className="agi-fl-lede">
-            AGI Web runs in your browser today. No install. Desktop and the CLI bring Local models
-            and BYOK to your machine. Mobile starts in on-device Local Mode; managed cloud is public
-            alpha. The Chrome and VS Code extensions meet you in the browser and the editor.
+            Web, Desktop, Mobile, CLI, Chrome, and VS Code are all in development toward the same
+            public launch. Nothing here is a placeholder link — leave your email and we will tell
+            you the moment each surface opens.
           </p>
           <div className="agi-fl-cta-row">
-            <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
-              Try AGI Web
-            </Link>
-            <Link href="/desktop" className="agi-fl-cta agi-fl-cta--secondary">
-              See AGI Desktop
+            <Link href="#agi-download-notify-title" className="agi-fl-cta agi-fl-cta--primary">
+              Get notified
             </Link>
             <WaitlistTrigger
               label="Team & Enterprise access"
@@ -77,7 +75,7 @@ export default function DownloadPage() {
         <SurfaceIndex
           eyebrow="Pick your surface"
           title="Six surfaces, honestly labeled."
-          lede="Each surface carries its real status: what runs in your browser today, what installs now, and what is in public alpha or developer preview. Nothing is marked available until it is."
+          lede="Every surface below is coming soon, ahead of the same public launch. Nothing is marked available until it actually is."
           items={[
             {
               index: '01',
@@ -91,7 +89,7 @@ export default function DownloadPage() {
                 'Account & cloud sync',
               ],
               platforms: 'Any modern browser',
-              status: 'Available in browser',
+              status: SURFACE_STATUS.web,
               href: WEB_CHAT_ENTRY_HREF,
               frame: {
                 variant: 'web',
@@ -117,7 +115,7 @@ export default function DownloadPage() {
                 'Scheduled work with AGI Work',
               ],
               platforms: 'macOS · Windows · Linux',
-              status: LAUNCH.publicLabel,
+              status: SURFACE_STATUS.desktop,
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Desktop', badge: 'Local' },
             },
@@ -133,7 +131,7 @@ export default function DownloadPage() {
                 'Cloud · public alpha',
               ],
               platforms: 'iPhone · Android',
-              status: 'Local + Cloud (public alpha)',
+              status: SURFACE_STATUS.mobile,
               href: '/mobile',
               frame: { variant: 'phone', title: 'AGI Mobile' },
             },
@@ -141,7 +139,7 @@ export default function DownloadPage() {
               index: '04',
               name: 'AGI CLI',
               tagline: 'An agent in your terminal.',
-              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. The CLI page carries the current install guide.',
+              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. It ships with the public release.',
               capabilities: [
                 'Sessions, resume & fork',
                 'Sandboxed execution',
@@ -149,7 +147,7 @@ export default function DownloadPage() {
                 'Offline with local models',
               ],
               platforms: 'macOS · Linux',
-              status: 'Developer preview',
+              status: SURFACE_STATUS.cli,
               href: '/cli',
               frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
             },
@@ -165,7 +163,7 @@ export default function DownloadPage() {
                 'Scoped permissions',
               ],
               platforms: 'Chrome (MV3)',
-              status: 'Desktop-bridge scoped',
+              status: SURFACE_STATUS.chrome,
               href: '/chrome-extension',
               frame: { variant: 'browser', title: 'AGI · side panel', badge: 'scoped' },
             },
@@ -181,79 +179,48 @@ export default function DownloadPage() {
                 'Explicit handoffs',
               ],
               platforms: 'VS Code',
-              status: 'Developer preview',
+              status: SURFACE_STATUS.vscode,
               href: '/vscode-extension',
               frame: { variant: 'editor', title: 'AGI · VS Code', badge: '@agi' },
             },
           ]}
         />
 
-        <section className="agi-fl-section" aria-labelledby="agi-download-installers-title">
-          <p className="agi-fl-eyebrow">Desktop installers</p>
-          <h2 id="agi-download-installers-title" className="agi-fl-h2">
-            Installers, as they become available.
+        <section className="agi-fl-section" aria-labelledby="agi-download-notify-title">
+          <p className="agi-fl-eyebrow">{COMING_SOON_LABEL}</p>
+          <h2 id="agi-download-notify-title" className="agi-fl-h2">
+            Nothing to install yet. Here&rsquo;s what&rsquo;s coming.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI Desktop targets macOS, Windows, and Linux. Each platform&rsquo;s route opens from
-            the Desktop page when release assets are available. No placeholder download links.
+            Every surface above is in active development toward the same public launch. No
+            placeholder download links, no fake availability badges. Leave your email and we will
+            tell you the day each one opens.
           </p>
-          <table className="agi-ledger">
-            <thead>
-              <tr>
-                <th>Platform</th>
-                <th>What it installs</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>macOS</td>
-                <td>Signed installer route opens when release assets are available</td>
-                <td>
-                  <Link href="/desktop" className="agi-cta-ghost">
-                    Check Availability
-                  </Link>
-                </td>
-              </tr>
-              <tr>
-                <td>Windows</td>
-                <td>Installer route opens when release assets are available</td>
-                <td>
-                  <Link href="/desktop" className="agi-cta-ghost">
-                    Check Availability
-                  </Link>
-                </td>
-              </tr>
-              <tr>
-                <td>Linux</td>
-                <td>AppImage or package route opens when release assets are available</td>
-                <td>
-                  <Link href="/desktop" className="agi-cta-ghost">
-                    Check Availability
-                  </Link>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="agi-fl-launch-form">
+            <PublicWaitlistForm
+              source="other"
+              ctaLabel="Get notified"
+              successMessage="You're on the list. We'll email you as each AGI surface opens for public launch."
+            />
+          </div>
         </section>
 
         <DevBand
           eyebrow="For developers"
-          title="Install the developer surfaces."
-          body="The AGI CLI ships as the agi binary in developer preview. The CLI page carries the current install guide and verified commands. The VS Code extension adds @agi chat, diff review, and slash commands to your editor."
+          title="Two developer surfaces, both coming soon."
+          body="The AGI CLI ships as the agi binary and AGI in VS Code adds @agi chat, diff review, and slash commands to your editor. Both are in developer preview ahead of public launch."
           ctas={[
-            { href: '/cli', label: 'Read the CLI Install Guide' },
+            { href: '/cli', label: 'See the CLI' },
             { href: '/vscode-extension', label: 'See the VS Code Extension' },
           ]}
         />
 
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
-          title="Pick a surface and go."
-          body="Try AGI Web in the browser now. Follow the Desktop and CLI pages for Local and BYOK work as releases open. AGI managed cloud is in public alpha — open by default. The route your work takes stays visible on every surface."
+          title="Be first to know when a surface opens."
+          body="Every AGI surface is in development toward the same public launch. Leave your email above and we will tell you the moment each one is ready — no placeholder links, no fake availability."
           ctas={[
-            { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/desktop', label: 'See AGI Desktop' },
+            { href: '#agi-download-notify-title', label: 'Get notified' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}

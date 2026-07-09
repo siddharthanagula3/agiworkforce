@@ -78,10 +78,10 @@ export default function AboutPage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Judge the bet on its merits."
-          body="Try AGI Web in the browser, install the desktop app or CLI for Local and BYOK work, and see where every request runs before it leaves your device."
+          body="Try AGI Web in the browser. Get notified when the desktop app or CLI open for Local and BYOK work, and see where every request runs before it leaves your device."
           ctas={[
             { href: '/login?redirectTo=%2Fchat', label: 'Try AGI Web' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/trust', label: 'See the Trust Posture' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}

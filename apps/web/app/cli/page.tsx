@@ -5,7 +5,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { FeatureGrid } from '../../components/marketing/LandingSections';
 import { DevBand, FinalCta, TrustTriptych } from '../../components/marketing/FlagshipSections';
-import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
+import { LAUNCH, MARKETING, COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'AGI CLI: the agi agent in your terminal',
@@ -84,7 +84,7 @@ export default function CliPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI CLI · developer preview</p>
+              <p className="agi-fl-eyebrow">AGI CLI · coming soon</p>
               <h1 id="agi-fl-cli-hero-title" className="agi-fl-h1">
                 <span className="agi-fl-h1-line">An agent in</span>
                 <span className="agi-fl-h1-line">
@@ -97,9 +97,9 @@ export default function CliPage() {
                 offline with local models.
               </p>
               <div className="agi-fl-cta-row">
-                <a href="#agi-fl-cli-install-title" className="agi-fl-cta agi-fl-cta--primary">
-                  Install AGI CLI
-                </a>
+                <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
+                  Get notified
+                </Link>
                 <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
                   Explore AGI Code
                 </Link>
@@ -206,36 +206,28 @@ export default function CliPage() {
         />
 
         <section className="agi-fl-section" aria-labelledby="agi-fl-cli-install-title">
-          <p className="agi-fl-eyebrow">Install</p>
+          <p className="agi-fl-eyebrow">{COMING_SOON_LABEL}</p>
           <h2 id="agi-fl-cli-install-title" className="agi-fl-h2">
-            Build from source, sign in, go.
+            The CLI ships with public release.
           </h2>
           <p className="agi-fl-section-lede">
-            The agi binary builds with a standard Rust toolchain from the AGI source tree. For
-            Desktop, Mobile, and the extensions, head to the download page.
+            The agi binary isn&rsquo;t distributed yet. It ships alongside Desktop, Mobile, and the
+            extensions at public launch. Leave your email on the download page and we&rsquo;ll tell
+            you the moment it&rsquo;s ready.
           </p>
-          <div className="agi-terminal">
-            <div className="agi-terminal-bar">agi · install</div>
-            <pre className="agi-terminal-pre">{`# from the AGI source tree (Rust toolchain)
-$ cargo install --path apps/cli --bin agi
-
-# first run
-$ agi login
-$ agi auth-status`}</pre>
-          </div>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--secondary">
-              Go to Downloads
+              Get notified
             </Link>
           </div>
         </section>
 
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
-          title="Open a terminal. Start working."
-          body="Build the agi binary from source on macOS or Linux. Keep your sessions replayable from day one. AGI managed cloud is in public alpha, open by default."
+          title="An agent for your terminal, coming soon."
+          body="The agi binary ships at public launch: resumable sessions from day one, sandboxed execution, and AGI managed cloud in public alpha, open by default."
           ctas={[
-            { href: '/download', label: 'Go to Downloads' },
+            { href: '/download', label: 'Get notified' },
             { href: '/agi-code', label: 'Explore AGI Code' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}

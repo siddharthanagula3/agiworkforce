@@ -110,7 +110,7 @@ export default function FeaturesPluginsPage() {
           body="Start from the skills directory, wire your own tools, and package the workflow as a plugin when it earns a name."
           ctas={[
             { href: '/skills', label: 'Browse Skills' },
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
           ]}
           stamp={`Public launch · ${LAUNCH.date}`}
         />

@@ -33,7 +33,7 @@ export default function VscodeExtensionPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI in VS Code · developer preview</p>
+              <p className="agi-fl-eyebrow">AGI in VS Code · coming soon</p>
               <h1 id="agi-vscode-hero-title" className="agi-fl-h1">
                 <span className="agi-fl-h1-line">Your editor,</span>
                 <span className="agi-fl-h1-line">with an agent</span>
@@ -154,10 +154,10 @@ export default function VscodeExtensionPage() {
           body="AGI in VS Code is in developer preview and ships as a VSIX. Request access and pair it with AGI Desktop and the AGI CLI. Installers open at public launch."
           ctas={[
             { label: 'Get VSIX Access', waitlist: true },
-            { href: '/download', label: 'Get Launch Access' },
+            { href: '/download', label: 'Get notified' },
             { href: '/cli', label: 'See the CLI' },
           ]}
-          stamp="Developer preview · VSIX distribution"
+          stamp="Coming soon · VSIX distribution"
         />
 
         <MarketingFooter />

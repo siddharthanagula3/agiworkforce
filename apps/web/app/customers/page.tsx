@@ -37,7 +37,7 @@ export default function CustomersPage() {
           <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <div className="agi-fl-cta-row">
               <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-                Download AGI
+                Get notified
               </Link>
               <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--secondary">
                 Talk to Sales
@@ -74,9 +74,9 @@ export default function CustomersPage() {
         <FinalCta
           eyebrow="Use it"
           title="Be the case study we ask to publish."
-          body="Install AGI and put it to work. If it earns a place in your stack, we'll ask your permission before your name ever appears here."
+          body="Put AGI to work when it opens. If it earns a place in your stack, we'll ask your permission before your name ever appears here."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/contact-sales', label: 'Talk to Sales' },
           ]}
         />

@@ -70,7 +70,7 @@ export default function FeaturesAgentsPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Download AGI
+              Get notified
             </Link>
             <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
               Explore AGI Code
@@ -154,9 +154,9 @@ export default function FeaturesAgentsPage() {
         <FinalCta
           eyebrow="Start now"
           title="Put an agent on it."
-          body="Download AGI for Local and BYOK agent work on Desktop and CLI. AGI managed cloud is in public alpha — open by default."
+          body="Get notified for Local and BYOK agent work on Desktop and CLI. AGI managed cloud is in public alpha — open by default."
           ctas={[
-            { href: '/download', label: 'Download AGI' },
+            { href: '/download', label: 'Get notified' },
             { href: '/agi-code', label: 'Explore AGI Code' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
