@@ -5,9 +5,12 @@
  * credentials sourced from env vars (server-side only — never echoed back
  * to the client).
  *
- * Sprint 7 (api-gateway integration). Lifts the new packages/providers/*
- * into the gateway alongside the existing OpenAI-compatible llm.ts proxy,
- * without disrupting it.
+ * Restructure Wave 2: this factory is the ONLY provider-calling seam in the
+ * gateway. All thirteen cloud adapters from packages/providers/* are wired
+ * here; a provider is "available" only when its server env key is present
+ * (buildProviderAdapter returns null otherwise and routes respond 502/503).
+ * LM Studio is deliberately absent — it is a local-device provider and has
+ * no meaning behind the managed gateway.
  */
 
 import {
@@ -17,11 +20,86 @@ import {
 import { createOpenAIAdapter, type OpenAIAdapterConfig } from '@agiworkforce/providers-openai';
 import { createOllamaAdapter, type OllamaAdapterConfig } from '@agiworkforce/providers-ollama';
 import { createGoogleAdapter, type GoogleAdapterConfig } from '@agiworkforce/providers-google';
+import { createDeepSeekAdapter } from '@agiworkforce/providers-deepseek';
+import { createXaiAdapter } from '@agiworkforce/providers-xai';
+import { createPerplexityAdapter } from '@agiworkforce/providers-perplexity';
+import { createGroqAdapter } from '@agiworkforce/providers-groq';
+import { createMistralAdapter } from '@agiworkforce/providers-mistral';
+import { createMoonshotAdapter } from '@agiworkforce/providers-moonshot';
+import { createQwenAdapter } from '@agiworkforce/providers-qwen';
+import { createZhipuAdapter } from '@agiworkforce/providers-zhipu';
+import { createOpenRouterAdapter } from '@agiworkforce/providers-openrouter';
 import type { ProviderAdapter } from '@agiworkforce/types';
 
-export type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'google';
+export type ProviderId =
+  | 'anthropic'
+  | 'openai'
+  | 'ollama'
+  | 'google'
+  | 'deepseek'
+  | 'xai'
+  | 'perplexity'
+  | 'groq'
+  | 'mistral'
+  | 'moonshot'
+  | 'qwen'
+  | 'zhipu'
+  | 'open_router';
 
-export const SUPPORTED_PROVIDER_IDS = ['anthropic', 'openai', 'ollama', 'google'] as const;
+export const SUPPORTED_PROVIDER_IDS = [
+  'anthropic',
+  'openai',
+  'ollama',
+  'google',
+  'deepseek',
+  'xai',
+  'perplexity',
+  'groq',
+  'mistral',
+  'moonshot',
+  'qwen',
+  'zhipu',
+  'open_router',
+] as const;
+
+/** Simple env-keyed providers: one API key env var, no extra config. */
+const ENV_KEYED_PROVIDERS: Partial<
+  Record<ProviderId, { envVars: string[]; create: (apiKey: string) => ProviderAdapter }>
+> = {
+  deepseek: {
+    envVars: ['DEEPSEEK_API_KEY'],
+    create: (apiKey) => createDeepSeekAdapter({ apiKey }),
+  },
+  xai: { envVars: ['XAI_API_KEY'], create: (apiKey) => createXaiAdapter({ apiKey }) },
+  perplexity: {
+    envVars: ['PERPLEXITY_API_KEY'],
+    create: (apiKey) => createPerplexityAdapter({ apiKey }),
+  },
+  groq: { envVars: ['GROQ_API_KEY'], create: (apiKey) => createGroqAdapter({ apiKey }) },
+  mistral: { envVars: ['MISTRAL_API_KEY'], create: (apiKey) => createMistralAdapter({ apiKey }) },
+  moonshot: {
+    envVars: ['MOONSHOT_API_KEY'],
+    create: (apiKey) => createMoonshotAdapter({ apiKey }),
+  },
+  // DASHSCOPE_API_KEY is Alibaba's own env-var convention — honored as a fallback.
+  qwen: {
+    envVars: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
+    create: (apiKey) => createQwenAdapter({ apiKey }),
+  },
+  zhipu: { envVars: ['ZHIPU_API_KEY'], create: (apiKey) => createZhipuAdapter({ apiKey }) },
+  open_router: {
+    envVars: ['OPENROUTER_API_KEY'],
+    create: (apiKey) => createOpenRouterAdapter({ apiKey }),
+  },
+};
+
+function firstEnv(names: string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return undefined;
+}
 
 interface ProviderAvailability {
   id: ProviderId;
@@ -49,6 +127,19 @@ export function listProviderAvailability(): ProviderAvailability[] {
         return process.env['GOOGLE_API_KEY'] || process.env['GOOGLE_AI_API_KEY']
           ? { id, available: true }
           : { id, available: false, unavailableReason: 'GOOGLE_API_KEY not set' };
+      default: {
+        const entry = ENV_KEYED_PROVIDERS[id];
+        if (!entry) {
+          return { id, available: false, unavailableReason: 'provider not wired' };
+        }
+        return firstEnv(entry.envVars)
+          ? { id, available: true }
+          : {
+              id,
+              available: false,
+              unavailableReason: `${entry.envVars[0]} not set`,
+            };
+      }
     }
   });
 }
@@ -108,6 +199,13 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
         config.baseUrl = process.env['GOOGLE_GENAI_BASE_URL'];
       }
       return createGoogleAdapter(config);
+    }
+    default: {
+      const entry = ENV_KEYED_PROVIDERS[id];
+      if (!entry) return null;
+      const apiKey = firstEnv(entry.envVars);
+      if (!apiKey) return null;
+      return entry.create(apiKey);
     }
   }
 }
