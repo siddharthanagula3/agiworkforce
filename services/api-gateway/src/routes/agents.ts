@@ -17,7 +17,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/neonClients';
+import { getServiceClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -66,8 +66,12 @@ async function verifyDesktopOwnership(desktopId: string, userId: string): Promis
     throw new AppError('Invalid desktop ID format', 400);
   }
 
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getUserScopedClient(userId);
+  // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables
+  // none) — migration TODO. Same gap applies to `agent_approval_requests` (no
+  // migration record anywhere in the repo) at every getServiceClient() call
+  // site in this file. Explicit ownership/filter checks are the SOLE
+  // tenant-isolation mechanism until policies ship.
+  const db = getServiceClient();
   const { data: desktop, error } = await db
     .from('desktop_devices')
     .select('id, user_id')
@@ -108,7 +112,7 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
 
   await verifyDesktopOwnership(desktopId, user.userId);
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
   // Send a status query to the desktop via WebSocket and return the response.
   // For MVP, we query the last known status from the DB.
   const { data: desktop } = await db
@@ -159,7 +163,7 @@ router.get('/pending', createRateLimiter('device-status'), async (req: Request, 
 
   await verifyDesktopOwnership(desktopId, user.userId);
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
   // Fetch pending approval requests from Neon
   const { data: pendingRequests, error } = await db
     .from('agent_approval_requests')
@@ -208,7 +212,7 @@ router.post(
 
     await verifyDesktopOwnership(desktopId, user.userId);
 
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
     const { data: updatedRows, error: updateError } = await db
       .from('agent_approval_requests')
       .update({ status: 'approved', resolved_at: new Date().toISOString() })
@@ -271,7 +275,7 @@ router.post('/deny', createRateLimiter('device-command'), async (req: Request, r
 
   await verifyDesktopOwnership(desktopId, user.userId);
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
   const { data: updatedRows, error: updateError } = await db
     .from('agent_approval_requests')
     .update({

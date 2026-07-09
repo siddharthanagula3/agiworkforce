@@ -42,7 +42,7 @@ import {
 import { createRateLimiter, warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';
 import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
-import { getServiceClient } from './lib/neonClients';
+import { getServiceClient, disposeUserScopedClientPool } from './lib/neonClients';
 import {
   registrationRouter,
   assignmentRouter,
@@ -204,6 +204,11 @@ process.on('SIGTERM', () => {
   wss.close();
   server.close(() => {
     logger.info({}, 'Server closed');
-    process.exit(0);
+    // Release the pooled RLS adapter's WebSocket connections (lib/neonClients.ts
+    // getUserScopedClient) — separate connection strategy from the one-shot HTTP
+    // service client, so it needs an explicit teardown.
+    disposeUserScopedClientPool()
+      .catch((err) => logger.error({ err }, 'Failed to dispose RLS adapter pool'))
+      .finally(() => process.exit(0));
   });
 });

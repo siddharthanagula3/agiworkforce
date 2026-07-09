@@ -16,7 +16,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/neonClients';
+import { getServiceClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -67,8 +67,12 @@ async function verifyDesktopOwnership(desktopId: string, userId: string): Promis
     throw new AppError('Invalid desktop ID format', 400);
   }
 
-  // Wave 1.5+ singleton sweep: user-scoped client for ownership lookup.
-  const db = getUserScopedClient(userId);
+  // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables
+  // none) — migration TODO. Same gap applies to `chat_messages` (no
+  // migration record anywhere in the repo) at every getServiceClient() call
+  // site below. The explicit ownership checks are the SOLE tenant-isolation
+  // mechanism until policies ship.
+  const db = getServiceClient();
   const { data: desktop, error } = await db
     .from('desktop_devices')
     .select('id, user_id')
@@ -116,7 +120,7 @@ router.post(
     const messageId = randomUUID();
     const timestamp = Date.now();
 
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: chat_messages — see verifyDesktopOwnership() above
     // Persist the message to Neon for history (best-effort)
     const { error: insertError } = await db.from('chat_messages').insert({
       id: messageId,
@@ -192,7 +196,7 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
     await verifyDesktopOwnership(query.desktopId, user.userId);
   }
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: chat_messages — see verifyDesktopOwnership() above
   // Build Neon query
   let dbQuery = db
     .from('chat_messages')
@@ -263,7 +267,7 @@ router.get(
       await verifyDesktopOwnership(desktopId, user.userId);
     }
 
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: chat_messages — see verifyDesktopOwnership() above
     // Fetch distinct conversations with their latest message
     let dbQuery = db
       .from('chat_messages')

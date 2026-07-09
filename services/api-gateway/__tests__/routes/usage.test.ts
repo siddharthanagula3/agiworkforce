@@ -36,10 +36,12 @@ const { usageRows } = vi.hoisted(() => ({
 }));
 
 // Wave 1.5+ task #17 (2026-05-08): legacy `lib/db` singleton deleted.
-// middleware/auth.ts kill-switch now uses `getServiceClient()` for the
-// profiles lookup; routes/usage.ts uses `getUserScopedClient(userId)` for
-// usage_events. Mock both helpers separately so each call site sees the
-// right chain (profile mock for kill-switch, usage mock for usage routes).
+// P1-GW-RLS (Wave 4): usage_events has no RLS policy coverage (RLS-GAP), so
+// routes/usage.ts now calls getServiceClient() directly, same as
+// middleware/auth.ts's kill-switch profiles lookup. Both call sites share one
+// mocked getServiceClient — dispatch on the table name passed to .from() so
+// each sees the right chain (profile mock for the kill-switch, usage mock for
+// the usage routes).
 vi.mock('../../src/lib/neonClients', () => {
   const usageQuery = {
     eq: vi.fn(() => usageQuery),
@@ -60,21 +62,15 @@ vi.mock('../../src/lib/neonClients', () => {
   };
 
   const serviceClient = {
-    from: vi.fn(() => ({
-      select: vi.fn(() => profileQuery),
-    })),
-  };
-
-  const userClient = {
-    from: vi.fn(() => ({
-      select: vi.fn(() => usageQuery),
-    })),
+    from: vi.fn((table: string) =>
+      table === 'usage_events'
+        ? { select: vi.fn(() => usageQuery) }
+        : { select: vi.fn(() => profileQuery) },
+    ),
   };
 
   return {
     getServiceClient: vi.fn(() => serviceClient),
-    getUserClient: vi.fn(() => userClient),
-    getUserScopedClient: vi.fn(() => userClient),
   };
 });
 

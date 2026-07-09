@@ -43,56 +43,47 @@ const { state } = vi.hoisted(() => ({
   },
 }));
 
+// P1-GW-RLS (Wave 4): organization_members/organizations have no RLS policy
+// coverage (RLS-GAP), so routes/enterprise.ts now calls getServiceClient()
+// for everything, same as middleware/auth.ts's kill-switch profiles lookup.
+// One table-dispatching mock serves both.
 vi.mock('../../src/lib/neonClients', () => {
-  function makeUserClient() {
-    function from(table: string) {
-      if (table === 'organization_members') {
-        // select(...).eq('user_id', ...).order(...) resolves to membership rows.
-        const q = {
-          select: () => q,
-          eq: () => q,
-          order: () => Promise.resolve({ data: state.members, error: null }),
-        };
-        return q;
-      }
-      if (table === 'organizations') {
-        // select(...).in('id', ids) resolves to org rows; capture the ids so the
-        // test proves the second query was actually issued.
-        const q = {
-          select: () => q,
-          in: (_col: string, ids: unknown[]) => {
-            state.lastInIds = ids;
-            return Promise.resolve({ data: state.orgs, error: null });
-          },
-        };
-        return q;
-      }
-      return {
-        select: () => ({
-          eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }),
-        }),
+  function from(table: string) {
+    if (table === 'organization_members') {
+      // select(...).eq('user_id', ...).order(...) resolves to membership rows.
+      const q = {
+        select: () => q,
+        eq: () => q,
+        order: () => Promise.resolve({ data: state.members, error: null }),
       };
+      return q;
     }
-    return { from: vi.fn(from) };
-  }
-
-  // Service client only needs to answer the kill-switch account_status lookup.
-  const serviceClient = {
-    from: vi.fn(() => ({
+    if (table === 'organizations') {
+      // select(...).in('id', ids) resolves to org rows; capture the ids so the
+      // test proves the second query was actually issued.
+      const q = {
+        select: () => q,
+        in: (_col: string, ids: unknown[]) => {
+          state.lastInIds = ids;
+          return Promise.resolve({ data: state.orgs, error: null });
+        },
+      };
+      return q;
+    }
+    // profiles kill-switch (middleware/auth.ts) and any other table.
+    return {
       select: () => ({
         eq: () => ({
           single: () => Promise.resolve({ data: { account_status: 'active' }, error: null }),
           maybeSingle: () => Promise.resolve({ data: null, error: null }),
         }),
       }),
-    })),
-  };
+    };
+  }
 
-  const userClient = makeUserClient();
+  const serviceClient = { from: vi.fn(from) };
   return {
     getServiceClient: vi.fn(() => serviceClient),
-    getUserClient: vi.fn(() => userClient),
-    getUserScopedClient: vi.fn(() => userClient),
   };
 });
 

@@ -29,7 +29,7 @@ import {
 } from '@agiworkforce/llm-normalize';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/neonClients';
+import { getServiceClient, getUserScopedClient } from '../lib/neonClients';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
@@ -147,13 +147,14 @@ export function resolveProvider(model: string): Provider {
  * Check the user's subscription tier and enforce model access.
  * Returns the tier string.
  *
- * P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
- * RLS — see lib/neonClients.ts). The `.eq('user_id', userId)` filter is the
- * SOLE tenant-isolation mechanism; there is no RLS backstop, so a
- * missing-filter regression here WOULD leak another tenant's plan_tier.
+ * P1-GW-RLS: `subscriptions` has RLS enabled+forced with a policy keyed on
+ * `user_id = current_app_user_id()` (0037_rls_user_isolation.sql), so this
+ * runs through real Postgres RLS via getUserScopedClient's withUser(token)
+ * binding — a DB-level backstop behind the `.eq('user_id', userId)` filter
+ * below, not a replacement for it. Keep the filter.
  */
-async function enforcePlanTier(userId: string, model: string): Promise<string> {
-  const userDb = getUserScopedClient(userId);
+async function enforcePlanTier(userId: string, token: string, model: string): Promise<string> {
+  const userDb = getUserScopedClient({ userId, token });
   const { data: subscription, error } = await userDb
     .from('subscriptions')
     .select('plan_tier')
@@ -217,7 +218,7 @@ router.post(
 
     const body = chatCompletionSchema.parse(req.body);
     const provider = resolveProvider(body.model);
-    const tier = await enforcePlanTier(user.userId, body.model);
+    const tier = await enforcePlanTier(user.userId, user.token, body.model);
 
     const adapter = buildProviderAdapter(provider);
     if (!adapter) {
@@ -238,11 +239,12 @@ router.post(
       'LLM proxy request',
     );
 
-    // P1-GW-RLS: service-role client (no DB-level RLS — see lib/neonClients.ts).
-    // usage_events rows carry the explicit user_id set on insert; there is no
-    // `user_id = auth.uid()` RLS backstop, so the explicit field is the SOLE
-    // guard against mis-attribution. Keep setting it.
-    const usageDb = getUserScopedClient(user.userId);
+    // RLS-GAP: usage_events has no RLS policy yet (not covered by
+    // 0037_rls_user_isolation.sql or any later migration) — migration TODO.
+    // usage_events rows carry the explicit user_id set on insert; that field
+    // is the SOLE guard against mis-attribution until a policy ships. Keep
+    // setting it.
+    const usageDb = getServiceClient();
 
     const recordUsage = (
       eventType: 'llm_stream' | 'llm_completion',
