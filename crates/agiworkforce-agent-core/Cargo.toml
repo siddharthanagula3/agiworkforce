@@ -1,0 +1,37 @@
+[package]
+name = "agiworkforce-agent-core"
+version = "0.1.0"
+edition = "2024"
+description = "AGI Workforce shared agent turn-loop engine: model-stream driving, tool-call scheduling (sequential + parallel read-only batches), runaway/iteration/budget guards, and turn-event emission. Host-agnostic — the CLI and desktop implement TurnHost to supply completion, tool dispatch, hooks, approval, and event routing."
+
+[lints]
+workspace = true
+
+[lib]
+name = "agiworkforce_agent_core"
+path = "src/lib.rs"
+
+[dependencies]
+# The engine drives the shared LLM layer's assembled outcome + stream events and
+# reuses its tool-call type. Pinned transitively to the CLI's reqwest line via
+# agiworkforce-llm; this crate itself performs no HTTP.
+#
+# NOTE (ToolDispatch reuse, stage e2): the plan sketched a
+# `dispatch() -> &dyn agiworkforce_app_server::ToolDispatch` on TurnHost. In the
+# real tree the CLI's agentic dispatch mutates session state (update_plan/MCP/
+# subagents) and needs an approval channel, which app-server's read-only, `&self`
+# `ToolDispatch` cannot serve (`CliToolDispatch` explicitly rejects every
+# mutating/MCP/team/task tool). Forcing it into the loop would break the loop, and
+# depending on `agiworkforce-app-server` (axum/tower) purely for an unused
+# re-export would bloat this lean crate. The e1 dispatch seam is therefore
+# TurnHost's execute methods; app-server/desktop ToolDispatch convergence lands in
+# stage e2.
+agiworkforce-llm = { path = "../agiworkforce-llm" }
+anyhow = "1"
+async-trait = "0.1.89"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
