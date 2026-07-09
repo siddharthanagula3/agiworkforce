@@ -50,6 +50,16 @@ pub enum TransportConfig {
         headers: HashMap<String, String>,
         oauth: Option<OAuthConfig>,
     },
+    /// Legacy HTTP+SSE split-endpoint convention (pre-streamable-HTTP remote
+    /// servers; the desktop remote MCP config shape): outbound JSON-RPC goes
+    /// via POST to `{base_url}/message`, and an optional long-lived
+    /// `GET {base_url}/sse` stream carries server-initiated frames. The GET is
+    /// best-effort — servers without an SSE stream keep working POST-only with
+    /// inline responses.
+    SseLegacy {
+        base_url: String,
+        headers: HashMap<String, String>,
+    },
 }
 
 impl TransportConfig {
@@ -59,11 +69,15 @@ impl TransportConfig {
             TransportConfig::Stdio { .. } => "stdio",
             TransportConfig::Sse { .. } => "sse",
             TransportConfig::Http { .. } => "http",
+            TransportConfig::SseLegacy { .. } => "sse-legacy",
         }
     }
 }
 
-/// Per-operation timeouts + framing limits for one MCP connection.
+/// Per-operation timeouts + framing limits + network hardening knobs for one
+/// MCP connection. All hardening knobs default to the original CLI behavior
+/// (off), so `McpTimeouts::default()` is behavior-neutral for existing hosts;
+/// desktop turns them on for remote transports.
 #[derive(Debug, Clone)]
 pub struct McpTimeouts {
     /// Timeout for the initialize handshake (default: 30s).
@@ -80,6 +94,21 @@ pub struct McpTimeouts {
     /// buffer exceeds it before a frame boundary, the read fails instead of
     /// growing without bound.
     pub max_frame_bytes: Option<usize>,
+    /// When `true`, remote transport URLs (`Sse`, `Http`, `SseLegacy`) are
+    /// validated against SSRF at connect time via
+    /// [`crate::security::validate_server_url`]: loopback allowed,
+    /// private/link-local/mapped ranges and numeric-domain obfuscation blocked.
+    /// Default `false` (CLI parity — LAN MCP servers stay reachable there).
+    pub validate_urls: bool,
+    /// When `false`, remote transports accept invalid TLS certificates
+    /// (`danger_accept_invalid_certs`). Default `true` — verify certificates.
+    /// Mirrors the desktop `HttpSseConfig::verify_ssl` knob.
+    pub verify_tls: bool,
+    /// Optional cap on an inline HTTP response body, enforced via
+    /// `Content-Length` before the body is read (a malicious server cannot
+    /// exhaust memory with one giant response). `None` (default) is unbounded,
+    /// matching the original CLI behavior. Desktop sets 50 MB.
+    pub max_response_bytes: Option<u64>,
 }
 
 impl Default for McpTimeouts {
@@ -90,6 +119,9 @@ impl Default for McpTimeouts {
             call_tool: Duration::from_secs(120),
             health_check: Duration::from_secs(5),
             max_frame_bytes: None,
+            validate_urls: false,
+            verify_tls: true,
+            max_response_bytes: None,
         }
     }
 }
