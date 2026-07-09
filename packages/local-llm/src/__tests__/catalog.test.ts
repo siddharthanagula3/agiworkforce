@@ -80,6 +80,65 @@ describe('on-device catalog: getShippableModels', () => {
       expect(model.executorchPreset).toBeDefined();
     }
   });
+
+  it('excludes the qwen3-vl multimodal pack until the mobile GGUF path ships', () => {
+    const shippable = getShippableModels();
+    expect(shippable.some((m) => m.id === 'qwen3-vl-2b-instruct')).toBe(false);
+  });
+});
+
+describe('on-device catalog: qwen3-vl-2b multimodal entry (P6)', () => {
+  const HEX64 = /^[0-9a-f]{64}$/;
+
+  it('is the Apache-2.0 primary vision pack with verified GGUF artifacts', () => {
+    const model = getModelById('qwen3-vl-2b-instruct');
+    expect(model).toBeDefined();
+    expect(model!.family).toBe('qwen3-vl');
+    expect(model!.license).toBe('Apache-2.0');
+    expect(model!.role).toBe('premium-vision-pack');
+    expect(model!.format).toBe('gguf');
+    expect(model!.supportedRuntimes).toEqual(['llama-rn']);
+    expect(model!.capabilities.visionIn).toBe(true);
+  });
+
+  it('carries a verified base-GGUF url + sha256 + byte size', () => {
+    const model = getModelById('qwen3-vl-2b-instruct')!;
+    expect(model.downloadUrl).toContain(
+      '/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf',
+    );
+    expect(model.checksum).toMatch(HEX64);
+    expect(model.checksum).toBe(
+      '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae',
+    );
+    expect(model.fileSizeBytes).toBe(1_107_409_952);
+  });
+
+  it('carries a verified mmproj vision-projector as a second artifact', () => {
+    const model = getModelById('qwen3-vl-2b-instruct')!;
+    expect(model.mmprojUrl).toContain('mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf');
+    expect(model.mmprojChecksum).toMatch(HEX64);
+    expect(model.mmprojChecksum).toBe(
+      'f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82',
+    );
+    expect(model.mmprojSizeBytes).toBe(445_053_216);
+  });
+
+  it('stays gated off until the mobile runtime path is wired', () => {
+    expect(getModelById('qwen3-vl-2b-instruct')!.shipsInV1).toBe(false);
+  });
+});
+
+describe('on-device catalog: lfm2-vl tier-2 option (P6, gated off)', () => {
+  it('is recorded, gated off, and carries no fabricated download URL', () => {
+    const model = getModelById('lfm2-vl-1.6b');
+    expect(model).toBeDefined();
+    expect(model!.family).toBe('lfm2-vl');
+    expect(model!.shipsInV1).toBe(false);
+    // No resolve-tag URL was verifiable, so none is recorded (no fabrication).
+    expect(model!.downloadUrl).toBeUndefined();
+    expect(model!.executorchPreset).toBeUndefined();
+    expect(model!.license).toContain('LFM Open License');
+  });
 });
 
 describe('on-device catalog: getLiteModeModel', () => {
