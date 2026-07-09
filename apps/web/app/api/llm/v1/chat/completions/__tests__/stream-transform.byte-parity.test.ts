@@ -126,21 +126,26 @@ async function collectBody(response: Response): Promise<string> {
  *    `data: {choices:...}` OpenAI-shaped chunk it no longer describes --
  *    orphaned, incoherent names, not a reconstructable byte contract.
  *
- * ONE EXCEPTION FOUND AND NOT YET RESOLVED, flagged separately in the task
- * #34 handoff: desktop's sse_parser.rs also has an `event: ping` /
- * `event:ping` keepalive-detection branch (is_keepalive_event). Anthropic's
- * real API sends `event: ping` during long idle periods (e.g. extended
- * thinking with no visible output) to prevent proxy/load-balancer timeouts;
- * the legacy raw-fetch passthrough forwards these today. The
- * `@anthropic-ai/sdk` MessageStream helper swallows `ping` events
- * internally and unconditionally (`core/streaming.ts`: `if (sse.event ===
- * 'ping') { continue; }`) BEFORE they ever reach `translateAnthropicStream`
- * -- there is no code path, in this package or any other, that could
- * recover them from the SDK. This is a potential CLIENT-FACING CONNECTION
- * keepalive gap for long-silent Anthropic streams, not just a parsing
- * nuance -- unverified whether it manifests in production (depends on
- * intermediary/platform idle-connection timeouts this repo doesn't
- * control), and out of scope to fix here.
+ * ONE EXCEPTION FOUND, flagged separately in the task #34 handoff and
+ * MITIGATED (not reproduced) by `../lib/sse-heartbeat.ts`: desktop's
+ * sse_parser.rs also has an `event: ping` / `event:ping` keepalive-detection
+ * branch (is_keepalive_event). Anthropic's real API sends `event: ping`
+ * during long idle periods (e.g. extended thinking with no visible output)
+ * to prevent proxy/load-balancer timeouts; the legacy raw-fetch passthrough
+ * forwards these today. The `@anthropic-ai/sdk` MessageStream helper
+ * swallows `ping` events internally and unconditionally (`core/
+ * streaming.ts`: `if (sse.event === 'ping') { continue; }`) BEFORE they ever
+ * reach `translateAnthropicStream` -- there is no code path, in this
+ * package or any other, that could recover Anthropic's OWN ping frames from
+ * the SDK. Per team-lead's direction, `buildAdapterStreamResponse` (and
+ * `buildStreamResponse`, for every other provider too) now wraps its body
+ * in `withSseHeartbeat`, which emits a provider-independent `: keepalive`
+ * SSE comment during genuine idle periods -- this keeps the client-facing
+ * connection warm without depending on any specific provider's own
+ * keepalive convention, but it means desktop's `event:ping`-specific
+ * detection branch will simply never match for Anthropic-routed traffic
+ * (harmless: a `: keepalive` comment line is silently ignored by every
+ * `data:`-only parser, same as any other non-`data:` line).
  */
 function stripToDataLines(body: string): string {
   return body
