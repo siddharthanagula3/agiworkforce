@@ -12,8 +12,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { Check, ChevronDown, ChevronRight, ListChecks, Circle } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@shared/ui/card';
-import { Badge } from '@agiworkforce/ui';
+import { Badge, Card, CardContent, CardHeader } from '@agiworkforce/ui';
 import { Progress } from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';

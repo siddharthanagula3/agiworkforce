@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogClose,
-} from './dialog';
+} from '@agiworkforce/ui';
 
 describe('Dialog Component', () => {
   beforeEach(() => {
@@ -292,7 +292,7 @@ describe('Dialog Component', () => {
     it('should support custom close button label', () => {
       render(
         <Dialog open>
-          <DialogContent closeButtonLabel="Dismiss modal">
+          <DialogContent closeLabel="Dismiss modal">
             <DialogTitle>Dialog</DialogTitle>
           </DialogContent>
         </Dialog>,
@@ -621,7 +621,7 @@ describe('Dialog Component', () => {
         </Dialog>,
       );
 
-      const overlay = document.querySelector('.fixed.inset-0.bg-black\\/80');
+      const overlay = document.querySelector('.fixed.inset-0.bg-black\\/70');
       expect(overlay).toHaveClass('data-[state=open]:animate-in');
       expect(overlay).toHaveClass('data-[state=closed]:animate-out');
     });

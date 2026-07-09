@@ -4,7 +4,7 @@ import React, { useRef } from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion, useInView } from 'framer-motion';
 import { Rocket, Zap, TrendingUp, Users, DollarSign, CheckCircle2, ArrowRight } from 'lucide-react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { Particles } from '@shared/ui/particles';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';

@@ -1,8 +1,16 @@
 import React from 'react';
 import { type UseFormReturn } from 'react-hook-form';
 import { Save, Loader2, Trash2, Bot } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Switch } from '@agiworkforce/ui';
+import {
+  Switch,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+} from '@agiworkforce/ui';
 import { Badge } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
@@ -14,8 +22,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@shared/ui/form';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
-import { Input } from '@shared/ui/input';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import { useAgentMetricsStore } from '@shared/stores/agent-metrics-store';
@@ -266,6 +272,7 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({
 
             <div className="flex gap-2">
               <Button
+                type="button"
                 variant="outline"
                 onClick={() => {
                   metricsStore.reset();

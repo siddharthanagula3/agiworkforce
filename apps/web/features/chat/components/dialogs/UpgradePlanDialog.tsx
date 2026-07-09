@@ -9,8 +9,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@shared/ui/dialog';
-import { Button } from '@shared/ui/button';
+  Button,
+} from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { FREE_TRIAL_PROMPT_LIMIT } from '@/lib/free-trial-config';
 
@@ -257,7 +257,7 @@ export function UpgradePlanDialog({
           'max-h-[90vh] overflow-hidden border-border/70 bg-background p-0 sm:rounded-2xl',
           expanded ? 'w-[min(98vw,56rem)]' : 'w-[min(94vw,38rem)]',
         )}
-        closeButtonLabel="Close upgrade plan dialog"
+        closeLabel="Close upgrade plan dialog"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Upgrade your plan</DialogTitle>

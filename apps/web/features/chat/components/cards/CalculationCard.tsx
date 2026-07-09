@@ -12,9 +12,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { Calculator, Copy, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@shared/ui/card';
-import { Badge } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
+import { Badge, Card, CardContent, CardHeader, Button } from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import DOMPurify from 'dompurify';

@@ -14,18 +14,18 @@ import {
   Link2,
   BookOpen,
 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Badge } from '@agiworkforce/ui';
-import { cn } from '@shared/lib/utils';
-import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import {
+  Badge,
+  Button,
+  Input,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@shared/ui/dialog';
+} from '@agiworkforce/ui';
+import { cn } from '@shared/lib/utils';
+import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { getConnectorTools } from '../config/connector-logos';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { OfficialConnectorLogo } from '../components/OfficialConnectorLogo';

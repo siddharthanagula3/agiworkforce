@@ -5,10 +5,8 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
-import { Card, CardContent } from '@shared/ui/card';
+import { Avatar, AvatarFallback, AvatarImage, Card, CardContent, Button } from '@agiworkforce/ui';
 import { Badge } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
 import {
   Bot,
   User,

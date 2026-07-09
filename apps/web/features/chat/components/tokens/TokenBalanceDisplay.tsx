@@ -6,8 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { Card } from '@shared/ui/card';
-import { Button } from '@shared/ui/button';
+import { Card, Button } from '@agiworkforce/ui';
 import { Coins, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';

@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useSearchParams } from 'next/navigation';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import {
   upgradeToBasicPlan,
   upgradeToProPlan,

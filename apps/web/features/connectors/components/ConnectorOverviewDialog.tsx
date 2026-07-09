@@ -11,15 +11,15 @@
  */
 
 import { ShieldAlert, Wrench } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Badge } from '@agiworkforce/ui';
 import {
+  Badge,
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@shared/ui/dialog';
+} from '@agiworkforce/ui';
 import { getConnectorTools } from '../config/connector-logos';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 

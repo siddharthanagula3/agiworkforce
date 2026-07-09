@@ -3,18 +3,18 @@
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, Terminal } from 'lucide-react';
 import { useSettingsStore, type CustomCommand } from '@/stores/settingsStore';
-import { Button } from '@shared/ui/button';
 import {
+  Label,
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
   DialogDescription,
-} from '@shared/ui/dialog';
-import { Input } from '@shared/ui/input';
-import { Textarea } from '@shared/ui/textarea';
-import { Label } from '@agiworkforce/ui';
+  Input,
+  Textarea,
+} from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 // ---------------------------------------------------------------------------

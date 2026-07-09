@@ -1,10 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Label } from '@agiworkforce/ui';
-import { Textarea } from '@shared/ui/textarea';
+import { Label, Button, Input, Textarea } from '@agiworkforce/ui';
 import { Switch } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import { Separator } from '@agiworkforce/ui';

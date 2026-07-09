@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   MessageSquare,

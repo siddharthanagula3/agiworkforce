@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Button } from '@shared/ui/button';
 import { X, Cookie, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  Switch,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@shared/ui/dialog';
-import { Switch } from '@agiworkforce/ui';
+} from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 
 interface CookiePreferences {

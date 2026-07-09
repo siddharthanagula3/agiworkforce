@@ -11,10 +11,18 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
-import { Label } from '@agiworkforce/ui';
-import { Textarea } from '@shared/ui/textarea';
+import {
+  Label,
+  Button,
+  Input,
+  Textarea,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@agiworkforce/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,14 +30,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@shared/ui/dialog';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import { ChevronDown, Users, Plus, User, Check, Settings } from 'lucide-react';

@@ -6,9 +6,7 @@
 import React from 'react';
 import NextImage from 'next/image';
 import { ExternalLink, Search, Clock, Globe } from 'lucide-react';
-import { Card } from '@shared/ui/card';
-import { Badge } from '@agiworkforce/ui';
-import { Button } from '@shared/ui/button';
+import { Badge, Card, Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import type { SearchResult, SearchResponse } from '@core/integrations/web-search-handler';
 

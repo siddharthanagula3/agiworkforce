@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
-import { Input } from './input';
+import { Input } from '@agiworkforce/ui';
 
 describe('Input Component', () => {
   beforeEach(() => {
@@ -236,7 +236,7 @@ describe('Input Component', () => {
     it('should have focus ring styles', () => {
       render(<Input />);
       const input = screen.getByRole('textbox');
-      expect(input).toHaveClass('focus-visible:outline-none');
+      expect(input).toHaveClass('focus-visible:outline-hidden');
       expect(input).toHaveClass('focus-visible:ring-2');
       expect(input).toHaveClass('focus-visible:ring-ring');
     });

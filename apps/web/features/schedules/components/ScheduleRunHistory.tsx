@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@shared/ui/button';
+import { Button } from '@agiworkforce/ui';
 import { CheckCircle2, XCircle, Loader2, Play, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { formatDate, formatDuration } from '../types';
 import type { ScheduleRun } from '../types';

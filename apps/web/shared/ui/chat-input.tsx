@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Textarea } from '@shared/ui/textarea';
+import { Textarea } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface ChatInputProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {

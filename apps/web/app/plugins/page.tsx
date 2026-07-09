@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { Puzzle, ArrowRight, Layers, Link2, Bell } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
-import { Badge } from '@agiworkforce/ui';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
 import { WaitlistForm } from '../byok/WaitlistForm';

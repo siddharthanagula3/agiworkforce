@@ -6,16 +6,16 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Badge,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@shared/ui/dialog';
-import { Input } from '@shared/ui/input';
-import { Button } from '@shared/ui/button';
-import { Badge } from '@agiworkforce/ui';
-import { ScrollArea } from '@shared/ui/scroll-area';
+  Input,
+  Button,
+  ScrollArea,
+} from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import { Calendar } from '@agiworkforce/ui';

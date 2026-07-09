@@ -20,8 +20,7 @@ import {
   Lock,
   ExternalLink,
 } from 'lucide-react';
-import { Button } from '@shared/ui/button';
-import { Input } from '@shared/ui/input';
+import { Button, Input } from '@agiworkforce/ui';
 import { Particles } from '@shared/ui/particles';
 import { SEOHead } from '@shared/components/seo/SEOHead';
 

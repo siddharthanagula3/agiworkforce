@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Button } from '@shared/ui/button';
-import { ThemeToggle } from '@agiworkforce/ui';
+import { ThemeToggle, Button } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import {
   Menu,
