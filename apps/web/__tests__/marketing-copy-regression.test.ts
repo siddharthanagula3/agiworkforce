@@ -54,9 +54,15 @@ describe('public marketing copy regressions', () => {
 
     const cliInstall = readWebFile('app/cli/page.tsx');
 
-    // /cli only advertises the install path documented in apps/cli/README.md.
-    // The brew tap and install.sh script have no repo backing for the CLI page.
-    expect(cliInstall).toContain('cargo install --path apps/cli --bin agi');
+    // Coming-soon posture (restructure 2026-07-09): the agi binary is not
+    // distributed yet, so the /cli page advertises NO install command at all —
+    // not cargo, not the unverified brew tap or curl installer. This supersedes
+    // the earlier "only advertise the cargo path" rule.
+    expect(cliInstall, 'cli page must show the coming-soon posture').toContain('coming soon');
+    expect(
+      cliInstall,
+      'cli page must not advertise a cargo install while coming soon',
+    ).not.toContain('cargo install');
     expect(cliInstall, 'cli page must not advertise the unverified curl installer').not.toContain(
       'install.sh',
     );
