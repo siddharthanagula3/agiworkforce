@@ -232,6 +232,18 @@ export interface ChatRequest {
 export interface StreamChunkText {
   type: 'text-delta';
   delta: string;
+  /**
+   * Raw per-token logprob data for THIS chunk's delta, verbatim from the
+   * vendor (OpenAI's `choices[0].logprobs`), when the adapter has one.
+   * Optional, per-chunk (NOT a stream-stable value like `StreamChunkResponseMeta`'s
+   * fields -- OpenAI reports different logprobs on every chunk, one per
+   * token). Untyped/opaque here deliberately: no cross-vendor consumer
+   * interprets its contents, only `packages/llm-normalize`'s
+   * `OpenAIWireAssembler` (`wireMode: 'openai-passthrough'`) re-serializes
+   * it verbatim onto the wire when present, falling back to `null` when
+   * absent (task #34's OpenAI slice).
+   */
+  logprobs?: unknown;
 }
 
 export interface StreamChunkThinking {
@@ -255,6 +267,8 @@ export interface StreamChunkToolUseStart {
    * see `OpenAIWireAssembler`'s `wireMode: 'legacy-web'`) can.
    */
   vendorIndex?: number;
+  /** See `StreamChunkText.logprobs` — same per-chunk passthrough contract. */
+  logprobs?: unknown;
 }
 
 export interface StreamChunkToolUseDelta {
@@ -262,6 +276,8 @@ export interface StreamChunkToolUseDelta {
   toolUseId: string;
   /** Partial JSON — adapters chunk vendor input deltas. */
   deltaJson: string;
+  /** See `StreamChunkText.logprobs` — same per-chunk passthrough contract. */
+  logprobs?: unknown;
 }
 
 export interface StreamChunkToolUseEnd {

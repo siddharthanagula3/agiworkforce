@@ -462,7 +462,16 @@ export class OpenAIWireAssembler {
    * -- so `sseChunk()`'s output for every existing (non-web) caller is
    * unaffected.
    */
-  private chunkEnvelope(delta: Record<string, unknown>, finish: string | null) {
+  private chunkEnvelope(
+    delta: Record<string, unknown>,
+    finish: string | null,
+    // 'openai-passthrough'-only: real per-chunk logprobs when the producer
+    // supplied one (StreamChunkText/ToolUseStart/ToolUseDelta.logprobs),
+    // `null` otherwise -- matches real OpenAI's own convention of always
+    // returning `logprobs: null` on a chunk with no per-token data (e.g. the
+    // finish-reason chunk, which never passes one), not omitting the key.
+    logprobs: unknown = null,
+  ) {
     if (this.wireMode === 'legacy-web') {
       // Key order matters here, not just presence -- this reconstructs the
       // literal SSE bytes the legacy route sent (`{delta: {...}, finish_
@@ -480,11 +489,15 @@ export class OpenAIWireAssembler {
     if (this.wireMode === 'openai-passthrough') {
       // Real id/created when a StreamChunkResponseMeta supplied them (see
       // ingest()'s 'response-meta' case), synthesized fallback otherwise.
-      // system_fingerprint/service_tier included only when present -- key
-      // order (id, object, created, model, system_fingerprint?,
-      // service_tier?, choices) and the static logprobs:null on every choice
-      // both verified against real captured OpenAI bytes, see stream-
-      // transform.openai-byte-parity.test.ts.
+      // system_fingerprint/service_tier included only when present. logprobs
+      // is the REAL per-chunk value when the caller passed one (content/
+      // tool-call chunks), `null` otherwise (the finish-reason/error chunks,
+      // which never carry one, same as real OpenAI's own finish chunk) --
+      // full passthrough, not a synthesized constant (team-lead's upgrade
+      // from best-effort, task #34's OpenAI slice). Key order (id, object,
+      // created, model, system_fingerprint?, service_tier?, choices) verified
+      // against real captured OpenAI bytes, see stream-transform.
+      // openai-byte-parity.test.ts.
       return {
         id: this.realId ?? this.id,
         object: 'chat.completion.chunk' as const,
@@ -494,7 +507,7 @@ export class OpenAIWireAssembler {
           ? { system_fingerprint: this.systemFingerprint }
           : {}),
         ...(this.serviceTier !== undefined ? { service_tier: this.serviceTier } : {}),
-        choices: [{ index: 0, delta, logprobs: null, finish_reason: finish }],
+        choices: [{ index: 0, delta, logprobs, finish_reason: finish }],
       };
     }
     return {
@@ -818,7 +831,7 @@ export class OpenAIWireAssembler {
         break;
       }
       case 'text-delta':
-        out.push(this.chunkEnvelope({ content: chunk.delta }, null));
+        out.push(this.chunkEnvelope({ content: chunk.delta }, null, chunk.logprobs ?? null));
         break;
       case 'thinking-delta':
         if (legacyWeb) {
@@ -841,6 +854,7 @@ export class OpenAIWireAssembler {
               ],
             },
             null,
+            chunk.logprobs ?? null,
           ),
         );
         break;
@@ -856,6 +870,7 @@ export class OpenAIWireAssembler {
               ],
             },
             null,
+            chunk.logprobs ?? null,
           ),
         );
         break;
