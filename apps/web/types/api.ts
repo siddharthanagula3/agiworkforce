@@ -14,25 +14,7 @@ export interface CheckoutResponse {
   url: string;
 }
 
-// Me API
-export interface MeResponse {
-  id: string;
-  email: string | null;
-  name: string;
-  avatar_url: string | null;
-  created_at: number;
-  updated_at: number;
-  plan: {
-    tier: string;
-    display_name: string;
-    status: string;
-    current_period_end: number | null;
-  };
-  feature_flags: {
-    beta_features: boolean;
-    advanced_model_access: boolean;
-  };
-}
+// Me API response shape lives in @agiworkforce/services cloud-contracts (MeResponseSchema).
 
 // Device API
 export interface DeviceLinkRequest {

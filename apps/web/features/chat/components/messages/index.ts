@@ -1,4 +1,3 @@
-export { AdvancedMessageList } from './AdvancedMessageList';
 export { ChatMessageList, groupMessages } from './ChatMessageList';
 export type { ChatMessageListProps } from './ChatMessageList';
 export { MessageBubble } from './MessageBubble';
@@ -6,10 +5,7 @@ export { MessageBubbleSkeleton } from './MessageBubbleSkeleton';
 export { ChatLoadingState } from './ChatLoadingState';
 export { MessageActions } from './MessageActions';
 export { EditableMessage } from './EditableMessage';
-export { EnhancedMessageInput } from './EnhancedMessageInput';
-export { ChatInput } from './ChatInput';
 export { CollaborativeMessageDisplay } from './CollaborativeMessageDisplay';
-export { EnhancedMarkdownRenderer } from './EnhancedMarkdownRenderer';
 export { TypingIndicator } from './TypingIndicator';
 export { AudioVisualizer } from './AudioVisualizer';
 export { AudioPlayer } from './AudioPlayer';
