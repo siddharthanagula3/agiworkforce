@@ -158,7 +158,17 @@ impl McpClient {
                 sse::connect(server_name, url, headers, timeouts.clone(), notif_tx.clone()).await?
             }
             TransportConfig::Http { url, headers, oauth } => {
-                http::connect(url, headers, oauth.as_ref())?
+                http::connect(url, headers, oauth.as_ref(), &timeouts)?
+            }
+            TransportConfig::SseLegacy { base_url, headers } => {
+                sse::connect_legacy(
+                    server_name,
+                    base_url,
+                    headers,
+                    timeouts.clone(),
+                    notif_tx.clone(),
+                )
+                .await?
             }
         };
 
@@ -478,6 +488,7 @@ impl McpClient {
         let hooks = self.hooks.clone();
         let elicitation_handler = Arc::clone(&hooks.elicitation);
         let max_frame = self.timeouts.max_frame_bytes;
+        let max_response = self.timeouts.max_response_bytes;
 
         match &mut self.inner {
             TransportConn::Stdio { child } => {
@@ -600,6 +611,17 @@ impl McpClient {
 
                 // Some servers return the JSON-RPC response inline in the POST
                 // body; others send it through the SSE stream. Try inline first.
+                // Optional hardening (desktop parity): reject an oversized
+                // inline body via Content-Length before reading it.
+                if let Some(cap) = max_response {
+                    if let Some(len) = resp.content_length() {
+                        if len > cap {
+                            bail!(
+                                "[{server_name}] SSE: response too large ({len} bytes, max {cap} bytes) on '{method_name}'"
+                            );
+                        }
+                    }
+                }
                 let inline_body = resp.text().await.unwrap_or_default();
                 if !inline_body.trim().is_empty() {
                     if let Ok(value) = serde_json::from_str::<serde_json::Value>(&inline_body) {
@@ -684,6 +706,7 @@ impl McpClient {
                     &method_name,
                     &hooks,
                     max_frame,
+                    max_response,
                 )
                 .await
             }
@@ -882,7 +905,21 @@ impl McpClient {
                 Ok(())
             }
             TransportConfig::Http { url, headers, oauth } => {
-                let inner = http::connect(&url, &headers, oauth.as_ref())?;
+                let inner = http::connect(&url, &headers, oauth.as_ref(), &self.timeouts)?;
+                self.inner = inner;
+                self.request_id = 0;
+                self.initialize().await?;
+                Ok(())
+            }
+            TransportConfig::SseLegacy { base_url, headers } => {
+                let inner = sse::connect_legacy(
+                    &self.server_name,
+                    &base_url,
+                    &headers,
+                    self.timeouts.clone(),
+                    self.notif_tx.clone(),
+                )
+                .await?;
                 self.inner = inner;
                 self.request_id = 0;
                 self.initialize().await?;

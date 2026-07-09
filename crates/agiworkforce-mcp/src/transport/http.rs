@@ -33,12 +33,18 @@ pub(crate) fn connect(
     url: &str,
     headers: &HashMap<String, String>,
     oauth: Option<&OAuthConfig>,
+    timeouts: &crate::config::McpTimeouts,
 ) -> Result<TransportConn> {
+    if timeouts.validate_urls {
+        crate::security::validate_server_url(url).context("[mcp http]")?;
+    }
     // No global `.timeout()` on the client — POSTs are wrapped per-call, and the
     // optional GET stream is long-lived.
-    let client = reqwest::Client::builder()
-        .build()
-        .context("build reqwest client")?;
+    let mut builder = reqwest::Client::builder();
+    if !timeouts.verify_tls {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    let client = builder.build().context("build reqwest client")?;
 
     Ok(TransportConn::Http {
         url: url.to_string(),
@@ -68,6 +74,7 @@ pub(crate) async fn send_request_http(
     method_name: &str,
     hooks: &ClientHooks,
     max_frame_bytes: Option<usize>,
+    max_response_bytes: Option<u64>,
 ) -> Result<Option<serde_json::Value>> {
     // Phase 1: refresh-if-near-expiry, then attach bearer if we have one.
     let mut bearer = if let Some(cfg) = oauth {
@@ -87,6 +94,7 @@ pub(crate) async fn send_request_http(
         server_name,
         method_name,
         max_frame_bytes,
+        max_response_bytes,
     )
     .await?;
 
@@ -157,6 +165,7 @@ pub(crate) async fn send_request_http(
                 server_name,
                 method_name,
                 max_frame_bytes,
+                max_response_bytes,
             )
             .await?;
 
@@ -196,6 +205,7 @@ async fn send_once(
     server_name: &str,
     method_name: &str,
     max_frame_bytes: Option<usize>,
+    max_response_bytes: Option<u64>,
 ) -> Result<SendOutcome> {
     let mut req = client
         .post(url)
@@ -318,7 +328,18 @@ async fn send_once(
         }
     }
 
-    // Default path: JSON body inline.
+    // Default path: JSON body inline. Optional hardening (desktop parity):
+    // reject an oversized response via Content-Length before reading the body
+    // so a malicious server cannot exhaust memory with one giant reply.
+    if let Some(cap) = max_response_bytes {
+        if let Some(len) = resp.content_length() {
+            if len > cap {
+                bail!(
+                    "[{server_name}] [mcp http] response too large ({len} bytes, max {cap} bytes) on '{method_name}'"
+                );
+            }
+        }
+    }
     let value: serde_json::Value = resp
         .json()
         .await

@@ -240,7 +240,7 @@ write_frame({"jsonrpc": "2.0", "id": tools["id"], "result": {"tools": []}})
         list_tools: Duration::from_millis(500),
         call_tool: Duration::from_secs(2),
         health_check: Duration::from_millis(500),
-        max_frame_bytes: None,
+        ..McpTimeouts::default()
     };
 
     let mut client = McpClient::connect("stdio-elicit", cfg, timeouts, support::decline_hooks())
