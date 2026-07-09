@@ -2,8 +2,9 @@ import 'server-only';
 
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
-import { buildAnthropicAdapter, startAnthropicStream } from './adapter-factory';
+import { buildAnthropicAdapter, startProviderStream } from './adapter-factory';
 import { buildAnthropicChatRequest } from './canonical-request';
+import { toUpstreamError } from './adapter-errors';
 import type { ProcessedRequest } from './request-processor';
 
 /**
@@ -48,9 +49,10 @@ import type { ProcessedRequest } from './request-processor';
  * TTFT/billing-entangled version would need extra unused parameters for no
  * gain).
  *
- * ERROR HANDLING: `startAnthropicStream` eagerly peeks the first chunk and
- * throws a plain `Error` if it's an error chunk (same peek-and-throw pattern
- * as the standard path). That throw propagates out of this function and is
+ * ERROR HANDLING: `startProviderStream` eagerly peeks the first chunk and
+ * throws a plain `Error` (via `toUpstreamError`) if it's an error chunk
+ * (same peek-and-throw pattern as the standard path). That throw propagates
+ * out of this function and is
  * caught by `runToolLoop`'s EXISTING try/catch around its provider-call site
  * -- which already does exactly the right thing for tool-loop specifically:
  * yield an inline `Error: ...` SSE content chunk and stop (no `[DONE]`, no
@@ -81,7 +83,7 @@ export async function buildAnthropicToolLoopStream(
   const adapter = buildAnthropicAdapter(stepProcessed);
   const chatRequest = buildAnthropicChatRequest(stepProcessed);
   const signal = new AbortController().signal;
-  const chunks = await startAnthropicStream(adapter, chatRequest, signal);
+  const chunks = await startProviderStream(adapter, chatRequest, signal, toUpstreamError);
   return chunksToOpenAiSse(chunks, responseModel);
 }
 

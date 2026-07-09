@@ -13,10 +13,15 @@ import { buildStreamResponse, buildAdapterStreamResponse } from './lib/stream-tr
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
-import { buildAnthropicAdapter, startAnthropicStream } from './lib/adapter-factory';
-import { buildAnthropicChatRequest } from './lib/canonical-request';
+import {
+  buildAnthropicAdapter,
+  buildGoogleAdapter,
+  startProviderStream,
+} from './lib/adapter-factory';
+import { buildAnthropicChatRequest, buildGoogleChatRequest } from './lib/canonical-request';
+import { toUpstreamError, toGoogleUpstreamError } from './lib/adapter-errors';
 import { drainToLlmResponse } from './lib/adapter-response';
-import type { StreamChunk } from '@agiworkforce/types';
+import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -32,12 +37,42 @@ import type { StreamChunk } from '@agiworkforce/types';
  * controls gating: ?approval_mode=auto skips the per-tool prompt; the default
  * 'manual' suspends and emits x_tool_approval_request events.
  *
- * Provider dispatch, for BOTH the standard (non-agentic) paths below AND the
- * agentic tool-loop path (MCP/E2B, `runToolLoop`, dispatch in tool-loop-
- * anthropic.ts) (restructure Wave 2, task #34): Anthropic goes through
- * `packages/providers/anthropic`'s adapter; every other provider still goes
- * through `LLMProviderFactory` (apps/web/lib/llm-providers), unchanged.
+ * Provider dispatch, for the standard (non-agentic) paths below (restructure
+ * Wave 2, task #34): Anthropic and Google go through `packages/providers/*`
+ * adapters (`ADAPTER_PROVIDERS` below); every other provider still goes
+ * through `LLMProviderFactory` (apps/web/lib/llm-providers), unchanged. The
+ * agentic tool-loop path (MCP/E2B, `runToolLoop`) has its own, separate
+ * per-step dispatch -- Anthropic-only so far, see tool-loop-anthropic.ts.
  */
+
+/**
+ * One entry per provider wired onto the `packages/providers/*` adapter path.
+ * Keeps the streaming/non-streaming branches below identical in shape for
+ * every adapter-backed provider instead of duplicating a provider-specific
+ * try/catch block per provider (Anthropic's was hand-duplicated for Google
+ * when this table didn't exist yet -- pulled out here so a third provider
+ * is one entry, not another duplicated block).
+ */
+const ADAPTER_PROVIDERS: Record<
+  string,
+  {
+    buildAdapter: (processed: ProcessedRequest) => ProviderAdapter;
+    buildChatRequest: (processed: ProcessedRequest) => ChatRequest;
+    mapError: (chunk: Extract<StreamChunk, { type: 'error' }>) => Error;
+  }
+> = {
+  anthropic: {
+    buildAdapter: buildAnthropicAdapter,
+    buildChatRequest: buildAnthropicChatRequest,
+    mapError: toUpstreamError,
+  },
+  google: {
+    buildAdapter: buildGoogleAdapter,
+    buildChatRequest: buildGoogleChatRequest,
+    mapError: toGoogleUpstreamError,
+  },
+};
+
 async function refundFailedReservation(
   userId: string,
   processed: ProcessedRequest,
@@ -163,17 +198,23 @@ async function handleChatCompletions(request: NextRequest) {
     }
 
     // Standard single-turn streaming path (no MCP tools configured).
-    if (processed.provider === 'anthropic') {
-      // Captured BEFORE startAnthropicStream's error-detection peek, which
+    const adapterProvider = ADAPTER_PROVIDERS[processed.provider];
+    if (adapterProvider) {
+      // Captured BEFORE startProviderStream's error-detection peek, which
       // awaits the first StreamChunk -- taking this timestamp any later
       // would measure the peek's own wait, not the real time-to-first-token.
       // See buildAdapterStreamResponse's docstring.
       const streamStartedAt = Date.now();
       let chunks: AsyncIterable<StreamChunk>;
       try {
-        const adapter = buildAnthropicAdapter(processed);
-        const chatRequest = buildAnthropicChatRequest(processed);
-        chunks = await startAnthropicStream(adapter, chatRequest, request.signal);
+        const adapter = adapterProvider.buildAdapter(processed);
+        const chatRequest = adapterProvider.buildChatRequest(processed);
+        chunks = await startProviderStream(
+          adapter,
+          chatRequest,
+          request.signal,
+          adapterProvider.mapError,
+        );
       } catch (error) {
         await refundFailedReservation(userId, processed, 'streaming_failure');
         return buildUpstreamErrorResponse(
@@ -210,13 +251,18 @@ async function handleChatCompletions(request: NextRequest) {
   }
 
   // Non-streaming path
-  if (processed.provider === 'anthropic') {
+  const nonStreamAdapterProvider = ADAPTER_PROVIDERS[processed.provider];
+  if (nonStreamAdapterProvider) {
     let llmResponse;
     try {
-      const adapter = buildAnthropicAdapter(processed);
-      const chatRequest = buildAnthropicChatRequest(processed);
+      const adapter = nonStreamAdapterProvider.buildAdapter(processed);
+      const chatRequest = nonStreamAdapterProvider.buildChatRequest(processed);
       const chunks = adapter.stream(chatRequest, request.signal);
-      llmResponse = await drainToLlmResponse(chunks, processed.llmRequest.model);
+      llmResponse = await drainToLlmResponse(
+        chunks,
+        processed.llmRequest.model,
+        nonStreamAdapterProvider.mapError,
+      );
     } catch (error) {
       await refundFailedReservation(userId, processed, 'request_failure');
       return buildUpstreamErrorResponse(

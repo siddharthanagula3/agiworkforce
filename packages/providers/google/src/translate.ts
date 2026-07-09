@@ -181,8 +181,19 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
   if (req.stopSequences) generationConfig.stopSequences = req.stopSequences;
 
   if (req.thinking?.type === 'enabled') {
+    // includeThoughts defaults to true (Gemini streams a reasoning summary
+    // back) so every caller that predates this field -- e.g. services/api-
+    // gateway's /api/v1/providers/:providerId/stream, which takes a caller-
+    // supplied ChatRequest.thinking directly -- keeps today's behavior with
+    // zero change. A caller can opt OUT (apps/web's web v1 route does, to
+    // hold its byte-stability contract with the pre-adapter Google provider,
+    // which only ever sent thinkingBudget -- see canonical-request.ts's
+    // toCanonicalGoogleThinking) by setting includeThoughts:false, which
+    // omits the key entirely rather than sending it as a literal `false`
+    // (Gemini's own default), matching the pre-adapter wire byte-for-byte.
+    const includeThoughts = req.thinking.includeThoughts ?? true;
     generationConfig.thinkingConfig = {
-      includeThoughts: true,
+      ...(includeThoughts ? { includeThoughts: true } : {}),
       ...(req.thinking.budgetTokens !== undefined
         ? { thinkingBudget: req.thinking.budgetTokens }
         : {}),
