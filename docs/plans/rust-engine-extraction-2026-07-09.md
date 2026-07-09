@@ -40,6 +40,21 @@ Replace the decision core (`sys/security/command_validator.rs` 687 + `sys/securi
 
 Export test `crates/agiworkforce-protocol/tests/export_bindings.rs` using `export_all_to` on root envelope types (recursive — no need to annotate all 200+). Committed tree at `packages/types/src/generated/protocol/` (web builds can't run cargo) + generated barrel + prettier/eslint ignores. Subpath export `"./protocol"` — NOT root re-export (name collisions with hand-authored `Provider`/`ToolEvent`). Drift guard `pnpm check:protocol-types` (regenerate + `git diff --exit-code`) in the cargo-capable CI job.
 
+## Execution status (2026-07-09)
+
+ALL SIX CLI-SIDE STAGES DONE + MERGED to the restructure branch, each with its verification gate:
+
+- **(f)** `crates/sandbox-policy` → `crates/agiworkforce-sandbox-policy` (move-only, cargo green).
+- **(b1)** ts-rs codegen wired — 216 protocol types generated into `packages/types/src/generated/protocol`, `@agiworkforce/types/protocol` subpath, `pnpm check:protocol-types` drift guard.
+- **(c1)** `agiworkforce-llm` crate (provider HTTP + SSE + tool-call assembly + retry/fallback) — CLI facade signature-identical, JSONL transcript byte-identical, 72 crate + 1678 CLI tests, key-redaction test; net −2,922/+467 CLI LOC.
+- **(a)** desktop adopts `agiworkforce-execpolicy` — 169-command / 338-evaluation same-or-stricter parity corpus (zero weakenings), 225 sys::security tests, clippy clean; hygiene layer stays as app-local pre-filter.
+- **(d1)** `agiworkforce-mcp` crate (3 transports + JSON-RPC + OAuth/PKCE, reusing protocol wire types) — CLI facade, byte-identical clientInfo, 60 crate + 58 CLI mcp tests via scripted sim harness.
+- **(e1)** `agiworkforce-agent-core` crate (turn loop + tool dispatch + runaway/iteration/budget guards) — CLI TurnHostAdapter facade, JSONL byte-identical on the exercised path, 7+11 crate + 121 CLI agent tests, strangler-complete (deny(dead_code)). Two ratified API deviations from the sketch (no app-server ToolDispatch dep — CliToolDispatch is read-only; `run_turn(host,params)` folds completion into TurnHost::complete — no LlmClient object). Verification boundary tracked as `RUST-AGENTCORE-LIVE-TURN-VERIFY-01`.
+
+REMAINING (all DESKTOP-SIDE adoption of the now-shared crates + one TS item — gated on live-provider + desktop-device smoke this environment cannot run; the crates are the frozen contracts they adopt): (c2/c3/c4) desktop SSE-decode + 28-arm→dialect + bedrock/azure/managed-cloud onto `agiworkforce-llm` runners; (d2) desktop MCP transport swap onto `agiworkforce-mcp`; (e2) desktop local-chat loop onto `agiworkforce-agent-core` TurnEngine; (b2) `Op` envelope TS derive + first generated-type adoption shim.
+
+---
+
 STATUS 2026-07-09: **b1 SHIPPED** (commit `feat(types): wire dormant ts-rs codegen...`, 216 modules; roots = EventMsg + mcp Tool — the `Op` envelope does not derive TS today, tracked follow-up). **b2 adoption proof DEFERRED with evidence:** the anticipated hand-mirrors do not actually mirror the protocol crate — `packages/types/src/tool-events.ts` mirrors DESKTOP's tauri enum (`apps/desktop/src-tauri/src/sys/commands/chat/tool_events.rs`), and no packages/types file hand-mirrors the protocol MCP types 1:1. The first honest adoption lands with stage (d)/(e), when desktop's wire types converge on `agiworkforce-protocol`; forcing one now would fabricate equivalence that doesn't exist.
 
 ### (c) Extract agiworkforce-llm (provider HTTP + SSE) — XL
