@@ -1,58 +1,25 @@
 // Shared UI Components - Public API
 //
 // NOTE: Primitives with a canonical counterpart in @agiworkforce/ui have been
-// migrated off this fork and their re-exports removed here. What remains are the
-// residual forks: web-divergent primitives pending a pkg enhancement decision
-// (Button/Input/Textarea/Card/Dialog/Alert/Slider/ScrollArea), the form and
-// imperative-toast systems (open decisions), the bespoke/aceternity components,
-// the no-counterpart shadcn sidebar island, and dead leaf forks kept for a
-// separate dead-code cleanup pass.
+// migrated off this fork and their re-exports removed here (restructure Wave 3).
+// The dead leaf forks (a pkg counterpart existed and they had zero importers)
+// were deleted 2026-07-09. What remains: web-divergent primitives pending a pkg
+// enhancement decision (Button/Input/Textarea/Card/Dialog/Alert/Slider/
+// ScrollArea), the form and imperative-toast systems (open decisions), the
+// bespoke/aceternity components, and the no-counterpart shadcn sidebar island.
 
-// Core form components
+// Core form components (web-divergent: a11y/error props pkg lacks — pending decision)
 export { Button, type ButtonProps } from './button';
 export { buttonVariants } from './button-variants';
 export { Input, type InputProps } from './input';
 export { Textarea, type TextareaProps } from './textarea';
-export { RadioGroup, RadioGroupItem } from './radio-group';
 export { Slider } from './slider';
 
-// Layout components
+// Layout components (web-divergent)
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './card';
 export { ScrollArea, ScrollBar } from './scroll-area';
-export { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './resizable';
-export { AspectRatio } from './aspect-ratio';
 
-// Navigation components
-export {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuIndicator,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-  NavigationMenuViewport,
-} from './navigation-menu';
-export {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-  BreadcrumbEllipsis,
-} from './breadcrumb';
-export {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from './pagination';
-
-// Overlay components
+// Overlay components (web-divergent: closeButtonLabel/hideCloseButton)
 export {
   Dialog,
   DialogPortal,
@@ -65,58 +32,8 @@ export {
   DialogTitle,
   DialogDescription,
 } from './dialog';
-export {
-  Drawer,
-  DrawerPortal,
-  DrawerOverlay,
-  DrawerTrigger,
-  DrawerClose,
-  DrawerContent,
-  DrawerHeader,
-  DrawerFooter,
-  DrawerTitle,
-  DrawerDescription,
-} from './drawer';
-export { HoverCard, HoverCardTrigger, HoverCardContent } from './hover-card';
 
-// Menu components
-export {
-  ContextMenu,
-  ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuCheckboxItem,
-  ContextMenuRadioItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuShortcut,
-  ContextMenuGroup,
-  ContextMenuPortal,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
-  ContextMenuRadioGroup,
-} from './context-menu';
-export {
-  Menubar,
-  MenubarMenu,
-  MenubarTrigger,
-  MenubarContent,
-  MenubarItem,
-  MenubarSeparator,
-  MenubarLabel,
-  MenubarCheckboxItem,
-  MenubarRadioGroup,
-  MenubarRadioItem,
-  MenubarPortal,
-  MenubarSubContent,
-  MenubarSubTrigger,
-  MenubarGroup,
-  MenubarSub,
-  MenubarShortcut,
-} from './menubar';
-
-// Feedback components
+// Feedback components (web-divergent alert + legacy imperative toast — decision pending)
 export { Alert, AlertTitle, AlertDescription } from './alert';
 export {
   Toast,
@@ -132,23 +49,7 @@ export {
 export { Toaster } from './toaster';
 export { useToast, toast } from './use-toast';
 
-// Data display components
-export {
-  Table,
-  TableHeader,
-  TableBody,
-  TableFooter,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableCaption,
-} from './table';
-
-// Toggle components
-export { Toggle } from './toggle';
-export { ToggleGroup, ToggleGroupItem } from './toggle-group';
-
-// Form components
+// Form components (react-hook-form FormField collides with pkg FormField — decision pending)
 export {
   Form,
   FormControl,
@@ -161,10 +62,7 @@ export {
 } from './form';
 export { FormFieldContext, FormItemContext } from './form-hooks';
 
-// Input components
-export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from './input-otp';
-
-// Sidebar components
+// Sidebar island (pkg Sidebar is a different bespoke component; no shared counterpart)
 export {
   Sidebar,
   SidebarContent,
@@ -201,16 +99,7 @@ export {
   SIDEBAR_KEYBOARD_SHORTCUT,
 } from './sidebar-constants';
 
-// Carousel
-export {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
-} from './carousel';
-
-// Chat components
+// Chat components (bespoke — no generic pkg counterpart)
 export {
   ChatBubble,
   ChatBubbleMessage,
@@ -232,12 +121,12 @@ export { ExpandableChatDemo } from './expandable-chat-demo';
 export { MessageLoading } from './message-loading';
 export { PromptInputBox } from './ai-prompt-box';
 
-// Loading components
+// Loading components (bespoke)
 export { DashboardLoading, ChatLoading, DataLoading } from './premium-loading';
 export { SkeletonText, SkeletonCard, SkeletonAvatar, SkeletonTable } from './skeleton-loader';
 export { default as LoadingSpinner } from './loading-spinner';
 
-// Animation and effects
+// Animation and effects (bespoke/aceternity)
 export { AnimatedBeam } from './animated-beam';
 export { AnimatedGradientText } from './animated-gradient-text';
 export { BentoGrid, BentoCard } from './bento-grid';
@@ -248,6 +137,6 @@ export { InteractiveHoverCard } from './interactive-hover-card';
 export { Particles } from './particles';
 export { Spotlight, MouseSpotlight } from './spotlight';
 
-// Sonner toast (alternative)
+// Sonner toast (alternative — the canonical SonnerToaster lives in @agiworkforce/ui)
 export { Toaster as SonnerToaster } from './sonner';
 export { toast as sonnerToast } from './sonner-utils';
