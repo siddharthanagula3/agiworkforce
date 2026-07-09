@@ -1,9 +1,23 @@
 import { neon } from '@neondatabase/serverless';
+import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
 import { requireEnv } from '../env';
+import { logger } from './logger';
 
 type SqlClient = ReturnType<typeof neon>;
 type QueryRows = Record<string, unknown>[];
 type LooseDbRow = ReturnType<typeof JSON.parse>;
+
+/**
+ * Minimal shape the query builder needs from its executor: a parameterized
+ * query method returning either a bare row array or `{ rows }` (both are
+ * normalized by rowsFromResult() below). The service-role neon() HTTP client
+ * and the RLS-capable data-layer DatabaseAdapter are both wrapped down to
+ * this shape so NeonQueryBuilder/NeonDataClient never depend on which one is
+ * live behind them.
+ */
+interface QueryExecutor {
+  query(text: string, values: unknown[]): Promise<unknown>;
+}
 
 export interface DbError {
   message: string;
@@ -142,7 +156,7 @@ class NeonQueryBuilder<T = LooseDbRow> implements PromiseLike<DbResult<T[]>> {
   private upsertOptions: UpsertOptions = {};
 
   constructor(
-    private readonly sql: SqlClient,
+    private readonly sql: QueryExecutor,
     private readonly table: string,
   ) {}
 
@@ -432,7 +446,7 @@ class NeonQueryBuilder<T = LooseDbRow> implements PromiseLike<DbResult<T[]>> {
 }
 
 class NeonDataClient {
-  constructor(private readonly sql: SqlClient) {}
+  constructor(private readonly sql: QueryExecutor) {}
 
   from<T = LooseDbRow>(table: string): NeonQueryBuilder<T> {
     return new NeonQueryBuilder<T>(this.sql, table);
@@ -469,26 +483,144 @@ let serviceClient: NeonDataClient | null = null;
 export type CloudDbClient = NeonDataClient;
 
 export function getServiceClient(): CloudDbClient {
-  serviceClient ??= new NeonDataClient(getSql());
+  if (serviceClient) return serviceClient;
+  const sql = getSql();
+  serviceClient = new NeonDataClient({ query: (text, values) => sql.query(text, values) });
   return serviceClient;
 }
 
+export interface UserAuth {
+  /** Clerk or gateway-issued user id — must match the token's own `sub` claim. */
+  userId: string;
+  /**
+   * Raw bearer token, ALREADY signature-verified by the caller. authenticateToken
+   * (middleware/auth.ts) verifies it via Clerk verifyToken() or
+   * jwt.verify(..., JWT_SECRET) and attaches the raw string as req.user.token —
+   * that verification is the precondition withUser() below assumes. Never pass
+   * an unverified token here.
+   */
+  token: string;
+}
+
+let rlsAdapter: DatabaseAdapter | null = null;
+
 /**
- * SECURITY (P1-GW-RLS): this does NOT scope the client to the user. It returns
- * the same service-role client as getServiceClient(); the `userId` argument is
- * ignored. The Neon HTTP driver issues every query as an independent one-shot
- * request, so there is no session in which `SET LOCAL request.jwt.claims` could
- * persist across queries — Postgres RLS bound to `auth.uid()` is therefore NOT
- * active here. Tenant isolation rests SOLELY on the explicit
- * `.eq('user_id', …)` / ownership filters in each route. There is no RLS
- * backstop: a route that drops its ownership filter WILL leak across tenants.
- * Keep the filters; do not rely on a database-level safety net that is absent.
+ * Lazily construct the pooled, RLS-capable Neon adapter that backs
+ * getUserScopedClient(). Deliberately separate from getSql() above: this uses
+ * @neondatabase/serverless's WebSocket Pool (via @agiworkforce/data-layer's
+ * NeonDatabaseAdapter) instead of the one-shot HTTP driver, because
+ * `SET LOCAL` only persists for the lifetime of a held connection/transaction.
+ *
+ * `unsafeAllowUnverifiedJwtSubject: true` is safe here ONLY because every
+ * caller of getUserScopedClient() is contractually required to pass a
+ * UserAuth.token that was already signature-verified upstream — see the
+ * UserAuth doc comment.
  */
-export function getUserScopedClient(_userId: string): CloudDbClient {
-  return getServiceClient();
+function getRlsAdapter(): DatabaseAdapter {
+  rlsAdapter ??= createDatabaseClient({
+    provider: 'neon',
+    connectionString: requireEnv('NEON_DATABASE_URL'),
+    applicationName: 'agi-gateway-rls',
+    unsafeAllowUnverifiedJwtSubject: true,
+  });
+  return rlsAdapter;
+}
+
+/**
+ * Release the pooled RLS adapter's connections. Call on graceful shutdown
+ * (SIGTERM) alongside closing the HTTP/WS servers. No-op if the adapter was
+ * never constructed — most short-lived processes (e.g. tests) never touch
+ * this lazy path.
+ */
+export async function disposeUserScopedClientPool(): Promise<void> {
+  if (!rlsAdapter) return;
+  await rlsAdapter.dispose();
+}
+
+/**
+ * SECURITY (P1-GW-RLS, real fix): binds `auth.token` via
+ * NeonDatabaseAdapter.withUser() (packages/data-layer/src/adapters/neon.ts),
+ * which runs every query as the NON-BYPASSRLS `app_rls` role with
+ * `request.jwt.claim.sub` set to the token's own `sub` claim — the same
+ * mechanism apps/web/lib/server/rls-db.ts uses in production. RLS policies
+ * keyed on that GUC (0037_rls_user_isolation.sql and friends) now enforce
+ * tenant isolation at the DATABASE level for tables that have one.
+ *
+ * IMPORTANT — most gateway tables do NOT have an RLS policy yet (see the
+ * Wave-4 coverage audit / SVC-GATEWAY-RLS-NOOP-01 follow-up). Only call this
+ * for a table you've confirmed has BOTH `ENABLE`+`FORCE ROW LEVEL SECURITY`
+ * AND a policy keyed on `request.jwt.claim.sub` matching your filter column.
+ * Every other call site MUST keep using getServiceClient() directly with its
+ * explicit `.eq('user_id', …)` filter and an `// RLS-GAP:` comment — calling
+ * this function for an uncovered table won't error (app_rls has blanket DML
+ * grants on all public-schema tables via 0037's `GRANT ... ON ALL TABLES`),
+ * it just pays pooled-connection overhead for zero added row-level
+ * protection while looking like it's scoped.
+ *
+ * Falls back to getServiceClient() — today's baseline, not a regression —
+ * in TWO distinct failure modes, both logged so they're observable rather
+ * than silently masked:
+ *
+ * 1. The token can't be bound: withUser() throws SYNCHRONOUSLY on a
+ *    malformed/`sub`-less token (e.g. a gateway device token minted before
+ *    the `sub` claim was added in deviceAuth.ts; those remain valid for up
+ *    to ACCESS_TOKEN_EXPIRES_SECONDS after this ships).
+ * 2. The query itself fails once it actually runs: `SET LOCAL ROLE app_rls`
+ *    / the pooled connection only execute INSIDE userAdapter.query() (per
+ *    query, per NeonDatabaseAdapter's design), which is outside the
+ *    withUser() try/catch below. If the `app_rls` role is missing, ungranted
+ *    to the connecting role, or the pool can't connect, that surfaces here —
+ *    NOT as a thrown withUser() error. Without this second fallback a
+ *    misprovisioned database would turn planGate (gates ALL cloud chat) and
+ *    deduct_credits (a billing write) into hard failures instead of a safe
+ *    degrade. Wrapping every query keeps the fallback point-in-time correct
+ *    even if the RLS infrastructure is provisioned after this ships, or goes
+ *    down independently of it.
+ */
+export function getUserScopedClient(auth: UserAuth): CloudDbClient {
+  if (!auth.token) {
+    logger.warn(
+      { userId: auth.userId },
+      'getUserScopedClient: called with no token — falling back to service client',
+    );
+    return getServiceClient();
+  }
+
+  let userAdapter: DatabaseAdapter;
+  try {
+    userAdapter = getRlsAdapter().withUser(auth.token);
+  } catch (err) {
+    logger.warn(
+      { err, userId: auth.userId },
+      'getUserScopedClient: withUser() rejected the token (likely a pre-rollout gateway ' +
+        'device token without a `sub` claim) — falling back to service client',
+    );
+    return getServiceClient();
+  }
+
+  return new NeonDataClient({
+    query: async (text, values) => {
+      try {
+        return await userAdapter.query(text, values);
+      } catch (err) {
+        // The withUser()-scoped connection/role failed AFTER withUser() itself
+        // succeeded — e.g. `app_rls` doesn't exist or isn't granted on this
+        // database. Retry via the service-role executor so the request still
+        // completes with today's app-layer-filter-only guarantee instead of
+        // hard-failing.
+        logger.warn(
+          { err, userId: auth.userId },
+          'getUserScopedClient: withUser()-scoped query failed (app_rls role/grant likely ' +
+            'missing on this database) — retrying via service-role client for this call',
+        );
+        return getSql().query(text, values);
+      }
+    },
+  });
 }
 
 export function _resetCloudDbForTests(): void {
   serviceClient = null;
   serviceSql = null;
+  rlsAdapter = null;
 }

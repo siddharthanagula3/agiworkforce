@@ -48,7 +48,7 @@ vi.mock('../lib/neonClients', () => ({
 // This must be declared before any router imports.
 vi.mock('../middleware/auth', () => ({
   authenticateToken: (req: Request, _res: Response, next: NextFunction) => {
-    req.user = { userId: 'user-abc', email: 'test@example.com' };
+    req.user = { userId: 'user-abc', email: 'test@example.com', token: 'test-token' };
     next();
   },
 }));

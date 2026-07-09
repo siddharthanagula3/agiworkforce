@@ -51,10 +51,12 @@ export async function requireProPlan(
   }
 
   try {
-    // P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
-    // RLS — see lib/neonClients.ts). The `.eq('user_id', …)` filter below is the
-    // SOLE tenant-isolation mechanism; there is no RLS backstop. Do not drop it.
-    const userDb = getUserScopedClient(user.userId);
+    // P1-GW-RLS: `subscriptions` has RLS enabled+forced with a policy keyed on
+    // `user_id = current_app_user_id()` (0037_rls_user_isolation.sql), so this
+    // now runs through real Postgres RLS via getUserScopedClient's
+    // withUser(token) binding — a DB-level backstop behind the `.eq('user_id',
+    // …)` filter below, not a replacement for it. Keep the filter.
+    const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
     const { data: subscription, error } = await userDb
       .from('subscriptions')
       .select('plan_tier')

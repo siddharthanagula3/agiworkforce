@@ -9,7 +9,7 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { createRateLimiter } from '../middleware/rateLimit';
-import { getUserScopedClient } from '../lib/neonClients';
+import { getServiceClient, type CloudDbClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const router: Router = Router();
@@ -106,7 +106,7 @@ function mapPolicy(row: EnterprisePolicyRow | null, organizationId: string) {
 }
 
 async function getMembershipRole(
-  db: ReturnType<typeof getUserScopedClient>,
+  db: CloudDbClient,
   organizationId: string,
   userId: string,
 ): Promise<OrganizationRole> {
@@ -131,7 +131,7 @@ async function getMembershipRole(
 }
 
 async function requireMembershipRole(
-  db: ReturnType<typeof getUserScopedClient>,
+  db: CloudDbClient,
   organizationId: string,
   userId: string,
   allowed: 'member' | 'admin',
@@ -148,7 +148,14 @@ router.get(
   createRateLimiter('enterprise-organizations'),
   async (req: Request, res: Response) => {
     const user = requireUser(req);
-    const db = getUserScopedClient(user.userId);
+    // RLS-GAP: organization_members/organizations exist (0015_organizations.sql)
+    // but have no RLS policy — migration TODO. Same gap applies to
+    // organization_admin_policies/enterprise_audit_events/
+    // organization_usage_ledger/support_cases (no migration record anywhere in
+    // the repo) at every getServiceClient() call site in this file. Explicit
+    // membership checks (requireMembershipRole) + `.eq()` filters are the SOLE
+    // tenant-isolation mechanism until policies ship.
+    const db = getServiceClient();
 
     // P1-GW-ENT: the Neon query layer (lib/neonClients.assertColumnList)
     // collapses any select containing `(` to `SELECT *`, so the PostgREST
@@ -224,7 +231,7 @@ router.get(
   async (req: Request, res: Response) => {
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: see /organizations handler above
 
     await requireMembershipRole(db, orgId, user.userId, 'member');
 
@@ -266,7 +273,7 @@ router.get(
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
     const { limit } = auditQuerySchema.parse(req.query);
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: see /organizations handler above
 
     await requireMembershipRole(db, orgId, user.userId, 'admin');
 
@@ -307,7 +314,7 @@ router.get(
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
     const { limit } = auditQuerySchema.parse(req.query);
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: see /organizations handler above
 
     await requireMembershipRole(db, orgId, user.userId, 'admin');
 
@@ -350,7 +357,7 @@ router.post(
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
     const body = supportCaseSchema.parse(req.body);
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: see /organizations handler above
 
     await requireMembershipRole(db, orgId, user.userId, 'member');
 

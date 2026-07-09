@@ -26,7 +26,7 @@ import { z } from 'zod';
 import { randomUUID, createHash, randomBytes } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
 import { createRateLimiter } from '../middleware/rateLimit';
-import { getServiceClient, getUserScopedClient } from '../lib/neonClients';
+import { getServiceClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 import { requireEnv } from '../env';
 import {
@@ -103,7 +103,11 @@ router.post(
     const environmentSecretHash = hashSecret(environmentSecret);
     const now = new Date().toISOString();
 
-    const client = getUserScopedClient(userId);
+    // RLS-GAP: worker_registrations has no migration record anywhere in the
+    // repo (not apps/web/db/neon, not elsewhere) — flag to the team lead as a
+    // possible shadow/manual schema; migration TODO either way. The explicit
+    // user_id set on insert below is the SOLE tenant-isolation mechanism.
+    const client = getServiceClient();
 
     const { error: insertError } = await client.from('worker_registrations').insert({
       id: environmentId,

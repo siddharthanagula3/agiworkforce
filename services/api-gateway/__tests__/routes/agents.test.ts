@@ -56,20 +56,22 @@ vi.mock('../../src/lib/neonClients', () => {
   testState.profileEq.mockReturnValue(profileQuery);
   testState.profileSelect.mockReturnValue(profileQuery);
 
+  // P1-GW-RLS (Wave 4): desktop_devices/agent_approval_requests have no RLS
+  // policy coverage (RLS-GAP), so routes/agents.ts now calls
+  // getServiceClient() for everything, same as middleware/auth.ts's
+  // kill-switch profiles lookup. Dispatch on table name so both see the
+  // right chain — testState.from already handles the two data tables.
   const serviceClient = {
-    from: vi.fn(() => ({
-      select: testState.profileSelect,
-    })),
-  };
-
-  const userClient = {
-    from: testState.from,
+    from: vi.fn((table: string) => {
+      if (table === 'profiles') {
+        return { select: testState.profileSelect };
+      }
+      return testState.from(table);
+    }),
   };
 
   return {
     getServiceClient: vi.fn(() => serviceClient),
-    getUserClient: vi.fn(() => userClient),
-    getUserScopedClient: vi.fn(() => userClient),
   };
 });
 

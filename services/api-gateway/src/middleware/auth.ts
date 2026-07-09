@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifyToken } from '@clerk/backend';
 import jwt from 'jsonwebtoken';
-import { authenticatedUserSchema, type AuthenticatedUser } from '../authenticated-user';
+import { authenticatedUserSchema, type AuthenticatedRequestUser } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { getServiceClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
@@ -101,7 +101,7 @@ setInterval(() => {
 declare global {
   namespace Express {
     interface Request {
-      user?: AuthenticatedUser;
+      user?: AuthenticatedRequestUser;
     }
   }
 }
@@ -124,7 +124,12 @@ export async function authenticateToken(
     }
 
     const payload = await verifyGatewayOrClerkToken(token);
-    req.user = authenticatedUserSchema.parse(payload);
+    // `token` is the raw, already-verified bearer string (verified just above
+    // via Clerk verifyToken() or jwt.verify(..., JWT_SECRET)). Attaching it
+    // lets getUserScopedClient() (lib/neonClients.ts) bind Postgres RLS via
+    // NeonDatabaseAdapter.withUser(token) for the handful of call sites that
+    // have real policy coverage — see UserAuth's doc comment there.
+    req.user = { ...authenticatedUserSchema.parse(payload), token };
 
     // SECURITY (H7, redteam-services 2026-05-04): per-jti revocation check.
     // Tokens issued before the H7 fix do not carry `jti` — accept them so

@@ -24,7 +24,7 @@ import { authenticateToken } from '../middleware/auth';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { requireProPlan } from '../middleware/planGate';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/neonClients';
+import { getServiceClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 import { buildProviderAdapter } from '../lib/providerAdapters';
@@ -69,10 +69,12 @@ const sendMessageSchema = z
 // =============================================================================
 
 async function verifyConversationOwnership(conversationId: string, userId: string): Promise<void> {
-  // P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
-  // RLS — see lib/neonClients.ts). The explicit `.eq('user_id', …)` filter below
-  // is the SOLE tenant-isolation mechanism; there is no RLS backstop.
-  const db = getUserScopedClient(userId);
+  // RLS-GAP: conversations has no RLS policy (not covered by
+  // 0037_rls_user_isolation.sql or any later migration) — migration TODO. The
+  // explicit `.eq('user_id', …)` / ownership check below is the SOLE
+  // tenant-isolation mechanism until a policy ships. Same gap applies to
+  // `messages` at every getServiceClient() call site in this file.
+  const db = getServiceClient();
   const { data: conversation, error } = await db
     .from('conversations')
     .select('id, user_id')
@@ -130,7 +132,7 @@ router.get('/', createRateLimiter('cloud-chat-list'), async (req: Request, res: 
     throw new AppError('Unauthorized', 401);
   }
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: conversations/messages — see verifyConversationOwnership() above
   const { data: conversations, error } = await db
     .from('conversations')
     .select('id, title, model, is_archived, created_at, updated_at')
@@ -164,7 +166,7 @@ router.post('/', createRateLimiter('cloud-chat-create'), async (req: Request, re
   const conversationId = randomUUID();
   const now = new Date().toISOString();
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: conversations/messages — see verifyConversationOwnership() above
   const { data: conversation, error } = await db
     .from('conversations')
     .insert({
@@ -210,7 +212,7 @@ router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res
 
   await verifyConversationOwnership(conversationId, user.userId);
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: conversations/messages — see verifyConversationOwnership() above
   // Fetch conversation metadata and messages in parallel.
   const [convResult, msgsResult] = await Promise.all([
     db
@@ -265,7 +267,7 @@ router.delete(
 
     await verifyConversationOwnership(conversationId, user.userId);
 
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: conversations/messages — see verifyConversationOwnership() above
     const { error } = await db
       .from('conversations')
       .update({ is_deleted: true, updated_at: new Date().toISOString() })
@@ -305,7 +307,7 @@ router.patch('/:id', createRateLimiter('cloud-chat-patch'), async (req: Request,
 
   await verifyConversationOwnership(conversationId, user.userId);
 
-  const db = getUserScopedClient(user.userId);
+  const db = getServiceClient(); // RLS-GAP: conversations/messages — see verifyConversationOwnership() above
   const { data: updated, error } = await db
     .from('conversations')
     .update({ ...updates, updated_at: new Date().toISOString() })
@@ -353,7 +355,7 @@ router.post(
 
     const { conversation_id, message, model } = sendMessageSchema.parse(req.body);
 
-    const db = getUserScopedClient(user.userId);
+    const db = getServiceClient(); // RLS-GAP: conversations/messages — see verifyConversationOwnership() above
 
     // Auto-create conversation if none provided
     let conversationId = conversation_id;
