@@ -33,7 +33,7 @@ import React, { memo } from 'react';
 import { Switch } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 import { Label } from '@agiworkforce/ui';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { getTierPolicy, SLOT_REGISTRY } from '@agiworkforce/types';
 import type { RoutingSlot } from '@agiworkforce/types';
 import { getModelMetadata } from '@/constants/llm';

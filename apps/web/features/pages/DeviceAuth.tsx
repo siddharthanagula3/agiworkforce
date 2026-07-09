@@ -12,7 +12,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Loader2, Monitor, CheckCircle, XCircle, Shield, LogIn } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';

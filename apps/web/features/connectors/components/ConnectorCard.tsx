@@ -3,7 +3,7 @@
 import React from 'react';
 import { Loader2, Lock, Plus } from 'lucide-react';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import type { Connector } from '../data/connectors';
 import { getConnectorAvailabilityLabel, isConnectorReady } from '../data/connectors';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { motion } from 'framer-motion';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Cookie, Settings, Shield } from 'lucide-react';
 
 const CookiePolicyPage: React.FC = () => {

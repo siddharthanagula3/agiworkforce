@@ -14,7 +14,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
 import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import { Separator } from '@agiworkforce/ui';
