@@ -81,23 +81,30 @@ vi.mock('@/shared/stores/model-store', () => ({
 }));
 
 // Radix Dialog · render children directly (no Portal)
-vi.mock('@/components/ui/Dialog', () => ({
-  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
-    open ? <div data-testid="dialog">{children}</div> : null,
-  DialogContent: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="dialog-content">{children}</div>
-  ),
-  DialogTitle: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <h2 className={className}>{children}</h2>
-  ),
-  DialogDescription: ({
-    children,
-    className,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-  }) => <p className={className}>{children}</p>,
-}));
+// CommandPalette imports Dialog from @agiworkforce/ui (restructure Wave 3A moved
+// it off the deleted @/components/ui fork). Mock the barrel, preserving every
+// other real export so unrelated symbols the component tree pulls still resolve.
+vi.mock('@agiworkforce/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  return {
+    ...actual,
+    Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+      open ? <div data-testid="dialog">{children}</div> : null,
+    DialogContent: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="dialog-content">{children}</div>
+    ),
+    DialogTitle: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+      <h2 className={className}>{children}</h2>
+    ),
+    DialogDescription: ({
+      children,
+      className,
+    }: {
+      children: React.ReactNode;
+      className?: string;
+    }) => <p className={className}>{children}</p>,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
