@@ -9,7 +9,10 @@
  *   4. Repeat up to `maxSteps` times.
  *
  * REUSE:
- *   - `LLMProviderFactory.streamRequest` / `sendRequest` -- provider calls unchanged.
+ *   - `LLMProviderFactory.streamRequest` -- provider calls for every provider except
+ *     Anthropic, which dispatches through packages/providers/anthropic's adapter via
+ *     tool-loop-anthropic.ts (restructure Wave 2, task #34's tool-loop slice); both
+ *     paths converge back onto `collectProviderStream` below, unchanged either way.
  *   - `getWebMcpCatalog` / `executeWebMcpTool` -- MCP dispatcher from lib/mcp-tool-executor.ts.
  *   - `ProcessedRequest.llmRequest.tools` seam in request-processor.ts (line 1041) --
  *     we push our tool defs there before the first provider call.
@@ -35,6 +38,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import { buildAnthropicToolLoopStream } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
   executeWebMcpTool,
@@ -547,10 +551,15 @@ export async function* runToolLoop(
       // Build the request for this step.
       const stepRequest = { ...llmRequest, messages };
 
-      // Call the provider.
+      // Call the provider. Anthropic goes through packages/providers/anthropic's
+      // adapter (restructure Wave 2, task #34's tool-loop slice, see
+      // tool-loop-anthropic.ts); every other provider is unchanged.
       let providerStream: ReadableStream;
       try {
-        providerStream = await LLMProviderFactory.streamRequest(processed.provider, stepRequest);
+        providerStream =
+          processed.provider === 'anthropic'
+            ? await buildAnthropicToolLoopStream(processed, stepRequest, responseModel)
+            : await LLMProviderFactory.streamRequest(processed.provider, stepRequest);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error(

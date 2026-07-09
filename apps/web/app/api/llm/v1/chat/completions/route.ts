@@ -14,33 +14,9 @@ import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/respon
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
 import { buildAnthropicAdapter, startAnthropicStream } from './lib/adapter-factory';
-import {
-  toCanonicalChatRequest,
-  toCanonicalThinking,
-  toCanonicalEffort,
-} from './lib/canonical-request';
+import { buildAnthropicChatRequest } from './lib/canonical-request';
 import { drainToLlmResponse } from './lib/adapter-response';
 import type { StreamChunk } from '@agiworkforce/types';
-
-/**
- * Provider dispatch for the standard (non-agentic) streaming and
- * non-streaming paths (restructure Wave 2, task #34): Anthropic goes through
- * `packages/providers/anthropic`'s adapter; every other provider still goes
- * through `LLMProviderFactory` (apps/web/lib/llm-providers), unchanged.
- *
- * The agentic tool-loop path (MCP/E2B, `runToolLoop` below) is NOT migrated
- * yet -- it has its own `LLMProviderFactory.streamRequest` call site
- * (tool-loop.ts) that needs its own verification pass; deliberately left on
- * the legacy path for now rather than rushed. See task #34.
- */
-function buildAnthropicChatRequest(processed: ProcessedRequest) {
-  const chatRequest = toCanonicalChatRequest(processed);
-  const thinking = toCanonicalThinking(processed.provider, processed.llmRequest.thinking);
-  if (thinking !== undefined) chatRequest.thinking = thinking;
-  const effort = toCanonicalEffort(processed.provider, processed.llmRequest.effort);
-  if (effort !== undefined) chatRequest.effort = effort;
-  return chatRequest;
-}
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -55,6 +31,12 @@ function buildAnthropicChatRequest(processed: ProcessedRequest) {
  * model up to DEFAULT_MAX_STEPS times.  The approval_mode query parameter
  * controls gating: ?approval_mode=auto skips the per-tool prompt; the default
  * 'manual' suspends and emits x_tool_approval_request events.
+ *
+ * Provider dispatch, for BOTH the standard (non-agentic) paths below AND the
+ * agentic tool-loop path (MCP/E2B, `runToolLoop`, dispatch in tool-loop-
+ * anthropic.ts) (restructure Wave 2, task #34): Anthropic goes through
+ * `packages/providers/anthropic`'s adapter; every other provider still goes
+ * through `LLMProviderFactory` (apps/web/lib/llm-providers), unchanged.
  */
 async function refundFailedReservation(
   userId: string,

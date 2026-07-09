@@ -207,6 +207,27 @@ export function toCanonicalEffort(
   return effort as Effort | undefined;
 }
 
+/**
+ * Compose the canonical `ChatRequest` for an Anthropic dispatch, folding in
+ * `thinking`/`effort` on top of `toCanonicalChatRequest`'s base conversion.
+ *
+ * Shared by route.ts's standard-path Anthropic branch and tool-loop.ts's
+ * per-step Anthropic dispatch (task #34) -- both need the exact same
+ * composition, and tool-loop.ts calls this once per agentic step with a
+ * step-scoped `ProcessedRequest` (same `processed` spread with `llmRequest`
+ * replaced by that step's request, so `computeAnthropicCacheConfig`-style
+ * tools-presence checks and message history reflect the current step, not
+ * just the turn's original request).
+ */
+export function buildAnthropicChatRequest(processed: ProcessedRequest): ChatRequest {
+  const chatRequest = toCanonicalChatRequest(processed);
+  const thinking = toCanonicalThinking(processed.provider, processed.llmRequest.thinking);
+  if (thinking !== undefined) chatRequest.thinking = thinking;
+  const effort = toCanonicalEffort(processed.provider, processed.llmRequest.effort);
+  if (effort !== undefined) chatRequest.effort = effort;
+  return chatRequest;
+}
+
 export type AnthropicCacheConfig = {
   enableCacheControl: boolean;
   cacheRetention: 'short' | 'long' | 'none';
