@@ -5,16 +5,22 @@ import { getProviderProbeModel } from '@agiworkforce/types';
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
-  createProvider: vi.fn(),
+  buildServerProviderAdapter: vi.fn(),
+  adapterStream: vi.fn(),
+  drainToLlmResponse: vi.fn(),
   getClerkAuthUser: vi.fn(),
   loggerError: vi.fn(),
-  sendRequest: vi.fn(),
 }));
 
-vi.mock('@/lib/llm-providers/factory', () => ({
-  LLMProviderFactory: {
-    createProvider: (...args: unknown[]) => mocks.createProvider(...args),
-  },
+vi.mock('@/lib/services/provider-adapter-service', () => ({
+  buildServerProviderAdapter: (...args: unknown[]) => mocks.buildServerProviderAdapter(...args),
+  toApiModelId: (modelId: string) => modelId,
+  toGenericUpstreamError: (providerId: string, chunk: { message: string }) =>
+    new Error(`${providerId} API error: ${chunk.message}`),
+}));
+
+vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
+  drainToLlmResponse: (...args: unknown[]) => mocks.drainToLlmResponse(...args),
 }));
 
 vi.mock('@/lib/api-auth', () => ({
@@ -47,9 +53,20 @@ function postProvider(provider: string): NextRequest {
 describe('POST /api/settings/test-provider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createProvider.mockReturnValue({ sendRequest: mocks.sendRequest });
+    mocks.buildServerProviderAdapter.mockReturnValue({
+      stream: (...args: unknown[]) => {
+        mocks.adapterStream(...args);
+        return (async function* () {})();
+      },
+    });
+    mocks.drainToLlmResponse.mockResolvedValue({
+      content: 'OK',
+      model: 'x',
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    });
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user_test' });
-    mocks.sendRequest.mockResolvedValue({ content: 'OK' });
     process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';
   });
 
@@ -61,18 +78,18 @@ describe('POST /api/settings/test-provider', () => {
     expect(body.success).toBe(true);
     expect(body.provider).toBe('qwen');
     expect(body.model).toBe(getProviderProbeModel('qwen'));
-    expect(mocks.createProvider).toHaveBeenCalledWith('qwen');
-    expect(mocks.sendRequest).toHaveBeenCalledWith(
+    expect(mocks.buildServerProviderAdapter).toHaveBeenCalledWith('qwen');
+    expect(mocks.adapterStream).toHaveBeenCalledWith(
       expect.objectContaining({
         model: getProviderProbeModel('qwen'),
-        stream: false,
-        max_tokens: 10,
+        maxOutputTokens: 10,
       }),
+      expect.anything(),
     );
   });
 
   it('accepts current display aliases without exposing provider errors', async () => {
-    mocks.sendRequest.mockRejectedValueOnce(
+    mocks.drainToLlmResponse.mockRejectedValueOnce(
       new Error('401 raw upstream body with secret diagnostic provider-token-value'),
     );
 
@@ -84,6 +101,22 @@ describe('POST /api/settings/test-provider', () => {
     expect(body.provider).toBe('xai');
     expect(body.error).toBe('Provider rejected the configured API key (401)');
     expect(body.error).not.toContain('provider-token-value');
-    expect(mocks.createProvider).toHaveBeenCalledWith('xai');
+    expect(mocks.buildServerProviderAdapter).toHaveBeenCalledWith('xai');
+  });
+
+  it('classifies a missing server API key without leaking internals', async () => {
+    mocks.buildServerProviderAdapter.mockImplementationOnce(() => {
+      throw new Error(
+        'Provider "openai" is not configured. Please ensure the OPENAI_API_KEY environment variable is set. Check your .env.local file or deployment environment variables.',
+      );
+    });
+
+    const response = await POST(postProvider('openai'));
+    const body = (await response.json()) as { success: boolean; provider: string; error: string };
+
+    expect(response.status).toBe(502);
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('Provider "openai" is not configured - missing API key on server');
+    expect(mocks.adapterStream).not.toHaveBeenCalled();
   });
 });
