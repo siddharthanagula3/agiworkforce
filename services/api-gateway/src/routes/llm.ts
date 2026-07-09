@@ -7,9 +7,12 @@
  * - Plan enforcement: Free tier blocked; hobby limited to small models
  * - Server-side API keys: Never exposed to client
  *
- * Proxies LLM requests from the desktop ManagedCloudProvider to upstream
- * providers (Anthropic, OpenAI, Google) using server-held API keys.
- * Normalizes all responses to OpenAI-compatible format.
+ * Proxies OpenAI-compatible LLM requests (desktop ManagedCloudProvider and
+ * other managed-cloud clients) to upstream providers through the canonical
+ * `packages/providers` adapters (restructure Wave 2). Request/response wire
+ * conversion lives in `@agiworkforce/llm-normalize` (`openai-wire-compat`),
+ * shared with the web v1 route, so the OpenAI-compatible contract stays
+ * byte-stable while provider mechanics live in one place.
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -19,13 +22,18 @@ import {
   getModelMetadataById,
   type Provider as CatalogProvider,
 } from '@agiworkforce/types';
+import {
+  OpenAIWireAssembler,
+  openAIWireRequestToChatRequest,
+  type OpenAIWireChatRequest,
+} from '@agiworkforce/llm-normalize';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/neonClients';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
-import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import { buildProviderAdapter, type ProviderId } from '../lib/providerAdapters';
 import {
   toolCallResponseSchema,
   toolChoiceSchema,
@@ -41,10 +49,6 @@ router.use(createRateLimiter('default'));
 // =============================================================================
 // CONSTANTS
 // =============================================================================
-
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-const GOOGLE_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 /**
  * Models allowed on the Hobby tier — derived from `models.json` (P0-I).
@@ -89,11 +93,12 @@ const chatCompletionSchema = z
 // HELPERS
 // =============================================================================
 
-// Providers this proxy actually has upstream code for. The shared catalog
-// (`@agiworkforce/types` -> models.json) knows about ~12 providers, but this
-// gateway only proxies the 3 first-party ones. All other providers reach
-// users via the desktop's BYOK path or the providerStream route — not here.
-type Provider = 'anthropic' | 'openai' | 'google';
+// Providers this proxy actually forwards to. The shared catalog
+// (`@agiworkforce/types` -> models.json) knows about ~12 providers; this
+// route currently proxies the 3 first-party managed ones. Widening this set
+// is a deliberate contract change (restructure Wave 2 step 2/3) done together
+// with adapter wiring + test updates — not implicitly.
+type Provider = Extract<ProviderId, 'anthropic' | 'openai' | 'google'>;
 
 const PROXIED_PROVIDERS: ReadonlySet<CatalogProvider> = new Set<CatalogProvider>([
   'anthropic',
@@ -127,19 +132,6 @@ export function resolveProvider(model: string): Provider {
   }
 
   return metadata.provider as Provider;
-}
-
-function getProviderKey(provider: Provider): string {
-  const envMap: Record<Provider, string> = {
-    anthropic: 'ANTHROPIC_API_KEY',
-    openai: 'OPENAI_API_KEY',
-    google: 'GOOGLE_API_KEY',
-  };
-  const key = process.env[envMap[provider]];
-  if (!key) {
-    throw new AppError(`Server is not configured for ${provider} models`, 502);
-  }
-  return key;
 }
 
 /**
@@ -181,517 +173,12 @@ async function enforcePlanTier(userId: string, model: string): Promise<string> {
   return tier;
 }
 
-// =============================================================================
-// ANTHROPIC FORMAT CONVERSION
-// =============================================================================
-
-/**
- * Convert OpenAI-format messages to Anthropic's messages API format.
- * Extracts system messages into the top-level `system` param.
- */
-function toAnthropicRequest(body: z.infer<typeof chatCompletionSchema>): {
-  system?: string;
-  messages: Array<{ role: string; content: string | Array<unknown> }>;
-  model: string;
-  max_tokens: number;
-  temperature?: number;
-  stream: boolean;
-  tools?: Array<unknown>;
-  tool_choice?: unknown;
-} {
-  const systemMessages: string[] = [];
-  const messages: Array<{ role: string; content: string | Array<unknown> }> = [];
-
-  for (const msg of body.messages) {
-    if (msg.role === 'system') {
-      if (typeof msg.content === 'string') {
-        systemMessages.push(msg.content);
-      }
-    } else {
-      messages.push({ role: msg.role, content: msg.content });
-    }
-  }
-
-  const result: ReturnType<typeof toAnthropicRequest> = {
-    model: body.model,
-    messages,
-    max_tokens: body.max_tokens ?? 4096,
-    stream: body.stream,
-  };
-
-  if (systemMessages.length > 0) {
-    result.system = systemMessages.join('\n\n');
-  }
-  if (body.temperature !== undefined) {
-    result.temperature = body.temperature;
-  }
-  if (body.tools && body.tools.length > 0) {
-    result.tools = body.tools.map((tool) => ({
-      name: tool.function.name,
-      description: tool.function.description,
-      input_schema: tool.function.parameters ?? {},
-    }));
-  }
-  if (body.tool_choice !== undefined) {
-    if (body.tool_choice === 'auto') {
-      result.tool_choice = { type: 'auto' };
-    } else if (body.tool_choice === 'none') {
-      result.tool_choice = { type: 'none' };
-    } else if (body.tool_choice === 'required') {
-      result.tool_choice = { type: 'any' };
-    } else if (typeof body.tool_choice === 'object') {
-      result.tool_choice = { type: 'tool', name: body.tool_choice.function.name };
-    }
-  }
-
-  return result;
-}
-
-/**
- * Convert a non-streaming Anthropic response to OpenAI-compatible format.
- */
-function anthropicToOpenAI(
-  anthropicResp: Record<string, unknown>,
-  model: string,
-): Record<string, unknown> {
-  const content = anthropicResp['content'] as Array<Record<string, unknown>> | undefined;
-  const textBlocks = (content ?? []).filter((b) => b['type'] === 'text');
-  const toolBlocks = (content ?? []).filter((b) => b['type'] === 'tool_use');
-
-  const message: Record<string, unknown> = {
-    role: 'assistant',
-    content: textBlocks.map((b) => b['text']).join('') || null,
-  };
-
-  if (toolBlocks.length > 0) {
-    message['tool_calls'] = toolBlocks.map((b, i) => ({
-      id: b['id'],
-      type: 'function',
-      index: i,
-      function: {
-        name: b['name'],
-        arguments: JSON.stringify(b['input']),
-      },
-    }));
-  }
-
-  const usage = anthropicResp['usage'] as Record<string, number> | undefined;
-
-  return {
-    id: anthropicResp['id'] ?? `chatcmpl-${Date.now()}`,
-    object: 'chat.completion',
-    created: Math.floor(Date.now() / 1000),
-    model,
-    choices: [
-      {
-        index: 0,
-        message,
-        finish_reason: mapAnthropicStopReason(anthropicResp['stop_reason'] as string),
-      },
-    ],
-    usage: usage
-      ? {
-          prompt_tokens: usage['input_tokens'],
-          completion_tokens: usage['output_tokens'],
-          total_tokens: (usage['input_tokens'] ?? 0) + (usage['output_tokens'] ?? 0),
-        }
-      : undefined,
-  };
-}
-
-function mapAnthropicStopReason(reason: string | undefined): string {
-  if (reason === 'end_turn') return 'stop';
-  if (reason === 'tool_use') return 'tool_calls';
-  if (reason === 'max_tokens') return 'length';
-  return reason ?? 'stop';
-}
-
-// =============================================================================
-// GOOGLE FORMAT CONVERSION
-// =============================================================================
-
-function toGoogleRequest(body: z.infer<typeof chatCompletionSchema>): {
-  contents: Array<{ role: string; parts: Array<{ text: string }> }>;
-  generationConfig?: Record<string, unknown>;
-} {
-  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
-
-  for (const msg of body.messages) {
-    const role = msg.role === 'assistant' ? 'model' : 'user';
-    const text = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-    // Gemini merges system into the first user turn
-    if (msg.role === 'system') {
-      contents.push({ role: 'user', parts: [{ text: `[System]: ${text}` }] });
-    } else {
-      contents.push({ role, parts: [{ text }] });
-    }
-  }
-
-  const result: ReturnType<typeof toGoogleRequest> = { contents };
-  const generationConfig: Record<string, unknown> = {};
-  if (body.temperature !== undefined) generationConfig['temperature'] = body.temperature;
-  if (body.max_tokens !== undefined) generationConfig['maxOutputTokens'] = body.max_tokens;
-  if (Object.keys(generationConfig).length > 0) result.generationConfig = generationConfig;
-
-  return result;
-}
-
-function googleToOpenAI(
-  googleResp: Record<string, unknown>,
-  model: string,
-): Record<string, unknown> {
-  const candidates = googleResp['candidates'] as Array<Record<string, unknown>> | undefined;
-  const firstCandidate = candidates?.[0];
-  const contentObj = firstCandidate?.['content'] as Record<string, unknown> | undefined;
-  const parts = contentObj?.['parts'] as Array<Record<string, unknown>> | undefined;
-  const text = parts?.map((p) => p['text']).join('') ?? '';
-
-  const usageMeta = googleResp['usageMetadata'] as Record<string, number> | undefined;
-
-  return {
-    id: `chatcmpl-${Date.now()}`,
-    object: 'chat.completion',
-    created: Math.floor(Date.now() / 1000),
-    model,
-    choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
-    usage: usageMeta
-      ? {
-          prompt_tokens: usageMeta['promptTokenCount'],
-          completion_tokens: usageMeta['candidatesTokenCount'],
-          total_tokens: usageMeta['totalTokenCount'],
-        }
-      : undefined,
-  };
-}
-
-// =============================================================================
-// UPSTREAM REQUEST EXECUTION
-// =============================================================================
-
-// GW-2 (audit 2026-05-03): SECURITY GUARDRAIL — every fetch() call in
-// this file constructs a fresh `headers` object literal with explicit
-// fields. NEVER copy `req.headers` into the upstream fetch — doing so
-// would forward the user's `Authorization: Bearer <jwt>` to the
-// upstream LLM provider, leaking the user's session token. If a future
-// pattern needs to forward headers selectively, add an explicit
-// allowlist (e.g. only `x-request-id`) — anything else is a security
-// review blocker.
-
-async function callUpstream(
-  provider: Provider,
-  apiKey: string,
-  body: z.infer<typeof chatCompletionSchema>,
-): Promise<globalThis.Response> {
-  switch (provider) {
-    case 'anthropic': {
-      const anthropicBody = toAnthropicRequest(body);
-      return fetchWithTimeout(ANTHROPIC_API_URL, {
-        method: 'POST',
-        timeoutMs: 30_000,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify(anthropicBody),
-      });
-    }
-    case 'openai': {
-      return fetchWithTimeout(OPENAI_API_URL, {
-        method: 'POST',
-        timeoutMs: 30_000,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: body.model,
-          messages: body.messages,
-          stream: body.stream,
-          ...(body.temperature !== undefined && { temperature: body.temperature }),
-          ...(body.max_tokens !== undefined && { max_tokens: body.max_tokens }),
-          ...(body.tools && { tools: body.tools }),
-          ...(body.tool_choice !== undefined && { tool_choice: body.tool_choice }),
-        }),
-      });
-    }
-    case 'google': {
-      const action = body.stream ? 'streamGenerateContent' : 'generateContent';
-      // SECURITY: Pass API key via header instead of URL query to prevent credential exposure in logs
-      const url = `${GOOGLE_API_BASE}/${body.model}:${action}`;
-      const googleBody = toGoogleRequest(body);
-      return fetchWithTimeout(url, {
-        method: 'POST',
-        timeoutMs: 30_000,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify(googleBody),
-      });
-    }
-  }
-}
-
-// =============================================================================
-// SSE STREAMING
-// =============================================================================
-
-/**
- * Pipe upstream SSE to the client, converting Anthropic format to OpenAI-compatible
- * SSE chunks on the fly. OpenAI responses are passed through as-is.
- */
-async function streamResponse(
-  provider: Provider,
-  upstream: globalThis.Response,
-  res: Response,
-  model: string,
-): Promise<void> {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  const body = upstream.body;
-  if (!body) {
-    res.write('data: [DONE]\n\n');
-    res.end();
-    return;
-  }
-
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') {
-          res.write('data: [DONE]\n\n');
-          continue;
-        }
-        if (!data) continue;
-
-        try {
-          const parsed = JSON.parse(data) as Record<string, unknown>;
-
-          if (provider === 'anthropic') {
-            const chunk = convertAnthropicStreamChunk(parsed, model);
-            if (chunk) {
-              res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-            }
-          } else {
-            // OpenAI format — pass through
-            res.write(`data: ${JSON.stringify(parsed)}\n\n`);
-          }
-        } catch {
-          // Skip malformed JSON lines
-        }
-      }
-    }
-
-    // Ensure [DONE] is sent
-    res.write('data: [DONE]\n\n');
-  } catch (err) {
-    logger.error({ error: err }, 'SSE streaming error');
-  } finally {
-    res.end();
-  }
-}
-
-/**
- * Convert a single Anthropic SSE event to an OpenAI-compatible stream chunk.
- */
-function convertAnthropicStreamChunk(
-  event: Record<string, unknown>,
-  model: string,
-): Record<string, unknown> | null {
-  const type = event['type'] as string;
-
-  if (type === 'content_block_delta') {
-    const delta = event['delta'] as Record<string, unknown> | undefined;
-    if (!delta) return null;
-
-    if (delta['type'] === 'text_delta') {
-      return {
-        id: `chatcmpl-${Date.now()}`,
-        object: 'chat.completion.chunk',
-        created: Math.floor(Date.now() / 1000),
-        model,
-        choices: [
-          {
-            index: 0,
-            delta: { content: delta['text'] },
-            finish_reason: null,
-          },
-        ],
-      };
-    }
-
-    if (delta['type'] === 'input_json_delta') {
-      return {
-        id: `chatcmpl-${Date.now()}`,
-        object: 'chat.completion.chunk',
-        created: Math.floor(Date.now() / 1000),
-        model,
-        choices: [
-          {
-            index: 0,
-            delta: {
-              tool_calls: [
-                {
-                  index: (event['index'] as number) ?? 0,
-                  function: { arguments: delta['partial_json'] },
-                },
-              ],
-            },
-            finish_reason: null,
-          },
-        ],
-      };
-    }
-  }
-
-  if (type === 'content_block_start') {
-    const block = event['content_block'] as Record<string, unknown> | undefined;
-    if (block?.['type'] === 'tool_use') {
-      return {
-        id: `chatcmpl-${Date.now()}`,
-        object: 'chat.completion.chunk',
-        created: Math.floor(Date.now() / 1000),
-        model,
-        choices: [
-          {
-            index: 0,
-            delta: {
-              tool_calls: [
-                {
-                  index: (event['index'] as number) ?? 0,
-                  id: block['id'],
-                  type: 'function',
-                  function: { name: block['name'], arguments: '' },
-                },
-              ],
-            },
-            finish_reason: null,
-          },
-        ],
-      };
-    }
-  }
-
-  if (type === 'message_delta') {
-    const delta = event['delta'] as Record<string, unknown> | undefined;
-    const stopReason = delta?.['stop_reason'] as string | undefined;
-    return {
-      id: `chatcmpl-${Date.now()}`,
-      object: 'chat.completion.chunk',
-      created: Math.floor(Date.now() / 1000),
-      model,
-      choices: [
-        {
-          index: 0,
-          delta: {},
-          finish_reason: mapAnthropicStopReason(stopReason),
-        },
-      ],
-    };
-  }
-
-  return null;
-}
-
-/**
- * Stream Google Gemini response. Gemini's streaming returns an array of
- * candidate chunks. Convert each to OpenAI-compatible SSE.
- */
-async function streamGoogleResponse(
-  upstream: globalThis.Response,
-  res: Response,
-  model: string,
-): Promise<void> {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  const body = upstream.body;
-  if (!body) {
-    res.write('data: [DONE]\n\n');
-    res.end();
-    return;
-  }
-
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // Gemini streaming returns JSON array chunks separated by newlines
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === '[' || trimmed === ']' || trimmed === ',') continue;
-
-        // Strip leading comma if present
-        const clean = trimmed.startsWith(',') ? trimmed.slice(1).trim() : trimmed;
-        if (!clean) continue;
-
-        try {
-          const parsed = JSON.parse(clean) as Record<string, unknown>;
-          const candidates = parsed['candidates'] as Array<Record<string, unknown>> | undefined;
-          const contentObj = candidates?.[0]?.['content'] as Record<string, unknown> | undefined;
-          const parts = contentObj?.['parts'] as Array<Record<string, unknown>> | undefined;
-          const text = parts?.map((p) => p['text']).join('') ?? '';
-
-          if (text) {
-            const chunk = {
-              id: `chatcmpl-${Date.now()}`,
-              object: 'chat.completion.chunk',
-              created: Math.floor(Date.now() / 1000),
-              model,
-              choices: [
-                {
-                  index: 0,
-                  delta: { content: text },
-                  finish_reason: null,
-                },
-              ],
-            };
-            res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-          }
-        } catch {
-          // Skip malformed chunks
-        }
-      }
-    }
-
-    res.write('data: [DONE]\n\n');
-  } catch (err) {
-    logger.error({ error: err }, 'Google SSE streaming error');
-  } finally {
-    res.end();
-  }
-}
+// GW-2 (audit 2026-05-03): SECURITY GUARDRAIL — upstream requests are built
+// exclusively inside `packages/providers` adapters from server env keys.
+// NEVER thread `req.headers` (or the user's `Authorization: Bearer <jwt>`)
+// into adapter config/fetch — forwarding it upstream would leak the user's
+// session token. If a future pattern needs to forward headers selectively,
+// add an explicit allowlist — anything else is a security review blocker.
 
 // =============================================================================
 // ROUTE: POST /chat/completions
@@ -702,7 +189,7 @@ async function streamGoogleResponse(
  * Proxy LLM requests to upstream providers with server-side API keys.
  *
  * Accepts OpenAI-compatible request format, routes to the correct provider
- * based on model prefix, and returns OpenAI-compatible responses.
+ * based on the model catalog, and returns OpenAI-compatible responses.
  *
  * SECURITY: JWT required. Plan tier enforced. Rate limited per tier.
  */
@@ -722,7 +209,13 @@ router.post(
     const body = chatCompletionSchema.parse(req.body);
     const provider = resolveProvider(body.model);
     const tier = await enforcePlanTier(user.userId, body.model);
-    const apiKey = getProviderKey(provider);
+
+    const adapter = buildProviderAdapter(provider);
+    if (!adapter) {
+      throw new AppError(`Server is not configured for ${provider} models`, 502);
+    }
+
+    const chatRequest = openAIWireRequestToChatRequest(body as OpenAIWireChatRequest);
 
     logger.info(
       {
@@ -736,36 +229,16 @@ router.post(
       'LLM proxy request',
     );
 
-    const upstream = await callUpstream(provider, apiKey, body);
-
-    if (!upstream.ok) {
-      const errorBody = await upstream.text().catch(() => 'Unknown upstream error');
-      logger.error(
-        {
-          provider,
-          model: body.model,
-          status: upstream.status,
-          errorBody: errorBody.slice(0, 500),
-        },
-        'Upstream provider error',
-      );
-      throw new AppError('Upstream provider error. Please try again.', 502);
-    }
-
-    // Streaming response
     // P1-GW-RLS: service-role client (no DB-level RLS — see lib/neonClients.ts).
     // usage_events rows carry the explicit user_id set on insert; there is no
     // `user_id = auth.uid()` RLS backstop, so the explicit field is the SOLE
     // guard against mis-attribution. Keep setting it.
     const usageDb = getUserScopedClient(user.userId);
 
-    if (body.stream) {
-      if (provider === 'google') {
-        await streamGoogleResponse(upstream, res, body.model);
-      } else {
-        await streamResponse(provider, upstream, res, body.model);
-      }
-      // Best-effort usage tracking (fire and forget for streaming).
+    const recordUsage = (
+      eventType: 'llm_stream' | 'llm_completion',
+      usage?: { prompt_tokens?: number; completion_tokens?: number } | null,
+    ): void => {
       // PostgrestBuilder.then() returns PromiseLike, not Promise — `.catch`
       // isn't on the prototype. Pair the rejection handler via the 2-arg
       // `.then(onfulfilled, onrejected)` form to swallow rejected inserts
@@ -778,7 +251,13 @@ router.post(
           model: body.model,
           provider,
           tier,
-          event_type: 'llm_stream',
+          event_type: eventType,
+          ...(eventType === 'llm_completion'
+            ? {
+                prompt_tokens: usage?.prompt_tokens ?? null,
+                completion_tokens: usage?.completion_tokens ?? null,
+              }
+            : {}),
           created_at: new Date().toISOString(),
         })
         .then(
@@ -786,47 +265,68 @@ router.post(
             if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
           },
           (err: unknown) => {
-            logger.debug({ err }, 'Usage event insert rejected (SSE path)');
+            logger.debug({ err }, `Usage event insert rejected (${eventType} path)`);
           },
         );
+    };
+
+    const abort = new AbortController();
+    req.on('close', () => abort.abort());
+
+    const assembler = new OpenAIWireAssembler({ model: body.model });
+
+    // Streaming response
+    if (body.stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+
+      try {
+        for await (const chunk of adapter.stream(chatRequest, abort.signal)) {
+          if (chunk.type === 'error') {
+            logger.error(
+              { provider, model: body.model, code: chunk.code, message: chunk.message },
+              'Upstream provider error (stream)',
+            );
+          }
+          const wire = assembler.sseChunk(chunk);
+          if (wire) {
+            res.write(`data: ${JSON.stringify(wire)}\n\n`);
+          }
+        }
+        res.write('data: [DONE]\n\n');
+      } catch (err) {
+        logger.error({ error: err, provider, model: body.model }, 'SSE streaming error');
+      } finally {
+        res.end();
+      }
+
+      recordUsage('llm_stream');
       return;
     }
 
     // Non-streaming response
-    const upstreamJson = (await upstream.json()) as Record<string, unknown>;
-
-    let openaiResponse: Record<string, unknown>;
-    if (provider === 'anthropic') {
-      openaiResponse = anthropicToOpenAI(upstreamJson, body.model);
-    } else if (provider === 'google') {
-      openaiResponse = googleToOpenAI(upstreamJson, body.model);
-    } else {
-      openaiResponse = upstreamJson;
+    try {
+      for await (const chunk of adapter.stream(chatRequest, abort.signal)) {
+        assembler.ingest(chunk);
+      }
+    } catch (err) {
+      logger.error({ error: err, provider, model: body.model }, 'Upstream provider error');
+      throw new AppError('Upstream provider error. Please try again.', 502);
     }
 
-    // Best-effort usage tracking
-    const usage = openaiResponse['usage'] as Record<string, number> | undefined;
-    // PromiseLike 2-arg form (see SSE path above for rationale).
-    usageDb
-      .from('usage_events')
-      .insert({
-        user_id: user.userId,
-        model: body.model,
-        provider,
-        tier,
-        event_type: 'llm_completion',
-        prompt_tokens: usage?.['prompt_tokens'] ?? null,
-        completion_tokens: usage?.['completion_tokens'] ?? null,
-        created_at: new Date().toISOString(),
-      })
-      .then(
-        ({ error }) => {
-          if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
-        },
-        (err: unknown) => {
-          logger.debug({ err }, 'Usage event insert rejected (completion path)');
-        },
+    if (assembler.lastError) {
+      logger.error(
+        { provider, model: body.model, errorBody: assembler.lastError.slice(0, 500) },
+        'Upstream provider error',
       );
+      throw new AppError('Upstream provider error. Please try again.', 502);
+    }
+
+    const openaiResponse = assembler.response();
+    recordUsage('llm_completion', assembler.usageOrNull());
 
     res.json(openaiResponse);
   },
