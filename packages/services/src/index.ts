@@ -27,3 +27,9 @@ export * from './artifact-sync';
 // apps/web. Clients validate against these instead of hand-declaring shapes.
 export * from './cloud-contracts/me';
 export * from './cloud-contracts/sync';
+
+// Delta-sync apply logic — the pure, cross-surface rules for applying pulled
+// cloud-sync deltas (conversations/messages/memory/projects/settings/cursor
+// math) that used to be hand-duplicated across mobile (TS) and desktop
+// (Rust). See sync-apply/index.ts for what's shared vs. surface-owned.
+export * from './sync-apply';

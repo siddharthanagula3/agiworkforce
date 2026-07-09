@@ -2818,3 +2818,383 @@ mod tests {
         assert_eq!(count, 1, "artifact must be in DB after apply_pull_page");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Fixture replay (Wave 4 — shared sync-apply extraction).
+//
+// The golden fixtures under packages/services/src/sync-apply/__fixtures__/
+// are the cross-language contract: TS's replay lives in
+// packages/services/src/sync-apply/__tests__/fixtures.test.ts. This module
+// replays the SAME JSON against these native Rust apply fns (Rust cannot
+// import the TS module — it re-implements the rules natively) to prove the
+// two independently-written implementations agree on observable outcome.
+// NO existing function in this file was changed to add this module.
+//
+// Fixture access — DIRECT include_str! across the workspace (not a copy):
+// `include_str!` resolves at COMPILE TIME relative to THIS source file, not
+// the `cargo test` invocation's working directory, so the relative path
+// below is stable across build environments (unlike a runtime path would
+// be). This also means these tests can never silently drift from a stale
+// copy — if the canonical fixture changes, this file picks it up on the
+// next build. The tradeoff is a compile-time dependency from this crate on
+// a sibling pnpm package's file layout: if
+// packages/services/src/sync-apply/__fixtures__ is ever moved, this path
+// must move with it — a loud compile error, not a silent skip.
+//
+// DIVERGENCE LEDGER (cases intentionally not replayed here, or replayed
+// with different intermediate assertions than the TS side — full rationale
+// in each fixture case's own `divergenceNote` field):
+//   - "dirty_title_preserved_against_stale_delta" (pull-apply.json, tagged
+//     ["ts"] only): apply_conversation_deltas has no dirtyConversationIds
+//     parameter — it always applies the server title via COALESCE. Desktop
+//     has no client-side rename-durability guard today; not a bug to fix
+//     as part of this test-only extraction.
+//   - "message_count_preserved_from_existing_on_update" (tagged ["ts"]
+//     only): the `conversations` table has no message_count column
+//     (desktop counts messages by SQL query, not a stored counter) — not a
+//     checkable field on this side.
+//   - "orphan_message_then_parent_conversation_arrives": SAME end state on
+//     both engines, reached differently. This module adds an INTERMEDIATE
+//     assertion after step 1 alone (message buffered, not yet a live row)
+//     that the TS side does not have — TS's port has no FK constraint, so
+//     the message is already visible after step 1 there. See
+//     packages/services/src/sync-apply/messages.ts's module docstring for
+//     the full rationale (SQLite FK constraint vs. a plain Zustand map).
+//   - Rust's wire structs (ConversationDelta/MessageDelta/ArtifactDelta) use
+//     lenient `Option<...>` fields where the TS wire schema requires
+//     non-null strings (e.g. title, role). Every fixture delta is written
+//     to satisfy the STRICT TS schema (so it also parses as suite (a)
+//     there), which is always a valid input to Rust's lenient fields too —
+//     so this leniency never surfaces as an observable fixture difference;
+//     it is a real asymmetry worth knowing about, not a testable one.
+//   - Rust silently skips a pulled row with an unsupported role or a
+//     duplicate cloud_id (via `debug!` + continue) rather than raising. No
+//     fixture case exercises this: the TS wire schema's role enum already
+//     makes an unsupported role unconstructable from a fixture that must
+//     also satisfy suite (a) parsing on the TS side.
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod fixture_tests {
+    use super::*;
+    use crate::data::db::migrations::run_migrations;
+    use rusqlite::Connection;
+    use serde::Deserialize;
+    use std::collections::HashMap;
+
+    fn fresh_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        run_migrations(&conn).expect("migrations");
+        conn
+    }
+
+    const USER_ID: &str = "fixture-user";
+
+    // ── Fixture schema (mirrors packages/services/src/sync-apply/__fixtures__) ──
+    //
+    // These structs are test-only projections, distinct from the production
+    // ConversationDelta/MessageDelta/ArtifactDelta wire structs (which are
+    // reused directly below for the `steps[].conversations/messages/artifacts`
+    // arrays — those ARE the wire shape, snake_case, no rename needed).
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct FxConversation {
+        id: String,
+        title: String,
+        created_at: String,
+        updated_at: String,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct FxMessage {
+        id: String,
+        role: String,
+        content: String,
+        #[serde(default)]
+        created_at: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize, Default)]
+    struct FxStep {
+        #[serde(default)]
+        conversations: Vec<ConversationDelta>,
+        #[serde(default)]
+        messages: Vec<MessageDelta>,
+        #[serde(default)]
+        artifacts: Vec<ArtifactDelta>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct FxCase {
+        name: String,
+        applies: Vec<String>,
+        #[serde(default)]
+        initial_conversations: Vec<FxConversation>,
+        #[serde(default)]
+        initial_messages: HashMap<String, Vec<FxMessage>>,
+        steps: Vec<FxStep>,
+        #[serde(default)]
+        expected_live_conversations: Vec<FxConversation>,
+        #[serde(default)]
+        expected_tombstoned_conversation_ids: Vec<String>,
+        #[serde(default)]
+        expected_live_messages: HashMap<String, Vec<FxMessage>>,
+        #[serde(default)]
+        expected_live_artifact_ids: Vec<String>,
+        #[serde(default)]
+        expected_tombstoned_artifact_ids: Vec<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FxFile {
+        cases: Vec<FxCase>,
+    }
+
+    fn load_pull_apply_fixtures() -> FxFile {
+        // Canonical source: packages/services/src/sync-apply/__fixtures__/pull-apply.json
+        let raw = include_str!(
+            "../../../../../packages/services/src/sync-apply/__fixtures__/pull-apply.json"
+        );
+        serde_json::from_str(raw).expect("pull-apply.json must parse into FxFile")
+    }
+
+    // ── Seeding (direct SQL, NOT the apply fns — so "initial" state is
+    //    independent of the logic under test) ───────────────────────────────
+
+    fn seed_conversation(conn: &Connection, rec: &FxConversation) {
+        conn.execute(
+            "INSERT INTO conversations \
+             (cloud_id, user_id, title, app_mode, created_at, updated_at, created_at_utc, server_version, needs_push) \
+             VALUES (?1, ?2, ?3, 'cloud', ?4, ?5, ?4, '0', 0)",
+            params![rec.id, USER_ID, rec.title, rec.created_at, rec.updated_at],
+        )
+        .unwrap_or_else(|e| panic!("seed_conversation({}) failed: {e}", rec.id));
+    }
+
+    fn seed_message(conn: &Connection, conversation_cloud_id: &str, rec: &FxMessage) {
+        let local_conv_id: i64 = conn
+            .query_row(
+                "SELECT id FROM conversations WHERE cloud_id = ?1",
+                params![conversation_cloud_id],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|e| {
+                panic!("seed_message: parent conversation {conversation_cloud_id} not seeded: {e}")
+            });
+        let created_at = rec.created_at.clone().unwrap_or_else(now_z);
+        conn.execute(
+            "INSERT INTO messages \
+             (cloud_id, conversation_id, conversation_cloud_id, user_id, role, content, created_at, created_at_utc, server_version, needs_push) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, '0', 0)",
+            params![rec.id, local_conv_id, conversation_cloud_id, USER_ID, rec.role, rec.content, created_at],
+        )
+        .unwrap_or_else(|e| panic!("seed_message({}) failed: {e}", rec.id));
+    }
+
+    // ── Assertions (observable outcome: fresh queries against the live
+    //    table state, never the apply fns' return counts) ──────────────────
+
+    fn assert_live_conversation(conn: &Connection, case: &str, expected: &FxConversation) {
+        let result: rusqlite::Result<(String, String, String, Option<String>)> = conn.query_row(
+            "SELECT title, created_at, updated_at, deleted_at_utc FROM conversations WHERE cloud_id = ?1",
+            params![expected.id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        );
+        let (title, created_at, updated_at, deleted_at_utc) = result
+            .unwrap_or_else(|e| panic!("[{case}] expected live conversation {} is missing: {e}", expected.id));
+        assert_eq!(title, expected.title, "[{case}] conversation {} title", expected.id);
+        assert_eq!(created_at, expected.created_at, "[{case}] conversation {} createdAt", expected.id);
+        assert_eq!(updated_at, expected.updated_at, "[{case}] conversation {} updatedAt", expected.id);
+        assert!(deleted_at_utc.is_none(), "[{case}] conversation {} must be live", expected.id);
+    }
+
+    fn assert_tombstoned_conversation(conn: &Connection, case: &str, id: &str) {
+        let deleted_at_utc: Option<String> = conn
+            .query_row(
+                "SELECT deleted_at_utc FROM conversations WHERE cloud_id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|e| panic!("[{case}] expected tombstoned conversation {id} is missing: {e}"));
+        assert!(deleted_at_utc.is_some(), "[{case}] conversation {id} must be tombstoned (deleted_at_utc set)");
+    }
+
+    /// Ordered by created_at (always non-null on this path — see apply_message_deltas'
+    /// insert branch), then cloud_id — the same tie-break TS's port applies.
+    fn assert_live_messages(conn: &Connection, case: &str, conversation_cloud_id: &str, expected: &[FxMessage]) {
+        let mut stmt = conn
+            .prepare(
+                "SELECT m.cloud_id, m.role, m.content FROM messages m \
+                 JOIN conversations c ON c.id = m.conversation_id \
+                 WHERE c.cloud_id = ?1 AND m.deleted_at_utc IS NULL \
+                 ORDER BY m.created_at, m.cloud_id",
+            )
+            .unwrap();
+        let actual: Vec<(String, String, String)> = stmt
+            .query_map(params![conversation_cloud_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        let expected_tuples: Vec<(String, String, String)> =
+            expected.iter().map(|m| (m.id.clone(), m.role.clone(), m.content.clone())).collect();
+        assert_eq!(
+            actual, expected_tuples,
+            "[{case}] live messages for conversation {conversation_cloud_id} (id, role, content), ordered by created_at then id"
+        );
+    }
+
+    fn assert_live_artifact(conn: &Connection, case: &str, id: &str) {
+        let deleted_at_utc: Option<String> = conn
+            .query_row("SELECT deleted_at_utc FROM artifacts WHERE cloud_id = ?1", params![id], |r| r.get(0))
+            .unwrap_or_else(|e| panic!("[{case}] expected live artifact {id} is missing: {e}"));
+        assert!(deleted_at_utc.is_none(), "[{case}] artifact {id} must be live");
+    }
+
+    fn assert_tombstoned_artifact(conn: &Connection, case: &str, id: &str) {
+        let deleted_at_utc: Option<String> = conn
+            .query_row("SELECT deleted_at_utc FROM artifacts WHERE cloud_id = ?1", params![id], |r| r.get(0))
+            .unwrap_or_else(|e| panic!("[{case}] expected tombstoned artifact {id} is missing: {e}"));
+        assert!(deleted_at_utc.is_some(), "[{case}] artifact {id} must be tombstoned");
+    }
+
+    fn take_page(step: &mut FxStep) -> PullResponse {
+        PullResponse {
+            conversations: std::mem::take(&mut step.conversations),
+            messages: std::mem::take(&mut step.messages),
+            artifacts: std::mem::take(&mut step.artifacts),
+            cursor: None,
+            has_more: false,
+        }
+    }
+
+    // ── Suite (b): pull-apply.json replay ───────────────────────────────────
+    //
+    // Rust-tagged cases only (`applies` contains "rust"); TS-only cases are
+    // listed in the divergence ledger in this module's header comment.
+
+    #[test]
+    fn replay_pull_apply_fixtures() {
+        let mut fixtures = load_pull_apply_fixtures();
+        let mut ran_any = false;
+
+        for case in fixtures.cases.iter_mut() {
+            if !case.applies.iter().any(|a| a == "rust") {
+                continue;
+            }
+            ran_any = true;
+
+            let conn = fresh_db();
+            for conv in &case.initial_conversations {
+                seed_conversation(&conn, conv);
+            }
+            for (conv_id, msgs) in &case.initial_messages {
+                for msg in msgs {
+                    seed_message(&conn, conv_id, msg);
+                }
+            }
+
+            if case.name == "orphan_message_then_parent_conversation_arrives" {
+                // Exercise the Rust-side half of the documented orphan-buffering
+                // divergence: after step 1 alone (message only, no parent yet),
+                // the message must NOT be a live row — it must be buffered.
+                // Replayed via apply_pull_page (not apply_message_deltas
+                // directly) so the real conv→drain→msg ordering is exercised.
+                assert_eq!(case.steps.len(), 2, "[{}] expected exactly 2 steps", case.name);
+                let page1 = take_page(&mut case.steps[0]);
+                let (_c, m, _a) = apply_pull_page(&conn, USER_ID, &page1);
+                assert_eq!(m, 0, "[{}] orphan message must not be visible before its parent lands", case.name);
+                let pending: i64 = conn
+                    .query_row("SELECT COUNT(*) FROM cloud_sync_pending_messages", [], |r| r.get(0))
+                    .unwrap();
+                assert_eq!(pending, 1, "[{}] orphan message must be buffered, not dropped", case.name);
+
+                let page2 = take_page(&mut case.steps[1]);
+                apply_pull_page(&conn, USER_ID, &page2);
+            } else {
+                for step in case.steps.iter_mut() {
+                    let page = take_page(step);
+                    apply_pull_page(&conn, USER_ID, &page);
+                }
+            }
+
+            for expected in &case.expected_live_conversations {
+                assert_live_conversation(&conn, &case.name, expected);
+            }
+            for id in &case.expected_tombstoned_conversation_ids {
+                assert_tombstoned_conversation(&conn, &case.name, id);
+            }
+            for (conv_id, expected) in &case.expected_live_messages {
+                assert_live_messages(&conn, &case.name, conv_id, expected);
+            }
+            for id in &case.expected_live_artifact_ids {
+                assert_live_artifact(&conn, &case.name, id);
+            }
+            for id in &case.expected_tombstoned_artifact_ids {
+                assert_tombstoned_artifact(&conn, &case.name, id);
+            }
+        }
+
+        assert!(ran_any, "sanity: at least one rust-tagged fixture case must have run");
+    }
+
+    // ── Suite (d): bigint cursor compare (cursor-compare.json) ─────────────
+
+    #[derive(Debug, Deserialize)]
+    struct FxBigintGreaterCase {
+        name: String,
+        a: String,
+        b: String,
+        expected: bool,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FxMaxCursorCase {
+        name: String,
+        base: String,
+        versions: Vec<String>,
+        expected: String,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct FxSelectNextCursorCase {
+        name: String,
+        current: String,
+        response_cursor: Option<String>,
+        expected: String,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct FxCursorFile {
+        bigint_greater_cases: Vec<FxBigintGreaterCase>,
+        max_cursor_cases: Vec<FxMaxCursorCase>,
+        select_next_cursor_cases: Vec<FxSelectNextCursorCase>,
+    }
+
+    #[test]
+    fn replay_cursor_compare_fixtures() {
+        // Canonical source: packages/services/src/sync-apply/__fixtures__/cursor-compare.json
+        let raw = include_str!(
+            "../../../../../packages/services/src/sync-apply/__fixtures__/cursor-compare.json"
+        );
+        let fixtures: FxCursorFile = serde_json::from_str(raw).expect("cursor-compare.json must parse");
+
+        for c in &fixtures.bigint_greater_cases {
+            assert_eq!(bigint_greater(&c.a, &c.b), c.expected, "bigintGreater — {}", c.name);
+        }
+        for c in &fixtures.max_cursor_cases {
+            assert_eq!(max_cursor(&c.base, &c.versions), c.expected, "maxCursor — {}", c.name);
+        }
+        for c in &fixtures.select_next_cursor_cases {
+            assert_eq!(
+                select_next_cursor(&c.current, &c.response_cursor),
+                c.expected,
+                "selectNextCursor — {}",
+                c.name
+            );
+        }
+    }
+}
