@@ -12,7 +12,7 @@ import {
   DialogDescription,
 } from '@shared/ui/dialog';
 import { Badge } from '@shared/ui/badge';
-import { Separator } from '@shared/ui/separator';
+import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
 import { safePlatform } from '@shared/utils/browser-utils';
 import type { KeyboardShortcut } from '../../hooks/use-keyboard-shortcuts';

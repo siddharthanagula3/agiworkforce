@@ -14,7 +14,7 @@ import {
 } from '@shared/ui/alert-dialog';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { Textarea } from '@shared/ui/textarea';
 import { Smile, Trash2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';

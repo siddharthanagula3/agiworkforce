@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
 import { getFallbackForDiceBear, isDiceBearUrl } from '@shared/utils/avatar-utils';
 
 interface AvatarWithFallbackProps {

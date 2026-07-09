@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Badge } from '@/shared/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
 import { Plus, Users } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import type { AIEmployeeBasic } from '@shared/types';

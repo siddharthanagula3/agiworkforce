@@ -14,8 +14,8 @@ import { motion, type Variants } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@shared/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import {
   Copy,
   Check,

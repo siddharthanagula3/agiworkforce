@@ -1,35 +1,28 @@
 // Shared UI Components - Public API
+//
+// NOTE: Primitives with a canonical counterpart in @agiworkforce/ui have been
+// migrated off this fork and their re-exports removed here. What remains are the
+// residual forks: web-divergent primitives pending a pkg enhancement decision
+// (Button/Input/Textarea/Card/Dialog/Alert/Slider/ScrollArea), the form and
+// imperative-toast systems (open decisions), the bespoke/aceternity components,
+// the no-counterpart shadcn sidebar island, and dead leaf forks kept for a
+// separate dead-code cleanup pass.
 
 // Core form components
 export { Button, type ButtonProps } from './button';
 export { buttonVariants } from './button-variants';
 export { Input, type InputProps } from './input';
 export { Textarea, type TextareaProps } from './textarea';
-export { Label } from './label';
-export { Checkbox } from './checkbox';
 export { RadioGroup, RadioGroupItem } from './radio-group';
-export {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from './select';
-export { Switch } from './switch';
 export { Slider } from './slider';
 
 // Layout components
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './card';
-export { Separator } from './separator';
 export { ScrollArea, ScrollBar } from './scroll-area';
 export { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './resizable';
 export { AspectRatio } from './aspect-ratio';
 
 // Navigation components
-export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs';
 export {
   NavigationMenu,
   NavigationMenuContent,
@@ -40,7 +33,6 @@ export {
   NavigationMenuTrigger,
   NavigationMenuViewport,
 } from './navigation-menu';
-export { navigationMenuTriggerStyle } from './navigation-menu-variants';
 export {
   Breadcrumb,
   BreadcrumbItem,
@@ -74,31 +66,6 @@ export {
   DialogDescription,
 } from './dialog';
 export {
-  AlertDialog,
-  AlertDialogPortal,
-  AlertDialogOverlay,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from './alert-dialog';
-export {
-  Sheet,
-  SheetPortal,
-  SheetOverlay,
-  SheetTrigger,
-  SheetClose,
-  SheetContent,
-  SheetHeader,
-  SheetFooter,
-  SheetTitle,
-  SheetDescription,
-} from './sheet';
-export {
   Drawer,
   DrawerPortal,
   DrawerOverlay,
@@ -110,28 +77,9 @@ export {
   DrawerTitle,
   DrawerDescription,
 } from './drawer';
-export { Popover, PopoverTrigger, PopoverContent } from './popover';
 export { HoverCard, HoverCardTrigger, HoverCardContent } from './hover-card';
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './tooltip';
 
 // Menu components
-export {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuCheckboxItem,
-  DropdownMenuRadioItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuGroup,
-  DropdownMenuPortal,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuRadioGroup,
-} from './dropdown-menu';
 export {
   ContextMenu,
   ContextMenuTrigger,
@@ -167,24 +115,9 @@ export {
   MenubarSub,
   MenubarShortcut,
 } from './menubar';
-export {
-  Command,
-  CommandDialog,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandShortcut,
-  CommandSeparator,
-} from './command';
 
 // Feedback components
 export { Alert, AlertTitle, AlertDescription } from './alert';
-export { Badge, type BadgeProps } from './badge';
-export { badgeVariants } from './badge-variants';
-export { Progress } from './progress';
-export { Skeleton } from './skeleton';
 export {
   Toast,
   ToastAction,
@@ -210,18 +143,9 @@ export {
   TableCell,
   TableCaption,
 } from './table';
-export { DataTable } from './data-table';
-export { createSortableHeader } from './data-table-helpers';
-export { Avatar, AvatarImage, AvatarFallback } from './avatar';
-export { AvatarWithFallback } from './avatar-with-fallback';
-export { Calendar, type CalendarProps } from './calendar';
-// Accordion and collapsible
-export { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './accordion';
-export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './collapsible';
 
 // Toggle components
 export { Toggle } from './toggle';
-export { toggleVariants } from './toggle-variants';
 export { ToggleGroup, ToggleGroupItem } from './toggle-group';
 
 // Form components
@@ -323,9 +247,6 @@ export { FloatingDock } from './floating-dock';
 export { InteractiveHoverCard } from './interactive-hover-card';
 export { Particles } from './particles';
 export { Spotlight, MouseSpotlight } from './spotlight';
-
-// Theme
-export { ThemeToggle } from './theme-toggle';
 
 // Sonner toast (alternative)
 export { Toaster as SonnerToaster } from './sonner';

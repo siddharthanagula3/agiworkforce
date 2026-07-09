@@ -15,11 +15,11 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { Textarea } from '@shared/ui/textarea';
 import { Badge } from '@shared/ui/badge';
 import { ScrollArea } from '@shared/ui/scroll-area';
-import { Separator } from '@shared/ui/separator';
+import { Separator } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 import {
   AlertDialog,
@@ -31,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@shared/ui/alert-dialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import {

@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { Textarea } from '@shared/ui/textarea';
-import { Switch } from '@shared/ui/switch';
+import { Switch } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
-import { Separator } from '@shared/ui/separator';
+import { Separator } from '@agiworkforce/ui';
 import { Clock, Loader2, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { TIMEZONES, AVAILABLE_MODELS, DAYS_OF_WEEK, INITIAL_NOTIFICATION_SETTINGS } from '../types';

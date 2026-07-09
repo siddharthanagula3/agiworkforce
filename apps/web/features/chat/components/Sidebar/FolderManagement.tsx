@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
 } from '@shared/ui/dropdown-menu';
 import { ScrollArea } from '@shared/ui/scroll-area';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';

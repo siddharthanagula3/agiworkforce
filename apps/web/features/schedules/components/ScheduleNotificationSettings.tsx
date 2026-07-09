@@ -1,7 +1,7 @@
 'use client';
 
-import { Switch } from '@shared/ui/switch';
-import { Label } from '@shared/ui/label';
+import { Switch } from '@agiworkforce/ui';
+import { Label } from '@agiworkforce/ui';
 import { Input } from '@shared/ui/input';
 import { Bell, Mail, Webhook } from 'lucide-react';
 import type { NotificationSettings } from '../types';

@@ -11,7 +11,7 @@
 
 import React, { useState, memo } from 'react';
 import { ChevronDown, User, Code, Search, Users, Zap } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
+import { Popover, PopoverTrigger, PopoverContent } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import type { ChatMode } from '@features/chat/types';
 
