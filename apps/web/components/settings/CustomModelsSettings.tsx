@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
-} from '@/components/ui';
+} from '@agiworkforce/ui';
 
 const PROVIDER_PRESETS: Record<string, string> = {
   Ollama: 'http://localhost:11434/v1',

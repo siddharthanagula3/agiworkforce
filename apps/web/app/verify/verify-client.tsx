@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 import { useState } from 'react';
-import { Button } from '@/components/ui';
+import { Button } from '@agiworkforce/ui';
 
 function getErrorMessage(data: { error?: unknown } | null): string {
   const error = data?.error;

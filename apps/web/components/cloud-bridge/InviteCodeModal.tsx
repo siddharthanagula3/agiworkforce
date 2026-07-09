@@ -8,10 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/Dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+} from '@agiworkforce/ui';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@agiworkforce/ui';
+import { Button } from '@agiworkforce/ui';
+import { Input } from '@agiworkforce/ui';
 import { redeemInviteCode, joinWaitlist } from '@/lib/services/waitlistServiceClient';
 import type { InviteCodeError, InviteCodeModalProps } from './types';
 

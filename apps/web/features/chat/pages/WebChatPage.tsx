@@ -33,7 +33,7 @@ import {
   Globe,
   LogOut,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';

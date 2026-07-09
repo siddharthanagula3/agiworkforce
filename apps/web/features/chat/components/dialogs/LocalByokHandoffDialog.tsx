@@ -11,7 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui';
+} from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   getProviderModeInfo,

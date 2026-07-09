@@ -111,7 +111,7 @@ function wireContentToBlocks(content: Array<Record<string, unknown>>): ContentBl
       const imageUrl = part['image_url'] as { url?: string } | undefined;
       const url = imageUrl?.url;
       if (typeof url === 'string' && url.length > 0) {
-        const dataUrlMatch = /^data:([^;]+);base64,(.*)$/s.exec(url);
+        const dataUrlMatch = /^data:([^;]+);base64,([\s\S]*)$/.exec(url);
         if (dataUrlMatch && dataUrlMatch[1] && dataUrlMatch[2] !== undefined) {
           blocks.push({
             type: 'image',
