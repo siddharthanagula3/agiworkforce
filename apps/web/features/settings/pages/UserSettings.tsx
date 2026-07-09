@@ -22,7 +22,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import {
   Settings,
   User,

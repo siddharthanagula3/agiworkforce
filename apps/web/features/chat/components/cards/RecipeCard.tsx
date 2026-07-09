@@ -13,9 +13,9 @@
 import { useState, useMemo } from 'react';
 import { Clock, Users, ChefHat, Printer, Timer, UtensilsCrossed } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@shared/ui/card';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';
-import { Checkbox } from '@shared/ui/checkbox';
+import { Checkbox } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface ParsedRecipe {

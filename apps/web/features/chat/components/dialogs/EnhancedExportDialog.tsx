@@ -13,10 +13,10 @@ import {
   DialogFooter,
 } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Input } from '@shared/ui/input';
-import { Checkbox } from '@shared/ui/checkbox';
+import { Checkbox } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import { FileText, FileJson, FileCode, Download, Check, Loader2 } from 'lucide-react';

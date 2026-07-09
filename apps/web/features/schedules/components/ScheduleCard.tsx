@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent } from '@shared/ui/card';
 import { Switch } from '@agiworkforce/ui';

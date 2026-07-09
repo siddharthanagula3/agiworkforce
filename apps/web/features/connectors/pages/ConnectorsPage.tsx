@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import {

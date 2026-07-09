@@ -3,7 +3,7 @@
  * Shows token count and cost per message (like ChatGPT/Claude.ai)
  */
 
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
 import { Zap, TrendingUp, DollarSign } from 'lucide-react';
 import { cn } from '@shared/lib/utils';

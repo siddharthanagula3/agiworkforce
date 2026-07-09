@@ -6,8 +6,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Badge } from '@shared/ui/badge';
-import { Skeleton } from '@shared/ui/skeleton';
+import { Badge } from '@agiworkforce/ui';
+import { Skeleton } from '@agiworkforce/ui';
 import {
   Dialog,
   DialogContent,

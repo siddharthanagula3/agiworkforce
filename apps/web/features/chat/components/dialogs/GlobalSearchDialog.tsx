@@ -14,7 +14,7 @@ import {
 } from '@shared/ui/dialog';
 import { Input } from '@shared/ui/input';
 import { Button } from '@shared/ui/button';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import { Label } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';

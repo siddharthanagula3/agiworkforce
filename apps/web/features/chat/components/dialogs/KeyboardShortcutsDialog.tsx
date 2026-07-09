@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@shared/ui/dialog';
-import { Badge } from '@shared/ui/badge';
+import { Badge } from '@agiworkforce/ui';
 import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
 import { safePlatform } from '@shared/utils/browser-utils';
