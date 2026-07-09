@@ -50,9 +50,12 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { GoogleProvider } from '@/lib/llm-providers/google';
+import type { LLMProviderResponse } from '@/lib/llm-providers/base';
 import { translateGeminiStream } from '@agiworkforce/providers-google';
 import type { GeminiStreamChunk } from '@agiworkforce/providers-google';
 import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
+import { drainToLlmResponse } from '../lib/adapter-response';
+import { toGoogleUpstreamError } from '../lib/adapter-errors';
 
 const RESPONSE_MODEL = 'gemini-3-pro';
 
@@ -337,5 +340,158 @@ describe('Google byte diff: tool call (functionCall)', () => {
     const adapterFinish = adapterLines.find((l) => l.includes('finish_reason'));
     expect(legacyFinish).toContain('"finish_reason":"tool_calls"');
     expect(adapterFinish).toContain('"finish_reason":"tool_calls"');
+  });
+});
+
+/**
+ * Non-streaming: legacy `GoogleProvider.sendRequest()` is a SEPARATE wire
+ * from `streamRequest()` -- it calls Gemini's true non-streaming
+ * `:generateContent` endpoint (one JSON response object, not SSE), not
+ * `:streamGenerateContent` drained to completion. The adapter path has no
+ * separate non-streaming method on `ProviderAdapter` -- `drainToLlmResponse`
+ * (route.ts's non-streaming branch) always calls `.stream()` (the SAME
+ * `:streamGenerateContent` endpoint every other request uses) and buffers it
+ * -- so "non-streaming" here means "streaming endpoint, drained," same as
+ * every other adapter-backed provider (Anthropic's non-streaming path works
+ * the same way).
+ *
+ * DISCLOSED DIVERGENCE, found empirically (not assumed) by writing this
+ * test: legacy `sendRequest()` returns Gemini's RAW `finishReason` verbatim
+ * (`candidate.finishReason` -- uppercase, e.g. `"STOP"`/`"MAX_TOKENS"`) with
+ * NO lowercasing and NO tool-call override, UNLIKE `streamRequest()`, which
+ * explicitly does `hasToolCalls ? 'tool_calls' : candidate.finishReason.
+ * toLowerCase()`. `buildNonStreamResponse` (response-builder.ts) passes
+ * `llmResponse.finishReason` straight through as the wire `finish_reason`
+ * (`llmResponse.finishReason || 'stop'`, no remapping) -- so the LEGACY
+ * non-streaming wire could send literally `finish_reason: "STOP"` to a
+ * client even when the model made a tool call. This is the SAME finish_
+ * reason bug class as the one fixed in stream.ts's mapFinishReason (see
+ * that function's docstring) -- pre-existing, and this time not even
+ * fixable while staying byte-compatible with legacy's non-streaming path,
+ * because legacy's non-streaming path itself never correctly signaled a
+ * tool call at all. `drainToLlmResponse` uses the SAME `translateGeminiStream`
+ * as the streaming path (my mapFinishReason fix flows through automatically),
+ * so the adapter's non-streaming `finish_reason` for a Google tool call is
+ * `'tool_calls'` (lowercase, correct) -- NOT byte-matched to legacy's
+ * uppercase, never-remapped value, deliberately: reproducing a confirmed
+ * bug in newly-written code would be worse than a disclosed, one-directional
+ * improvement here. Not filed as a fresh known-flaw -- same root cause
+ * already covered by the streaming fix's disclosure.
+ */
+describe('Google non-streaming diff: sendRequest() vs drainToLlmResponse', () => {
+  /** Captures the LEGACY non-streaming response by running the real
+   *  GoogleProvider.sendRequest() against a mocked global fetch returning
+   *  Gemini's true non-streaming (:generateContent) JSON shape -- a single
+   *  response object, not SSE framing. */
+  async function captureLegacySendRequest(
+    geminiResponse: Record<string, unknown>,
+  ): Promise<LLMProviderResponse> {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(geminiResponse), { status: 200, headers: {} }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const provider = new GoogleProvider('fake-key');
+      return await provider.sendRequest({
+        model: RESPONSE_MODEL,
+        messages: [{ role: 'user', content: 'what is the weather in nyc?' }],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+
+  /** The SAME logical content, run through the adapter path: a single
+   *  Gemini non-streaming response object has the identical `candidates[0].
+   *  content.parts`/`finishReason`/`usageMetadata` shape as one streaming
+   *  chunk, so feeding it as a one-chunk AsyncIterable to translateGeminiStream
+   *  is a faithful (not approximated) stand-in for the real adapter.stream()
+   *  drain -- it's the SAME translation function either way. */
+  async function captureAdapterDrain(geminiResponse: GeminiStreamChunk) {
+    async function* asChunks(): AsyncIterable<GeminiStreamChunk> {
+      yield geminiResponse;
+    }
+    return drainToLlmResponse(
+      translateGeminiStream(asChunks()),
+      RESPONSE_MODEL,
+      toGoogleUpstreamError,
+    );
+  }
+
+  it('matches text content for a plain-text turn', async () => {
+    const fixture = {
+      candidates: [
+        {
+          content: { role: 'model', parts: [{ text: 'Cats are mammals.' }] },
+          finishReason: 'STOP',
+        },
+      ],
+      usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 5, totalTokenCount: 25 },
+    };
+
+    const legacy = await captureLegacySendRequest(fixture);
+    const adapter = await captureAdapterDrain(fixture as unknown as GeminiStreamChunk);
+
+    expect(adapter.content).toBe(legacy.content);
+    expect(legacy.content).toBe('Cats are mammals.');
+    expect(legacy.promptTokens).toBe(20);
+    expect(adapter.promptTokens).toBe(20);
+  });
+
+  it('never surfaces grounding/search_results for non-streaming (matches legacy, which never extracted it here)', async () => {
+    const fixture = {
+      candidates: [
+        {
+          content: { role: 'model', parts: [{ text: 'It is sunny.' }] },
+          finishReason: 'STOP',
+          groundingMetadata: {
+            groundingChunks: [{ web: { uri: 'https://example.com', title: 'Example' } }],
+          },
+        },
+      ],
+      usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 5, totalTokenCount: 25 },
+    };
+
+    const legacy = await captureLegacySendRequest(fixture);
+    const adapter = await captureAdapterDrain(fixture as unknown as GeminiStreamChunk);
+
+    // Legacy sendRequest() has no groundingMetadata handling at all --
+    // LLMProviderResponse never had a search_results-carrying path for it.
+    expect((legacy as unknown as { search_results?: unknown }).search_results).toBeUndefined();
+    // ingest() (openai-wire-compat.ts) deliberately does not aggregate
+    // gemini_grounding_result payloads -- confirmed here, not just asserted
+    // in the source comment.
+    expect(adapter.search_results).toBeUndefined();
+  });
+
+  it('DISCLOSED DIVERGENCE: legacy returns Gemini’s raw finishReason verbatim (never remapped to tool_calls, even for a tool call); the adapter path correctly derives tool_calls', async () => {
+    const fixture = {
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [{ functionCall: { name: 'get_weather', args: { city: 'NYC' } } }],
+          },
+          finishReason: 'STOP',
+        },
+      ],
+      usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 5, totalTokenCount: 25 },
+    };
+
+    const legacy = await captureLegacySendRequest(fixture);
+    const adapter = await captureAdapterDrain(fixture as unknown as GeminiStreamChunk);
+
+    // Legacy: raw Gemini enum, uppercase, never remapped -- confirmed bug,
+    // not a hypothesis. `buildNonStreamResponse` would send this literal
+    // string as the client-visible finish_reason.
+    expect(legacy.finishReason).toBe('STOP');
+    expect(legacy.tool_calls).toHaveLength(1);
+
+    // Adapter: correct, lowercase, tool_calls -- via the SAME mapFinishReason
+    // fix the streaming path uses (translateGeminiStream is shared).
+    expect(adapter.finishReason).toBe('tool_calls');
+    expect(adapter.tool_calls).toHaveLength(1);
   });
 });

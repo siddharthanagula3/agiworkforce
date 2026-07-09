@@ -3,7 +3,6 @@ import 'server-only';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
-import { toUpstreamError } from './adapter-errors';
 
 /**
  * Flat shape `buildNonStreamResponse` (response-builder.ts) expects for its
@@ -49,22 +48,25 @@ export interface AdapterLlmResponse {
  * about matching the legacy code's literal logged/recorded string, not cost
  * correctness.
  *
- * Throws (via `toUpstreamError`) if ANY `{type:'error'}` chunk appears
- * anywhere in the sequence -- not just the first, unlike the streaming
- * path's `startAnthropicStream` (adapter-factory.ts), which only peeks the
- * first chunk. The old non-streaming `anthropic.ts` was a single HTTP POST:
- * Anthropic's non-streaming API either returns a complete response or the
- * request fails outright -- there was never a "partial content, then a
- * failure" outcome to preserve. Since every non-streaming call here goes
- * through the adapter's `.stream()` internally (there is no separate
- * non-streaming adapter method), treating ANY error chunk as a hard failure
- * (rather than returning whatever partial text/tokens were produced before
- * it) reproduces that same all-or-nothing contract instead of inventing a
- * new partial-success shape the legacy API never had.
+ * Throws (via the caller-supplied `mapError` -- `toUpstreamError` for
+ * Anthropic, `toGoogleUpstreamError` for Google, see adapter-errors.ts) if
+ * ANY `{type:'error'}` chunk appears anywhere in the sequence -- not just
+ * the first, unlike the streaming path's `startProviderStream` (adapter-
+ * factory.ts), which only peeks the first chunk. The old non-streaming
+ * provider calls (`anthropic.ts`, `google.ts`) were each a single HTTP POST:
+ * the non-streaming API either returns a complete response or the request
+ * fails outright -- there was never a "partial content, then a failure"
+ * outcome to preserve for either provider. Since every non-streaming call
+ * here goes through the adapter's `.stream()` internally (there is no
+ * separate non-streaming adapter method), treating ANY error chunk as a
+ * hard failure (rather than returning whatever partial text/tokens were
+ * produced before it) reproduces that same all-or-nothing contract instead
+ * of inventing a new partial-success shape neither legacy API ever had.
  */
 export async function drainToLlmResponse(
   chunks: AsyncIterable<StreamChunk>,
   model: string,
+  mapError: (chunk: Extract<StreamChunk, { type: 'error' }>) => Error,
 ): Promise<AdapterLlmResponse> {
   const assembler = new OpenAIWireAssembler({ model, wireMode: 'legacy-web' });
   const usage = createUsageAccumulator();
@@ -77,7 +79,7 @@ export async function drainToLlmResponse(
   }
 
   if (firstError) {
-    throw toUpstreamError(firstError);
+    throw mapError(firstError);
   }
 
   const response = assembler.response();

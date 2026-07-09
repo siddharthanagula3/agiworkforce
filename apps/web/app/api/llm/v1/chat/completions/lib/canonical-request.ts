@@ -208,6 +208,73 @@ export function toCanonicalEffort(
 }
 
 /**
+ * Reproduces `apps/web/lib/llm-providers/google.ts`'s `GOOGLE_THINKING_
+ * BUDGET`/`getGoogleThinkingBudget` exactly: `low`/`medium`/`high` -> a fixed
+ * token budget; any other tier ('xhigh', 'max', or unset) -> no thinking
+ * config at all (Google's legacy provider never sent `thinkingConfig` for
+ * those tiers -- a pre-existing gap in the LEGACY code, not something this
+ * migration introduces or should silently "fix" by inventing a budget for
+ * tiers Google's own logic never mapped).
+ *
+ * FOUND while wiring Google into route.ts (task #34's Google slice, response-
+ * side byte-diff can't see this -- it's request-direction): `llmRequest.
+ * effort` IS populated for Google by request-processor.ts (`modelSupports
+ * Effort` explicitly includes 'google'; `llmRequest.effort` is the raw tier
+ * string for every provider except OpenAI's special-cased remap). But
+ * `packages/providers/google/src/translate.ts`'s `translateChatRequest` only
+ * reads `ChatRequest.thinking` (Gemini's `generationConfig.thinkingConfig`)
+ * -- it does not read `ChatRequest.effort` at all, unlike Anthropic's
+ * independent thinking/effort pair. And `toCanonicalThinking` above is
+ * Anthropic-gated (it reads `llmRequest.thinking`, which request-processor.ts
+ * NEVER populates for Google -- `buildThinkingConfig` returns undefined for
+ * every non-Anthropic provider). Without this function, a Google request
+ * with extended thinking enabled would silently lose it when routed through
+ * the adapter -- not a wire-shape difference, a dropped capability.
+ *
+ * FOUND AND FIXED IN THE SAME PASS (request-direction, not caught by the
+ * response-side byte-diff): `translateChatRequest` sets
+ * `thinkingConfig.includeThoughts: true` unconditionally whenever
+ * `req.thinking?.type === 'enabled'` (translate.ts). Legacy `google.ts`
+ * (lines 395, 589) only ever sent `{thinkingConfig:{thinkingBudget}}` --
+ * budget only, no `includeThoughts`. Before this function existed,
+ * `chatRequest.thinking` was always undefined for Google, so that branch
+ * never fired and the gap was moot; restoring the budget alone would have
+ * tripped it, making Gemini return `part.thought` content (which
+ * `translateGeminiStream` turns into `thinking-delta` chunks, which the
+ * legacy-web wire assembler renders as `<thinking>...</thinking>`) for any
+ * Google request with `effort` set -- new response content the legacy
+ * Google wire never produced, on the one contract (byte-stability) this
+ * migration exists to hold. `ThinkingConfig` gained an optional
+ * `includeThoughts` field (defaults to `true`, so every OTHER caller of
+ * `translateChatRequest` -- e.g. services/api-gateway's `/api/v1/providers/
+ * :providerId/stream`, which takes a caller-supplied `ChatRequest.thinking`
+ * directly and is not part of this byte-stability contract -- keeps today's
+ * behavior with zero change) specifically so this function can opt OUT
+ * for the web v1 route without touching any other consumer. Whether Gemini
+ * reasoning visibility should ship as a product improvement is a real
+ * question, but it's team-lead's call, not one to bake into a "keep the
+ * wire byte-stable" migration -- see canonical-request.test.ts's
+ * 'buildGoogleChatRequest -> translateChatRequest wire' test, which pins
+ * the outgoing Gemini body has NO `includeThoughts` key at all, exactly
+ * matching legacy.
+ */
+export function toCanonicalGoogleThinking(
+  provider: string,
+  effort: ProcessedRequest['llmRequest']['effort'],
+): ThinkingConfig | undefined {
+  if (provider !== 'google') return undefined;
+  const budgetTokens = GOOGLE_THINKING_BUDGET[effort as 'low' | 'medium' | 'high'];
+  if (budgetTokens === undefined) return undefined;
+  return { type: 'enabled', budgetTokens, includeThoughts: false };
+}
+
+const GOOGLE_THINKING_BUDGET: Readonly<Record<'low' | 'medium' | 'high', number>> = {
+  low: 1024,
+  medium: 8192,
+  high: 24576,
+};
+
+/**
  * Compose the canonical `ChatRequest` for an Anthropic dispatch, folding in
  * `thinking`/`effort` on top of `toCanonicalChatRequest`'s base conversion.
  *
@@ -225,6 +292,20 @@ export function buildAnthropicChatRequest(processed: ProcessedRequest): ChatRequ
   if (thinking !== undefined) chatRequest.thinking = thinking;
   const effort = toCanonicalEffort(processed.provider, processed.llmRequest.effort);
   if (effort !== undefined) chatRequest.effort = effort;
+  return chatRequest;
+}
+
+/**
+ * Compose the canonical `ChatRequest` for a Google dispatch. Google's
+ * sibling of `buildAnthropicChatRequest` -- same `toCanonicalChatRequest`
+ * base, but folds in `toCanonicalGoogleThinking` (effort-tier -> budget)
+ * instead of `toCanonicalThinking`/`toCanonicalEffort` (which are Anthropic-
+ * gated and would both return undefined here).
+ */
+export function buildGoogleChatRequest(processed: ProcessedRequest): ChatRequest {
+  const chatRequest = toCanonicalChatRequest(processed);
+  const thinking = toCanonicalGoogleThinking(processed.provider, processed.llmRequest.effort);
+  if (thinking !== undefined) chatRequest.thinking = thinking;
   return chatRequest;
 }
 

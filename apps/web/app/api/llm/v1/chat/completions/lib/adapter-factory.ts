@@ -5,10 +5,10 @@ import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { validateBaseUrl } from '@agiworkforce/llm-runtime';
 import { createAnthropicAdapter } from '@agiworkforce/providers-anthropic';
+import { createGoogleAdapter } from '@agiworkforce/providers-google';
 import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 import { computeAnthropicCacheConfig } from './canonical-request';
 import type { ProcessedRequest } from './request-processor';
-import { toUpstreamError } from './adapter-errors';
 
 /**
  * Web-side `packages/providers/*` adapter construction (restructure Wave 2
@@ -17,8 +17,9 @@ import { toUpstreamError } from './adapter-errors';
  * own API key -- this is never a user BYOK key, matching the existing
  * behavior on this route.
  *
- * Only Anthropic is wired through the adapter path so far -- see task #34.
- * Other providers still dispatch through `LLMProviderFactory` in route.ts.
+ * Anthropic and Google are wired through the adapter path so far -- see
+ * task #34. Other providers still dispatch through `LLMProviderFactory` in
+ * route.ts.
  */
 
 /**
@@ -82,7 +83,48 @@ export function buildAnthropicAdapter(processed: ProcessedRequest): ProviderAdap
 }
 
 /**
- * Start an Anthropic stream for one request, restoring the pre-migration
+ * Builds a configured Google `ProviderAdapter` for one request.
+ *
+ * Mirrors `buildAnthropicAdapter`'s structure exactly, reading `GOOGLE_API_
+ * KEY`/`GOOGLE_BASE_URL` (same env keys `LLMProviderFactory.getProviderBase
+ * Url`/`getEnvKeyForProvider` use for 'google') against the SAME shared
+ * `ALLOWED_BASE_HOSTS` SSRF allowlist. No cache-config equivalent -- Google
+ * has no `cache_control`-style knob the legacy provider ever set.
+ */
+export function buildGoogleAdapter(): ProviderAdapter {
+  const apiKey = getOptionalEnv('GOOGLE_API_KEY');
+  if (!apiKey) {
+    throw new Error(
+      'Provider "google" is not configured. ' +
+        'Please ensure the GOOGLE_API_KEY environment variable is set. ' +
+        'Check your .env.local file or deployment environment variables.',
+    );
+  }
+
+  let baseUrl: string | undefined;
+  const candidateBaseUrl = getOptionalEnv('GOOGLE_BASE_URL');
+  if (candidateBaseUrl) {
+    const validated = validateBaseUrl(candidateBaseUrl, {
+      allowedHosts: LLMProviderFactory.ALLOWED_BASE_HOSTS,
+    });
+    if (validated.ok) {
+      baseUrl = validated.url;
+    } else {
+      logger.warn(
+        { envKey: 'GOOGLE_BASE_URL', reason: validated.reason, host: validated.hostname },
+        'Refusing GOOGLE_BASE_URL override pointing to a non-allowlisted host (potential SSRF)',
+      );
+    }
+  }
+
+  return createGoogleAdapter({
+    apiKey,
+    ...(baseUrl ? { baseUrl } : {}),
+  });
+}
+
+/**
+ * Start a provider stream for one request, restoring the pre-migration
  * "a request that fails immediately throws" contract.
  *
  * `ProviderAdapter.stream()` is an async generator: calling it runs no code
@@ -99,7 +141,9 @@ export function buildAnthropicAdapter(processed: ProcessedRequest): ProviderAdap
  *
  * Fix: eagerly pull the FIRST chunk here (still inside route.ts's existing
  * try/catch, before any response is constructed). If it's an error, throw
- * via `toUpstreamError` -- route.ts's catch block then runs
+ * via the caller-supplied `mapError` (`toUpstreamError` for Anthropic,
+ * `toGoogleUpstreamError` for Google -- provider-specific message text, see
+ * adapter-errors.ts) -- route.ts's catch block then runs
  * `refundFailedReservation` + `buildUpstreamErrorResponse` exactly as it
  * does for the legacy path. Otherwise, transparently replay the already-
  * pulled first chunk back onto the returned iterable so no data is lost.
@@ -112,16 +156,23 @@ export function buildAnthropicAdapter(processed: ProcessedRequest): ProviderAdap
  * raw-SSE pipeline had no special handling for that case either (the
  * connection just ends); disclosed gap, not a silent regression on the
  * common path.
+ *
+ * Generic across providers (originally Anthropic-only as `startAnthropic
+ * Stream`; genericized when Google was wired in -- task #34's Google slice).
+ * The peek-and-throw MECHANICS never depended on which provider produced the
+ * chunks; only the error message text did, hence `mapError` as a parameter
+ * instead of a hardcoded import.
  */
-export async function startAnthropicStream(
+export async function startProviderStream(
   adapter: ProviderAdapter,
   chatRequest: ChatRequest,
   signal: AbortSignal,
+  mapError: (chunk: Extract<StreamChunk, { type: 'error' }>) => Error,
 ): Promise<AsyncIterable<StreamChunk>> {
   const iterator = adapter.stream(chatRequest, signal)[Symbol.asyncIterator]();
   const first = await iterator.next();
   if (!first.done && first.value.type === 'error') {
-    throw toUpstreamError(first.value);
+    throw mapError(first.value);
   }
   return {
     [Symbol.asyncIterator](): AsyncIterator<StreamChunk> {

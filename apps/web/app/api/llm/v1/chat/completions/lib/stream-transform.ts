@@ -527,17 +527,20 @@ export async function buildStreamResponse(
 
 /**
  * `buildStreamResponse`'s sibling for the `packages/providers/*` adapter
- * path (restructure Wave 2, task #34) -- Anthropic only so far. Consumes an
- * `AsyncIterable<StreamChunk>` (an adapter's `.stream()` result) instead of
- * a raw upstream SSE `ReadableStream`, reconstructing the SAME byte-stable
- * legacy wire via `OpenAIWireAssembler`'s `wireMode: 'legacy-web'` +
- * `sseChunks()` (proven against captured golden fixtures --
- * packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts).
+ * path (restructure Wave 2, task #34) -- Anthropic and Google so far (see
+ * `ADAPTER_PROVIDERS` in route.ts). Consumes an `AsyncIterable<StreamChunk>`
+ * (an adapter's `.stream()` result) instead of a raw upstream SSE
+ * `ReadableStream`, reconstructing the SAME byte-stable legacy wire via
+ * `OpenAIWireAssembler`'s `wireMode: 'legacy-web'` + `sseChunks()` (proven
+ * against captured golden fixtures for each provider --
+ * packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts,
+ * apps/web/.../__tests__/stream-transform.google-byte-parity.test.ts).
  *
  * `buildStreamResponse` above is left completely untouched: every other
  * provider still dispatches through it via `LLMProviderFactory`'s raw
  * ReadableStream. Two separate functions, not a shared one with a branch,
- * so migrating Anthropic carries zero risk to the still-legacy providers.
+ * so migrating a provider onto this one carries zero risk to the still-
+ * legacy providers.
  *
  * Billing/TTFT/analytics logic is a straight port of `buildStreamResponse`'s
  * `flush()` -- same LLMCostCalculator/CreditService/recordModelUsage calls,
@@ -547,28 +550,31 @@ export async function buildStreamResponse(
  * shapes per provider.
  *
  * `[DONE]` is emitted unconditionally once the adapter's AsyncIterable is
- * exhausted -- correct because this function is Anthropic-only today: the
- * legacy wire's `data: [DONE]` was injected on Anthropic's `message_stop`
- * specifically (Anthropic's own SSE has no `[DONE]` sentinel), which
- * `translateAnthropicStream`'s terminal `stop` chunk (always yielded, even
- * on a truncated upstream connection -- see its `finally` block) now stands
- * in for 1:1. A provider whose raw wire already contains its own `[DONE]`
- * (OpenAI) would double it up -- do not reuse this function for another
- * provider without revisiting this.
+ * exhausted -- safe for every provider wired through this function SO FAR,
+ * but not automatically safe for every future one: the canonical `Stream
+ * Chunk` layer has no `[DONE]`-equivalent chunk type at all (it's purely an
+ * OpenAI-WIRE-LEVEL sentinel `OpenAIWireAssembler` never emits on its own),
+ * so appending it here unconditionally is only correct because NEITHER
+ * Anthropic's nor Google's raw wire ever contained its own `[DONE]` for
+ * `translateAnthropicStream`/`translateGeminiStream` to preserve or
+ * duplicate (confirmed for Google via stream-transform.google-byte-parity.
+ * test.ts's `[DONE]` assertion). A provider whose raw wire already contains
+ * its own `[DONE]` (OpenAI's Chat Completions SSE does) WOULD double it up
+ * -- revisit this before wiring OpenAI through this function.
  *
  * `streamStartedAt` is a CALLER-supplied timestamp, not computed internally
  * with `Date.now()` here -- unlike `buildStreamResponse`, which can safely
  * take its own timestamp because `await LLMProviderFactory.streamRequest()`
  * returns as soon as response headers arrive, before any content. This
- * function's caller (route.ts) instead calls `startAnthropicStream`, which
+ * function's caller (route.ts) instead calls `startProviderStream`, which
  * eagerly awaits the FIRST `StreamChunk` (see adapter-factory.ts's
  * docstring on why: detecting an immediate upstream error before committing
  * to a 200 response) -- so by the time `chunks` reaches this function, the
  * first token may already have arrived. Taking `Date.now()` here would
  * measure only the gap between that peek resolving and this function
  * starting (near-zero), silently breaking the `llm_ttft_slo_breach` alert
- * for every Anthropic request. Route.ts captures the real start time BEFORE
- * calling `startAnthropicStream`.
+ * for every request dispatched this way. Route.ts captures the real start
+ * time BEFORE calling `startProviderStream`.
  */
 export async function buildAdapterStreamResponse(
   request: NextRequest,
