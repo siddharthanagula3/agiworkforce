@@ -236,6 +236,31 @@ static ONESHOT_BLOCKED_OPERATORS: LazyLock<HashSet<char>> =
 /// Maximum allowed command length
 const MAX_COMMAND_LENGTH: usize = 65536;
 
+/// Returns the first dangerous pattern contained in the command, if any.
+///
+/// Matching is substring-based on a whitespace-normalized, lowercased copy of
+/// the command — exactly the pre-filter check `validate_command` applies.
+/// Exposed so the execpolicy decision core (`exec_gate`) consults the same
+/// blocklist as its heuristics fallback; the two layers cannot drift apart.
+pub fn matches_dangerous_pattern(command: &str) -> Option<&'static str> {
+    let normalized = command
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    DANGEROUS_PATTERNS
+        .iter()
+        .find(|pattern| normalized.contains(pattern.to_lowercase().as_str()))
+        .copied()
+}
+
+/// Test-only accessor so the exec-gate parity corpus can pin the production
+/// blocklist against its frozen pre-refactor copy (drift guard).
+#[cfg(test)]
+pub(crate) fn dangerous_patterns_for_test() -> &'static [&'static str] {
+    DANGEROUS_PATTERNS.as_slice()
+}
+
 /// Configuration for command validation
 #[derive(Debug, Clone)]
 pub struct ValidationConfig {
@@ -335,31 +360,21 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
         return Err(CommandValidationError::NullByte);
     }
 
-    // Normalize command for pattern matching
-    let normalized = command
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
-
     // Check dangerous patterns (ALWAYS blocked, even in interactive mode).
     // NOTE: This is a defense-in-depth blocklist layer. It can be bypassed via shell variable
     // expansion ($'\x72\x6d'), aliases, or unicode homoglyphs. It is not an OS sandbox.
     // Terminal sandboxing is handled separately by the configured runtime wrapper.
-    for pattern in DANGEROUS_PATTERNS.iter() {
-        let lower_pattern = pattern.to_lowercase();
-        if normalized.contains(lower_pattern.as_str()) {
-            tracing::warn!(
-                correlation_id = correlation_id,
-                pattern = pattern,
-                command = %command,
-                "Blocked dangerous command pattern"
-            );
-            return Err(CommandValidationError::DangerousPattern {
-                pattern: pattern.to_string(),
-                command: command.to_string(),
-            });
-        }
+    if let Some(pattern) = matches_dangerous_pattern(command) {
+        tracing::warn!(
+            correlation_id = correlation_id,
+            pattern = pattern,
+            command = %command,
+            "Blocked dangerous command pattern"
+        );
+        return Err(CommandValidationError::DangerousPattern {
+            pattern: pattern.to_string(),
+            command: command.to_string(),
+        });
     }
 
     // Check for blocked metacharacters (ALWAYS blocked)
@@ -412,6 +427,11 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
     }
 
     // Log suspicious patterns for audit (but don't block)
+    let normalized = command
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
     for pattern in SUSPICIOUS_PATTERNS.iter() {
         if normalized.contains(pattern) {
             tracing::info!(
@@ -421,6 +441,33 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
                 "Suspicious command pattern detected (allowed)"
             );
         }
+    }
+
+    // Decision core: evaluate against the shared execpolicy engine
+    // (`exec_gate` — argv-prefix Forbidden rules + heuristics fallback). This
+    // runs AFTER the hygiene pre-filter above because execpolicy cannot model
+    // metacharacters, shell operators, or substring patterns; those checks
+    // must stay in front. A `Forbidden` here is strictly additive blocking —
+    // e.g. `rm -rf "/"`, whose quotes dodge the substring blocklist but not
+    // the shlex-tokenized argv rules. `Prompt` does not block: it routes
+    // through `requires_confirmation` into the existing confirmation flow.
+    let outcome =
+        super::exec_gate::evaluate_full(super::exec_gate::default_policy(), command);
+    if outcome.decision == agiworkforce_execpolicy::Decision::Forbidden {
+        let pattern = outcome
+            .matched_forbidden_prefix
+            .or_else(|| matches_dangerous_pattern(command).map(|p| p.to_string()))
+            .unwrap_or_else(|| "execution-policy-forbidden".to_string());
+        tracing::warn!(
+            correlation_id = correlation_id,
+            pattern = %pattern,
+            command = %command,
+            "Blocked forbidden command (execpolicy decision core)"
+        );
+        return Err(CommandValidationError::DangerousPattern {
+            pattern,
+            command: command.to_string(),
+        });
     }
 
     tracing::debug!(
@@ -519,40 +566,21 @@ pub fn reject_if_root() -> ValidationResult {
     Ok(())
 }
 
-/// Check if a command should trigger additional confirmation
+/// Check if a command should trigger additional confirmation.
+///
+/// Delegates to the execpolicy decision core (`exec_gate`): any non-`Allow`
+/// decision requires confirmation. `Prompt` routes into the existing
+/// confirmation flow (callers pass `true` to
+/// `tool_confirmation::request_confirmation_simple`) exactly as the old
+/// bulk/system pattern lists did — those lists now live in
+/// `exec_gate::PROMPT_PATTERNS`. `Forbidden` also returns `true` so a caller
+/// that only consults this gate still confirms, although forbidden commands
+/// are hard-blocked by `validate_command` before execution.
 pub fn requires_confirmation(command: &str) -> bool {
-    let normalized = command.to_lowercase();
-
-    // Commands that modify many files
-    let bulk_patterns = [
-        "rm -r",
-        "rm -f",
-        "rm -rf",
-        "find . -delete",
-        "git clean -fd",
-        "git reset --hard",
-    ];
-
-    // Commands that affect system configuration
-    let system_patterns = [
-        "chmod",
-        "chown",
-        "systemctl",
-        "service",
-        "apt",
-        "yum",
-        "dnf",
-        "pacman",
-        "brew",
-    ];
-
-    for pattern in bulk_patterns.iter().chain(system_patterns.iter()) {
-        if normalized.contains(pattern) {
-            return true;
-        }
-    }
-
-    false
+    !matches!(
+        super::exec_gate::evaluate_command(command),
+        agiworkforce_execpolicy::Decision::Allow
+    )
 }
 
 #[cfg(test)]
