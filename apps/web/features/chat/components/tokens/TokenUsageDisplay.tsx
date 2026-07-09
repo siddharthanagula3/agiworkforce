@@ -4,7 +4,7 @@
  */
 
 import { Badge } from '@shared/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
 import { Zap, TrendingUp, DollarSign } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 

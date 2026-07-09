@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface AnimatedAvatarProps {

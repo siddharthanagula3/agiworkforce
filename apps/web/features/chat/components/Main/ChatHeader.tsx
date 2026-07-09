@@ -15,9 +15,9 @@ import Link from 'next/link';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@shared/ui/avatar';
-import { Popover, PopoverContent, PopoverTrigger } from '@shared/ui/popover';
-import { Separator } from '@shared/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
+import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
+import { Separator } from '@agiworkforce/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,

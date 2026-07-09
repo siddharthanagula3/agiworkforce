@@ -9,8 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@shared/ui/dialog';
-import { Switch } from '@shared/ui/switch';
-import { Label } from '@shared/ui/label';
+import { Switch } from '@agiworkforce/ui';
+import { Label } from '@agiworkforce/ui';
 
 interface CookiePreferences {
   necessary: boolean;

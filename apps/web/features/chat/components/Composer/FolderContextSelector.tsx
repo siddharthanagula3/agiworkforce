@@ -13,7 +13,7 @@
 
 import { useEffect, useState, useCallback, memo } from 'react';
 import { Folder, FolderOpen, ChevronDown } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
+import { Popover, PopoverTrigger, PopoverContent } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   folderManagementService,

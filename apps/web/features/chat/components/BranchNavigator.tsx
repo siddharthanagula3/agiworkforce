@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@shared/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@agiworkforce/ui';
 import {
   Dialog,
   DialogContent,
@@ -20,9 +20,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@shared/ui/dialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
 import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import {
   GitBranch,

@@ -14,7 +14,7 @@ import {
 } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { Input } from '@shared/ui/input';
 import { Checkbox } from '@shared/ui/checkbox';
 import { cn } from '@shared/lib/utils';

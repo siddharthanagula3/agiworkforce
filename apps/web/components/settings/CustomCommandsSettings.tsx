@@ -14,7 +14,7 @@ import {
 } from '@shared/ui/dialog';
 import { Input } from '@shared/ui/input';
 import { Textarea } from '@shared/ui/textarea';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 // ---------------------------------------------------------------------------

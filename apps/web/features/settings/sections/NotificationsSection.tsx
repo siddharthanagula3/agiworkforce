@@ -6,7 +6,7 @@ import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
-import { Switch } from '@shared/ui/switch';
+import { Switch } from '@agiworkforce/ui';
 
 /**
  * NotificationsSection · push + email notification preferences. Round-2

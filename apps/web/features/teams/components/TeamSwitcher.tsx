@@ -13,7 +13,7 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { Textarea } from '@shared/ui/textarea';
 import {
   DropdownMenu,

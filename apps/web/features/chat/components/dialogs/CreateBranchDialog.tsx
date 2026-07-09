@@ -18,7 +18,7 @@ import {
 } from '@shared/ui/dialog';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
-import { Label } from '@shared/ui/label';
+import { Label } from '@agiworkforce/ui';
 import { GitFork, Loader2 } from 'lucide-react';
 import { conversationBranchingService } from '../../services/conversation-branching';
 import { toast } from 'sonner';
