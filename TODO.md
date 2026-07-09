@@ -14,6 +14,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [ ] **P4 Rust engine:** desktop adopts `agiworkforce-execpolicy`; extract `agiworkforce-llm`/`agent-core`/`mcp` crates from desktop+CLI; desktop links `protocol`; wire dormant ts-rs codegen into `packages/types`; rename `crates/sandbox-policy` dir.
 - [ ] **P5 data:** derive web row types from cloud-contracts; gateway onto a real RLS client (`SVC-GATEWAY-RLS-NOOP-01`); shared sync-apply engine + contract fixtures.
 - [ ] **P6 mobile multimodal + native path:** ship Qwen3-VL-2B-Instruct (primary, Apache 2.0, llama.rn mmproj) and/or LFM2-VL-1.6B (RN-executorch tier 2); resolve root `ios/` vs prebuild divergence (`MOBILE-IOS-PREBUILD-DRIFT-01`); decide dormant health-context client (HealthKit re-implementation is a tracked product gap).
+- [ ] **P7 enterprise Local/self-hosted (founder, 2026-07-08):** offline licensing package (signed license files, seats), signed org policy schema in suite-contracts enforced by trust-kernel guards, SSO/SCIM identity binding without cloud chat routing, local audit export, self-hosted gateway profile. Design doc first; sequence after P2. See plan §7 P7.
 
 ## 2026-06-21 Deferred — tackle AFTER the P2 sync engine ships
 
