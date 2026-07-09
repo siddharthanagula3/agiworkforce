@@ -255,6 +255,23 @@ function stopReasonToFinishReason(
   }
 }
 
+/**
+ * The web v1 route's ACTUAL pre-migration finish_reason mapping -- verified
+ * against apps/web/lib/llm-providers/anthropic.ts's identical streaming
+ * (stream-transform.ts) and non-streaming derivation, both:
+ * `stopReason === 'tool_use' ? 'tool_calls' : stopReason === 'end_turn' ?
+ * 'stop' : stopReason`. Unlike `stopReasonToFinishReason` above, this does
+ * NOT map `max_tokens` to `'length'` -- the legacy wire emits the literal
+ * string `'max_tokens'` as `finish_reason`. Used only in `wireMode:
+ * 'legacy-web'` so `sseChunk()`'s existing (api-gateway) behavior is
+ * untouched.
+ */
+function legacyWebFinishReason(reason: Extract<StreamChunk, { type: 'stop' }>['reason']): string {
+  if (reason === 'tool_use') return 'tool_calls';
+  if (reason === 'end_turn') return 'stop';
+  return reason;
+}
+
 export interface OpenAIWireUsage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -270,43 +287,131 @@ export interface OpenAIWireAssemblerOptions {
   /**
    * Emit `thinking-delta` chunks as OpenAI-style `reasoning_content` deltas.
    * Off by default: the legacy gateway wire dropped thinking entirely.
+   * Read by `sseChunk()`/`response()` only -- `sseChunks()` uses `wireMode`
+   * instead (see below).
    */
   emitReasoningContent?: boolean;
+  /**
+   * `'default'` (unchanged): `sseChunk()`/`ingest()`/`response()` behave
+   * exactly as before this option existed -- the new server-tool-use/
+   * server-tool-result/citation-delta/vendor-raw chunk types produce no
+   * wire output and no `response()` fields, so an existing caller (e.g.
+   * services/api-gateway) sees byte-identical behavior even though the
+   * adapter it consumes may now emit these chunk types.
+   *
+   * `'legacy-web'`: reproduces the web v1 route's pre-Wave-2 wire exactly
+   * (captured via golden fixture, see apps/web/app/api/llm/v1/chat/
+   * completions/__tests__/stream-transform.golden.test.ts and response-
+   * builder.golden.test.ts) --
+   *   - streaming, via the new `sseChunks()` method (NOT `sseChunk()`,
+   *     whose one-chunk-in-one-chunk-out signature can't represent the
+   *     inline <thinking>/</thinking> tag pair a single thinking-delta
+   *     transition needs): inline `<thinking>`/`</thinking>` tags wrapped
+   *     around thinking-delta content, `x_tool_status` for server-tool-use,
+   *     `x_search_results`/`x_code_result` for server-tool-result, and raw
+   *     vendor-shaped passthrough for citation-delta/vendor-raw chunks;
+   *   - non-streaming, via `response()`: aggregates citation-delta payloads
+   *     into a `citations` array and server-tool-result payloads whose
+   *     `payload.type === 'web_search_tool_result'` into a `search_results`
+   *     array (code-execution results are NOT aggregated here -- the
+   *     legacy non-streaming response never surfaced them either, only its
+   *     streaming wire did via x_code_result);
+   *   - both: finish_reason uses the legacy web mapping (tool_use ->
+   *     tool_calls, end_turn -> stop, everything else passed through
+   *     as-is -- e.g. max_tokens stays 'max_tokens', not 'length').
+   */
+  wireMode?: 'default' | 'legacy-web';
 }
 
 /**
  * Stateful canonical-chunk -> OpenAI-wire assembler.
  *
- * Streaming: call `sseChunk(chunk)` per canonical chunk; null means "nothing
- * to emit for this event". Non-streaming: feed every chunk through
- * `ingest(chunk)` (or `sseChunk`, which ingests too) and call `response()`.
+ * Streaming: call `sseChunk(chunk)` per canonical chunk (single wire object
+ * or null per input; `wireMode` does not affect this method) or
+ * `sseChunks(chunk)` (array, always empty-or-more; honors `wireMode` --
+ * needed for `'legacy-web'`'s multi-chunk-per-event thinking tags). Pick
+ * one and use it consistently for a given stream. Non-streaming: feed every
+ * chunk through `ingest(chunk)` (or either sse method, which ingest too)
+ * and call `response()`.
  */
 export class OpenAIWireAssembler {
   private readonly model: string;
   private readonly now: () => number;
   private readonly id: string;
   private readonly emitReasoning: boolean;
+  private readonly wireMode: 'default' | 'legacy-web';
 
   private readonly toolIndexById = new Map<string, number>();
+  /** `sseChunks()`-only, `wireMode: 'legacy-web'`-only: `tool-use-start`'s
+   *  `vendorIndex`, when present, keyed by toolUseId so later `tool-use-
+   *  delta` chunks for the same call can reuse it. `toolIndexById` above
+   *  (0-based, order-of-appearance) is untouched and still drives `sse
+   *  Chunk()`/`response()` so existing callers see no behavior change. */
+  private readonly vendorIndexById = new Map<string, number>();
   private readonly toolCalls: Array<{ id: string; name: string; args: string }> = [];
   private text = '';
   private reasoning = '';
   private usage: { input?: number; output?: number } = {};
   private finishReason: OpenAIWireFinishReason | null = null;
+  private legacyFinishReason: string | null = null;
   private errorMessage: string | null = null;
+
+  /** `sseChunks()`-only state: are we currently inside a thinking block
+   *  (i.e. did the last chunk seen start or continue one)? Used to decide
+   *  when to emit the inline `<thinking>`/`</thinking>` tag pair. */
+  private insideThinking = false;
+  /** `wireMode: 'legacy-web'`-only aggregation for `response()`. */
+  private readonly citations: unknown[] = [];
+  private readonly searchResults: unknown[] = [];
 
   constructor(options: OpenAIWireAssemblerOptions) {
     this.model = options.model;
     this.now = options.now ?? Date.now;
     this.id = options.id ?? `chatcmpl-${(options.now ?? Date.now)()}`;
     this.emitReasoning = options.emitReasoningContent ?? false;
+    this.wireMode = options.wireMode ?? 'default';
   }
 
   get lastError(): string | null {
     return this.errorMessage;
   }
 
-  private chunkEnvelope(delta: Record<string, unknown>, finish: OpenAIWireFinishReason | null) {
+  /**
+   * `finish` accepts a plain `string` (not just `OpenAIWireFinishReason`)
+   * so `sseChunks()`'s `'legacy-web'` mode can pass through
+   * `legacyWebFinishReason()`'s untranslated values (e.g. the literal
+   * `'max_tokens'`, which is not a member of `OpenAIWireFinishReason`).
+   *
+   * `'legacy-web'` mode omits `id`/`object`/`created` entirely, and omits
+   * `finish_reason` on the choices object unless non-null (rather than the
+   * default mode's always-present `finish_reason: null`): verified against
+   * the captured golden fixture (apps/web/app/api/llm/v1/chat/completions/
+   * __tests__/stream-transform.golden.test.ts) that the legacy web route's
+   * per-chunk SSE JSON only ever had `{delta, index}` (plus `finish_reason`
+   * on the one terminal chunk) inside a bare `{choices, model}` object --
+   * never the full spec-compliant `chat.completion.chunk` envelope real
+   * OpenAI (and this assembler's default mode, for `sseChunk()`/
+   * api-gateway) sends on every chunk. Safe to gate on `wireMode` here
+   * despite `sseChunk()` sharing this method: no existing caller can
+   * already be passing `wireMode: 'legacy-web'` -- it's a brand-new option
+   * -- so `sseChunk()`'s output for every existing (non-web) caller is
+   * unaffected.
+   */
+  private chunkEnvelope(delta: Record<string, unknown>, finish: string | null) {
+    if (this.wireMode === 'legacy-web') {
+      // Key order matters here, not just presence -- this reconstructs the
+      // literal SSE bytes the legacy route sent (`{delta: {...}, finish_
+      // reason: ..., index: 0}` and `{delta: {...}, index: 0}` --
+      // apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts's
+      // pre-migration object literals, verified via a byte-literal (not
+      // structural) test: stream-transform.adapter.test.ts). `toEqual`-based
+      // golden fixtures elsewhere in this migration are key-order-blind, so
+      // they could not catch a `{index, delta}` vs `{delta, index}` swap --
+      // only a literal string comparison could, and did.
+      const choice: Record<string, unknown> =
+        finish !== null ? { delta, finish_reason: finish, index: 0 } : { delta, index: 0 };
+      return { choices: [choice], model: this.model };
+    }
     return {
       id: this.id,
       object: 'chat.completion.chunk' as const,
@@ -314,6 +419,18 @@ export class OpenAIWireAssembler {
       model: this.model,
       choices: [{ index: 0, delta, finish_reason: finish }],
     };
+  }
+
+  /** `sseChunks()`-only tool_calls[].index: prefers the vendor's own index
+   *  in `'legacy-web'` mode (reproducing the pre-migration wire exactly),
+   *  falls back to the 0-based order-of-appearance index otherwise --
+   *  identical to what `sseChunk()` always uses. */
+  private wireToolCallIndex(toolUseId: string): number {
+    if (this.wireMode === 'legacy-web') {
+      const vendorIndex = this.vendorIndexById.get(toolUseId);
+      if (vendorIndex !== undefined) return vendorIndex;
+    }
+    return this.toolIndexById.get(toolUseId) ?? 0;
   }
 
   /** Record a canonical chunk into assembler state without producing wire output. */
@@ -330,6 +447,9 @@ export class OpenAIWireAssembler {
           this.toolIndexById.set(chunk.toolUseId, this.toolCalls.length);
           this.toolCalls.push({ id: chunk.toolUseId, name: chunk.name, args: '' });
         }
+        if (chunk.vendorIndex !== undefined && !this.vendorIndexById.has(chunk.toolUseId)) {
+          this.vendorIndexById.set(chunk.toolUseId, chunk.vendorIndex);
+        }
         return;
       }
       case 'tool-use-delta': {
@@ -342,6 +462,32 @@ export class OpenAIWireAssembler {
       }
       case 'tool-use-end':
         return;
+      case 'server-tool-use':
+        // No response()/non-streaming representation in either wire mode
+        // (x_tool_status is a streaming-only concept, see sseChunks()).
+        return;
+      case 'server-tool-result':
+        // Only 'legacy-web' aggregates, and only web_search results -- the
+        // legacy non-streaming response never surfaced code-execution
+        // results (see module docstring / OpenAIWireAssemblerOptions).
+        if (
+          this.wireMode === 'legacy-web' &&
+          typeof chunk.payload === 'object' &&
+          chunk.payload !== null &&
+          (chunk.payload as { type?: unknown }).type === 'web_search_tool_result'
+        ) {
+          this.searchResults.push(chunk.payload);
+        }
+        return;
+      case 'citation-delta':
+        if (this.wireMode === 'legacy-web') this.citations.push(chunk.payload);
+        return;
+      case 'vendor-raw':
+        // No response()/non-streaming representation -- vendor-raw chunks
+        // are, by construction, events the legacy wire never gave any
+        // structured meaning to; only their streaming raw-passthrough
+        // bytes (sseChunks()) are reproduced.
+        return;
       case 'usage':
         if (chunk.inputTokens !== undefined) this.usage.input = chunk.inputTokens;
         if (chunk.outputTokens !== undefined) this.usage.output = chunk.outputTokens;
@@ -349,9 +495,11 @@ export class OpenAIWireAssembler {
       case 'error':
         this.errorMessage = chunk.message;
         this.finishReason = 'stop';
+        this.legacyFinishReason = 'stop';
         return;
       case 'stop':
         this.finishReason = stopReasonToFinishReason(chunk.reason);
+        this.legacyFinishReason = legacyWebFinishReason(chunk.reason);
         return;
     }
   }
@@ -397,14 +545,169 @@ export class OpenAIWireAssembler {
         );
       case 'stop':
         return this.chunkEnvelope({}, stopReasonToFinishReason(chunk.reason));
+      // No single-envelope wire representation for any of these in the
+      // default mode -- callers that need one (the web v1 route's inline
+      // thinking tags, x_tool_status/x_search_results/x_code_result, and raw
+      // citation/vendor passthrough) use `sseChunks()` instead, which can
+      // return more than one wire object per canonical chunk. Existing
+      // `sseChunk()` callers (services/api-gateway) see no new output for
+      // the four newer chunk types, matching their behavior before this
+      // adapter could even produce them (translateAnthropicStream silently
+      // dropped the underlying vendor events).
       case 'tool-use-end':
       case 'usage':
+      case 'server-tool-use':
+      case 'server-tool-result':
+      case 'citation-delta':
+      case 'vendor-raw':
         return null;
       case 'error':
         // Error surfaces as a terminal finish chunk; HTTP-level handling is
         // the route's job (it may already have committed a 200 SSE stream).
         return this.chunkEnvelope({}, 'stop');
     }
+  }
+
+  /**
+   * Convert one canonical chunk into zero or more OpenAI-wire objects.
+   *
+   * Unlike `sseChunk()` (always exactly one-or-null), a single canonical
+   * chunk can need multiple wire outputs -- most notably the first
+   * thinking-delta after non-thinking content needs an inline `<thinking>`
+   * tag chunk BEFORE its own content chunk, and the reverse (a `</thinking>`
+   * tag chunk emitted ahead of whatever the next non-thinking chunk itself
+   * produces) when leaving a thinking block. `wireMode: 'default'` never
+   * needs more than one, but always returns an array for a single
+   * predictable call shape.
+   */
+  sseChunks(chunk: StreamChunk): Record<string, unknown>[] {
+    this.ingest(chunk);
+    const out: Record<string, unknown>[] = [];
+    const legacyWeb = this.wireMode === 'legacy-web';
+
+    // Inline <thinking>/</thinking> tag boundary, detected from the
+    // thinking-delta <-> anything-else transition (the canonical stream has
+    // no dedicated "thinking block started/stopped" chunk -- Anthropic's
+    // content_block_start/content_block_stop for thinking blocks translate
+    // to no StreamChunk at all, see packages/providers/anthropic/src/
+    // stream.ts). Runs before the chunk's own translation either way, so a
+    // close tag always precedes whatever comes next, and an open tag always
+    // precedes the thinking content that triggered it.
+    if (legacyWeb) {
+      const isThinking = chunk.type === 'thinking-delta';
+      if (isThinking && !this.insideThinking) {
+        out.push(this.chunkEnvelope({ content: '<thinking>' }, null));
+      } else if (!isThinking && this.insideThinking) {
+        out.push(this.chunkEnvelope({ content: '</thinking>' }, null));
+      }
+      this.insideThinking = isThinking;
+    }
+
+    switch (chunk.type) {
+      case 'server-tool-use': {
+        if (!legacyWeb) break;
+        const status =
+          chunk.name === 'code_execution'
+            ? 'executing'
+            : chunk.name === 'web_search'
+              ? 'searching'
+              : chunk.name === 'web_fetch'
+                ? 'fetching'
+                : 'running';
+        out.push(
+          this.chunkEnvelope(
+            { x_tool_status: { type: 'server_tool_use', name: chunk.name, status } },
+            null,
+          ),
+        );
+        break;
+      }
+      case 'server-tool-result': {
+        if (!legacyWeb) break;
+        const payload = chunk.payload as { type?: unknown } | null;
+        if (payload?.type === 'code_execution_tool_result') {
+          out.push(this.chunkEnvelope({ x_code_result: chunk.payload }, null));
+        } else if (payload?.type === 'web_search_tool_result') {
+          out.push(this.chunkEnvelope({ x_search_results: chunk.payload }, null));
+        }
+        break;
+      }
+      case 'citation-delta': {
+        if (!legacyWeb) break;
+        // Reproduces the legacy wire's raw, unwrapped Anthropic-shaped
+        // passthrough (captured via golden fixture) -- NOT a normal
+        // chunkEnvelope. See StreamChunkCitation's JSDoc.
+        out.push({
+          type: 'content_block_delta',
+          index: chunk.blockIndex,
+          delta: { type: 'citations_delta', citation: chunk.payload },
+        });
+        break;
+      }
+      case 'vendor-raw': {
+        if (!legacyWeb) break;
+        // The captured payload IS the complete raw event already.
+        out.push(chunk.payload as Record<string, unknown>);
+        break;
+      }
+      case 'text-delta':
+        out.push(this.chunkEnvelope({ content: chunk.delta }, null));
+        break;
+      case 'thinking-delta':
+        if (legacyWeb) {
+          out.push(this.chunkEnvelope({ content: chunk.delta }, null));
+        } else if (this.emitReasoning) {
+          out.push(this.chunkEnvelope({ reasoning_content: chunk.delta }, null));
+        }
+        break;
+      case 'tool-use-start':
+        out.push(
+          this.chunkEnvelope(
+            {
+              tool_calls: [
+                {
+                  index: this.wireToolCallIndex(chunk.toolUseId),
+                  id: chunk.toolUseId,
+                  type: 'function',
+                  function: { name: chunk.name, arguments: '' },
+                },
+              ],
+            },
+            null,
+          ),
+        );
+        break;
+      case 'tool-use-delta':
+        out.push(
+          this.chunkEnvelope(
+            {
+              tool_calls: [
+                {
+                  index: this.wireToolCallIndex(chunk.toolUseId),
+                  function: { arguments: chunk.deltaJson },
+                },
+              ],
+            },
+            null,
+          ),
+        );
+        break;
+      case 'stop':
+        out.push(
+          this.chunkEnvelope(
+            {},
+            legacyWeb ? this.legacyFinishReason : stopReasonToFinishReason(chunk.reason),
+          ),
+        );
+        break;
+      case 'error':
+        out.push(this.chunkEnvelope({}, legacyWeb ? (this.legacyFinishReason ?? 'stop') : 'stop'));
+        break;
+      case 'tool-use-end':
+      case 'usage':
+        break;
+    }
+    return out;
   }
 
   usageOrNull(): OpenAIWireUsage | null {
@@ -437,6 +740,10 @@ export class OpenAIWireAssembler {
     }
 
     const usage = this.usageOrNull();
+    const legacyWeb = this.wireMode === 'legacy-web';
+    const finishReason = legacyWeb
+      ? (this.legacyFinishReason ?? (this.toolCalls.length > 0 ? 'tool_calls' : 'stop'))
+      : (this.finishReason ?? (this.toolCalls.length > 0 ? 'tool_calls' : 'stop'));
     return {
       id: this.id,
       object: 'chat.completion',
@@ -446,10 +753,14 @@ export class OpenAIWireAssembler {
         {
           index: 0,
           message,
-          finish_reason: this.finishReason ?? (this.toolCalls.length > 0 ? 'tool_calls' : 'stop'),
+          finish_reason: finishReason,
         },
       ],
       ...(usage ? { usage } : {}),
+      // Matches apps/web/lib/llm-providers/anthropic.ts's non-streaming
+      // shape: only present, and only non-empty, in 'legacy-web' mode.
+      ...(legacyWeb && this.citations.length > 0 ? { citations: this.citations } : {}),
+      ...(legacyWeb && this.searchResults.length > 0 ? { search_results: this.searchResults } : {}),
     };
   }
 }

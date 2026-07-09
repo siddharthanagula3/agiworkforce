@@ -6,7 +6,10 @@ import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
+import type { StreamChunk } from '@agiworkforce/types';
+import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
 import type { ProcessedRequest } from './request-processor';
+import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 // ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. · no extra imports needed
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
@@ -517,4 +520,255 @@ export async function buildStreamResponse(
   }
 
   return new NextResponse(reconciledStream, { headers: streamHeaders });
+}
+
+/**
+ * `buildStreamResponse`'s sibling for the `packages/providers/*` adapter
+ * path (restructure Wave 2, task #34) -- Anthropic only so far. Consumes an
+ * `AsyncIterable<StreamChunk>` (an adapter's `.stream()` result) instead of
+ * a raw upstream SSE `ReadableStream`, reconstructing the SAME byte-stable
+ * legacy wire via `OpenAIWireAssembler`'s `wireMode: 'legacy-web'` +
+ * `sseChunks()` (proven against captured golden fixtures --
+ * packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts).
+ *
+ * `buildStreamResponse` above is left completely untouched: every other
+ * provider still dispatches through it via `LLMProviderFactory`'s raw
+ * ReadableStream. Two separate functions, not a shared one with a branch,
+ * so migrating Anthropic carries zero risk to the still-legacy providers.
+ *
+ * Billing/TTFT/analytics logic is a straight port of `buildStreamResponse`'s
+ * `flush()` -- same LLMCostCalculator/CreditService/recordModelUsage calls,
+ * same TTFT-observed/breach/missing log events -- just reading accumulated
+ * `StreamChunk` usage fields (via `adapter-usage.ts`, shared with the
+ * non-streaming `drainToLlmResponse`) instead of re-parsing JSON event
+ * shapes per provider.
+ *
+ * `[DONE]` is emitted unconditionally once the adapter's AsyncIterable is
+ * exhausted -- correct because this function is Anthropic-only today: the
+ * legacy wire's `data: [DONE]` was injected on Anthropic's `message_stop`
+ * specifically (Anthropic's own SSE has no `[DONE]` sentinel), which
+ * `translateAnthropicStream`'s terminal `stop` chunk (always yielded, even
+ * on a truncated upstream connection -- see its `finally` block) now stands
+ * in for 1:1. A provider whose raw wire already contains its own `[DONE]`
+ * (OpenAI) would double it up -- do not reuse this function for another
+ * provider without revisiting this.
+ *
+ * `streamStartedAt` is a CALLER-supplied timestamp, not computed internally
+ * with `Date.now()` here -- unlike `buildStreamResponse`, which can safely
+ * take its own timestamp because `await LLMProviderFactory.streamRequest()`
+ * returns as soon as response headers arrive, before any content. This
+ * function's caller (route.ts) instead calls `startAnthropicStream`, which
+ * eagerly awaits the FIRST `StreamChunk` (see adapter-factory.ts's
+ * docstring on why: detecting an immediate upstream error before committing
+ * to a 200 response) -- so by the time `chunks` reaches this function, the
+ * first token may already have arrived. Taking `Date.now()` here would
+ * measure only the gap between that peek resolving and this function
+ * starting (near-zero), silently breaking the `llm_ttft_slo_breach` alert
+ * for every Anthropic request. Route.ts captures the real start time BEFORE
+ * calling `startAnthropicStream`.
+ */
+export async function buildAdapterStreamResponse(
+  request: NextRequest,
+  chunks: AsyncIterable<StreamChunk>,
+  processed: ProcessedRequest,
+  userId: string,
+  // See buildStreamResponse's identical parameter for why this is unused.
+  _token: string,
+  streamStartedAt: number,
+): Promise<NextResponse> {
+  const {
+    requestId,
+    chatRequest,
+    requestedModel,
+    provider,
+    estimatedCostCents,
+    quotaWarningHeader,
+    usedFallback,
+    freeTrial,
+  } = processed;
+
+  // Billing/analytics model id -- canonical (client-facing), matching
+  // buildStreamResponse's `modelUsed` exactly (both read `chatRequest.model`,
+  // never the apiModelId `adapter-factory.ts`/`toCanonicalChatRequest` sent
+  // to the provider -- see canonical-request.ts's `toApiModelId` docstring).
+  const modelUsed = chatRequest.model;
+  const providerUsed = provider;
+  // Wire-visible model id -- identical rule to buildStreamResponse.
+  const responseModelName = usedFallback ? chatRequest.model : requestedModel;
+
+  const assembler = new OpenAIWireAssembler({ model: responseModelName, wireMode: 'legacy-web' });
+  const usage = createUsageAccumulator();
+  const encoder = new TextEncoder();
+  let firstTokenTimestampMs: number | null = null;
+
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      for await (const chunk of chunks) {
+        ingestUsageChunk(usage, chunk);
+        const wireEvents = assembler.sseChunks(chunk);
+        if (wireEvents.length === 0) continue;
+
+        const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
+        controller.enqueue(encoder.encode(lines + '\n\n'));
+
+        if (firstTokenTimestampMs === null) {
+          for (const event of wireEvents) {
+            const deltaContent = (event as { choices?: Array<{ delta?: { content?: unknown } }> })
+              .choices?.[0]?.delta?.content;
+            if (typeof deltaContent === 'string' && deltaContent.length > 0) {
+              firstTokenTimestampMs = Date.now() - streamStartedAt;
+              logger.info(
+                {
+                  event: 'llm_ttft_observed',
+                  requestId,
+                  userId,
+                  provider: providerUsed,
+                  model: modelUsed,
+                  ttftMs: firstTokenTimestampMs,
+                  sloTargetMs: TTFT_SLO_TARGET_MS,
+                  sloBreachMs: TTFT_SLO_BREACH_MS,
+                },
+                'First token observed',
+              );
+              if (firstTokenTimestampMs > TTFT_SLO_BREACH_MS) {
+                logger.warn(
+                  {
+                    event: 'llm_ttft_slo_breach',
+                    requestId,
+                    userId,
+                    provider: providerUsed,
+                    model: modelUsed,
+                    ttftMs: firstTokenTimestampMs,
+                    sloTargetMs: TTFT_SLO_TARGET_MS,
+                    sloBreachMs: TTFT_SLO_BREACH_MS,
+                  },
+                  'TTFT exceeded breach threshold',
+                );
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+
+      if (firstTokenTimestampMs === null) {
+        logger.warn(
+          {
+            event: 'llm_ttft_missing',
+            requestId,
+            userId,
+            provider: providerUsed,
+            model: modelUsed,
+          },
+          'Stream completed without observable first token',
+        );
+      }
+
+      try {
+        const totalTokens = usage.inputTokens + usage.outputTokens;
+
+        if (!freeTrial && totalTokens > 0) {
+          const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
+            promptTokens: usage.inputTokens,
+            completionTokens: usage.outputTokens,
+            totalTokens,
+            cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
+            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+          });
+
+          const costDifference = actualCostCents - estimatedCostCents;
+
+          if (costDifference !== 0) {
+            const reconciliationKey = CreditService.generateIdempotencyKey(
+              userId,
+              'reconciliation',
+              requestId,
+            );
+            await CreditService.deductCredits(
+              userId,
+              costDifference,
+              `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,
+              {
+                provider: providerUsed,
+                model: modelUsed,
+                type: 'streaming_reconciliation',
+                estimatedCostCents,
+                actualCostCents,
+                promptTokens: usage.inputTokens,
+                completionTokens: usage.outputTokens,
+                totalTokens,
+                requestId,
+              },
+              reconciliationKey,
+            );
+          }
+        }
+      } catch (reconciliationError) {
+        logger.error(
+          {
+            error: reconciliationError,
+            userId,
+            requestId,
+            providerUsed,
+            modelUsed,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            estimatedCostCents,
+          },
+          'CRITICAL: Credit reconciliation failed after streaming completed - may require manual adjustment',
+        );
+      }
+
+      // Fire-and-forget cost tracking + OTel attribute emit -- mirrors
+      // buildStreamResponse's flush(); the stream is already closed by this
+      // point, so a failure here can't affect what the client received.
+      try {
+        const usageForTracking = {
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          reasoningOutputTokens: usage.reasoningOutputTokens,
+          cacheReadInputTokens: usage.cacheReadInputTokens,
+          cacheCreationInputTokens: usage.cacheCreationInputTokens,
+          cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+        };
+        recordModelUsage(userId, modelUsed, usageForTracking);
+        logger.info(
+          {
+            event: 'gen_ai_usage_recorded',
+            userId,
+            requestId,
+            ...toOtelAttributes(providerUsed, modelUsed, usageForTracking),
+          },
+          'GenAI usage attributes recorded (streaming)',
+        );
+      } catch (trackingError) {
+        logger.warn({ error: trackingError, userId, requestId }, 'Stream cost tracking failed');
+      }
+    },
+    async cancel() {
+      // Best-effort: the underlying adapter's fetch/SSE connection is torn
+      // down by the caller-owned AbortSignal, not by this stream directly.
+    },
+  });
+
+  const streamHeaders: Record<string, string> = {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    ...getCorsHeaders(request),
+    ...getSecurityHeaders(),
+  };
+  if (quotaWarningHeader) {
+    streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
+  }
+  if (freeTrial) {
+    streamHeaders['X-AGI-Trial-Prompts-Used'] = String(freeTrial.promptCount);
+    streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
+  }
+
+  return new NextResponse(body, { headers: streamHeaders });
 }

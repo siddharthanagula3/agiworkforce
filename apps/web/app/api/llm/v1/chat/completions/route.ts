@@ -9,10 +9,38 @@ import { handleCorsPreflightRequest, getSecurityHeaders, getCorsHeaders } from '
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { runAuthGate } from './lib/auth-gate';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
-import { buildStreamResponse } from './lib/stream-transform';
+import { buildStreamResponse, buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
+import { buildAnthropicAdapter, startAnthropicStream } from './lib/adapter-factory';
+import {
+  toCanonicalChatRequest,
+  toCanonicalThinking,
+  toCanonicalEffort,
+} from './lib/canonical-request';
+import { drainToLlmResponse } from './lib/adapter-response';
+import type { StreamChunk } from '@agiworkforce/types';
+
+/**
+ * Provider dispatch for the standard (non-agentic) streaming and
+ * non-streaming paths (restructure Wave 2, task #34): Anthropic goes through
+ * `packages/providers/anthropic`'s adapter; every other provider still goes
+ * through `LLMProviderFactory` (apps/web/lib/llm-providers), unchanged.
+ *
+ * The agentic tool-loop path (MCP/E2B, `runToolLoop` below) is NOT migrated
+ * yet -- it has its own `LLMProviderFactory.streamRequest` call site
+ * (tool-loop.ts) that needs its own verification pass; deliberately left on
+ * the legacy path for now rather than rushed. See task #34.
+ */
+function buildAnthropicChatRequest(processed: ProcessedRequest) {
+  const chatRequest = toCanonicalChatRequest(processed);
+  const thinking = toCanonicalThinking(processed.provider, processed.llmRequest.thinking);
+  if (thinking !== undefined) chatRequest.thinking = thinking;
+  const effort = toCanonicalEffort(processed.provider, processed.llmRequest.effort);
+  if (effort !== undefined) chatRequest.effort = effort;
+  return chatRequest;
+}
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -153,6 +181,33 @@ async function handleChatCompletions(request: NextRequest) {
     }
 
     // Standard single-turn streaming path (no MCP tools configured).
+    if (processed.provider === 'anthropic') {
+      // Captured BEFORE startAnthropicStream's error-detection peek, which
+      // awaits the first StreamChunk -- taking this timestamp any later
+      // would measure the peek's own wait, not the real time-to-first-token.
+      // See buildAdapterStreamResponse's docstring.
+      const streamStartedAt = Date.now();
+      let chunks: AsyncIterable<StreamChunk>;
+      try {
+        const adapter = buildAnthropicAdapter(processed);
+        const chatRequest = buildAnthropicChatRequest(processed);
+        chunks = await startAnthropicStream(adapter, chatRequest, request.signal);
+      } catch (error) {
+        await refundFailedReservation(userId, processed, 'streaming_failure');
+        return buildUpstreamErrorResponse(
+          error,
+          processed.provider,
+          processed.chatRequest.model,
+          processed.requestedModel,
+          userId,
+          processed.requestId,
+          'streaming',
+        );
+      }
+
+      return buildAdapterStreamResponse(request, chunks, processed, userId, token, streamStartedAt);
+    }
+
     let stream: ReadableStream;
     try {
       stream = await LLMProviderFactory.streamRequest(processed.provider, processed.llmRequest);
@@ -173,6 +228,29 @@ async function handleChatCompletions(request: NextRequest) {
   }
 
   // Non-streaming path
+  if (processed.provider === 'anthropic') {
+    let llmResponse;
+    try {
+      const adapter = buildAnthropicAdapter(processed);
+      const chatRequest = buildAnthropicChatRequest(processed);
+      const chunks = adapter.stream(chatRequest, request.signal);
+      llmResponse = await drainToLlmResponse(chunks, processed.llmRequest.model);
+    } catch (error) {
+      await refundFailedReservation(userId, processed, 'request_failure');
+      return buildUpstreamErrorResponse(
+        error,
+        processed.provider,
+        processed.chatRequest.model,
+        processed.requestedModel,
+        userId,
+        processed.requestId,
+        'non-streaming',
+      );
+    }
+
+    return buildNonStreamResponse(request, llmResponse, processed, userId, token);
+  }
+
   let llmResponse;
   try {
     llmResponse = await LLMProviderFactory.sendRequest(processed.provider, processed.llmRequest);
