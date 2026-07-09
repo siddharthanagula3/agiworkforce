@@ -25,6 +25,14 @@ export interface ExecutionResult {
  * tests. Each method runs INSIDE the isolated sandbox with the session's resource
  * limits (CPU/mem/wall-clock/network) enforced by E2B at session creation.
  */
+export interface SandboxFileEntry {
+  /** Absolute path inside the sandbox. */
+  path: string;
+  name: string;
+  isDir: boolean;
+  byteSize: number;
+}
+
 export interface E2BExecutor {
   /** Run code in the sandbox (e.g. python/node) and return its output. */
   runCode(input: { language: string; code: string }): Promise<ExecutionResult>;
@@ -32,6 +40,14 @@ export interface E2BExecutor {
   writeFile(input: { path: string; content: string }): Promise<ExecutionResult>;
   /** Create a folder inside the sandbox workspace. */
   createFolder(input: { path: string }): Promise<ExecutionResult>;
+  /**
+   * List directory entries (non-recursive). Optional: used by the generated-file
+   * harvest (lib/e2b/generated-files.ts); mocks that never harvest may omit it.
+   * Returns null on failure (best-effort — harvesting must never break the turn).
+   */
+  listFiles?(path: string): Promise<SandboxFileEntry[] | null>;
+  /** Read a file's raw bytes. Optional, same contract as `listFiles`. */
+  readFileBytes?(path: string): Promise<Uint8Array | null>;
   /** Release the sandbox session. */
   dispose(): Promise<void>;
 }

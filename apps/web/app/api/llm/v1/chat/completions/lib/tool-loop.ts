@@ -46,6 +46,12 @@ import {
 import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BExecutor } from '@/lib/e2b/types';
+import {
+  snapshotSandboxFiles,
+  harvestGeneratedFiles,
+  type SandboxSnapshot,
+  type GeneratedFileWire,
+} from '@/lib/e2b/generated-files';
 import type { ProcessedRequest } from './request-processor';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -84,6 +90,12 @@ export interface ToolLoopOptions {
   approvalMode?: ApprovalMode;
   /** Resolved MCP tool defs to inject (fetched once by the caller). */
   mcpTools?: WebMcpToolDef[];
+  /**
+   * Authenticated user id — required for the generated-file harvest (files the
+   * model writes in the E2B sandbox are persisted to the user's media library
+   * and emitted as an `x_generated_files` delta). Without it, harvest is skipped.
+   */
+  userId?: string;
 }
 
 /** Shape of a parsed tool_call from the provider stream. */
@@ -194,6 +206,25 @@ function toolApprovalRequestEvent(
             name: toolName,
             args,
           },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+/**
+ * Emit an `x_generated_files` SSE event carrying durable descriptors for files
+ * the model created in the E2B sandbox this turn. Clients render these as
+ * downloadable file cards (mobile GeneratedFileCard / web equivalent).
+ */
+function generatedFilesEvent(files: GeneratedFileWire[], responseModel: string): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_generated_files: { files },
         },
         index: 0,
       },
@@ -471,12 +502,41 @@ export async function* runToolLoop(
   const conversationId = processed.conversationId;
   let e2bExecutor: E2BExecutor | null = null;
   let e2bExecutorResolved = false;
+  // Generated-file harvest state: the workspace is snapshotted once, when the
+  // executor first resolves (BEFORE any execution tool runs), so the turn-end
+  // diff only surfaces files created/changed THIS turn — a resumed sandbox may
+  // still hold files from previous turns.
+  let e2bBaseline: SandboxSnapshot | null = null;
+  let executionToolRan = false;
   async function resolveE2BExecutor(): Promise<E2BExecutor | null> {
     if (!e2bExecutorResolved) {
       e2bExecutor = await getE2BExecutor(conversationId);
       e2bExecutorResolved = true;
+      if (e2bExecutor) e2bBaseline = await snapshotSandboxFiles(e2bExecutor);
     }
+    executionToolRan = true;
     return e2bExecutor;
+  }
+
+  /**
+   * Harvest files the model created in the sandbox this turn and return the
+   * SSE line announcing them, or null when there is nothing to announce.
+   * Called at the terminal points of the loop, before the final [DONE].
+   */
+  async function harvestGeneratedFilesEvent(): Promise<SseLine | null> {
+    if (!executionToolRan || !e2bExecutor || !e2bBaseline || !options.userId) return null;
+    try {
+      const files = await harvestGeneratedFiles({
+        executor: e2bExecutor,
+        baseline: e2bBaseline,
+        userId: options.userId,
+        model: responseModel,
+      });
+      return files.length > 0 ? generatedFilesEvent(files, responseModel) : null;
+    } catch (err) {
+      logger.warn({ err }, '[tool-loop] generated-file harvest failed; no file card emitted');
+      return null;
+    }
   }
 
   try {
@@ -515,8 +575,12 @@ export async function* runToolLoop(
         yield encoder.encode(line);
       }
 
-      // If no tool calls, the model is done: emit [DONE] and exit.
+      // If no tool calls, the model is done: harvest any sandbox-generated
+      // files (file cards need durable URLs before the stream closes), then
+      // emit [DONE] and exit.
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
+        const filesLine = await harvestGeneratedFilesEvent();
+        if (filesLine) yield encoder.encode(filesLine);
         yield encoder.encode(sseDone());
         break;
       }
@@ -600,6 +664,8 @@ export async function* runToolLoop(
         { maxSteps, provider: processed.provider },
         '[tool-loop] max steps reached without terminal stop',
       );
+      const filesLine = await harvestGeneratedFilesEvent();
+      if (filesLine) yield encoder.encode(filesLine);
       yield encoder.encode(sseDone());
     }
   } finally {

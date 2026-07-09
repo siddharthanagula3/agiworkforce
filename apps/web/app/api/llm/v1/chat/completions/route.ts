@@ -115,7 +115,7 @@ async function handleChatCompletions(request: NextRequest) {
       const approvalMode = hasMcpTools ? ('manual' as const) : ('auto' as const);
 
       // Build the agentic SSE stream from the tool-loop generator.
-      const toolLoopGen = runToolLoop(processed, { mcpTools, approvalMode });
+      const toolLoopGen = runToolLoop(processed, { mcpTools, approvalMode, userId });
 
       const encoder = new TextEncoder();
       const agentStream = new ReadableStream({
