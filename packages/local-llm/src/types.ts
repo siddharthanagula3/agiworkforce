@@ -54,6 +54,18 @@ export interface GenerateOptions {
   prompt: string;
   systemPrompt?: string;
   messages?: ChatMessage[];
+  /**
+   * Images attached to the CURRENT user turn, as `file://` URIs or `data:`
+   * base64 URLs. Only effective on a multimodal runtime with a loaded mmproj
+   * projector (tier-3 llama.rn `initMultimodal`); ignored by text-only runtimes.
+   */
+  images?: string[];
+  /**
+   * On-disk path to the mmproj vision-projector for a tier-3 multimodal GGUF
+   * model. When present, tier-3 loads the model via `initLlama({ ctx_shift:false })`
+   * + `initMultimodal({ path })` so `images` can be used.
+   */
+  mmprojPath?: string;
   requestId?: string;
   tools?: LLMTool[];
   signal?: AbortSignal;

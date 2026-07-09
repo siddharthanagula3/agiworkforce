@@ -6,7 +6,30 @@ export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from 
 export { detectCapabilities, isThermallyThrottled } from './capabilities';
 export { tier1Generate } from './tier1';
 export { tier2LoadModel, tier2Generate, tier2Release, _setLLMModuleForTesting } from './tier2';
-export { tier3LoadModel, tier3Generate, tier3Release } from './tier3';
+export {
+  tier3LoadModel,
+  tier3LoadMultimodalModel,
+  tier3Generate,
+  tier3Release,
+  tier3IsMultimodalReady,
+} from './tier3';
+export {
+  resolveMultimodalArtifacts,
+  isMultimodalModel,
+  effectiveVisionIn,
+  ensureVerifiedArtifact,
+  ensureMultimodalArtifacts,
+  buildMultimodalMessages,
+  ChecksumMismatchError,
+} from './multimodal';
+export type {
+  MultimodalArtifact,
+  MultimodalArtifacts,
+  MultimodalInstallResult,
+  FileSystemDeps,
+  LlamaMessage,
+  LlamaContentPart,
+} from './multimodal';
 export {
   getModelById,
   getModelsForRole,
