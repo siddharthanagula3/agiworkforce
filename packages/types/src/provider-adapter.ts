@@ -160,6 +160,15 @@ export interface ChatRequest {
   /** System prompt: string or pre-blocked (for Anthropic cache_control). */
   system?: string | TextBlock[];
   tools?: ToolDef[];
+  /**
+   * Provider-NATIVE built-in tool payloads passed through verbatim, appended
+   * after the translated `tools` (e.g. Anthropic `web_search_20260209`,
+   * Google `{ google_search: {} }`, OpenAI `{ type: 'web_search_preview' }`).
+   * The caller owns matching each entry to the target provider's wire shape;
+   * adapters append without validating or translating. Server-side gateways
+   * use this for managed built-in tools (restructure Wave 2).
+   */
+  rawVendorTools?: unknown[];
   toolChoice?: ToolChoice;
   maxOutputTokens?: number;
   temperature?: number;

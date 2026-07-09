@@ -163,9 +163,14 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
     req.tools && req.tools.length > 0
       ? req.tools.flatMap(translateTool).filter((d): d is NonNullable<typeof d> => d !== undefined)
       : undefined;
-  const tools: GeminiTool[] | undefined = declarations
-    ? [{ functionDeclarations: declarations }]
-    : undefined;
+  // rawVendorTools are provider-native tool entries (e.g. { google_search: {} })
+  // appended verbatim as additional GeminiTool objects — caller owns the shape.
+  const vendorTools = (req.rawVendorTools ?? []) as GeminiTool[];
+  const combinedTools: GeminiTool[] = [
+    ...(declarations ? [{ functionDeclarations: declarations }] : []),
+    ...vendorTools,
+  ];
+  const tools: GeminiTool[] | undefined = combinedTools.length > 0 ? combinedTools : undefined;
   const toolConfig = translateToolChoice(req.toolChoice);
 
   const generationConfig: NonNullable<GeminiGenerateContentRequest['generationConfig']> = {};
