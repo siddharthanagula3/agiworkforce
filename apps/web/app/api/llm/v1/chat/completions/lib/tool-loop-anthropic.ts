@@ -2,47 +2,66 @@ import 'server-only';
 
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
-import { buildAnthropicAdapter, startProviderStream } from './adapter-factory';
-import { buildAnthropicChatRequest } from './canonical-request';
-import { toUpstreamError } from './adapter-errors';
+import { startProviderStream } from './adapter-factory';
+import { ADAPTER_PROVIDERS } from './adapter-providers';
 import type { ProcessedRequest } from './request-processor';
 
 /**
- * Anthropic dispatch for the agentic tool-loop (MCP/E2B), task #34's
- * tool-loop slice. Mirrors route.ts's standard-path Anthropic branch, but
- * reshaped for tool-loop.ts's per-step calling convention and its
- * OpenAI-shaped-bytes contract with `collectProviderStream`.
+ * Table-driven per-provider dispatch for the agentic tool-loop (MCP/E2B),
+ * task #34's tool-loop slice. Mirrors route.ts's standard-path dispatch
+ * (same `ADAPTER_PROVIDERS` table, same `buildAdapter`/`buildChatRequest`/
+ * `mapError`/`wireMode` per entry), reshaped for tool-loop.ts's per-step
+ * calling convention and its OpenAI-shaped-bytes contract with
+ * `collectProviderStream`.
  *
- * LATENT BUG FOUND AND FIXED BY THIS MIGRATION (reported to team-lead, not
- * filed as a separate known-flaw -- fixed in this same pass): the OLD
- * dispatch here was `LLMProviderFactory.streamRequest('anthropic', ...)`,
- * which returns Anthropic's raw, completely unreshaped native SSE
- * (`content_block_delta`/`message_delta`/etc -- see apps/web/lib/llm-
- * providers/anthropic.ts's `streamRequest`, which does `return
- * response.body` with zero transformation). `collectProviderStream` (tool-
- * loop.ts) only ever understood OpenAI-shaped `.choices[0].delta.content` /
- * `.tool_calls[]` / `.finish_reason` events -- it has no Anthropic-native
- * `content_block_delta` handling at all. So an Anthropic-routed agentic turn
- * could never correctly extract text or tool calls: `finishReason` would
- * never become `'tool_calls'`, tools would never execute, and raw Anthropic
- * bytes would be forwarded to a client expecting OpenAI-shaped SSE. Verified
- * empirically in tool-loop-anthropic.test.ts (a test against the OLD
- * dispatch fails; against this one it passes -- there is no correct legacy
- * baseline to byte-match here, unlike the standard-path Anthropic slice).
- * LATENT, not actively firing: `hasMcpTools`/`hasE2BTools` are both gated in
- * route.ts, so a default deployment likely never exercised this path for
- * Anthropic.
+ * GENERALIZED from an Anthropic-only bridge (originally `buildAnthropicTool
+ * LoopStream`, kept below as a thin compat wrapper so tool-loop-anthropic.
+ * test.ts keeps exercising the Anthropic case through this same generic
+ * path unchanged) to cover all 12 `ADAPTER_PROVIDERS` entries, closing the
+ * last `LLMProviderFactory` dispatch in the v1 route tree (restructure
+ * Wave 2, task #34 completion gate).
+ *
+ * LATENT BUG FOUND AND FIXED WHEN THE ANTHROPIC CASE WAS FIRST MIGRATED
+ * (reported to team-lead, not filed as a separate known-flaw -- fixed in
+ * that same pass): the OLD dispatch here was `LLMProviderFactory.
+ * streamRequest(provider, ...)`, which for Anthropic returned Anthropic's
+ * raw, completely unreshaped native SSE (`content_block_delta`/
+ * `message_delta`/etc -- see apps/web/lib/llm-providers/anthropic.ts's
+ * `streamRequest`, which does `return response.body` with zero
+ * transformation). `collectProviderStream` (tool-loop.ts) only ever
+ * understood OpenAI-shaped `.choices[0].delta.content` / `.tool_calls[]` /
+ * `.finish_reason` events -- it has no Anthropic-native `content_block_
+ * delta` handling at all. So an Anthropic-routed agentic turn could never
+ * correctly extract text or tool calls: `finishReason` would never become
+ * `'tool_calls'`, tools would never execute, and raw Anthropic bytes would
+ * be forwarded to a client expecting OpenAI-shaped SSE. Verified empirically
+ * in tool-loop-anthropic.test.ts (a test against the OLD dispatch fails;
+ * against this one it passes -- there is no correct legacy baseline to
+ * byte-match here, unlike the standard-path Anthropic slice). LATENT, not
+ * actively firing: `hasMcpTools`/`hasE2BTools` are both gated in route.ts,
+ * so a default deployment likely never exercised this path.
+ *
+ * The other 11 providers' legacy `LLMProviderFactory.streamRequest` calls
+ * returned each vendor's OWN near-OpenAI-shaped SSE (never reshaped by the
+ * legacy factory either -- see adapter-providers.ts's `wireMode` docstring:
+ * OpenAI + all 9 compat providers never needed Anthropic/Google-style
+ * reshaping even on the standard path). Whether `collectProviderStream`
+ * happened to tolerate each vendor's raw SSE well enough for tool calls to
+ * fire was never verified provider-by-provider before this migration --
+ * this generalization removes that uncertainty by giving every provider the
+ * SAME `OpenAIWireAssembler`-normalized wire (its own `wireMode`, not always
+ * `'legacy-web'`) that route.ts's standard path already proved correct.
  *
  * WHY NOT JUST RETURN `AsyncIterable<StreamChunk>` DIRECTLY: `collectProvider
  * Stream` is deliberately left UNCHANGED (not rewritten against StreamChunk)
  * -- it already has a tested tool-call accumulator (index-keyed, argument-
- * fragment-joining) shared by every other provider, all of which speak
- * actual OpenAI-compatible SSE on the wire. Reshaping Anthropic's chunks into
- * that same OpenAI-shaped byte wire via `OpenAIWireAssembler` (`wireMode:
- * 'legacy-web'`, the same translation `buildAdapterStreamResponse` in
- * stream-transform.ts uses for the standard path) lets `collectProviderStream`
- * consume Anthropic exactly like it consumes every other provider, at the
- * cost of a small amount of duplicated wrapping logic (no TTFT/billing
+ * fragment-joining) shared by every provider, all of which speak actual
+ * OpenAI-compatible SSE on the wire. Reshaping each provider's chunks into
+ * that same OpenAI-shaped byte wire via `OpenAIWireAssembler` (per-provider
+ * `wireMode` from `ADAPTER_PROVIDERS`, the same translation
+ * `buildAdapterStreamResponse` in stream-transform.ts uses for the standard
+ * path) lets `collectProviderStream` consume every provider identically, at
+ * the cost of a small amount of duplicated wrapping logic (no TTFT/billing
  * tracking needed here -- tool-loop.ts does neither; it relies solely on
  * request-processor.ts's upfront credit reservation with no per-step
  * reconciliation, confirmed by grep -- so reusing stream-transform.ts's
@@ -50,15 +69,15 @@ import type { ProcessedRequest } from './request-processor';
  * gain).
  *
  * ERROR HANDLING: `startProviderStream` eagerly peeks the first chunk and
- * throws a plain `Error` (via `toUpstreamError`) if it's an error chunk
- * (same peek-and-throw pattern as the standard path). That throw propagates
- * out of this function and is
- * caught by `runToolLoop`'s EXISTING try/catch around its provider-call site
- * -- which already does exactly the right thing for tool-loop specifically:
- * yield an inline `Error: ...` SSE content chunk and stop (no `[DONE]`, no
- * attempt at `buildUpstreamErrorResponse`). That matters because by step 2+
- * a 200 response is already committed -- there is no HTTP-error-response
- * path available mid-loop, and step 1 failing this way matches the OLD
+ * throws a plain `Error` (via the provider's `mapError`) if it's an error
+ * chunk (same peek-and-throw pattern as the standard path). That throw
+ * propagates out of this function and is caught by `runToolLoop`'s EXISTING
+ * try/catch around its provider-call site -- which already does exactly the
+ * right thing for tool-loop specifically: yield an inline `Error: ...` SSE
+ * content chunk and stop (no `[DONE]`, no attempt at
+ * `buildUpstreamErrorResponse`). That matters because by step 2+ a 200
+ * response is already committed -- there is no HTTP-error-response path
+ * available mid-loop, and step 1 failing this way matches the OLD
  * `LLMProviderFactory.streamRequest` behavior too (it threw synchronously on
  * a failed fetch, before any body streaming began). This function does NOT
  * duplicate that error-UX decision -- it only supplies the throw; the loop's
@@ -74,32 +93,66 @@ import type { ProcessedRequest } from './request-processor';
  * argument, but nothing about tool-loop's cancellation contract changes by
  * giving it one that never fires.
  */
+export async function buildToolLoopStream(
+  provider: string,
+  processed: ProcessedRequest,
+  stepRequest: ProcessedRequest['llmRequest'],
+  responseModel: string,
+): Promise<ReadableStream> {
+  const adapterProvider = ADAPTER_PROVIDERS[provider];
+  if (!adapterProvider) {
+    // Same reasoning as route.ts's standard-path guard: processed.provider
+    // is resolved via resolveProviderFromModel's catalog lookup + heuristic
+    // fallback chain, which never produces anything outside
+    // ADAPTER_PROVIDERS -- unreachable in practice, kept as an explicit,
+    // typed failure rather than a silent crash if that invariant ever
+    // breaks.
+    throw new Error(`Provider "${provider}" is not supported.`);
+  }
+  const stepProcessed: ProcessedRequest = { ...processed, llmRequest: stepRequest };
+  const adapter = adapterProvider.buildAdapter(stepProcessed);
+  const chatRequest = adapterProvider.buildChatRequest(stepProcessed);
+  const signal = new AbortController().signal;
+  const chunks = await startProviderStream(adapter, chatRequest, signal, adapterProvider.mapError);
+  return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode);
+}
+
+/**
+ * Anthropic-only convenience wrapper, kept so tool-loop-anthropic.test.ts
+ * continues to exercise the Anthropic case through `buildToolLoopStream`
+ * (the now-generic function) without needing to pass a provider id.
+ */
 export async function buildAnthropicToolLoopStream(
   processed: ProcessedRequest,
   stepRequest: ProcessedRequest['llmRequest'],
   responseModel: string,
 ): Promise<ReadableStream> {
-  const stepProcessed: ProcessedRequest = { ...processed, llmRequest: stepRequest };
-  const adapter = buildAnthropicAdapter(stepProcessed);
-  const chatRequest = buildAnthropicChatRequest(stepProcessed);
-  const signal = new AbortController().signal;
-  const chunks = await startProviderStream(adapter, chatRequest, signal, toUpstreamError);
-  return chunksToOpenAiSse(chunks, responseModel);
+  return buildToolLoopStream('anthropic', processed, stepRequest, responseModel);
 }
 
 /**
- * Wrap an Anthropic adapter's `AsyncIterable<StreamChunk>` as an OpenAI-
- * shaped SSE byte stream via a FRESH `OpenAIWireAssembler` per call. Fresh is
+ * Wrap a provider adapter's `AsyncIterable<StreamChunk>` as an OpenAI-shaped
+ * SSE byte stream via a FRESH `OpenAIWireAssembler` per call. Fresh is
  * required, not just convenient: the assembler is stateful (tool-call
  * indices, thinking-block state) and tool-loop.ts calls the provider once
  * per agentic step -- reusing one assembler across steps would corrupt that
  * state (e.g. a step-2 tool call would see step-1's tool-index counter).
+ *
+ * `wireMode` matches the provider's `ADAPTER_PROVIDERS` entry -- Anthropic/
+ * Google use `'legacy-web'`, OpenAI + the 9 compat providers use
+ * `'openai-passthrough'` (see adapter-providers.ts's docstring).
+ *
+ * Exported (not module-private) so apps/web/app/api/agents/execute/route.ts
+ * can normalize its own per-provider stream onto the same v1 wire shape
+ * (restructure Wave 2, task #34 completion gate) without duplicating this
+ * assembler-wrapping logic.
  */
-function chunksToOpenAiSse(
+export function chunksToOpenAiSse(
   chunks: AsyncIterable<StreamChunk>,
   model: string,
+  wireMode: 'legacy-web' | 'openai-passthrough',
 ): ReadableStream<Uint8Array> {
-  const assembler = new OpenAIWireAssembler({ model, wireMode: 'legacy-web' });
+  const assembler = new OpenAIWireAssembler({ model, wireMode });
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
     async start(controller) {
