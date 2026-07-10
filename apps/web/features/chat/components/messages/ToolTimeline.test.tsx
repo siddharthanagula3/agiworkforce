@@ -289,3 +289,43 @@ describe('ToolTimeline · edge cases', () => {
     expect(screen.getByText(/1 failed/)).toBeInTheDocument();
   });
 });
+
+// ─── Audit-trail lifecycle (Claude parity: live steps → collapsed trail) ──────
+
+describe('ToolTimeline · audit-trail collapse lifecycle', () => {
+  it('shows steps live while running, auto-collapses to a summary on completion, and re-expands on click', async () => {
+    const running = [
+      { name: 'Read', status: 'completed' as const, durationMs: 120 },
+      { name: 'file_create', status: 'running' as const, statusPhrase: 'Creating file…' },
+    ];
+    const { rerender } = render(<ToolTimeline tools={running} />);
+
+    // Live phase: auto-expanded, steps visible with the running status phrase
+    expect(screen.getByText('Creating file…')).toBeInTheDocument();
+    expect(screen.getByText('Read')).toBeInTheDocument();
+
+    // All steps complete → the trail auto-collapses into the action-phrase summary
+    const completed = [
+      { name: 'Read', status: 'completed' as const, durationMs: 120 },
+      { name: 'file_create', status: 'completed' as const, durationMs: 900 },
+    ];
+    await act(async () => {
+      rerender(<ToolTimeline tools={completed} />);
+    });
+    expect(screen.queryByText('Read')).not.toBeInTheDocument();
+    expect(screen.getByText(/read a file, created a file/i)).toBeInTheDocument();
+
+    // Collapsed trail stays clickable: expanding restores the full step list
+    fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Read')).toBeInTheDocument();
+      expect(screen.getByText('Done')).toBeInTheDocument();
+    });
+
+    // And collapses again on a second click
+    fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
+    await waitFor(() => {
+      expect(screen.queryByText('Read')).not.toBeInTheDocument();
+    });
+  });
+});
