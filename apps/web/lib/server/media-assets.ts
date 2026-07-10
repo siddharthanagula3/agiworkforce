@@ -135,6 +135,60 @@ export async function listMediaAssets(
   }
 }
 
+/**
+ * One asset row with ownership + storage pointer, for the authenticated
+ * byte-serving route (`/api/files/[id]`). Unlike the Library list shape this
+ * includes `userId` (authorization check), `storagePathname` (R2 key), and
+ * `metadata` (original filename for Content-Disposition).
+ */
+export interface MediaAssetForServing {
+  id: string;
+  userId: string;
+  kind: string;
+  mimeType: string;
+  byteSize: number | null;
+  storageUrl: string;
+  storagePathname: string | null;
+  metadata: Record<string, unknown>;
+  deletedAt: string | null;
+}
+
+/**
+ * Fetch a single asset by id REGARDLESS of owner — the caller must compare
+ * `userId` and return 403 on mismatch. Returns null when the row does not
+ * exist or the table has not been migrated yet.
+ */
+export async function getMediaAssetById(id: string): Promise<MediaAssetForServing | null> {
+  const db = getNeonDb();
+  try {
+    const rows = await db.query<Record<string, unknown>>(
+      `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+              metadata, deleted_at
+         from public.media_assets
+        where id = $1
+        limit 1`,
+      [id],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: String(row['id']),
+      userId: String(row['user_id']),
+      kind: String(row['kind']),
+      mimeType: String(row['mime_type']),
+      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+      storageUrl: String(row['storage_url']),
+      storagePathname: (row['storage_pathname'] as string | null) ?? null,
+      metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+      deletedAt:
+        row['deleted_at'] == null ? null : new Date(row['deleted_at'] as string).toISOString(),
+    };
+  } catch (error) {
+    if (isSchemaNotReady(error)) return null;
+    throw error;
+  }
+}
+
 /** Soft-delete one of the user's assets. Returns true when a row was updated. */
 export async function softDeleteMediaAsset(userId: string, id: string): Promise<boolean> {
   const db = getNeonDb();

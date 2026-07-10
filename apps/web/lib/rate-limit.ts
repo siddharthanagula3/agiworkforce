@@ -218,6 +218,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 presigned-upload requests per minute per user
     failClosed: false,
   },
+  'files-serve': {
+    limit: 120,
+    window: '1 m', // generated-file byte serving; a transcript can render many inline files
+    failClosed: false,
+  },
   // LLM completion endpoints - critical for cost control and abuse prevention
   'llm-completion': {
     limit: 30,
