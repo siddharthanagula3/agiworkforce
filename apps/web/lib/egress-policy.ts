@@ -22,6 +22,14 @@ const ALLOWED_HOSTNAMES = [
   'api.anthropic.com',
   'api.openai.com',
   'generativelanguage.googleapis.com',
+  // Moonshot (Kimi): both the mainland (`.cn`) and international (`.ai`) hosts.
+  // We now route to the international endpoint via `MOONSHOT_BASE_URL=https://api.moonshot.ai/v1`,
+  // and a `*_BASE_URL` override is validated here (request-processor.ts:validateEgressUrl)
+  // before the adapter is built — without `.ai` on the allowlist a plain Moonshot send 403s
+  // with "Provider endpoint not in approved egress allowlist". The moonshot adapter's own
+  // SSRF allowlist already permits both hosts (packages/providers/moonshot/src/index.ts).
+  'api.moonshot.cn',
+  'api.moonshot.ai',
   'api.stripe.com',
   'api.upstash.io',
   // Neon: wildcard for project-specific subdomains

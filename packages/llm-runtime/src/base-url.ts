@@ -40,6 +40,7 @@ export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
   'dashscope.aliyuncs.com',
   'api.mulerouter.ai',
   'api.moonshot.cn',
+  'api.moonshot.ai',
   'api.deepseek.com',
   'api.perplexity.ai',
   'open.bigmodel.cn',
