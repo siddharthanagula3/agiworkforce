@@ -269,45 +269,42 @@ export function GeneralSection() {
           </div>
 
           {/* Full name */}
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-foreground">Full name</span>
+          <FieldRow label="Full name" htmlFor="general-full-name">
             <input
+              id="general-full-name"
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value.slice(0, 80))}
               maxLength={80}
               placeholder="Your name"
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="w-56 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
             />
-          </label>
+          </FieldRow>
 
           {/* What should AGI call you */}
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-foreground">
-              What should AGI call you?
-            </span>
+          <FieldRow
+            label="What should AGI call you?"
+            helper="The assistant uses this in greetings and follow-ups."
+            htmlFor="general-preferred-name"
+          >
             <input
+              id="general-preferred-name"
               type="text"
               value={preferredName}
               onChange={(e) => setPreferredName(e.target.value.slice(0, 60))}
               maxLength={60}
               placeholder="Nickname or first name"
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="w-56 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
             />
-            <span className="text-[11px] text-muted-foreground">
-              The assistant uses this in greetings and follow-ups.
-            </span>
-          </label>
+          </FieldRow>
 
           {/* Work description */}
-          <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-foreground">
-              What best describes your work?
-            </span>
+          <FieldRow label="What best describes your work?" htmlFor="general-work">
             <select
+              id="general-work"
               value={workDescription}
               onChange={(e) => setWorkDescription(e.target.value as WorkDescription)}
-              className="cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="w-56 cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
               style={{ appearance: 'none', WebkitAppearance: 'none' }}
             >
               <option value="">Select a role...</option>
@@ -317,10 +314,10 @@ export function GeneralSection() {
                 </option>
               ))}
             </select>
-          </label>
+          </FieldRow>
 
-          {/* Instructions for AGI */}
-          <label className="flex flex-col gap-1.5">
+          {/* Instructions for AGI — full-width textarea (matches reference) */}
+          <label className="flex flex-col gap-1.5 pt-1">
             <span className="text-[13px] font-medium text-foreground">Instructions for AGI</span>
             <span className="text-xs leading-relaxed text-muted-foreground">
               AGI will keep these in mind across chats. They help tailor tone, format, and
@@ -433,6 +430,30 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex min-h-9 items-center justify-between gap-4">
       <span className="shrink-0 text-sm text-foreground">{label}</span>
       {children}
+    </div>
+  );
+}
+
+// Profile field row: label (+ optional helper) on the left, control on the
+// right, separated by a thin hairline divider (matches the reference layout).
+function FieldRow({
+  label,
+  helper,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  helper?: string;
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border/40 pb-4">
+      <label htmlFor={htmlFor} className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-[13px] font-medium text-foreground">{label}</span>
+        {helper && <span className="text-[11px] text-muted-foreground">{helper}</span>}
+      </label>
+      <div className="shrink-0">{children}</div>
     </div>
   );
 }
