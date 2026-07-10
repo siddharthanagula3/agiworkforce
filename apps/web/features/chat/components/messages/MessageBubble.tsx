@@ -70,6 +70,7 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
+import { dedupeResearchSources } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 
@@ -472,7 +473,10 @@ const MessageBubbleComponent = function MessageBubble({
         });
     }
 
-    return { searchSources: collected, searchQuery: query };
+    // De-dupe by URL and assign stable 1-based citation numbers (claude.ai
+    // parity: a source cited twice keeps one number). Sources missing a usable
+    // URL are dropped here rather than rendered as dead links.
+    return { searchSources: dedupeResearchSources(collected), searchQuery: query };
   }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
 
   // Mirror this message's web-search sources into the right-hand Sources panel

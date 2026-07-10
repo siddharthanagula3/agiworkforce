@@ -236,6 +236,65 @@ interface InlineSourcesListProps {
   query?: string;
 }
 
+/** Derive a clean host and a favicon URL (provider favicon → Google fallback). */
+function sourceDisplay(source: ResearchSource): { host: string; favicon?: string } {
+  let host = source.url;
+  let favicon = source.favicon;
+  try {
+    const parsed = new URL(source.url);
+    host = parsed.hostname.replace(/^www\./, '');
+    if (!favicon) {
+      favicon = `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`;
+    }
+  } catch {
+    // Non-URL string: keep raw host, no favicon.
+  }
+  return { host, favicon };
+}
+
+/** A single inline source chip: number badge + favicon + domain. */
+function SourcePill({ source, index }: { source: ResearchSource; index: number }) {
+  const [imgError, setImgError] = useState(false);
+  const { host, favicon } = sourceDisplay(source);
+  const label = source.title || host;
+  const number = source.citationIndex ?? index + 1;
+
+  return (
+    <a
+      href={source.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      role="listitem"
+      title={label}
+      aria-label={`Source ${number}: ${label}`}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border border-border/30',
+        'bg-muted/30 px-2 py-0.5 text-[11px] no-underline',
+        'text-muted-foreground hover:border-border/60 hover:bg-muted/60 hover:text-foreground',
+        'transition-colors duration-100',
+      )}
+    >
+      <span className="flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-primary/15 px-0.5 text-[9px] font-bold text-primary">
+        {number}
+      </span>
+      {favicon && !imgError ? (
+        <img
+          src={favicon}
+          alt=""
+          aria-hidden="true"
+          width={12}
+          height={12}
+          className="h-3 w-3 shrink-0 rounded-[2px] object-contain"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <Globe className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+      )}
+      <span className="max-w-[120px] truncate">{host}</span>
+    </a>
+  );
+}
+
 export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
   const openPanel = useResearchPanelStore((s) => s.openPanel);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -248,37 +307,14 @@ export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
       role="list"
       aria-label={query ? `Sources for "${query}"` : 'Web search sources'}
     >
-      {sources.map((source, index) => {
-        let displayHost = source.url;
-        try {
-          displayHost = new URL(source.url).hostname.replace(/^www\./, '');
-        } catch {
-          // keep raw
-        }
+      {/* Compact "Sources" label (claude.ai parity) with the deduped count. */}
+      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground/70">
+        {sources.length} {sources.length === 1 ? 'source' : 'sources'}
+      </span>
 
-        return (
-          <a
-            key={`${source.url}-${index}`}
-            href={source.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            role="listitem"
-            title={source.title || displayHost}
-            aria-label={`Source ${source.citationIndex ?? index + 1}: ${source.title || displayHost}`}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-full border border-border/30',
-              'bg-muted/30 px-2 py-0.5 text-[11px] no-underline',
-              'text-muted-foreground hover:border-border/60 hover:bg-muted/60 hover:text-foreground',
-              'transition-colors duration-100',
-            )}
-          >
-            <span className="flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-primary/15 px-0.5 text-[9px] font-bold text-primary">
-              {source.citationIndex ?? index + 1}
-            </span>
-            <span className="max-w-[120px] truncate">{displayHost}</span>
-          </a>
-        );
-      })}
+      {sources.map((source, index) => (
+        <SourcePill key={`${source.url}-${index}`} source={source} index={index} />
+      ))}
 
       {/* View all link -- opens the full-detail panel */}
       <button
