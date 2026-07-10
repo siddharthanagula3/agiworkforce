@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronRight, Maximize2, Presentation } from 'lucide-react
 import { useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../lib/types';
+import { MarkdownLite } from '../MessageBubble';
 
 export interface PresentationArtifactProps {
   artifact: Artifact;
@@ -81,10 +82,8 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
 
         {/* Slide card */}
         <div className="w-full max-w-4xl aspect-[16/9] bg-card/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 sm:p-12 shadow-2xl flex flex-col relative z-10 transition-transform duration-500">
-          <div className="flex-1 flex flex-col justify-center leading-relaxed">
-            <pre className="whitespace-pre-wrap font-sans text-sm text-foreground">
-              {slides[currentSlide]}
-            </pre>
+          <div className="flex-1 flex flex-col justify-center leading-relaxed overflow-auto">
+            <MarkdownLite content={slides[currentSlide] ?? ''} className="text-sm text-foreground" />
           </div>
           <div className="mt-8 pt-4 border-t border-white/5 flex justify-between items-center text-xs text-muted-foreground font-medium tracking-wide uppercase">
             <span>{artifact.title || 'Presentation'}</span>
