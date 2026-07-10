@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../cn';
 import type { SettingsDataAdapter, SettingsConnector, SettingsSkill } from './types';
+import type { SettingsNavGroupResolved } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
 
 // ---------------------------------------------------------------------------
@@ -498,6 +499,42 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 // SettingsModal props + component
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// NavButton — a single nav row (filled pill when active), shared by the grouped
+// and legacy flat renderers.
+// ---------------------------------------------------------------------------
+
+function NavButton({
+  itemKey,
+  label,
+  Icon,
+  isActive,
+  onClick,
+}: {
+  itemKey: string;
+  label: string;
+  Icon: LucideIcon;
+  isActive: boolean;
+  onClick: (key: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(itemKey)}
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+        isActive
+          ? 'bg-foreground text-background font-medium'
+          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+      )}
+      aria-current={isActive ? 'page' : undefined}
+    >
+      <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-100' : 'opacity-60')} />
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
 export interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
@@ -508,8 +545,15 @@ export interface SettingsModalProps {
    * Connectors/Skills/Plugins fall back to built-in adapter-driven panels.
    */
   sectionContent: Partial<Record<string, React.ReactNode>>;
-  /** Subset of nav keys to show (omit to show all). */
+  /** Subset of nav keys to show (omit to show all). Ignored when navGroups is set. */
   activeKeys?: string[];
+  /**
+   * Grouped nav to render (group headings + icon'd items). When provided, this
+   * replaces the flat built-in list — the single source is
+   * `SETTINGS_NAV_GROUPS_WEB` from `../settings-nav`. Omit for the legacy flat
+   * list.
+   */
+  navGroups?: SettingsNavGroupResolved[];
   /** Data for built-in Connectors/Skills/Plugins panels. */
   adapter?: SettingsDataAdapter;
   /** Modal title (default: "Settings") */
@@ -523,11 +567,26 @@ export function SettingsModal({
   onSectionChange,
   sectionContent,
   activeKeys,
+  navGroups,
   adapter,
   title = 'Settings',
 }: SettingsModalProps) {
   const [navSearch, setNavSearch] = useState('');
 
+  // Grouped nav (preferred): filter items within each group, dropping groups
+  // that end up empty so headers never orphan.
+  const visibleGroups = useMemo(() => {
+    if (!navGroups) return null;
+    const filter = navSearch.trim().toLowerCase();
+    return navGroups
+      .map((g) => ({
+        label: g.label,
+        items: filter ? g.items.filter((i) => i.label.toLowerCase().includes(filter)) : g.items,
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [navGroups, navSearch]);
+
+  // Legacy flat nav (backward compat when navGroups is not provided).
   const visibleEntries = useMemo(() => {
     const filter = navSearch.trim().toLowerCase();
     const keySet = activeKeys ? new Set(activeKeys) : null;
@@ -616,31 +675,45 @@ export function SettingsModal({
           </div>
 
           {/* Nav entries */}
-          <div className="flex flex-col gap-0.5 px-2">
-            {visibleEntries.map((entry) => {
-              const Icon = entry.icon;
-              const isActive = activeSection === entry.key;
-              return (
-                <button
-                  key={entry.key}
-                  type="button"
-                  onClick={() => onSectionChange(entry.key)}
-                  className={cn(
-                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                    isActive
-                      ? 'bg-muted text-foreground font-medium'
-                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+          {visibleGroups ? (
+            <div className="flex flex-col gap-3 px-2">
+              {visibleGroups.map((group, gi) => (
+                <div key={group.label ?? `group-${gi}`} className="flex flex-col gap-0.5">
+                  {group.label && (
+                    <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      {group.label}
+                    </div>
                   )}
-                  aria-current={isActive ? 'page' : undefined}
-                >
-                  <Icon
-                    className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-100' : 'opacity-60')}
-                  />
-                  <span className="truncate">{entry.label}</span>
-                </button>
-              );
-            })}
-          </div>
+                  {group.items.map((item) => (
+                    <NavButton
+                      key={item.key}
+                      itemKey={item.key}
+                      label={item.label}
+                      Icon={item.icon}
+                      isActive={activeSection === item.key}
+                      onClick={onSectionChange}
+                    />
+                  ))}
+                </div>
+              ))}
+              {visibleGroups.length === 0 && (
+                <p className="px-3 py-2 text-xs text-muted-foreground">No matches.</p>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-0.5 px-2">
+              {visibleEntries.map((entry) => (
+                <NavButton
+                  key={entry.key}
+                  itemKey={entry.key}
+                  label={entry.label}
+                  Icon={entry.icon}
+                  isActive={activeSection === entry.key}
+                  onClick={onSectionChange}
+                />
+              ))}
+            </div>
+          )}
         </nav>
 
         {/* Right pane */}

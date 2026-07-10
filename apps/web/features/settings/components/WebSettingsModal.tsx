@@ -24,7 +24,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { SettingsModal } from '@agiworkforce/ui';
+import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type { SettingsDataAdapter, SettingsSkill } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -313,6 +313,7 @@ export function WebSettingsModal({
         activeSection={activeSection}
         onSectionChange={handleSectionChange}
         sectionContent={sectionContent}
+        navGroups={SETTINGS_NAV_GROUPS_WEB}
         adapter={adapter}
         title="Settings"
       />
