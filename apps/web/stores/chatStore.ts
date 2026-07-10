@@ -19,6 +19,19 @@ import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkfo
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 
 // Types
+/**
+ * A single reasoning segment within one assistant turn. Multiple segments occur
+ * when the model interleaves thinking with tool calls. Rendered by ThinkingBlock.
+ */
+export interface ThinkingSegment {
+  id: string;
+  content: string;
+  isStreaming: boolean;
+  startedAt: string;
+  completedAt: string | null;
+  durationSeconds?: number;
+}
+
 export interface MessageMetadata {
   /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
   privacyMode?: 'local' | 'byok' | 'managed';
@@ -39,6 +52,15 @@ export interface MessageMetadata {
   thinkingStartedAt?: string;
   /** ISO timestamp when thinking completed */
   thinkingCompletedAt?: string;
+  /** Stable thinking duration in seconds (persisted so reload shows "Thought for Ns"). */
+  thinkingDurationSeconds?: number;
+  /**
+   * Ordered reasoning segments for a single turn. Populated only when the model
+   * emits MORE THAN ONE `<thinking>` block (e.g. interleaved thinking around tool
+   * calls) so the transcript renders each block as a flow instead of one blob.
+   * Single-block turns leave this undefined and use `thinkingContent`.
+   */
+  thinkingSegments?: ThinkingSegment[];
   /** True while a server-managed web search is in progress */
   isSearching?: boolean;
   /** Web search results from server-managed tools */
