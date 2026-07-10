@@ -179,6 +179,12 @@ export class WebRuntime implements ChatRuntime {
       }
     >();
     let inThinkingBlock = false;
+    // How this turn ended, from the OpenAI-wire `finish_reason`. Captured in the
+    // raw-payload callback (which sees `choices[0].finish_reason`) but emitted
+    // in `onDone` — so it lives here across both callbacks. Keep the LAST reason
+    // seen: server tool loops emit intermediate 'tool_calls' before the final
+    // 'stop'/'length'. 'length'/'max_tokens' → truncated (continuable).
+    let finishReason: string | undefined;
 
     // If the caller provided an external signal, chain it
     if (options?.signal) {
@@ -209,7 +215,7 @@ export class WebRuntime implements ChatRuntime {
         },
         // onDone
         () => {
-          this.emit({ type: 'done' });
+          this.emit({ type: 'done', ...(finishReason ? { finishReason } : {}) });
         },
         // onError
         (err: Error) => {
@@ -224,6 +230,17 @@ export class WebRuntime implements ChatRuntime {
                   | Record<string, unknown>
                   | undefined)
               : undefined;
+
+          // Capture the turn's finish_reason as it streams (last seen wins).
+          // Sits on the choice, not the delta. Threaded into the assistant
+          // message metadata by useChat so the Continue affordance is honest.
+          const rawFinishReason =
+            choices.length > 0 && choices[0] && typeof choices[0] === 'object'
+              ? (choices[0] as Record<string, unknown>)['finish_reason']
+              : undefined;
+          if (typeof rawFinishReason === 'string' && rawFinishReason) {
+            finishReason = rawFinishReason;
+          }
 
           const toolCalls = Array.isArray(delta?.['tool_calls']) ? delta['tool_calls'] : [];
           for (const entry of toolCalls) {
