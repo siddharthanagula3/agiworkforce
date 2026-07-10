@@ -5,8 +5,12 @@
  *
  * Everything here is DETERMINISTIC: keypairs derive from fixed committed seeds
  * and every timestamp derives from a fixed `REFERENCE_NOW_MS`. Re-running
- * regenerates byte-identical fixtures, so the corpus a future Rust
- * `agiworkforce-licensing` crate replays stays honest.
+ * regenerates byte-identical signed fixtures, so the corpus a future Rust
+ * `agiworkforce-licensing` crate replays stays honest. (The `manifest.json`
+ * files emit as `JSON.stringify(..., 2)` and are normalized by the repo's
+ * pre-commit prettier hook — the committed prettier form is canonical; a bare
+ * re-run may show a whitespace-only manifest diff that `prettier --write`
+ * flattens. The signed `.agilicense`/`.agipolicy` bytes never differ.)
  *
  * It writes TWO corpora:
  *   - license fixtures → packages/licensing/src/__fixtures__/
