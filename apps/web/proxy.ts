@@ -83,6 +83,7 @@ function buildSignedOutRedirect(request: NextRequest): NextResponse {
 
 const isProtectedAppRoute = createRouteMatcher([
   '/chat(.*)',
+  '/library(.*)',
   '/settings(.*)',
   '/billing(.*)',
   '/admin(.*)',
@@ -99,6 +100,7 @@ const isPublicApiRoute = createRouteMatcher([
 const isClerkSessionRoute = createRouteMatcher([
   '/__clerk/(.*)',
   '/chat(.*)',
+  '/library(.*)',
   '/settings(.*)',
   '/billing(.*)',
   '/admin(.*)',
