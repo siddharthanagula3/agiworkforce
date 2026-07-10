@@ -66,7 +66,6 @@ import type { SearchResponse, SearchResult } from '@core/integrations/web-search
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
-import { ArtifactBlock } from '../ArtifactBlock';
 import { ComparisonResponse } from './ComparisonResponse';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
@@ -740,12 +739,16 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {/* ArtifactBlock · rendered code blocks (html/csv/json/mermaid/generic) */}
-          {!isUser && cleanedContent.trim() && (
-            <div className="mt-1">
-              <ArtifactBlock content={cleanedContent} />
-            </div>
-          )}
+          {/* Code blocks are rendered exactly once by <MarkdownContent> above
+              (syntax-highlighted via rehype-highlight, with a copy button + lang
+              label). A previous <ArtifactBlock content={cleanedContent}> here
+              RE-rendered every fenced block a second time, so non-renderable
+              blocks (python/csv/json/generic — the ones NOT stripped from
+              cleanedContent by removeArtifactBlocks) appeared twice (the visible
+              "duplicate code block" bug). Renderable artifacts (html/react/svg/
+              mermaid) are already stripped from cleanedContent and surfaced via
+              <InlineArtifactCards> / the Artifacts panel below, so removing the
+              inline ArtifactBlock loses no unique rendering. */}
 
           {/* Inline artifact thumbnail cards · quick visual summary, click to open panel */}
           {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
