@@ -164,9 +164,11 @@ export type ProcessedRequest = {
   /**
    * True when Deep Research mode was applied (research:true and the resolved
    * model supports web search). route.ts uses this to enter the multi-turn
-   * research loop on streaming, non-free-trial requests.
+   * research loop on streaming, non-free-trial requests. Optional (additive
+   * schema evolution): absent/undefined means false, so pre-existing
+   * ProcessedRequest fixtures stay valid without churn.
    */
-  researchMode: boolean;
+  researchMode?: boolean;
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
   llmRequest: {
