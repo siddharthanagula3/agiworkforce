@@ -60,7 +60,7 @@ import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-det
 import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforce/services';
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore } from '../../stores/artifacts-store';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore, type GeneratedFileMetadataEntry } from '@/stores/chatStore';
 import { useToolApprovalResolver } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
@@ -191,6 +191,8 @@ interface Message {
     computeSession?: ComputeSession;
     generatedFile?: GeneratedFile;
     artifactManifest?: ArtifactManifest;
+    /** Tool/provider-generated files (x_generated_files) with same-origin /api/files uris. */
+    generatedFiles?: GeneratedFileMetadataEntry[];
     collaborationMessages?: Array<{
       employeeName: string;
       employeeAvatar: string;
@@ -351,13 +353,103 @@ const MessageBubbleComponent = function MessageBubble({
     block: streamingBlock,
   });
 
+  // ── Tool/provider-generated files (`x_generated_files` → metadata) ────────
+  // Bytes live behind the authenticated same-origin /api/files/{id} route.
+  // Rendering reuses EXISTING components per kind: images → attachment
+  // thumbnail + ImageLightbox; pdf → ArtifactPreview's gated PDF viewer;
+  // csv → SpreadsheetArtifact (content fetched below); rest → download chip.
+  const generatedFiles = useMemo<GeneratedFileMetadataEntry[]>(
+    () => (isUser ? [] : (message.metadata?.generatedFiles ?? [])),
+    [isUser, message.metadata?.generatedFiles],
+  );
+
+  /** Max CSV bytes fetched for the inline spreadsheet renderer. */
+  const MAX_INLINE_CSV_BYTES = 2 * 1024 * 1024;
+  // Fetched CSV text per generated-file id; 'error' → honest chip fallback.
+  const [generatedCsvContent, setGeneratedCsvContent] = useState<Record<string, string | 'error'>>(
+    {},
+  );
+  useEffect(() => {
+    const pending = generatedFiles.filter(
+      (f) =>
+        f.kind === 'csv' &&
+        f.byteCount <= MAX_INLINE_CSV_BYTES &&
+        generatedCsvContent[f.id] === undefined,
+    );
+    if (pending.length === 0) return;
+    let cancelled = false;
+    for (const file of pending) {
+      fetch(file.uri, { credentials: 'same-origin' })
+        .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
+        .then((text) => {
+          if (!cancelled) setGeneratedCsvContent((prev) => ({ ...prev, [file.id]: text }));
+        })
+        .catch(() => {
+          if (!cancelled) setGeneratedCsvContent((prev) => ({ ...prev, [file.id]: 'error' }));
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedFiles, generatedCsvContent, MAX_INLINE_CSV_BYTES]);
+
+  const toGeneratedFile = useCallback(
+    (f: GeneratedFileMetadataEntry): GeneratedFile => ({
+      id: f.id,
+      computeSessionId: `generated-${message.id}`,
+      ownerUserId: '',
+      sourceSurface: 'web',
+      privacyMode: 'managed',
+      providerMode: 'ManagedGateway',
+      kind: (f.kind || 'other') as GeneratedFile['kind'],
+      fileName: f.fileName,
+      mimeType: f.mimeType,
+      uri: f.uri,
+      byteCount: f.byteCount,
+      checksumSha256: f.checksumSha256 ?? '',
+      previewDerivatives: [],
+      createdAt: message.timestamp.toISOString(),
+    }),
+    [message.id, message.timestamp],
+  );
+
   const generatedFileArtifacts = useMemo<ArtifactData[]>(() => {
     if (isUser) return [];
+    const out: ArtifactData[] = [];
+
+    // Renderable generated files → existing artifact renderers. Images and
+    // download-only kinds render through the attachment grid instead.
+    for (const f of generatedFiles) {
+      if (f.kind === 'pdf') {
+        out.push({
+          id: `genfile-${f.id}`,
+          type: 'document',
+          language: 'pdf',
+          title: f.fileName,
+          content: '',
+          generatedFile: toGeneratedFile(f),
+        });
+      } else if (f.kind === 'csv') {
+        const csv = generatedCsvContent[f.id];
+        if (typeof csv === 'string' && csv !== 'error') {
+          out.push({
+            id: `genfile-${f.id}`,
+            type: 'csv',
+            language: 'csv',
+            title: f.fileName,
+            content: csv,
+            generatedFile: toGeneratedFile(f),
+          });
+        }
+      }
+    }
+
     const { computeSession, generatedFile, artifactManifest, documentData } =
       message.metadata ?? {};
-    if (!computeSession && !generatedFile && !artifactManifest) return [];
+    if (!computeSession && !generatedFile && !artifactManifest) return out;
 
     return [
+      ...out,
       {
         id: artifactManifest?.artifactId ?? generatedFile?.id ?? `generated-file-${message.id}`,
         type: 'document',
@@ -382,12 +474,56 @@ const MessageBubbleComponent = function MessageBubble({
         currentVersion: 0,
       },
     ];
-  }, [isUser, message.content, message.id, message.metadata, message.timestamp]);
+  }, [
+    isUser,
+    message.content,
+    message.id,
+    message.metadata,
+    message.timestamp,
+    generatedFiles,
+    generatedCsvContent,
+    toGeneratedFile,
+  ]);
 
   const artifacts = useMemo(() => {
     const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
-    return [...baseArtifacts, ...generatedFileArtifacts];
+    // Dedupe by id: the upsert effect below writes generated-file artifacts
+    // into the artifacts store, so on the next render they ALSO arrive via
+    // existingArtifacts — without this they would render twice.
+    const merged = [...baseArtifacts];
+    for (const artifact of generatedFileArtifacts) {
+      if (!merged.some((existing) => existing.id === artifact.id)) merged.push(artifact);
+    }
+    return merged;
   }, [existingArtifacts, extractedArtifacts, generatedFileArtifacts]);
+
+  // Generated files rendered through the EXISTING attachment grid: images get
+  // the thumbnail + ImageLightbox path; non-renderable kinds (docx/xlsx/zip/…)
+  // and CSVs whose content fetch failed get the download chip. PDFs and
+  // successfully-loaded CSVs are excluded here — they render as artifacts.
+  const generatedFileAttachments = useMemo<Attachment[]>(
+    () =>
+      generatedFiles
+        .filter(
+          (f) =>
+            f.kind === 'image' ||
+            (f.kind === 'csv' && generatedCsvContent[f.id] === 'error') ||
+            !['image', 'pdf', 'csv'].includes(f.kind),
+        )
+        .map((f) => ({
+          id: `genfile-${f.id}`,
+          name: f.fileName,
+          type: f.mimeType,
+          size: f.byteCount,
+          url: f.uri,
+        })),
+    [generatedFiles, generatedCsvContent],
+  );
+
+  const displayAttachments = useMemo<Attachment[]>(
+    () => [...(message.attachments ?? []), ...generatedFileAttachments],
+    [message.attachments, generatedFileAttachments],
+  );
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
@@ -717,9 +853,9 @@ const MessageBubbleComponent = function MessageBubble({
               muted loading placeholder behind the image and a graceful
               broken-image fallback when the source fails to load. Non-image
               attachments keep the icon+name chip linking to the file. */}
-          {message.attachments && message.attachments.length > 0 && (
+          {displayAttachments.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
-              {message.attachments.map((attachment) => {
+              {displayAttachments.map((attachment) => {
                 const isImage = attachment.type.startsWith('image/');
                 const isDoc =
                   attachment.type === 'application/pdf' ||

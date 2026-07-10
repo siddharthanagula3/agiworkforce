@@ -496,4 +496,149 @@ describe('MessageBubble', () => {
       expect(screen.queryByRole('button', { name: /view report\.pdf full size/i })).toBeNull();
     });
   });
+
+  describe('generated files (x_generated_files metadata)', () => {
+    const genFile = (overrides: Record<string, unknown> = {}) => ({
+      id: 'gf-1',
+      fileName: 'chart.png',
+      mimeType: 'image/png',
+      uri: '/api/files/gf-1',
+      byteCount: 1024,
+      kind: 'image',
+      checksumSha256: 'a'.repeat(64),
+      ...overrides,
+    });
+
+    it('renders an image generated file as a thumbnail that opens the lightbox', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Here is your chart.',
+            metadata: { generatedFiles: [genFile()] },
+          })}
+        />,
+      );
+      const img = screen.getByAltText('chart.png') as HTMLImageElement;
+      // Same-origin authenticated serve route — the renderable url shape.
+      expect(img.getAttribute('src')).toBe('/api/files/gf-1');
+      fireEvent.click(screen.getByRole('button', { name: /view chart\.png full size/i }));
+      expect(screen.getByRole('dialog', { name: /image preview/i })).toBeTruthy();
+    });
+
+    it('renders a PDF generated file as an artifact card (PDF viewer path)', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Report attached.',
+            metadata: {
+              generatedFiles: [
+                genFile({
+                  id: 'gf-pdf',
+                  fileName: 'report.pdf',
+                  mimeType: 'application/pdf',
+                  uri: '/api/files/gf-pdf',
+                  kind: 'pdf',
+                }),
+              ],
+            },
+          })}
+        />,
+      );
+      expect(screen.getByRole('button', { name: /open artifact: report\.pdf/i })).toBeTruthy();
+      // Not duplicated as a download chip.
+      expect(screen.queryByRole('link', { name: /report\.pdf/i })).toBeNull();
+    });
+
+    it('fetches CSV content same-origin and renders it as a spreadsheet artifact', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response('name,score\nada,10\n', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        render(
+          <MessageBubble
+            message={makeMessage({
+              role: 'assistant',
+              content: 'Data attached.',
+              metadata: {
+                generatedFiles: [
+                  genFile({
+                    id: 'gf-csv',
+                    fileName: 'data.csv',
+                    mimeType: 'text/csv',
+                    uri: '/api/files/gf-csv',
+                    kind: 'csv',
+                  }),
+                ],
+              },
+            })}
+          />,
+        );
+        await waitFor(() =>
+          expect(screen.getByRole('button', { name: /open artifact: data\.csv/i })).toBeTruthy(),
+        );
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/files/gf-csv',
+          expect.objectContaining({ credentials: 'same-origin' }),
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('falls back to an honest download chip when the CSV fetch fails', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 403 })));
+      try {
+        render(
+          <MessageBubble
+            message={makeMessage({
+              role: 'assistant',
+              content: 'Data attached.',
+              metadata: {
+                generatedFiles: [
+                  genFile({
+                    id: 'gf-csv2',
+                    fileName: 'data.csv',
+                    mimeType: 'text/csv',
+                    uri: '/api/files/gf-csv2',
+                    kind: 'csv',
+                  }),
+                ],
+              },
+            })}
+          />,
+        );
+        const link = (await screen.findByRole('link', { name: /data\.csv/i })) as HTMLAnchorElement;
+        expect(link.getAttribute('href')).toBe('/api/files/gf-csv2');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('renders non-renderable kinds (archive) as a download chip', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Bundle attached.',
+            metadata: {
+              generatedFiles: [
+                genFile({
+                  id: 'gf-zip',
+                  fileName: 'bundle.zip',
+                  mimeType: 'application/zip',
+                  uri: '/api/files/gf-zip',
+                  kind: 'archive',
+                }),
+              ],
+            },
+          })}
+        />,
+      );
+      const link = screen.getByRole('link', { name: /bundle\.zip/i }) as HTMLAnchorElement;
+      expect(link.getAttribute('href')).toBe('/api/files/gf-zip');
+    });
+  });
 });

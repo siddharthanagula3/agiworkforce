@@ -397,6 +397,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let currentSearchResults: MessageMetadata['searchResults'];
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'];
   let currentResearch: MessageResearchState | undefined;
+  let currentGeneratedFiles: MessageMetadata['generatedFiles'];
 
   // ── Reasoning (thinking) accumulation ──────────────────────────────────────
   // updateMessage REPLACES metadata wholesale, so a bare `{ metadata: {...} }`
@@ -566,6 +567,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (currentCodeExecutionResult) {
       metadata.codeExecutionResult = currentCodeExecutionResult;
+    }
+    if (currentGeneratedFiles && currentGeneratedFiles.length > 0) {
+      metadata.generatedFiles = currentGeneratedFiles.map((f) => ({ ...f }));
     }
     if (currentResearch) {
       metadata.research = { ...currentResearch };
@@ -952,6 +956,37 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 entry.error = is_error ? resultText : entry.error;
               }
               publishToolTimeline();
+            }
+          }
+
+          // Generated files (tool/provider runs that produced real bytes).
+          // Emitted once by the server before [DONE] with same-origin
+          // /api/files/{id} uris. UPSERT by file name so a re-harvested file
+          // replaces its earlier descriptor instead of duplicating.
+          const generatedFilesBlock = parsed.choices?.[0]?.delta?.x_generated_files;
+          if (generatedFilesBlock?.files && Array.isArray(generatedFilesBlock.files)) {
+            const incoming = (generatedFilesBlock.files as Record<string, unknown>[])
+              .filter((f) => typeof f['uri'] === 'string' && typeof f['file_name'] === 'string')
+              .map((f) => ({
+                id: typeof f['id'] === 'string' ? f['id'] : (f['file_name'] as string),
+                fileName: f['file_name'] as string,
+                mimeType:
+                  typeof f['mime_type'] === 'string' ? f['mime_type'] : 'application/octet-stream',
+                uri: f['uri'] as string,
+                byteCount: typeof f['byte_count'] === 'number' ? f['byte_count'] : 0,
+                kind: typeof f['kind'] === 'string' ? f['kind'] : 'other',
+                checksumSha256:
+                  typeof f['checksum_sha256'] === 'string' ? f['checksum_sha256'] : undefined,
+              }));
+            if (incoming.length > 0) {
+              const merged = [...(currentGeneratedFiles ?? [])];
+              for (const file of incoming) {
+                const existing = merged.findIndex((m) => m.fileName === file.fileName);
+                if (existing >= 0) merged[existing] = file;
+                else merged.push(file);
+              }
+              currentGeneratedFiles = merged;
+              patchMessageMeta({ generatedFiles: merged.map((f) => ({ ...f })) });
             }
           }
 
