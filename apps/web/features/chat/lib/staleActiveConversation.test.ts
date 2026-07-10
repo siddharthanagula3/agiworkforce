@@ -62,4 +62,23 @@ describe('isStaleActiveConversation', () => {
       }),
     ).toBe(false);
   });
+
+  it('never resets while a send is in flight, even in the createConversation→bareChatSessionId gap (DEMO-BLOCKER)', () => {
+    // Reproduces the exact first-turn race: createConversation has set the store
+    // active + cleared messages and its own isLoading finally has already flipped
+    // back to false, but bareChatSessionId has not committed yet (displayed id
+    // still null) and the stream has not started (isStreaming false). Without the
+    // isSending guard this returns true and nulls the just-created conversation,
+    // which then makes the post-navigation loadConversation refetch orphan the
+    // streaming assistant message so the first reply never renders until reload.
+    expect(
+      isStaleActiveConversation({
+        displayedConversationId: null,
+        activeConversationId: 'conv-abc',
+        isStreaming: false,
+        isLoading: false,
+        isSending: true,
+      }),
+    ).toBe(false);
+  });
 });

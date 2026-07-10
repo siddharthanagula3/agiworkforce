@@ -331,6 +331,21 @@ export default function WebChatPage() {
   const pendingEditRollbackRef = useRef<PendingEditRollback | null>(null);
   const deletePersistedMessagesRef = useRef<((ids: string[]) => Promise<boolean>) | null>(null);
 
+  // First-message send guard (DEMO-BLOCKER FIX). A brand-new-chat send runs
+  // `createConversation` (which sets the store's `activeConversationId` +
+  // clears messages) and only THEN commits `bareChatSessionId` and appends the
+  // user/streaming-assistant messages. Between those two steps there is a render
+  // where the store is active but `displayedConversationId` is still null and
+  // neither `isStreaming` nor `isLoading` is set — which the stale-active
+  // reconciler (below) misreads as a stale homepage and nulls
+  // `activeConversationId`. That desync then makes the post-navigation
+  // `loadConversation` refetch fire and clobber the in-flight streaming
+  // assistant message (it never renders until a manual reload). This ref stays
+  // true for the whole `sendContent` lifetime so the reconciler never clears an
+  // active conversation mid-send. It is a ref (not state) so flipping it never
+  // triggers a render; the reconciler reads it at effect-run time.
+  const isSendingRef = useRef(false);
+
   // Consume any pending message written by the project-detail composer before
   // navigating here. Reading once on mount prevents the value from surviving
   // page refreshes.
@@ -578,6 +593,7 @@ export default function WebChatPage() {
         activeConversationId,
         isStreaming,
         isLoading,
+        isSending: isSendingRef.current,
       })
     ) {
       setActiveConversation(null);
@@ -707,78 +723,90 @@ export default function WebChatPage() {
         meta?: SendMeta;
       } = {},
     ) => {
-      let freshConvId: string | null = null;
-      const convId =
-        options.conversationId ||
-        urlConversationId ||
-        bareChatSessionId ||
-        (await createConversation('New Chat', activeModelId).then((c) => {
-          if (c) {
-            freshConvId = c.id;
-            if (!urlConversationId) setBareChatSessionId(c.id);
-            return c.id;
-          }
-          return null;
-        }));
+      // Hold the send guard for the entire flow (set BEFORE createConversation,
+      // which is the first thing to mutate the store's activeConversationId) so
+      // the stale-active reconciler can never null the just-created conversation
+      // during the first-message → navigate window. Cleared in `finally`.
+      isSendingRef.current = true;
+      try {
+        let freshConvId: string | null = null;
+        const convId =
+          options.conversationId ||
+          urlConversationId ||
+          bareChatSessionId ||
+          (await createConversation('New Chat', activeModelId).then((c) => {
+            if (c) {
+              freshConvId = c.id;
+              if (!urlConversationId) setBareChatSessionId(c.id);
+              return c.id;
+            }
+            return null;
+          }));
 
-      if (!convId) return;
-      if (!urlConversationId) setBareChatSessionId(convId);
+        if (!convId) return;
+        if (!urlConversationId) setBareChatSessionId(convId);
 
-      // Navigate to the canonical /chat/[id] URL after the first message so the
-      // conversation is bookmarkable and survives a page refresh. Use replace so
-      // the empty /chat entry is removed from browser history.
-      if (freshConvId) {
-        router.replace(`/chat/${freshConvId}`);
+        // Navigate to the canonical /chat/[id] URL after the first message so the
+        // conversation is bookmarkable and survives a page refresh. Use replace so
+        // the empty /chat entry is removed from browser history.
+        if (freshConvId) {
+          router.replace(`/chat/${freshConvId}`);
+        }
+
+        // Read image files as base64 data URLs so the LLM can process them
+        const resolvedAttachments = options.attachments
+          ? await Promise.all(
+              options.attachments.map(async (f) => {
+                let base64Content: string | undefined;
+                if (f.type.startsWith('image/')) {
+                  base64Content = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(f);
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                  });
+                }
+                return {
+                  id: crypto.randomUUID(),
+                  type: f.type.startsWith('image/') ? ('image' as const) : ('file' as const),
+                  name: f.name,
+                  size: f.size,
+                  mimeType: f.type,
+                  content: base64Content,
+                };
+              }),
+            )
+          : undefined;
+
+        // Deferred edit rollback: if this send is the resubmission of an edited
+        // message, delete the original message + everything after it NOW (not on
+        // edit-click) so the edited turn replaces the old one. Abandoning the
+        // edit never reaches here, so nothing is lost. Best-effort: a failed
+        // delete must not block the send.
+        const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
+        if (pendingEdit) {
+          pendingEditRollbackRef.current = null;
+          await deletePersistedMessagesRef.current?.(pendingEdit.rollbackIds);
+        }
+
+        await sendMessage(content, {
+          model: activeModelId,
+          conversationId: convId,
+          attachments: resolvedAttachments,
+          webSearch: options.meta?.webSearchEnabled,
+          thinkingEnabled: options.meta?.thinkingEnabled,
+          codeExecution: options.meta?.codeExecutionEnabled,
+          research: options.meta?.researchEnabled,
+          styleMode: options.meta?.styleMode,
+          skillBody: options.meta?.skillBody,
+          skillName: options.meta?.skillName,
+        });
+      } finally {
+        // Release the guard once the send has fully settled (or bailed). By now
+        // `bareChatSessionId`/`urlConversationId` reflect the real conversation,
+        // so the reconciler reads a consistent displayed id and never misfires.
+        isSendingRef.current = false;
       }
-
-      // Read image files as base64 data URLs so the LLM can process them
-      const resolvedAttachments = options.attachments
-        ? await Promise.all(
-            options.attachments.map(async (f) => {
-              let base64Content: string | undefined;
-              if (f.type.startsWith('image/')) {
-                base64Content = await new Promise<string>((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.readAsDataURL(f);
-                  reader.onload = () => resolve(reader.result as string);
-                  reader.onerror = reject;
-                });
-              }
-              return {
-                id: crypto.randomUUID(),
-                type: f.type.startsWith('image/') ? ('image' as const) : ('file' as const),
-                name: f.name,
-                size: f.size,
-                mimeType: f.type,
-                content: base64Content,
-              };
-            }),
-          )
-        : undefined;
-
-      // Deferred edit rollback: if this send is the resubmission of an edited
-      // message, delete the original message + everything after it NOW (not on
-      // edit-click) so the edited turn replaces the old one. Abandoning the
-      // edit never reaches here, so nothing is lost. Best-effort: a failed
-      // delete must not block the send.
-      const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
-      if (pendingEdit) {
-        pendingEditRollbackRef.current = null;
-        await deletePersistedMessagesRef.current?.(pendingEdit.rollbackIds);
-      }
-
-      await sendMessage(content, {
-        model: activeModelId,
-        conversationId: convId,
-        attachments: resolvedAttachments,
-        webSearch: options.meta?.webSearchEnabled,
-        thinkingEnabled: options.meta?.thinkingEnabled,
-        codeExecution: options.meta?.codeExecutionEnabled,
-        research: options.meta?.researchEnabled,
-        styleMode: options.meta?.styleMode,
-        skillBody: options.meta?.skillBody,
-        skillName: options.meta?.skillName,
-      });
     },
     [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId, router],
   );
@@ -826,60 +854,72 @@ export default function WebChatPage() {
   // ---------------------------------------------------------------------------
   const handleGenerateImage = useCallback(
     (prompt: string, options: { aspectRatio: ImageAspectRatio; modelId: string }) => {
+      // Same first-message send guard as sendContent: a lazy-created image
+      // conversation has the identical createConversation → bareChatSessionId
+      // gap that the stale-active reconciler would otherwise misread and clear.
+      isSendingRef.current = true;
       void (async () => {
-        const { size, provider } = resolveImageParams(options.aspectRatio, options.modelId);
-
-        // Ensure a conversation exists (lazy-create, same pattern as sendContent).
-        let convId = displayedConversationId;
-        if (!convId) {
-          const fresh = await createConversation('Image generation', activeModelId);
-          if (fresh) {
-            convId = fresh.id;
-            if (!urlConversationId) setBareChatSessionId(fresh.id);
-            router.replace(`/chat/${fresh.id}`);
-          }
-        }
-        if (!convId) return;
-
-        // User message (prompt)
-        addMessage({
-          id: crypto.randomUUID(),
-          role: 'user',
-          content: prompt,
-          createdAt: new Date().toISOString(),
-        });
-
-        // Placeholder assistant message while generating (isStreaming = true → state A)
-        const assistantMsgId = crypto.randomUUID();
-        addMessage({
-          id: assistantMsgId,
-          role: 'assistant',
-          content: '',
-          isStreaming: true,
-          createdAt: new Date().toISOString(),
-          metadata: {
-            toolType: 'image-generation',
-            imageGenPrompt: prompt,
-            imageGenAspect: options.aspectRatio,
-            imageGenModel: options.modelId,
-          },
-        });
-
         try {
-          const imageUrl = await generateImage(prompt, { size, provider, model: options.modelId });
-          updateMessage(assistantMsgId, {
+          const { size, provider } = resolveImageParams(options.aspectRatio, options.modelId);
+
+          // Ensure a conversation exists (lazy-create, same pattern as sendContent).
+          let convId = displayedConversationId;
+          if (!convId) {
+            const fresh = await createConversation('Image generation', activeModelId);
+            if (fresh) {
+              convId = fresh.id;
+              if (!urlConversationId) setBareChatSessionId(fresh.id);
+              router.replace(`/chat/${fresh.id}`);
+            }
+          }
+          if (!convId) return;
+
+          // User message (prompt)
+          addMessage({
+            id: crypto.randomUUID(),
+            role: 'user',
+            content: prompt,
+            createdAt: new Date().toISOString(),
+          });
+
+          // Placeholder assistant message while generating (isStreaming = true → state A)
+          const assistantMsgId = crypto.randomUUID();
+          addMessage({
+            id: assistantMsgId,
+            role: 'assistant',
             content: '',
-            isStreaming: false,
+            isStreaming: true,
+            createdAt: new Date().toISOString(),
             metadata: {
               toolType: 'image-generation',
-              imageUrl,
               imageGenPrompt: prompt,
               imageGenAspect: options.aspectRatio,
               imageGenModel: options.modelId,
             },
           });
-        } catch (err) {
-          applyImageError(assistantMsgId, err instanceof Error ? err.message : String(err));
+
+          try {
+            const imageUrl = await generateImage(prompt, {
+              size,
+              provider,
+              model: options.modelId,
+            });
+            updateMessage(assistantMsgId, {
+              content: '',
+              isStreaming: false,
+              metadata: {
+                toolType: 'image-generation',
+                imageUrl,
+                imageGenPrompt: prompt,
+                imageGenAspect: options.aspectRatio,
+                imageGenModel: options.modelId,
+              },
+            });
+          } catch (err) {
+            applyImageError(assistantMsgId, err instanceof Error ? err.message : String(err));
+          }
+        } finally {
+          isSendingRef.current = false;
         }
       })();
     },
@@ -1047,6 +1087,10 @@ export default function WebChatPage() {
 
     setIsConfirmingHandoff(true);
     setHandoffError(null);
+    // Same first-message send guard: the BYOK fork lazily creates a conversation
+    // and only commits bareChatSessionId after an async saveSystemMessage, so the
+    // stale-active reconciler must not clear the fork during that window.
+    isSendingRef.current = true;
 
     try {
       const fork = await createConversation(
@@ -1090,6 +1134,9 @@ export default function WebChatPage() {
       );
     } finally {
       setIsConfirmingHandoff(false);
+      // The dispatched sendContent (conversationId already set) manages its own
+      // guard from here; the fork's create→navigate window is now closed.
+      isSendingRef.current = false;
     }
   }, [
     addMessage,
