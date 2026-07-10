@@ -201,6 +201,81 @@ describe('cost calculation', () => {
   });
 });
 
+// Worked cost examples that exercise ALL FOUR token classes (input, output,
+// cache-read, cache-write) at once, pinning the per-class multipliers to a
+// known token mix → an exact dollar total. Anthropic multipliers verified
+// against the official prompt-caching pricing page (2026-07):
+//   https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
+//   cache read = 0.1x base input · 5-minute cache write = 1.25x · 1-hour = 2x.
+// The pipeline exposes a single cacheCreationInputTokens bucket (no 5m/1h
+// split — StreamChunkUsage has only cacheReadTokens/cacheWriteTokens), so
+// writes bill at the 5m rate (1.25x); the 1h 2x premium is a documented gap.
+describe('worked cost examples — all token classes, per provider', () => {
+  it('anthropic (disjoint input): input + output + cache-read(0.1x fallback) + cache-write(1.25x)', () => {
+    // claude-sonnet-4-6: input=$3/M, output=$15/M, no catalog cached_input.
+    //   cache-read fallback = 0.1 * 3 = $0.3/M · cache-write fallback = 1.25 * 3 = $3.75/M
+    //   input      100k * 3    /1e6 = $0.30   (Anthropic input_tokens are disjoint → full, no subtraction)
+    //   output      50k * 15   /1e6 = $0.75
+    //   cache-read 200k * 0.30 /1e6 = $0.06
+    //   cache-write800k * 3.75 /1e6 = $3.00
+    //   total = $4.11
+    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+      inputTokens: 100_000,
+      outputTokens: 50_000,
+      cacheReadInputTokens: 200_000,
+      cacheCreationInputTokens: 800_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-4-6')!.costUsd).toBeCloseTo(4.11, 6);
+  });
+
+  it('anthropic (catalog cached_input): read billed at explicit rate, write at 1.25x', () => {
+    // claude-opus-4.8: input=$5/M, output=$25/M, catalog cached_input=$0.3/M.
+    //   cache-write fallback = 1.25 * 5 = $6.25/M
+    //   input       1M * 5    /1e6 = $5.00
+    //   output      1M * 25   /1e6 = $25.00
+    //   cache-read  1M * 0.30 /1e6 = $0.30
+    //   cache-write 1M * 6.25 /1e6 = $6.25
+    //   total = $36.55
+    recordModelUsage(SESSION_A, 'claude-opus-4.8', {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      cacheReadInputTokens: 1_000_000,
+      cacheCreationInputTokens: 1_000_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('claude-opus-4.8')!.costUsd).toBeCloseTo(36.55, 6);
+  });
+
+  it('openai (inclusive prompt): cached subset subtracted from input, read at 0.1x fallback', () => {
+    // gpt-5.5: input=$5/M, output=$30/M, no catalog cached_input → read = 0.1*5 = $0.5/M.
+    // OpenAI prompt_tokens INCLUDE the cached hits, so the cached subset is
+    // subtracted from the billable-input bucket (billed once, at the read rate).
+    //   billable input (1M - 400k) 600k * 5   /1e6 = $3.00
+    //   cache-read                 400k * 0.5 /1e6 = $0.20
+    //   output                      1M  * 30  /1e6 = $30.00
+    //   total = $33.20
+    recordModelUsage(SESSION_A, 'gpt-5.5', {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      cacheReadInputTokens: 400_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('gpt-5.5')!.costUsd).toBeCloseTo(33.2, 6);
+  });
+
+  it('deepseek (inclusive prompt): fully-cached prompt bills only the discounted read rate', () => {
+    // deepseek-v4-flash: input=$0.14/M, output=$0.28/M, catalog cached_input=$0.0028/M.
+    //   billable input (1M - 1M)   0 * 0.14   /1e6 = $0.00
+    //   cache-read                1M * 0.0028 /1e6 = $0.0028
+    //   output                   500k * 0.28  /1e6 = $0.14
+    //   total = $0.1428
+    recordModelUsage(SESSION_A, 'deepseek-v4-flash', {
+      inputTokens: 1_000_000,
+      outputTokens: 500_000,
+      cacheReadInputTokens: 1_000_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('deepseek-v4-flash')!.costUsd).toBeCloseTo(0.1428, 6);
+  });
+});
+
 describe('getSessionTotalCostUsd', () => {
   it('returns 0 for unknown session', () => {
     expect(getSessionTotalCostUsd('nonexistent')).toBe(0);
