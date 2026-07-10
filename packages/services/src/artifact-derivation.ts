@@ -176,6 +176,63 @@ export function computeDerivedArtifactId(
   );
 }
 
+/**
+ * A trailing, still-open fenced code block found at the end of a streaming
+ * message buffer (opening ``` fence seen, closing fence not yet arrived).
+ */
+export interface TrailingUnclosedBlock {
+  /** Fence language tag (e.g. `html`) or `'text'` when absent. */
+  language: string;
+  /** Partial block body streamed so far (NOT trimmed — it is still growing). */
+  content: string;
+  /**
+   * The ordinal this block WILL have once the fence closes (= count of
+   * complete blocks before it). Feeding this to
+   * {@link computeDerivedArtifactId} yields the SAME id the completed
+   * artifact will get, enabling a seamless streaming → persisted handoff.
+   */
+  ordinal: number;
+  /** Character offset of the opening ``` in the source markdown. */
+  startIndex: number;
+}
+
+/**
+ * Matches the opening fence of a code block whose language-tag line is
+ * COMPLETE (terminated by a newline). While streaming, a partial "```ht"
+ * without its newline must NOT match — the language tag may still be growing.
+ */
+const OPEN_FENCE_RE = /```[^\S\n]*(\w*)[^\S\n]*\n/;
+
+/**
+ * Incremental-parse helper for live streaming: find the trailing UNCLOSED
+ * fenced code block at the end of a partial markdown buffer, if any.
+ *
+ * Only the text AFTER the last complete fenced block is scanned, so
+ * fence-like text inside earlier (closed) code blocks can never be
+ * misdetected as an opening fence. Returns null when:
+ *  - there is no open fence in the tail;
+ *  - an open fence exists but its language-tag line is not yet complete
+ *    (no newline after ```lang — the tag may still be streaming in).
+ *
+ * Pure string/regex slicing — safe for pathological inputs (giant single
+ * lines, repeated backticks) with linear cost.
+ */
+export function extractTrailingUnclosedBlock(markdown: string): TrailingUnclosedBlock | null {
+  const blocks = extractCodeBlocks(markdown);
+  const tailStart = blocks.length > 0 ? blocks[blocks.length - 1]!.endIndex : 0;
+  const tail = markdown.slice(tailStart);
+
+  const open = OPEN_FENCE_RE.exec(tail);
+  if (!open) return null;
+
+  return {
+    language: (open[1] ?? '').trim() || 'text',
+    content: tail.slice(open.index + open[0].length),
+    ordinal: blocks.length,
+    startIndex: tailStart + open.index,
+  };
+}
+
 /** How a markdown message is turned into artifacts. */
 export type ArtifactInclusion = 'renderable' | 'code' | ((block: DerivedCodeBlock) => boolean);
 

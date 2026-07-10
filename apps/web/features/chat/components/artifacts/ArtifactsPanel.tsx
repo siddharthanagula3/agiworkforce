@@ -4,8 +4,10 @@ import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@agiworkforce/ui';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
+import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore } from '@/stores/chatStore';
 import { ArtifactPreview } from './ArtifactPreview';
+import { StreamingArtifactView } from './StreamingArtifactView';
 
 // ============================================================================
 // Download All helper (Fix 41)
@@ -108,12 +110,27 @@ export function ArtifactsPanel() {
   const { getConversationArtifacts, selectedArtifactId, panelOpen, selectArtifact, setPanelOpen } =
     useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const streaming = useStreamingArtifactStore((s) => s.streaming);
 
   // Only show artifacts that belong to the current conversation.
   // When there is no active conversation (new/empty chat), the list is empty.
   const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
 
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId);
+
+  // Live-streaming artifact (Claude-style streamed file write): shown while a
+  // renderable fence is still open in the streaming message. Hidden as soon as
+  // a persisted artifact with the SAME deterministic id lands (fence closed) —
+  // the panel then swaps to the full ArtifactPreview, Preview tab first.
+  const streamingArtifact =
+    streaming &&
+    streaming.conversationId === activeConversationId &&
+    !artifacts.some((a) => a.id === streaming.artifactId)
+      ? streaming
+      : null;
+  const showStreamingView = Boolean(
+    streamingArtifact && (selectedArtifactId === streamingArtifact.artifactId || !selectedArtifact),
+  );
 
   if (!panelOpen) return null;
 
@@ -184,7 +201,7 @@ export function ArtifactsPanel() {
           </div>
         </div>
 
-        {artifacts.length === 0 ? (
+        {artifacts.length === 0 && !streamingArtifact ? (
           <EmptyState />
         ) : (
           <>
@@ -199,12 +216,33 @@ export function ArtifactsPanel() {
                     onSelect={() => selectArtifact(artifact.id)}
                   />
                 ))}
+                {/* Live streaming artifact tab · pulsing dot marks the write in progress */}
+                {streamingArtifact && (
+                  <button
+                    onClick={() => selectArtifact(streamingArtifact.artifactId)}
+                    className={cn(
+                      'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                      showStreamingView
+                        ? 'bg-primary/15 text-primary'
+                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                    )}
+                    title={streamingArtifact.title}
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary"
+                      aria-hidden="true"
+                    />
+                    <span className="max-w-[120px] truncate">{streamingArtifact.title}</span>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Content */}
             <div className="flex flex-1 flex-col overflow-hidden bg-[#1e1e1e]">
-              {selectedArtifact ? (
+              {showStreamingView && streamingArtifact ? (
+                <StreamingArtifactView artifact={streamingArtifact} />
+              ) : selectedArtifact ? (
                 <ArtifactViewer artifact={selectedArtifact} onClose={() => setPanelOpen(false)} />
               ) : (
                 <EmptyState />
