@@ -23,8 +23,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: '/app-preview.png',
-        width: 1200,
-        height: 630,
+        width: 1024,
+        height: 665,
         alt: 'AGI FAQ',
       },
     ],

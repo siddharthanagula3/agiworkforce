@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Contact sales',
   description:
     'Reach a real human about AGI Enterprise readiness, security review needs, account rollout, and managed cloud access.',
-  alternates: { canonical: 'https://agiworkforce.com/contact-sales' },
-};
+  path: '/contact-sales',
+});
 
 export default function ContactSalesPage() {
   return (

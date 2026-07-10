@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Siddhartha Nagula | Buildathon Profile | AGIWorkforce',
   description:
     'Founder & AI Systems Engineer building AGIWorkforce, a model-neutral AI application suite across web, desktop, CLI, VS Code extension, Chrome extension, and mobile.',
-  alternates: { canonical: `${APP_URL}/buildathon` },
-};
+  path: '/buildathon',
+});
 
 const LINKS = [
   { label: 'GitHub', href: 'https://github.com/siddharthanagula3' },

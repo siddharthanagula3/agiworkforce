@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Mobile Legal · Privacy Policy and Terms of Service',
   description:
     'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local and public-alpha Cloud modes.',
-  alternates: { canonical: 'https://agiworkforce.com/mobile/legal' },
-};
+  path: '/mobile/legal',
+});
 
 const EFFECTIVE_DATE = '2026-07-12';
 const COMPANY = 'AGI Automation LLC';

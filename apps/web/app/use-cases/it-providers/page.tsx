@@ -1,4 +1,6 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -7,16 +9,23 @@ import { FeatureGrid, LedgerSection } from '../../../components/marketing/Landin
 import { FinalCta } from '../../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'IT service providers: AGI',
   description:
     'How MSPs and IT shops use AGI: triage, runbooks, and scripted operations with sandboxed execution, explicit approvals, and multi-provider routing.',
-  alternates: { canonical: 'https://agiworkforce.com/use-cases/it-providers' },
-};
+  path: '/use-cases/it-providers',
+});
 
 export default function ItProvidersPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Use Cases', path: '/use-cases' },
+          { name: 'IT Service Providers', path: '/use-cases/it-providers' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

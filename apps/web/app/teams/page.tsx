@@ -1,16 +1,16 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { FeatureGrid, LedgerSection } from '../../components/marketing/LandingSections';
 import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI for Teams: Shared projects, governance, and BYOK policy',
   description:
     'Team workspace controls for AGI: shared projects, admin policy, connector governance, usage visibility, BYOK enforcement, and public-alpha managed cloud.',
-  alternates: { canonical: 'https://agiworkforce.com/teams' },
-};
+  path: '/teams',
+});
 
 export default function TeamsPage() {
   return (

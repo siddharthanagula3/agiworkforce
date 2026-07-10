@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Resources',
   description: 'Pointers into the parts of AGI most often asked about.',
-  alternates: { canonical: 'https://agiworkforce.com/resources' },
-};
+  path: '/resources',
+});
 
 const SECTIONS: { href: string; label: string; body: string }[] = [
   { href: '/docs', label: 'Documentation', body: 'Reference material for every surface.' },

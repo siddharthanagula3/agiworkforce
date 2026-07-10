@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Subprocessors',
   description:
     'Third parties that process customer data on AGI&rsquo;s behalf, with their purpose and region.',
-  alternates: { canonical: 'https://agiworkforce.com/subprocessors' },
-};
+  path: '/subprocessors',
+});
 
 const SUBS: { name: string; purpose: string; region: string }[] = [
   {

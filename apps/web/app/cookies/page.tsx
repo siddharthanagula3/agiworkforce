@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Cookie policy',
   description:
     'How AGI uses cookies and similar technologies. Strictly-necessary by default; analytics opt-in.',
-  alternates: { canonical: 'https://agiworkforce.com/cookies' },
-};
+  path: '/cookies',
+});
 
 export default function CookiesPage() {
   return (

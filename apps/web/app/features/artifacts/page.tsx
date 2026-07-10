@@ -1,19 +1,28 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
 import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Artifacts | Sandboxed Previews, Versions & Downloads',
   description:
     'Artifacts in the AGI workspace: HTML, React, SVG, diagrams, code, and documents rendered in a sandboxed preview beside the chat. Versioned, with source view, copy, and download.',
-  alternates: { canonical: 'https://agiworkforce.com/features/artifacts' },
-};
+  path: '/features/artifacts',
+});
 
 export default function ArtifactsFeaturePage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'Artifacts', path: '/features/artifacts' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

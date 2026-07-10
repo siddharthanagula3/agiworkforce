@@ -1,16 +1,18 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
 import { Reveal } from '../../../components/marketing/Reveal';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Memory | Plain-Language Facts You Control',
   description:
     'AGI Memory is a readable list of facts you can view, add to, edit, and delete. Device-local by default. Hosted sync available with AGI managed cloud (public alpha).',
-  alternates: { canonical: 'https://agiworkforce.com/features/memory' },
-};
+  path: '/features/memory',
+});
 
 const CONTROLS = [
   {
@@ -48,6 +50,13 @@ const CONTROLS = [
 export default function MemoryFeaturePage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'Memory', path: '/features/memory' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

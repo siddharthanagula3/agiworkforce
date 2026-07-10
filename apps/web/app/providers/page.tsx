@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { formatProviderModeLabel, modelsCatalogJson } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
@@ -8,12 +8,12 @@ import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { FinalCta } from '../../components/marketing/FlagshipSections';
 import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: `Providers: ${MARKETING.providers.display} providers, one thread`,
   description:
     'Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LM Studio, plus any OpenAI-compatible endpoint. Switch providers mid-conversation and keep your history.',
-  alternates: { canonical: 'https://agiworkforce.com/providers' },
-};
+  path: '/providers',
+});
 
 type ProviderEntry = {
   name: string;

@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Support',
   description:
     'How to reach us today, where to report bugs, and what support looks like across every tier.',
-  alternates: { canonical: 'https://agiworkforce.com/support' },
-};
+  path: '/support',
+});
 
 const SUPPORT_ROWS: { tier: string; status: string; channel: string; expectation: string }[] = [
   {

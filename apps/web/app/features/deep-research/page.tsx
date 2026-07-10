@@ -1,4 +1,6 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -8,12 +10,12 @@ import { FinalCta } from '../../../components/marketing/FlagshipSections';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Deep Research | Cited Answers Across Web, Files & Tools',
   description:
     'Research in AGI is designed around citations: live web search with source cards, numbered inline citations, and a sources panel. In the same workspace as your projects, artifacts, and memory.',
-  alternates: { canonical: 'https://agiworkforce.com/features/deep-research' },
-};
+  path: '/features/deep-research',
+});
 
 const RESEARCH_FEATURES = [
   {
@@ -53,6 +55,13 @@ const RESEARCH_FEATURES = [
 export default function DeepResearchPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'Deep Research', path: '/features/deep-research' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

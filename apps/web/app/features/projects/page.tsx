@@ -1,15 +1,17 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
 import { Reveal } from '../../../components/marketing/Reveal';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Projects | A Home for Recurring Work',
   description:
     'AGI Projects group chats, knowledge files, and standing instructions under one objective. Recurring work opens with its context already in place.',
-  alternates: { canonical: 'https://agiworkforce.com/features/projects' },
-};
+  path: '/features/projects',
+});
 
 const ANATOMY = [
   {
@@ -68,6 +70,13 @@ const LOOP = [
 export default function ProjectsFeaturePage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'Projects', path: '/features/projects' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

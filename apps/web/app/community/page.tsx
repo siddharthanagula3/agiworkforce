@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { Reveal } from '../../components/marketing/Reveal';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Community',
   description: 'Where to find AGI: follow the changelog for what ships, email for everything else.',
-  alternates: { canonical: 'https://agiworkforce.com/community' },
-};
+  path: '/community',
+});
 
 export default function CommunityPage() {
   return (

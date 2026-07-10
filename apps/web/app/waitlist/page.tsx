@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { PublicWaitlistForm } from '../../components/marketing/PublicWaitlistForm';
 import { Reveal } from '../../components/marketing/Reveal';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Cloud is open — Team & Enterprise early access',
   description:
     'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Join the list for Team & Enterprise early access (org seats, admin controls, SSO).',
-  alternates: { canonical: 'https://agiworkforce.com/waitlist' },
-};
+  path: '/waitlist',
+});
 
 const WHILE_YOU_WAIT = [
   {

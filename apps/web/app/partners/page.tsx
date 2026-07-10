@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Partners',
   description: 'How to partner with AGI · integrations, resellers, and platform plays.',
-  alternates: { canonical: 'https://agiworkforce.com/partners' },
-};
+  path: '/partners',
+});
 
 export default function PartnersPage() {
   return (

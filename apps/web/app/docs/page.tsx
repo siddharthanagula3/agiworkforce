@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Documentation | AGI',
   description:
     'Reference for every AGI surface: CLI, Desktop, Mobile, Web, Chrome, and VS Code extension.',
-  alternates: { canonical: 'https://agiworkforce.com/docs' },
-};
+  path: '/docs',
+});
 
 const SIDEBAR: { heading: string; icon: string; links: { label: string; href: string }[] }[] = [
   {
