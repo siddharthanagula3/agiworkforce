@@ -113,6 +113,141 @@ describe('WebRuntime x_generated_files stream handling', () => {
     expect(events.some((e) => e.type === 'done')).toBe(true);
   });
 
+  it('finishes a server-executed tool from x_tool_result (same tool_call_id as the tool_calls delta)', async () => {
+    const runtime = new WebRuntime();
+    const events = collectEvents(runtime);
+
+    sendCloudMessage.mockImplementation(
+      async (
+        _conversationId: string,
+        _content: string,
+        _model: string,
+        _onChunk: (text: string) => void,
+        onDone: () => void,
+        _onError: (err: Error) => void,
+        _signal: AbortSignal,
+        onPayload: (payload: Record<string, unknown>) => void,
+      ) => {
+        onPayload({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_1',
+                    function: { name: 'execute_code', arguments: '{"language":"python"}' },
+                  },
+                ],
+              },
+              index: 0,
+            },
+          ],
+        });
+        onPayload({
+          choices: [
+            {
+              delta: {
+                x_tool_result: {
+                  tool_call_id: 'call_1',
+                  name: 'execute_code',
+                  content: '<stdout>ok</stdout>',
+                  is_error: false,
+                },
+              },
+              index: 0,
+            },
+          ],
+        });
+        onDone();
+      },
+    );
+
+    await runtime.sendMessage('conv_1', 'run this');
+
+    const toolCall = events.find((e) => e.type === 'tool_call');
+    expect(toolCall).toBeDefined();
+    if (toolCall?.type !== 'tool_call') throw new Error('unreachable');
+    expect(toolCall.toolCall).toMatchObject({ id: 'call_1', name: 'execute_code' });
+
+    const toolResult = events.find((e) => e.type === 'tool_result');
+    expect(toolResult).toBeDefined();
+    if (toolResult?.type !== 'tool_result') throw new Error('unreachable');
+    expect(toolResult.toolCallId).toBe('call_1');
+    expect(toolResult.result).toBe('<stdout>ok</stdout>');
+    expect(toolResult.error).toBeUndefined();
+  });
+
+  it('surfaces a failed x_tool_result as a tool_result error', async () => {
+    const runtime = new WebRuntime();
+    const events = collectEvents(runtime);
+
+    sendCloudMessage.mockImplementation(
+      async (
+        _conversationId: string,
+        _content: string,
+        _model: string,
+        _onChunk: (text: string) => void,
+        onDone: () => void,
+        _onError: (err: Error) => void,
+        _signal: AbortSignal,
+        onPayload: (payload: Record<string, unknown>) => void,
+      ) => {
+        onPayload({
+          choices: [
+            {
+              delta: {
+                x_tool_result: {
+                  tool_call_id: 'call_9',
+                  name: 'execute_code',
+                  content: 'Sandbox unavailable',
+                  is_error: true,
+                },
+              },
+              index: 0,
+            },
+          ],
+        });
+        onDone();
+      },
+    );
+
+    await runtime.sendMessage('conv_1', 'run this');
+
+    const toolResult = events.find((e) => e.type === 'tool_result');
+    expect(toolResult).toBeDefined();
+    if (toolResult?.type !== 'tool_result') throw new Error('unreachable');
+    expect(toolResult.toolCallId).toBe('call_9');
+    expect(toolResult.error).toBe('Sandbox unavailable');
+  });
+
+  it('ignores x_tool_result deltas without a tool_call_id', async () => {
+    const runtime = new WebRuntime();
+    const events = collectEvents(runtime);
+
+    sendCloudMessage.mockImplementation(
+      async (
+        _conversationId: string,
+        _content: string,
+        _model: string,
+        _onChunk: (text: string) => void,
+        onDone: () => void,
+        _onError: (err: Error) => void,
+        _signal: AbortSignal,
+        onPayload: (payload: Record<string, unknown>) => void,
+      ) => {
+        onPayload({
+          choices: [{ delta: { x_tool_result: { name: 'execute_code', content: 'x' } }, index: 0 }],
+        });
+        onDone();
+      },
+    );
+
+    await runtime.sendMessage('conv_1', 'run this');
+
+    expect(events.some((e) => e.type === 'tool_result')).toBe(false);
+  });
+
   it('emits no generated_files event for deltas without x_generated_files', async () => {
     const runtime = new WebRuntime();
     const events = collectEvents(runtime);
