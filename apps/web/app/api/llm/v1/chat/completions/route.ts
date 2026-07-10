@@ -11,6 +11,10 @@ import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
+import {
+  loadUserConnectorToolDefs,
+  makeUserConnectorExecutor,
+} from '@/lib/user-connector-tools';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
 import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
@@ -105,7 +109,18 @@ async function handleChatCompletions(request: NextRequest) {
     // Agentic path: load MCP tools (fast -- catalog is cached for 60s).
     // If no tools are configured, mcpTools is empty and we fall through to
     // the standard single-turn streaming path unchanged.
-    const mcpTools = await loadMcpToolDefs();
+    //
+    // Additive per-user connector tools (fixes WEB-CONNECTORS-NO-RUNTIME-EFFECT-01):
+    // a signed-in user's CONNECTED connectors (github built-in / operator-mapped
+    // remote MCP connectors) contribute tools alongside the operator MCP catalog.
+    // Fully server-side and degrades to [] on any failure, so the SSE wire shape
+    // is unchanged (no new event types) and an unconfigured/empty environment
+    // behaves exactly as before.
+    const [operatorTools, connectorTools] = await Promise.all([
+      loadMcpToolDefs(),
+      loadUserConnectorToolDefs(userId),
+    ]);
+    const mcpTools = [...operatorTools, ...connectorTools];
     const hasMcpTools = mcpTools.length > 0 && !processed.freeTrial;
 
     // Detect E2B execution tools offered on this request (set by request-processor when
@@ -131,8 +146,17 @@ async function handleChatCompletions(request: NextRequest) {
       //     mixed MCP+E2B is an edge case and the operator can enable the resume endpoint).
       const approvalMode = hasMcpTools ? ('manual' as const) : ('auto' as const);
 
-      // Build the agentic SSE stream from the tool-loop generator.
-      const toolLoopGen = runToolLoop(processed, { mcpTools, approvalMode, userId });
+      // Build the agentic SSE stream from the tool-loop generator. The connector
+      // executor is bound to the authenticated userId (only meaningful when the
+      // user actually connected connectors; a no-op otherwise).
+      const connectorExecutor =
+        connectorTools.length > 0 ? makeUserConnectorExecutor(userId) : undefined;
+      const toolLoopGen = runToolLoop(processed, {
+        mcpTools,
+        approvalMode,
+        userId,
+        connectorExecutor,
+      });
 
       const encoder = new TextEncoder();
       const agentStream = new ReadableStream({
