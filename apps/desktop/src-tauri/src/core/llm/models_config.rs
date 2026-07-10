@@ -593,6 +593,83 @@ mod tests {
     }
 
     #[test]
+    fn catalog_openai_chat_models_use_chat_completions_not_responses() {
+        // Regression: catalog OpenAI *chat*-tier models (gpt-5-nano, gpt-4.1-nano)
+        // must NOT be routed to the Responses API. The `gpt-` major>=5 / 4.1
+        // version heuristic would otherwise misroute them into a Responses-shaped
+        // body (`input`, no `messages`) posted to `/chat/completions`, which the
+        // provider rejects with 400 "Missing required parameter: 'messages'".
+        // Catalog `model_type` is authoritative for known ids.
+        for id in ["gpt-5-nano", "gpt-4.1-nano"] {
+            let entry = CONFIG
+                .models
+                .get(id)
+                .unwrap_or_else(|| panic!("{id} missing from catalog"));
+            assert_eq!(entry.provider, "openai", "{id} should be an openai model");
+            assert_eq!(entry.model_type, "chat", "{id} should be a chat model");
+            assert!(
+                !model_uses_responses_api(id),
+                "{id} is a catalog chat model and must use Chat Completions, not Responses API"
+            );
+        }
+        // Catalog reasoning-tier OpenAI models still use the Responses API.
+        assert!(model_uses_responses_api("gpt-5.5"));
+        assert!(model_uses_responses_api("gpt-5.4-mini"));
+    }
+
+    #[test]
+    fn api_model_id_maps_dotted_internal_ids_to_wire_and_is_idempotent() {
+        // BUG 1 regression: the wire body must carry `apiModelId` (dash form),
+        // never the dotted internal catalog id. Anthropic returns 404 for the
+        // dotted id. Verify every catalog model whose internal id differs from
+        // its apiModelId maps correctly AND that re-running through
+        // `get_api_model_id` on the already-wire id is a no-op (idempotent) — the
+        // reverse-lookup branch in `get_canonicalized_id` exists precisely to
+        // keep this idempotent, so it must not corrupt an already-wire id.
+        let mut checked_any = false;
+        for (internal_id, entry) in &CONFIG.models {
+            let Some(api_id) = entry.api_model_id.as_deref() else {
+                continue;
+            };
+            if api_id == internal_id {
+                continue;
+            }
+            checked_any = true;
+            // internal (dotted) id -> wire (dash) id
+            assert_eq!(
+                get_api_model_id(internal_id),
+                api_id,
+                "get_api_model_id({internal_id}) must return the apiModelId {api_id}"
+            );
+            // already-wire id -> unchanged (idempotent)
+            assert_eq!(
+                get_api_model_id(api_id),
+                api_id,
+                "get_api_model_id is not idempotent for wire id {api_id}"
+            );
+        }
+        assert!(
+            checked_any,
+            "expected at least one catalog model with internal_id != apiModelId"
+        );
+
+        // Pin the specific Anthropic haiku case that surfaced the bug.
+        assert_eq!(get_api_model_id("claude-haiku-4.5"), "claude-haiku-4-5");
+        assert_eq!(get_api_model_id("claude-haiku-4-5"), "claude-haiku-4-5");
+
+        // Pin get_canonicalized_id's reverse-lookup branch directly: it maps a
+        // wire (apiModelId) id back to its dotted catalog id, and leaves the
+        // catalog id unchanged. This branch is what keeps get_provider_for_model
+        // working when handed a wire id; it must not be removed. (Note:
+        // get_api_model_id above is idempotent for the wire id with OR without
+        // this branch — the branch earns its keep via provider lookup, not
+        // idempotence — but the ADAPTER must call get_api_model_id, never
+        // get_canonicalized_id, for the wire model field.)
+        assert_eq!(get_canonicalized_id("claude-haiku-4.5"), "claude-haiku-4.5");
+        assert_eq!(get_canonicalized_id("claude-haiku-4-5"), "claude-haiku-4.5");
+    }
+
+    #[test]
     fn model_supports_gemini_thinking_for_pro_models() {
         assert!(model_supports_gemini_thinking("gemini-3.1-pro-preview"));
         assert!(!model_supports_gemini_thinking("gemini-3-flash"));
