@@ -269,7 +269,7 @@ export {
 export type { Checkpoint, Branch } from './stores/checkpointStore';
 
 // Phase A Slice 4 — Artifacts + sidecar (ported from UAC, covers Task #16)
-export { ArtifactRenderer } from './components/ArtifactRenderer';
+export { ArtifactRenderer, isTabularType } from './components/ArtifactRenderer';
 export type { ArtifactRendererProps } from './components/ArtifactRenderer';
 export { ArtifactsSidebar } from './components/ArtifactsSidebar';
 export type { ArtifactsSidebarProps } from './components/ArtifactsSidebar';

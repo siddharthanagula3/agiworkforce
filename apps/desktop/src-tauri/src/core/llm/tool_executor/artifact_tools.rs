@@ -50,8 +50,10 @@ const SUPPORTED_FRONTEND_TYPES: &[&str] = &[
     "react",
     "svg",
     "table",
+    "csv",
     "spreadsheet",
     "presentation",
+    "email",
 ];
 
 /// Map a frontend artifact-type string to the closest backend `ArtifactType`
@@ -96,11 +98,23 @@ fn map_frontend_type(
         // SVG persists under Image (binary/markup visual content); the wire
         // event still carries `type: "svg"` for the sanitized inline renderer.
         "svg" => Some((BackendArtifactType::Image, ArtifactMetadata::default())),
-        "table" | "spreadsheet" => Some((
+        // Tabular types (CSV/TSV or JSON array-of-objects content) all render
+        // through the shared SpreadsheetArtifact and persist as Spreadsheet.
+        "table" | "spreadsheet" | "csv" => Some((
             BackendArtifactType::Spreadsheet,
             ArtifactMetadata::Spreadsheet(SpreadsheetMetadata::default()),
         )),
         "presentation" => Some((BackendArtifactType::Presentation, ArtifactMetadata::default())),
+        // Email drafts have no backend-native type; persist as Document (plain
+        // text with optional RFC-822-style headers) while the wire event keeps
+        // `type: "email"` so the frontend renders it with EmailArtifact.
+        "email" => Some((
+            BackendArtifactType::Document,
+            ArtifactMetadata::Document(DocumentMetadata {
+                format: "text".to_string(),
+                ..Default::default()
+            }),
+        )),
         _ => None,
     }
 }
@@ -269,6 +283,23 @@ mod tests {
         match metadata {
             ArtifactMetadata::Code(meta) => assert_eq!(meta.language, "python"),
             other => panic!("expected Code metadata, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn csv_type_maps_to_spreadsheet() {
+        let (backend_type, metadata) = map_frontend_type("csv", None).unwrap();
+        assert_eq!(backend_type, BackendArtifactType::Spreadsheet);
+        assert!(matches!(metadata, ArtifactMetadata::Spreadsheet(_)));
+    }
+
+    #[test]
+    fn email_type_maps_to_document() {
+        let (backend_type, metadata) = map_frontend_type("email", None).unwrap();
+        assert_eq!(backend_type, BackendArtifactType::Document);
+        match metadata {
+            ArtifactMetadata::Document(meta) => assert_eq!(meta.format, "text"),
+            other => panic!("expected Document metadata, got {other:?}"),
         }
     }
 

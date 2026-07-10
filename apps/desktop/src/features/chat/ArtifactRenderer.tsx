@@ -13,6 +13,7 @@ import {
   Globe,
   Image as ImageIcon,
   Layers,
+  Mail,
   Network,
   Presentation,
   Table2,
@@ -37,9 +38,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
 import {
+  EmailArtifact,
+  isTabularType,
+  parseTabular,
   PresentationArtifact,
   ReactPreview,
   SpreadsheetArtifact,
+  toMarkdownTable,
 } from '@agiworkforce/unified-chat';
 import { ChartArtifact } from './artifacts/ChartArtifact';
 import { CodeArtifact } from './artifacts/CodeArtifact';
@@ -47,7 +52,6 @@ import { HtmlArtifact } from './artifacts/HtmlArtifact';
 import { MarkdownArtifact } from './artifacts/MarkdownArtifact';
 import { MermaidArtifact } from './artifacts/MermaidArtifact';
 import { SvgArtifact } from './artifacts/SvgArtifact';
-import { TableArtifact } from './artifacts/TableArtifact';
 
 interface ArtifactRendererProps {
   artifact: Artifact;
@@ -218,7 +222,7 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
   };
 
   const handleExportExcel = async () => {
-    if (artifact.type !== 'spreadsheet' && artifact.type !== 'table') return;
+    if (!isTabularType(artifact.type)) return;
 
     if (!isTauri) {
       toast.info('Excel export requires the desktop app');
@@ -232,33 +236,19 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       });
       if (!savePath) return;
 
-      let data: Record<string, string | number>[];
-      try {
-        data = JSON.parse(artifact.content) as Record<string, string | number>[];
-      } catch {
-        toast.error('Invalid JSON format in artifact');
-        return;
-      }
-
-      if (!Array.isArray(data) || data.length === 0) {
+      // Shared tabular parser handles CSV/TSV and the legacy JSON
+      // array-of-objects shape — same path the unified-chat renderer uses.
+      const data = parseTabular(artifact.content);
+      if (!data || data.rows.length === 0) {
         toast.error('No data to export');
         return;
       }
-
-      const firstRow = data[0];
-      if (!firstRow) {
-        toast.error('No data to export');
-        return;
-      }
-
-      const headers = Object.keys(firstRow);
-      const rows = data.map((row) => headers.map((h) => String(row[h] ?? '')));
 
       await invoke('document_create_excel_simple_manifest', {
         outputPath: savePath,
         sheetName: artifact.title || 'Sheet1',
-        headers,
-        rows,
+        headers: data.columns,
+        rows: data.rows,
       });
       toast.success('Exported to Excel successfully');
     } catch {
@@ -273,9 +263,9 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     'markdown',
     'document',
   ].includes(artifact.type);
-  const supportsExcelExport = ['spreadsheet', 'table'].includes(artifact.type);
+  const supportsExcelExport = isTabularType(artifact.type);
   const supportsImageExport = ['chart', 'mermaid', 'svg'].includes(artifact.type);
-  const supportsMarkdownExport = ['table', 'spreadsheet'].includes(artifact.type);
+  const supportsMarkdownExport = isTabularType(artifact.type);
 
   const handleExportSvg = async () => {
     try {
@@ -436,28 +426,15 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
 
   const handleCopyMarkdown = async () => {
     try {
-      const data = JSON.parse(artifact.content) as Record<string, string | number>[];
-      if (!Array.isArray(data) || data.length === 0) {
+      // Shared tabular parser handles CSV/TSV and the legacy JSON
+      // array-of-objects shape — same path the unified-chat renderer uses.
+      const data = parseTabular(artifact.content);
+      if (!data || data.rows.length === 0) {
         toast.error('No data to copy');
         return;
       }
 
-      const firstRow = data[0];
-      if (!firstRow) {
-        toast.error('No data to copy');
-        return;
-      }
-
-      const headers = Object.keys(firstRow);
-      const headerRow = `| ${headers.join(' | ')} |`;
-      const separatorRow = `| ${headers.map(() => '---').join(' | ')} |`;
-      const dataRows = data
-        .map((row) => `| ${headers.map((h) => String(row[h] ?? '')).join(' | ')} |`)
-        .join('\n');
-
-      const markdown = `${headerRow}\n${separatorRow}\n${dataRows}`;
-
-      await navigator.clipboard.writeText(markdown);
+      await navigator.clipboard.writeText(toMarkdownTable(data));
       toast.success('Copied as Markdown table');
     } catch {
       toast.error('Failed to copy as Markdown');
@@ -468,7 +445,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
     if (artifact.type === 'code' && artifact.language) {
       return artifact.language;
     }
-    if (artifact.type === 'spreadsheet') return 'csv';
+    if (isTabularType(artifact.type)) return 'csv';
+    if (artifact.type === 'email') return 'txt';
     if (artifact.type === 'presentation') return 'md';
     if (artifact.type === 'markdown') return 'md';
     if (artifact.type === 'svg') return 'svg';
@@ -486,7 +464,11 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
       case 'mermaid':
         return <Network className="h-4 w-4" />;
       case 'spreadsheet':
+      case 'table':
+      case 'csv':
         return <FileSpreadsheet className="h-4 w-4" />;
+      case 'email':
+        return <Mail className="h-4 w-4" />;
       case 'presentation':
         return <Presentation className="h-4 w-4" />;
       case 'html':
@@ -651,8 +633,8 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
               <CodeArtifact artifact={artifact} isDark={isDark} />
             ) : artifact.type === 'chart' ? (
               <ChartArtifact artifact={artifact} />
-            ) : artifact.type === 'table' ? (
-              <TableArtifact artifact={artifact} />
+            ) : isTabularType(artifact.type) ? (
+              <SpreadsheetArtifact artifact={artifact} />
             ) : artifact.type === 'mermaid' ? (
               <MermaidArtifact artifact={artifact} isDark={isDark} />
             ) : artifact.type === 'svg' ||
@@ -663,10 +645,10 @@ export function ArtifactRenderer({ artifact, className }: ArtifactRendererProps)
               <MarkdownArtifact artifact={artifact} isDark={isDark} />
             ) : artifact.type === 'react' || artifact.type === 'component' ? (
               <ReactPreview code={artifact.content} />
-            ) : artifact.type === 'spreadsheet' ? (
-              <SpreadsheetArtifact artifact={artifact} />
             ) : artifact.type === 'presentation' ? (
               <PresentationArtifact artifact={artifact} />
+            ) : artifact.type === 'email' ? (
+              <EmailArtifact artifact={artifact} />
             ) : artifact.type === 'html' ? (
               <HtmlArtifact artifact={artifact} />
             ) : artifact.type === 'document' ? (

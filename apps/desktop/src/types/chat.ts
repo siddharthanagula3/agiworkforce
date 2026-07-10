@@ -46,6 +46,8 @@ export type ArtifactType =
   | 'chart'
   | 'diagram'
   | 'table'
+  | 'csv'
+  | 'email'
   | 'mermaid'
   | 'spreadsheet'
   | 'presentation'
