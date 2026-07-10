@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  FileText,
 } from 'lucide-react';
 import {
   summarizeGeneratedFileBundle,
@@ -136,6 +137,10 @@ export function ArtifactPreview({
     (artifact.language?.toLowerCase() === 'docx' || artifact.language?.toLowerCase() === 'doc');
   const [docxHtml, setDocxHtml] = useState<string | null>(null);
   const [docxError, setDocxError] = useState<string | null>(null);
+  // PDF viewer load-failure (iframe onError). Distinct from "no valid source":
+  // this is set when a real source is handed to the iframe but the browser
+  // fails to render it. Reset on refresh / artifact change.
+  const [pdfError, setPdfError] = useState(false);
 
   // Convert DOCX base64/blob content to HTML via mammoth (Fix 40)
   useEffect(() => {
@@ -199,6 +204,89 @@ export function ArtifactPreview({
   const hasGeneratedFileManifest = Boolean(
     artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
   );
+
+  // Resolve a SAFE, real PDF byte-source for the inline viewer.
+  //
+  // Provenance matters here: for a *generated* document artifact,
+  // `artifact.content` is the model's TEXT (markdown), NOT PDF bytes — feeding
+  // it to <iframe src> renders garbage. The real bytes, when they exist, live
+  // at `generatedFile.uri` (surfaced as `generatedFileSummary.primaryUri`). An
+  // *attachment* path can instead carry a `blob:`/`data:` URI directly in
+  // `artifact.content`.
+  //
+  // We only accept sources the browser can render locally WITHOUT an outbound
+  // fetch to an arbitrary origin (SSRF / egress-allowlist safety):
+  //   - `data:application/pdf...`  (inline bytes)
+  //   - `blob:...`                 (same-origin object URL)
+  //   - same-origin http(s) URL that is a PDF
+  // Anything else (off-origin https, an opaque compute-storage URI, or plain
+  // text) yields `null` → the viewer shows an honest "download instead" state
+  // rather than a fake/blank preview.
+  const pdfSrc = useMemo<string | null>(() => {
+    if (!isPdf) return null;
+    const mime = (generatedFileSummary.mimeType ?? '').toLowerCase();
+    const candidates = [artifact.content, generatedFileSummary.primaryUri];
+    for (const raw of candidates) {
+      if (!raw) continue;
+      const value = raw.trim();
+      if (value.toLowerCase().startsWith('data:application/pdf')) return value;
+      if (value.startsWith('blob:')) return value;
+      // Same-origin http(s) URL pointing at a PDF (never an arbitrary origin).
+      if (typeof window !== 'undefined' && /^https?:\/\//i.test(value)) {
+        try {
+          const url = new URL(value);
+          if (
+            url.origin === window.location.origin &&
+            (url.pathname.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))
+          ) {
+            return url.href;
+          }
+        } catch {
+          /* not a parseable URL — fall through */
+        }
+      }
+      // Relative same-origin path.
+      if (value.startsWith('/') && (value.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))) {
+        return value;
+      }
+    }
+    return null;
+  }, [isPdf, artifact.content, generatedFileSummary.primaryUri, generatedFileSummary.mimeType]);
+
+  // The native PDF viewer (a browser-internal resource) is blocked inside ANY
+  // sandboxed iframe, so the viewer iframe below is intentionally NOT
+  // sandboxed. `pdfSrc` is therefore the trust boundary:
+  //   - `data:application/pdf` — the data: MIME forces PDF interpretation; it
+  //     can never be executed as HTML, so it is safe unsandboxed.
+  //   - same-origin http(s)/relative `.pdf` — our own origin's content.
+  //   - `blob:` — the object's stored type is NOT provable from the URL string
+  //     (an HTML blob would execute same-origin in an unsandboxed frame), so we
+  //     verify the blob's MIME is application/pdf before rendering it.
+  // `null` = pending verification, `false` = not a PDF (→ fallback), `true` = ok.
+  const isBlobPdf = Boolean(pdfSrc?.startsWith('blob:'));
+  const [pdfBlobOk, setPdfBlobOk] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!pdfSrc || !pdfSrc.startsWith('blob:')) {
+      setPdfBlobOk(null);
+      return;
+    }
+    let cancelled = false;
+    setPdfBlobOk(null);
+    // blob: URLs are same-origin object URLs — this fetch never leaves the
+    // browser, so it introduces no egress/SSRF surface.
+    fetch(pdfSrc)
+      .then((r) => r.blob())
+      .then((b) => {
+        if (!cancelled) setPdfBlobOk(b.type === 'application/pdf');
+      })
+      .catch(() => {
+        if (!cancelled) setPdfBlobOk(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfSrc]);
+
   const docxPreviewHtml = useMemo(() => {
     if (!docxHtml) return null;
     const sanitizedDocxHtml = sanitizeArtifact(docxHtml, 'html');
@@ -250,6 +338,7 @@ export function ArtifactPreview({
   useEffect(() => {
     setViewedVersionIndex(null);
     setRenderError(null);
+    setPdfError(false);
   }, [artifact.id, versionCount]);
 
   const getPreviewHTML = useCallback((): string => {
@@ -496,6 +585,7 @@ export function ArtifactPreview({
     // WEB-13: bump refreshKey to re-mount the SandboxedIframe; the new
     // iframe load triggers a fresh sandbox-ready + payload post.
     setRenderError(null);
+    setPdfError(false);
     setRefreshKey((k) => k + 1);
   };
 
@@ -543,6 +633,79 @@ export function ArtifactPreview({
   };
 
   const canPreview = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
+
+  // A download action for the PDF fallback, only when real bytes exist:
+  // a generated-file uri (compute output) or an inline data:/blob: content.
+  const pdfDownload: (() => void) | null = generatedFileSummary.primaryUri
+    ? () => void handleDownloadGeneratedFile()
+    : artifact.content.startsWith('data:') || artifact.content.startsWith('blob:')
+      ? handleDownloadBinaryDoc
+      : null;
+
+  // Shared PDF preview body used by both the panel and card variants. Renders
+  // the native browser PDF viewer ONLY when a validated same-origin/blob/data
+  // source exists and hasn't failed to load; otherwise an honest fallback with
+  // a real Download (never a fake/blank preview). `containerClassName` supplies
+  // the height (full-height in the panel, fixed height in the card).
+  // A blob source that is still being MIME-verified: show a brief loading state
+  // rather than flashing the iframe or the fallback.
+  const pdfBlobPending = isBlobPdf && pdfBlobOk === null;
+  // A source is renderable only when it exists, hasn't errored, and — for blob:
+  // sources — has been verified as an actual PDF.
+  const canRenderPdf = Boolean(pdfSrc) && !pdfError && (!isBlobPdf || pdfBlobOk === true);
+
+  const renderPdfPreview = (containerClassName: string) => (
+    <div className={cn('bg-muted/20', containerClassName)}>
+      {pdfBlobPending ? (
+        <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+          Loading PDF…
+        </div>
+      ) : canRenderPdf ? (
+        // Intentionally NOT sandboxed — the native PDF viewer is blocked in a
+        // sandboxed frame. `pdfSrc` (+ blob MIME verification) is the trust
+        // boundary; see the comment on the pdfSrc/pdfBlobOk block above.
+        <iframe
+          key={`pdf-${refreshKey}`}
+          title={artifact.title || 'PDF Preview'}
+          src={pdfSrc ?? undefined}
+          onError={() => setPdfError(true)}
+          className="h-full w-full border-0"
+          aria-label={artifact.title || 'PDF document'}
+        />
+      ) : (
+        <div
+          className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center"
+          data-testid="artifact-pdf-fallback"
+        >
+          <FileText className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              {pdfError ? "This PDF couldn't be displayed." : 'Inline preview unavailable'}
+            </p>
+            <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+              {pdfError
+                ? 'The document failed to render in the viewer. Download it to open the file.'
+                : 'This PDF has no inline-renderable source yet. Download it to view the file.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {pdfError && (
+              <Button variant="ghost" size="sm" onClick={handleRefresh}>
+                <RefreshCw className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                Retry
+              </Button>
+            )}
+            {pdfDownload && (
+              <Button variant="outline" size="sm" onClick={pdfDownload}>
+                <Download className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                Download
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   // ============================================================================
   // PANEL VARIANT — single-toolbar, full-height flex-fill layout
@@ -868,16 +1031,7 @@ export function ArtifactPreview({
             ))}
 
           {/* Preview: PDF */}
-          {showPreview && isPdf && (
-            <iframe
-              key={`pdf-${refreshKey}`}
-              title={artifact.title || 'PDF Preview'}
-              src={artifact.content}
-              sandbox="allow-same-origin"
-              className="h-full w-full border-0"
-              aria-label={artifact.title || 'PDF document'}
-            />
-          )}
+          {showPreview && isPdf && renderPdfPreview('h-full w-full')}
 
           {/* Preview: DOCX */}
           {showPreview && isDocx && (
@@ -1153,15 +1307,7 @@ export function ArtifactPreview({
         {/* Preview Tab · PDF inline viewer (Fix 39) */}
         {isPdf && (
           <TabsContent value="preview" className="m-0 p-0">
-            <div className={cn(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}>
-              <iframe
-                title={artifact.title || 'PDF Preview'}
-                src={artifact.content}
-                sandbox="allow-same-origin"
-                className="h-full w-full border-0"
-                aria-label={artifact.title || 'PDF document'}
-              />
-            </div>
+            {renderPdfPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}
           </TabsContent>
         )}
 
