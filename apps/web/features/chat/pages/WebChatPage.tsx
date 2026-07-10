@@ -794,6 +794,10 @@ export default function WebChatPage() {
           conversationId: convId,
           attachments: resolvedAttachments,
           webSearch: options.meta?.webSearchEnabled,
+          // Search implies fetch (ChatGPT/Claude parity): with Search on, the model
+          // can also open URLs — Anthropic via its native web_fetch server tool,
+          // other providers via the platform url_fetch tool in the agentic loop.
+          webFetch: options.meta?.webSearchEnabled,
           thinkingEnabled: options.meta?.thinkingEnabled,
           codeExecution: options.meta?.codeExecutionEnabled,
           research: options.meta?.researchEnabled,
