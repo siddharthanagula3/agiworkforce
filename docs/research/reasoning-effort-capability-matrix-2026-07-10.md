@@ -422,6 +422,233 @@ index.ts` says "does not send reasoning_effort (no OpenAI-style reasoning-
 - Moonshot — live curl to api.moonshot.ai/v1 (2026-07-10).
 - App code: `packages/llm-normalize/src/openai-reasoning-effort.ts`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, `apps/web/app/api/llm/v1/chat/completions/lib/canonical-request.ts`, `apps/web/lib/ai-sdk/providers.ts`, `packages/providers/anthropic/src/translate.ts`, `packages/types/src/design-system/effort.ts`.
 
+---
+
+# Addendum A — "Coming soon" / grayed-out availability (founder req, 2026-07-10)
+
+Requirement: announced-but-inaccessible models (our key 404s on them today) must
+**appear in the picker as a grayed-out "Coming soon" row that is NOT selectable
+and NEVER routable/callable**, and must auto-flip to live when the provider
+provisions them. GPT-5.6 Sol/Terra/Luna are the first users.
+
+## Why a NEW field, not `status`
+
+The existing catalog filter in `packages/types/src/model-catalog.ts`
+(`MANUAL_OVERRIDE_MODEL_IDS`, lines ~577-588) **removes** any model with
+`deprecated:true`, `status:"deprecated"`, or `status:"experimental"` from the
+picker entirely. Reusing `status` for coming-soon would therefore **hide** the
+row — the opposite of what's wanted. So coming-soon needs a separate axis:
+`availability`, which controls _selectability_, not _visibility_.
+
+## Proposed field
+
+```jsonc
+// Per-model, additive. Absent ⇒ "live".
+"availability": "live" | "coming_soon" | "unavailable",
+"unavailableReason": "Announced 2026-07-09; not yet provisioned on our API key (404).",
+"expectedLiveDate": "2026-07-15"   // optional, display-only ("Coming soon · ~Jul 15")
 ```
 
+Semantics:
+
+- **`live`** (default): normal — selectable, routable, tier-gated as usual.
+- **`coming_soon`**: **shown** in the picker as a disabled row, **not
+  selectable**, **excluded from every routable/tier set** (see invariants). This
+  is the fake-availability-safe state: it is visibly "not yet here", and the
+  request path can never send it to a provider.
+- **`unavailable`**: shown but disabled with a hard reason (e.g. region-blocked);
+  same non-routable guarantees. (Optional third state; `coming_soon` is the one
+  needed now.)
+
+Auto-flip to live: `availability` is the ONLY thing to change (drop the field or
+set `"live"`) once a live probe returns 200 — no other edits. Recommend the
+follow-up wave gate the flip behind the existing live-probe verification
+(same discipline as the 2026-07-10 gpt-5.6 correction): **do not set `live`
+until a real 200 is observed on our key.**
+
+## Invariants the follow-up wave MUST enforce (guardrail)
+
+A `coming_soon`/`unavailable` model id must NOT appear in any of:
+
+- `tierAllowedModels.{economy,pro_additions,flagship_additions}`
+- `modelPresets.<provider>` selectable lists (or if present, the picker must
+  render them disabled — prefer simply omitting from presets and sourcing the
+  disabled row from the catalog)
+- `SLOT_REGISTRY` / `taskRouting` / any auto-routing pool
+- provider `defaultModel`
+
+Add a `pnpm check:*` invariant: `∀ model where availability≠"live" ⇒ id ∉
+(tierAllowedModels ∪ SLOT_REGISTRY ∪ taskRouting ∪ defaultModel)`. This makes
+"announced but non-routable" a checked property, not a convention.
+
+## Catalog wiring change (design, not code)
+
+Split the current single selectable list into two derived sets:
+
+- `getDisplayModels()` = non-deprecated models **including** `coming_soon`
+  (drives the picker list / ordering).
+- `getSelectableModels()` = `getDisplayModels()` filtered to
+  `availability === "live"` **and** environment-selectable
+  (`isModelSelectableInEnvironment`). Drives what can actually be picked/sent.
+
+The picker maps over `getDisplayModels()`; rows failing `getSelectableModels()`
+render disabled.
+
+## Model-picker UI treatment (exact)
+
+| Aspect          | Treatment                                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Row             | Rendered but **grayed** (reduced opacity, muted text token), below the live models of that provider group              |
+| Badge           | Small **"Coming soon"** pill (use `expectedLiveDate` → "Coming soon · ~Jul 15" when present)                           |
+| Interaction     | **Non-clickable / non-focusable for selection**; `aria-disabled="true"`, pointer-events none on the select affordance  |
+| Tooltip / hover | Show `unavailableReason` (e.g. "Announced Jul 9; not yet available on your plan")                                      |
+| Keyboard        | Skipped by arrow-key selection traversal (present for screen-reader listing with disabled state)                       |
+| Effort flyout   | Not shown (model isn't selectable); when it flips live, effort UI derives from its `reasoning` block per Addendum-none |
+
+## Proposed diff — add GPT-5.6 family as `coming_soon`
+
+Add three model entries (full specs from the founder + the 2026-07-09 research),
+each `availability:"coming_soon"`, each with the `reasoning` block (adds `max` +
+`ultraMode`), and each **kept out of tierAllowedModels / modelPresets /
+SLOT_REGISTRY**. Do NOT apply here.
+
+```jsonc
+"gpt-5.6-sol": {
+  "id": "gpt-5.6-sol",
+  "apiModelId": "gpt-5.6-sol",          // bare "gpt-5.6" also routes to Sol per the model page
+  "name": "GPT-5.6 Sol",
+  "provider": "openai",
+  "modelType": "reasoning",
+  "availability": "coming_soon",
+  "unavailableReason": "GA announced 2026-07-09; live curl to api.openai.com returns 404 on our key (2026-07-10).",
+  "contextWindow": 1050000,
+  "maxOutputTokens": 128000,
+  "inputCost": 5, "cached_input": 0.5, "outputCost": 30,
+  "capabilities": { "streaming": true, "tools": true, "vision": true, "json": true,
+    "thinking": true, "computerUse": true, "agentic": true, "imageGen": false,
+    "videoGen": false, "search": false, "research": false, "codeExecution": true, "caching": true },
+  "reasoning": {
+    "capable": true, "control": "effort_levels",
+    "supportedEfforts": ["none","low","medium","high","xhigh","max"],
+    "defaultEffort": "medium", "canDisableThinking": true, "ultraMode": true,
+    "request": { "api": "chat", "effortPath": "reasoning_effort", "togglePath": null, "budgetPath": null }
+  },
+  "released": "July 2026", "deprecation_date": null,
+  "cachePolicy": { "writeMultiplier": 1.25, "readDiscount": 0.9, "minCacheLifeMin": 30, "explicitBreakpoints": true },
+  "reasoningDots": 6                     // capability hint from the OpenAI compare page (Sol 6 / Terra 4 / Luna 3)
+},
+"gpt-5.6-terra": {
+  "id": "gpt-5.6-terra", "apiModelId": "gpt-5.6-terra", "name": "GPT-5.6 Terra",
+  "provider": "openai", "modelType": "reasoning",
+  "availability": "coming_soon",
+  "unavailableReason": "GA announced 2026-07-09; 404 on our key (2026-07-10).",
+  "contextWindow": 1050000, "maxOutputTokens": 128000,
+  "inputCost": 2.5, "cached_input": 0.25, "outputCost": 15,
+  "capabilities": { "streaming": true, "tools": true, "vision": true, "json": true,
+    "thinking": true, "computerUse": true, "agentic": true, "imageGen": false,
+    "videoGen": false, "search": false, "research": false, "codeExecution": true, "caching": true },
+  "reasoning": {
+    "capable": true, "control": "effort_levels",
+    "supportedEfforts": ["none","low","medium","high","xhigh","max"],
+    "defaultEffort": "medium", "canDisableThinking": true, "ultraMode": true,
+    "request": { "api": "chat", "effortPath": "reasoning_effort", "togglePath": null, "budgetPath": null }
+  },
+  "released": "July 2026", "deprecation_date": null, "reasoningDots": 4
+},
+"gpt-5.6-luna": {
+  "id": "gpt-5.6-luna", "apiModelId": "gpt-5.6-luna", "name": "GPT-5.6 Luna",
+  "provider": "openai", "modelType": "reasoning",
+  "availability": "coming_soon",
+  "unavailableReason": "GA announced 2026-07-09; 404 on our key (2026-07-10).",
+  "contextWindow": 1050000, "maxOutputTokens": 128000,
+  "inputCost": 1, "cached_input": 0.1, "outputCost": 6,
+  "capabilities": { "streaming": true, "tools": true, "vision": true, "json": true,
+    "thinking": true, "computerUse": true, "agentic": true, "imageGen": false,
+    "videoGen": false, "search": false, "research": false, "codeExecution": true, "caching": true },
+  "reasoning": {
+    "capable": true, "control": "effort_levels",
+    "supportedEfforts": ["none","low","medium","high","xhigh","max"],
+    "defaultEffort": "medium", "canDisableThinking": true, "ultraMode": true,
+    "request": { "api": "chat", "effortPath": "reasoning_effort", "togglePath": null, "budgetPath": null }
+  },
+  "released": "July 2026", "deprecation_date": null, "reasoningDots": 3
+}
 ```
+
+Notes: metadata (ctx 1,050,000; max output 128K; cutoff 2026-02-16; pricing;
+cache write 1.25× / read −90% / 30-min min life / explicit breakpoints; endpoints
+chat/completions + responses + batch; streaming, function calling, structured
+outputs, image input) is carried from the 2026-07-09 research. **All three are
+`coming_soon` because they 404 on our key today** — they must not be routable
+until a real 200 is observed. Add `gpt-5.6-*` to the OpenAI `modelPrefixes`
+already covered by `gpt-`; no provider-map change needed.
+
+---
+
+# Addendum B — Tier / roadmap policy (post-GA newest→Pro+, retained cheap→Free/Basic)
+
+Requirement to encode (for the implementation wave; **do not apply the GA
+transform now — pre-GA we keep all cheap/budget models available for testing**):
+
+- Post-GA, newest-generation models serve **Pro+** tiers (Pro / Max /
+  Enterprise).
+- Each provider's retained **cheapest older** model serves **Free + Basic**.
+- On GPT-5.6 GA, remove old 5.5/5.4-family models from the **Pro+ selectable
+  set**, EXCEPT the single cheapest older model per provider, which stays to
+  serve Free/Basic.
+
+## How to express it in `tierAllowedModels`
+
+The catalog already has the right shape: `tierAllowedModels.economy` (Free/Basic
+floor), `.pro_additions` (adds at Pro), `.flagship_additions` (adds at
+Max/Enterprise). Tier membership is **cumulative** (Pro = economy + pro_additions;
+Max = + flagship_additions). Encode the policy as:
+
+1. **Free/Basic keep the retained cheap model** → it lives in `economy` (already
+   the case for the budget models). Mark the ONE retained-per-provider model with
+   a per-model hint so the GA transform knows which to keep:
+   ```jsonc
+   "tierPolicy": {
+     "budgetFloorFor": ["free","basic"],   // this is the retained cheap model
+     "retainOnNextGenGA": true             // survives the GA prune
+   }
+   ```
+2. **New-gen models are Pro+** → they go in `pro_additions` (and
+   `flagship_additions` for the top model), and are **absent from `economy`**:
+   ```jsonc
+   "tierPolicy": { "minTier": "pro" }      // never offered to Free/Basic
+   ```
+3. **Old flagships pruned at GA** → mark them so the transform removes them from
+   `pro_additions`/`flagship_additions` on the GA date, without deleting the
+   catalog entry (kept for history/legacy sessions):
+   ```jsonc
+   "tierPolicy": { "retireFromSelectableOn": "gpt-5.6-ga", "keepForBudgetTier": false }
+   ```
+
+`tierPolicy.minTier` (`free|basic|pro|max|enterprise`) is the single declarative
+knob; `tierAllowedModels` remains the compiled/derived result. Recommended: make
+`tierAllowedModels` **derivable** from per-model `tierPolicy.minTier` so the two
+can't drift — a build step emits the three buckets, and a check asserts every
+selectable model has a `minTier`.
+
+## Worked example — at GPT-5.6 GA (illustrative; NOT applied now)
+
+| Provider       | Free/Basic (retained cheap)                                                         | Pro+ (new-gen)                                          | Pruned from Pro+ at GA                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI         | `gpt-4.1-nano` or `gpt-5-nano` (`budgetFloorFor:[free,basic]`, `retainOnNextGenGA`) | `gpt-5.6-luna/terra/sol` (`minTier:pro`)                | `gpt-5.5`, `gpt-5.4-mini` (`retireFromSelectableOn:"gpt-5.6-ga"`) — but keep ONE cheapest if it's the provider's Free/Basic floor |
+| Anthropic      | `claude-haiku-4.5` (budget floor)                                                   | `claude-opus-4.8` (flagship), `claude-sonnet-4.6` (pro) | prior-gen opus/sonnet when superseded                                                                                             |
+| Google         | `gemini-3.1-flash-lite` (budget floor)                                              | `gemini-3.5-flash`, `gemini-3.1-pro-preview`            | prior-gen when superseded                                                                                                         |
+| (per provider) | one cheapest retained                                                               | newest generation                                       | superseded older non-floor models                                                                                                 |
+
+## Sequencing with Addendum A
+
+- **Now (pre-GA)**: GPT-5.6 entries are `availability:"coming_soon"` (Addendum A)
+  → not selectable, not in any tier set regardless of `tierPolicy`. All existing
+  cheap/budget models stay live and available for testing. `tierPolicy` can be
+  authored now (inert until GA).
+- **At GA (separate verified wave)**: live probe returns 200 → flip GPT-5.6 to
+  `availability:"live"`; run the `tierPolicy` GA transform (new-gen → Pro+; prune
+  old flagships from Pro+; retain each provider's cheapest for Free/Basic). The
+  availability guardrail (Addendum A) and the `minTier` derivation (Addendum B)
+  together guarantee nothing is offered or routed to the wrong tier or before
+  it's real.
