@@ -34,14 +34,14 @@ import { useBillingStore } from '@/stores/unified/auth';
 import {
   getAllowedAutoModesForTier,
   getBestAutoModeForTier,
-  getModelMetadata,
+  getModelReasoning,
   isModelAllowedForTier,
 } from '@/constants/llm';
+import type { ModelReasoning } from '@agiworkforce/types';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
 import { AgiMark } from '@/components/agi/AgiMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
 /**
  * Returns a human-readable daily usage label for free-tier users.
@@ -94,20 +94,81 @@ function providerBrandHex(providerKey: string): string {
   return id ? (PROVIDER_DISPLAY[id].brandColor ?? '#71717A') : '#71717A';
 }
 
-/** Whether this provider supports thinking/effort toggle. */
-function providerSupportsEffort(providerKey: string): boolean {
-  const id = toProviderId(providerKey);
-  return id ? PROVIDER_DISPLAY[id].supportsEffort : false;
+// ---------------------------------------------------------------------------
+// Reasoning / effort capability (per-model, driven by models.json `reasoning`).
+//
+// The flyout is rendered off `model.reasoning.control` + `supportedEfforts` so
+// each model shows ONLY the effort chips it actually accepts — fixing the prior
+// "xhigh/max shown (and disabled) for every model" behaviour. See
+// docs/research/reasoning-effort-capability-matrix-2026-07-10.md (UI adaptation).
+// ---------------------------------------------------------------------------
+
+/** The per-model reasoning block (absent ⇒ non-reasoning `none`). */
+function reasoningFor(model: AIModel): ModelReasoning {
+  return getModelReasoning(model.id);
 }
 
-/** Whether this model supports adaptive thinking (checks provider capability). */
+/** Whether this model exposes any reasoning/effort control at all. */
 function modelSupportsThinking(model: AIModel): boolean {
-  const metadata = getModelMetadata(model.id);
-  return metadata ? metadata.capabilities.thinking : providerSupportsEffort(model.providerKey);
+  const r = reasoningFor(model);
+  return r.capable && r.control !== 'none';
 }
 
-function openAIModelSupportsXHigh(modelId: string): boolean {
-  return supportsOpenAIReasoningEffort({ provider: 'openai', id: modelId }, 'xhigh');
+/** Effort chip labels — extended to cover the provider vocab (`none`, `minimal`). */
+const EFFORT_CHIP_LABEL: Record<string, string> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'xHigh',
+  max: 'Max',
+};
+
+const EFFORT_CHIP_DESCRIPTION: Record<string, string> = {
+  none: 'No reasoning — fastest, lowest token use',
+  minimal: 'Minimal reasoning',
+  low: 'Fastest, lowest token use',
+  medium: 'Balanced default for daily work',
+  high: 'More thorough for complex work',
+  xhigh: 'Extra-high for long-horizon work',
+  max: 'Most capable, highest token use',
+};
+
+/**
+ * The effort chips to render for a model. `effort_levels`/`always_on` use the
+ * model's exact `supportedEfforts`; `thinking_budget` maps low/medium/high chips
+ * to budget presets when no explicit set is declared. `thinking_toggle` without a
+ * set renders no chips (the on/off switch is the whole control).
+ */
+function effortChipsFor(r: ModelReasoning): string[] {
+  if (r.control === 'thinking_budget') {
+    return r.supportedEfforts && r.supportedEfforts.length > 0
+      ? r.supportedEfforts
+      : ['low', 'medium', 'high'];
+  }
+  return r.supportedEfforts ?? [];
+}
+
+/** Whether the flyout should show a separate on/off switch (vs a `none` chip). */
+function showsThinkingSwitch(r: ModelReasoning): boolean {
+  if (r.control === 'none' || r.control === 'always_on') return false;
+  // effort_levels with a `none` chip encodes off in the chip row itself.
+  if (r.control === 'effort_levels' && (r.supportedEfforts ?? []).includes('none')) return false;
+  return r.canDisableThinking ?? true;
+}
+
+/** Map a display chip to the thinking-store effort (or 'off'). */
+function chipToStoreEffort(chip: string): Effort | 'off' {
+  if (chip === 'none') return 'off';
+  if (chip === 'minimal') return 'low'; // closest representable; request path drops non-union values
+  return chip as Effort;
+}
+
+/** The model's default effort as a store value. */
+function defaultStoreEffort(r: ModelReasoning): Effort {
+  const mapped = r.defaultEffort ? chipToStoreEffort(r.defaultEffort) : 'medium';
+  return mapped === 'off' ? 'medium' : mapped;
 }
 
 function isModelSelectableForTier(model: AIModel, tier: string): boolean {
@@ -161,8 +222,18 @@ function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailabilit
 function modelLock(
   model: AIModel,
   tier: string,
-): { locked: boolean; reason?: string; kind: 'tier' | 'env' } {
-  // Tier check first (existing pure logic).
+): { locked: boolean; reason?: string; kind: 'tier' | 'env' | 'coming_soon' } {
+  // Availability check FIRST — a coming_soon/unavailable model is display-only:
+  // never selectable, never routable, regardless of tier. This is the picker
+  // side of the availability invariant (guardrail-enforced in the catalog).
+  if (model.availability && model.availability !== 'live') {
+    return {
+      locked: true,
+      kind: 'coming_soon',
+      reason: model.unavailableReason ?? 'Coming soon — not yet available',
+    };
+  }
+  // Tier check next (existing pure logic).
   if (!isModelSelectableForTier(model, tier)) {
     return { locked: true, kind: 'tier' };
   }
@@ -182,30 +253,6 @@ function isOpusModel(model: AIModel): boolean {
   return model.name.toLowerCase().includes('opus');
 }
 
-const EFFORT_OPTIONS: ReadonlyArray<{ value: Effort; description: string }> = [
-  { value: 'low', description: 'Fastest, lowest token use' },
-  { value: 'medium', description: 'Balanced default for daily work' },
-  { value: 'high', description: 'More thorough for complex work' },
-  { value: 'xhigh', description: 'Extra-high for long-horizon work' },
-  { value: 'max', description: 'Most capable, highest token use' },
-];
-
-function effortDisabledReason(model: AIModel, effort: Effort): string | null {
-  const providerId = toProviderId(model.providerKey);
-  if (!modelSupportsThinking(model)) return 'This model does not support effort control';
-  if (providerId === 'openai' && effort === 'max') return 'OpenAI does not support Max effort';
-  if (providerId === 'openai' && effort === 'xhigh' && !openAIModelSupportsXHigh(model.id)) {
-    return 'This OpenAI model supports Low, Medium, and High effort';
-  }
-  if (providerId === 'google' && (effort === 'xhigh' || effort === 'max')) {
-    return 'Gemini supports Low, Medium, and High effort';
-  }
-  if (providerId === 'agi-cloud' && (effort === 'xhigh' || effort === 'max')) {
-    return 'Auto mode supports Low, Medium, and High effort';
-  }
-  return null;
-}
-
 /**
  * Partition models into "recommended" (top ~4 for the user's tier) and
  * "more" (the rest). Flagship (locked) models always appear in recommended
@@ -222,7 +269,11 @@ function partitionModels(
   tier: string,
   searchQuery: string,
 ): {
-  recommended: (AIModel & { isLocked: boolean; lockKind: 'tier' | 'env'; lockReason?: string })[];
+  recommended: (AIModel & {
+    isLocked: boolean;
+    lockKind: 'tier' | 'env' | 'coming_soon';
+    lockReason?: string;
+  })[];
   more: AIModel[];
   isSearching: boolean;
 } {
@@ -339,9 +390,9 @@ function ModelRow({
   model: AIModel;
   isSelected: boolean;
   isLocked: boolean;
-  /** Whether the lock is a tier restriction or an environment requirement. */
-  lockKind?: 'tier' | 'env';
-  /** Human-readable reason for env-locked models (from evaluateModelEnvironment). */
+  /** Whether the lock is a tier restriction, an environment requirement, or coming-soon. */
+  lockKind?: 'tier' | 'env' | 'coming_soon';
+  /** Human-readable reason for env-locked / coming_soon models. */
   lockReason?: string;
   onSelect?: () => void;
   onUpgradeRequest?: () => void;
@@ -351,37 +402,46 @@ function ModelRow({
   const pickerTier = isLocked && lockKind === 'tier' ? getPickerModelTier(model.id) : 'economy';
 
   const isEnvLocked = isLocked && lockKind === 'env';
+  const isComingSoon = isLocked && lockKind === 'coming_soon';
+  // Env-locked and coming_soon rows are HARD-disabled: not clickable, not
+  // focusable, no upgrade CTA (upgrading can't satisfy either). Only tier-locked
+  // rows are clickable (they open the upgrade dialog).
+  const isHardDisabled = isEnvLocked || isComingSoon;
 
   const handleLockedClick = () => {
-    if (isEnvLocked) return; // env-lock: clicking does nothing (not an upgrade path)
+    if (isHardDisabled) return;
     onUpgradeRequest?.();
   };
 
-  const ariaLabel = isEnvLocked
-    ? `${model.name} - ${lockReason ?? 'environment not available'}`
-    : isLocked
-      ? `${model.name} - requires upgrade`
-      : model.name;
+  const ariaLabel = isComingSoon
+    ? `${model.name} - ${lockReason ?? 'coming soon'} (not yet available)`
+    : isEnvLocked
+      ? `${model.name} - ${lockReason ?? 'environment not available'}`
+      : isLocked
+        ? `${model.name} - requires upgrade`
+        : model.name;
 
   const rowContent = (
     <div
       className={[
         'flex items-center gap-2 rounded px-3 py-1.5 transition-colors',
-        isEnvLocked
-          ? 'cursor-not-allowed opacity-80'
-          : isLocked
-            ? 'cursor-pointer hover:bg-muted/40 opacity-80 hover:opacity-100'
-            : 'cursor-pointer hover:bg-muted/60',
+        isComingSoon
+          ? 'cursor-not-allowed opacity-45'
+          : isEnvLocked
+            ? 'cursor-not-allowed opacity-80'
+            : isLocked
+              ? 'cursor-pointer hover:bg-muted/40 opacity-80 hover:opacity-100'
+              : 'cursor-pointer hover:bg-muted/60',
         isSelected ? 'bg-muted/40' : '',
       ].join(' ')}
       onClick={isLocked ? handleLockedClick : onSelect}
       role="button"
-      tabIndex={isEnvLocked ? -1 : 0}
-      aria-disabled={isEnvLocked ? true : undefined}
+      tabIndex={isHardDisabled ? -1 : 0}
+      aria-disabled={isHardDisabled ? true : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          if (isEnvLocked) return;
+          if (isHardDisabled) return;
           if (isLocked) {
             handleLockedClick();
           } else {
@@ -390,6 +450,7 @@ function ModelRow({
         }
       }}
       aria-label={ariaLabel}
+      title={isComingSoon ? lockReason : undefined}
     >
       <ProviderLogo providerKey={model.providerKey} size={14} />
       <span className="min-w-0 flex-1">
@@ -409,6 +470,15 @@ function ModelRow({
           <span className="block truncate text-xs text-muted-foreground">{model.description}</span>
         )}
       </span>
+      {isComingSoon && (
+        <span
+          className="ml-auto shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          aria-label={lockReason ?? 'coming soon'}
+          title={lockReason}
+        >
+          Coming soon
+        </span>
+      )}
       {isEnvLocked && (
         <span
           className="ml-auto shrink-0 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
@@ -418,7 +488,7 @@ function ModelRow({
           Beta
         </span>
       )}
-      {!isEnvLocked && isLocked && (
+      {!isHardDisabled && isLocked && (
         <span
           className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
           aria-label="Requires upgrade"
@@ -559,35 +629,79 @@ export function ComposerFooter({
   const showMore = moreExpanded || selectedInMore || isSearching;
 
   const selectedProviderKey = (lockModelSelector ? lockedDisplayModel : selectedModel).providerKey;
+  const reasoning = reasoningFor(selectedModel);
   const supportsAdaptive = modelSupportsThinking(selectedModel);
-  const currentEffortDisabledReason = effortDisabledReason(selectedModel, thinkingEffort);
+  const isAlwaysOn = reasoning.control === 'always_on';
+  const effortChips = effortChipsFor(reasoning);
+  const showThinkingSwitch = showsThinkingSwitch(reasoning);
+  // Store efforts this model actually supports (for clamping the persisted pref).
+  const supportedStoreEfforts = new Set<Effort>(
+    effortChips.map(chipToStoreEffort).filter((e): e is Effort => e !== 'off'),
+  );
 
   useEffect(() => {
-    // modelLock covers both tier and env gates — closing the selection-reset leak
-    // where an env-gated model could remain selected after the user's tier changed.
+    // modelLock covers tier, env AND availability gates — closing the selection-
+    // reset leak where a now-invalid model could remain selected after the tier
+    // changed. (coming_soon models can never be selected in the first place, but
+    // this also recovers if a live model is retired.)
     if (modelLock(selectedModel, tier).locked) {
       setSelectedModelId(getBestAutoModeForTier(tier));
     }
   }, [selectedModel, setSelectedModelId, tier]);
 
   useEffect(() => {
-    if (thinkingEnabled && currentEffortDisabledReason) {
-      setThinkingEnabled(false);
+    // always_on reasoners keep thinking on. If thinking is enabled but the current
+    // persisted effort isn't in this model's supported set, snap it to the model's
+    // default so we never send an effort the model would reject.
+    if (isAlwaysOn && !thinkingEnabled) {
+      setThinkingEnabled(true);
     }
-  }, [currentEffortDisabledReason, setThinkingEnabled, thinkingEnabled]);
+    if (
+      thinkingEnabled &&
+      supportedStoreEfforts.size > 0 &&
+      !supportedStoreEfforts.has(thinkingEffort)
+    ) {
+      setThinkingEffort(defaultStoreEffort(reasoning));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModelId, isAlwaysOn, thinkingEnabled, thinkingEffort]);
 
   const handleThinkingEnabledChange = (checked: boolean) => {
     if (!checked) {
       setThinkingEnabled(false);
       return;
     }
-    if (currentEffortDisabledReason) {
-      setThinkingEffort('medium');
-      setThinkingEnabled(true);
-      return;
+    // Enabling: snap effort into the model's supported set if needed.
+    if (supportedStoreEfforts.size > 0 && !supportedStoreEfforts.has(thinkingEffort)) {
+      setThinkingEffort(defaultStoreEffort(reasoning));
+      return; // setEffort also enables
     }
     setThinkingEnabled(true);
   };
+
+  // Select an effort chip. `none` = off; other chips enable + set the level.
+  const handleEffortChip = (chip: string) => {
+    const store = chipToStoreEffort(chip);
+    if (store === 'off') {
+      setThinkingEnabled(false);
+      return;
+    }
+    setThinkingEffort(store); // setEffort also enables thinking
+  };
+
+  // Whether a chip is the active selection.
+  const isEffortChipActive = (chip: string): boolean => {
+    const store = chipToStoreEffort(chip);
+    if (store === 'off') return !thinkingEnabled;
+    return thinkingEnabled && thinkingEffort === store;
+  };
+
+  // Whether the effort chip row is visible. When there's a separate on/off
+  // switch, chips only show while thinking is enabled. When the row itself
+  // carries the off state (a `none` chip) or the model is always-on, chips are
+  // always shown.
+  const effortChipsVisible =
+    supportsAdaptive && effortChips.length > 0 && (showThinkingSwitch ? thinkingEnabled : true);
 
   return (
     <div
@@ -623,9 +737,7 @@ export function ComposerFooter({
 
       <div
         className={
-          inline
-            ? 'flex min-w-0 items-center gap-2'
-            : 'flex items-center justify-end gap-2 px-1'
+          inline ? 'flex min-w-0 items-center gap-2' : 'flex items-center justify-end gap-2 px-1'
         }
       >
         {/* min-w-0 so the model selector button below can shrink (its name span
@@ -736,58 +848,73 @@ export function ComposerFooter({
                     );
                   })}
 
-                  {/* Adaptive thinking toggle row · sits between model list and "More models" */}
-                  {!isSearching && (
+                  {/* Reasoning / effort control · rendered off the selected model's
+                      reasoning.control. Non-reasoning models render NOTHING here
+                      (no dead effort control). Effort chips are the model's exact
+                      supportedEfforts — never a global low/medium/high/xhigh/max. */}
+                  {!isSearching && supportsAdaptive && (
                     <>
                       <div className="my-1 border-t border-border/40" />
-                      <div className="flex items-center gap-2 px-3 py-1.5">
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm text-foreground/80">
-                            Adaptive thinking
+                      {isAlwaysOn ? (
+                        // Reasoner-only: reasoning is always on, cannot be disabled.
+                        <div className="flex items-center gap-2 px-3 py-1.5">
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm text-foreground/80">Reasoning</span>
+                            <span className="block text-xs text-muted-foreground">
+                              Always on for this model
+                            </span>
                           </span>
-                          <span className="block text-xs text-muted-foreground">
-                            Thinks for more complex tasks
+                          <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Always on
                           </span>
-                        </span>
-                        <Switch
-                          checked={supportsAdaptive && thinkingEnabled}
-                          disabled={!supportsAdaptive}
-                          onCheckedChange={handleThinkingEnabledChange}
-                          aria-label="Toggle adaptive thinking"
-                          className="h-5 w-9"
-                        />
-                      </div>
-                      {supportsAdaptive && thinkingEnabled && (
-                        <div className="px-2 pb-1">
-                          {EFFORT_OPTIONS.map((option) => {
-                            const isActive = thinkingEffort === option.value;
-                            const disabledReason = effortDisabledReason(
-                              selectedModel,
-                              option.value,
-                            );
-                            const isDisabled = Boolean(disabledReason);
+                        </div>
+                      ) : showThinkingSwitch ? (
+                        // On/off switch (thinking_toggle / thinking_budget / effort_levels
+                        // whose supported set has no `none` chip).
+                        <div className="flex items-center gap-2 px-3 py-1.5">
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm text-foreground/80">
+                              Extended thinking
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              Thinks for more complex tasks
+                            </span>
+                          </span>
+                          <Switch
+                            checked={thinkingEnabled}
+                            onCheckedChange={handleThinkingEnabledChange}
+                            aria-label="Toggle extended thinking"
+                            className="h-5 w-9"
+                          />
+                        </div>
+                      ) : (
+                        // effort_levels with a `none` chip: the chip row itself carries
+                        // the off state — just a label above the chips.
+                        <div className="px-3 py-1.5">
+                          <span className="block text-sm text-foreground/80">Reasoning effort</span>
+                        </div>
+                      )}
+                      {effortChipsVisible && (
+                        <div className="px-2 pb-1" role="group" aria-label="Reasoning effort level">
+                          {effortChips.map((chip) => {
+                            const isActive = isEffortChipActive(chip);
                             return (
                               <button
-                                key={option.value}
+                                key={chip}
                                 type="button"
-                                disabled={isDisabled}
-                                title={disabledReason ?? option.description}
-                                onClick={() => setThinkingEffort(option.value)}
+                                title={EFFORT_CHIP_DESCRIPTION[chip] ?? chip}
+                                onClick={() => handleEffortChip(chip)}
                                 className={[
                                   'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors',
-                                  isDisabled
-                                    ? 'cursor-not-allowed opacity-45'
-                                    : isActive
-                                      ? 'bg-muted/50'
-                                      : 'hover:bg-muted/40',
+                                  isActive ? 'bg-muted/50' : 'hover:bg-muted/40',
                                 ].join(' ')}
                               >
                                 <span className="min-w-0 flex-1">
                                   <span className="block text-sm text-foreground/85">
-                                    {EFFORT_LABEL[option.value]}
+                                    {EFFORT_CHIP_LABEL[chip] ?? chip}
                                   </span>
                                   <span className="block text-xs text-muted-foreground">
-                                    {disabledReason ?? option.description}
+                                    {EFFORT_CHIP_DESCRIPTION[chip] ?? ''}
                                   </span>
                                 </span>
                                 {isActive && (
