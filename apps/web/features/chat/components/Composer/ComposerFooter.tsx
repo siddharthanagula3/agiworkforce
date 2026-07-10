@@ -501,8 +501,15 @@ export function ComposerFooter({
   // Prompt-cache safety: switching the model mid-conversation resets the cache and re-bills
   // prior context at full input price (caching is per-model). Warn before committing such a
   // switch. Logic lives in the shared @agiworkforce/services util (reused by all surfaces).
-  const assistantTurnCount = useChatStore(
-    (s) => s.messages.filter((m) => m.role === 'assistant').length,
+  // Only conversation context that ACTUALLY exists can be re-billed by a switch.
+  // Gate on there being an active conversation: on an empty/new chat (no active
+  // conversation yet) the switch is free and must be silent — the store can hold
+  // no relevant cached prefix, so priorTurnCount is 0 and assessModelSwitchCache
+  // returns no-warn. Without this gate a stale `messages` count (e.g. left over
+  // from a just-abandoned turn) made the "Switch model mid-conversation?" dialog
+  // fire on a brand-new chat. See coordinator audit (Claude/DeepSeek/Moonshot).
+  const assistantTurnCount = useChatStore((s) =>
+    s.activeConversationId ? s.messages.filter((m) => m.role === 'assistant').length : 0,
   );
   const [pendingSwitch, setPendingSwitch] = useState<{ id: string; message: string } | null>(null);
 
