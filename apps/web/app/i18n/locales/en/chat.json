@@ -1,5 +1,6 @@
 {
   "placeholder": "Message AGI...",
+  "placeholderEmpty": "How can I help you today?",
   "thinking": "Thinking...",
   "searching": "Searching...",
   "writing": "Writing...",
