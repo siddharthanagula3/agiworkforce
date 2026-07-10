@@ -194,6 +194,14 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
     expect(() => validateEgressUrl('https://api.openai.com/v1/chat/completions')).not.toThrow();
   });
 
+  it('allows both Moonshot endpoints (mainland .cn and international .ai)', () => {
+    // Bug 4: a plain Moonshot (Kimi) send 403'd with "Provider endpoint not in approved
+    // egress allowlist" because MOONSHOT_BASE_URL=https://api.moonshot.ai/v1 was not on
+    // the list. Both hosts must pass so the *_BASE_URL override validates.
+    expect(() => validateEgressUrl('https://api.moonshot.ai/v1/chat/completions')).not.toThrow();
+    expect(() => validateEgressUrl('https://api.moonshot.cn/v1/chat/completions')).not.toThrow();
+  });
+
   it('blocks unlisted host', () => {
     expect(() => validateEgressUrl('https://attacker.example/v1/messages')).toThrow(
       EgressPolicyError,
