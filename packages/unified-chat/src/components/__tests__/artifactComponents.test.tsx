@@ -121,7 +121,8 @@ describe('ArtifactRenderer', () => {
     ]);
     const artifact = makeArtifact({ id: 'a4', type: 'table', content: data });
     render(<ArtifactRenderer artifact={artifact} />);
-    expect(screen.getByTestId('table-artifact')).toBeDefined();
+    // Table artifacts now route to the shared tabular renderer.
+    expect(screen.getByTestId('spreadsheet-artifact')).toBeDefined();
     expect(screen.getByText('Alice')).toBeDefined();
   });
 
@@ -394,10 +395,12 @@ describe('SpreadsheetArtifact', () => {
     expect(screen.getByText(/2 rows/)).toBeDefined();
   });
 
-  it('shows invalid state for malformed JSON', () => {
+  it('shows the honest raw-content fallback for non-tabular content', () => {
     const artifact = makeArtifact({ id: 's5', type: 'spreadsheet', content: 'not-json' });
     render(<SpreadsheetArtifact artifact={artifact} />);
-    expect(screen.getByText(/Invalid spreadsheet data/)).toBeDefined();
+    expect(screen.getByTestId('spreadsheet-artifact-fallback')).toBeDefined();
+    // The raw content is still shown, never a dead end.
+    expect(screen.getByText('not-json')).toBeDefined();
   });
 });
 

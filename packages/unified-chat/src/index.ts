@@ -282,8 +282,30 @@ export {
   buildReactPreviewDocument,
 } from './components/artifact-components/ReactPreview';
 export type { ReactPreviewProps } from './components/artifact-components/ReactPreview';
-export { SpreadsheetArtifact } from './components/artifact-components/SpreadsheetArtifact';
+export {
+  SpreadsheetArtifact,
+  SPREADSHEET_ROW_CAP,
+} from './components/artifact-components/SpreadsheetArtifact';
 export type { SpreadsheetArtifactProps } from './components/artifact-components/SpreadsheetArtifact';
+export {
+  EmailArtifact,
+  parseEmail,
+  emailToText,
+} from './components/artifact-components/EmailArtifact';
+export type {
+  EmailArtifactProps,
+  ParsedEmail,
+} from './components/artifact-components/EmailArtifact';
+export { splitSlides } from './components/artifact-components/PresentationArtifact';
+export {
+  parseTabular,
+  parseDelimited,
+  toCsv,
+  toMarkdownTable,
+  isNumericCell,
+  numericValue,
+} from './lib/tabular';
+export type { TabularData } from './lib/tabular';
 // Store selectors for the conversation-keyed artifact map
 export { selectArtifacts, selectActiveArtifact, selectArtifactById } from './stores/artifactStore';
 

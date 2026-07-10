@@ -32,6 +32,7 @@ import {
   Globe,
   Image as ImageIcon,
   Layers,
+  Mail,
   Network,
   Presentation,
   Table2,
@@ -39,7 +40,9 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
 import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
+import { parseTabular, toCsv, toMarkdownTable } from '../lib/tabular';
 import type { Artifact } from '../lib/types';
+import { EmailArtifact } from './artifact-components/EmailArtifact';
 import { PresentationArtifact } from './artifact-components/PresentationArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
 import { SpreadsheetArtifact } from './artifact-components/SpreadsheetArtifact';
@@ -228,8 +231,11 @@ function sanitizeSvg(raw: string): string {
 
 function getFileExtension(artifact: Artifact): string {
   if (artifact.type === 'code' && artifact.language) return artifact.language;
-  if (artifact.type === 'spreadsheet') return 'csv';
+  if (artifact.type === 'spreadsheet' || artifact.type === 'table' || artifact.type === 'csv') {
+    return 'csv';
+  }
   if (artifact.type === 'presentation') return 'md';
+  if (artifact.type === 'email') return 'txt';
   if (artifact.type === 'markdown') return 'md';
   if (artifact.type === 'svg') return 'svg';
   if (artifact.type === 'react' || artifact.type === 'component') return 'tsx';
@@ -246,9 +252,14 @@ function getArtifactIcon(type: string): React.ReactNode {
     case 'mermaid':
       return <Network className="h-4 w-4" />;
     case 'spreadsheet':
+    case 'csv':
       return <FileSpreadsheet className="h-4 w-4" />;
+    case 'table':
+      return <Table2 className="h-4 w-4" />;
     case 'presentation':
       return <Presentation className="h-4 w-4" />;
+    case 'email':
+      return <Mail className="h-4 w-4" />;
     case 'html':
       return <Globe className="h-4 w-4" />;
     case 'document':
@@ -443,53 +454,11 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
   );
 }
 
-function TableArtifact({ artifact }: { artifact: Artifact }) {
-  const tableData = useMemo(() => {
-    try {
-      const parsed = JSON.parse(artifact.content);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return { columns: Object.keys(parsed[0]), rows: parsed };
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }, [artifact.content]);
+/** Types whose content is tabular (CSV/TSV or JSON array-of-objects). */
+const TABULAR_TYPES = ['spreadsheet', 'table', 'csv'] as const;
 
-  if (!tableData) {
-    return (
-      <div className="p-8 text-center text-sm text-muted-foreground">
-        Invalid table data. Expected array of objects.
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto" data-testid="table-artifact">
-      <table className="w-full text-sm">
-        <thead className="bg-muted">
-          <tr>
-            {tableData.columns.map((col) => (
-              <th key={col} className="px-4 py-2 text-left font-semibold border-b">
-                {col}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {tableData.rows.map((row: Record<string, unknown>, i: number) => (
-            <tr key={i} className="hover:bg-muted/50 border-b">
-              {tableData.columns.map((col) => (
-                <td key={col} className="px-4 py-2">
-                  {String(row[col] ?? '')}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+function isTabularType(type: string): boolean {
+  return (TABULAR_TYPES as readonly string[]).includes(type);
 }
 
 // ---------------------------------------------------------------------------
@@ -536,7 +505,19 @@ export function ArtifactRenderer({
 
   const handleDownload = () => {
     if (!hasContent) return;
-    const blob = new Blob([artifact.content], { type: 'text/plain' });
+    // Tabular artifacts download as real CSV even when the stored content is
+    // the legacy JSON array-of-objects shape; unparseable content falls back
+    // to the raw text so nothing is silently lost.
+    let body = artifact.content;
+    let mime = 'text/plain';
+    if (isTabularType(artifact.type)) {
+      const parsed = parseTabular(artifact.content);
+      if (parsed) {
+        body = toCsv(parsed);
+        mime = 'text/csv;charset=utf-8;';
+      }
+    }
+    const blob = new Blob([body], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -554,22 +535,14 @@ export function ArtifactRenderer({
     'markdown',
     'document',
   ].includes(artifact.type);
-  const supportsExcelExport = ['spreadsheet', 'table'].includes(artifact.type);
-  const supportsMarkdownExport = ['table', 'spreadsheet'].includes(artifact.type);
+  const supportsExcelExport = isTabularType(artifact.type);
+  const supportsMarkdownExport = isTabularType(artifact.type);
 
   const handleCopyMarkdown = async () => {
     try {
-      const data = JSON.parse(artifact.content) as Record<string, string | number>[];
-      if (!Array.isArray(data) || data.length === 0) return;
-      const firstRow = data[0];
-      if (!firstRow) return;
-      const headers = Object.keys(firstRow);
-      const headerRow = `| ${headers.join(' | ')} |`;
-      const separatorRow = `| ${headers.map(() => '---').join(' | ')} |`;
-      const dataRows = data
-        .map((row) => `| ${headers.map((h) => String(row[h] ?? '')).join(' | ')} |`)
-        .join('\n');
-      await navigator.clipboard.writeText(`${headerRow}\n${separatorRow}\n${dataRows}`);
+      const data = parseTabular(artifact.content);
+      if (!data) return;
+      await navigator.clipboard.writeText(toMarkdownTable(data));
     } catch {
       // clipboard write failed silently
     }
@@ -655,7 +628,7 @@ export function ArtifactRenderer({
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
                   >
                     <Download className="h-4 w-4" />
-                    Download as text
+                    {isTabularType(artifact.type) ? 'Download as CSV' : 'Download as text'}
                   </button>
 
                   {(supportsDocumentExport || supportsExcelExport) && (
@@ -749,8 +722,8 @@ export function ArtifactRenderer({
           <MermaidArtifact artifact={artifact} isDark={isDark} />
         ) : artifact.type === 'code' ? (
           <CodeArtifact artifact={artifact} />
-        ) : artifact.type === 'table' ? (
-          <TableArtifact artifact={artifact} />
+        ) : isTabularType(artifact.type) ? (
+          <SpreadsheetArtifact artifact={artifact} />
         ) : artifact.type === 'mermaid' ? (
           <MermaidArtifact artifact={artifact} isDark={isDark} />
         ) : artifact.type === 'svg' ||
@@ -761,10 +734,10 @@ export function ArtifactRenderer({
           <MarkdownArtifact artifact={artifact} isDark={isDark} />
         ) : artifact.type === 'react' || artifact.type === 'component' ? (
           <ReactPreview code={artifact.content} />
-        ) : artifact.type === 'spreadsheet' ? (
-          <SpreadsheetArtifact artifact={artifact} />
         ) : artifact.type === 'presentation' ? (
           <PresentationArtifact artifact={artifact} />
+        ) : artifact.type === 'email' ? (
+          <EmailArtifact artifact={artifact} />
         ) : artifact.type === 'html' ? (
           <HtmlArtifact artifact={artifact} />
         ) : artifact.type === 'document' ? (
