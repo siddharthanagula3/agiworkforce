@@ -124,7 +124,9 @@ export function listProviderAvailability(): ProviderAvailability[] {
         // probe lives on the catalog endpoint, not here.
         return { id, available: true };
       case 'google':
-        return process.env['GOOGLE_API_KEY'] || process.env['GOOGLE_AI_API_KEY']
+        return process.env['GOOGLE_API_KEY'] ||
+          process.env['GOOGLE_AI_API_KEY'] ||
+          process.env['GEMINI_API_KEY']
           ? { id, available: true }
           : { id, available: false, unavailableReason: 'GOOGLE_API_KEY not set' };
       default: {
@@ -189,10 +191,13 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
       return createOllamaAdapter(config);
     }
     case 'google': {
-      // GOOGLE_AI_API_KEY is the legacy cloud-chat env name — honored as a
-      // fallback so existing deployments keep working after the Wave 2
-      // adapter migration.
-      const apiKey = process.env['GOOGLE_API_KEY'] ?? process.env['GOOGLE_AI_API_KEY'];
+      // GOOGLE_AI_API_KEY is the legacy cloud-chat env name; GEMINI_API_KEY is
+      // Google's own current preferred name — both honored as fallbacks so
+      // existing deployments and users naming it either way keep working.
+      const apiKey =
+        process.env['GOOGLE_API_KEY'] ??
+        process.env['GOOGLE_AI_API_KEY'] ??
+        process.env['GEMINI_API_KEY'];
       if (!apiKey) return null;
       const config: GoogleAdapterConfig = { apiKey };
       if (process.env['GOOGLE_GENAI_BASE_URL']) {
