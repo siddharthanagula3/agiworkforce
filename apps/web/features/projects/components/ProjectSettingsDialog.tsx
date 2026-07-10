@@ -58,6 +58,7 @@ export function ProjectSettingsDialog({
   const [instructions, setInstructions] = useState(project.instructions ?? '');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Sync local state when project changes (e.g., switching between projects)
   useEffect(() => {
@@ -110,11 +111,42 @@ export function ProjectSettingsDialog({
     }
   };
 
-  const handleDelete = () => {
-    onDelete(project.id);
-    setDeleteConfirmOpen(false);
-    onOpenChange(false);
-    toast.success('Project deleted');
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      // Delete on the server first (DELETE /api/projects/[id] · soft-delete
+      // tombstone) so the removal actually persists. Previously this handler
+      // only called the local-store `onDelete` and showed a success toast, so
+      // the next server-driven `/api/projects` refresh silently resurrected the
+      // project — a false "Project deleted" toast with no DELETE ever sent.
+      const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+        method: 'DELETE',
+        headers: await addCsrfHeaders(),
+        credentials: 'same-origin',
+      });
+
+      if (!response.ok) {
+        let message = `Failed to delete project (${response.status})`;
+        try {
+          const json = (await response.json()) as { error?: string; message?: string };
+          message = json.message || json.error || message;
+        } catch {
+          // response body wasn't JSON · fall back to the generic message above
+        }
+        throw new Error(message);
+      }
+
+      // Server delete succeeded · remove from the local store and close.
+      onDelete(project.id);
+      setDeleteConfirmOpen(false);
+      onOpenChange(false);
+      toast.success('Project deleted');
+    } catch (error) {
+      // Keep the confirm dialog open on failure so the user can retry.
+      toast.error(error instanceof Error ? error.message : 'Failed to delete project');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -262,12 +294,19 @@ export function ProjectSettingsDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={(e) => {
+                // Prevent Radix from auto-closing the confirm dialog before the
+                // async server delete resolves — we close it ourselves only on
+                // success, and keep it open (for retry) on failure.
+                e.preventDefault();
+                void handleDelete();
+              }}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {isDeleting ? 'Deleting…' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
