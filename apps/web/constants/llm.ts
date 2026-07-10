@@ -16,12 +16,17 @@ import {
   getProviderDefaultModel as getCatalogProviderDefaultModel,
   getTaskModelForProvider as getCatalogTaskModelForProvider,
   getTierPolicy as getCatalogTierPolicy,
+  getModelReasoning as getCatalogModelReasoning,
+  getDisplayModels as getCatalogDisplayModels,
+  getSelectableModels as getCatalogSelectableModels,
   isModelAllowedForTier as isCatalogModelAllowedForTier,
   modelIdAliases,
   modelsById,
   modelsCatalogJson as modelsJson,
   normalizeModelId as normalizeCatalogModelId,
   providerLabels,
+  type ModelReasoning,
+  type ModelAvailability,
 } from '@agiworkforce/types';
 
 // ---- Types ----
@@ -63,6 +68,14 @@ export interface ModelMetadata {
    * Absent on all current models; set on future env-gated models (Phase B).
    */
   requiresEnvironment?: 'e2b' | 'local-runtime';
+  /** Additive per-model reasoning capability metadata (drives the effort flyout). */
+  reasoning?: ModelReasoning;
+  /** Selectability axis (separate from lifecycle status). Absent ⇒ "live". */
+  availability?: ModelAvailability;
+  /** Reason shown on coming_soon/unavailable rows. */
+  unavailableReason?: string;
+  /** Optional display-only expected-live date for coming_soon rows. */
+  expectedLiveDate?: string;
 }
 
 // ---- Derived data from JSON ----
@@ -118,6 +131,21 @@ export const TIER_ALLOWED_MODELS: Record<string, string[]> = {
 
 export function getModelMetadata(modelId: string): ModelMetadata | null {
   return (getModelMetadataById(modelId) as ModelMetadata | null) ?? null;
+}
+
+/** Per-model reasoning capability block (absent ⇒ non-reasoning `none`). */
+export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {
+  return getCatalogModelReasoning(modelId);
+}
+
+/** DISPLAY models — includes coming_soon (drives the picker list). */
+export function getDisplayModels(): ModelMetadata[] {
+  return getCatalogDisplayModels() as unknown as ModelMetadata[];
+}
+
+/** SELECTABLE models — live only (what can actually be picked/sent). */
+export function getSelectableModels(): ModelMetadata[] {
+  return getCatalogSelectableModels() as unknown as ModelMetadata[];
 }
 
 export function getAllModels(): ModelMetadata[] {
