@@ -437,9 +437,11 @@ const ChatComposerNewComponent = ({
     clearAttachments();
     setSelectedSkill(null);
     setSkillBody(null);
-    setWebSearchEnabled(false);
-    setResearchEnabled(false);
-    setStyleMode('normal');
+    // Web search / Deep Research / style are PERSISTENT toggles (claude.ai parity):
+    // once on they stay on across sends (checkmark remains in the + menu) until the
+    // user turns them off. Do NOT reset them here (the after-send clear) — that made
+    // Web search a fire-once flag. They still auto-clear via the capability effects
+    // above when the selected model can't support them, and via the free-trial reset.
     setShowStyleSubmenu(false);
     setActiveTags([]);
     setLocalNotice(null);
