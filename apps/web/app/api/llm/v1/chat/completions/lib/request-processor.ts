@@ -282,6 +282,45 @@ export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
   }
 }
 
+/**
+ * Append the provider-native web-search server tool to `tools` when the caller has
+ * requested web search and the resolved model supports search. Pure and exported so
+ * the injection is unit-testable across every provider (the previous inline block
+ * silently no-op'd for any provider without a branch — xai/qwen/moonshot, whose
+ * catalog `search:true` lit the composer toggle, so the request went out with no
+ * search tool and the model answered "I can't browse the internet"; those providers
+ * are now gated out of the toggle client-side via `providerSupportsWebSearch`).
+ *
+ * Providers WITH a branch (kept in sync with `WEB_SEARCH_INJECTION_PROVIDERS`):
+ *   - anthropic: `web_search_20260209` with `allowed_callers:['direct']` (verified
+ *     against platform.claude.com — the current dynamic-filtering tool version;
+ *     `allowed_callers:['direct']` is required to call it without code execution).
+ *   - google:    `{ google_search: {} }`.
+ *   - openai:    `{ type: 'web_search_preview' }` (Responses API).
+ * `caps.search ?? true` keeps unknown/missing catalog entries permissive (a missing
+ * entry never silently drops the tool for a provider that does support it).
+ */
+export function appendWebSearchTool(
+  providerLower: string,
+  tools: unknown[] | undefined,
+  caps: { search?: boolean } | undefined,
+): unknown[] | undefined {
+  if (!(caps?.search ?? true)) return tools;
+  if (providerLower === 'anthropic') {
+    return [
+      ...(tools ?? []),
+      { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'] },
+    ];
+  }
+  if (providerLower === 'google') {
+    return [...(tools ?? []), { google_search: {} }];
+  }
+  if (providerLower === 'openai') {
+    return [...(tools ?? []), { type: 'web_search_preview' }];
+  }
+  return tools;
+}
+
 function resolveAutoModel(
   model: string,
   subscriptionTier?: string,
@@ -1119,17 +1158,8 @@ export async function processRequest(
   // Only inject a built-in tool the resolved model can actually use (unknown models
   // default to allowed so a missing catalog entry never silently drops the tool).
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
-  if (chatRequest.web_search && (resolvedModelCaps?.search ?? true)) {
-    if (providerLower === 'anthropic') {
-      resolvedTools = [
-        ...(resolvedTools ?? []),
-        { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'] },
-      ];
-    } else if (providerLower === 'google') {
-      resolvedTools = [...(resolvedTools ?? []), { google_search: {} }];
-    } else if (providerLower === 'openai') {
-      resolvedTools = [...(resolvedTools ?? []), { type: 'web_search_preview' }];
-    }
+  if (chatRequest.web_search) {
+    resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps);
   }
 
   if (
