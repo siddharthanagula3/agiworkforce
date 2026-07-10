@@ -369,13 +369,18 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 pub fn model_uses_responses_api(model_id: &str) -> bool {
     let id = get_canonicalized_id(model_id).to_lowercase();
 
-    // Catalog-first: any OpenAI reasoning-tier model uses Responses API.
-    // No hardcoded SPECIFIC model IDs per the locked rule — capability
-    // info flows through models.json.
+    // Catalog is authoritative for known models: trust the declared
+    // `model_type`. Only OpenAI reasoning-tier models use the Responses API;
+    // OpenAI *chat* models (e.g. gpt-5-nano, gpt-4.1-nano) and every non-OpenAI
+    // model use Chat Completions. Returning here (rather than falling through to
+    // the version heuristics below) prevents the `gpt-` major>=5 / 4.1 heuristic
+    // from misrouting a catalog chat model into a Responses-shaped body (`input`,
+    // no `messages`) — which is posted to `/chat/completions` and 400s with
+    // "Missing required parameter: 'messages'". No hardcoded SPECIFIC model IDs
+    // per the locked rule — capability info flows through models.json. The
+    // heuristics below only apply to ids NOT present in the catalog.
     if let Some(entry) = CONFIG.models.get(&id) {
-        if entry.provider == "openai" && entry.model_type == "reasoning" {
-            return true;
-        }
+        return entry.provider == "openai" && entry.model_type == "reasoning";
     }
 
     // O-series (oN) reasoning family — parse a single digit after the
