@@ -8,6 +8,7 @@ import {
   deriveArtifacts,
   hasArtifacts,
   removeArtifactBlocks,
+  extractTrailingUnclosedBlock,
 } from '../artifact-derivation';
 
 const HTML = '```html\n<!DOCTYPE html><html><body><h1>Hi</h1></body></html>\n```';
@@ -150,5 +151,77 @@ describe('hasArtifacts + removeArtifactBlocks', () => {
     const body = 'A\n\n```bash\nls -la\n```\n\nB';
     const cleaned = removeArtifactBlocks(body, [{ content: 'unrelated', language: 'html' }]);
     expect(cleaned).toContain('ls -la');
+  });
+});
+
+describe('extractTrailingUnclosedBlock', () => {
+  it('detects a trailing unclosed fence and returns its partial body', () => {
+    const md = 'Here is your page:\n\n```html\n<!DOCTYPE html>\n<html>\n<body>';
+    const block = extractTrailingUnclosedBlock(md);
+    expect(block).not.toBeNull();
+    expect(block!.language).toBe('html');
+    expect(block!.content).toBe('<!DOCTYPE html>\n<html>\n<body>');
+    expect(block!.ordinal).toBe(0);
+    expect(md.slice(block!.startIndex)).toMatch(/^```html\n/);
+  });
+
+  it('returns null when every fence is closed', () => {
+    expect(extractTrailingUnclosedBlock(`intro\n${HTML}\nafter`)).toBeNull();
+    expect(extractTrailingUnclosedBlock('no code at all')).toBeNull();
+    expect(extractTrailingUnclosedBlock('')).toBeNull();
+  });
+
+  it('returns null while the opening fence line is still incomplete (no newline yet)', () => {
+    expect(extractTrailingUnclosedBlock('Sure:\n\n```ht')).toBeNull();
+    expect(extractTrailingUnclosedBlock('Sure:\n\n```html')).toBeNull();
+  });
+
+  it('detects the fence as soon as the language line completes, with empty body', () => {
+    const block = extractTrailingUnclosedBlock('Sure:\n\n```html\n');
+    expect(block).not.toBeNull();
+    expect(block!.language).toBe('html');
+    expect(block!.content).toBe('');
+  });
+
+  it('assigns the ordinal the block will have once closed (after complete blocks)', () => {
+    const md = `${HTML}\n\ntext\n\n${PY}\n\nnow streaming:\n\n\`\`\`svg\n<svg`;
+    const block = extractTrailingUnclosedBlock(md);
+    expect(block).not.toBeNull();
+    expect(block!.language).toBe('svg');
+    expect(block!.ordinal).toBe(2);
+    // Same deterministic id as the eventual completed artifact
+    expect(computeDerivedArtifactId('c1', 'm1', block!.ordinal)).toBe(
+      computeDerivedArtifactId('c1', 'm1', 2),
+    );
+  });
+
+  it('stays consistent with extractCodeBlocks fence pairing on fence-like inner text', () => {
+    // extractCodeBlocks pairs lazily: the inner ``` closes the first block, and
+    // the next ```-with-newline opens a new (unclosed) one. The streaming parser
+    // MUST mirror that pairing — its ordinal/startIndex have to match what the
+    // canonical extractor will produce once the fence closes (id-handoff invariant).
+    const md = '```md\nUse ``` to open a fence\n```\n\nplain prose after';
+    const closed = extractCodeBlocks(md);
+    const block = extractTrailingUnclosedBlock(md);
+    expect(block).not.toBeNull();
+    expect(block!.ordinal).toBe(closed.length);
+    expect(block!.startIndex).toBeGreaterThanOrEqual(closed[closed.length - 1]!.endIndex);
+    // Once a closing fence arrives, the canonical extractor sees the same block.
+    const completed = extractCodeBlocks(md + '\n```');
+    expect(completed).toHaveLength(closed.length + 1);
+    expect(completed[closed.length]!.ordinal).toBe(block!.ordinal);
+  });
+
+  it('defaults language to text for a bare ``` fence', () => {
+    const block = extractTrailingUnclosedBlock('```\npartial body');
+    expect(block).not.toBeNull();
+    expect(block!.language).toBe('text');
+  });
+
+  it('handles a giant single-line partial body without pathological cost', () => {
+    const giant = 'x'.repeat(500_000);
+    const block = extractTrailingUnclosedBlock('```html\n' + giant);
+    expect(block).not.toBeNull();
+    expect(block!.content).toHaveLength(500_000);
   });
 });
