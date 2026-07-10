@@ -48,6 +48,9 @@ struct ScriptedHost {
     content_loop: LoopControl,
     /// Fixed per-turn cost reported to the budget guard.
     cost: f64,
+    /// When `Some(n)`, `is_cancelled()` reports `true` once `n` tool batches have
+    /// been committed — used to characterize mid-turn cancellation.
+    cancel_after_commits: Option<usize>,
 
     // ---- recording ----
     events: Vec<TurnEvent>,
@@ -68,6 +71,7 @@ impl ScriptedHost {
             runaway: LoopControl::Break,
             content_loop: LoopControl::Break,
             cost: 0.0,
+            cancel_after_commits: None,
             events: Vec::new(),
             committed: Vec::new(),
             assistant_texts: Vec::new(),
@@ -94,6 +98,11 @@ impl ScriptedHost {
 
     fn preempt_tool(mut self, name: &str, block: ResultBlock) -> Self {
         self.preempt.insert(name.to_string(), block);
+        self
+    }
+
+    fn cancel_after(mut self, commits: usize) -> Self {
+        self.cancel_after_commits = Some(commits);
         self
     }
 
@@ -229,6 +238,11 @@ impl TurnHost for ScriptedHost {
 
     fn on_event(&mut self, event: &TurnEvent) {
         self.events.push(event.clone());
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel_after_commits
+            .is_some_and(|n| self.committed.len() >= n)
     }
 }
 
@@ -670,4 +684,66 @@ async fn usage_totals_accumulate_across_iterations() {
     assert_eq!(outcome.totals.input_tokens, 13);
     assert_eq!(outcome.totals.output_tokens, 12);
     assert_eq!(outcome.response, "b");
+}
+
+#[tokio::test]
+async fn cancellation_mid_turn_stops_after_committed_batch() {
+    // The model keeps requesting distinct tools, but the user stops mid-turn:
+    // after the FIRST tool batch commits, `is_cancelled()` flips true and the
+    // post-dispatch guard breaks the loop BEFORE the next model completion is
+    // spent. The response is whatever had been produced so far.
+    let mut host = ScriptedHost::new(vec![
+        completion("i0", vec![tc("a", "read_file")]),
+        completion("i1", vec![tc("b", "grep_files")]),
+        completion("i2", vec![tc("c", "list_directory")]),
+    ])
+    .result("read_file", true, "0")
+    .cancel_after(1);
+
+    let outcome = {
+        let mut tracker = RunawayTracker::new();
+        TurnEngine::run_turn(&mut host, params(25, None), &mut tracker)
+            .await
+            .unwrap()
+    };
+
+    // Exactly one dispatch batch ran before the stop was observed.
+    assert_eq!(host.committed.len(), 1);
+    // Only the first completion was consumed — no continuation round-trip.
+    assert_eq!(host.assistant_texts, vec!["i0"]);
+    // The turn still finalizes cleanly (TurnComplete emitted, partial response).
+    assert_eq!(outcome.response, "i0");
+    assert!(
+        host.events
+            .iter()
+            .any(|e| matches!(e, TurnEvent::TurnComplete { .. })),
+        "a cancelled turn still emits TurnComplete with the partial response"
+    );
+}
+
+#[tokio::test]
+async fn cancellation_before_first_dispatch_runs_no_tools() {
+    // A stop already latched when the turn begins: the loop-top guard breaks at
+    // iteration 0 before any tool is dispatched. The first completion's text is
+    // the final response and no tool batch is committed.
+    let mut host = ScriptedHost::new(vec![completion("only", vec![tc("t1", "read_file")])])
+        .result("read_file", true, "x")
+        .cancel_after(0);
+
+    let outcome = {
+        let mut tracker = RunawayTracker::new();
+        TurnEngine::run_turn(&mut host, params(25, None), &mut tracker)
+            .await
+            .unwrap()
+    };
+
+    assert!(host.committed.is_empty(), "no tool batch should run");
+    assert!(
+        !host
+            .events
+            .iter()
+            .any(|e| matches!(e, TurnEvent::IterationStarted { .. })),
+        "no iteration should start once cancellation is already latched"
+    );
+    assert_eq!(outcome.response, "only");
 }

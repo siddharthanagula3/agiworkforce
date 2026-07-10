@@ -353,4 +353,19 @@ pub trait TurnHost: Send {
     /// lines, TUI transcript). Must be side-effect-only and non-reentrant w.r.t.
     /// the other trait methods.
     fn on_event(&mut self, event: &TurnEvent);
+
+    /// Whether the turn has been cancelled by the user mid-flight (e.g. the
+    /// desktop "stop generation" control, or the CLI's Ctrl-C flag). The engine
+    /// checks this at the top of every agentic iteration and again immediately
+    /// after committing a tool batch (before spending another model completion),
+    /// breaking cleanly with the response accumulated so far.
+    ///
+    /// Defaults to `false` so hosts that manage cancellation entirely inside
+    /// their own `complete()` (the CLI, whose stream cancellation is app-local)
+    /// keep their historical behavior with zero changes — the check is a no-op
+    /// for them. The desktop host overrides this to consult its per-conversation
+    /// stop flag so a mid-turn stop halts the loop without an extra round-trip.
+    fn is_cancelled(&self) -> bool {
+        false
+    }
 }
