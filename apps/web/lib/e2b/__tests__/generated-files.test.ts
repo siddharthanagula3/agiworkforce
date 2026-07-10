@@ -80,16 +80,24 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       async (path: string) => (after as Record<string, SandboxFileEntry[]>)[path] ?? [],
     );
 
-    const files = await harvestGeneratedFiles({ executor, baseline, userId: 'u1' });
+    const { files, failedCount } = await harvestGeneratedFiles({
+      executor,
+      baseline,
+      userId: 'u1',
+    });
 
+    expect(failedCount).toBe(0);
     expect(files).toHaveLength(1);
+    // The wire uri is the SAME-ORIGIN authenticated serve route, not the raw
+    // R2 URL — the renderer gates only accept same-origin sources.
     expect(files[0]).toMatchObject({
       file_name: 'report.pdf',
       mime_type: 'application/pdf',
       kind: 'pdf',
-      uri: 'https://media.example/f',
+      uri: '/api/files/asset-1',
       id: 'asset-1',
     });
+    expect(files[0]!.checksum_sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('re-emits a baseline file whose size changed (model overwrote it)', async () => {
@@ -99,7 +107,7 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       file('/home/user/data.csv', 999),
     ]);
 
-    const files = await harvestGeneratedFiles({ executor, baseline, userId: 'u1' });
+    const { files } = await harvestGeneratedFiles({ executor, baseline, userId: 'u1' });
     expect(files.map((f) => f.file_name)).toEqual(['data.csv']);
   });
 
@@ -110,7 +118,11 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       '/home/user/node_modules': [file('/home/user/node_modules/x.js', 5)],
     });
 
-    const files = await harvestGeneratedFiles({ executor, baseline: new Map(), userId: 'u1' });
+    const { files } = await harvestGeneratedFiles({
+      executor,
+      baseline: new Map(),
+      userId: 'u1',
+    });
     expect(files.map((f) => f.file_name)).toEqual(['chart.png']);
     expect(files[0]!.kind).toBe('image');
   });
@@ -118,9 +130,10 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
   it('returns [] when media storage is unconfigured (never throws)', async () => {
     mockIsConfigured.mockReturnValue(false);
     const executor = makeExecutor({ '/home/user': [file('/home/user/a.txt', 5)] });
-    expect(await harvestGeneratedFiles({ executor, baseline: new Map(), userId: 'u1' })).toEqual(
-      [],
-    );
+    expect(await harvestGeneratedFiles({ executor, baseline: new Map(), userId: 'u1' })).toEqual({
+      files: [],
+      failedCount: 0,
+    });
   });
 
   it('skips a file whose read fails and still persists the rest', async () => {
@@ -131,8 +144,14 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(new Uint8Array([7]));
 
-    const files = await harvestGeneratedFiles({ executor, baseline: new Map(), userId: 'u1' });
+    const { files, failedCount } = await harvestGeneratedFiles({
+      executor,
+      baseline: new Map(),
+      userId: 'u1',
+    });
     expect(files).toHaveLength(1);
     expect(files[0]!.file_name).toBe('good.txt');
+    // The unreadable file is COUNTED so the tool loop can surface an honest note.
+    expect(failedCount).toBe(1);
   });
 });

@@ -231,7 +231,18 @@ export async function getE2BExecutor(conversationId?: string): Promise<E2BExecut
           };
         }
         const output = [stdout, stderr, execution.text ?? ''].filter(Boolean).join('\n');
-        return { ok: true, output: output || '(no output)' };
+        // Rich results: charts/images arrive as base64 PNGs on results[].png
+        // (they are not files on the sandbox disk, so the end-of-turn file
+        // harvest can't see them). Surface them so the tool loop can persist
+        // them through the shared generated-file pipeline.
+        const pngResults = ((execution.results ?? []) as Array<{ png?: unknown }>)
+          .map((r) => r?.png)
+          .filter((png): png is string => typeof png === 'string' && png.length > 0);
+        return {
+          ok: true,
+          output: output || '(no output)',
+          ...(pngResults.length > 0 ? { pngResults } : {}),
+        };
       } catch (err) {
         return fail(err);
       }

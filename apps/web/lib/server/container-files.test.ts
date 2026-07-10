@@ -12,7 +12,12 @@ vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: (...args: unknown[]) => insertMediaAsset(...args),
 }));
 
-import { persistGeneratedFile, persistGeneratedFiles } from './container-files';
+import {
+  persistGeneratedFile,
+  persistGeneratedFiles,
+  collectGeneratedFileRefs,
+  type GeneratedFileRef,
+} from './container-files';
 
 function fetchOk(body = 'bytes', contentType = 'application/pdf') {
   return {
@@ -67,11 +72,44 @@ describe('persistGeneratedFile', () => {
     expect(insertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'file', mimeType: 'application/pdf', provider: 'openai' }),
     );
+    // The serve URL is the SAME-ORIGIN authenticated route, not the raw R2
+    // public URL — the renderer gates only accept same-origin sources.
     expect(result).toMatchObject({
       assetId: 'asset_1',
-      url: 'https://blob.example/media/file/u/x.pdf',
+      url: '/api/files/asset_1',
       filename: 'report.pdf',
     });
+    expect(result!.checksumSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(result!.wire).toMatchObject({
+      file_name: 'report.pdf',
+      mime_type: 'application/pdf',
+      uri: '/api/files/asset_1',
+      kind: 'pdf',
+    });
+  });
+
+  it('resolves a missing Anthropic filename from the Files API metadata endpoint', async () => {
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ id: 'file_meta', filename: 'analysis.csv' }),
+      })
+      .mockResolvedValueOnce(fetchOk('a,b\n1,2\n', 'text/csv'));
+    const result = await persistGeneratedFile({
+      userId: 'u',
+      ref: { provider: 'anthropic', fileId: 'file_meta' },
+    });
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      1,
+      'https://api.anthropic.com/v1/files/file_meta',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'anthropic-beta': 'files-api-2025-04-14' }),
+      }),
+    );
+    expect(result!.filename).toBe('analysis.csv');
+    expect(result!.mimeType).toBe('text/csv');
   });
 
   it('fetches an Anthropic file via the Files API with the beta header', async () => {
@@ -137,7 +175,7 @@ describe('persistGeneratedFiles', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('persists the successes and drops the failures', async () => {
+  it('persists the successes and COUNTS the failures (honest-note contract)', async () => {
     fetchSpy
       .mockResolvedValueOnce(fetchOk('ok', 'application/pdf'))
       .mockResolvedValueOnce({ ok: false, status: 404, headers: { get: () => null } });
@@ -148,7 +186,55 @@ describe('persistGeneratedFiles', () => {
         { provider: 'openai', filename: 'b.pdf', containerId: 'c', fileId: 'f2' },
       ],
     });
-    expect(out).toHaveLength(1);
-    expect(out[0]!.filename).toBe('a.pdf');
+    expect(out.files).toHaveLength(1);
+    expect(out.files[0]!.filename).toBe('a.pdf');
+    expect(out.failedCount).toBe(1);
+  });
+});
+
+describe('collectGeneratedFileRefs', () => {
+  it('finds OpenAI container citations and Anthropic code-execution outputs at any depth, deduped', () => {
+    const sink = new Map<string, GeneratedFileRef>();
+    collectGeneratedFileRefs(
+      {
+        type: 'vendor-raw',
+        payload: {
+          nested: [
+            {
+              type: 'container_file_citation',
+              file_id: 'cfile_1',
+              container_id: 'cntr_1',
+              filename: 'a.csv',
+            },
+            {
+              deeper: {
+                content: [{ type: 'code_execution_output', file_id: 'file_x' }],
+              },
+            },
+          ],
+        },
+      },
+      sink,
+    );
+    // Same refs again — must dedupe by file id.
+    collectGeneratedFileRefs({ type: 'code_execution_output', file_id: 'file_x' }, sink);
+
+    expect([...sink.keys()].sort()).toEqual(['cfile_1', 'file_x']);
+    expect(sink.get('cfile_1')).toEqual({
+      provider: 'openai',
+      fileId: 'cfile_1',
+      containerId: 'cntr_1',
+      filename: 'a.csv',
+    });
+    expect(sink.get('file_x')).toEqual({ provider: 'anthropic', fileId: 'file_x' });
+  });
+
+  it('ignores payloads without file references and malformed lookalikes', () => {
+    const sink = new Map<string, GeneratedFileRef>();
+    collectGeneratedFileRefs({ type: 'text-delta', delta: 'hello' }, sink);
+    collectGeneratedFileRefs({ type: 'container_file_citation', file_id: 42 }, sink);
+    collectGeneratedFileRefs({ type: 'code_execution_output' }, sink);
+    collectGeneratedFileRefs(null, sink);
+    expect(sink.size).toBe(0);
   });
 });

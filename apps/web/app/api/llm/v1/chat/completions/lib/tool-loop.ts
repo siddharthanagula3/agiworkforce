@@ -62,6 +62,7 @@ import {
   type SandboxSnapshot,
   type GeneratedFileWire,
 } from '@/lib/e2b/generated-files';
+import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
 import type { ProcessedRequest } from './request-processor';
 
@@ -520,7 +521,13 @@ async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
   connectorExecutor?: ConnectorToolExecutor,
-): Promise<{ content: string; isError: boolean; source?: FetchedSource }> {
+): Promise<{
+  content: string;
+  isError: boolean;
+  source?: FetchedSource;
+  /** Base64 PNG rich results from an E2B runCode (charts) — persisted by the loop. */
+  pngResults?: string[];
+}> {
   // Platform url_fetch: read-only page fetch, SSRF-guarded (see lib/url-fetch/).
   // Executes on the auto path like E2B tools — no manual approval gate needed
   // because it cannot mutate anything and every failure mode returns a
@@ -557,6 +564,7 @@ async function runMcpTool(
     return {
       content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
       isError: !result.ok,
+      pngResults: result.pngResults,
     };
   }
 
@@ -719,6 +727,8 @@ export async function* runToolLoop(
   // still hold files from previous turns.
   let e2bBaseline: SandboxSnapshot | null = null;
   let executionToolRan = false;
+  /** Base64 chart PNGs surfaced by runCode this turn (E2B rich results). */
+  const turnPngResults: string[] = [];
   async function resolveE2BExecutor(): Promise<E2BExecutor | null> {
     if (!e2bExecutorResolved) {
       e2bExecutor = await getE2BExecutor(conversationId);
@@ -730,24 +740,77 @@ export async function* runToolLoop(
   }
 
   /**
-   * Harvest files the model created in the sandbox this turn and return the
-   * SSE line announcing them, or null when there is nothing to announce.
-   * Called at the terminal points of the loop, before the final [DONE].
+   * Harvest files the model created in the sandbox this turn (disk files via
+   * the workspace diff, plus runCode chart PNGs that never touch the disk) and
+   * return the SSE lines announcing them. Called at the terminal points of the
+   * loop, before the final [DONE].
+   *
+   * Honest states: when a generated file could not be retrieved/persisted, an
+   * inline note is emitted alongside today's log warn — never silence.
    */
-  async function harvestGeneratedFilesEvent(): Promise<SseLine | null> {
-    if (!executionToolRan || !e2bExecutor || !e2bBaseline || !options.userId) return null;
-    try {
-      const files = await harvestGeneratedFiles({
-        executor: e2bExecutor,
-        baseline: e2bBaseline,
-        userId: options.userId,
-        model: responseModel,
-      });
-      return files.length > 0 ? generatedFilesEvent(files, responseModel) : null;
-    } catch (err) {
-      logger.warn({ err }, '[tool-loop] generated-file harvest failed; no file card emitted');
-      return null;
+  async function harvestGeneratedFilesEvents(): Promise<SseLine[]> {
+    if (!executionToolRan || !e2bExecutor || !options.userId) return [];
+    const lines: SseLine[] = [];
+    const files: GeneratedFileWire[] = [];
+    let failedCount = 0;
+
+    if (e2bBaseline) {
+      try {
+        const harvest = await harvestGeneratedFiles({
+          executor: e2bExecutor,
+          baseline: e2bBaseline,
+          userId: options.userId,
+          model: responseModel,
+        });
+        files.push(...harvest.files);
+        failedCount += harvest.failedCount;
+      } catch (err) {
+        logger.warn({ err }, '[tool-loop] generated-file harvest failed; no file card emitted');
+        failedCount += 1;
+      }
     }
+
+    // Chart PNGs from runCode rich results (execution.results[].png).
+    for (const [index, png] of turnPngResults.entries()) {
+      try {
+        const outcome = await persistGeneratedFileBytes({
+          userId: options.userId,
+          data: Buffer.from(png, 'base64'),
+          mimeType: 'image/png',
+          filename: turnPngResults.length === 1 ? 'chart.png' : `chart-${index + 1}.png`,
+          provider: 'e2b',
+          origin: 'e2b-execution-result',
+          model: responseModel,
+        });
+        if (outcome.ok) {
+          files.push(outcome.file);
+        } else if (outcome.reason !== 'not_configured') {
+          failedCount += 1;
+        }
+      } catch (err) {
+        logger.warn({ err }, '[tool-loop] chart png persist failed; skipping');
+        failedCount += 1;
+      }
+    }
+
+    if (files.length > 0) lines.push(generatedFilesEvent(files, responseModel));
+    if (failedCount > 0) {
+      const plural = failedCount === 1 ? 'file' : 'files';
+      lines.push(
+        sseData({
+          choices: [
+            {
+              delta: {
+                content: `\n\n*Note: ${failedCount} generated ${plural} could not be retrieved from the execution sandbox and ${failedCount === 1 ? 'is' : 'are'} not attached.*`,
+              },
+              index: 0,
+            },
+          ],
+          model: responseModel,
+        }),
+      );
+    }
+    return lines;
   }
 
   /**
@@ -979,8 +1042,9 @@ export async function* runToolLoop(
       // files (file cards need durable URLs before the stream closes), then
       // emit [DONE] and exit.
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
-        const filesLine = await harvestGeneratedFilesEvent();
-        if (filesLine) yield encoder.encode(filesLine);
+        for (const filesLine of await harvestGeneratedFilesEvents()) {
+          yield encoder.encode(filesLine);
+        }
         yield encoder.encode(sseDone());
         break;
       }
@@ -1039,8 +1103,9 @@ export async function* runToolLoop(
         { maxSteps, provider: processed.provider },
         '[tool-loop] max steps reached without terminal stop',
       );
-      const filesLine = await harvestGeneratedFilesEvent();
-      if (filesLine) yield encoder.encode(filesLine);
+      for (const filesLine of await harvestGeneratedFilesEvents()) {
+        yield encoder.encode(filesLine);
+      }
       yield encoder.encode(sseDone());
     }
   } finally {
