@@ -56,6 +56,8 @@ const MarkdownContent = dynamic(
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
+import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforce/services';
+import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@/stores/chatStore';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
@@ -283,6 +285,28 @@ const MessageBubbleComponent = function MessageBubble({
     });
   }, [message.content, isUser, artifactConversationId, message.id]);
 
+  // Live artifact streaming (Claude parity): while this assistant message is
+  // still streaming and its buffer ends in an UNCLOSED renderable fence, parse
+  // the partial block on every chunk. The sync hook mirrors it into the
+  // ephemeral streaming-artifact store (auto-opening the Artifacts panel) so
+  // the panel shows the file being written line-by-line instead of nothing.
+  // Once the closing fence arrives, extractArtifacts sees the completed block,
+  // the persisted artifact lands under the SAME deterministic id, and the
+  // streaming overlay clears — a seamless handoff to the Preview tab.
+  const streamingBlock = useMemo(() => {
+    if (isUser || !message.isStreaming) return null;
+    const block = extractTrailingUnclosedBlock(message.content);
+    if (!block || !isRenderableArtifact(block.language, block.content)) return null;
+    return block;
+  }, [isUser, message.isStreaming, message.content]);
+
+  useStreamingArtifactSync({
+    messageId: message.id,
+    conversationId: artifactConversationId,
+    isStreaming: Boolean(message.isStreaming),
+    block: streamingBlock,
+  });
+
   const generatedFileArtifacts = useMemo<ArtifactData[]>(() => {
     if (isUser) return [];
     const { computeSession, generatedFile, artifactManifest, documentData } =
@@ -349,9 +373,15 @@ const MessageBubbleComponent = function MessageBubble({
   }, [artifacts, isUser, message.id, artifactConversationId, upsertArtifact]);
 
   const cleanedContent = useMemo(() => {
-    if (artifacts.length === 0) return message.content;
-    return removeArtifactBlocks(message.content, artifacts);
-  }, [message.content, artifacts]);
+    // While an artifact block is streaming into the panel, hide the growing
+    // raw fence from the chat body (a compact "Writing…" chip renders instead)
+    // — mirroring how completed artifact blocks are stripped below.
+    const base = streamingBlock
+      ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
+      : message.content;
+    if (artifacts.length === 0) return base;
+    return removeArtifactBlocks(base, artifacts);
+  }, [message.content, artifacts, streamingBlock]);
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(message.content);
@@ -592,7 +622,7 @@ const MessageBubbleComponent = function MessageBubble({
               !isUser && message.metadata?.comparisonOptions && 'hidden',
             )}
           >
-            {message.isStreaming && !cleanedContent.trim() ? (
+            {message.isStreaming && !cleanedContent.trim() && !streamingBlock ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                 <span className="text-sm">Thinking...</span>
@@ -601,6 +631,27 @@ const MessageBubbleComponent = function MessageBubble({
               <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
             )}
           </div>
+
+          {/* Compact chip while an artifact block streams into the panel — the raw
+              fence is stripped from the body above; this is its in-transcript stand-in. */}
+          {!isUser && streamingBlock && (
+            <button
+              type="button"
+              onClick={() => {
+                useArtifactsStore.getState().setPanelOpen(true);
+              }}
+              className="mt-2 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/70"
+              aria-label="Show artifact being written"
+            >
+              <span
+                className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary"
+                aria-hidden="true"
+              />
+              <span>
+                Writing {streamingBlock.language === 'text' ? 'artifact' : streamingBlock.language}…
+              </span>
+            </button>
+          )}
 
           {/* Attachments (Fix 43) · image thumbnails or file-type icons */}
           {message.attachments && message.attachments.length > 0 && (
@@ -1051,6 +1102,13 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
 
   // Check timestamp (may update for streaming messages)
   if (prev.message.timestamp.getTime() !== next.message.timestamp.getTime()) {
+    return false;
+  }
+
+  // Streaming flag flip must re-render even when content is unchanged (it
+  // drives the action row, the live-artifact overlay teardown, and the
+  // streaming placeholder).
+  if (prev.message.isStreaming !== next.message.isStreaming) {
     return false;
   }
 
