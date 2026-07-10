@@ -1918,7 +1918,7 @@ export default function WebChatPage() {
                     onStop={stopGeneration}
                     isLoading={isLoading}
                     isGenerating={isStreaming}
-                    placeholder={t('chat:placeholder')}
+                    placeholder={t('chat:placeholderEmpty')}
                     prefillText={composerPrefill}
                     onPrefillConsumed={() => setComposerPrefill(undefined)}
                     onTypingChange={handleTypingChange}
