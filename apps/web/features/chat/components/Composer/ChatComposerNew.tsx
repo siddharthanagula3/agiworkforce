@@ -40,9 +40,6 @@ import { getModelMetadata } from '@/constants/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { ChatMode } from '@features/chat/types';
 import { FREE_TRIAL_MAX_INPUT_CHARS, getFreeTrialRemaining } from '../../stores/freeTrialStore';
-import { CONNECTORS } from '@features/connectors/data/connectors';
-import { useConnectors } from '@features/connectors/hooks/use-connectors';
-import { Switch } from '@agiworkforce/ui';
 import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
@@ -121,8 +118,6 @@ interface ChatComposerProps {
     promptLimit: number;
   };
 }
-
-const CONNECTOR_PHASE1 = CONNECTORS.filter((c) => c.phase === 1).slice(0, 8);
 
 type StyleMode = 'normal' | 'concise' | 'formal' | 'explanatory';
 
@@ -292,7 +287,6 @@ const ChatComposerNewComponent = ({
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
-  const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
 
   // Image generation mode state
   const [imageMode, setImageMode] = useState(false);
@@ -366,21 +360,6 @@ const ChatComposerNewComponent = ({
       thinkingCycle();
     }
   }, [thinkingEnabled, setThinkingEffort, thinkingCycle]);
-
-  // Real connector state from the server
-  const connectors = useConnectors();
-
-  // Build connector list for the + menu submenu: show connected connectors first,
-  // then fill with phase-1 connectors. Cap at 8 to keep the popover compact.
-  const connectorMenuList = React.useMemo(() => {
-    const connected = CONNECTORS.filter((c) => connectors.connectedIds.has(c.id));
-    if (connected.length > 0) {
-      // Show all connected ones plus any phase-1 not yet connected, capped at 8.
-      const phase1NotConnected = CONNECTOR_PHASE1.filter((c) => !connectors.connectedIds.has(c.id));
-      return [...connected, ...phase1NotConnected].slice(0, 8);
-    }
-    return CONNECTOR_PHASE1;
-  }, [connectors.connectedIds]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -466,7 +445,6 @@ const ChatComposerNewComponent = ({
     setStyleMode('normal');
     setShowOverflowMenu(false);
     setShowSkillsSubmenu(false);
-    setShowConnectorsSubmenu(false);
     setShowStyleSubmenu(false);
     if (attachments.length > 0) {
       clearAttachments();
@@ -598,7 +576,6 @@ const ChatComposerNewComponent = ({
       if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
         setShowOverflowMenu(false);
         setShowSkillsSubmenu(false);
-        setShowConnectorsSubmenu(false);
         setShowStyleSubmenu(false);
       }
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
@@ -612,7 +589,6 @@ const ChatComposerNewComponent = ({
       if (e.key !== 'Escape') return;
       setShowOverflowMenu(false);
       setShowSkillsSubmenu(false);
-      setShowConnectorsSubmenu(false);
       setShowStyleSubmenu(false);
       setShowMentions(false);
     }
@@ -643,7 +619,6 @@ const ChatComposerNewComponent = ({
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
     setShowSkillsSubmenu(false);
-    setShowConnectorsSubmenu(false);
     setShowStyleSubmenu(false);
   }, []);
 
@@ -1082,7 +1057,6 @@ const ChatComposerNewComponent = ({
                 if (!next) {
                   setShowStyleSubmenu(false);
                   setShowSkillsSubmenu(false);
-                  setShowConnectorsSubmenu(false);
                 }
               }}
               disabled={isLoading || composerDisabled}
@@ -1226,7 +1200,6 @@ const ChatComposerNewComponent = ({
                         type="button"
                         onClick={() => {
                           setShowSkillsSubmenu((prev) => !prev);
-                          setShowConnectorsSubmenu(false);
                           setShowStyleSubmenu(false);
                         }}
                         className={cn(
@@ -1265,80 +1238,37 @@ const ChatComposerNewComponent = ({
                       )}
                     </div>
 
-                    {/* 6. Connectors -- right flyout */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowConnectorsSubmenu((prev) => !prev);
-                          setShowSkillsSubmenu(false);
-                          setShowStyleSubmenu(false);
-                        }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    {/* 6. Connectors -- routes to the Connectors settings section.
+                        The web chat runtime's tool loop is assembled from
+                        operator-deployed MCP servers (loadWebMcpConfig), not from
+                        the user's connected-connector state (that row is only read
+                        back by /api/connectors itself, never by the chat route or
+                        tool-loop). Per-conversation connector enablement therefore
+                        has NO runtime backing today, so an inline connect toggle
+                        here would imply a mid-chat capability that does not exist.
+                        The honest surface is a link to the Connectors settings
+                        page, mirroring Plugins below — no fake toggles. */}
+                    <a
+                      href="/connectors"
+                      onClick={closeMenu}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    >
+                      {/* Simple connector icon */}
+                      <svg
+                        className="h-4 w-4 text-muted-foreground"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        aria-hidden="true"
                       >
-                        {/* Simple connector icon */}
-                        <svg
-                          className="h-4 w-4 text-muted-foreground"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          aria-hidden="true"
-                        >
-                          <circle cx="3.5" cy="8" r="2" />
-                          <circle cx="12.5" cy="8" r="2" />
-                          <path d="M5.5 8h5" />
-                        </svg>
-                        <span className="flex-1 text-left">Connectors</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-
-                      {showConnectorsSubmenu && (
-                        <div className="absolute left-full top-0 z-50 ml-1 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                          {connectorMenuList.map((connector) => {
-                            const isConnected = connectors.connectedIds.has(connector.id);
-                            const isMutating = connectors.mutatingIds.has(connector.id);
-                            const canToggle = isConnected || connector.authType !== 'oauth';
-                            return (
-                              <div
-                                key={connector.id}
-                                className="flex items-center gap-2.5 rounded-lg px-3 py-2"
-                              >
-                                <span className="text-base" aria-hidden="true">
-                                  {connector.iconEmoji ?? connector.iconText}
-                                </span>
-                                <span className="flex-1 truncate text-sm">{connector.name}</span>
-                                <Switch
-                                  checked={isConnected}
-                                  disabled={isMutating || connectors.loading || !canToggle}
-                                  aria-label={`Toggle ${connector.name}`}
-                                  onCheckedChange={(checked) => {
-                                    if (checked && connector.authType === 'oauth') return;
-                                    if (checked) {
-                                      void connectors.connect(connector.id, connector.authType);
-                                    } else {
-                                      void connectors.disconnect(connector.id);
-                                    }
-                                  }}
-                                  className="h-5 w-9 data-[state=checked]:bg-[var(--chat-accent-primary)]"
-                                />
-                              </div>
-                            );
-                          })}
-
-                          {/* Connector footer */}
-                          <div className="mt-1 border-t border-border/30 pt-1">
-                            <a
-                              href="/connectors"
-                              onClick={closeMenu}
-                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                            >
-                              Manage connectors
-                            </a>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                        <circle cx="3.5" cy="8" r="2" />
+                        <circle cx="12.5" cy="8" r="2" />
+                        <path d="M5.5 8h5" />
+                      </svg>
+                      <span className="flex-1 text-left">Connectors</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </a>
 
                     {/* 7. Plugins */}
                     <a
@@ -1409,7 +1339,6 @@ const ChatComposerNewComponent = ({
                         onClick={() => {
                           setShowStyleSubmenu((prev) => !prev);
                           setShowSkillsSubmenu(false);
-                          setShowConnectorsSubmenu(false);
                         }}
                         className={cn(
                           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
