@@ -111,9 +111,9 @@ describe('ComposerFooter · model selector integration', () => {
 });
 
 describe('ComposerFooter · layout', () => {
-  it('renders keyboard hint text', () => {
-    render(<ComposerFooter hint="Enter to send" />);
-    expect(screen.getByText('Enter to send')).toBeInTheDocument();
+  it('does NOT render a persistent keyboard-send hint (founder directive, claude.ai parity)', () => {
+    const { container } = render(<ComposerFooter />);
+    expect(container.textContent).not.toMatch(/Cmd\+Enter|Enter to send|newline/i);
   });
 
   it('renders BudgetTrackerDisplay', () => {
@@ -134,8 +134,4 @@ describe('ComposerFooter · layout', () => {
     expect(modelBtn).toBeInTheDocument();
   });
 
-  it('renders default hint when no hint prop is provided', () => {
-    render(<ComposerFooter />);
-    expect(screen.getByText(/Enter to send/)).toBeInTheDocument();
-  });
 });
