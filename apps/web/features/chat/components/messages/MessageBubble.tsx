@@ -917,12 +917,14 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {/* Actions (show on hover) */}
+          {/* Action row visibility (claude.ai parity): ASSISTANT actions (copy /
+              read-aloud / thumbs / retry) are ALWAYS visible below the message;
+              USER actions are HOVER-ONLY. Do not invert this. */}
           {!message.isStreaming && (
             <div
               className={cn(
-                'mt-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100',
-                isUser && 'justify-end',
+                'mt-2 flex items-center gap-1 transition-opacity',
+                isUser ? 'justify-end opacity-0 group-hover:opacity-100' : 'opacity-100',
               )}
             >
               <TooltipProvider delayDuration={300}>
