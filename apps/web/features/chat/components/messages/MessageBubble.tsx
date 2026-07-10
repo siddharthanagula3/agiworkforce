@@ -32,8 +32,9 @@ import {
   ThumbsDown,
   GitFork,
   FileText,
-  FileImage,
   File,
+  ImageOff,
+  ZoomIn,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -72,6 +73,7 @@ import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { dedupeResearchSources } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
+import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 
 /**
@@ -258,6 +260,20 @@ const MessageBubbleComponent = function MessageBubble({
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  // Attachment image rendering (claude.ai parity): the opened lightbox image and
+  // the set of attachment ids whose <img> failed to load (broken-image fallback).
+  const [lightboxAttachment, setLightboxAttachment] = useState<Attachment | null>(null);
+  const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Set<string>>(
+    () => new Set<string>(),
+  );
+  const markAttachmentBroken = useCallback((id: string) => {
+    setBrokenAttachmentIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
   const isUser = message.role === 'user';
 
   // Manual tool-approval wiring: an awaiting_approval tool card's approve/reject
@@ -683,7 +699,12 @@ const MessageBubbleComponent = function MessageBubble({
             </button>
           )}
 
-          {/* Attachments (Fix 43) · image thumbnails or file-type icons */}
+          {/* Attachments (Fix 43) · image thumbnails or file-type icons.
+              Image attachments render a real <img> thumbnail that opens the
+              full-size ImageLightbox on click (claude.ai parity), with a
+              muted loading placeholder behind the image and a graceful
+              broken-image fallback when the source fails to load. Non-image
+              attachments keep the icon+name chip linking to the file. */}
           {message.attachments && message.attachments.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {message.attachments.map((attachment) => {
@@ -692,6 +713,53 @@ const MessageBubbleComponent = function MessageBubble({
                   attachment.type === 'application/pdf' ||
                   attachment.type.includes('word') ||
                   attachment.type.includes('document');
+
+                if (isImage) {
+                  // Broken-image fallback: never leave a torn-image glyph — show
+                  // a labelled chip so the user still sees which file failed.
+                  if (brokenAttachmentIds.has(attachment.id)) {
+                    return (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1.5"
+                        title={attachment.name}
+                      >
+                        <ImageOff
+                          className="h-4 w-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <span className="max-w-[160px] truncate text-xs text-muted-foreground">
+                          {attachment.name}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={attachment.id}
+                      type="button"
+                      onClick={() => setLightboxAttachment(attachment)}
+                      className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border/50 bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      aria-label={`View ${attachment.name} full size`}
+                      title={attachment.name}
+                    >
+                      <img
+                        src={attachment.thumbnailUrl ?? attachment.url}
+                        alt={attachment.name}
+                        loading="lazy"
+                        onError={() => markAttachmentBroken(attachment.id)}
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                      <span
+                        className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-hidden="true"
+                      >
+                        <ZoomIn className="h-6 w-6 text-white" />
+                      </span>
+                    </button>
+                  );
+                }
+
                 return (
                   <a
                     key={attachment.id}
@@ -701,46 +769,37 @@ const MessageBubbleComponent = function MessageBubble({
                     className={cn(
                       'flex items-center gap-2 rounded-lg border border-border/50 overflow-hidden',
                       'bg-muted/40 hover:bg-muted/70 transition-colors text-left no-underline',
-                      isImage ? 'p-0' : 'px-2.5 py-1.5',
+                      'px-2.5 py-1.5',
                     )}
                     title={attachment.name}
                   >
-                    {isImage ? (
-                      <div className="relative h-24 w-24 overflow-hidden rounded-lg">
-                        <img
-                          src={attachment.thumbnailUrl ?? attachment.url}
-                          alt={attachment.name}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
+                    {isDoc ? (
+                      <FileText
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
                     ) : (
-                      <>
-                        {isDoc ? (
-                          <FileText
-                            className="h-4 w-4 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                        ) : attachment.type.startsWith('image/') ? (
-                          <FileImage
-                            className="h-4 w-4 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <File
-                            className="h-4 w-4 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                        )}
-                        <span className="max-w-[160px] truncate text-xs text-foreground">
-                          {attachment.name}
-                        </span>
-                      </>
+                      <File className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     )}
+                    <span className="max-w-[160px] truncate text-xs text-foreground">
+                      {attachment.name}
+                    </span>
                   </a>
                 );
               })}
             </div>
+          )}
+
+          {/* Full-size image viewer for attachment thumbnails (Esc / backdrop to
+              close, zoom + download). Rendered once per bubble; driven by which
+              attachment the user clicked above. */}
+          {lightboxAttachment && (
+            <ImageLightbox
+              src={lightboxAttachment.url}
+              alt={lightboxAttachment.name}
+              downloadFilename={lightboxAttachment.name}
+              onClose={() => setLightboxAttachment(null)}
+            />
           )}
 
           {/* Code blocks are rendered exactly once by <MarkdownContent> above
