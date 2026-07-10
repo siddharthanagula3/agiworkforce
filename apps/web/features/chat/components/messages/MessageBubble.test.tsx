@@ -443,4 +443,57 @@ describe('MessageBubble', () => {
       expect(screen.getAllByTestId('markdown-content')).toHaveLength(1);
     });
   });
+
+  // Raster-image attachment rendering (claude.ai parity): image attachments
+  // render a real <img> thumbnail that opens the full-size lightbox on click,
+  // with a graceful broken-image fallback. Non-image attachments keep a chip.
+  describe('image attachment rendering', () => {
+    const imageAttachment = {
+      id: 'att-img-1',
+      name: 'diagram.png',
+      type: 'image/png',
+      size: 2048,
+      url: 'blob:https://app.local/att-img-1',
+    };
+
+    it('renders an image attachment as a clickable thumbnail (not a plain link)', () => {
+      render(<MessageBubble message={makeMessage({ attachments: [imageAttachment] })} />);
+      const trigger = screen.getByRole('button', { name: /view diagram\.png full size/i });
+      const img = screen.getByAltText('diagram.png') as HTMLImageElement;
+      expect(img).toBeTruthy();
+      expect(img.getAttribute('src')).toBe(imageAttachment.url);
+      expect(trigger).toBeTruthy();
+    });
+
+    it('opens the full-size lightbox when the thumbnail is clicked', () => {
+      render(<MessageBubble message={makeMessage({ attachments: [imageAttachment] })} />);
+      expect(screen.queryByRole('dialog', { name: /image preview/i })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: /view diagram\.png full size/i }));
+      expect(screen.getByRole('dialog', { name: /image preview/i })).toBeTruthy();
+    });
+
+    it('shows a labelled fallback (no torn image) when the source fails to load', () => {
+      render(<MessageBubble message={makeMessage({ attachments: [imageAttachment] })} />);
+      const img = screen.getByAltText('diagram.png');
+      fireEvent.error(img);
+      // The <img> is replaced by a text fallback carrying the file name.
+      expect(screen.queryByAltText('diagram.png')).toBeNull();
+      expect(screen.getByText('diagram.png')).toBeTruthy();
+    });
+
+    it('keeps non-image attachments as an icon+name chip link', () => {
+      const pdf = {
+        id: 'att-pdf-1',
+        name: 'report.pdf',
+        type: 'application/pdf',
+        size: 4096,
+        url: 'blob:https://app.local/att-pdf-1',
+      };
+      render(<MessageBubble message={makeMessage({ attachments: [pdf] })} />);
+      const link = screen.getByRole('link', { name: /report\.pdf/i }) as HTMLAnchorElement;
+      expect(link.getAttribute('href')).toBe(pdf.url);
+      // Not rendered as an image thumbnail.
+      expect(screen.queryByRole('button', { name: /view report\.pdf full size/i })).toBeNull();
+    });
+  });
 });
