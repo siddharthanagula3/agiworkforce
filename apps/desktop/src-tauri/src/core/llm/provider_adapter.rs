@@ -1573,7 +1573,14 @@ struct AnthropicAdapter;
 
 impl ProviderAdapter for AnthropicAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        let canonical_model = Self::canonicalize_model(&request.model);
+        // Resolve the wire API model ID: catalog keys carrying a dotted internal
+        // id (e.g. "claude-haiku-4.5") must be translated to the real Anthropic
+        // API string ("claude-haiku-4-5") before being sent in the request body.
+        // `get_api_model_id` returns the `apiModelId` from models.json when set
+        // (and is idempotent for an already-wire id), otherwise the input
+        // unchanged. Using `get_canonicalized_id` here instead would send the
+        // dotted internal id on the wire and Anthropic returns a 404.
+        let wire_model = super::models_config::get_api_model_id(&request.model);
 
         // ── Validate tool message pairing ────────────────────────────
         // Ensure every tool result message has a matching tool_use block
@@ -1758,7 +1765,7 @@ impl ProviderAdapter for AnthropicAdapter {
 
         // Anthropic uses Messages API format with flat tool definitions
         let mut anthropic_request = serde_json::json!({
-            "model": canonical_model,
+            "model": wire_model,
             // FIX-007: clamp through PER_REQUEST_MAX_TOKENS_CEILING.
             "max_tokens": clamp_max_tokens(Some(request.max_tokens.unwrap_or(4096))).0.unwrap_or(4096),
             "messages": messages,
@@ -2154,10 +2161,6 @@ impl ProviderAdapter for AnthropicAdapter {
 }
 
 impl AnthropicAdapter {
-    fn canonicalize_model(model: &str) -> String {
-        super::models_config::get_canonicalized_id(model)
-    }
-
     /// Validate that every tool result message has a matching tool_use block
     /// in a preceding assistant message.  Orphaned tool results would cause
     /// the Anthropic API to reject the request.
