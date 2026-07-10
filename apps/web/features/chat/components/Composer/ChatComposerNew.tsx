@@ -1164,6 +1164,40 @@ const ChatComposerNewComponent = ({
               <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
                 {
                   <>
+                    {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY below sm,
+                        where the inline segmented toggle is hidden to free composer-row
+                        width for the model selector. Keeps work-mode fully switchable on
+                        the narrow (mobile) composer instead of dropping the control. */}
+                    {!imageMode && (
+                      <div className="sm:hidden">
+                        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+                          <span className="flex-1 text-left text-sm">Mode</span>
+                          <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
+                            {(['chat', 'agiwork'] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setWorkMode(mode)}
+                                disabled={isLoading || composerDisabled}
+                                aria-pressed={workMode === mode}
+                                className={cn(
+                                  'flex h-7 items-center rounded-full px-3 transition-colors',
+                                  workMode === mode
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                                  (isLoading || composerDisabled) &&
+                                    'cursor-not-allowed opacity-50',
+                                )}
+                              >
+                                {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="my-1 border-t border-border/40" />
+                      </div>
+                    )}
+
                     {/* 1. Add photos */}
                     <button
                       type="button"
@@ -1527,9 +1561,15 @@ const ChatComposerNewComponent = ({
               tool "pills" (Search / Research / Run code / Think / Incognito) moved
               INTO the + menu, so the composer bottom row stays a SINGLE
               non-wrapping line at every width (fixes the Send-button-drops-to-a-
-              second-line overflow bug). */}
+              second-line overflow bug).
+              NARROW WIDTHS: this ~135px toggle is `hidden ... sm:flex`, so below sm
+              (mobile, 375/320px) it is relocated into the + menu (see the "Mode" row
+              above). At those widths the toggle + style + model + mic + send cannot
+              coexist on one row, so — like claude.ai's mobile composer — the toggle and
+              style drop out of the row, leaving the model selector visible, tappable,
+              and clear of Send. */}
           {!imageMode && (
-            <div className="flex shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
+            <div className="hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
               {(['chat', 'agiwork'] as const).map((mode) => (
                 <button
                   key={mode}
@@ -1824,8 +1864,8 @@ const ChatComposerNewComponent = ({
       )}
 
       {/* Disclaimer · sits below the composer (outside the pill), ChatGPT/Claude-
-          style. The 'Cmd+Enter to send' keyboard hint lives in ComposerFooter (visible
-          at md+ widths) rather than here — see ComposerFooter's inline hint span. */}
+          style. No persistent keyboard-send hint is shown (matches claude.ai; founder
+          directive) — Enter/Cmd+Enter behavior is handled in the textarea keydown. */}
       <p className="mt-2 text-center text-[11px] text-muted-foreground">
         AGI can make mistakes. Check important info.
       </p>
