@@ -6,6 +6,13 @@ import './globals.css';
 import Providers from './providers';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { SkipLinks } from '@/components/accessibility/SkipLinks';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { OG_IMAGE } from '@/lib/seo/site';
+import {
+  organizationSchema,
+  softwareApplicationSchema,
+  webSiteSchema,
+} from '@/lib/seo/structured-data';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -36,10 +43,6 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-
-function serializeJsonLd(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, '\\u003c');
-}
 
 const clerkLocalization = {
   signIn: {
@@ -105,9 +108,9 @@ export const metadata: Metadata = {
       'A practical AI workspace for chat, code, research, files, tools, artifacts, connectors, and automation.',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1200,
-        height: 630,
+        url: OG_IMAGE.url,
+        width: OG_IMAGE.width,
+        height: OG_IMAGE.height,
         alt: 'AGI - Just ask, it does',
       },
     ],
@@ -131,65 +134,19 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read the per-request nonce set by middleware for CSP compliance
+  // Read the per-request nonce set by the proxy for CSP compliance
   const headersList = await headers();
   const nonce = headersList.get('x-nonce') ?? '';
 
   // Only wire GA4 when the tracking ID env var is set
   const gaTrackingId = process.env['NEXT_PUBLIC_GA_TRACKING_ID'];
 
-  // JSON-LD Schema for Organization
-  const organizationSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: 'AGI',
-    url: APP_URL,
-    logo: `${APP_URL}/logo.png`,
-    description:
-      'AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation.',
-    sameAs: ['https://twitter.com/agiworkforce', 'https://github.com/agiworkforce'],
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'Customer Support',
-      email: 'contact@agiworkforce.com',
-    },
-  };
-
-  // JSON-LD Schema for SoftwareApplication. No `offers` or `operatingSystem`:
-  // every surface (Web, Desktop, Mobile, CLI, Chrome, VS Code) is coming soon,
-  // and neither field should assert current availability or pricing.
-  const softwareAppSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'AGI',
-    description: 'AI workspace with explicit Local, BYOK, and open managed cloud modes',
-    applicationCategory: 'Business Application',
-    url: APP_URL,
-  };
-
-  // JSON-LD Schema for WebSite
-  const webSiteSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'AGI',
-    url: APP_URL,
-  };
-
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Organization Schema */}
-        <script nonce={nonce} suppressHydrationWarning type="application/ld+json">
-          {serializeJsonLd(organizationSchema)}
-        </script>
-        {/* SoftwareApplication Schema */}
-        <script nonce={nonce} suppressHydrationWarning type="application/ld+json">
-          {serializeJsonLd(softwareAppSchema)}
-        </script>
-        {/* WebSite Schema */}
-        <script nonce={nonce} suppressHydrationWarning type="application/ld+json">
-          {serializeJsonLd(webSiteSchema)}
-        </script>
+        {/* Site-wide structured data: Organization, WebSite (no SearchAction),
+            and SoftwareApplication. Nonce-carried for the strict CSP. */}
+        <JsonLd data={[organizationSchema(), webSiteSchema(), softwareApplicationSchema()]} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
