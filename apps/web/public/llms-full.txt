@@ -1,0 +1,86 @@
+# AGI — full reference for AI answer engines
+
+> AGI is an AI application suite across six surfaces — Web, Desktop, Mobile, CLI, Chrome extension, and VS Code extension — that lets you run AI three ways: Local (on your device), BYOK (your own provider keys, no markup), or AGI managed cloud (public alpha, open by default). You see the route before anything leaves your machine.
+
+This document expands llms.txt with the details most often asked of an AI assistant. Everything here mirrors what the public site says; where a capability is planned rather than shipped, it is labeled as such.
+
+## What AGI is
+
+AGI is the public product brand; AGI Workforce is the formal platform and repository name. It is published by AGI Automation LLC, based in Austin, Texas. The goal is practical parity with leading AI application ecosystems, with one major differentiation: you choose the model backend — Local, BYOK, or AGI managed cloud — instead of being locked into one model lab. Claude and ChatGPT are competitive references, not affiliations; AGI ships its own design system, contracts, and trust-boundary UX.
+
+## The three trust modes, in detail
+
+### Local
+On-device chat and local tools through Ollama or LM Studio on Desktop and the CLI, plus an on-device Local Mode on Mobile. No API keys, no quotas, no internet required. A Local conversation never leaves your device and is never silently promoted to another mode. Local is free.
+
+### BYOK (Bring Your Own Key)
+You supply your own provider API keys on Desktop and CLI. Keys are encrypted at rest on your machine; requests go directly from your machine to the provider; usage is billed by the provider, not by AGI — there is no markup. Every route shows a visible provider label so you always know where a request is going. Moving a Local thread to BYOK is an explicit fork with context selection, a secret scan, a payload preview, and consent — not a hidden mode flip. BYOK is free.
+
+### Managed cloud
+AGI-hosted access to providers. It is in public alpha and open by default: signed-in users can start immediately, with no waitlist. Usage is metered and ledgered. A small free capacity tier exists, and higher-capacity paid plans (Basic, Pro, Max) are the individual on-ramp. Team and Enterprise plans — shared org seats, SSO, admin controls, governance — are the only tiers behind early-access. Managed cloud remains a distinct trust boundary: Local and BYOK work is never silently routed into it.
+
+`AGI_MANAGED_COMPUTE_PRIVATE_BETA` exists only as an incident-response kill-switch; it is not a normal access gate.
+
+## Providers and models
+
+10+ providers:
+- Nine first-party cloud APIs: Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu.
+- Two local runtimes: Ollama and LM Studio.
+- Any custom OpenAI-compatible endpoint you configure.
+
+You can switch models mid-conversation; the thread continues with the new model and the provider label updates before the next request leaves your machine. Runtime model IDs come from a canonical catalog, not from marketing copy.
+
+## Surfaces
+
+Six first-class surfaces, developed serially (Mobile first, then Web, Desktop, CLI, Chrome extension, VS Code extension):
+- Mobile: private, local-first AI for iPhone and Android; chats, memory, projects, and files stay on-device by default.
+- Web: the browser workspace.
+- Desktop: a native Rust app for macOS, Windows, and Linux; local models, encrypted keys, chats stored in SQLite on your disk.
+- CLI: `agi`, a Rust-native developer agent with resumable sessions, code review, sandboxed execution, hooks, skills, and MCP; offline-capable with local models.
+- Chrome extension: a Manifest V3 side panel that captures page context on request and hands work to AGI Desktop over a paired, HMAC-signed native-messaging bridge.
+- VS Code extension: an `@agi` chat participant with workspace-scoped context, slash commands, and diff review.
+
+## Workspace capabilities
+
+- Chat: one composer with attachments, voice input, web search, slash commands, and per-chat model choice.
+- Artifacts: HTML, React, SVG, diagrams, code, and documents rendered in a sandboxed preview beside the chat, versioned, with source view, copy, and download.
+- Projects: group chats, knowledge files, and standing instructions under one objective.
+- Tools and connectors: MCP servers and OAuth apps, with every tool call reviewed before it runs.
+- Memory: a readable list of plain-language facts you can view, add to, edit, and delete; device-local by default, with optional hosted sync on managed cloud.
+- Deep research: live web search with source cards and numbered inline citations.
+- Agents: delegated, tool-using sessions with explicit approvals and sandboxed execution.
+- Plugins and skills: bundle commands, skills, hooks, and MCP wiring.
+
+## Security and trust
+
+Keys are encrypted at rest on your device for BYOK and Desktop. The Desktop master password is unrecoverable by design — AGI never holds it. Hosted data lives in the United States; EU/UK residency is on the roadmap, not yet available. AGI does not use customer conversation content to train AGI-owned models. Enterprise controls (SSO, SCIM, audit export, custom retention, BYOK enforcement) are scoped on a contract, with compliance status reported honestly with dates.
+
+## Pricing summary
+
+- Local: free forever.
+- BYOK: free forever (you pay your provider directly, no markup).
+- Managed cloud: public-alpha, metered; Basic, Pro, and Max are the individual paid on-ramp.
+- Team and Enterprise: org-level plans with shared, governed access and centralized billing; early access.
+
+Authoritative, current numbers live on the pricing page.
+
+## Status and dates
+
+All six surfaces are progressing toward a public launch targeted for July 12, 2026. Managed cloud is live in public alpha now. The site is deliberately honest about what has and has not shipped.
+
+## Key URLs
+
+- Home: https://agiworkforce.com/
+- Pricing: https://agiworkforce.com/pricing
+- Providers: https://agiworkforce.com/providers
+- BYOK: https://agiworkforce.com/byok
+- Local: https://agiworkforce.com/local
+- Features: https://agiworkforce.com/features
+- FAQ: https://agiworkforce.com/faq
+- Security: https://agiworkforce.com/security
+- Trust: https://agiworkforce.com/trust
+- Docs: https://agiworkforce.com/docs
+
+## Contact
+
+contact@agiworkforce.com — AGI Automation LLC, Austin, Texas.
