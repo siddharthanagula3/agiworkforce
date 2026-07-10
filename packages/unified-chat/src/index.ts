@@ -109,7 +109,7 @@ export { UserProfile } from './components/UserProfile';
 
 // Chat area components
 export { MessageList } from './components/MessageList';
-export { MessageBubble } from './components/MessageBubble';
+export { MessageBubble, MarkdownLite } from './components/MessageBubble';
 export { ActionBar } from './components/ActionBar';
 export { ConversationHeader } from './components/ConversationHeader';
 

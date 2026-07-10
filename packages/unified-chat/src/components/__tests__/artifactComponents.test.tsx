@@ -272,6 +272,22 @@ describe('ReactPreview', () => {
     // Should include allow-only script execution note
     expect(doc).toContain('esm.sh/react@18');
   });
+
+  it('buildReactPreviewDocument avoids wildcard postMessage targets and dynamic Function execution', () => {
+    // Ported from the retired desktop fork's security test: the sandbox document
+    // must post only to the explicit parentOrigin and execute user code via a
+    // blob module import, never `new Function` or a '*' postMessage target.
+    const doc = buildReactPreviewDocument(
+      'export default function App() { return <div>Hello</div>; }',
+      'channel-1',
+      'null',
+    );
+
+    expect(doc).not.toContain('new Function');
+    expect(doc).not.toContain("postMessage({ channelId, type, ...payload }, '*')");
+    expect(doc).toContain('postMessage({ channelId, type, ...payload }, parentOrigin)');
+    expect(doc).toContain('import(moduleUrl)');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -323,6 +339,21 @@ describe('PresentationArtifact', () => {
     const artifact = makeArtifact({ id: 'p6', type: 'presentation', content: '' });
     render(<PresentationArtifact artifact={artifact} />);
     expect(screen.getByText(/No slides found/)).toBeDefined();
+  });
+
+  it('renders slide content as markdown, not raw markup', () => {
+    const artifact = makeArtifact({
+      id: 'p7',
+      type: 'presentation',
+      content: '# Big Title\n**bold point**\n- bullet one',
+    });
+    render(<PresentationArtifact artifact={artifact} />);
+    // Heading text renders without the leading '#'
+    expect(screen.getByText('Big Title')).toBeDefined();
+    expect(screen.queryByText(/# Big Title/)).toBeNull();
+    // Bold renders as <strong>, bullets as list items
+    expect(screen.getByText('bold point').tagName).toBe('STRONG');
+    expect(screen.getByText('bullet one').closest('li')).not.toBeNull();
   });
 });
 
