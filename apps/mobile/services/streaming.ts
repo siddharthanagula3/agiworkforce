@@ -57,7 +57,11 @@ export interface StreamToolApprovalRequest {
 /**
  * One durable file the model generated in the E2B sandbox this turn
  * (`x_generated_files`, emitted once by the server tool loop before [DONE]).
- * `uri` is a real media-storage download URL, not a sandbox path.
+ * `uri` is the RELATIVE authed route `/api/files/{id}` on the cloud origin —
+ * consumers resolve it against API_URL and attach the Bearer token when
+ * fetching. Wire shape is validated by the shared cloud contract
+ * (`GeneratedFileWireSchema` in `@agiworkforce/services`) at the point of
+ * consumption (chatExecutionStore).
  */
 export interface StreamGeneratedFile {
   id: string;
@@ -66,6 +70,7 @@ export interface StreamGeneratedFile {
   uri: string;
   byte_count: number;
   kind: string;
+  checksum_sha256?: string;
 }
 
 export interface StreamDelta {

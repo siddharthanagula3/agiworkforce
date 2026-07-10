@@ -17,6 +17,7 @@ import {
   generatedFileArtifactsFromWire,
   citationsFromToolCalls,
 } from '../stores/chat/chatExecutionStore';
+import { API_URL } from '../lib/constants';
 import type { ToolCall } from '../types/chat';
 
 const T = '2026-07-06T00:00:00.000Z';
@@ -32,6 +33,7 @@ describe('generatedFileArtifactsFromWire', () => {
           uri: 'https://media.example/report.pdf',
           byte_count: 2048,
           kind: 'pdf',
+          checksum_sha256: 'c'.repeat(64),
         },
       ],
       T,
@@ -48,9 +50,27 @@ describe('generatedFileArtifactsFromWire', () => {
       mimeType: 'application/pdf',
       uri: 'https://media.example/report.pdf',
       byteCount: 2048,
+      checksumSha256: 'c'.repeat(64),
       privacyMode: 'managed',
       createdAt: T,
     });
+  });
+
+  it('resolves relative /api/files uris against the cloud API base (Bearer-authed route)', () => {
+    const artifacts = generatedFileArtifactsFromWire(
+      [
+        {
+          id: 'asset-2',
+          file_name: 'data.csv',
+          mime_type: 'text/csv',
+          uri: '/api/files/asset-2',
+          byte_count: 128,
+          kind: 'csv',
+        },
+      ],
+      T,
+    );
+    expect(artifacts[0]!.generatedFile?.uri).toBe(`${API_URL}/api/files/asset-2`);
   });
 
   it('maps image kind to an image artifact and unknown kinds to other', () => {
