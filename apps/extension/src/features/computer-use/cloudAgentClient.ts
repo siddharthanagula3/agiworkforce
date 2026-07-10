@@ -36,18 +36,17 @@
 import { validateGatewayUrl } from '../../background/policy';
 
 // ─── Model selection ─────────────────────────────────────────────────────────
-// Read from models.json managed_cloud.taskRouting.computer_use at build time.
-// This import uses resolveJsonModule (enabled in tsconfig).
-import modelsJson from '../../../../../packages/types/src/models.json';
+// Read from the canonical model catalog's SLOT_REGISTRY at build time
+// (managed_cloud.taskRouting in models.json was cleared in favour of the slot
+// registry — see packages/types/src/model-catalog.ts).
+import { getRoutingSlotModel } from '@agiworkforce/types';
 
 /**
  * The model ID to use for computer-use tasks, sourced from the canonical
- * models.json catalog (managed_cloud › taskRouting › computer_use).
+ * catalog's 'computer_use' routing slot.
  * Never hardcode a model ID — always reference this constant.
  */
-export const COMPUTER_USE_MODEL: string =
-  (modelsJson.providers.managed_cloud.taskRouting as Record<string, string>)['computer_use'] ??
-  'gpt-5.4-mini';
+export const COMPUTER_USE_MODEL: string = getRoutingSlotModel('computer_use');
 
 // ─── Gateway base URL ─────────────────────────────────────────────────────────
 

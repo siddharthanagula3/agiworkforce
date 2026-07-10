@@ -28,8 +28,8 @@
  *   we do NOT decrement (server did not consume the quota slot).
  *
  * MODEL:
- *   Read from models.json providers.managed_cloud.taskRouting.chat at build time.
- *   Never hardcoded.
+ *   Read from the canonical model catalog via getRoutingSlotModel('general_fast')
+ *   (the lowest-cost managed-cloud chat lane). Never hardcoded.
  *
  * SECURITY:
  *   - Only posts to FREE_TRIAL_GATEWAY — validated before every fetch
@@ -37,18 +37,17 @@
  *   - Input capped at FREE_TRIAL_MAX_INPUT_CHARS to bound server cost
  */
 
-import modelsJson from '../../../../../packages/types/src/models.json';
+import { getRoutingSlotModel } from '@agiworkforce/types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /**
  * The economy model used for free-trial prompts.
- * Read from models.json managed_cloud.taskRouting.chat (= gemini-3.1-flash-lite).
- * Never hardcoded — this constant is the single indirection point.
+ * Read from the canonical SLOT_REGISTRY 'general_fast' slot (lowest-cost lane;
+ * managed_cloud.taskRouting in models.json was cleared in favour of the slot
+ * registry). Never hardcoded — this constant is the single indirection point.
  */
-export const FREE_TRIAL_MODEL: string =
-  (modelsJson.providers.managed_cloud.taskRouting as Record<string, string>)['chat'] ??
-  'gemini-3.1-flash-lite';
+export const FREE_TRIAL_MODEL: string = getRoutingSlotModel('general_fast');
 
 /**
  * Number of free prompts per signed-in user.
