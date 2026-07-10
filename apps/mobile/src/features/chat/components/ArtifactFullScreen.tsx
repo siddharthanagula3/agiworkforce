@@ -8,7 +8,12 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
 import { copyToClipboard } from '@/lib/clipboard';
-import { shareFile, exportToText, exportToMarkdown } from '@/services/fileCreation';
+import {
+  shareFile,
+  exportToText,
+  exportToMarkdown,
+  downloadGeneratedFile,
+} from '@/services/fileCreation';
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
 import type { Artifact } from '@/types/chat';
 import { GeneratedFileCard } from './GeneratedFileCard';
@@ -118,6 +123,12 @@ export function ArtifactFullScreen({
       const uri = generatedFileSummary.primaryUri;
       if (uri?.startsWith('file://')) {
         await shareFile(uri);
+      } else if (artifact.generatedFile && uri && /^https?:\/\//.test(uri)) {
+        // Cloud generated file: the remote /api/files URL is auth-gated, so a
+        // shared LINK would 401 for the recipient. Download the real bytes
+        // (Bearer-authed) and share the file itself.
+        const localUri = await downloadGeneratedFile(uri, artifact.generatedFile.fileName);
+        await shareFile(localUri);
       } else {
         await Share.share({
           title: generatedFileSummary.title,
@@ -158,16 +169,26 @@ export function ArtifactFullScreen({
     if (!artifact || downloading) return;
     setDownloading(true);
     try {
-      const isMarkdownKind = artifact.type === 'document' || artifact.type === 'research';
-      const result = isMarkdownKind
-        ? await exportToMarkdown(artifact.content, artifact.title)
-        : await exportToText(artifact.content, artifact.title);
-      await shareFile(result.uri);
+      const remoteUri = artifact.generatedFile?.uri;
+      if (artifact.generatedFile && remoteUri && /^https?:\/\//.test(remoteUri)) {
+        // Cloud generated file (x_generated_files): the artifact's `content`
+        // is empty — the real bytes live behind the authed /api/files route.
+        // Download them (Bearer-authed) and hand the local file to the share
+        // sheet so the user can save/open it.
+        const localUri = await downloadGeneratedFile(remoteUri, artifact.generatedFile.fileName);
+        await shareFile(localUri);
+      } else {
+        const isMarkdownKind = artifact.type === 'document' || artifact.type === 'research';
+        const result = isMarkdownKind
+          ? await exportToMarkdown(artifact.content, artifact.title)
+          : await exportToText(artifact.content, artifact.title);
+        await shareFile(result.uri);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
       Alert.alert(
-        'Export failed',
-        err instanceof Error ? err.message : 'Could not export this artifact.',
+        'Download failed',
+        err instanceof Error ? err.message : 'Could not download this file.',
       );
     } finally {
       setDownloading(false);

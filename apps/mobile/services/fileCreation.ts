@@ -19,6 +19,11 @@ import {
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+// Cloud generated-file downloads: guardedFetch keeps the Local-mode zero-leak
+// chokepoint in front of the request; the Bearer token is only attached to
+// our-cloud hosts (never leaked to arbitrary URLs).
+import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
+import { getAuthHeaders } from '@/services/authSession';
 
 /**
  * All user-initiated chat exports are written here (not the documentDirectory
@@ -281,15 +286,106 @@ export async function shareFile(uri: string): Promise<void> {
   const utiMap: Record<string, string> = {
     pdf: 'com.adobe.pdf',
     md: 'net.daringfireball.markdown',
+    docx: 'org.openxmlformats.wordprocessingml.document',
+    xlsx: 'org.openxmlformats.spreadsheetml.sheet',
+    pptx: 'org.openxmlformats.presentationml.presentation',
+    csv: 'public.comma-separated-values-text',
+    json: 'public.json',
+    html: 'public.html',
+    png: 'public.png',
+    jpg: 'public.jpeg',
+    jpeg: 'public.jpeg',
+    zip: 'public.zip-archive',
   };
   const mimeMap: Record<string, string> = {
     pdf: 'application/pdf',
     md: 'text/markdown',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    csv: 'text/csv',
+    json: 'application/json',
+    html: 'text/html',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    zip: 'application/zip',
   };
   await Sharing.shareAsync(uri, {
     UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
     mimeType: mimeMap[ext ?? ''] ?? 'text/plain',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Cloud generated-file download (x_generated_files → local bytes)
+// ---------------------------------------------------------------------------
+
+/** Strip the `data:<mime>;base64,` prefix a FileReader data URL carries. */
+function dataUrlToBase64(dataUrl: string): string {
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx < 0) throw new Error('Malformed data URL from file reader');
+  return dataUrl.slice(commaIdx + 1);
+}
+
+/** Blob → base64 via FileReader (RN's fetch lacks a usable arrayBuffer path). */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read downloaded file bytes'));
+    reader.onload = () => {
+      try {
+        resolve(dataUrlToBase64(String(reader.result)));
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Download a Cloud-mode generated file (`x_generated_files`) to the exports
+ * dir so it can be previewed/shared with the native sheet.
+ *
+ * The file lives behind the authenticated `/api/files/{id}` route on the
+ * cloud origin (401 unauthenticated), so:
+ *   - `url` must already be absolute (resolved via `resolveGeneratedFileUri`
+ *     in chatExecutionStore).
+ *   - the Clerk Bearer token is attached ONLY when the host is ours.
+ *   - `guardedFetch` fail-closes the request in Local mode (generated files
+ *     only exist in Cloud mode, so a Local-mode call is a bug upstream).
+ *
+ * @returns The local `file://` URI of the downloaded file.
+ * @throws {Error} On HTTP failure (surfaced honestly to the caller's alert).
+ */
+export async function downloadGeneratedFile(url: string, fileName: string): Promise<string> {
+  let host: string | undefined;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    throw new Error(`Generated file URL is not absolute: ${url}`);
+  }
+  const headers: Record<string, string> = isOurCloudHost(host) ? await getAuthHeaders() : {};
+
+  const res = await guardedFetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(
+      res.status === 401 || res.status === 403
+        ? 'You must be signed in to download this file.'
+        : `Download failed (HTTP ${res.status})`,
+    );
+  }
+  const base64 = await blobToBase64(await res.blob());
+
+  await ensureExportsDir();
+  // Preserve the real extension so the share sheet picks a sensible UTI/mime.
+  const dotIdx = fileName.lastIndexOf('.');
+  const baseName = dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
+  const ext = dotIdx > 0 ? `.${fileName.slice(dotIdx + 1).replace(/[^a-zA-Z0-9]/g, '')}` : '';
+  const destUri = `${EXPORTS_DIR}${sanitizeFileName(baseName)}${ext}`;
+  await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
+  return destUri;
 }
 
 // ---------------------------------------------------------------------------
