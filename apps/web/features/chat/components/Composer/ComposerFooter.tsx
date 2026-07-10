@@ -239,7 +239,9 @@ function modelLock(
     return {
       locked: true,
       kind: 'coming_soon',
-      reason: model.unavailableReason ?? 'Coming soon — not yet available',
+      // `unavailableReason` in models.json is an internal ops record (probe
+      // results, key provisioning) — never surface it to users.
+      reason: 'Coming soon — not yet available',
     };
   }
   // Tier check next (existing pure logic).

@@ -966,7 +966,7 @@
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
-      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Multi-Agent"],
+      "bestFor": ["Balanced Intelligence & Cost", "Coding", "Agentic Tasks", "General Chat"],
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -1067,7 +1067,7 @@
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
-      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Multi-Agent"],
+      "bestFor": ["Cost-Efficient Reasoning", "Quick Tasks", "High Throughput", "Classification"],
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
