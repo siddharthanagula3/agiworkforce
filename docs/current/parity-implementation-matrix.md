@@ -281,6 +281,20 @@ Primary paths: `apps/extension/src`, `apps/extension/native-host`, `apps/extensi
 
 Primary paths: `apps/web/features`, `apps/mobile/app/(app)/billing`, `services/api-gateway`, `packages/types/src/enterprise`, `apps/web/db/neon`.
 
+## Competitor Deltas (verified 2026-07-09 — fold into rows on next full matrix pass)
+
+Both vendors shipped major releases on 2026-07-09. Full sourced report: session scratchpad `competitor-changelogs-2026-07.md` (regenerate from the URLs below if absent). Screenshots in `/Users/siddhartha/Desktop/reference` win for UI/IA; official docs win for feature existence/naming.
+
+- **ChatGPT Work (2026-07-09):** third agent mode beside Chat/Codex — goal in, hours of autonomous cross-connector work, finished docs/sheets/slides/"Sites" out. No matrix row exists; nearest AGI analog is the Cowork/dispatch surface. https://help.openai.com/en/articles/20001275-chatgpt-work-and-codex
+- **Codex merged into one ChatGPT desktop app** (Chat + Work + Codex modes, all plans): reword any "standalone Codex app" parity target — the one-app-multi-mode shape now matches AGI's own single-window philosophy. Old `developers.openai.com/codex/app/features` 308-redirects to `learn.chatgpt.com/docs/features`.
+- **GPT-5.6 GA (Sol/Terra/Luna tiers)** replacing mini/nano naming. `models.json` tops out at gpt-5.5 — exact API IDs pending primary-source verification before any catalog change (SSOT rule).
+- **ChatGPT Atlas browser sunsetting** into desktop app + Chrome extension (shutdown date UNVERIFIED, press-only).
+- **Claude in Chrome GA (2026-07-01):** all paid plans, multi-tab group control, native-app navigation, saved-prompt shortcuts — raises the Chrome-extension parity bar above the old "preview" target.
+- **Claude Cowork on web + mobile (2026-07-07, Max first):** async agent, cross-device review — both vendors converged on this shape; affects Dispatch/Cowork rows.
+- **Claude Trusted Devices (2026-06-25):** remote control of Claude Code sessions from another device — no matrix row; relevant to AGI remote-control product spec.
+- **Claude usage-recap personalization (2026-07-09):** monthly "reflect on how you use Claude" — no ChatGPT equivalent, no matrix row.
+- Ledger-link rot: `docs.anthropic.com/en/docs/claude-code/*` soft-redirects to `platform.claude.com` (links resolve with an extra hop). ChatGPT release-notes pages 403 direct fetches — verify via cached search or alternate official hosts and mark UNVERIFIED when only cache-sourced.
+
 ## Required Research Ledger
 
 Future agents updating parity must use official sources for current competitor claims and the local reference folder for visual/UI details.
