@@ -379,17 +379,6 @@ const SettingsPageContent: React.FC = () => {
     toast.success('API key copied to clipboard');
   }, []);
 
-  const handleToggle2FA = useCallback(
-    (enabled: boolean) => {
-      toggle2FAMutation.mutate(enabled, {
-        onSuccess: () => {
-          securityForm.setValue('two_factor_enabled', enabled);
-        },
-      });
-    },
-    [toggle2FAMutation, securityForm],
-  );
-
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -525,14 +514,12 @@ const SettingsPageContent: React.FC = () => {
                 securityForm={securityForm}
                 passwordForm={passwordForm}
                 isSaving={isSaving}
-                isToggle2FAPending={toggle2FAMutation.isPending}
                 isUpdateSettingsPending={updateSettingsMutation.isPending}
                 isChangePasswordPending={changePasswordMutation.isPending}
                 showNewPassword={showNewPassword}
                 showConfirmPassword={showConfirmPassword}
                 onSaveSecurity={handleSaveSecurity}
                 onPasswordChange={handlePasswordChange}
-                onToggle2FA={handleToggle2FA}
                 onToggleShowNewPassword={() => setShowNewPassword((p) => !p)}
                 onToggleShowConfirmPassword={() => setShowConfirmPassword((p) => !p)}
               />

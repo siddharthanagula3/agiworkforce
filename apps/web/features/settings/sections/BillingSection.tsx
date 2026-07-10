@@ -1,8 +1,28 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useBillingStore } from '@/stores/unified/auth';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+
+// Real Stripe-backed shapes returned by the web billing routes.
+interface PaymentMethod {
+  id: string;
+  type: string;
+  is_default: boolean;
+  card?: { brand: string; last4: string; exp_month: number; exp_year: number };
+}
+
+interface Invoice {
+  id: string;
+  number: string;
+  status: string;
+  amount: number;
+  currency: string;
+  created_at: string;
+  hosted_invoice_url: string | null;
+  invoice_pdf: string | null;
+}
 
 function formatDate(ts: number | null): string {
   if (!ts) return 'Never';
@@ -11,6 +31,24 @@ function formatDate(ts: number | null): string {
     month: 'long',
     day: 'numeric',
   });
+}
+
+function formatIsoDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatMoney(minorUnits: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(minorUnits / 100);
+  } catch {
+    return `$${(minorUnits / 100).toFixed(2)}`;
+  }
 }
 
 const FREE_PLAN_FEATURES = [
@@ -120,6 +158,53 @@ export function BillingSection() {
 
   const isFreeTier = tier === 'free';
   const isManagedPaid = !isFreeTier && subscription?.status === 'active';
+
+  // Real Stripe data (empty for free/unbilled users — the routes return [] when
+  // there is no Stripe customer, which we render as an honest empty state).
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[] | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Only paid/managed accounts have a Stripe customer; skip the calls for
+    // free users to avoid pointless 200-empty round-trips.
+    if (!isManagedPaid) {
+      setPaymentMethods([]);
+      setInvoices([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const [pmRes, invRes] = await Promise.all([
+          fetch('/api/billing/payment-methods', { credentials: 'include' }),
+          fetch('/api/billing/invoices', { credentials: 'include' }),
+        ]);
+        if (!cancelled && pmRes.ok) {
+          const json = (await pmRes.json()) as { payment_methods?: PaymentMethod[] };
+          setPaymentMethods(json.payment_methods ?? []);
+        } else if (!cancelled) {
+          setPaymentMethods([]);
+        }
+        if (!cancelled && invRes.ok) {
+          const json = (await invRes.json()) as { invoices?: Invoice[] };
+          setInvoices(json.invoices ?? []);
+        } else if (!cancelled) {
+          setInvoices([]);
+        }
+      } catch {
+        if (!cancelled) {
+          setPaymentMethods([]);
+          setInvoices([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isManagedPaid]);
+
+  const defaultCard =
+    paymentMethods?.find((pm) => pm.is_default)?.card ?? paymentMethods?.[0]?.card;
 
   function usageBadgeText(): string | null {
     // Tiers are Local/Free, Pro, Max (the 'hobby' tier was removed). The Pro badge compared
@@ -324,11 +409,21 @@ export function BillingSection() {
                   fontWeight: 700,
                   color: 'var(--text-3)',
                   fontFamily: 'var(--mono)',
+                  textTransform: 'uppercase',
                 }}
               >
-                CARD
+                {defaultCard ? defaultCard.brand.slice(0, 4) : 'CARD'}
               </div>
-              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Managed by Stripe</span>
+              {/* Truthful copy: show the real card when Stripe returns one, an
+                  honest "no method on file" line while loading is null, and a
+                  neutral prompt when the account genuinely has none. */}
+              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                {paymentMethods === null
+                  ? 'Loading payment method…'
+                  : defaultCard
+                    ? `${defaultCard.brand.charAt(0).toUpperCase() + defaultCard.brand.slice(1)} •••• ${defaultCard.last4} · expires ${String(defaultCard.exp_month).padStart(2, '0')}/${defaultCard.exp_year}`
+                    : 'No card on file'}
+              </span>
             </div>
             <Link
               href="/billing"
@@ -343,7 +438,7 @@ export function BillingSection() {
                 cursor: 'pointer',
               }}
             >
-              Update
+              {defaultCard ? 'Update' : 'Add payment method'}
             </Link>
           </div>
         </section>
@@ -388,39 +483,102 @@ export function BillingSection() {
         }}
       >
         <SectionHeader title="Invoices" />
-        <div
-          style={{
-            padding: '16px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-          }}
-        >
-          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-            {isFreeTier
-              ? 'No invoices yet. Upgrade to a paid plan to see your billing history.'
-              : 'View and download your full invoice history on the billing dashboard.'}
-          </p>
-          {!isFreeTier && (
-            <Link
-              href="/billing"
-              style={{
-                flexShrink: 0,
-                padding: '7px 14px',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--text-2)',
-                fontSize: 13,
-                textDecoration: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              View invoices
-            </Link>
-          )}
-        </div>
+        {invoices && invoices.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: '1px solid var(--settings-border)',
+                    background: 'var(--bg-hover, rgba(255,255,255,0.03))',
+                  }}
+                >
+                  {['Date', 'Total', 'Status', ''].map((col, i) => (
+                    <th
+                      key={col || `col-${i}`}
+                      style={{
+                        padding: '10px 16px',
+                        textAlign: i === 3 ? 'right' : 'left',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-3)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv, idx) => (
+                  <tr
+                    key={inv.id}
+                    style={{
+                      borderBottom:
+                        idx < invoices.length - 1 ? '1px solid var(--settings-border)' : 'none',
+                    }}
+                  >
+                    <td
+                      style={{ padding: '12px 16px', color: 'var(--text-1)', whiteSpace: 'nowrap' }}
+                    >
+                      {formatIsoDate(inv.created_at)}
+                    </td>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        color: 'var(--text-2)',
+                        fontFamily: 'var(--mono)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {formatMoney(inv.amount, inv.currency)}
+                    </td>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        color: 'var(--text-3)',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {inv.status}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {inv.hosted_invoice_url ? (
+                        <a
+                          href={inv.hosted_invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: 13,
+                            color: 'var(--text-2)',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          View
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: 13, color: 'var(--text-3)' }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ padding: '16px 20px' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+              {invoices === null
+                ? 'Loading invoices…'
+                : isFreeTier
+                  ? 'Invoices appear here once you are billed on a paid plan.'
+                  : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -30,14 +30,12 @@ interface TwoFactorPanelProps {
   securityForm: UseFormReturn<SecuritySettingsFormData>;
   passwordForm: UseFormReturn<ChangePasswordFormData>;
   isSaving: boolean;
-  isToggle2FAPending: boolean;
   isUpdateSettingsPending: boolean;
   isChangePasswordPending: boolean;
   showNewPassword: boolean;
   showConfirmPassword: boolean;
   onSaveSecurity: (data: SecuritySettingsFormData) => void;
   onPasswordChange: (data: ChangePasswordFormData) => void;
-  onToggle2FA: (enabled: boolean) => void;
   onToggleShowNewPassword: () => void;
   onToggleShowConfirmPassword: () => void;
 }
@@ -46,14 +44,12 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
   securityForm,
   passwordForm,
   isSaving,
-  isToggle2FAPending,
   isUpdateSettingsPending,
   isChangePasswordPending,
   showNewPassword,
   showConfirmPassword,
   onSaveSecurity,
   onPasswordChange,
-  onToggle2FA,
   onToggleShowNewPassword,
   onToggleShowConfirmPassword,
 }) => (
@@ -72,17 +68,22 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
               <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-4">
                 <div className="space-y-0.5">
                   <FormLabel className="text-foreground">Two-Factor Authentication</FormLabel>
-                  <FormDescription>Add an extra layer of security</FormDescription>
+                  {/*
+                    Honest state: web does not yet ship the full authenticator
+                    enrollment flow (setup -> scan QR -> verify a TOTP code), so
+                    enabling here cannot truthfully succeed. Rather than a toggle
+                    that throws on click, present it disabled with copy that tells
+                    the user where 2FA can be managed today. (Enrollment dialog is
+                    tracked as a follow-up; the backend endpoints already exist.)
+                  */}
+                  <FormDescription>
+                    {field.value
+                      ? 'Two-factor authentication is enabled for your account.'
+                      : 'Two-factor via an authenticator app is coming to web. Manage 2FA from your identity provider for now.'}
+                  </FormDescription>
                 </div>
                 <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={(checked) => {
-                      field.onChange(checked);
-                      onToggle2FA(checked);
-                    }}
-                    disabled={isToggle2FAPending}
-                  />
+                  <Switch checked={field.value} disabled aria-readonly="true" />
                 </FormControl>
               </FormItem>
             )}

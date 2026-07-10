@@ -20,7 +20,6 @@ import {
   useUserSettings,
   useUpdateSettings,
   useChangePassword,
-  useToggle2FA,
 } from '@features/settings/hooks/use-settings-queries';
 import {
   changePasswordSchema,
@@ -34,7 +33,6 @@ export function SecuritySection() {
   const { data: serverSettings, isLoading } = useUserSettings();
   const updateSettingsMutation = useUpdateSettings();
   const changePasswordMutation = useChangePassword();
-  const toggle2FAMutation = useToggle2FA();
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -87,17 +85,6 @@ export function SecuritySection() {
     [changePasswordMutation, passwordForm],
   );
 
-  const handleToggle2FA = useCallback(
-    (enabled: boolean) => {
-      toggle2FAMutation.mutate(enabled, {
-        onSuccess: () => {
-          securityForm.setValue('two_factor_enabled', enabled);
-        },
-      });
-    },
-    [toggle2FAMutation, securityForm],
-  );
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
@@ -123,19 +110,13 @@ export function SecuritySection() {
         <TwoFactorPanel
           securityForm={securityForm}
           passwordForm={passwordForm}
-          isSaving={
-            updateSettingsMutation.isPending ||
-            changePasswordMutation.isPending ||
-            toggle2FAMutation.isPending
-          }
-          isToggle2FAPending={toggle2FAMutation.isPending}
+          isSaving={updateSettingsMutation.isPending || changePasswordMutation.isPending}
           isUpdateSettingsPending={updateSettingsMutation.isPending}
           isChangePasswordPending={changePasswordMutation.isPending}
           showNewPassword={showNewPassword}
           showConfirmPassword={showConfirmPassword}
           onSaveSecurity={handleSaveSecurity}
           onPasswordChange={handlePasswordChange}
-          onToggle2FA={handleToggle2FA}
           onToggleShowNewPassword={() => setShowNewPassword((p) => !p)}
           onToggleShowConfirmPassword={() => setShowConfirmPassword((p) => !p)}
         />
