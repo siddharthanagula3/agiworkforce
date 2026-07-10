@@ -276,6 +276,123 @@ describe('useChatStream', () => {
     });
   });
 
+  // Reasoning / extended-thinking. Providers serialize thinking as literal
+  // `<thinking>…</thinking>` text inside delta.content (see stream-transform.ts);
+  // the client re-parses those tags into metadata.thinkingContent / segments.
+  describe('reasoning (thinking) accumulation + persistence', () => {
+    it('keeps thinkingContent after the block closes (no metadata wipe) and leaves single-block turns un-segmented', async () => {
+      // Regression: closing `</thinking>` used to updateMessage() with a bare
+      // metadata object, which REPLACES the bag and erased the accumulated
+      // reasoning — the block vanished on completion. It must survive, collapsed.
+      mockSseStream([
+        { choices: [{ delta: { content: '<thinking>reasoning here</thinking>' } }] },
+        { choices: [{ delta: { content: 'final answer' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('think then answer', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistantMsg = useChatStore
+        .getState()
+        .messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.thinkingContent).toBe('reasoning here');
+      // Never left in a live-streaming state once done — reload would otherwise
+      // show a stuck timer.
+      expect(assistantMsg?.metadata?.isThinkingStreaming).toBe(false);
+      expect(assistantMsg?.metadata?.thinkingCompletedAt).toBeTruthy();
+      // Single block → no segments (single-block render path stays untouched).
+      expect(assistantMsg?.metadata?.thinkingSegments).toBeUndefined();
+      // The visible answer excludes the reasoning text.
+      expect(assistantMsg?.content).toBe('final answer');
+    });
+
+    it('renders multiple sequential thinking blocks as an ordered segment flow', async () => {
+      mockSseStream([
+        { choices: [{ delta: { content: '<thinking>first thought</thinking>' } }] },
+        { choices: [{ delta: { content: 'partial ' } }] },
+        { choices: [{ delta: { content: '<thinking>second thought</thinking>' } }] },
+        { choices: [{ delta: { content: 'the answer' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('interleaved thinking', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistantMsg = useChatStore
+        .getState()
+        .messages.find((m) => m.role === 'assistant');
+      const segments = assistantMsg?.metadata?.thinkingSegments ?? [];
+      expect(segments).toHaveLength(2);
+      expect(segments[0]?.content).toBe('first thought');
+      expect(segments[1]?.content).toBe('second thought');
+      // Both segments finalized (not stuck streaming) once the turn completes.
+      expect(segments.every((s) => s.isStreaming === false)).toBe(true);
+      expect(segments.every((s) => typeof s.completedAt === 'string')).toBe(true);
+    });
+
+    it('persists reasoning to the DB so it survives reload', async () => {
+      // Non-temporary conversation → the assistant turn is saved. Assert the save
+      // payload carries the reasoning (previously dropped: only the answer saved).
+      const CONV = { ...TEMP_CONVERSATION, id: 'conv-persist', isTemporary: false };
+      useChatStore.setState({ conversations: [CONV], activeConversationId: CONV.id });
+
+      const streamBody =
+        `data: ${JSON.stringify({ choices: [{ delta: { content: '<thinking>my reasoning</thinking>' } }] })}\n\n` +
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'answer' }, finish_reason: 'stop' }] })}\n\n` +
+        'data: [DONE]\n\n';
+
+      const saveBodies: Array<Record<string, unknown>> = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/api/llm/')) {
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(streamBody));
+              controller.close();
+            },
+          });
+          return new Response(stream, { status: 200, headers: new Headers() });
+        }
+        if (url.includes('/messages')) {
+          try {
+            saveBodies.push(JSON.parse(String(init?.body ?? '{}')));
+          } catch {
+            /* ignore */
+          }
+          return new Response(JSON.stringify({ message: { id: 'saved-reasoning' } }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('persist my reasoning', {
+          conversationId: CONV.id,
+        });
+      });
+      // The assistant save is fire-and-forget inside the [DONE] handler.
+      await vi.waitFor(() =>
+        expect(saveBodies.some((b) => b['role'] === 'assistant')).toBe(true),
+      );
+
+      const assistantSave = saveBodies.find((b) => b['role'] === 'assistant');
+      const savedMeta = assistantSave?.['metadata'] as Record<string, unknown> | undefined;
+      expect(savedMeta?.['thinkingContent']).toBe('my reasoning');
+      expect(savedMeta?.['isThinkingStreaming']).toBe(false);
+      expect(savedMeta?.['thinkingCompletedAt']).toBeTruthy();
+    });
+  });
+
   it('renders failed LLM responses as visible assistant errors without console-directed copy', async () => {
     mockLlmErrorResponse({
       error: {

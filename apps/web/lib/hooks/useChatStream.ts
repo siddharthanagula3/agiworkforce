@@ -395,6 +395,67 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let currentSearchResults: MessageMetadata['searchResults'];
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'];
 
+  // ── Reasoning (thinking) accumulation ──────────────────────────────────────
+  // updateMessage REPLACES metadata wholesale, so a bare `{ metadata: {...} }`
+  // update wipes everything else already on the bag (thinkingContent, tools,
+  // searchResults). This merge-safe patch reads the current bag and spreads it —
+  // without it, closing a `<thinking>` block erased the accumulated reasoning and
+  // the block vanished on completion (and never persisted).
+  const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
+    const current = useChatStore
+      .getState()
+      .messages.find((m) => m.id === assistantMessageId)?.metadata;
+    updateMessage(assistantMessageId, { metadata: { ...current, ...patch } });
+  };
+
+  // Local ledger of reasoning segments. Published to the store only once a turn
+  // has >= 2 blocks (interleaved thinking around tool calls), so single-block
+  // turns keep their proven single-`thinkingContent` render + persist path and
+  // this stays a no-op for the common case.
+  const thinkingSegments: NonNullable<MessageMetadata['thinkingSegments']> = [];
+
+  const publishThinkingSegments = () => {
+    if (thinkingSegments.length < 2) return;
+    patchMessageMeta({ thinkingSegments: thinkingSegments.map((s) => ({ ...s })) });
+  };
+
+  const openThinkingSegment = () => {
+    const startedAt = new Date().toISOString();
+    thinkingSegments.push({
+      id: `${assistantMessageId}-think-${thinkingSegments.length}`,
+      content: '',
+      isStreaming: true,
+      startedAt,
+      completedAt: null,
+    });
+    patchMessageMeta({ isThinkingStreaming: true, thinkingStartedAt: startedAt });
+    publishThinkingSegments();
+  };
+
+  const appendThinkingText = (text: string) => {
+    appendToThinking(assistantMessageId, text);
+    const seg = thinkingSegments[thinkingSegments.length - 1];
+    if (seg) {
+      seg.content += text;
+      publishThinkingSegments();
+    }
+  };
+
+  const closeThinkingSegment = () => {
+    const completedAt = new Date().toISOString();
+    const seg = thinkingSegments[thinkingSegments.length - 1];
+    if (seg && seg.isStreaming) {
+      seg.isStreaming = false;
+      seg.completedAt = completedAt;
+      seg.durationSeconds = Math.max(
+        0,
+        Math.round((Date.parse(completedAt) - Date.parse(seg.startedAt)) / 1000),
+      );
+    }
+    patchMessageMeta({ isThinkingStreaming: false, thinkingCompletedAt: completedAt });
+    publishThinkingSegments();
+  };
+
   const publishToolTimeline = () => {
     if (toolTimeline.length === 0) return;
     setToolTimeline(
@@ -503,6 +564,40 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (currentCodeExecutionResult) {
       metadata.codeExecutionResult = currentCodeExecutionResult;
     }
+    // Persist reasoning so it survives reload (previously dropped — only the answer
+    // was saved). Read the accumulated thinking off the store bag. Always persist
+    // isThinkingStreaming:false and a stable duration so a reloaded turn renders the
+    // collapsed "Thought for Ns" summary, never a stuck live timer.
+    const persisted = useChatStore
+      .getState()
+      .messages.find((m) => m.id === assistantMessageId)?.metadata;
+    if (persisted?.thinkingSegments && persisted.thinkingSegments.length > 0) {
+      metadata.thinkingSegments = persisted.thinkingSegments.map((s) => ({
+        ...s,
+        isStreaming: false,
+      }));
+    }
+    if (persisted?.thinkingContent && persisted.thinkingContent.trim().length > 0) {
+      metadata.thinkingContent = persisted.thinkingContent;
+      metadata.isThinkingStreaming = false;
+      if (persisted.thinkingStartedAt) metadata.thinkingStartedAt = persisted.thinkingStartedAt;
+      if (persisted.thinkingCompletedAt) {
+        metadata.thinkingCompletedAt = persisted.thinkingCompletedAt;
+      }
+      const duration =
+        persisted.thinkingDurationSeconds ??
+        (persisted.thinkingStartedAt && persisted.thinkingCompletedAt
+          ? Math.max(
+              0,
+              Math.round(
+                (Date.parse(persisted.thinkingCompletedAt) -
+                  Date.parse(persisted.thinkingStartedAt)) /
+                  1000,
+              ),
+            )
+          : undefined);
+      if (duration !== undefined) metadata.thinkingDurationSeconds = duration;
+    }
     return Object.keys(metadata).length > 0 ? metadata : undefined;
   };
 
@@ -552,12 +647,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           appendToMessage(assistantMessageId, before);
         }
         inThinkingBlock = true;
-        updateMessage(assistantMessageId, {
-          metadata: {
-            isThinkingStreaming: true,
-            thinkingStartedAt: new Date().toISOString(),
-          },
-        });
+        openThinkingSegment();
         contentBuffer = contentBuffer.slice(openIdx + '<thinking>'.length);
         continue;
       }
@@ -565,15 +655,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (inThinkingBlock && closeIdx !== -1) {
         const thinkingPart = contentBuffer.slice(0, closeIdx);
         if (thinkingPart) {
-          appendToThinking(assistantMessageId, thinkingPart);
+          appendThinkingText(thinkingPart);
         }
         inThinkingBlock = false;
-        updateMessage(assistantMessageId, {
-          metadata: {
-            isThinkingStreaming: false,
-            thinkingCompletedAt: new Date().toISOString(),
-          },
-        });
+        closeThinkingSegment();
         contentBuffer = contentBuffer.slice(closeIdx + '</thinking>'.length);
         continue;
       }
@@ -581,7 +666,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (isFinal) {
         if (contentBuffer) {
           if (inThinkingBlock) {
-            appendToThinking(assistantMessageId, contentBuffer);
+            appendThinkingText(contentBuffer);
           } else {
             fullAssistantContent += contentBuffer;
             appendToMessage(assistantMessageId, contentBuffer);
@@ -591,7 +676,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       } else if (contentBuffer.length > HOLD_BACK) {
         const safe = contentBuffer.slice(0, contentBuffer.length - HOLD_BACK);
         if (inThinkingBlock) {
-          appendToThinking(assistantMessageId, safe);
+          appendThinkingText(safe);
         } else {
           fullAssistantContent += safe;
           appendToMessage(assistantMessageId, safe);
@@ -622,12 +707,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (data === '[DONE]') {
         flushContentBuffer(true);
         if (inThinkingBlock) {
-          updateMessage(assistantMessageId, {
-            metadata: {
-              isThinkingStreaming: false,
-              thinkingCompletedAt: new Date().toISOString(),
-            },
-          });
+          closeThinkingSegment();
           inThinkingBlock = false;
         }
         finishRunningTools();
@@ -828,6 +908,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   // Stream ended without an explicit [DONE].
   flushContentBuffer(true);
+  if (inThinkingBlock) {
+    closeThinkingSegment();
+    inThinkingBlock = false;
+  }
   finishRunningTools();
   persistAssistant(fullAssistantContent);
   stopStreaming();
