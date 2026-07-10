@@ -22,14 +22,19 @@ import {
   History,
   Shield,
   X,
+  ChevronLeft,
+  ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
   type ComputeSession,
   type GeneratedFile,
+  type SharedArtifact,
 } from '@agiworkforce/types';
 import { GeneratedFileCard } from '@agiworkforce/unified-chat';
+import { TypeIcon } from './InlineArtifactCards';
 import { cn } from '@shared/lib/utils';
 import {
   DropdownMenu,
@@ -76,6 +81,15 @@ interface ArtifactPreviewProps {
   variant?: 'card' | 'panel';
   /** Called when user clicks the Close button in panel variant toolbar. */
   onClose?: () => void;
+  /**
+   * Real edit history from the shared store's content-keyed auto-versioning
+   * (oldest → newest). When length > 1 the panel header shows a version chip
+   * (`v{n}/{total}`) with prev/next navigation. Navigation is view-only: it
+   * changes which version the viewer renders/copies/downloads without mutating
+   * the store, so no data is lost. Omit or pass a single-entry array to hide
+   * the chip.
+   */
+  versionHistory?: SharedArtifact[];
 }
 
 /**
@@ -101,11 +115,19 @@ export function ArtifactPreview({
   className,
   variant = 'card',
   onClose,
+  versionHistory,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [securityWarning, setSecurityWarning] = useState(false);
+  // Preview render failure surfaced by the cross-origin sandbox (production
+  // path only). Reset on refresh / version change. Drives the error state.
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  // Version navigation (panel-only, view-only). null = show latest.
+  const versionCount = versionHistory?.length ?? 0;
+  const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
 
   // PDF / DOCX viewer state (Fix 39 / Fix 40)
   const isPdf = artifact.type === 'document' && artifact.language?.toLowerCase() === 'pdf';
@@ -205,11 +227,33 @@ export function ArtifactPreview({
 </html>`;
   }, [docxHtml]);
 
+  // Side-map (explicit-snapshot) content: the card variant's version model.
+  const sideMapContent =
+    artifact.versions && artifact.currentVersion !== undefined
+      ? (artifact.versions[artifact.currentVersion]?.content ?? artifact.content)
+      : artifact.content;
+
+  // Which version index the viewer is currently showing (defaults to latest).
+  const shownVersionIndex = viewedVersionIndex ?? (versionCount > 0 ? versionCount - 1 : 0);
+
+  // The content the viewer renders / copies / downloads. When the user has
+  // navigated the version chip, this is the viewed version's content; otherwise
+  // it falls back to the side-map/current content (byte-identical to the prior
+  // behavior for the card variant, which never passes versionHistory).
+  const activeContent =
+    versionHistory && versionHistory[shownVersionIndex]
+      ? versionHistory[shownVersionIndex]!.content
+      : sideMapContent;
+
+  // Reset version navigation + render error when the artifact identity changes
+  // or a new version lands (so we snap to the latest and clear stale errors).
+  useEffect(() => {
+    setViewedVersionIndex(null);
+    setRenderError(null);
+  }, [artifact.id, versionCount]);
+
   const getPreviewHTML = useCallback((): string => {
-    const content =
-      artifact.versions && artifact.currentVersion !== undefined
-        ? artifact!.versions[artifact.currentVersion]!.content
-        : artifact.content;
+    const content = activeContent;
     const renderType = artifact.type === 'document' ? 'code' : artifact.type;
 
     // SECURITY: Check for XSS risks — only set the warning if content was
@@ -315,7 +359,7 @@ export function ArtifactPreview({
   <body>${content}</body>
 </html>`;
     }
-  }, [artifact]);
+  }, [activeContent, artifact.type]);
 
   // WEB-13 / WEB-20: build the cross-origin sandbox payload from the artifact.
   // SandboxedIframe will post this to sandbox.agiworkforce.com (if configured)
@@ -327,10 +371,7 @@ export function ArtifactPreview({
   // is the security boundary: scripts inside it cannot access the parent's
   // cookies, localStorage, or DOM.
   const sandboxPayload = useMemo<ArtifactRenderPayload>(() => {
-    const content =
-      artifact.versions && artifact.currentVersion !== undefined
-        ? artifact!.versions[artifact.currentVersion]!.content
-        : artifact.content;
+    const content = activeContent;
     const renderType = artifact.type === 'document' ? 'code' : artifact.type;
     const kind: ArtifactKind = renderType === 'code' ? 'code' : (renderType as ArtifactKind);
     switch (renderType) {
@@ -353,24 +394,16 @@ export function ArtifactPreview({
       default:
         return { type: 'render', kind, text: content };
     }
-  }, [artifact]);
+  }, [activeContent, artifact.type]);
 
   const handleCopy = async () => {
-    const content =
-      artifact.versions && artifact.currentVersion !== undefined
-        ? artifact!.versions[artifact.currentVersion]!.content
-        : artifact.content;
-
-    await navigator.clipboard.writeText(content);
+    await navigator.clipboard.writeText(activeContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
-    const content =
-      artifact.versions && artifact.currentVersion !== undefined
-        ? artifact!.versions[artifact.currentVersion]!.content
-        : artifact.content;
+    const content = activeContent;
 
     let blob: Blob;
     let filename: string;
@@ -462,7 +495,32 @@ export function ArtifactPreview({
   const handleRefresh = () => {
     // WEB-13: bump refreshKey to re-mount the SandboxedIframe; the new
     // iframe load triggers a fresh sandbox-ready + payload post.
+    setRenderError(null);
     setRefreshKey((k) => k + 1);
+  };
+
+  // Download a PDF/DOCX artifact as its real bytes. The content is either a
+  // `data:` URI (anchor directly so the browser saves the decoded bytes, not
+  // the URI text) or a raw binary string (wrap in a Blob). The generic
+  // handleDownload('txt'/'html'/'md') paths would corrupt these by writing the
+  // string representation, so binary docs get this dedicated handler instead.
+  const handleDownloadBinaryDoc = () => {
+    const ext = artifact.language || (isPdf ? 'pdf' : 'docx');
+    const filename = `${artifact.title || 'artifact'}.${ext}`;
+    const a = document.createElement('a');
+    let objectUrl: string | null = null;
+    if (artifact.content.startsWith('data:')) {
+      a.href = artifact.content;
+    } else {
+      const blob = new Blob([artifact.content], { type: 'application/octet-stream' });
+      objectUrl = URL.createObjectURL(blob);
+      a.href = objectUrl;
+    }
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl!), 60_000);
   };
 
   const handleFullscreen = () => {
@@ -511,11 +569,13 @@ export function ArtifactPreview({
       >
         {/* Single reference toolbar */}
         <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-card/80 px-3 py-1.5">
-          {/* LEFT: toggle + title + type */}
+          {/* LEFT: toggle + type icon + title + type + version chip */}
           <div className="flex min-w-0 items-center gap-2">
-            {/* Eye/Code segmented toggle — only when there is previewable content */}
-            {(canPreview || isPdf || isDocx) && (
-              <div className="flex items-center rounded-md border border-border/40 bg-muted/40 p-0.5">
+            {/* Eye/Code segmented toggle — only for renderable artifacts.
+                PDF/DOCX are single-view (their "source" is an opaque data URI),
+                so they get no toggle per the claude.ai artifact header. */}
+            {canPreview && (
+              <div className="flex shrink-0 items-center rounded-md border border-border/40 bg-muted/40 p-0.5">
                 <button
                   type="button"
                   onClick={() => setActiveTab('preview')}
@@ -546,68 +606,128 @@ export function ArtifactPreview({
                 </button>
               </div>
             )}
+            {/* Type icon */}
+            <TypeIcon type={artifact.type} className="h-4 w-4 text-muted-foreground" />
             {/* Title + muted TYPE label */}
             <span className="truncate text-sm font-semibold text-foreground">
               {artifact.title || 'Artifact'}
             </span>
             <span className="shrink-0 text-sm text-muted-foreground">· {typeLabel}</span>
+            {/* Version chip — only when the artifact has real edit history. */}
+            {versionCount > 1 && (
+              <div
+                className="ml-0.5 flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
+                data-testid="artifact-version-chip"
+              >
+                <button
+                  type="button"
+                  onClick={() => setViewedVersionIndex(Math.max(0, shownVersionIndex - 1))}
+                  disabled={shownVersionIndex <= 0}
+                  className="flex h-6 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                  aria-label="Previous version"
+                  title="Previous version"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+                <span
+                  className="min-w-[2.75rem] text-center text-xs tabular-nums text-muted-foreground"
+                  aria-live="polite"
+                >
+                  v{shownVersionIndex + 1}/{versionCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setViewedVersionIndex(Math.min(versionCount - 1, shownVersionIndex + 1))
+                  }
+                  disabled={shownVersionIndex >= versionCount - 1}
+                  className="flex h-6 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                  aria-label="Next version"
+                  title="Next version"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* RIGHT: Copy / Download / Refresh / Open-in-new-tab / Fullscreen / Close */}
+          {/* RIGHT: controls composed per artifact type (claude.ai parity).
+              - renderable (html/react/svg/mermaid): Copy · Download · Refresh · Open · Fullscreen · Close
+              - binary doc (pdf/docx): Download · Refresh · Close  (no Copy — content is an opaque data URI)
+              - code / markdown doc: Copy · Download · Close
+              External + Fullscreen collapse on narrow (375px) widths. */}
           <div className="flex shrink-0 items-center gap-1">
-            {/* Copy */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void handleCopy()}
-              className="h-7 px-2"
-            >
-              {copied ? (
-                <>
-                  <Check className="h-3.5 w-3.5 text-green-500" />
-                  <span className="ml-1 text-xs">Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5" />
-                  <span className="ml-1 text-xs">Copy</span>
-                </>
-              )}
-            </Button>
-
-            {/* Download dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2"
-                  aria-label="Download artifact"
-                  title="Download"
-                >
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleDownload('html')}>
-                  Download as HTML
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDownload('txt')}>
-                  Download as {artifact.language?.toUpperCase() || 'TXT'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDownload('md')}>
-                  Download as Markdown
-                </DropdownMenuItem>
-                {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
-                  <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
-                    Download generated file
-                  </DropdownMenuItem>
+            {/* Copy — not for binary docs (copying a data URI is useless). */}
+            {!isPdf && !isDocx && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleCopy()}
+                className="h-7 px-2"
+                aria-label={copied ? 'Copied' : 'Copy artifact'}
+                title="Copy"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    <span className="ml-1 hidden text-xs sm:inline">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    <span className="ml-1 hidden text-xs sm:inline">Copy</span>
+                  </>
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </Button>
+            )}
 
-            {/* Refresh — only when previewable */}
-            {canPreview && (
+            {/* Download — binary docs save real bytes via a plain button;
+                everything else offers the format dropdown. */}
+            {isPdf || isDocx ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDownloadBinaryDoc}
+                className="h-7 px-2"
+                aria-label="Download file"
+                title="Download"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    aria-label="Download artifact"
+                    title="Download"
+                  >
+                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleDownload('html')}>
+                    Download as HTML
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownload('txt')}>
+                    Download source (.{(artifact.language || 'txt').toLowerCase()})
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownload('md')}>
+                    Download as Markdown
+                  </DropdownMenuItem>
+                  {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
+                    <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
+                      Download generated file
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Refresh — renderable previews and PDFs (re-mounts the frame). */}
+            {(canPreview || isPdf) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -620,13 +740,13 @@ export function ArtifactPreview({
               </Button>
             )}
 
-            {/* Open in new tab — only when previewable */}
+            {/* Open in new tab — renderable only; hidden on narrow widths. */}
             {canPreview && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleOpenInNewTab}
-                className="h-7 px-2"
+                className="hidden h-7 px-2 sm:flex"
                 aria-label="Open source in new tab"
                 title="Open source in new tab"
               >
@@ -634,17 +754,19 @@ export function ArtifactPreview({
               </Button>
             )}
 
-            {/* Fullscreen */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleFullscreen}
-              className="h-7 px-2"
-              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-              title="Fullscreen"
-            >
-              <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-            </Button>
+            {/* Fullscreen — renderable only; hidden on narrow widths. */}
+            {canPreview && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleFullscreen}
+                className="hidden h-7 px-2 sm:flex"
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                title="Fullscreen"
+              >
+                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            )}
 
             {/* Close — panel-only */}
             {onClose && (
@@ -697,22 +819,58 @@ export function ArtifactPreview({
         {/* Content area — fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          {/* Preview: HTML / React / SVG / Mermaid */}
-          {showPreview && canPreview && (
-            <div className="h-full w-full bg-white">
-              <SandboxedIframe
-                payload={sandboxPayload}
-                fallbackSrcDoc={getPreviewHTML()}
-                title={artifact.title || 'Artifact Preview'}
-                className="h-full w-full border-0"
-                refreshKey={refreshKey}
-              />
-            </div>
-          )}
+          {/* Preview: HTML / React / SVG / Mermaid — with empty + error states. */}
+          {showPreview &&
+            canPreview &&
+            (activeContent.trim().length === 0 ? (
+              // Empty state: a renderable artifact with no content yet (e.g. an
+              // opened-but-still-empty draft). Not an error, just nothing to show.
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-background px-6 text-center">
+                <Code className="h-6 w-6 text-muted-foreground/50" aria-hidden="true" />
+                <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
+              </div>
+            ) : renderError ? (
+              // Error state: the sandbox reported a render failure. Offer source
+              // + retry so the user is never stuck on a blank frame.
+              <div
+                className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center"
+                data-testid="artifact-render-error"
+              >
+                <AlertTriangle className="h-7 w-7 text-amber-500" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    This artifact couldn&apos;t be rendered.
+                  </p>
+                  <p className="mt-1 max-w-sm text-xs text-muted-foreground">{renderError}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setActiveTab('code')}>
+                    <Code className="mr-1 h-3.5 w-3.5" />
+                    View source
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleRefresh}>
+                    <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="h-full w-full bg-white">
+                <SandboxedIframe
+                  payload={sandboxPayload}
+                  fallbackSrcDoc={getPreviewHTML()}
+                  title={artifact.title || 'Artifact Preview'}
+                  className="h-full w-full border-0"
+                  refreshKey={refreshKey}
+                  onRenderError={(err) => setRenderError(err)}
+                />
+              </div>
+            ))}
 
           {/* Preview: PDF */}
           {showPreview && isPdf && (
             <iframe
+              key={`pdf-${refreshKey}`}
               title={artifact.title || 'PDF Preview'}
               src={artifact.content}
               sandbox="allow-same-origin"
@@ -748,11 +906,7 @@ export function ArtifactPreview({
           {!showPreview && (
             <ScrollArea className="h-full w-full bg-gray-900">
               <pre className="p-4">
-                <code className="text-sm text-gray-100">
-                  {artifact.versions && artifact.currentVersion !== undefined
-                    ? artifact!.versions[artifact.currentVersion]!.content
-                    : artifact.content}
-                </code>
+                <code className="text-sm text-gray-100">{activeContent}</code>
               </pre>
             </ScrollArea>
           )}
@@ -861,7 +1015,7 @@ export function ArtifactPreview({
                 Download as HTML
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleDownload('txt')}>
-                Download as {artifact.language?.toUpperCase() || 'TXT'}
+                Download source (.{(artifact.language || 'txt').toLowerCase()})
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleDownload('md')}>
                 Download as Markdown
@@ -1043,11 +1197,7 @@ export function ArtifactPreview({
             className={cn('bg-gray-900', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
           >
             <pre className="p-4">
-              <code className="text-sm text-gray-100">
-                {artifact.versions && artifact.currentVersion !== undefined
-                  ? artifact!.versions[artifact.currentVersion]!.content
-                  : artifact.content}
-              </code>
+              <code className="text-sm text-gray-100">{activeContent}</code>
             </pre>
           </ScrollArea>
         </TabsContent>

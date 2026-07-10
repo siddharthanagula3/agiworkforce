@@ -48,8 +48,8 @@ function typeBadge(type: ArtifactData['type']): string {
   }
 }
 
-/** Icon for each artifact type. */
-function TypeIcon({ type, className }: { type: ArtifactData['type']; className?: string }) {
+/** Icon for each artifact type. Exported for reuse in the artifact viewer header. */
+export function TypeIcon({ type, className }: { type: ArtifactData['type']; className?: string }) {
   const cls = cn('shrink-0', className);
   switch (type) {
     case 'html':
