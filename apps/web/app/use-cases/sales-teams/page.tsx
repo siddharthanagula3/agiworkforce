@@ -1,4 +1,6 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -7,16 +9,23 @@ import { FeatureGrid, LedgerSection } from '../../../components/marketing/Landin
 import { FinalCta } from '../../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Sales teams: AGI',
   description:
     'How revenue teams use AGI: research, outreach drafts, deal-room briefings, and pipeline triage with provider choice and visible routing.',
-  alternates: { canonical: 'https://agiworkforce.com/use-cases/sales-teams' },
-};
+  path: '/use-cases/sales-teams',
+});
 
 export default function SalesTeamsPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Use Cases', path: '/use-cases' },
+          { name: 'Sales Teams', path: '/use-cases/sales-teams' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { Reveal } from '../../components/marketing/Reveal';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Careers',
   description: 'AGI Automation LLC is small and intentional. We do not have open roles right now.',
-  alternates: { canonical: 'https://agiworkforce.com/careers' },
-};
+  path: '/careers',
+});
 
 export default function CareersPage() {
   return (

@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'MCP Directory',
   description:
     'Reference MCP servers you can connect to AGI. A full browsable, searchable directory is coming soon.',
-  alternates: { canonical: 'https://agiworkforce.com/connectors/mcp-directory' },
-};
+  path: '/connectors/mcp-directory',
+});
 
 const FEATURED_MCPS = [
   {
@@ -66,8 +66,8 @@ export default function McpDirectoryPage() {
           <p className="agi-page-lede">
             A full browsable, searchable directory is coming soon. Until then, here are a few
             well-known reference servers &mdash; all maintained in the official Model Context
-            Protocol servers repository. Copy a server&rsquo;s setup into the custom connector dialog
-            when you are ready to connect it.
+            Protocol servers repository. Copy a server&rsquo;s setup into the custom connector
+            dialog when you are ready to connect it.
           </p>
         </section>
 

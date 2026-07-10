@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Press',
   description:
     'Press materials and contact for AGI: what we are, who runs it, and how to reach us.',
-  alternates: { canonical: 'https://agiworkforce.com/press' },
-};
+  path: '/press',
+});
 
 const QUICK_FACTS: { k: string; v: string }[] = [
   { k: 'Company', v: 'AGI Automation LLC, USA' },

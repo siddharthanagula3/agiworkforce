@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Trust',
   description: 'Compliance, audits, and security posture. With honest dates.',
-  alternates: { canonical: 'https://agiworkforce.com/trust' },
-};
+  path: '/trust',
+});
 
 const COMPLIANCE: { item: string; status: string; note: string }[] = [
   {

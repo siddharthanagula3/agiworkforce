@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Env-based BYOK in v1',
   description:
     'How to configure provider API keys via environment variables in AGI v1. Self-hosted .env.local setup and desktop OS keychain reference.',
-  alternates: { canonical: 'https://agiworkforce.com/docs/byok-env' },
-};
+  path: '/docs/byok-env',
+});
 
 export default function ByokEnvDocsPage() {
   return (

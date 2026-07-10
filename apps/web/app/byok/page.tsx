@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -8,11 +8,11 @@ import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 import { WaitlistForm } from './WaitlistForm';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'BYOK: Bring Your Own Keys to Desktop & CLI',
   description: `Bring your own provider API keys to AGI Desktop and the CLI. Keys encrypted at rest on your machine, traffic direct to your provider, and a visible provider label on every route. ${LAUNCH.publicLabel}.`,
-  alternates: { canonical: 'https://agiworkforce.com/byok' },
-};
+  path: '/byok',
+});
 
 const BYOK_PROVIDERS = [
   'Anthropic',

@@ -1,16 +1,16 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { FinalCta } from '../../components/marketing/FlagshipSections';
 import { AgiMark } from '../../components/agi/AgiMark';
 import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'About: Multi-provider by design',
   description:
     'AGI Automation LLC. Austin, Texas. The CLI is the engine; the apps are surfaces over it. The bet: the user owns the keys, the data, and the choice of model.',
-  alternates: { canonical: 'https://agiworkforce.com/about' },
-};
+  path: '/about',
+});
 
 const PRINCIPLES: { title: string; body: string }[] = [
   {
@@ -105,8 +105,8 @@ export default function AboutPage() {
                 <em className="agi-fl-h1-em">&ldquo;You should own the choice of model.&rdquo;</em>
               </h2>
               <p className="agi-fl-section-lede">
-                AGI is built on a single conviction: the person doing the work should decide where it
-                runs and which model answers — not a vendor lock-in. Everything here follows from
+                AGI is built on a single conviction: the person doing the work should decide where
+                it runs and which model answers — not a vendor lock-in. Everything here follows from
                 that, from Local Mode that never phones home to BYOK that keeps your keys on your
                 machine.
               </p>

@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'SLA',
   description: 'Service level agreement · uptime targets, response times, and credit terms.',
-  alternates: { canonical: 'https://agiworkforce.com/sla' },
-};
+  path: '/sla',
+});
 
 export default function SlaPage() {
   return (
@@ -96,10 +96,10 @@ export default function SlaPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">Planned service credits</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Once paid plans reach general availability, the intended policy is: if we miss the uptime
-            target in a given month, paid customers can claim a service credit equal to 10% of the
-            monthly fee for each 0.1% below target, capped at 50% of the monthly fee. Final credit
-            terms are confirmed in your plan agreement at launch. To reach us: email{' '}
+            Once paid plans reach general availability, the intended policy is: if we miss the
+            uptime target in a given month, paid customers can claim a service credit equal to 10%
+            of the monthly fee for each 0.1% below target, capped at 50% of the monthly fee. Final
+            credit terms are confirmed in your plan agreement at launch. To reach us: email{' '}
             <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
               contact@agiworkforce.com
             </a>{' '}

@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Refund policy',
   description: 'When refunds are issued and how to request one.',
-  alternates: { canonical: 'https://agiworkforce.com/refund-policy' },
-};
+  path: '/refund-policy',
+});
 
 export default function RefundPolicyPage() {
   return (

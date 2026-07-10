@@ -1,16 +1,16 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { FeatureGrid, RouteMap } from '../../components/marketing/LandingSections';
 import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Use Cases: Startups, consultants, sales, and IT providers',
   description:
     'Use AGI across startup building, consulting, IT service delivery, sales teams, research, coding, and business automation.',
-  alternates: { canonical: 'https://agiworkforce.com/use-cases' },
-};
+  path: '/use-cases',
+});
 
 export default function UseCasesPage() {
   return (

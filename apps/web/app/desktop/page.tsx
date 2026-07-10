@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -12,11 +12,11 @@ import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { LAUNCH, COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Desktop | Runs on Your Machine',
   description: `The native AGI app, built in Rust. Local models with Ollama and LM Studio. Keys encrypted on your machine. Chats in SQLite on your disk. macOS, Windows, Linux. ${LAUNCH.publicLabel}.`,
-  alternates: { canonical: 'https://agiworkforce.com/desktop' },
-};
+  path: '/desktop',
+});
 
 export default function DesktopPage() {
   return (

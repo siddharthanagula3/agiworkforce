@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { CapabilityGrid, FinalCta } from '../../components/marketing/FlagshipSections';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Features | Chat, Artifacts, Projects, Tools, Memory & Research',
   description:
     'Everything inside the AGI workspace: chat, artifacts, projects, tools and connectors, memory, deep research, agents, plugins, and skills. Across six surfaces and three trust modes.',
-  alternates: { canonical: 'https://agiworkforce.com/features' },
-};
+  path: '/features',
+});
 
 export default function FeaturesHubPage() {
   return (

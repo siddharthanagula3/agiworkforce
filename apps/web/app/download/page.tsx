@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -10,11 +10,11 @@ import { LAUNCH, COMING_SOON_LABEL, SURFACE_STATUS } from '../../lib/marketing-c
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI: Coming Soon on Every Surface',
   description: `AGI is coming to six surfaces: Web, Desktop, CLI, Mobile, Chrome, and VS Code. All are in development toward public launch. ${LAUNCH.publicLabel}. Leave your email to get notified.`,
-  alternates: { canonical: 'https://agiworkforce.com/download' },
-};
+  path: '/download',
+});
 
 export default function DownloadPage() {
   return (

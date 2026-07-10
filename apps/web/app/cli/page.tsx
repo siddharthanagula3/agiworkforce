@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -7,11 +7,11 @@ import { FeatureGrid } from '../../components/marketing/LandingSections';
 import { DevBand, FinalCta, TrustTriptych } from '../../components/marketing/FlagshipSections';
 import { LAUNCH, MARKETING, COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI CLI: the agi agent in your terminal',
   description: `agi is a Rust-native developer agent: resumable sessions, code review, sandboxed execution, hooks, skills, and MCP, offline-capable with local models. ${LAUNCH.publicLabel}.`,
-  alternates: { canonical: 'https://agiworkforce.com/cli' },
-};
+  path: '/cli',
+});
 
 const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'exec', desc: 'Run a task non-interactively' },

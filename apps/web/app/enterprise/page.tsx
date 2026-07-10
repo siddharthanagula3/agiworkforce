@@ -1,16 +1,16 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { LedgerSection } from '../../components/marketing/LandingSections';
 import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Enterprise: controls your security team needs',
   description:
     'SSO, SCIM, audit export, custom retention, BYOK enforcement, and a named support contact. Scoped on a contract, with compliance status reported honestly.',
-  alternates: { canonical: 'https://agiworkforce.com/enterprise' },
-};
+  path: '/enterprise',
+});
 
 export default function EnterprisePage() {
   return (

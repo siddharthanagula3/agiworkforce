@@ -1,17 +1,33 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema, collectionPageSchema } from '@/lib/seo/structured-data';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Writing',
   description:
     'We post when we have something to say. Engineering deep-dives, security postures, design notes.',
-  alternates: { canonical: 'https://agiworkforce.com/blog' },
-};
+  path: '/blog',
+});
 
 export default function BlogPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={[
+          collectionPageSchema({
+            name: 'AGI Blog',
+            description:
+              'Engineering deep-dives, security postures, and design notes from the AGI team.',
+            path: '/blog',
+          }),
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Blog', path: '/blog' },
+          ]),
+        ]}
+      />
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">

@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Terms of service',
   description:
     'Terms of service for AGI · license, account responsibilities, payment, termination.',
-  alternates: { canonical: 'https://agiworkforce.com/terms' },
-};
+  path: '/terms',
+});
 
 export default function TermsPage() {
   return (

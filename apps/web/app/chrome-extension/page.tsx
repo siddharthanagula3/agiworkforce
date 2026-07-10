@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -7,12 +7,12 @@ import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { Reveal } from '../../components/marketing/Reveal';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI in Chrome | Browser Context, Desktop Execution',
   description:
     'A Chrome Manifest V3 side panel that captures page context on request and hands real work to AGI Desktop over a paired, HMAC-signed native-messaging bridge. Scoped task permissions, workflow recording, and scheduled tasks.',
-  alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
-};
+  path: '/chrome-extension',
+});
 
 const ARCHITECTURE_STEPS = [
   {

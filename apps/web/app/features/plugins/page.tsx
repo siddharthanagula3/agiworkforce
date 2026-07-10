@@ -1,20 +1,29 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { LedgerSection } from '../../../components/marketing/LandingSections';
 import { CapabilityGrid, DevBand, FinalCta } from '../../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Plugins | Bundle Commands, Skills, Hooks & MCP Servers',
   description:
     'AGI plugins bundle slash commands, skills, agents, hooks, and MCP server wiring into one install. Previewed on the agi CLI today, ahead of a marketplace.',
-  alternates: { canonical: 'https://agiworkforce.com/features/plugins' },
-};
+  path: '/features/plugins',
+});
 
 export default function FeaturesPluginsPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'Plugins', path: '/features/plugins' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

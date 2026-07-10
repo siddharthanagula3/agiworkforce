@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { RouteMap } from '../../components/marketing/LandingSections';
@@ -11,12 +11,12 @@ import {
 } from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Code | CLI + VS Code developer stack',
   description:
     'AGI Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or AGI managed cloud (public alpha).',
-  alternates: { canonical: 'https://agiworkforce.com/agi-code' },
-};
+  path: '/agi-code',
+});
 
 export default function AgiCodePage() {
   return (
