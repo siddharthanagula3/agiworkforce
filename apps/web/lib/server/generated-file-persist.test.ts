@@ -16,6 +16,7 @@ vi.mock('@/lib/server/media-assets', () => ({
 import {
   persistGeneratedFileBytes,
   generatedFileKind,
+  classifyGeneratedFile,
   MAX_GENERATED_FILE_BYTES,
 } from './generated-file-persist';
 
@@ -55,6 +56,8 @@ describe('persistGeneratedFileBytes', () => {
       byte_count: data.byteLength,
       kind: 'csv',
       checksum_sha256: expectedHash,
+      surface: 'file',
+      previewable: true,
     });
     expect(insertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -64,7 +67,30 @@ describe('persistGeneratedFileBytes', () => {
           filename: 'table.csv',
           origin: 'e2b-execution',
           checksumSha256: expectedHash,
+          // Classification persisted for library filtering (Wave D).
+          surface: 'file',
+          previewable: true,
         }),
+      }),
+    );
+  });
+
+  it('classifies artifact outputs on both the wire and the catalog metadata', async () => {
+    const outcome = await persistGeneratedFileBytes({
+      userId: 'user_1',
+      data: Buffer.from('<html><body>hi</body></html>', 'utf8'),
+      mimeType: 'text/html',
+      filename: 'page.html',
+      provider: 'e2b',
+      origin: 'e2b-execution',
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.file.surface).toBe('artifact');
+    expect(outcome.file.previewable).toBe(true);
+    expect(insertMediaAsset).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ surface: 'artifact', previewable: true }),
       }),
     );
   });
@@ -133,5 +159,78 @@ describe('generatedFileKind', () => {
     expect(generatedFileKind('notes.md', 'text/markdown')).toBe('markdown');
     expect(generatedFileKind('bundle.zip', 'application/zip')).toBe('archive');
     expect(generatedFileKind('mystery.bin', 'application/octet-stream')).toBe('other');
+  });
+});
+
+describe('classifyGeneratedFile', () => {
+  it('classifies renderable/editable source text as artifact (always previewable)', () => {
+    for (const [name, mime] of [
+      ['page.html', 'text/html'],
+      ['diagram.svg', 'image/svg+xml'],
+      ['notes.md', 'text/markdown'],
+      ['flow.mmd', 'text/plain'],
+      ['flow.mermaid', 'text/plain'],
+      ['data.json', 'application/json'],
+      ['script.py', 'text/x-python'],
+      ['app.tsx', 'application/octet-stream'],
+      ['readme.txt', 'text/plain'],
+      ['config.yaml', 'application/yaml'],
+    ] as const) {
+      expect(classifyGeneratedFile(name, mime)).toEqual({
+        surface: 'artifact',
+        previewable: true,
+      });
+    }
+  });
+
+  it('classifies download deliverables with inline renderers as previewable files', () => {
+    for (const [name, mime] of [
+      ['report.pdf', 'application/pdf'],
+      ['doc.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      ['sheet.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+      ['deck.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+      ['table.csv', 'text/csv'],
+    ] as const) {
+      expect(classifyGeneratedFile(name, mime)).toEqual({ surface: 'file', previewable: true });
+    }
+  });
+
+  it('classifies raster images/charts as previewable files, not artifacts (ChatGPT/Claude parity)', () => {
+    expect(classifyGeneratedFile('chart.png', 'image/png')).toEqual({
+      surface: 'file',
+      previewable: true,
+    });
+    expect(classifyGeneratedFile('photo.jpg', 'image/jpeg')).toEqual({
+      surface: 'file',
+      previewable: true,
+    });
+  });
+
+  it('classifies svg as artifact even though its mime is image/*', () => {
+    expect(classifyGeneratedFile('logo.svg', 'image/svg+xml').surface).toBe('artifact');
+    expect(classifyGeneratedFile('noext-svg', 'image/svg+xml').surface).toBe('artifact');
+  });
+
+  it('classifies archives and unknown binaries as non-previewable files', () => {
+    expect(classifyGeneratedFile('bundle.zip', 'application/zip')).toEqual({
+      surface: 'file',
+      previewable: false,
+    });
+    expect(classifyGeneratedFile('mystery.bin', 'application/octet-stream')).toEqual({
+      surface: 'file',
+      previewable: false,
+    });
+  });
+
+  it('falls back to mime for extension-less names (csv beats generic text)', () => {
+    expect(classifyGeneratedFile('output', 'text/csv')).toEqual({
+      surface: 'file',
+      previewable: true,
+    });
+    expect(classifyGeneratedFile('output', 'text/plain').surface).toBe('artifact');
+    expect(classifyGeneratedFile('output', 'application/pdf')).toEqual({
+      surface: 'file',
+      previewable: true,
+    });
   });
 });
