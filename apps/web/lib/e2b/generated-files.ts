@@ -132,7 +132,7 @@ export async function harvestGeneratedFiles(params: {
   prompt?: string;
 }): Promise<HarvestResult> {
   const { executor, baseline, userId, model, prompt } = params;
-  if (!executor.readFileBytes || !isMediaStorageConfigured()) return { files: [], failedCount: 0 };
+  const canPersist = Boolean(executor.readFileBytes) && isMediaStorageConfigured();
 
   let files: SandboxFileEntry[];
   try {
@@ -144,6 +144,16 @@ export async function harvestGeneratedFiles(params: {
 
   const changed = files.filter((f) => baseline.get(f.path) !== f.byteSize);
   if (changed.length === 0) return { files: [], failedCount: 0 };
+  if (!canPersist) {
+    // The model DID write files the user was promised; silence here would let the
+    // turn claim success with nothing delivered. Count them so the caller emits
+    // its honest "could not be retrieved" note.
+    logger.warn(
+      { changed: changed.length, storageConfigured: isMediaStorageConfigured() },
+      '[e2b] generated files present but persistence unavailable; surfacing honest failure note',
+    );
+    return { files: [], failedCount: changed.length };
+  }
   if (changed.length > MAX_FILES_PER_TURN) {
     logger.warn(
       { total: changed.length, kept: MAX_FILES_PER_TURN },
@@ -160,7 +170,7 @@ export async function harvestGeneratedFiles(params: {
       continue;
     }
     try {
-      const bytes = await executor.readFileBytes(f.path);
+      const bytes = await executor.readFileBytes!(f.path);
       if (!bytes) {
         failedCount += 1;
         continue;
