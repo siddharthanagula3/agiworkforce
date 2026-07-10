@@ -39,7 +39,7 @@ Web Search · Deep Research · URL Fetch · Artifact Rendering · Sandbox Execut
 
 ### Documentation — STARTED
 
-- Research corpus in `docs/research/` (claude.ai live audit, component spec, competitor changelogs, visual gaps). The comprehensive reverse-engineering doc (architecture/flows/screens/components/streaming/runtime/prompt-pipeline/routing/state/shared-packages/platform-adapters/design-decisions) is a deliverable of this plan — assemble from these inputs as surfaces reach parity.
+- Research corpus in `docs/research/` (claude.ai live audit, component spec, competitor changelogs, visual gaps). The comprehensive reverse-engineering doc (architecture/flows/screens/components/streaming/runtime/prompt-pipeline/routing/state/shared-packages/platform-adapters/design-decisions) is assembled at **`docs/architecture/reverse-engineering/`** (index: [`README.md`](../architecture/reverse-engineering/README.md)). It now covers all required sections: areas 1–10 (architecture, shared packages, runtime/routing, streaming, data/sync, state, platform adapters, UI/design system, competitor mapping, design decisions), **area 11 the per-capability reverse-engineered → implementation → parity status matrix** for this plan's capability list, and **area 12 screens/user-flows/layout/interaction patterns**. Statuses are honestly downgraded to Partial/Gap where this plan or the live audits flag them; keep it updated as waves land.
 
 ## Execution model
 
