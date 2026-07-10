@@ -501,15 +501,19 @@ export function ComposerFooter({
   // Prompt-cache safety: switching the model mid-conversation resets the cache and re-bills
   // prior context at full input price (caching is per-model). Warn before committing such a
   // switch. Logic lives in the shared @agiworkforce/services util (reused by all surfaces).
-  // Only conversation context that ACTUALLY exists can be re-billed by a switch.
-  // Gate on there being an active conversation: on an empty/new chat (no active
-  // conversation yet) the switch is free and must be silent — the store can hold
-  // no relevant cached prefix, so priorTurnCount is 0 and assessModelSwitchCache
-  // returns no-warn. Without this gate a stale `messages` count (e.g. left over
-  // from a just-abandoned turn) made the "Switch model mid-conversation?" dialog
-  // fire on a brand-new chat. See coordinator audit (Claude/DeepSeek/Moonshot).
+  //
+  // Count only COMPLETED assistant turns in an ACTIVE conversation:
+  //   - `activeConversationId` gate: an empty/new chat holds no cached prefix.
+  //   - `!m.isStreaming` gate: the assistant message added at the START of the
+  //     very first turn is an empty streaming placeholder. Counting it made the
+  //     "Switch model mid-conversation?" dialog fire on a brand-new chat that has
+  //     no real prior context yet (coordinator audit — Claude/DeepSeek/Moonshot,
+  //     the caching-capable providers). A completed turn (isStreaming=false) is
+  //     real cached context and still warns.
   const assistantTurnCount = useChatStore((s) =>
-    s.activeConversationId ? s.messages.filter((m) => m.role === 'assistant').length : 0,
+    s.activeConversationId
+      ? s.messages.filter((m) => m.role === 'assistant' && !m.isStreaming).length
+      : 0,
   );
   const [pendingSwitch, setPendingSwitch] = useState<{ id: string; message: string } | null>(null);
 
@@ -589,7 +593,7 @@ export function ComposerFooter({
 
   return (
     <div
-      className={[inline ? 'flex items-center' : 'mt-2 space-y-2', className ?? '']
+      className={[inline ? 'flex min-w-0 items-center' : 'mt-2 space-y-2', className ?? '']
         .filter(Boolean)
         .join(' ')}
     >
@@ -669,11 +673,13 @@ export function ComposerFooter({
               <PopoverTrigger asChild>
                 <button
                   id="model-selector"
-                  className="flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                   aria-label="Change model"
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
-                  <span className="max-w-[140px] truncate">{selectedModel.name}</span>
+                  {/* min-w-0 + truncate lets the model name shrink so the composer
+                      bottom row stays a single line at narrow widths (375px). */}
+                  <span className="min-w-0 max-w-[140px] truncate">{selectedModel.name}</span>
                   {supportsAdaptive && thinkingEnabled && (
                     <span className="text-xs text-muted-foreground/70">
                       {EFFORT_LABEL[thinkingEffort]}

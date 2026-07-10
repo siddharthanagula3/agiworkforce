@@ -1077,7 +1077,7 @@ const ChatComposerNewComponent = ({
           )}
         >
           {/* + Overflow Menu Button */}
-          <div className={cn('relative order-2')} ref={overflowRef}>
+          <div className={cn('relative order-2 shrink-0')} ref={overflowRef}>
             <button
               onClick={() => {
                 const next = !showOverflowMenu;
@@ -1594,7 +1594,7 @@ const ChatComposerNewComponent = ({
           {!imageMode && (
             <ComposerFooter
               inline
-              className="order-4 ml-auto"
+              className="order-4 ml-auto min-w-0"
               showModelSelector
               lockModelSelector={false}
               showStyleSelector={!isFreeTrial}
@@ -1647,7 +1647,7 @@ const ChatComposerNewComponent = ({
               users see a visible-disabled control with a tooltip instead of the mic
               disappearing from the DOM. */}
           <div
-            className="relative order-5"
+            className="relative order-5 shrink-0"
             title={isFreeTrial ? 'Upgrade to use voice input' : undefined}
           >
             <VoiceInputButton
@@ -1668,7 +1668,7 @@ const ChatComposerNewComponent = ({
             hasContent={hasContent}
             disabled={composerDisabled}
             onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-            className="order-6"
+            className="order-6 shrink-0"
           />
         </div>
 
