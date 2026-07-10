@@ -625,16 +625,26 @@ export function ComposerFooter({
 
       <div
         className={
-          inline ? 'flex items-center gap-2' : 'flex items-center justify-between gap-2 px-1'
+          inline
+            ? 'flex min-w-0 items-center gap-2'
+            : 'flex items-center justify-between gap-2 px-1'
         }
       >
         {/* Left: keyboard hint. Always rendered (even inline) so the send shortcut is
             disclosed somewhere in the UI instead of only in marketing copy — collapses
-            on narrow inline toolbars (md breakpoint) to avoid crowding the composer row. */}
+            on narrow inline toolbars (md breakpoint) to avoid crowding the composer row.
+            INLINE OVERFLOW FIX: the hint is a flex child, so `min-w-0 shrink truncate`
+            (flex items are blockified, so overflow/ellipsis actually apply) lets it give
+            up width under pressure. Previously `whitespace-nowrap` with no max-width kept
+            the hint at its full intrinsic width even though every ancestor had min-w-0 —
+            inside a real conversation the sidebar narrows the composer column, and that
+            rigid hint (plus the model-name pill) pushed the Send button onto a 2nd row.
+            The model-name span's own max-w+truncate masked it, so the empty homepage
+            (wide column, no sidebar) never reproduced it. */}
         <span
           className={[
-            'whitespace-nowrap text-xs text-muted-foreground',
-            inline ? 'hidden md:inline' : '',
+            'text-xs text-muted-foreground',
+            inline ? 'hidden min-w-0 shrink truncate md:block' : 'whitespace-nowrap',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -642,7 +652,9 @@ export function ComposerFooter({
           {hint}
         </span>
 
-        <div className="flex items-center gap-2">
+        {/* min-w-0 so the model selector button below can shrink (its name span
+            truncates) instead of forcing the control row to wrap. */}
+        <div className="flex min-w-0 items-center gap-2">
           {/* Response style selector */}
           {showStyleSelector && <StyleSelector />}
 
