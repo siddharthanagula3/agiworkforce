@@ -107,11 +107,16 @@ export function buildAnthropicAdapter(processed: ProcessedRequest): ProviderAdap
  * has no `cache_control`-style knob the legacy provider ever set.
  */
 export function buildGoogleAdapter(): ProviderAdapter {
-  const apiKey = getOptionalEnv('GOOGLE_API_KEY');
+  // Accept GOOGLE_API_KEY, plus the legacy cloud-chat name (GOOGLE_AI_API_KEY)
+  // and Google's own current preferred name (GEMINI_API_KEY) as aliases.
+  const apiKey =
+    getOptionalEnv('GOOGLE_API_KEY') ||
+    getOptionalEnv('GOOGLE_AI_API_KEY') ||
+    getOptionalEnv('GEMINI_API_KEY');
   if (!apiKey) {
     throw new Error(
       'Provider "google" is not configured. ' +
-        'Please ensure the GOOGLE_API_KEY environment variable is set. ' +
+        'Please set GOOGLE_API_KEY (or GEMINI_API_KEY). ' +
         'Check your .env.local file or deployment environment variables.',
     );
   }
