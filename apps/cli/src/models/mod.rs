@@ -4,7 +4,8 @@ pub mod streaming;
 
 pub use provider_dispatch::{
     detect_provider, provider_from_name, provider_name, register_custom_providers,
-    resolve_selected_provider, selection_provider_override, try_detect_provider,
+    resolve_exec_model, resolve_selected_provider, selection_provider_override,
+    try_detect_provider,
 };
 pub use streaming::{parse_paywall_body, stream_completion};
 
