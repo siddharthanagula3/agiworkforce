@@ -319,35 +319,6 @@ export function UsageSection() {
           </button>
         </div>
       </section>
-
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Additional features
-        </div>
-        <div style={{ padding: 20 }}>
-          <UsageBar
-            label="Daily included routine runs"
-            percent={0}
-            value="0 runs today"
-            detail="Hosted routines unlock when managed execution controls are enabled for your account"
-          />
-        </div>
-      </section>
     </div>
   );
 }
