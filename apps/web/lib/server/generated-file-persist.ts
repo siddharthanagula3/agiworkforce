@@ -44,6 +44,14 @@ export interface GeneratedFileWire {
   checksum_sha256: string;
 }
 
+// Compile-time drift anchor: the emitted wire shape must stay assignable to
+// the shared cloud contract (`packages/services/src/cloud-contracts/
+// generated-files.ts`) that mobile/desktop validate stream deltas against.
+const _generatedFileWireContractCheck: (
+  file: GeneratedFileWire,
+) => import('@agiworkforce/services').GeneratedFileWire = (file) => file;
+void _generatedFileWireContractCheck;
+
 export type PersistGeneratedFileOutcome =
   | { ok: true; file: GeneratedFileWire }
   | { ok: false; reason: 'not_configured' | 'too_large' | 'storage_error' };
