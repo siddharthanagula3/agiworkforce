@@ -581,6 +581,9 @@ mod tests {
         // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json (thinking=true)
         assert!(reasoning_ids.contains(&"claude-opus-4-8"));
         assert!(reasoning_ids.contains(&"claude-sonnet-4-6"));
+        // Haiku 4.5 supports extended thinking (models.json capabilities.thinking=true,
+        // flipped in the effort-catalog wave).
+        assert!(reasoning_ids.contains(&"claude-haiku-4-5"));
         // OpenAI flagship + mini entries are both sourced from models.json.
         assert!(reasoning_ids.contains(&"gpt-5.5"));
         assert!(reasoning_ids.contains(&"gpt-5.4-mini"));
@@ -592,10 +595,54 @@ mod tests {
 
     #[test]
     fn test_non_reasoning_models_not_flagged() {
-        let model = find_model("claude-haiku-4-5-20251001").unwrap();
-        assert!(!model.supports_reasoning);
+        // Spot-check a model that is non-reasoning per the SSOT
+        // (packages/types/src/models.json capabilities.thinking=false).
         let model = find_model("gemini-3.1-flash-lite").unwrap();
         assert!(!model.supports_reasoning);
+    }
+
+    /// Guard against test-vs-SSOT drift: derive reasoning expectations from
+    /// `packages/types/src/models.json` (the SSOT the catalog is compiled
+    /// from) instead of hardcoding per-model booleans. A capability flip in
+    /// the SSOT (e.g. Haiku 4.5 thinking=true in the effort-catalog wave)
+    /// must never leave this suite asserting stale values.
+    #[test]
+    fn test_reasoning_flags_match_ssot_thinking_capability() {
+        let ssot: serde_json::Value =
+            serde_json::from_str(include_str!("../../../packages/types/src/models.json"))
+                .expect("models.json must parse");
+        let models = ssot
+            .get("models")
+            .and_then(|m| m.as_object())
+            .expect("models.json must have a models object");
+
+        let mut checked = 0usize;
+        for (canonical_id, entry) in models {
+            let api_id = entry
+                .get("apiModelId")
+                .and_then(|v| v.as_str())
+                .unwrap_or(canonical_id);
+            let thinking = entry
+                .get("capabilities")
+                .and_then(|c| c.get("thinking"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            // Only models that made it into the CLI catalog (supported
+            // provider, CLI-compatible modelType, not deprecated) are checked.
+            if let Some(model) = find_model(api_id) {
+                assert_eq!(
+                    model.supports_reasoning, thinking,
+                    "supports_reasoning for '{}' diverged from models.json capabilities.thinking",
+                    api_id
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 10,
+            "expected to cross-check at least 10 catalog models against the SSOT, got {}",
+            checked
+        );
     }
 
     #[test]
