@@ -192,11 +192,17 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
     // omits the key entirely rather than sending it as a literal `false`
     // (Gemini's own default), matching the pre-adapter wire byte-for-byte.
     const includeThoughts = req.thinking.includeThoughts ?? true;
+    // Gemini 3.x: prefer the discrete `thinkingLevel` (current control). Fall back
+    // to the legacy `thinkingBudget` integer (2.5-era, still accepted) when no
+    // level is set — preserving byte-stability for legacy callers that only ever
+    // sent a budget. See reasoning-effort-capability-matrix-2026-07-10 flag 4.
     generationConfig.thinkingConfig = {
       ...(includeThoughts ? { includeThoughts: true } : {}),
-      ...(req.thinking.budgetTokens !== undefined
-        ? { thinkingBudget: req.thinking.budgetTokens }
-        : {}),
+      ...(req.thinking.thinkingLevel !== undefined
+        ? { thinkingLevel: req.thinking.thinkingLevel }
+        : req.thinking.budgetTokens !== undefined
+          ? { thinkingBudget: req.thinking.budgetTokens }
+          : {}),
     };
   }
 

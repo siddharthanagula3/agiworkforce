@@ -305,6 +305,32 @@ describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
     const geminiBody = translateChatRequest(chatRequest);
     expect(geminiBody.generationConfig?.thinkingConfig).toBeUndefined();
   });
+
+  // Reasoning-effort-capability wave (2026-07-10, flag 4): Gemini 3.x migrates to
+  // the discrete `thinkingLevel` control. Legacy 2.5 stays on `thinkingBudget`
+  // (the byte-stability test above), so the migration is gated on a 3.x id.
+  it('sends thinkingConfig.thinkingLevel (NOT thinkingBudget) for a Gemini 3.x model', () => {
+    const processed = makeProcessed(
+      {
+        model: 'gemini-3.5-flash',
+        messages: [{ role: 'user', content: 'hi' }],
+        effort: 'high',
+      },
+      'google',
+    );
+
+    const chatRequest = buildGoogleChatRequest(processed);
+    expect(chatRequest.thinking).toEqual({
+      type: 'enabled',
+      thinkingLevel: 'high',
+      includeThoughts: false,
+    });
+
+    const geminiBody = translateChatRequest(chatRequest);
+    expect(geminiBody.generationConfig?.thinkingConfig).toEqual({ thinkingLevel: 'high' });
+    expect(geminiBody.generationConfig?.thinkingConfig).not.toHaveProperty('thinkingBudget');
+    expect(geminiBody.generationConfig?.thinkingConfig).not.toHaveProperty('includeThoughts');
+  });
 });
 
 describe('computeAnthropicCacheConfig', () => {

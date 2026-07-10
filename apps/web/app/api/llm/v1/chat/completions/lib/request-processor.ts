@@ -34,6 +34,7 @@ import {
   OPENAI_REASONING_EFFORT,
   getEconomyFallbackModels,
   getModelMetadataById,
+  getModelReasoning,
   type Effort,
   getSlotForModel,
   normalizeModelId,
@@ -209,12 +210,34 @@ function modelSupportsEffort(provider: string, model: string): boolean {
   return provider === 'anthropic' || provider === 'openai' || provider === 'google';
 }
 
-function anthropicUsesAdaptiveThinking(model: string): boolean {
+/**
+ * Whether an Anthropic model uses the NEW adaptive-thinking + `output_config.effort`
+ * API generation (Opus 4.8, Sonnet 4.6) vs the classic manual
+ * `thinking:{type:"enabled",budget_tokens}` generation (Haiku 4.5).
+ *
+ * CRITICAL: keys off the per-model `reasoning.control`, NOT just
+ * `capabilities.thinking`. Opus 4.8 REJECTS the classic enabled+budget shape with
+ * a 400; Haiku 4.5 is classic-only. Before this was control-aware, flipping
+ * Haiku's `capabilities.thinking` to true (correct — it does think) would have
+ * routed Haiku through `{type:"adaptive"}`, which is unverified on Haiku. Matrix
+ * flag 3 + docs/research/reasoning-effort-capability-matrix-2026-07-10.md.
+ *
+ * The lookup uses `getModelMetadataById`, which resolves BOTH the catalog id
+ * (`claude-opus-4.8`) AND the apiModelId (`claude-opus-4-8`) via modelIdAliases —
+ * so the route can pass either form without falling through to enabled+budget
+ * (which would 400 live on Opus). Matrix flag 3 (Opus id-resolution).
+ */
+export function anthropicUsesAdaptiveThinking(model: string): boolean {
   const metadata = getModelMetadataById(model);
-  return metadata?.provider === 'anthropic' && metadata.capabilities.thinking;
+  if (metadata?.provider !== 'anthropic' || !metadata.capabilities.thinking) return false;
+  const control = metadata.reasoning?.control;
+  // effort_levels ⇒ adaptive+output_config.effort (Opus 4.8 / Sonnet 4.6).
+  // thinking_budget ⇒ classic enabled+budget (Haiku 4.5) — NOT adaptive.
+  if (control === 'thinking_budget') return false;
+  return true;
 }
 
-function buildThinkingConfig({
+export function buildThinkingConfig({
   provider,
   model,
   explicitThinking,
@@ -242,9 +265,15 @@ function buildThinkingConfig({
 
   if (usesAdaptive) return { type: 'adaptive' };
 
+  // Classic manual budget (Haiku 4.5, control=thinking_budget). Clamp the
+  // effort→budget preset to the model's declared thinkingBudget.max so a high
+  // effort can't exceed what the model accepts (Haiku max 32768 < the 'max'
+  // preset 65536). Matrix: Haiku budget min ~1024 / model-max.
+  const budgetMax = getModelReasoning(model).thinkingBudget?.max;
+  const preset = ANTHROPIC_THINKING_BUDGET[effort ?? 'medium'];
   return {
     type: 'enabled',
-    budget_tokens: ANTHROPIC_THINKING_BUDGET[effort ?? 'medium'],
+    budget_tokens: typeof budgetMax === 'number' ? Math.min(preset, budgetMax) : preset,
   };
 }
 
