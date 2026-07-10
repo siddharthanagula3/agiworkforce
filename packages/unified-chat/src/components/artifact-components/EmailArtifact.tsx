@@ -1,11 +1,11 @@
 /**
  * EmailArtifact — renderer for `email` artifacts (email drafts).
  *
- * Honest scope note: `'email'` exists in the shared `ArtifactType` union
- * (packages/types/src/conversation.ts) but no producer emits it yet — the
- * desktop `create_artifact` tool's supported list excludes it and the
- * derivation service never detects it. Until a producer lands, this renderer
- * defines the display contract WITHOUT inventing a wire format: it parses
+ * Scope note: `'email'` exists in the shared `ArtifactType` union
+ * (packages/types/src/conversation.ts). The desktop `create_artifact` tool
+ * accepts it (persisted as Document), while the derivation service never
+ * detects it. This renderer defines the display contract WITHOUT inventing
+ * a wire format: it parses
  * optional leading RFC-822-style header lines (Subject/To/From/Cc/Bcc/
  * Reply-To/Date) and treats everything else as the body. Content with no
  * headers renders entirely as the body — nothing is dropped.
