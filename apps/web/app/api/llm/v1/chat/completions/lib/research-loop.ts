@@ -489,10 +489,13 @@ export async function* runResearchLoop(
 
       let turn: TurnResult;
       try {
+        // Directives ride as 'user' turns: several providers (e.g. Google)
+        // only honor the FIRST system message and silently drop the rest, so
+        // a trailing system directive would never reach the model.
         turn = yield* runTurn(
           [
             ...messages,
-            { role: 'system', content: gatheringDirective(round, maxGatherRounds, sources) },
+            { role: 'user', content: gatheringDirective(round, maxGatherRounds, sources) },
           ],
           false,
         );
@@ -557,7 +560,7 @@ export async function* runResearchLoop(
     yield status('synthesizing', 'Writing report');
     try {
       yield* runTurn(
-        [...messages, { role: 'system', content: synthesisDirective(sources, cutShortReason) }],
+        [...messages, { role: 'user', content: synthesisDirective(sources, cutShortReason) }],
         true,
       );
     } catch (err) {

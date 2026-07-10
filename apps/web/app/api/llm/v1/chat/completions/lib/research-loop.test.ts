@@ -269,7 +269,7 @@ describe('runResearchLoop', () => {
       messages: Array<{ role: string; content: string }>;
     };
     const synthDirective = synthesisRequest.messages[synthesisRequest.messages.length - 1];
-    expect(synthDirective?.role).toBe('system');
+    expect(synthDirective?.role).toBe('user');
     expect(synthDirective?.content).toContain('[1] A — https://a.com');
     expect(synthDirective?.content).toContain('[2] B — https://b.com');
     // Notes were appended (markers stripped) for the synthesis turn to build on.
