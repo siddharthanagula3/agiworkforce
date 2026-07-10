@@ -15,7 +15,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { isModelSelectable } from '@agiworkforce/types';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { MODEL_PICKER_OPTIONS } from '../features/model-picker/modelConstants';
 
 function makeWebview() {
   return {
@@ -63,5 +65,39 @@ describe('VS Code webview structural snapshots', () => {
 
   it('locks the rendered shape when meter is collapsed', () => {
     expect(renderAndNormalize('auto', 'medium', true, true)).toMatchSnapshot();
+  });
+});
+
+describe('model dropdown availability invariant', () => {
+  // Availability invariant (scripts/check-availability-invariant.mjs): a model
+  // with availability !== "live" (e.g. coming_soon) is display-only — it must
+  // never appear as a selectable option on any surface. The webview renders
+  // non-live rows disabled with a "Coming soon" suffix, mirroring the web picker.
+  it('renders live models enabled and non-live models as disabled "Coming soon" rows', () => {
+    const html = renderAndNormalize();
+    const optionTags = html.match(/<option[^>]*>[^<]*<\/option>/g) ?? [];
+    expect(optionTags.length).toBeGreaterThan(0);
+
+    for (const option of MODEL_PICKER_OPTIONS) {
+      const tag = optionTags.find((t) => t.includes(`value="${option.id}"`));
+      expect(tag, `option for "${option.id}" missing from dropdown`).toBeDefined();
+      if (option.availability === 'live') {
+        expect(tag, `live model "${option.id}" must not be disabled`).not.toContain('disabled');
+      } else {
+        expect(tag, `non-live model "${option.id}" must be disabled`).toContain('disabled');
+        expect(tag, `non-live model "${option.id}" must say Coming soon`).toContain('Coming soon');
+      }
+    }
+  });
+
+  it('never renders a non-live catalog model id as a selectable (enabled) option', () => {
+    const html = renderAndNormalize();
+    const optionTags = html.match(/<option[^>]*>[^<]*<\/option>/g) ?? [];
+    for (const tag of optionTags) {
+      if (tag.includes('disabled')) continue;
+      const id = /value="([^"]+)"/.exec(tag)?.[1] ?? '';
+      if (id.startsWith('auto-')) continue; // routing pseudo-models, not catalog entries
+      expect(isModelSelectable(id), `non-live model "${id}" rendered as selectable`).toBe(true);
+    }
   });
 });
