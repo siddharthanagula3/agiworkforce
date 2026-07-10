@@ -11,10 +11,8 @@ import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
-import {
-  loadUserConnectorToolDefs,
-  makeUserConnectorExecutor,
-} from '@/lib/user-connector-tools';
+import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
+import { runResearchLoop } from './lib/research-loop';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
 import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
@@ -106,6 +104,53 @@ async function handleChatCompletions(request: NextRequest) {
 
   // 3. Dispatch to provider
   if (processed.chatRequest.stream) {
+    // Deep Research path: bounded multi-turn research loop (plan -> search
+    // rounds -> cited synthesis). Gated to non-free-trial requests (a run is
+    // several provider turns) and non-Anthropic providers (their raw streams
+    // are only normalized by buildStreamResponse; every other provider already
+    // emits OpenAI-compatible SSE, which the research loop consumes). Free
+    // trial and Anthropic keep the existing single-turn research behavior
+    // (research prompt + forced web_search) unchanged.
+    if (
+      processed.researchMode &&
+      !processed.freeTrial &&
+      processed.provider.toLowerCase() !== 'anthropic'
+    ) {
+      const researchGen = runResearchLoop(processed, { userId, token });
+      const researchStream = new ReadableStream({
+        async pull(controller) {
+          const { value, done } = await researchGen.next();
+          if (done) {
+            controller.close();
+          } else {
+            controller.enqueue(value);
+          }
+        },
+        async cancel() {
+          // Finalize the generator so billing reconciliation runs on abort.
+          try {
+            await researchGen.return(undefined);
+          } catch {
+            // ignore
+          }
+        },
+      });
+
+      const researchHeaders: Record<string, string> = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-AGI-Research-Loop': 'active',
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      };
+      if (processed.quotaWarningHeader) {
+        researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
+      }
+
+      return new NextResponse(researchStream, { headers: researchHeaders });
+    }
+
     // Agentic path: load MCP tools (fast -- catalog is cached for 60s).
     // If no tools are configured, mcpTools is empty and we fall through to
     // the standard single-turn streaming path unchanged.

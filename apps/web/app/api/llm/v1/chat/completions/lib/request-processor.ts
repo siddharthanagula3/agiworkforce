@@ -161,6 +161,12 @@ export type ProcessedRequest = {
   quotaFeature: QuotaFeature;
   quotaWarningHeader: string | null;
   isFlagshipRequest: boolean;
+  /**
+   * True when Deep Research mode was applied (research:true and the resolved
+   * model supports web search). route.ts uses this to enter the multi-turn
+   * research loop on streaming, non-free-trial requests.
+   */
+  researchMode: boolean;
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
   llmRequest: {
@@ -732,7 +738,8 @@ export async function processRequest(
   // model supports web search, inject the research system prompt and force
   // web_search on so the tool-injection block below picks it up automatically.
   // Non-search models silently skip this block (no crash, no wasted request).
-  if (chatRequest.research && (resolvedModelCaps?.search ?? false)) {
+  const researchMode = chatRequest.research === true && (resolvedModelCaps?.search ?? false);
+  if (researchMode) {
     applyResearchMode(chatRequest);
   }
 
@@ -1266,6 +1273,7 @@ export async function processRequest(
     quotaFeature,
     quotaWarningHeader,
     isFlagshipRequest,
+    researchMode,
     indicResult,
     freeTrial,
     llmRequest,
