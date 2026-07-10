@@ -8,9 +8,12 @@ import {
   getPlanSessionUsageBudgetCents,
   getPlanFlagshipWeeklyUsageBudgetCents,
   getUsageBudgetCentsFromPriceCents,
+  isPlanSelectableOnSurface,
+  PLAN_SURFACE_VISIBILITY,
   INCLUDED_USAGE_BUDGET_RATIO,
   SESSION_OF_WEEKLY_BUDGET_RATIO,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
+  type BillingPlanTier,
 } from '../billing-catalog';
 
 describe('billing catalog', () => {
@@ -86,6 +89,48 @@ describe('billing catalog', () => {
       expect(getPlanWeeklyUsageBudgetCents('free')).toBe(0);
       expect(getPlanSessionUsageBudgetCents('free')).toBe(0);
       expect(getPlanFlagshipWeeklyUsageBudgetCents('free')).toBe(0);
+    });
+  });
+
+  // 2026-07: Basic is a mobile-only tier in plan-SELECTION UIs (founder
+  // decision). This is a DISPLAY rule — it does not change pricing/budget math
+  // above; those still resolve Basic normally for an existing subscriber.
+  describe('plan surface visibility (Basic is mobile-only)', () => {
+    it('hides Basic from web and desktop plan selection, shows it on mobile', () => {
+      expect(isPlanSelectableOnSurface('basic', 'web')).toBe(false);
+      expect(isPlanSelectableOnSurface('basic', 'desktop')).toBe(false);
+      expect(isPlanSelectableOnSurface('basic', 'mobile')).toBe(true);
+    });
+
+    it('shows every other tier on every surface', () => {
+      const others: BillingPlanTier[] = [
+        'local-only',
+        'byok',
+        'free',
+        'pro',
+        'max',
+        'team',
+        'enterprise',
+      ];
+      for (const tier of others) {
+        expect(isPlanSelectableOnSurface(tier, 'web')).toBe(true);
+        expect(isPlanSelectableOnSurface(tier, 'desktop')).toBe(true);
+        expect(isPlanSelectableOnSurface(tier, 'mobile')).toBe(true);
+      }
+    });
+
+    it('normalizes unknown/empty tiers to free (visible everywhere)', () => {
+      expect(isPlanSelectableOnSurface('nonsense', 'web')).toBe(true);
+      expect(isPlanSelectableOnSurface(null, 'web')).toBe(true);
+      expect(isPlanSelectableOnSurface(undefined, 'desktop')).toBe(true);
+    });
+
+    it('keeps Basic in the pricing catalog even though it is hidden from web', () => {
+      // Guard against "hide" being mistaken for "remove": the tier must still
+      // resolve for math + an existing subscriber's current-plan display.
+      expect(PLAN_SURFACE_VISIBILITY.basic).toEqual(['mobile']);
+      expect(getPlanUsageBudgetCents('basic')).toBe(200);
+      expect(getPlanPriceCents('basic')).toBe(800);
     });
   });
 });

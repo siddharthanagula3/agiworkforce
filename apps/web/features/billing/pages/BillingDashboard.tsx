@@ -39,6 +39,7 @@ import {
   formatCurrency,
   formatDate,
 } from '@features/billing/components/Billing/types';
+import { getBillingPlanPricing, isPlanSelectableOnSurface } from '@agiworkforce/types';
 import { Subscription } from '@features/billing/components/Billing/Subscription';
 import { Usage } from '@features/billing/components/Billing/Usage';
 
@@ -352,28 +353,34 @@ const BillingPage: React.FC = () => {
               </Button>
             )}
             {normalizePlan(billing?.plan) !== 'max' &&
-              normalizePlan(billing?.plan) !== 'enterprise' && (
-                <Button
-                  onClick={() => {
-                    const current = normalizePlan(billing?.plan);
-                    const next = current === 'free' ? 'basic' : current === 'basic' ? 'pro' : 'max';
-                    handleUpgrade(next);
-                  }}
-                  size="sm"
-                  className="gradient-primary"
-                >
-                  <Crown className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">
-                    Upgrade to{' '}
-                    {normalizePlan(billing?.plan) === 'free'
-                      ? 'Basic'
-                      : normalizePlan(billing?.plan) === 'basic'
-                        ? 'Pro'
-                        : 'Max'}
-                  </span>
-                  <span className="sm:hidden">Upgrade</span>
-                </Button>
-              )}
+              normalizePlan(billing?.plan) !== 'enterprise' &&
+              (() => {
+                // Basic is mobile-only on web (founder decision, 2026-07), so a
+                // free web user's next step skips Basic straight to Pro. Label is
+                // derived from the same tier the CTA upgrades to (no drift).
+                const current = normalizePlan(billing?.plan);
+                const nextTier: 'basic' | 'pro' | 'max' =
+                  current === 'free'
+                    ? isPlanSelectableOnSurface('basic', 'web')
+                      ? 'basic'
+                      : 'pro'
+                    : current === 'basic'
+                      ? 'pro'
+                      : 'max';
+                return (
+                  <Button
+                    onClick={() => handleUpgrade(nextTier)}
+                    size="sm"
+                    className="gradient-primary"
+                  >
+                    <Crown className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">
+                      Upgrade to {getBillingPlanPricing(nextTier).label}
+                    </span>
+                    <span className="sm:hidden">Upgrade</span>
+                  </Button>
+                );
+              })()}
           </div>
         </div>
 

@@ -95,6 +95,47 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
   },
 };
 
+/** Product surfaces that render plan-selection / upgrade / comparison lists. */
+export type BillingSurface = 'web' | 'desktop' | 'mobile';
+
+/**
+ * Surfaces on which each plan tier is offered as a SELECTABLE / suggested
+ * upgrade target in plan-selection, upgrade, and comparison lists.
+ *
+ * DISPLAY-ONLY. This does NOT affect pricing math, tier resolution, price-id
+ * mapping, or an existing subscriber's ability to see their own current plan
+ * in billing — it only governs whether a tier appears as a choosable option
+ * on a given surface.
+ *
+ * Founder decision (2026-07): the `basic` tier is mobile-only — hidden from
+ * the web and desktop pricing/upgrade UIs, shown on mobile. Every other tier
+ * stays visible on every surface it already appeared on. Data-driven so a
+ * future mobile-only (or web-only) tier is a one-line change here.
+ */
+export const PLAN_SURFACE_VISIBILITY: Record<BillingPlanTier, readonly BillingSurface[]> = {
+  'local-only': ['web', 'desktop', 'mobile'],
+  byok: ['web', 'desktop', 'mobile'],
+  free: ['web', 'desktop', 'mobile'],
+  basic: ['mobile'],
+  pro: ['web', 'desktop', 'mobile'],
+  max: ['web', 'desktop', 'mobile'],
+  team: ['web', 'desktop', 'mobile'],
+  enterprise: ['web', 'desktop', 'mobile'],
+};
+
+/**
+ * Whether `plan` may be shown as a selectable/upgrade option on `surface`.
+ * Unknown values normalize to `free` (visible everywhere). Use this at every
+ * plan-LIST render site; do not use it for tier resolution or current-plan
+ * display (an existing subscriber must always see their own plan).
+ */
+export function isPlanSelectableOnSurface(
+  plan: string | null | undefined,
+  surface: BillingSurface,
+): boolean {
+  return PLAN_SURFACE_VISIBILITY[normalizeBillingPlanTier(plan)].includes(surface);
+}
+
 export function isBillingPlanTier(value: string | null | undefined): value is BillingPlanTier {
   if (!value) return false;
   return value in BILLING_PLAN_PRICING;
