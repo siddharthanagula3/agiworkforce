@@ -268,17 +268,45 @@ export function toCanonicalEffort(
 export function toCanonicalGoogleThinking(
   provider: string,
   effort: ProcessedRequest['llmRequest']['effort'],
+  model?: string,
 ): ThinkingConfig | undefined {
   if (provider !== 'google') return undefined;
+  // Gemini 3.x: migrate to the discrete `thinkingLevel` control (current API).
+  // Legacy 2.5-era models keep the `thinkingBudget` integer (still accepted) so
+  // this migration does NOT touch the byte-stable legacy Gemini wire. Level is
+  // gated on a 3.x id so the pinned 2.5 byte-stability test is unaffected.
+  // reasoning-effort-capability-matrix-2026-07-10 flag 4.
+  if (isGemini3xModel(model)) {
+    const thinkingLevel = GOOGLE_THINKING_LEVEL[effort as 'low' | 'medium' | 'high'];
+    if (thinkingLevel === undefined) return undefined;
+    return { type: 'enabled', thinkingLevel, includeThoughts: false };
+  }
   const budgetTokens = GOOGLE_THINKING_BUDGET[effort as 'low' | 'medium' | 'high'];
   if (budgetTokens === undefined) return undefined;
   return { type: 'enabled', budgetTokens, includeThoughts: false };
+}
+
+function isGemini3xModel(model: string | undefined): boolean {
+  return typeof model === 'string' && /^gemini-3(?:[.-]|$)/u.test(model);
 }
 
 const GOOGLE_THINKING_BUDGET: Readonly<Record<'low' | 'medium' | 'high', number>> = {
   low: 1024,
   medium: 8192,
   high: 24576,
+};
+
+/**
+ * Gemini 3.x effort→thinkingLevel map. The UI only sends low/medium/high for
+ * Gemini (xhigh/max are unsupported and dropped upstream), mirroring the legacy
+ * budget map's tier coverage.
+ */
+const GOOGLE_THINKING_LEVEL: Readonly<
+  Record<'low' | 'medium' | 'high', 'low' | 'medium' | 'high'>
+> = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
 };
 
 /**
@@ -311,7 +339,11 @@ export function buildAnthropicChatRequest(processed: ProcessedRequest): ChatRequ
  */
 export function buildGoogleChatRequest(processed: ProcessedRequest): ChatRequest {
   const chatRequest = toCanonicalChatRequest(processed);
-  const thinking = toCanonicalGoogleThinking(processed.provider, processed.llmRequest.effort);
+  const thinking = toCanonicalGoogleThinking(
+    processed.provider,
+    processed.llmRequest.effort,
+    processed.llmRequest.model,
+  );
   if (thinking !== undefined) chatRequest.thinking = thinking;
   return chatRequest;
 }
