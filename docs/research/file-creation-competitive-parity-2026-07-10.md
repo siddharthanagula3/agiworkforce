@@ -290,3 +290,30 @@ Gap items 3 and 8 flagged "verify" are CONFIRMED: no producer in the repo ever s
 `isRunning` or `retentionLabel` on `GeneratedFilePresentation` (only `isRunning:` hit
 anywhere is ThinkingBlock's unrelated prop). Both card slots are unwired placeholders —
 the running-state badge and retention label render dead code today.
+
+## Wave A implementation note (2026-07-10)
+
+Wave A landed at the contract level: `GeneratedFileWireSchema` now carries
+`surface: 'artifact' | 'file'` plus `previewable: boolean`, both derived once,
+server-side, at persistence time by `classifyGeneratedFile` in
+`apps/web/lib/server/generated-file-persist.ts` (deterministic on mime +
+extension) and persisted into `media_assets` metadata for Wave D filtering.
+Both fields are optional-with-default (`file`/`false`) with `.catch` folding
+unknown future surface values, so pre-classification payloads and older
+client parses keep working.
+
+Decision on images/charts (the case §8-A left open): raster images — e.g.
+matplotlib chart PNGs — are `surface: 'file'` + `previewable: true`, NOT a
+third surface value. Rationale from §1–2: ChatGPT delivers chart PNGs as
+`container_file_citation` byte files that the chat UI happens to render
+inline, and Claude likewise treats PNG outputs as downloadable files with
+inline preview — neither routes them to the Canvas/Artifact editing surface,
+because a raster has no source text for a panel to show or edit. A third
+`surface` value would conflate ownership (which UI opens it) with rendering
+affordance (can the client inline-render the bytes); `previewable` carries
+the latter orthogonally. SVG is the deliberate exception: despite its
+`image/*` mime it IS editable source text, so it classifies as `artifact`.
+`previewable` is also true for pdf/docx/xlsx/pptx/csv, which the web app
+already inline-renders (PDF viewer + shared docx/spreadsheet/presentation
+renderers); archives and unknown binaries are the only `previewable: false`
+class. `kind` is unchanged and stays the icon taxonomy.
