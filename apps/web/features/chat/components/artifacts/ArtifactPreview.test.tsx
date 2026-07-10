@@ -78,4 +78,63 @@ describe('ArtifactPreview · PDF viewer', () => {
     expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();
     expect(screen.queryByTitle('Trip.pdf')).toBeNull();
   });
+
+  it('ACCEPTS a same-origin relative /api/files/{id} uri when the generated file is a PDF', () => {
+    // The generated-file byte pipeline serves persisted bytes from the
+    // authenticated same-origin route — this is the url shape it emits.
+    render(
+      <ArtifactPreview
+        artifact={pdfArtifact({
+          content: '',
+          generatedFile: {
+            id: 'gf-1',
+            computeSessionId: 'cs-1',
+            ownerUserId: 'u1',
+            sourceSurface: 'web',
+            privacyMode: 'managed',
+            providerMode: 'ManagedGateway',
+            kind: 'pdf',
+            fileName: 'Trip.pdf',
+            mimeType: 'application/pdf',
+            uri: '/api/files/11111111-2222-4333-8444-555555555555',
+            byteCount: 2048,
+            checksumSha256: 'a'.repeat(64),
+            previewDerivatives: [],
+            createdAt: '2026-07-10T00:00:00Z',
+          },
+        })}
+      />,
+    );
+    const iframe = screen.getByTitle('Trip.pdf') as HTMLIFrameElement;
+    expect(iframe.getAttribute('src')).toBe('/api/files/11111111-2222-4333-8444-555555555555');
+    expect(screen.queryByTestId('artifact-pdf-fallback')).toBeNull();
+  });
+
+  it('REJECTS a cross-origin storage url on a generated file (fallback, no off-origin iframe)', () => {
+    render(
+      <ArtifactPreview
+        artifact={pdfArtifact({
+          content: '',
+          generatedFile: {
+            id: 'gf-2',
+            computeSessionId: 'cs-1',
+            ownerUserId: 'u1',
+            sourceSurface: 'web',
+            privacyMode: 'managed',
+            providerMode: 'ManagedGateway',
+            kind: 'pdf',
+            fileName: 'Trip.pdf',
+            mimeType: 'application/pdf',
+            uri: 'https://r2.example.com/media/file/u1/x.pdf',
+            byteCount: 2048,
+            checksumSha256: 'b'.repeat(64),
+            previewDerivatives: [],
+            createdAt: '2026-07-10T00:00:00Z',
+          },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();
+    expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+  });
 });
