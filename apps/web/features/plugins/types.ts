@@ -6,7 +6,11 @@ export interface Plugin {
   description: string;
   category: string;
   source: 'builtin' | 'marketplace' | 'custom';
-  downloadCount: number;
+  /**
+   * Real install count once a plugin backend exists. Omitted for pre-launch
+   * preview entries so the marketplace never shows fabricated download numbers.
+   */
+  downloadCount?: number;
   skills: string[];
   connectors: string[];
   installedAt?: string;
