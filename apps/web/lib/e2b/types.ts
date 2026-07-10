@@ -18,6 +18,13 @@ export interface ExecutionResult {
   output: string;
   /** Present (human-readable) when `ok` is false. */
   error?: string;
+  /**
+   * Base64-encoded PNG rich results from `runCode` (matplotlib charts etc. —
+   * E2B returns them as `execution.results[].png`). These are NOT files on the
+   * sandbox disk, so the end-of-turn file harvest can't see them; the tool loop
+   * persists them through the shared generated-file pipeline instead.
+   */
+  pngResults?: string[];
 }
 
 /**
