@@ -28,6 +28,12 @@ export * from './artifact-sync';
 export * from './cloud-contracts/me';
 export * from './cloud-contracts/sync';
 
+// Signed org-policy contract (enterprise Local, design §2.2) — schema + offline
+// verifier + monotonic-tightening rule. Root of trust is the org license
+// (@agiworkforce/licensing); this is the contract + verifier only, not wired
+// into any surface enforcement path yet.
+export * from './cloud-contracts/org-policy';
+
 // Delta-sync apply logic — the pure, cross-surface rules for applying pulled
 // cloud-sync deltas (conversations/messages/memory/projects/settings/cursor
 // math) that used to be hand-duplicated across mobile (TS) and desktop
