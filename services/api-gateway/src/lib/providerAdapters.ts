@@ -79,7 +79,14 @@ const ENV_KEYED_PROVIDERS: Partial<
   mistral: { envVars: ['MISTRAL_API_KEY'], create: (apiKey) => createMistralAdapter({ apiKey }) },
   moonshot: {
     envVars: ['MOONSHOT_API_KEY'],
-    create: (apiKey) => createMoonshotAdapter({ apiKey }),
+    // Honor MOONSHOT_BASE_URL so international keys can target api.moonshot.ai
+    // (the adapter default is api.moonshot.cn). The adapter re-validates the
+    // host against its allowlist, which already permits both.
+    create: (apiKey) =>
+      createMoonshotAdapter({
+        apiKey,
+        ...(process.env['MOONSHOT_BASE_URL'] ? { baseUrl: process.env['MOONSHOT_BASE_URL'] } : {}),
+      }),
   },
   // DASHSCOPE_API_KEY is Alibaba's own env-var convention — honored as a fallback.
   qwen: {
