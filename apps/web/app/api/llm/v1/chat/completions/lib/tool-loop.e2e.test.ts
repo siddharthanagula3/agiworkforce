@@ -30,6 +30,12 @@ vi.mock('@/lib/e2b/runtime', () => ({
   pauseE2BSession: (...args: unknown[]) => mockPauseE2BSession(...args),
 }));
 
+// Generated-file persistence core (chart PNGs from runCode rich results).
+const mockPersistGeneratedFileBytes = vi.fn();
+vi.mock('@/lib/server/generated-file-persist', () => ({
+  persistGeneratedFileBytes: (...args: unknown[]) => mockPersistGeneratedFileBytes(...args),
+}));
+
 import { runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import type { E2BExecutor } from '@/lib/e2b/types';
@@ -95,6 +101,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
+    mockPersistGeneratedFileBytes.mockReset();
   });
 
   it('executes an execute_code tool call via the E2B interception point and re-invokes the model', async () => {
@@ -266,5 +273,105 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       'x_tool_approval_request',
     );
     expect(mockPauseE2BSession).not.toHaveBeenCalled();
+  });
+
+  it('persists runCode chart PNGs through the generated-file pipeline and emits x_generated_files', async () => {
+    const step1 = sseStreamFrom([
+      chunk({
+        tool_calls: [{ index: 0, id: 'call_1', function: { name: 'execute_code', arguments: '' } }],
+      }),
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            function: { arguments: JSON.stringify({ language: 'python', code: 'plt.plot()' }) },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    const step2 = sseStreamFrom([chunk({ content: 'Chart attached.' }), chunk({}, 'stop')]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+
+    const pngBase64 = Buffer.from('png-bytes').toString('base64');
+    const executor: E2BExecutor = {
+      runCode: vi.fn().mockResolvedValue({ ok: true, output: '(chart)', pngResults: [pngBase64] }),
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    };
+    mockGetE2BExecutor.mockResolvedValue(executor);
+    mockPersistGeneratedFileBytes.mockResolvedValue({
+      ok: true,
+      file: {
+        id: 'asset-png',
+        file_name: 'chart.png',
+        mime_type: 'image/png',
+        uri: '/api/files/asset-png',
+        byte_count: 9,
+        kind: 'image',
+        checksum_sha256: 'c'.repeat(64),
+      },
+    });
+
+    const output = await drain(
+      runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1' }),
+    );
+
+    // The PNG bytes were decoded from base64 and handed to the persistence core.
+    expect(mockPersistGeneratedFileBytes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        mimeType: 'image/png',
+        filename: 'chart.png',
+        provider: 'e2b',
+      }),
+    );
+    const persisted = mockPersistGeneratedFileBytes.mock.calls[0]?.[0] as { data: Buffer };
+    expect(persisted.data.toString('utf8')).toBe('png-bytes');
+
+    // The wire carries the same-origin descriptor BEFORE [DONE].
+    expect(output).toContain('x_generated_files');
+    expect(output).toContain('/api/files/asset-png');
+    expect(output.indexOf('x_generated_files')).toBeLessThan(output.lastIndexOf('data: [DONE]'));
+  });
+
+  it('emits an honest inline note (never silence) when chart persistence fails', async () => {
+    const step1 = sseStreamFrom([
+      chunk({
+        tool_calls: [{ index: 0, id: 'call_1', function: { name: 'execute_code', arguments: '' } }],
+      }),
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            function: { arguments: JSON.stringify({ language: 'python', code: 'plt.plot()' }) },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    const step2 = sseStreamFrom([chunk({ content: 'Chart attached.' }), chunk({}, 'stop')]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+
+    const executor: E2BExecutor = {
+      runCode: vi.fn().mockResolvedValue({
+        ok: true,
+        output: '(chart)',
+        pngResults: [Buffer.from('x').toString('base64')],
+      }),
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    };
+    mockGetE2BExecutor.mockResolvedValue(executor);
+    mockPersistGeneratedFileBytes.mockResolvedValue({ ok: false, reason: 'storage_error' });
+
+    const output = await drain(
+      runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1' }),
+    );
+
+    expect(output).not.toContain('x_generated_files');
+    expect(output).toContain('could not be retrieved');
   });
 });
