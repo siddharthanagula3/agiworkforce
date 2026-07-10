@@ -21,6 +21,7 @@ import { useProjectMetaStore } from '@/features/projects/stores/project-meta-sto
 import { useChatStore } from '@/stores/chatStore';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
+import { WebAppShell } from '@/components/layout/WebAppShell';
 
 /**
  * /projects/[id] - per-project detail view.
@@ -235,500 +236,506 @@ export default function ProjectDetailPage() {
   // Loading state while hydrating from server
   if (!project && hydratingProjects) {
     return (
-      <main
-        data-design="agi"
-        style={{
-          minHeight: '100vh',
-          background: 'var(--agi-bg-2)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--agi-ink-2)',
-          fontSize: 14,
-        }}
-      >
-        Loading project...
-      </main>
+      <WebAppShell>
+        <main
+          data-design="agi"
+          style={{
+            minHeight: '100%',
+            background: 'var(--agi-bg-2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--agi-ink-2)',
+            fontSize: 14,
+          }}
+        >
+          Loading project...
+        </main>
+      </WebAppShell>
     );
   }
 
   if (!project || !headerPresentation) {
     return (
-      <main
-        data-design="agi"
-        style={{
-          minHeight: '100vh',
-          background: 'var(--agi-bg-2)',
-          padding: '48px 32px',
-          color: 'var(--agi-ink)',
-        }}
-      >
-        <div style={{ maxWidth: 680, margin: '0 auto' }}>
-          <button
-            type="button"
-            onClick={() => router.push('/projects')}
-            style={{
-              border: '1px solid var(--agi-rule-strong)',
-              background: 'transparent',
-              color: 'var(--agi-ink-2)',
-              padding: '6px 12px',
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: 'pointer',
-            }}
-            data-testid="project-detail-back"
-          >
-            Back to projects
-          </button>
-          <h1
-            style={{
-              fontFamily: 'var(--serif)',
-              fontSize: 22,
-              color: 'var(--agi-ink)',
-              margin: '24px 0 8px',
-            }}
-          >
-            Project not found
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--agi-ink-2)', margin: 0 }}>
-            This project does not exist on this device. It may live on another device, or it was
-            deleted. Cloud sync arrives with Cloud Managed.
-          </p>
-        </div>
-      </main>
+      <WebAppShell>
+        <main
+          data-design="agi"
+          style={{
+            minHeight: '100%',
+            background: 'var(--agi-bg-2)',
+            padding: '48px 32px',
+            color: 'var(--agi-ink)',
+          }}
+        >
+          <div style={{ maxWidth: 680, margin: '0 auto' }}>
+            <button
+              type="button"
+              onClick={() => router.push('/projects')}
+              style={{
+                border: '1px solid var(--agi-rule-strong)',
+                background: 'transparent',
+                color: 'var(--agi-ink-2)',
+                padding: '6px 12px',
+                borderRadius: 8,
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+              data-testid="project-detail-back"
+            >
+              Back to projects
+            </button>
+            <h1
+              style={{
+                fontFamily: 'var(--serif)',
+                fontSize: 22,
+                color: 'var(--agi-ink)',
+                margin: '24px 0 8px',
+              }}
+            >
+              Project not found
+            </h1>
+            <p style={{ fontSize: 13, color: 'var(--agi-ink-2)', margin: 0 }}>
+              This project does not exist on this device. It may live on another device, or it was
+              deleted. Cloud sync arrives with Cloud Managed.
+            </p>
+          </div>
+        </main>
+      </WebAppShell>
     );
   }
 
   const conversationIds = project.conversationIds ?? [];
 
   return (
-    <main
-      data-design="agi"
-      style={{ minHeight: '100vh', background: 'var(--agi-bg-2)', color: 'var(--agi-ink)' }}
-    >
-      {/* Single centered column, ChatGPT-style */}
-      <div
-        style={{
-          maxWidth: 720,
-          margin: '0 auto',
-          padding: '0 24px',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: '100vh',
-        }}
+    <WebAppShell>
+      <main
+        data-design="agi"
+        style={{ minHeight: '100%', background: 'var(--agi-bg-2)', color: 'var(--agi-ink)' }}
       >
-        {/* ---------------------------------------------------------------- */}
-        {/* Top bar: back + model selector + "..." menu                      */}
-        {/* ---------------------------------------------------------------- */}
+        {/* Single centered column, ChatGPT-style */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 0 0',
-            flexShrink: 0,
-          }}
-        >
-          {/* Back button */}
-          <button
-            type="button"
-            onClick={() => router.push('/projects')}
-            aria-label="Back to projects"
-            data-testid="project-detail-back"
-            title="Back to projects"
-            style={{
-              width: 36,
-              height: 36,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 8,
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              color: 'var(--agi-ink-2)',
-              fontSize: 16,
-            }}
-          >
-            &larr;
-          </button>
-
-          {/* Right side: model selector + "..." menu */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ModelSelector
-              onSettingsClick={() => router.push('/settings/general')}
-              onProPlusRequired={() => {
-                /* waitlist-gated in v1 */
-              }}
-            />
-
-            {/* "..." overflow menu */}
-            <div ref={menuRef} style={{ position: 'relative' }}>
-              <button
-                type="button"
-                aria-label="Project options"
-                data-testid="project-detail-menu-btn"
-                onClick={() => setMenuOpen((o) => !o)}
-                style={{
-                  width: 36,
-                  height: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 8,
-                  border: '1px solid var(--agi-rule)',
-                  background: menuOpen ? 'var(--agi-bg-3)' : 'transparent',
-                  cursor: 'pointer',
-                  color: 'var(--agi-ink-2)',
-                  transition: 'background 0.12s, color 0.12s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!menuOpen)
-                    (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!menuOpen)
-                    (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                }}
-              >
-                <MoreHorizontal style={{ width: 18, height: 18 }} aria-hidden="true" />
-              </button>
-
-              {menuOpen && (
-                <div
-                  role="menu"
-                  data-testid="project-detail-menu"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 6px)',
-                    right: 0,
-                    minWidth: 180,
-                    background: 'var(--agi-bg)',
-                    border: '1px solid var(--agi-rule-strong)',
-                    borderRadius: 10,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
-                    overflow: 'hidden',
-                    zIndex: 50,
-                  }}
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-testid="project-detail-menu-settings"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setSettingsOpen(true);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      width: '100%',
-                      padding: '10px 14px',
-                      background: 'transparent',
-                      border: 0,
-                      textAlign: 'left',
-                      fontSize: 13,
-                      color: 'var(--agi-ink)',
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                    }}
-                  >
-                    <Settings2
-                      style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                      aria-hidden="true"
-                    />
-                    Project settings
-                  </button>
-
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-testid="project-detail-menu-pin"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      if (projectId) toggleStar(projectId);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      width: '100%',
-                      padding: '10px 14px',
-                      background: 'transparent',
-                      border: 0,
-                      textAlign: 'left',
-                      fontSize: 13,
-                      color: 'var(--agi-ink)',
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                    }}
-                  >
-                    {project.starred ? (
-                      <PinOff
-                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Pin
-                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
-                        aria-hidden="true"
-                      />
-                    )}
-                    {project.starred ? 'Unpin project' : 'Pin project'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* Hero: FolderOpen icon + project name                             */}
-        {/* ---------------------------------------------------------------- */}
-        <div
-          style={{
+            maxWidth: 720,
+            margin: '0 auto',
+            padding: '0 24px',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '48px 0 32px',
-            flexShrink: 0,
+            minHeight: '100%',
           }}
         >
-          {project.iconEmoji ? (
-            <span style={{ fontSize: 40, lineHeight: 1, marginBottom: 12 }} aria-hidden="true">
-              {project.iconEmoji}
-            </span>
-          ) : (
-            <FolderOpen
-              style={{
-                width: 40,
-                height: 40,
-                color: 'var(--agi-amber)',
-                marginBottom: 12,
-              }}
-              aria-hidden="true"
-            />
-          )}
-          <h1
-            style={{
-              fontFamily: 'var(--serif)',
-              fontSize: 26,
-              fontWeight: 600,
-              color: 'var(--agi-ink)',
-              margin: 0,
-            }}
-          >
-            {project.name}
-          </h1>
-
-          {/* Optional project description / instructions summary */}
-          {headerPresentation && (
-            <div style={{ marginTop: 8, maxWidth: 540 }}>
-              <ProjectHeader presentation={headerPresentation} />
-            </div>
-          )}
-        </div>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* Composer                                                         */}
-        {/* ---------------------------------------------------------------- */}
-        <div data-testid="project-detail-composer" style={{ flexShrink: 0, marginBottom: 32 }}>
-          <ChatComposerNew
-            onSend={handleProjectSend}
-            placeholder={`New chat in ${project.name}`}
-            promptCompletionEnabled={false}
-          />
-        </div>
-
-        {/* ---------------------------------------------------------------- */}
-        {/* Capacity banner                                                  */}
-        {/* ---------------------------------------------------------------- */}
-        {conversationIds.length >= MAX_CONVERSATIONS_WARN && (
+          {/* ---------------------------------------------------------------- */}
+          {/* Top bar: back + model selector + "..." menu                      */}
+          {/* ---------------------------------------------------------------- */}
           <div
-            role="alert"
             style={{
-              marginBottom: 16,
-              padding: '8px 12px',
-              borderRadius: 8,
-              background: 'rgba(200,137,42,0.1)',
-              border: '1px solid rgba(200,137,42,0.3)',
-              fontSize: 12,
-              color: 'var(--agi-amber)',
-              lineHeight: 1.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 0 0',
               flexShrink: 0,
             }}
           >
-            This project has {conversationIds.length} conversations. Consider archiving older ones
-            for performance.
-          </div>
-        )}
-
-        {/* ---------------------------------------------------------------- */}
-        {/* Chats / Sources tab bar                                          */}
-        {/* ---------------------------------------------------------------- */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            borderBottom: '1px solid var(--agi-rule)',
-            flexShrink: 0,
-            marginBottom: 0,
-          }}
-          role="tablist"
-          aria-label="Project tabs"
-        >
-          {(['chats', 'sources'] as const).map((t) => (
+            {/* Back button */}
             <button
-              key={t}
               type="button"
-              role="tab"
-              aria-selected={tab === t}
-              onClick={() => setTab(t)}
-              data-testid={`project-detail-tab-${t}`}
+              onClick={() => router.push('/projects')}
+              aria-label="Back to projects"
+              data-testid="project-detail-back"
+              title="Back to projects"
               style={{
-                padding: '10px 16px',
-                background: 'transparent',
+                width: 36,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 8,
                 border: 'none',
-                borderBottom: tab === t ? '2px solid var(--agi-amber)' : '2px solid transparent',
-                color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
-                fontSize: 13,
-                fontWeight: tab === t ? 600 : 400,
+                background: 'transparent',
                 cursor: 'pointer',
-                textTransform: 'capitalize',
-                marginBottom: -1,
-                transition: 'color 0.15s, border-color 0.15s',
+                color: 'var(--agi-ink-2)',
+                fontSize: 16,
               }}
             >
-              {t === 'chats' ? 'Chats' : 'Sources'}
+              &larr;
             </button>
-          ))}
-        </div>
 
-        {/* ---------------------------------------------------------------- */}
-        {/* Tab content                                                      */}
-        {/* ---------------------------------------------------------------- */}
-        <div
-          style={{ flex: 1, paddingTop: 20, paddingBottom: 40 }}
-          data-testid={`project-detail-panel-${tab}`}
-        >
-          {tab === 'chats' ? (
-            conversationIds.length === 0 ? (
-              <EmptyChatsState projectName={project.name} />
-            ) : (
-              <ul
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                  padding: 0,
-                  margin: 0,
+            {/* Right side: model selector + "..." menu */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ModelSelector
+                onSettingsClick={() => router.push('/settings/general')}
+                onProPlusRequired={() => {
+                  /* waitlist-gated in v1 */
                 }}
-              >
-                {conversationIds.map((conversationId) => {
-                  const meta = conversationMeta.get(conversationId);
-                  const title =
-                    meta?.title && meta.title !== 'New Chat'
-                      ? meta.title
-                      : (meta?.title ?? 'Untitled chat');
-                  const dateLabel = formatChatDate(meta?.updatedAt);
-                  return (
-                    <li
-                      key={conversationId}
+              />
+
+              {/* "..." overflow menu */}
+              <div ref={menuRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  aria-label="Project options"
+                  data-testid="project-detail-menu-btn"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 8,
+                    border: '1px solid var(--agi-rule)',
+                    background: menuOpen ? 'var(--agi-bg-3)' : 'transparent',
+                    cursor: 'pointer',
+                    color: 'var(--agi-ink-2)',
+                    transition: 'background 0.12s, color 0.12s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!menuOpen)
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!menuOpen)
+                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                  }}
+                >
+                  <MoreHorizontal style={{ width: 18, height: 18 }} aria-hidden="true" />
+                </button>
+
+                {menuOpen && (
+                  <div
+                    role="menu"
+                    data-testid="project-detail-menu"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      right: 0,
+                      minWidth: 180,
+                      background: 'var(--agi-bg)',
+                      border: '1px solid var(--agi-rule-strong)',
+                      borderRadius: 10,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+                      overflow: 'hidden',
+                      zIndex: 50,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="project-detail-menu-settings"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setSettingsOpen(true);
+                      }}
                       style={{
-                        listStyle: 'none',
-                        border: '1px solid var(--agi-rule)',
-                        borderRadius: 10,
-                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        width: '100%',
+                        padding: '10px 14px',
+                        background: 'transparent',
+                        border: 0,
+                        textAlign: 'left',
+                        fontSize: 13,
+                        color: 'var(--agi-ink)',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveProject(project.id);
-                          router.push(`/chat/${encodeURIComponent(conversationId)}`);
-                        }}
-                        title={title}
+                      <Settings2
+                        style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                        aria-hidden="true"
+                      />
+                      Project settings
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="project-detail-menu-pin"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        if (projectId) toggleStar(projectId);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        width: '100%',
+                        padding: '10px 14px',
+                        background: 'transparent',
+                        border: 0,
+                        textAlign: 'left',
+                        fontSize: 13,
+                        color: 'var(--agi-ink)',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      }}
+                    >
+                      {project.starred ? (
+                        <PinOff
+                          style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Pin
+                          style={{ width: 15, height: 15, color: 'var(--agi-ink-2)' }}
+                          aria-hidden="true"
+                        />
+                      )}
+                      {project.starred ? 'Unpin project' : 'Pin project'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Hero: FolderOpen icon + project name                             */}
+          {/* ---------------------------------------------------------------- */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              padding: '48px 0 32px',
+              flexShrink: 0,
+            }}
+          >
+            {project.iconEmoji ? (
+              <span style={{ fontSize: 40, lineHeight: 1, marginBottom: 12 }} aria-hidden="true">
+                {project.iconEmoji}
+              </span>
+            ) : (
+              <FolderOpen
+                style={{
+                  width: 40,
+                  height: 40,
+                  color: 'var(--agi-amber)',
+                  marginBottom: 12,
+                }}
+                aria-hidden="true"
+              />
+            )}
+            <h1
+              style={{
+                fontFamily: 'var(--serif)',
+                fontSize: 26,
+                fontWeight: 600,
+                color: 'var(--agi-ink)',
+                margin: 0,
+              }}
+            >
+              {project.name}
+            </h1>
+
+            {/* Optional project description / instructions summary */}
+            {headerPresentation && (
+              <div style={{ marginTop: 8, maxWidth: 540 }}>
+                <ProjectHeader presentation={headerPresentation} />
+              </div>
+            )}
+          </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Composer                                                         */}
+          {/* ---------------------------------------------------------------- */}
+          <div data-testid="project-detail-composer" style={{ flexShrink: 0, marginBottom: 32 }}>
+            <ChatComposerNew
+              onSend={handleProjectSend}
+              placeholder={`New chat in ${project.name}`}
+              promptCompletionEnabled={false}
+            />
+          </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Capacity banner                                                  */}
+          {/* ---------------------------------------------------------------- */}
+          {conversationIds.length >= MAX_CONVERSATIONS_WARN && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 16,
+                padding: '8px 12px',
+                borderRadius: 8,
+                background: 'rgba(200,137,42,0.1)',
+                border: '1px solid rgba(200,137,42,0.3)',
+                fontSize: 12,
+                color: 'var(--agi-amber)',
+                lineHeight: 1.5,
+                flexShrink: 0,
+              }}
+            >
+              This project has {conversationIds.length} conversations. Consider archiving older ones
+              for performance.
+            </div>
+          )}
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Chats / Sources tab bar                                          */}
+          {/* ---------------------------------------------------------------- */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              borderBottom: '1px solid var(--agi-rule)',
+              flexShrink: 0,
+              marginBottom: 0,
+            }}
+            role="tablist"
+            aria-label="Project tabs"
+          >
+            {(['chats', 'sources'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                data-testid={`project-detail-tab-${t}`}
+                style={{
+                  padding: '10px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: tab === t ? '2px solid var(--agi-amber)' : '2px solid transparent',
+                  color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
+                  fontSize: 13,
+                  fontWeight: tab === t ? 600 : 400,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                  marginBottom: -1,
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+              >
+                {t === 'chats' ? 'Chats' : 'Sources'}
+              </button>
+            ))}
+          </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* Tab content                                                      */}
+          {/* ---------------------------------------------------------------- */}
+          <div
+            style={{ flex: 1, paddingTop: 20, paddingBottom: 40 }}
+            data-testid={`project-detail-panel-${tab}`}
+          >
+            {tab === 'chats' ? (
+              conversationIds.length === 0 ? (
+                <EmptyChatsState projectName={project.name} />
+              ) : (
+                <ul
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    padding: 0,
+                    margin: 0,
+                  }}
+                >
+                  {conversationIds.map((conversationId) => {
+                    const meta = conversationMeta.get(conversationId);
+                    const title =
+                      meta?.title && meta.title !== 'New Chat'
+                        ? meta.title
+                        : (meta?.title ?? 'Untitled chat');
+                    const dateLabel = formatChatDate(meta?.updatedAt);
+                    return (
+                      <li
+                        key={conversationId}
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          width: '100%',
-                          background: 'transparent',
-                          border: 0,
-                          padding: '10px 14px',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background =
-                            'var(--agi-bg-3)';
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                          listStyle: 'none',
+                          border: '1px solid var(--agi-rule)',
+                          borderRadius: 10,
+                          overflow: 'hidden',
                         }}
                       >
-                        <span
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveProject(project.id);
+                            router.push(`/chat/${encodeURIComponent(conversationId)}`);
+                          }}
+                          title={title}
                           style={{
-                            color: 'var(--agi-ink)',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            width: '100%',
+                            background: 'transparent',
+                            border: 0,
+                            padding: '10px 14px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background =
+                              'var(--agi-bg-3)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                           }}
                         >
-                          {title}
-                        </span>
-                        {dateLabel && (
                           <span
                             style={{
-                              color: 'var(--agi-ink-2)',
-                              fontSize: 11,
-                              flexShrink: 0,
+                              color: 'var(--agi-ink)',
+                              fontSize: 13,
+                              fontWeight: 500,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              minWidth: 0,
+                              flex: 1,
                             }}
                           >
-                            {dateLabel}
+                            {title}
                           </span>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )
-          ) : (
-            /* Sources tab: ChatGPT-style sources experience */
-            <SourcesPanel projectId={project.id} />
-          )}
+                          {dateLabel && (
+                            <span
+                              style={{
+                                color: 'var(--agi-ink-2)',
+                                fontSize: 11,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {dateLabel}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : (
+              /* Sources tab: ChatGPT-style sources experience */
+              <SourcesPanel projectId={project.id} />
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Project Settings Modal */}
-      {settingsOpen && (
-        <ProjectSettingsDialog
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          project={project}
-          onUpdate={updateProject}
-          onDelete={handleDeleteProject}
-        />
-      )}
-    </main>
+        {/* Project Settings Modal */}
+        {settingsOpen && (
+          <ProjectSettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            project={project}
+            onUpdate={updateProject}
+            onDelete={handleDeleteProject}
+          />
+        )}
+      </main>
+    </WebAppShell>
   );
 }
 
