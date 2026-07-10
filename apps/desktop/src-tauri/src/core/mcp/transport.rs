@@ -1,21 +1,11 @@
 use super::logs::append_server_log;
-use super::protocol::{
-    JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, McpMessage, RequestId,
-};
+use super::protocol::{JsonRpcResponse, RequestId};
 use crate::core::mcp::{McpError, McpResult};
 use async_trait::async_trait;
-use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::{mpsc, oneshot};
-
-/// Maximum age for pending requests before they are considered stale (5 minutes)
-const MAX_REQUEST_AGE_SECS: u64 = 300;
-
-/// Interval for cleaning up stale pending requests
-const CLEANUP_INTERVAL_SECS: u64 = 60;
 
 /// Default timeout for HTTP requests (30 seconds)
 const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
@@ -23,46 +13,9 @@ const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
 /// Default timeout for stdio JSON-RPC request/response round-trips
 const STDIO_REQUEST_TIMEOUT_SECS: u64 = 120;
 
-/// SSE reconnection delay in milliseconds
-const SSE_RECONNECT_DELAY_MS: u64 = 1000;
-
-/// Maximum SSE reconnection attempts
-const SSE_MAX_RECONNECT_ATTEMPTS: u32 = 5;
-
 /// Default timeout for SSE stream idle reads (seconds).
 /// If no SSE chunk arrives within this window, the stream is considered stalled.
 const SSE_STREAM_IDLE_TIMEOUT_SECS: u64 = 60;
-
-/// Classify a reqwest error into the appropriate `McpError` variant.
-///
-/// Uses the reqwest error inspection methods (`is_connect`, `is_timeout`) to
-/// distinguish between:
-/// - Connection timeout: the TCP handshake did not complete in time
-/// - Request timeout: the server accepted the connection but the overall
-///   request duration exceeded the configured limit
-/// - Other connection errors: DNS failures, refused connections, etc.
-fn classify_reqwest_error(err: reqwest::Error, url: &str) -> McpError {
-    if err.is_connect() && err.is_timeout() {
-        // reqwest sets both flags when `connect_timeout` fires
-        McpError::ConnectionTimeout(format!(
-            "HTTP connection attempt to {} timed out after {}s — server may be unreachable",
-            url, SSE_CONNECT_TIMEOUT_SECS,
-        ))
-    } else if err.is_timeout() {
-        // Overall request timeout (server accepted but response too slow)
-        McpError::RequestTimeout(format!(
-            "HTTP request to {} timed out after {}s — server accepted connection but did not respond in time",
-            url, HTTP_REQUEST_TIMEOUT_SECS,
-        ))
-    } else if err.is_connect() {
-        McpError::ConnectionError(format!(
-            "HTTP connection to {} failed: {} — check that the server is running and reachable",
-            url, err,
-        ))
-    } else {
-        McpError::ConnectionError(format!("HTTP request to {} failed: {}", url, err))
-    }
-}
 
 /// Trait defining the interface for MCP transports
 #[async_trait]
@@ -82,12 +35,6 @@ pub trait McpTransport: Send + Sync {
 
     /// Shutdown the transport connection
     async fn shutdown(&self) -> McpResult<()>;
-}
-
-/// Holds a pending request with its creation timestamp for age-based cleanup
-struct PendingRequest {
-    sender: oneshot::Sender<McpResult<JsonRpcResponse>>,
-    created_at: Instant,
 }
 
 // ============================================================================
@@ -172,6 +119,143 @@ fn drain_engine_stderr(server_name: &str, client: &agiworkforce_mcp::McpClient) 
         tracing::debug!("[MCP Server stderr] {}", line);
         append_server_log(server_name, format!("[stderr] {}", line));
     }
+}
+
+/// Host hooks handed to the shared engine, common to both desktop transports.
+/// Elicitation auto-declines (desktop's transport never surfaced
+/// server-initiated requests), the browser gate denies (no OAuth on these
+/// paths — desktop resolves credentials app-side), and engine lifecycle logs
+/// route to tracing.
+fn engine_hooks(server_name: &str) -> agiworkforce_mcp::ClientHooks {
+    agiworkforce_mcp::ClientHooks {
+        token_store: Arc::new(agiworkforce_mcp::hooks::InMemoryTokenStore::new()),
+        elicitation: Arc::new(agiworkforce_mcp::AutoDeclineHandler),
+        browser: Arc::new(agiworkforce_mcp::hooks::DenyBrowserAuthorizer),
+        client_info: agiworkforce_mcp::ClientInfo {
+            name: "AGI Workforce".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+        on_log: {
+            let name = server_name.to_string();
+            Arc::new(move |msg: &str| {
+                tracing::info!("[MCP Transport] [{}] {}", name, msg);
+            })
+        },
+    }
+}
+
+/// The engine actor shared by both transports: exclusively owns the engine
+/// client, processes commands in FIFO order, keeps the liveness snapshot
+/// fresh, and streams child stderr into the per-server log store (stdio only —
+/// remote transports have no stderr).
+#[allow(clippy::too_many_arguments)]
+fn spawn_engine_actor(
+    server_name: String,
+    mut client: agiworkforce_mcp::McpClient,
+    mut rx: mpsc::UnboundedReceiver<EngineCommand>,
+    response_seq: Arc<AtomicU64>,
+    alive: Arc<AtomicBool>,
+    is_shutdown: Arc<AtomicBool>,
+    shutdown_signal: Arc<tokio::sync::Notify>,
+    request_timeout: std::time::Duration,
+) {
+    tokio::spawn(async move {
+        let mut liveness = tokio::time::interval(
+            std::time::Duration::from_secs(STDIO_LIVENESS_POLL_SECS),
+        );
+        liveness.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+        loop {
+            tokio::select! {
+                cmd = rx.recv() => match cmd {
+                    Some(EngineCommand::Request { method, params, reply }) => {
+                        if is_shutdown.load(Ordering::SeqCst) {
+                            let _ = reply.send(Err(McpError::ConnectionError(
+                                "Transport shutting down".to_string(),
+                            )));
+                            continue;
+                        }
+
+                        let outcome = {
+                            let request = client.request(&method, params, request_timeout);
+                            tokio::pin!(request);
+                            tokio::select! {
+                                result = &mut request => Some(result),
+                                _ = shutdown_signal.notified() => None,
+                            }
+                            // `request` (and its &mut client borrow) drops here.
+                        };
+
+                        match outcome {
+                            Some(result) => {
+                                drain_engine_stderr(&server_name, &client);
+                                let mapped = match result {
+                                    Ok(value) => {
+                                        let seq = response_seq.fetch_add(1, Ordering::SeqCst);
+                                        Ok(JsonRpcResponse {
+                                            jsonrpc: "2.0".to_string(),
+                                            result: value.unwrap_or(serde_json::Value::Null),
+                                            id: RequestId::Number((seq % i64::MAX as u64) as i64),
+                                        })
+                                    }
+                                    Err(e) => {
+                                        alive.store(
+                                            client.transport_alive(),
+                                            Ordering::SeqCst,
+                                        );
+                                        Err(map_engine_error(e))
+                                    }
+                                };
+                                let _ = reply.send(mapped);
+                            }
+                            None => {
+                                // Shutdown requested mid-request: abandon it and
+                                // tear the engine down promptly (the old transports
+                                // killed/dropped on shutdown without waiting).
+                                let _ = reply.send(Err(McpError::ConnectionError(
+                                    "Transport shutting down".to_string(),
+                                )));
+                                let _ = client.shutdown().await;
+                                drain_engine_stderr(&server_name, &client);
+                                alive.store(false, Ordering::SeqCst);
+                                break;
+                            }
+                        }
+                    }
+                    Some(EngineCommand::Notify { method, params }) => {
+                        if let Err(e) = client.notify(&method, params).await {
+                            tracing::warn!(
+                                "[MCP Transport] Notification '{}' failed: {:#}",
+                                method,
+                                e.as_anyhow()
+                            );
+                        }
+                        drain_engine_stderr(&server_name, &client);
+                    }
+                    Some(EngineCommand::Shutdown { reply }) => {
+                        let _ = client.shutdown().await;
+                        drain_engine_stderr(&server_name, &client);
+                        alive.store(false, Ordering::SeqCst);
+                        let _ = reply.send(());
+                        break;
+                    }
+                    None => {
+                        // Transport dropped without shutdown(): tear down the
+                        // engine so no child process / stream is leaked.
+                        let _ = client.shutdown().await;
+                        alive.store(false, Ordering::SeqCst);
+                        break;
+                    }
+                },
+                _ = liveness.tick() => {
+                    alive.store(client.transport_alive(), Ordering::SeqCst);
+                    drain_engine_stderr(&server_name, &client);
+                }
+            }
+        }
+
+        tracing::info!("[MCP Transport] Engine actor for '{}' stopped", server_name);
+    });
 }
 
 /// Build an augmented PATH string that includes common Node.js install locations.
@@ -508,25 +592,12 @@ impl StdioTransport {
             args: args.to_vec(),
             env: engine_env,
         };
-        let hooks = agiworkforce_mcp::ClientHooks {
-            token_store: Arc::new(agiworkforce_mcp::hooks::InMemoryTokenStore::new()),
-            // Desktop's elicitation UI plumbing is not wired to the transport
-            // today (the old read loop ignored server-initiated requests); the
-            // engine's auto-decline handler answers `elicitation/create` with a
-            // decline instead of leaving the server hanging.
-            elicitation: Arc::new(agiworkforce_mcp::AutoDeclineHandler),
-            browser: Arc::new(agiworkforce_mcp::hooks::DenyBrowserAuthorizer),
-            client_info: agiworkforce_mcp::ClientInfo {
-                name: "AGI Workforce".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            },
-            on_log: {
-                let name = server_name.clone();
-                Arc::new(move |msg: &str| {
-                    tracing::info!("[MCP Transport] [{}] {}", name, msg);
-                })
-            },
-        };
+        // Elicitation note: desktop's elicitation UI plumbing is not wired to
+        // the transport today (the old read loop ignored server-initiated
+        // requests); the engine's auto-decline handler answers
+        // `elicitation/create` with a decline instead of leaving the server
+        // hanging.
+        let hooks = engine_hooks(&server_name);
 
         // No handshake here: McpSession drives its own `initialize` (protocol
         // version 2025-11-25, desktop clientInfo) through send_request, exactly
@@ -546,7 +617,7 @@ impl StdioTransport {
         let is_shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_signal = Arc::new(tokio::sync::Notify::new());
 
-        Self::spawn_engine_actor(
+        spawn_engine_actor(
             server_name,
             client,
             rx,
@@ -554,6 +625,7 @@ impl StdioTransport {
             alive.clone(),
             is_shutdown.clone(),
             shutdown_signal.clone(),
+            std::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS),
         );
 
         Ok(Self {
@@ -562,123 +634,6 @@ impl StdioTransport {
             is_shutdown,
             shutdown_signal,
         })
-    }
-
-    /// The engine actor: exclusively owns the engine client, processes commands
-    /// in FIFO order, keeps the liveness snapshot fresh, and streams child
-    /// stderr into the per-server log store.
-    #[allow(clippy::too_many_arguments)]
-    fn spawn_engine_actor(
-        server_name: String,
-        mut client: agiworkforce_mcp::McpClient,
-        mut rx: mpsc::UnboundedReceiver<EngineCommand>,
-        response_seq: Arc<AtomicU64>,
-        alive: Arc<AtomicBool>,
-        is_shutdown: Arc<AtomicBool>,
-        shutdown_signal: Arc<tokio::sync::Notify>,
-    ) {
-        tokio::spawn(async move {
-            let mut liveness = tokio::time::interval(
-                std::time::Duration::from_secs(STDIO_LIVENESS_POLL_SECS),
-            );
-            liveness.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-
-            loop {
-                tokio::select! {
-                    cmd = rx.recv() => match cmd {
-                        Some(EngineCommand::Request { method, params, reply }) => {
-                            if is_shutdown.load(Ordering::SeqCst) {
-                                let _ = reply.send(Err(McpError::ConnectionError(
-                                    "Transport shutting down".to_string(),
-                                )));
-                                continue;
-                            }
-
-                            let outcome = {
-                                let request = client.request(
-                                    &method,
-                                    params,
-                                    std::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS),
-                                );
-                                tokio::pin!(request);
-                                tokio::select! {
-                                    result = &mut request => Some(result),
-                                    _ = shutdown_signal.notified() => None,
-                                }
-                                // `request` (and its &mut client borrow) drops here.
-                            };
-
-                            match outcome {
-                                Some(result) => {
-                                    drain_engine_stderr(&server_name, &client);
-                                    let mapped = match result {
-                                        Ok(value) => {
-                                            let seq = response_seq.fetch_add(1, Ordering::SeqCst);
-                                            Ok(JsonRpcResponse {
-                                                jsonrpc: "2.0".to_string(),
-                                                result: value.unwrap_or(serde_json::Value::Null),
-                                                id: RequestId::Number((seq % i64::MAX as u64) as i64),
-                                            })
-                                        }
-                                        Err(e) => {
-                                            alive.store(
-                                                client.transport_alive(),
-                                                Ordering::SeqCst,
-                                            );
-                                            Err(map_engine_error(e))
-                                        }
-                                    };
-                                    let _ = reply.send(mapped);
-                                }
-                                None => {
-                                    // Shutdown requested mid-request: abandon it and
-                                    // kill the child promptly (the old transport
-                                    // killed on shutdown without waiting).
-                                    let _ = reply.send(Err(McpError::ConnectionError(
-                                        "Transport shutting down".to_string(),
-                                    )));
-                                    let _ = client.shutdown().await;
-                                    drain_engine_stderr(&server_name, &client);
-                                    alive.store(false, Ordering::SeqCst);
-                                    break;
-                                }
-                            }
-                        }
-                        Some(EngineCommand::Notify { method, params }) => {
-                            if let Err(e) = client.notify(&method, params).await {
-                                tracing::warn!(
-                                    "[MCP Transport] Notification '{}' failed: {:#}",
-                                    method,
-                                    e.as_anyhow()
-                                );
-                            }
-                            drain_engine_stderr(&server_name, &client);
-                        }
-                        Some(EngineCommand::Shutdown { reply }) => {
-                            let _ = client.shutdown().await;
-                            drain_engine_stderr(&server_name, &client);
-                            alive.store(false, Ordering::SeqCst);
-                            let _ = reply.send(());
-                            break;
-                        }
-                        None => {
-                            // Transport dropped without shutdown(): kill the child
-                            // so no zombie process is left (the old transport
-                            // killed the child in Drop).
-                            let _ = client.shutdown().await;
-                            alive.store(false, Ordering::SeqCst);
-                            break;
-                        }
-                    },
-                    _ = liveness.tick() => {
-                        alive.store(client.transport_alive(), Ordering::SeqCst);
-                        drain_engine_stderr(&server_name, &client);
-                    }
-                }
-            }
-
-            tracing::info!("[MCP Transport] Engine actor for '{}' stopped", server_name);
-        });
     }
 }
 
@@ -814,181 +769,70 @@ impl Default for HttpSseConfig {
 /// Separate from request timeout because SSE streams are open-ended.
 const SSE_CONNECT_TIMEOUT_SECS: u64 = 30;
 
-/// HTTP/SSE transport for remote MCP servers
+
+/// HTTP/SSE (legacy split-endpoint) MCP transport — a thin facade over the
+/// shared [`agiworkforce_mcp::McpClient`] engine speaking
+/// `TransportConfig::SseLegacy` (Wave 5 stage d2 of
+/// `docs/plans/rust-engine-extraction-2026-07-09.md`).
 ///
-/// This transport uses:
-/// - HTTP POST for client-to-server requests (JSON-RPC)
-/// - Server-Sent Events (SSE) for server-to-client streaming responses
+/// Wire convention (unchanged): outbound JSON-RPC goes via POST to
+/// `{url}/message`; a best-effort long-lived `GET {url}/sse` carries
+/// server-initiated frames, with reconnect (5 consecutive connect failures
+/// max, linear 1s backoff, attempts reset on success) and a 60s stalled-stream
+/// read timeout — all now inside the engine. Responses may arrive inline on
+/// the POST or via the SSE stream (dual delivery); the engine correlates both
+/// on the JSON-RPC id. This transport is legacy-convention only (it never
+/// spoke streamable-HTTP 2025-06-18; the engine's `Http` config is available
+/// when desktop adds that).
 ///
-/// The MCP spec defines that:
-/// - Requests are sent via POST to the server's endpoint
-/// - The server can respond with either a direct JSON response or initiate an SSE stream
-/// - SSE is used for long-running operations and server-initiated notifications
+/// Desktop-side POLICY stays here in [`HttpSseTransport::new`]: SSRF URL
+/// validation + the 50 MB response cap + the 30s connect / 60s read timeouts
+/// (as engine hardening knobs), the SEV-DESK-07 `verify_ssl` policy (refused
+/// in release builds; debug builds localhost-only), and the
+/// api-key/bearer/custom header mapping with build-time validation.
+///
+/// Same actor model as [`StdioTransport`]: a background task exclusively owns
+/// the engine client behind a FIFO command channel.
 pub struct HttpSseTransport {
-    /// Server name for logging
+    /// Server name for logging.
     server_name: String,
 
-    /// HTTP client for JSON-RPC requests (has overall request timeout)
-    client: reqwest::Client,
+    /// FIFO command channel into the engine actor.
+    tx: mpsc::UnboundedSender<EngineCommand>,
 
-    /// HTTP client for SSE streams (connect + per-read timeout, no overall
-    /// request timeout so long-lived SSE connections are not killed prematurely)
-    sse_client: reqwest::Client,
+    /// Liveness snapshot maintained by the actor. Remote transports report
+    /// alive until shutdown (matching the old `!is_shutdown` semantics —
+    /// connection failures surface on the next request).
+    alive: Arc<AtomicBool>,
 
-    /// Configuration for the transport
-    config: HttpSseConfig,
-
-    /// Request ID counter
-    request_id: Arc<AtomicU64>,
-
-    /// Pending requests waiting for responses
-    pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>>,
-
-    /// Channel for sending SSE events to be processed
-    sse_tx: mpsc::UnboundedSender<SseEvent>,
-
-    /// Shutdown signal sender
-    shutdown_tx: Mutex<Option<oneshot::Sender<()>>>,
-
-    /// Shared flag to signal shutdown to all tasks
+    /// Set by [`McpTransport::shutdown`]; rejects new requests immediately.
     is_shutdown: Arc<AtomicBool>,
 
-    /// SSE connection state
-    sse_connected: Arc<AtomicBool>,
+    /// Wakes the actor out of an in-flight request when shutdown is requested.
+    shutdown_signal: Arc<tokio::sync::Notify>,
+
+    /// Per-request timeout (seconds), from [`HttpSseConfig::timeout_secs`].
+    request_timeout_secs: u64,
 }
 
-/// Server-Sent Event parsed from the stream
-#[derive(Debug, Clone)]
-struct SseEvent {
-    /// Event type (optional, defaults to "message")
-    event: Option<String>,
-
-    /// Event data
-    data: String,
-
-    /// Event ID (optional, for resuming)
-    id: Option<String>,
-}
-
-/// Validate an MCP server URL to prevent SSRF attacks against private networks.
-///
-/// Blocks requests to private/link-local/loopback IP ranges and IPv6-mapped IPv4.
-/// Loopback addresses (127.0.0.0/8, ::1, localhost) are allowed because MCP
-/// servers commonly run locally.
-///
-/// This mirrors the logic in `direct_api_provider.rs::validate_provider_base_url()`
-/// but returns `McpError` and permits loopback (local MCP servers are expected).
-fn validate_mcp_server_url(url: &str) -> McpResult<()> {
-    let parsed = url::Url::parse(url)
-        .map_err(|e| McpError::InvalidConfig(format!("Invalid MCP server URL: {e}")))?;
-
-    // Determine if the host is a loopback address.
-    let is_loopback = match parsed.host() {
-        Some(url::Host::Domain(d)) => d == "localhost",
-        Some(url::Host::Ipv4(v4)) => v4.is_loopback(),
-        Some(url::Host::Ipv6(v6)) => v6.is_loopback(),
-        None => false,
-    };
-
-    // Loopback is allowed — MCP servers commonly run locally.
-    if is_loopback {
-        return Ok(());
-    }
-
-    // Block private/link-local IP ranges (SSRF prevention).
-    match parsed.host() {
-        Some(url::Host::Ipv4(v4)) => {
-            if v4.is_private() || v4.is_link_local() {
-                return Err(McpError::ConnectionError(format!(
-                    "SSRF protection: private/link-local IP address {} is not allowed for remote MCP servers",
-                    v4
-                )));
-            }
-            // Block 0.0.0.0
-            if v4.is_unspecified() {
-                return Err(McpError::ConnectionError(
-                    "SSRF protection: unspecified address 0.0.0.0 is not allowed".to_string(),
-                ));
-            }
-        }
-        Some(url::Host::Ipv6(v6)) => {
-            let segments = v6.segments();
-            // Block fe80::/10 (link-local)
-            let is_link_local = (segments[0] & 0xffc0) == 0xfe80;
-            // Block fc00::/7 (unique local)
-            let is_unique_local = (segments[0] & 0xfe00) == 0xfc00;
-            // Block IPv6-mapped IPv4 addresses (::ffff:x.x.x.x)
-            let is_ipv4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
-            if is_link_local || is_unique_local || is_ipv4_mapped {
-                return Err(McpError::ConnectionError(format!(
-                    "SSRF protection: private/link-local/mapped IPv6 address {} is not allowed for remote MCP servers",
-                    v6
-                )));
-            }
-        }
-        Some(url::Host::Domain(d)) => {
-            // Block numeric-only domains (decimal IP like 2130706433 = 127.0.0.1)
-            if d.chars().all(|c| c.is_ascii_digit()) && !d.is_empty() {
-                return Err(McpError::ConnectionError(format!(
-                    "SSRF protection: numeric hostname '{}' is not allowed (potential IP obfuscation)",
-                    d
-                )));
-            }
-        }
-        None => {}
-    }
-
-    Ok(())
-}
+/// Maximum inline response body size accepted from a remote MCP server
+/// (Content-Length checked before the body is read). FIX R-10 preserved.
+const MAX_RESPONSE_BODY_BYTES: u64 = 50_000_000; // 50 MB
 
 impl HttpSseTransport {
-    /// Create a new HTTP/SSE transport
+    /// Create a new HTTP/SSE transport over the shared engine.
     pub async fn new(server_name: String, config: HttpSseConfig) -> McpResult<Self> {
-        // FIX R-09: Validate the MCP server URL to prevent SSRF against private networks.
-        validate_mcp_server_url(&config.url)?;
-
         tracing::info!(
             "[MCP HTTP Transport] Connecting to server '{}' at {}",
             server_name,
             config.url
         );
 
-        // Build HTTP client for JSON-RPC requests (with overall request timeout)
-        // `mut` is only needed in debug builds where verify_ssl=false flows through.
-        #[cfg(debug_assertions)]
-        let mut client_builder = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(config.timeout_secs))
-            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
-        #[cfg(not(debug_assertions))]
-        let client_builder = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(config.timeout_secs))
-            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS));
-
-        // Build a separate SSE client with connect + read timeouts but no overall
-        // request timeout, so long-lived SSE streams are not killed prematurely.
-        //
-        // - `connect_timeout`: caps TCP handshake at 30s for unreachable hosts.
-        // - `read_timeout`: caps each individual socket read at 60s, catching servers
-        //   that accept TCP but never send headers or go silent between chunks.
-        //   This does NOT kill healthy SSE streams because each SSE chunk (including
-        //   server heartbeats) counts as a read and resets the timer.
-        #[cfg(debug_assertions)]
-        let mut sse_client_builder = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS))
-            .read_timeout(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS));
-        #[cfg(not(debug_assertions))]
-        let sse_client_builder = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS))
-            .read_timeout(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS));
-
+        // SEV-DESK-07 (defence-in-depth), preserved verbatim from the old
+        // transport: in release builds, refuse `verify_ssl: false` regardless
+        // of host — a malicious config file must not be able to downgrade TLS.
+        // Debug builds may disable verification for localhost only.
         if !config.verify_ssl {
-            // SEV-DESK-07 (defence-in-depth): in release builds, refuse
-            // `verify_ssl: false` regardless of host. Real users running a
-            // packaged build never need to disable cert verification — that
-            // setting is a developer escape hatch for self-signed certs on
-            // local MCP servers. Killing it in release means a malicious
-            // config file (planted by another local process) can't downgrade
-            // TLS even on a correctly-restricted localhost URL.
             #[cfg(not(debug_assertions))]
             {
                 tracing::error!(
@@ -1003,16 +847,6 @@ impl HttpSseTransport {
                 ));
             }
 
-            // SECURITY: Only allow disabling SSL verification for localhost connections.
-            // Disabling for remote servers exposes the connection to MITM attacks.
-            // Hostname-string match (not IP resolution): an attacker
-            // registering `attack.example.com` with a short-TTL A record at
-            // 127.0.0.1 cannot reach this branch because `host_str()` returns
-            // the literal hostname, not the resolved IP. DNS rebinding does
-            // not apply here.
-            //
-            // Release builds never reach here — the #[cfg(not(debug_assertions))]
-            // block above returns early before this point.
             #[cfg(debug_assertions)]
             {
                 let is_localhost = if let Ok(parsed) = url::Url::parse(&config.url) {
@@ -1043,550 +877,138 @@ impl HttpSseTransport {
                      This is acceptable for local development with self-signed certificates.",
                     server_name
                 );
-                // SECURITY: Certificate verification bypass is ONLY reached after
-                // localhost guard. Remote servers are rejected before reaching this point.
-                client_builder = client_builder.danger_accept_invalid_certs(true); // lgtm[rust/disabled-certificate-check]
-                sse_client_builder = sse_client_builder.danger_accept_invalid_certs(true);
-                // lgtm[rust/disabled-certificate-check]
             }
         }
 
-        let client = client_builder.build().map_err(|e| {
-            McpError::ConnectionError(format!("Failed to create HTTP client: {}", e))
-        })?;
-
-        let sse_client = sse_client_builder.build().map_err(|e| {
-            McpError::ConnectionError(format!("Failed to create SSE HTTP client: {}", e))
-        })?;
-
-        let (sse_tx, mut sse_rx) = mpsc::unbounded_channel::<SseEvent>();
-        let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
-
-        let pending: Arc<Mutex<HashMap<RequestId, PendingRequest>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-        let is_shutdown = Arc::new(AtomicBool::new(false));
-        let sse_connected = Arc::new(AtomicBool::new(false));
-
-        // SSE event processor task
-        let pending_sse = pending.clone();
-        let is_shutdown_sse = is_shutdown.clone();
-        let server_name_sse = server_name.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Some(event) = sse_rx.recv() => {
-                        Self::process_sse_event(&server_name_sse, &pending_sse, event);
-                    }
-                    _ = &mut shutdown_rx => {
-                        tracing::info!("[MCP HTTP Transport] SSE processor shutdown signal received");
-                        is_shutdown_sse.store(true, Ordering::SeqCst);
-
-                        // Clean up pending requests
-                        let mut pending = pending_sse.lock();
-                        for (_, pending_req) in pending.drain() {
-                            let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                                "Transport shutting down".to_string()
-                            )));
-                        }
-                        break;
-                    }
-                }
-            }
-        });
-
-        // Periodic cleanup task for stale pending requests
-        let pending_cleanup = pending.clone();
-        let is_shutdown_cleanup = is_shutdown.clone();
-        tokio::spawn(async move {
-            let mut interval =
-                tokio::time::interval(tokio::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
-            loop {
-                interval.tick().await;
-
-                if is_shutdown_cleanup.load(Ordering::SeqCst) {
-                    tracing::debug!("[MCP HTTP Transport] Cleanup task stopping due to shutdown");
-                    break;
-                }
-
-                let mut pending = pending_cleanup.lock();
-                let now = Instant::now();
-                let stale_keys: Vec<RequestId> = pending
-                    .iter()
-                    .filter(|(_, req)| {
-                        now.duration_since(req.created_at).as_secs() > MAX_REQUEST_AGE_SECS
-                    })
-                    .map(|(id, _)| id.clone())
-                    .collect();
-
-                for key in stale_keys {
-                    if let Some(pending_req) = pending.remove(&key) {
-                        tracing::warn!("[MCP HTTP Transport] Cleaning up stale request: {:?}", key);
-                        let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                            "Request expired due to age".to_string(),
-                        )));
-                    }
-                }
-            }
-        });
-
-        let transport = Self {
-            server_name,
-            client,
-            sse_client,
-            config,
-            request_id: Arc::new(AtomicU64::new(1)),
-            pending,
-            sse_tx,
-            shutdown_tx: Mutex::new(Some(shutdown_tx)),
-            is_shutdown,
-            sse_connected,
-        };
-
-        Ok(transport)
-    }
-
-    /// Start the SSE connection for receiving server-initiated messages
-    ///
-    /// This should be called after initialization to enable server push capabilities.
-    /// The SSE endpoint is typically at `{base_url}/sse` or `{base_url}/events`.
-    pub async fn start_sse_listener(&self, sse_endpoint: Option<&str>) -> McpResult<()> {
-        let url = match sse_endpoint {
-            Some(endpoint) => format!("{}/{}", self.config.url.trim_end_matches('/'), endpoint),
-            None => format!("{}/sse", self.config.url.trim_end_matches('/')),
-        };
-
-        tracing::info!(
-            "[MCP HTTP Transport] Starting SSE listener for '{}' at {}",
-            self.server_name,
-            url
-        );
-
-        let sse_client = self.sse_client.clone();
-        let sse_tx = self.sse_tx.clone();
-        let is_shutdown = self.is_shutdown.clone();
-        let sse_connected = self.sse_connected.clone();
-        let server_name = self.server_name.clone();
-        let headers = self.build_headers()?;
-
-        tokio::spawn(async move {
-            let mut reconnect_attempts = 0;
-
-            while !is_shutdown.load(Ordering::SeqCst)
-                && reconnect_attempts < SSE_MAX_RECONNECT_ATTEMPTS
-            {
-                match Self::connect_sse(&sse_client, &url, &headers).await {
-                    Ok(response) => {
-                        sse_connected.store(true, Ordering::SeqCst);
-                        reconnect_attempts = 0;
-
-                        tracing::info!(
-                            "[MCP HTTP Transport] SSE connection established for '{}'",
-                            server_name
-                        );
-
-                        // Process the SSE stream
-                        if let Err(e) =
-                            Self::process_sse_stream(&server_name, response, &sse_tx, &is_shutdown)
-                                .await
-                        {
-                            tracing::warn!(
-                                "[MCP HTTP Transport] SSE stream error for '{}': {}",
-                                server_name,
-                                e
-                            );
-                        }
-
-                        sse_connected.store(false, Ordering::SeqCst);
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "[MCP HTTP Transport] SSE connection failed for '{}': {} (attempt {}/{})",
-                            server_name,
-                            e,
-                            reconnect_attempts + 1,
-                            SSE_MAX_RECONNECT_ATTEMPTS
-                        );
-                        reconnect_attempts += 1;
-                    }
-                }
-
-                // Wait before reconnecting
-                if !is_shutdown.load(Ordering::SeqCst)
-                    && reconnect_attempts < SSE_MAX_RECONNECT_ATTEMPTS
-                {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(
-                        SSE_RECONNECT_DELAY_MS * reconnect_attempts as u64,
-                    ))
-                    .await;
-                }
-            }
-
-            if reconnect_attempts >= SSE_MAX_RECONNECT_ATTEMPTS {
-                tracing::error!(
-                    "[MCP HTTP Transport] SSE reconnection limit reached for '{}'",
-                    server_name
-                );
-            }
-        });
-
-        Ok(())
-    }
-
-    /// Connect to SSE endpoint.
-    ///
-    /// SECURITY: HTTP (non-TLS) is allowed only for localhost MCP servers.
-    /// Remote servers MUST use HTTPS to prevent credential interception.
-    async fn connect_sse(
-        client: &reqwest::Client,
-        url: &str,
-        headers: &reqwest::header::HeaderMap,
-    ) -> McpResult<reqwest::Response> {
-        // Enforce HTTPS for non-localhost URLs to prevent cleartext credential transmission
-        if url.starts_with("http://") {
-            if let Ok(parsed) = url::Url::parse(url) {
-                let host = parsed.host_str().unwrap_or("");
-                let is_localhost =
-                    host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]";
-                if !is_localhost {
-                    return Err(McpError::ConnectionError(format!(
-                        "Refusing to connect to non-localhost HTTP URL '{}'. \
-                         Remote MCP servers must use HTTPS.",
-                        parsed.host_str().unwrap_or("unknown")
-                    )));
-                }
-            }
-        }
-
-        let response = client
-            .get(url)
-            .headers(headers.clone())
-            .header("Accept", "text/event-stream")
-            .header("Cache-Control", "no-cache")
-            .send()
-            .await
-            .map_err(|e| {
-                tracing::warn!(
-                    "[MCP HTTP Transport] SSE connection error for {}: {}",
-                    url,
-                    e
-                );
-                classify_reqwest_error(e, url)
+        // Header mapping with build-time validation (old `build_headers`
+        // semantics): api_key -> X-API-Key, bearer_token -> Authorization,
+        // plus custom headers. Content-Type is set per-request by the engine.
+        let mut engine_headers: HashMap<String, String> = HashMap::new();
+        if let Some(ref api_key) = config.api_key {
+            reqwest::header::HeaderValue::from_str(api_key).map_err(|e| {
+                McpError::InvalidConfig(format!("Invalid API key header value: {}", e))
             })?;
-
-        if !response.status().is_success() {
-            return Err(McpError::ConnectionError(format!(
-                "SSE endpoint returned error: {}",
-                response.status()
-            )));
+            engine_headers.insert("X-API-Key".to_string(), api_key.clone());
         }
-
-        Ok(response)
-    }
-
-    /// Process the SSE stream
-    ///
-    /// Reads chunks from the response byte stream with an idle timeout. If no
-    /// data arrives within `SSE_STREAM_IDLE_TIMEOUT_SECS`, the stream is
-    /// considered stalled and a `RequestTimeout` error is returned so the caller
-    /// can attempt reconnection.
-    async fn process_sse_stream(
-        server_name: &str,
-        response: reqwest::Response,
-        sse_tx: &mpsc::UnboundedSender<SseEvent>,
-        is_shutdown: &Arc<AtomicBool>,
-    ) -> McpResult<()> {
-        use futures_util::StreamExt;
-
-        let mut stream = response.bytes_stream();
-        let mut buffer = String::new();
-        let mut current_event = SseEvent {
-            event: None,
-            data: String::new(),
-            id: None,
-        };
-
-        let idle_timeout = tokio::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS);
-
-        loop {
-            if is_shutdown.load(Ordering::SeqCst) {
-                break;
-            }
-
-            // Wrap stream.next() in a timeout so we detect stalled connections
-            let chunk_opt = match tokio::time::timeout(idle_timeout, stream.next()).await {
-                Ok(Some(chunk_result)) => Some(chunk_result),
-                Ok(None) => {
-                    // Stream ended normally
-                    tracing::info!(
-                        "[MCP HTTP Transport] SSE stream ended normally for '{}'",
-                        server_name,
-                    );
-                    break;
-                }
-                Err(_elapsed) => {
-                    tracing::warn!(
-                        "[MCP HTTP Transport] SSE stream idle timeout for '{}' — \
-                         no data received for {}s",
-                        server_name,
-                        SSE_STREAM_IDLE_TIMEOUT_SECS,
-                    );
-                    return Err(McpError::RequestTimeout(format!(
-                        "SSE stream for '{}' stalled — no data received for {}s",
-                        server_name, SSE_STREAM_IDLE_TIMEOUT_SECS,
-                    )));
-                }
-            };
-
-            let chunk = match chunk_opt {
-                Some(Ok(bytes)) => bytes,
-                Some(Err(e)) => {
-                    return Err(McpError::ConnectionError(format!(
-                        "SSE stream error: {}",
-                        e
-                    )));
-                }
-                None => break,
-            };
-
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
-
-            // Process complete lines
-            while let Some(newline_pos) = buffer.find('\n') {
-                let line = buffer[..newline_pos].trim_end_matches('\r').to_string();
-                buffer = buffer[newline_pos + 1..].to_string();
-
-                if line.is_empty() {
-                    // Empty line signals end of event
-                    if !current_event.data.is_empty() {
-                        // Remove trailing newline from data
-                        if current_event.data.ends_with('\n') {
-                            current_event.data.pop();
-                        }
-
-                        tracing::debug!(
-                            "[MCP HTTP Transport] SSE event for '{}': type={:?}, data_len={}",
-                            server_name,
-                            current_event.event,
-                            current_event.data.len()
-                        );
-
-                        if sse_tx.send(current_event.clone()).is_err() {
-                            tracing::warn!(
-                                "[MCP HTTP Transport] Failed to send SSE event - channel closed"
-                            );
-                            return Err(McpError::ConnectionError(
-                                "SSE event channel closed".to_string(),
-                            ));
-                        }
-                    }
-
-                    // Reset for next event
-                    current_event = SseEvent {
-                        event: None,
-                        data: String::new(),
-                        id: None,
-                    };
-                } else if let Some(value) = line.strip_prefix("event:") {
-                    current_event.event = Some(value.trim().to_string());
-                } else if let Some(value) = line.strip_prefix("data:") {
-                    if !current_event.data.is_empty() {
-                        current_event.data.push('\n');
-                    }
-                    current_event.data.push_str(value.trim_start());
-                } else if let Some(value) = line.strip_prefix("id:") {
-                    current_event.id = Some(value.trim().to_string());
-                } else if line.starts_with(':') {
-                    // Comment, ignore
-                }
-            }
+        if let Some(ref token) = config.bearer_token {
+            let value = format!("Bearer {}", token);
+            reqwest::header::HeaderValue::from_str(&value).map_err(|e| {
+                McpError::InvalidConfig(format!("Invalid bearer token header value: {}", e))
+            })?;
+            engine_headers.insert("Authorization".to_string(), value);
         }
-
-        Ok(())
-    }
-
-    /// Process an SSE event
-    fn process_sse_event(
-        server_name: &str,
-        pending: &Arc<Mutex<HashMap<RequestId, PendingRequest>>>,
-        event: SseEvent,
-    ) {
-        // Try to parse the event data as a JSON-RPC message
-        match McpMessage::from_str(&event.data) {
-            Ok(McpMessage::Response(response)) => {
-                let mut pending_lock = pending.lock();
-                if let Some(pending_req) = pending_lock.remove(&response.id) {
-                    let _ = pending_req.sender.send(Ok(response));
-                } else {
-                    tracing::warn!(
-                        "[MCP HTTP Transport] Received SSE response for unknown request: {:?}",
-                        response.id
-                    );
-                }
-            }
-            Ok(McpMessage::Error(error)) => {
-                let mut pending_lock = pending.lock();
-                if let Some(pending_req) = pending_lock.remove(&error.id) {
-                    let _ = pending_req
-                        .sender
-                        .send(Err(McpError::RmcpError(error.error.message)));
-                } else {
-                    tracing::warn!(
-                        "[MCP HTTP Transport] Received SSE error for unknown request: {:?}",
-                        error.id
-                    );
-                }
-            }
-            Ok(McpMessage::Notification(notif)) => {
-                tracing::info!(
-                    "[MCP HTTP Transport] Received SSE notification for '{}': {}",
-                    server_name,
-                    notif.method
-                );
-                append_server_log(server_name, format!("[sse notification] {}", notif.method));
-            }
-            Ok(McpMessage::Request(req)) => {
-                tracing::warn!(
-                    "[MCP HTTP Transport] Received server request via SSE (not supported): {}",
-                    req.method
-                );
-            }
-            Err(e) => {
-                // Not a JSON-RPC message, log as server message
-                tracing::debug!(
-                    "[MCP HTTP Transport] Non-JSON SSE event for '{}': {}",
-                    server_name,
-                    e
-                );
-                append_server_log(server_name, format!("[sse] {}", event.data));
-            }
-        }
-    }
-
-    /// Build headers for HTTP requests
-    fn build_headers(&self) -> McpResult<reqwest::header::HeaderMap> {
-        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-
-        let mut headers = HeaderMap::new();
-
-        // Add content type
-        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-
-        // Add API key if configured
-        if let Some(ref api_key) = self.config.api_key {
-            headers.insert(
-                "X-API-Key",
-                HeaderValue::from_str(api_key).map_err(|e| {
-                    McpError::InvalidConfig(format!("Invalid API key header value: {}", e))
-                })?,
-            );
-        }
-
-        // Add bearer token if configured
-        if let Some(ref token) = self.config.bearer_token {
-            headers.insert(
-                "Authorization",
-                HeaderValue::from_str(&format!("Bearer {}", token)).map_err(|e| {
-                    McpError::InvalidConfig(format!("Invalid bearer token header value: {}", e))
-                })?,
-            );
-        }
-
-        // Add custom headers
-        for (key, value) in &self.config.headers {
-            let header_name = HeaderName::try_from(key.as_str()).map_err(|e| {
+        for (key, value) in &config.headers {
+            reqwest::header::HeaderName::try_from(key.as_str()).map_err(|e| {
                 McpError::InvalidConfig(format!("Invalid header name '{}': {}", key, e))
             })?;
-            let header_value = HeaderValue::from_str(value).map_err(|e| {
+            reqwest::header::HeaderValue::from_str(value).map_err(|e| {
                 McpError::InvalidConfig(format!("Invalid header value for '{}': {}", key, e))
             })?;
-            headers.insert(header_name, header_value);
+            engine_headers.insert(key.clone(), value.clone());
         }
 
-        Ok(headers)
-    }
+        // Engine hardening knobs: SSRF validation at connect (FIX R-09; the
+        // engine's validator is the ported desktop one), the 50 MB inline
+        // response cap (FIX R-10), the 30s connect timeout, and the 60s
+        // stalled-stream read timeout. The SSE listener's HTTPS-for-remote
+        // refusal lives inside the engine supervisor (old `connect_sse`
+        // parity; cleartext-remote POSTs stay allowed, as before).
+        let timeouts = agiworkforce_mcp::McpTimeouts {
+            validate_urls: true,
+            verify_tls: config.verify_ssl,
+            max_response_bytes: Some(MAX_RESPONSE_BODY_BYTES),
+            connect_timeout: Some(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS)),
+            sse_read_timeout: Some(std::time::Duration::from_secs(
+                SSE_STREAM_IDLE_TIMEOUT_SECS,
+            )),
+            ..agiworkforce_mcp::McpTimeouts::default()
+        };
 
-    /// Send HTTP POST request with JSON-RPC payload
-    async fn send_http_request(&self, request: &JsonRpcRequest) -> McpResult<JsonRpcResponse> {
-        let url = format!("{}/message", self.config.url.trim_end_matches('/'));
-        let headers = self.build_headers()?;
+        let engine_config = agiworkforce_mcp::TransportConfig::SseLegacy {
+            base_url: config.url.clone(),
+            headers: engine_headers,
+        };
 
-        let body = serde_json::to_string(request).map_err(|e| {
-            McpError::ConnectionError(format!("Failed to serialize request: {}", e))
-        })?;
+        // No handshake here: McpSession drives its own `initialize` through
+        // send_request, exactly as it did against the old transport.
+        let mut client = agiworkforce_mcp::McpClient::connect_without_handshake(
+            &server_name,
+            engine_config,
+            timeouts,
+            engine_hooks(&server_name),
+        )
+        .await
+        .map_err(map_engine_error)?;
 
-        tracing::debug!(
-            "[MCP HTTP Transport] Sending request to '{}': method={}, id={:?}",
-            self.server_name,
-            request.method,
-            request.id
+        // Forward server-initiated SSE notifications into the per-server log
+        // store — the same `[sse notification]` line the old event processor
+        // produced.
+        if let Some(mut notifications) = client.notifications() {
+            let notif_server = server_name.clone();
+            tokio::spawn(async move {
+                while let Some(notif) = notifications.recv().await {
+                    tracing::info!(
+                        "[MCP HTTP Transport] Received SSE notification for '{}': {}",
+                        notif_server,
+                        notif.method
+                    );
+                    append_server_log(
+                        &notif_server,
+                        format!("[sse notification] {}", notif.method),
+                    );
+                }
+            });
+        }
+
+        let (tx, rx) = mpsc::unbounded_channel::<EngineCommand>();
+        let response_seq = Arc::new(AtomicU64::new(1));
+        let alive = Arc::new(AtomicBool::new(true));
+        let is_shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_signal = Arc::new(tokio::sync::Notify::new());
+        let request_timeout_secs = config.timeout_secs;
+
+        spawn_engine_actor(
+            server_name.clone(),
+            client,
+            rx,
+            response_seq,
+            alive.clone(),
+            is_shutdown.clone(),
+            shutdown_signal.clone(),
+            std::time::Duration::from_secs(request_timeout_secs),
         );
 
-        let response = self
-            .client
-            .post(&url)
-            .headers(headers)
-            .body(body)
-            .send()
-            .await
-            .map_err(|e| {
-                tracing::warn!(
-                    "[MCP HTTP Transport] HTTP POST to '{}' failed for method '{}': {}",
-                    self.server_name,
-                    request.method,
-                    e
-                );
-                classify_reqwest_error(e, &url)
-            })?;
+        Ok(Self {
+            server_name,
+            tx,
+            alive,
+            is_shutdown,
+            shutdown_signal,
+            request_timeout_secs,
+        })
+    }
 
-        let status = response.status();
-        if !status.is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(McpError::ConnectionError(format!(
-                "HTTP request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        // Check content type to determine response format
-        let content_type = response
-            .headers()
-            .get("content-type")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-
-        if content_type.contains("text/event-stream") {
-            // Server wants to respond via SSE - the response will come through the SSE channel
-            // Return a placeholder that will be replaced by the actual response
-            Err(McpError::ConnectionError(
-                "Response will be delivered via SSE".to_string(),
-            ))
+    /// Kept for API compatibility with the pre-engine transport: the SSE
+    /// listener (with reconnect) now attaches automatically inside the engine
+    /// at connect time, so there is nothing left to start here. Both callers
+    /// (`McpSession::connect{,_with_transport}`) pass `None`; a custom
+    /// `sse_endpoint` was never used and is no longer supported — the legacy
+    /// convention fixes the stream at `{url}/sse`.
+    pub async fn start_sse_listener(&self, sse_endpoint: Option<&str>) -> McpResult<()> {
+        if let Some(endpoint) = sse_endpoint {
+            tracing::warn!(
+                "[MCP HTTP Transport] Custom SSE endpoint '{}' ignored for '{}' — \
+                 the engine listens on {{url}}/sse",
+                endpoint,
+                self.server_name
+            );
         } else {
-            // FIX R-10: Check Content-Length before reading the response body to prevent
-            // a malicious MCP server from exhausting memory with an oversized response.
-            const MAX_RESPONSE_BODY_BYTES: u64 = 50_000_000; // 50 MB
-            if let Some(len) = response.content_length() {
-                if len > MAX_RESPONSE_BODY_BYTES {
-                    return Err(McpError::ConnectionError(format!(
-                        "Response too large ({} bytes, max {} bytes)",
-                        len, MAX_RESPONSE_BODY_BYTES
-                    )));
-                }
-            }
-
-            // Direct JSON response
-            let response_text = response.text().await.map_err(|e| {
-                McpError::ConnectionError(format!("Failed to read response body: {}", e))
-            })?;
-
-            match McpMessage::from_str(&response_text) {
-                Ok(McpMessage::Response(resp)) => Ok(resp),
-                Ok(McpMessage::Error(err)) => Err(McpError::RmcpError(err.error.message)),
-                _ => Err(McpError::ConnectionError(format!(
-                    "Unexpected response format: {}",
-                    response_text
-                ))),
-            }
+            tracing::debug!(
+                "[MCP HTTP Transport] SSE listener for '{}' already attached by the engine",
+                self.server_name
+            );
         }
+        Ok(())
     }
 }
 
@@ -1603,71 +1025,33 @@ impl McpTransport for HttpSseTransport {
             ));
         }
 
-        // Generate a unique request ID
-        let id = loop {
-            let next_id = self.request_id.fetch_add(1, Ordering::SeqCst);
-            let candidate = RequestId::Number((next_id % i64::MAX as u64) as i64);
-            let pending = self.pending.lock();
-            if !pending.contains_key(&candidate) {
-                break candidate;
-            }
-        };
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.tx
+            .send(EngineCommand::Request {
+                method,
+                params,
+                reply: reply_tx,
+            })
+            .map_err(|_| {
+                McpError::ConnectionError("Failed to send request: channel closed".to_string())
+            })?;
 
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method,
-            params,
-            id: id.clone(),
-        };
-
-        // Try direct HTTP request first
-        match self.send_http_request(&request).await {
-            Ok(response) => Ok(response),
-            Err(McpError::ConnectionError(msg)) if msg.contains("SSE") => {
-                // Response will come via SSE, wait for it
-                let (response_tx, response_rx) = oneshot::channel();
-
-                {
-                    let mut pending = self.pending.lock();
-                    pending.insert(
-                        id.clone(),
-                        PendingRequest {
-                            sender: response_tx,
-                            created_at: Instant::now(),
-                        },
-                    );
-                }
-
-                match tokio::time::timeout(
-                    tokio::time::Duration::from_secs(self.config.timeout_secs),
-                    response_rx,
-                )
-                .await
-                {
-                    Ok(Ok(result)) => result,
-                    Ok(Err(_)) => {
-                        self.pending.lock().remove(&id);
-                        Err(McpError::ConnectionError(
-                            "Response channel closed".to_string(),
-                        ))
-                    }
-                    Err(_) => {
-                        self.pending.lock().remove(&id);
-                        tracing::warn!(
-                            "[MCP HTTP Transport] SSE response timeout for '{}' — \
-                             waited {}s for response via SSE channel",
-                            self.server_name,
-                            self.config.timeout_secs,
-                        );
-                        Err(McpError::RequestTimeout(format!(
-                            "SSE response for '{}' timed out after {}s — server accepted request but did not respond in time",
-                            self.server_name,
-                            self.config.timeout_secs
-                        )))
-                    }
-                }
-            }
-            Err(e) => Err(e),
+        // The engine enforces the same per-request timeout internally; this
+        // outer bound also caps time spent queued behind an in-flight request.
+        match tokio::time::timeout(
+            tokio::time::Duration::from_secs(self.request_timeout_secs),
+            reply_rx,
+        )
+        .await
+        {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(McpError::ConnectionError(
+                "Response channel closed".to_string(),
+            )),
+            Err(_) => Err(McpError::RequestTimeout(format!(
+                "Request for '{}' timed out after {}s — server accepted request but did not respond in time",
+                self.server_name, self.request_timeout_secs
+            ))),
         }
     }
 
@@ -1675,59 +1059,14 @@ impl McpTransport for HttpSseTransport {
         if self.is_shutdown.load(Ordering::SeqCst) {
             return;
         }
-
-        // BUG 1 FIX: Use JsonRpcNotification (no id field) per JSON-RPC 2.0 spec.
-        // Notifications MUST NOT include an id member. Previously this incorrectly
-        // created a JsonRpcRequest with id: RequestId::Null which serializes to
-        // {"id": null, ...}, causing MCP servers to reject the notification.
-        let notification = JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method: method.clone(),
-            params,
-        };
-
-        let client = self.client.clone();
-        let url = format!("{}/message", self.config.url.trim_end_matches('/'));
-        let server_name = self.server_name.clone();
-
-        // Clone headers for async block
-        let headers = match self.build_headers() {
-            Ok(h) => h,
-            Err(e) => {
-                tracing::error!(
-                    "[MCP HTTP Transport] Failed to build headers for notification: {}",
-                    e
-                );
-                return;
-            }
-        };
-
-        // Send notification in background (fire and forget)
-        tokio::spawn(async move {
-            let body = match serde_json::to_string(&notification) {
-                Ok(b) => b,
-                Err(e) => {
-                    tracing::error!(
-                        "[MCP HTTP Transport] Failed to serialize notification: {}",
-                        e
-                    );
-                    return;
-                }
-            };
-
-            if let Err(e) = client.post(&url).headers(headers).body(body).send().await {
-                tracing::warn!(
-                    "[MCP HTTP Transport] Failed to send notification '{}' to '{}': {}",
-                    method,
-                    server_name,
-                    e
-                );
-            }
-        });
+        // FIFO with requests through the actor channel. The engine serializes
+        // notifications without an `id` member per the JSON-RPC 2.0 spec
+        // (BUG 1 FIX preserved).
+        let _ = self.tx.send(EngineCommand::Notify { method, params });
     }
 
     fn is_alive(&self) -> bool {
-        !self.is_shutdown.load(Ordering::SeqCst)
+        !self.is_shutdown.load(Ordering::SeqCst) && self.alive.load(Ordering::SeqCst)
     }
 
     async fn shutdown(&self) -> McpResult<()> {
@@ -1735,29 +1074,18 @@ impl McpTransport for HttpSseTransport {
             "[MCP HTTP Transport] Shutting down transport for '{}'",
             self.server_name
         );
-
         self.is_shutdown.store(true, Ordering::SeqCst);
-        self.sse_connected.store(false, Ordering::SeqCst);
 
-        if let Some(tx) = self.shutdown_tx.lock().take() {
-            let _ = tx.send(());
-        }
-
+        self.shutdown_signal.notify_waiters();
+        let (reply_tx, reply_rx) = oneshot::channel();
+        if self
+            .tx
+            .send(EngineCommand::Shutdown { reply: reply_tx })
+            .is_ok()
         {
-            let mut pending = self.pending.lock();
-            if !pending.is_empty() {
-                tracing::warn!(
-                    "[MCP HTTP Transport] Shutdown draining {} pending requests for '{}'",
-                    pending.len(),
-                    self.server_name
-                );
-            }
-            for (_, pending_req) in pending.drain() {
-                let _ = pending_req.sender.send(Err(McpError::ConnectionError(
-                    "Transport shutting down".to_string(),
-                )));
-            }
+            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), reply_rx).await;
         }
+        self.alive.store(false, Ordering::SeqCst);
 
         Ok(())
     }
@@ -1915,6 +1243,8 @@ impl<'de> serde::Deserialize<'de> for HttpSseConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::protocol::{JsonRpcRequest, McpMessage};
+    use std::time::Instant;
 
     #[tokio::test]
     async fn test_request_id_increment() {
@@ -1991,19 +1321,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sse_event_parsing() {
-        // This tests the SSE event structure
-        let event = SseEvent {
-            event: Some("message".to_string()),
-            data: r#"{"jsonrpc":"2.0","result":{},"id":1}"#.to_string(),
-            id: Some("1".to_string()),
-        };
-
-        assert_eq!(event.event, Some("message".to_string()));
-        assert!(event.data.contains("jsonrpc"));
-    }
-
-    #[test]
     fn test_notification_serialization() {
         // BUG 1 verification: notifications should NOT have an id field
         use super::super::protocol::JsonRpcNotification;
@@ -2046,46 +1363,6 @@ mod tests {
     }
 
     #[test]
-    fn test_classify_reqwest_error_formats_url() {
-        // Build a client with an extremely short timeout so we can trigger a
-        // timeout error synchronously via an unreachable address.
-        // We cannot easily fabricate reqwest::Error internals, so we verify the
-        // helper against generic ConnectionError for an unreachable host.
-        //
-        // This test validates that classify_reqwest_error includes the URL in
-        // all error variants.
-        let url = "http://192.0.2.1:1/nonexistent";
-
-        // Construct a connection error by attempting to send to a non-routable IP
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let result = rt.block_on(async {
-            let client = reqwest::Client::builder()
-                .connect_timeout(std::time::Duration::from_millis(50))
-                .timeout(std::time::Duration::from_millis(100))
-                .build()
-                .unwrap();
-
-            client.get(url).send().await
-        });
-
-        if let Err(e) = result {
-            let mcp_error = classify_reqwest_error(e, url);
-            let error_msg = mcp_error.to_string();
-            assert!(
-                error_msg.contains(url),
-                "Error message should contain the URL '{}', got: {}",
-                url,
-                error_msg,
-            );
-        }
-        // If the request somehow succeeded (unlikely for TEST-NET-1), that is fine
-    }
-
-    #[test]
     fn test_connection_timeout_error_variant() {
         let err = McpError::ConnectionTimeout(
             "HTTP connection attempt to http://example.com timed out after 30s".to_string(),
@@ -2103,46 +1380,6 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("timed out"));
         assert!(msg.contains("http://example.com"));
-    }
-
-    #[tokio::test]
-    async fn test_connect_sse_timeout_on_unreachable_host() {
-        // Use TEST-NET-1 (192.0.2.0/24) which is guaranteed non-routable per RFC 5737.
-        // This ensures the connect attempt times out rather than being refused.
-        let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_millis(200))
-            .build()
-            .unwrap();
-
-        let headers = reqwest::header::HeaderMap::new();
-        let url = "http://192.0.2.1:9999/sse";
-
-        let start = Instant::now();
-        let result = HttpSseTransport::connect_sse(&client, url, &headers).await;
-        let elapsed = start.elapsed();
-
-        assert!(result.is_err(), "Should have timed out or failed");
-
-        let err = result.unwrap_err();
-        let err_msg = err.to_string();
-
-        // The error should be either:
-        // - a ConnectionTimeout / ConnectionError from OS-level network failure, or
-        // - a security rejection (HTTP non-localhost addresses are blocked)
-        assert!(
-            err_msg.contains("timed out")
-                || err_msg.contains("failed")
-                || err_msg.contains("Refusing to connect"),
-            "Error should mention timeout, failure, or security rejection, got: {}",
-            err_msg,
-        );
-
-        // Should not hang indefinitely -- verify it completed within a reasonable bound
-        assert!(
-            elapsed.as_secs() < 10,
-            "connect_sse should not hang indefinitely, took {:?}",
-            elapsed,
-        );
     }
 
     #[tokio::test]
