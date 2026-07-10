@@ -1970,4 +1970,51 @@ mod tests {
             PreToolUseOutcome::Proceed(serde_json::json!({"path":"TODO.md"}))
         );
     }
+
+    // -----------------------------------------------------------------------
+    // Cancelled-turn reconciliation (SIGINT / Esc / Ctrl-C paths)
+    //
+    // Both the TUI cancel path and `agi exec` SIGINT handling cancel a turn by
+    // dropping the in-flight `send()` future, then calling
+    // `finalize_cancelled_turn` to keep history a valid user→assistant
+    // alternation. There is no harness for delivering a real SIGINT inside
+    // `cargo test`, so the reconciliation function is tested directly.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn cancelled_turn_appends_partial_assistant_reply() {
+        let mut session = make_local_session();
+        session.messages.push(Message::text("user", "hello"));
+
+        session.finalize_cancelled_turn("partial answ");
+
+        let last = session.messages.last().unwrap();
+        assert_eq!(last.role, "assistant");
+        assert_eq!(last.text_content(), "partial answ");
+    }
+
+    #[test]
+    fn cancelled_turn_with_no_output_appends_stopped_marker() {
+        let mut session = make_local_session();
+        session.messages.push(Message::text("user", "hello"));
+
+        session.finalize_cancelled_turn("   ");
+
+        let last = session.messages.last().unwrap();
+        assert_eq!(last.role, "assistant");
+        assert_eq!(last.text_content(), "[stopped]");
+    }
+
+    #[test]
+    fn cancelled_turn_is_noop_when_turn_already_completed() {
+        let mut session = make_local_session();
+        session.messages.push(Message::text("user", "hello"));
+        session.messages.push(Message::text("assistant", "done"));
+        let len_before = session.messages.len();
+
+        session.finalize_cancelled_turn("straggler text");
+
+        assert_eq!(session.messages.len(), len_before);
+        assert_eq!(session.messages.last().unwrap().text_content(), "done");
+    }
 }

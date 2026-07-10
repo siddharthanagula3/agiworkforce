@@ -1374,10 +1374,15 @@ pub async fn run_main() -> Result<()> {
                 full_auto,
                 json,
             } => {
-                let raw_model = model
-                    .as_deref()
-                    .unwrap_or(&app_config.default.model)
-                    .to_string();
+                // Honor an explicit model: exec-level --model first, then the
+                // top-level --model, then config. Mirrors the provider fallback
+                // below — without this, `agi --model X exec` silently dropped X
+                // and ran the config-default model.
+                let raw_model = models::resolve_exec_model(
+                    model.as_deref(),
+                    cli.model.as_deref(),
+                    &app_config.default.model,
+                );
                 let chain = routing::fallback::FallbackChain::parse(&raw_model);
                 let m = chain
                     .head()
@@ -1467,11 +1472,23 @@ pub async fn run_main() -> Result<()> {
                 }
 
                 let session_id_for_chunks = session_id.clone();
-                let result = session
-                    .send(
+                // Accumulate streamed text so a SIGINT can reconcile session
+                // history with the partial reply (the TUI does the same via its
+                // shared stream buffer on the Esc/Ctrl-C cancel path).
+                let partial_buffer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+                let partial_sink = std::sync::Arc::clone(&partial_buffer);
+                // Race the turn against Ctrl-C. Cancellation reuses the TUI's
+                // mechanism: dropping the `send()` future aborts the in-flight
+                // provider stream and tool loop (tokio::select! drops the losing
+                // branch), then `finalize_cancelled_turn` repairs history.
+                let outcome = tokio::select! {
+                    result = session.send(
                         &app_config,
                         prompt,
                         Box::new(move |chunk| {
+                            if let Ok(mut buf) = partial_sink.lock() {
+                                buf.push_str(chunk);
+                            }
                             if json_events {
                                 agent_events::AgentEvent::MessageDelta {
                                     session_id: session_id_for_chunks.clone(),
@@ -1482,8 +1499,37 @@ pub async fn run_main() -> Result<()> {
                                 output::print_assistant_chunk(chunk);
                             }
                         }),
-                    )
-                    .await;
+                    ) => Some(result),
+                    _ = tokio::signal::ctrl_c() => None,
+                };
+                let Some(result) = outcome else {
+                    // First SIGINT: the send future was dropped above, which
+                    // cancelled the stream. A second Ctrl-C during shutdown
+                    // exits immediately.
+                    tokio::spawn(async {
+                        let _ = tokio::signal::ctrl_c().await;
+                        std::process::exit(130);
+                    });
+                    let partial = partial_buffer
+                        .lock()
+                        .map(|buf| buf.clone())
+                        .unwrap_or_default();
+                    session.finalize_cancelled_turn(&partial);
+                    use std::io::Write as _;
+                    let _ = io::stdout().flush();
+                    if json_events {
+                        agent_events::AgentEvent::Finished {
+                            session_id: session_id.clone(),
+                            reason: "interrupted",
+                        }
+                        .emit_stdout();
+                    } else {
+                        eprintln!();
+                        eprintln!("Interrupted — turn cancelled before completion.");
+                    }
+                    // 130 = 128 + SIGINT, the conventional exit code.
+                    std::process::exit(130);
+                };
                 match result {
                     Ok(turn) => {
                         if json_events {

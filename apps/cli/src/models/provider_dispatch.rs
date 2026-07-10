@@ -162,6 +162,25 @@ pub fn resolve_selected_provider(model: &str, provider_override: Option<&str>) -
     })
 }
 
+/// Resolve the model an `exec`-style subcommand should use.
+///
+/// Precedence: subcommand-level `--model` > top-level `--model` > config
+/// default. Mirrors `selection_provider_override`'s explicit-provider
+/// fallback — without the top-level layer, `agi --model X exec "…"` silently
+/// dropped `X` and ran the config-default model.
+pub fn resolve_exec_model(
+    subcommand_model: Option<&str>,
+    top_level_model: Option<&str>,
+    configured_model: &str,
+) -> String {
+    for candidate in [subcommand_model, top_level_model] {
+        if let Some(value) = candidate.map(str::trim).filter(|v| !v.is_empty()) {
+            return value.to_string();
+        }
+    }
+    configured_model.to_string()
+}
+
 pub fn selection_provider_override<'a>(
     selected_model: &str,
     configured_model: &str,
@@ -595,6 +614,44 @@ mod safe_provider_url_tests {
 mod tests {
     use super::*;
     use crate::models::{OllamaMode, Provider};
+
+    // ── resolve_exec_model precedence: exec flag > top-level flag > config ──
+
+    #[test]
+    fn exec_model_prefers_subcommand_flag_over_all() {
+        assert_eq!(
+            resolve_exec_model(Some("exec-model"), Some("top-model"), "config-model"),
+            "exec-model"
+        );
+    }
+
+    #[test]
+    fn exec_model_falls_back_to_top_level_flag() {
+        assert_eq!(
+            resolve_exec_model(None, Some("top-model"), "config-model"),
+            "top-model"
+        );
+    }
+
+    #[test]
+    fn exec_model_falls_back_to_config_default() {
+        assert_eq!(
+            resolve_exec_model(None, None, "config-model"),
+            "config-model"
+        );
+    }
+
+    #[test]
+    fn exec_model_skips_blank_flag_layers() {
+        assert_eq!(
+            resolve_exec_model(Some("  "), Some(""), "config-model"),
+            "config-model"
+        );
+        assert_eq!(
+            resolve_exec_model(Some(""), Some("top-model"), "config-model"),
+            "top-model"
+        );
+    }
 
     fn sample_model_for(provider: &str) -> String {
         crate::model_catalog::models_for(provider)
