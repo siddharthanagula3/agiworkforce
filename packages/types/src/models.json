@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-09",
+  "lastUpdated": "2026-07-10",
   "verificationLog": [
     {
       "date": "2026-06-03",
@@ -31,6 +31,12 @@
       "verifiedBy": "research-agent-2026-07-09",
       "status": "PASS",
       "notes": "Added GPT-5.6 family (GA 2026-07-09), verified from developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (platform.openai.com/docs/models now 301s to this host). Exact API IDs gpt-5.6-sol/-terra/-luna; bare alias gpt-5.6 routes to Sol per the sol page. All: 1,050,000 ctx, 128K max output, reasoning+vision+tools+streaming, knowledge cutoff 2026-02-16. Pricing per 1M: sol $5/$0.50/$30, terra $2.50/$0.25/$15, luna $1/$0.10/$6. No dated snapshot IDs published yet for 5.6 (do not invent). computerUse/codeExecution enumerated on the terra page (web search, file search, image generation, code interpreter, computer use, MCP); carried to sol/luna as family-level API tools pending per-page enumeration. gpt-5.5 NOT deprecated: still listed as Default frontier model with gpt-5.5 + gpt-5.5-2026-04-23 IDs; 5.6 launched alongside, not replacing. Benchmarks intentionally omitted for 5.6 (none published on the model pages)."
+    },
+    {
+      "date": "2026-07-10",
+      "verifiedBy": "live-api-verification-2026-07-10",
+      "status": "CORRECTION",
+      "notes": "REVERTED the gpt-5.6 family (sol/terra/luna) added 2026-07-09 — LIVE curl to api.openai.com/v1/chat/completions with a real key returns HTTP 404 'model does not exist' for gpt-5.6-sol/-terra/-luna and bare gpt-5.6. The 2026-07-09 'verified from developers.openai.com' claim was a documentation hallucination, not provisioned models. Confirmed REAL and retained: gpt-5.5 (HTTP 200 with max_completion_tokens; the earlier 400 was the max_tokens-vs-max_completion_tokens param, not model absence), gpt-5.4/-mini/-nano/-pro, gpt-5-nano, gpt-4.1-nano. Latest real OpenAI flagship in this account = gpt-5.5. Lesson: verify model IDs against a live API call, not just doc pages."
     }
   ],
   "providers": {
@@ -753,102 +759,6 @@
       "qualityTier": "best",
       "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Research"],
       "released": "April 2026",
-      "deprecation_date": null
-    },
-    "gpt-5.6-sol": {
-      "id": "gpt-5.6-sol",
-      "apiModelId": "gpt-5.6-sol",
-      "name": "GPT-5.6 Sol",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "contextWindow": 1050000,
-      "inputCost": 5,
-      "outputCost": 30,
-      "cached_input": 0.5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks"],
-      "released": "July 2026",
-      "deprecation_date": null
-    },
-    "gpt-5.6-terra": {
-      "id": "gpt-5.6-terra",
-      "apiModelId": "gpt-5.6-terra",
-      "name": "GPT-5.6 Terra",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "contextWindow": 1050000,
-      "inputCost": 2.5,
-      "outputCost": 15,
-      "cached_input": 0.25,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Balanced Reasoning", "Coding", "Agentic Tasks"],
-      "released": "July 2026",
-      "deprecation_date": null
-    },
-    "gpt-5.6-luna": {
-      "id": "gpt-5.6-luna",
-      "apiModelId": "gpt-5.6-luna",
-      "name": "GPT-5.6 Luna",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "contextWindow": 1050000,
-      "inputCost": 1,
-      "outputCost": 6,
-      "cached_input": 0.1,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      },
-      "speed": "fast",
-      "quality": "excellent",
-      "qualityTier": "good",
-      "bestFor": ["Fast Reasoning", "High-volume Tasks"],
-      "released": "July 2026",
       "deprecation_date": null
     },
     "claude-opus-4.8": {
@@ -2721,8 +2631,7 @@
       "qwen-3.5-plus",
       "kimi-k2.6",
       "glm-5.2",
-      "sonar",
-      "gpt-5.6-luna"
+      "sonar"
     ],
     "pro_additions": [
       "claude-sonnet-4.6",
@@ -2731,10 +2640,9 @@
       "deepseek-v4-pro",
       "qwen-max",
       "sonar-deep-research",
-      "gpt-5.5",
-      "gpt-5.6-terra"
+      "gpt-5.5"
     ],
-    "flagship_additions": ["claude-opus-4.8", "grok-4.3", "gpt-5.6-sol"]
+    "flagship_additions": ["claude-opus-4.8", "grok-4.3"]
   },
   "modelPresets": {
     "managed_cloud": [
@@ -2756,18 +2664,6 @@
     "llamacpp": [],
     "vllm": [],
     "openai": [
-      {
-        "value": "gpt-5.6-sol",
-        "label": "GPT-5.6 Sol"
-      },
-      {
-        "value": "gpt-5.6-terra",
-        "label": "GPT-5.6 Terra"
-      },
-      {
-        "value": "gpt-5.6-luna",
-        "label": "GPT-5.6 Luna"
-      },
       {
         "value": "gpt-5.5",
         "label": "GPT-5.5"
