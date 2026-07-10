@@ -27,6 +27,12 @@ export interface MenuProps {
   side?: 'top' | 'bottom';
   className?: string;
   menuClassName?: string;
+  /**
+   * Fires on every open/close transition (trigger toggle, outside click,
+   * Escape, item select). Lets hover-revealed trigger rows stay visible while
+   * their menu is open without duplicating open-state tracking.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function Menu({
@@ -36,10 +42,25 @@ export function Menu({
   side = 'bottom',
   className,
   menuClassName,
+  onOpenChange,
 }: MenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+
+  // Notify open/close transitions (skip the initial mount, which is not a
+  // transition). Effect-based so it works for every close path (outside
+  // click, Escape, item select) without impure state updaters.
+  const mountedRef = useRef(false);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    onOpenChangeRef.current?.(open);
+  }, [open]);
 
   const close = () => setOpen(false);
 
