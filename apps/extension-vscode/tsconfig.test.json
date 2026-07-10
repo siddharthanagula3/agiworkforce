@@ -3,7 +3,9 @@
   "compilerOptions": {
     "outDir": "./out",
     "rootDir": "./src",
-    "noUnusedLocals": false
+    "noUnusedLocals": false,
+    "incremental": false,
+    "tsBuildInfoFile": null
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "out", ".vscode-test", "src/__tests__"]
