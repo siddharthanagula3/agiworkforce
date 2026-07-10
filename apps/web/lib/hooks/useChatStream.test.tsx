@@ -296,9 +296,7 @@ describe('useChatStream', () => {
         });
       });
 
-      const assistantMsg = useChatStore
-        .getState()
-        .messages.find((m) => m.role === 'assistant');
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
       expect(assistantMsg?.metadata?.thinkingContent).toBe('reasoning here');
       // Never left in a live-streaming state once done — reload would otherwise
       // show a stuck timer.
@@ -325,9 +323,7 @@ describe('useChatStream', () => {
         });
       });
 
-      const assistantMsg = useChatStore
-        .getState()
-        .messages.find((m) => m.role === 'assistant');
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
       const segments = assistantMsg?.metadata?.thinkingSegments ?? [];
       expect(segments).toHaveLength(2);
       expect(segments[0]?.content).toBe('first thought');
@@ -381,15 +377,357 @@ describe('useChatStream', () => {
         });
       });
       // The assistant save is fire-and-forget inside the [DONE] handler.
-      await vi.waitFor(() =>
-        expect(saveBodies.some((b) => b['role'] === 'assistant')).toBe(true),
-      );
+      await vi.waitFor(() => expect(saveBodies.some((b) => b['role'] === 'assistant')).toBe(true));
 
       const assistantSave = saveBodies.find((b) => b['role'] === 'assistant');
       const savedMeta = assistantSave?.['metadata'] as Record<string, unknown> | undefined;
       expect(savedMeta?.['thinkingContent']).toBe('my reasoning');
       expect(savedMeta?.['isThinkingStreaming']).toBe(false);
       expect(savedMeta?.['thinkingCompletedAt']).toBeTruthy();
+    });
+  });
+
+  // Continue Generation (task #88): finish_reason plumbing + append-in-place
+  // continuation of a truncated / user-stopped assistant turn.
+  describe('continue generation', () => {
+    const PERSISTED_CONV = { ...TEMP_CONVERSATION, id: 'conv-continue', isTemporary: false };
+
+    /**
+     * Route-aware fetch mock: /api/llm/ requests stream `streamBody`, message
+     * saves are captured into `saveBodies`, and LLM request payloads into
+     * `llmBodies`.
+     */
+    function mockRoutedFetch(streamBody: string) {
+      const saveBodies: Array<Record<string, unknown>> = [];
+      const llmBodies: Array<Record<string, unknown>> = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/api/llm/')) {
+          try {
+            llmBodies.push(JSON.parse(String(init?.body ?? '{}')));
+          } catch {
+            /* ignore */
+          }
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(streamBody));
+              controller.close();
+            },
+          });
+          return new Response(stream, { status: 200, headers: new Headers() });
+        }
+        if (url.includes('/messages')) {
+          let body: Record<string, unknown> = {};
+          try {
+            body = JSON.parse(String(init?.body ?? '{}'));
+            saveBodies.push(body);
+          } catch {
+            /* ignore */
+          }
+          // Echo the client-supplied id like the real route (coalesce($1, ...))
+          // so the store message id is not renamed mid-test.
+          return new Response(JSON.stringify({ message: { id: body['id'] ?? 'saved-row' } }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 200 });
+      });
+      return { saveBodies, llmBodies };
+    }
+
+    function sse(events: unknown[], done = true): string {
+      return (
+        events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') +
+        (done ? 'data: [DONE]\n\n' : '')
+      );
+    }
+
+    it("records finish_reason 'length' on the assistant metadata (continuable truncation)", async () => {
+      mockSseStream([
+        { choices: [{ delta: { content: 'truncated ans' }, finish_reason: 'length' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('long question', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.finishReason).toBe('length');
+    });
+
+    it('records the FINAL finish_reason, not an intermediate tool_calls, on normal completion', async () => {
+      mockSseStream([
+        { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+        { choices: [{ delta: { content: 'complete answer' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('hello', { conversationId: TEMP_CONVERSATION.id });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      // 'stop' is recorded honestly — the Continue affordance must never
+      // appear on a normally-completed turn.
+      expect(assistantMsg?.metadata?.finishReason).toBe('stop');
+    });
+
+    it("marks a user-stopped turn 'stopped' and persists the partial content", async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+
+      const saveBodies: Array<Record<string, unknown>> = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/api/llm/')) {
+          const encoder = new TextEncoder();
+          // Emit partial content, then reject the NEXT read like an aborted
+          // fetch does (pull-based so the chunk is consumed before the error).
+          let pulls = 0;
+          const stream = new ReadableStream({
+            pull(controller) {
+              if (pulls === 0) {
+                pulls += 1;
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ choices: [{ delta: { content: 'partial answer' } }] })}\n\n`,
+                  ),
+                );
+                return;
+              }
+              controller.error(new DOMException('The user aborted a request.', 'AbortError'));
+            },
+          });
+          return new Response(stream, { status: 200, headers: new Headers() });
+        }
+        if (url.includes('/messages')) {
+          try {
+            saveBodies.push(JSON.parse(String(init?.body ?? '{}')));
+          } catch {
+            /* ignore */
+          }
+          return new Response(JSON.stringify({ message: { id: 'saved-stop' } }), { status: 200 });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('question', { conversationId: PERSISTED_CONV.id });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe('partial answer');
+      expect(assistantMsg?.metadata?.finishReason).toBe('stopped');
+      expect(assistantMsg?.isStreaming).toBe(false);
+
+      // The partial (with the 'stopped' marker) is persisted so it survives reload.
+      await vi.waitFor(() =>
+        expect(
+          saveBodies.some((b) => b['role'] === 'assistant' && b['content'] === 'partial answer'),
+        ).toBe(true),
+      );
+      const assistantSave = saveBodies.find((b) => b['role'] === 'assistant');
+      expect((assistantSave?.['metadata'] as Record<string, unknown>)?.['finishReason']).toBe(
+        'stopped',
+      );
+    });
+
+    it('APPENDS the continuation to the same assistant message and persists the merged text', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            content: 'write a long story',
+            createdAt: '2026-07-01T00:00:00.000Z',
+          },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: 'Once upon a time',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            model: 'test/model-1',
+            metadata: { finishReason: 'length' },
+          },
+        ],
+      });
+
+      const { saveBodies, llmBodies } = mockRoutedFetch(
+        sse([
+          { choices: [{ delta: { content: ', the story continued.' }, finish_reason: 'stop' }] },
+        ]),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('assistant-1');
+      });
+
+      const state = useChatStore.getState();
+      const assistantMessages = state.messages.filter((m) => m.role === 'assistant');
+      // Append-not-replace: still exactly ONE assistant bubble, same id.
+      expect(assistantMessages).toHaveLength(1);
+      expect(assistantMessages[0]?.id).toBe('assistant-1');
+      expect(assistantMessages[0]?.content).toBe('Once upon a time, the story continued.');
+      // The continuable marker clears on normal completion (re-offered only if
+      // it truncates again).
+      expect(assistantMessages[0]?.metadata?.finishReason).toBe('stop');
+
+      // The request thread ends with the partial assistant turn + an ephemeral
+      // continue instruction, and reuses the SAME model that produced the partial.
+      const llmRequest = llmBodies[0]!;
+      expect(llmRequest['model']).toBe('test/model-1');
+      const requestMessages = llmRequest['messages'] as Array<Record<string, unknown>>;
+      const last = requestMessages[requestMessages.length - 1]!;
+      const secondToLast = requestMessages[requestMessages.length - 2]!;
+      expect(secondToLast['role']).toBe('assistant');
+      expect(secondToLast['content']).toBe('Once upon a time');
+      expect(last['role']).toBe('user');
+      expect(String(last['content'])).toMatch(/continue/i);
+      // The ephemeral instruction is never stored in the transcript.
+      expect(state.messages.some((m) => m.content === last['content'])).toBe(false);
+
+      // The MERGED full text is persisted.
+      await vi.waitFor(() =>
+        expect(
+          saveBodies.some(
+            (b) =>
+              b['role'] === 'assistant' &&
+              b['content'] === 'Once upon a time, the story continued.',
+          ),
+        ).toBe(true),
+      );
+    });
+
+    it('re-offers Continue when the continuation truncates again', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        messages: [
+          {
+            id: 'user-1',
+            role: 'user',
+            content: 'go on',
+            createdAt: '2026-07-01T00:00:00.000Z',
+          },
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: 'part one',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            metadata: { finishReason: 'length' },
+          },
+        ],
+      });
+
+      mockRoutedFetch(
+        sse([{ choices: [{ delta: { content: ' part two' }, finish_reason: 'length' }] }]),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('assistant-1');
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.id === 'assistant-1');
+      expect(assistantMsg?.content).toBe('part one part two');
+      expect(assistantMsg?.metadata?.finishReason).toBe('length');
+    });
+
+    it('is a NO-OP on a normally-completed turn (no request fired)', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        messages: [
+          {
+            id: 'assistant-done',
+            role: 'assistant',
+            content: 'complete answer',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            metadata: { finishReason: 'stop' },
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('assistant-done');
+      });
+
+      expect(fetch).not.toHaveBeenCalled();
+      expect(useChatStore.getState().messages[0]?.content).toBe('complete answer');
+    });
+
+    it('is a NO-OP when the partial content is empty (nothing to continue)', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        messages: [
+          {
+            id: 'assistant-empty',
+            role: 'assistant',
+            content: '',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            metadata: { finishReason: 'stopped' },
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('assistant-empty');
+      });
+
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('keeps the partial text and appends an honest error note when the continuation fails', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: 'partial before failure',
+            createdAt: '2026-07-01T00:00:01.000Z',
+            metadata: { finishReason: 'stopped' },
+          },
+        ],
+      });
+
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/api/llm/')) {
+          return new Response(
+            JSON.stringify({ error: { code: 'server_overloaded', message: 'Provider down' } }),
+            { status: 503 },
+          );
+        }
+        return new Response(JSON.stringify({ message: { id: 'saved-x' } }), { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.continueGeneration('assistant-1');
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.id === 'assistant-1');
+      // The partial is preserved (not replaced by a bare error message)...
+      expect(assistantMsg?.content).toContain('partial before failure');
+      // ...with an honest error note appended, and the turn flagged as errored.
+      expect(assistantMsg?.content).toContain('Error: Provider down');
+      expect(assistantMsg?.error).toBe(true);
+      expect(useChatStore.getState().error).toBe('Provider down');
     });
   });
 
