@@ -457,7 +457,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
 /** Types whose content is tabular (CSV/TSV or JSON array-of-objects). */
 const TABULAR_TYPES = ['spreadsheet', 'table', 'csv'] as const;
 
-function isTabularType(type: string): boolean {
+export function isTabularType(type: string): boolean {
   return (TABULAR_TYPES as readonly string[]).includes(type);
 }
 

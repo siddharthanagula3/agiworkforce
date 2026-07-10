@@ -2262,14 +2262,14 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "create_artifact".to_string(),
             name: "Create Artifact".to_string(),
-            description: "Create a rich, standalone artifact (code file, markdown document, HTML page, Mermaid diagram, React component, spreadsheet/table, or presentation) that renders live in a dedicated side panel next to the chat, instead of inline in the reply. Use this for substantial, self-contained, or reusable content — a complete code file, a full document, a diagram, or an interactive HTML/React preview. Do not use it for short snippets, explanations, or conversational text; keep those in the normal reply.".to_string(),
+            description: "Create a rich, standalone artifact (code file, markdown document, HTML page, Mermaid diagram, React component, spreadsheet/table/CSV, presentation, or email draft) that renders live in a dedicated side panel next to the chat, instead of inline in the reply. Use this for substantial, self-contained, or reusable content — a complete code file, a full document, a diagram, or an interactive HTML/React preview. Do not use it for short snippets, explanations, or conversational text; keep those in the normal reply.".to_string(),
             capabilities: vec![ToolCapability::TextProcessing],
             parameters: vec![
                 ToolParameter {
                     name: "artifact_type".to_string(),
                     parameter_type: ParameterType::String,
                     required: true,
-                    description: "One of: code, markdown, document, html, mermaid, react, svg, table, spreadsheet, presentation.".to_string(),
+                    description: "One of: code, markdown, document, html, mermaid, react, svg, table, csv, spreadsheet, presentation, email.".to_string(),
                     default: None,
                 },
                 ToolParameter {
