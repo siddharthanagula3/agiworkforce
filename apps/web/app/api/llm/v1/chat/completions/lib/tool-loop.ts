@@ -87,6 +87,20 @@ function isReadOnlyTool(toolName: string): boolean {
 
 export type ApprovalMode = 'auto' | 'manual';
 
+/**
+ * Per-user connector tool executor (see lib/user-connector-tools.ts). Called
+ * before the operator MCP dispatch for every tool: returns `handled: true` for
+ * connector-owned tools (first-party github built-in / operator-mapped remote
+ * connectors) and `handled: false` otherwise so the loop falls through to the
+ * operator MCP executor. Bound to the authenticated userId by the caller;
+ * authorization is re-validated inside.
+ */
+export type ConnectorToolExecutor = (
+  serverId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+) => Promise<{ handled: boolean; content: string; isError: boolean }>;
+
 export interface ToolLoopOptions {
   /** Maximum number of model re-invocations. Default: 10. */
   maxSteps?: number;
@@ -100,6 +114,12 @@ export interface ToolLoopOptions {
    * and emitted as an `x_generated_files` delta). Without it, harvest is skipped.
    */
   userId?: string;
+  /**
+   * Optional per-user connector executor. When provided, connector-namespaced
+   * tool calls (from the user's connected connectors) execute through it before
+   * falling back to the operator MCP dispatcher. See ConnectorToolExecutor.
+   */
+  connectorExecutor?: ConnectorToolExecutor;
 }
 
 /** Shape of a parsed tool_call from the provider stream. */
@@ -406,6 +426,7 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
 async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
+  connectorExecutor?: ConnectorToolExecutor,
 ): Promise<{ content: string; isError: boolean }> {
   // E2B execution interception: if a code/file/folder execution tool is ever invoked, it
   // runs in the E2B sandbox (gated, fail-closed), never as a generic MCP tool.
@@ -435,6 +456,26 @@ async function runMcpTool(
       content: `Unknown tool: ${toolCall.qualifiedName}`,
       isError: true,
     };
+  }
+
+  // Per-user connector tools (github built-in / operator-mapped remote MCP
+  // connectors) execute through the bound connector executor first. It returns
+  // `handled: false` for anything it does not own, so operator MCP tools keep
+  // their existing dispatch path unchanged.
+  if (connectorExecutor) {
+    try {
+      const connectorResult = await connectorExecutor(
+        parsed.serverId,
+        parsed.toolName,
+        toolCall.args,
+      );
+      if (connectorResult.handled) {
+        return { content: capOutput(connectorResult.content), isError: connectorResult.isError };
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { content: capOutput(`Tool error: ${msg}`), isError: true };
+    }
   }
 
   try {
@@ -663,7 +704,7 @@ export async function* runToolLoop(
 
       const parallelResults = await Promise.all(
         readOnly.map(async (tc) => {
-          const result = await runMcpTool(tc, resolveE2BExecutor);
+          const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
           return { tc, ...result };
         }),
       );
@@ -671,7 +712,7 @@ export async function* runToolLoop(
 
       // Execute mutating tools serially.
       for (const tc of mutating) {
-        const result = await runMcpTool(tc, resolveE2BExecutor);
+        const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
         results.push({ tc, ...result });
       }
 
