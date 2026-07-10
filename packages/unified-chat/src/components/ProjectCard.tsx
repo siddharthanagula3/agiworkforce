@@ -92,13 +92,25 @@ export function ProjectCard({
   const hasMenu = !!(onEdit || onArchive || onDelete);
 
   return (
-    <button
-      type="button"
+    // Rendered as a role="button" div (not a native <button>) so the nested
+    // star-toggle and options <button>s below are valid HTML. A <button> may
+    // not contain another <button> — the old markup did, producing a React
+    // hydration warning on every Projects render (live audit 2026-07-10 §9).
+    // Keyboard access is preserved via tabIndex + Enter/Space handling.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect?.(project)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect?.(project);
+        }
+      }}
       aria-current={active ? 'true' : undefined}
       aria-label={`Open project ${project.name}`}
       className={cn(
-        'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
+        'group relative flex w-full cursor-pointer flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
         'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
         active
           ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_rgba(218,119,86,0.18)]'
@@ -317,6 +329,6 @@ export function ProjectCard({
         </span>
         <span>Updated {formatRelativeDate(project.updatedAt)}</span>
       </div>
-    </button>
+    </div>
   );
 }
