@@ -451,7 +451,8 @@ export default function WebChatPage() {
   }, []);
 
   // Streaming send + store state
-  const { sendMessage, stopGeneration, isStreaming, resolveToolApproval } = useChatStream();
+  const { sendMessage, stopGeneration, continueGeneration, isStreaming, resolveToolApproval } =
+    useChatStream();
 
   // Notification banner: appears after 3s of streaming if the user hasn't
   // already granted/denied the Notification permission in this session.
@@ -1577,6 +1578,30 @@ export default function WebChatPage() {
     ],
   );
 
+  /**
+   * Continue Generation: resume the last assistant turn when it was truncated
+   * at the token cap or user-stopped with partial text. Appends to the same
+   * message (never a new bubble); useChatStream.continueGeneration owns the
+   * continuable check and the append/persist mechanics.
+   */
+  const handleContinueMessage = useCallback(
+    async (id: string) => {
+      if (!displayedConversationId || isStreaming) return;
+      if (isTrialExhausted) {
+        handleOpenUpgradeDialog();
+        return;
+      }
+      await continueGeneration(id);
+    },
+    [
+      displayedConversationId,
+      isStreaming,
+      isTrialExhausted,
+      handleOpenUpgradeDialog,
+      continueGeneration,
+    ],
+  );
+
   const handleReactMessage = useCallback(
     async (id: string, reactionType: 'up' | 'down' | null) => {
       if (!displayedConversationId) return;
@@ -2048,6 +2073,7 @@ export default function WebChatPage() {
                     isLoading={isLoading && !isStreaming}
                     isUserTyping={isUserTyping}
                     onRegenerate={handleRegenerateMessage}
+                    onContinue={handleContinueMessage}
                     onEdit={handleEditMessage}
                     onDelete={handleDeleteMessage}
                     onReact={handleReactMessage}
