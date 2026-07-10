@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { MessageBubble } from './MessageBubble';
 import { ProvenanceFooter } from './ProvenanceFooter';
+import { isMessageContinuable } from '../lib/continue-generation';
 import type { Artifact } from '../lib/types';
 
 interface MessageListProps {
@@ -12,6 +13,13 @@ interface MessageListProps {
    * below their bubble. Pass `false` to suppress.
    */
   showProvenanceFooter?: boolean;
+  /**
+   * Continue Generation (cloud mode): resume the LAST assistant turn when it
+   * was truncated at the token cap or user-stopped with partial content.
+   * When omitted, the Continue control is not rendered (e.g. surfaces whose
+   * runtime exposes no finish signal — no fake affordance).
+   */
+  onContinueGeneration?: (assistantMessageId: string) => void;
 }
 
 /**
@@ -26,8 +34,10 @@ export function MessageList({
   conversationId,
   onArtifactClick,
   showProvenanceFooter = true,
+  onContinueGeneration,
 }: MessageListProps) {
   const messages = useChatStore((s) => s.messagesByConversation[conversationId] ?? []);
+  const isStreaming = useChatStore((s) => s.isStreaming);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -105,6 +115,17 @@ export function MessageList({
 
   const showJumpButton = !isNearBottom;
 
+  // Continue-Generation control: offered only for the LAST message, when it is
+  // a continuable assistant turn (truncated/user-stopped with partial content),
+  // nothing is currently streaming, and the host wired a handler. Continuing an
+  // earlier turn would fork history, so it is strictly the tail message.
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined;
+  const showContinue =
+    !isStreaming &&
+    !!onContinueGeneration &&
+    !!lastMessage &&
+    isMessageContinuable(lastMessage);
+
   return (
     <div className="relative h-full">
       <div ref={scrollerRef} className="h-full overflow-y-auto px-4 py-4">
@@ -123,6 +144,43 @@ export function MessageList({
             )}
           </div>
         ))}
+        {showContinue && lastMessage ? (
+          <div className="mb-4 flex justify-start">
+            <button
+              type="button"
+              onClick={() => onContinueGeneration?.(lastMessage.id)}
+              aria-label="Continue generating the previous response"
+              className="
+                inline-flex items-center gap-2
+                rounded-full border px-3 py-1.5
+                text-xs font-medium
+                transition hover:scale-[1.02] active:scale-[0.98]
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+              "
+              style={{
+                background: 'var(--chat-surface-elevated)',
+                color: 'var(--chat-text-primary)',
+                borderColor: 'var(--chat-border-strong)',
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.25"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 3l14 9-14 9V3z" />
+              </svg>
+              <span>Continue generating</span>
+            </button>
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 
