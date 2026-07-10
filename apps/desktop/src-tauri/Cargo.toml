@@ -28,6 +28,7 @@ unused_results = "allow"
 await_holding_lock = "warn"
 
 [dependencies]
+agiworkforce-agent-core = { path = "../../../crates/agiworkforce-agent-core" }
 agiworkforce-execpolicy = { path = "../../../crates/agiworkforce-execpolicy" }
 agiworkforce-llm = { path = "../../../crates/agiworkforce-llm" }
 agiworkforce-mcp = { path = "../../../crates/agiworkforce-mcp" }
