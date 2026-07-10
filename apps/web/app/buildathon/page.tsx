@@ -28,19 +28,6 @@ const CURRENT_PROOF = [
   'Current focus: Agent Orchestration, local LLMs, free BYOK, AGI Cloud, browser context capture, VS Code/CLI workflows, and multi-provider routing.',
 ];
 
-const RAW_ANALYSIS = [
-  '4,766 commits/year',
-  '1,055 commits in the last 30 days',
-  '56 commits in the last 7 days',
-  '190 active days',
-  '20-day longest streak',
-  '103 merged PRs',
-  '100/100 GitHub ownership authenticity',
-  '563 LeetCode problems solved',
-  '240 LeetCode hard problems solved',
-  'No fraud flags detected',
-];
-
 const SURFACES = [
   'Web app',
   'Tauri desktop app',
@@ -181,21 +168,7 @@ export default function BuildathonPage() {
           </ul>
         </section>
 
-        {/* 4. Previous Buildathon Raw Analysis */}
-        <section className="agi-section" id="buildathon-raw-analysis">
-          <p className="agi-section-eyebrow">Previous Buildathon Raw Analysis</p>
-          <h2 className="agi-section-h2">Analysis Report</h2>
-          <p className="agi-page-lede" style={{ marginTop: 0, marginBottom: 16 }}>
-            The previous Buildathon analysis report recorded:
-          </p>
-          <ul className="buildathon-proof-list">
-            {RAW_ANALYSIS.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </section>
-
-        {/* 5. Product Surfaces */}
+        {/* 4. Product Surfaces */}
         <section className="agi-section" id="buildathon-surfaces">
           <p className="agi-section-eyebrow">Product Surfaces</p>
           <h2 className="agi-section-h2">Platform Coverage</h2>

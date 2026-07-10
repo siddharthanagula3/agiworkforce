@@ -12,8 +12,13 @@ export const metadata: Metadata = {
 
 const SUBS: { name: string; purpose: string; region: string }[] = [
   {
-    name: 'Managed database and auth platform',
-    purpose: 'Primary data store, authentication, real-time sync, file storage.',
+    name: 'Neon',
+    purpose: 'Primary Postgres data store for account, chat, and application data.',
+    region: 'United States',
+  },
+  {
+    name: 'Clerk',
+    purpose: 'Authentication, session, and user identity management.',
     region: 'United States',
   },
   {
