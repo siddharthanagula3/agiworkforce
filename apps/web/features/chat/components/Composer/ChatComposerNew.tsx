@@ -41,6 +41,7 @@ import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { ChatMode } from '@features/chat/types';
 import { FREE_TRIAL_MAX_INPUT_CHARS, getFreeTrialRemaining } from '../../stores/freeTrialStore';
 import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
+import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { useProjectStore } from '@features/projects';
@@ -197,18 +198,22 @@ function MenuToggleRow({
   checked,
   onToggle,
   disabled,
+  title,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   checked: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  /** Native tooltip — used to explain WHY a row is disabled (e.g. no search path). */
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onToggle}
       disabled={disabled}
+      title={title}
       className={cn(
         'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
         disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
@@ -324,15 +329,26 @@ const ChatComposerNewComponent = ({
   // model's capabilities so a user never sends an input the model can't handle
   // (e.g. an image to a text-only model, or web search to a no-search model).
   const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
-  const selectedModelCaps = getModelMetadata(composerSelectedModelId)?.capabilities;
+  const selectedModelMeta = getModelMetadata(composerSelectedModelId);
+  const selectedModelCaps = selectedModelMeta?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
-  const modelSupportsSearch = selectedModelCaps?.search ?? false;
+  // A model's catalog `search`/`research` flag is necessary but NOT sufficient: some
+  // providers set search:true for models AGI does not yet wire a web-search path for
+  // (xai/qwen/moonshot). Gate the toggles on BOTH the catalog capability AND the
+  // provider actually executing search, so the toggle is never cosmetic (turning it
+  // on then getting "I can't browse the internet"). anthropic/google/openai inject a
+  // native tool; perplexity searches natively; managed_cloud (Auto) resolves
+  // server-side to a search-capable model — see providerSupportsWebSearch.
+  const providerCanWebSearch = providerSupportsWebSearch(selectedModelMeta?.provider);
+  const modelSupportsSearch = (selectedModelCaps?.search ?? false) && providerCanWebSearch;
   // Deep Research is its own capability field in models.json, distinct from
   // plain web search - values diverge in both directions (e.g. claude-haiku-4.5
   // has search:true/research:false, gpt-5.5 has search:false/research:true).
   // Gating on modelSupportsSearch alone both wrongly exposes Research for
   // search-only models and wrongly blocks it for research-only models.
-  const modelSupportsResearch = selectedModelCaps?.research ?? false;
+  // Deep Research forces web_search on server-side (applyResearchMode), so it needs
+  // the same provider search path — gate it the same way to avoid a cosmetic toggle.
+  const modelSupportsResearch = (selectedModelCaps?.research ?? false) && providerCanWebSearch;
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   const modelSupportsCodeExecution = selectedModelCaps?.codeExecution ?? false;
 
@@ -1069,15 +1085,57 @@ const ChatComposerNewComponent = ({
 
         <div
           className={cn(
-            // Two-row layout (textarea full-width on top, controls below) via
-            // flex-wrap + order — same pattern in both empty and docked states so
-            // the placeholder never gets pushed to the centre.
-            'flex flex-wrap items-end gap-1 p-2 sm:gap-2 sm:p-3',
+            // Column layout: the textarea sits full-width on row 1, and the control
+            // cluster below is a SINGLE flex-nowrap row so the Send button can never
+            // drop to a second line. A previous flex-wrap+order layout wrapped inside
+            // a conversation once the sidebar narrowed the column: flex-wrap breaks
+            // lines on each item's CONTENT size, so min-w-0 alone can't stop it — only
+            // flex-nowrap forces one line, while the min-w-0 chain lets the model
+            // pill/hint shrink to fit within it.
+            'flex flex-col gap-2 p-2 sm:p-3',
             emptyState && 'px-4 py-3 sm:px-5',
           )}
         >
-          {/* + Overflow Menu Button */}
-          <div className={cn('relative order-2 shrink-0')} ref={overflowRef}>
+          {/* Textarea + Ghost-text overlay wrapper — row 1, full width */}
+          <div className={cn('relative w-full', emptyState ? 'min-h-[40px]' : 'min-h-[52px]')}>
+            <GhostTextOverlay
+              inputText={message}
+              suggestion={suggestion}
+              isLoading={isSuggestionLoading}
+            />
+
+            <textarea
+              ref={textareaRef}
+              data-composer-textarea
+              value={message}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder={imageMode ? 'Describe or edit an image' : placeholder}
+              disabled={isLoading || composerDisabled}
+              className={cn(
+                'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
+                emptyState
+                  ? 'min-h-[40px] py-1.5 text-[18px] md:text-[18px]'
+                  : 'min-h-[52px] py-3 text-sm md:text-[15px]',
+              )}
+              rows={1}
+              aria-label="Message input"
+              aria-describedby={suggestion ? 'ghost-text-hint' : undefined}
+            />
+
+            {suggestion && (
+              <span id="ghost-text-hint" className="sr-only">
+                Suggestion available: {suggestion}. Press Tab to accept.
+              </span>
+            )}
+          </div>
+
+          {/* Control cluster — row 2, a single non-wrapping line (flex-nowrap). */}
+          <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-2">
+            {/* + Overflow Menu Button */}
+          <div className={cn('relative shrink-0')} ref={overflowRef}>
             <button
               onClick={() => {
                 const next = !showOverflowMenu;
@@ -1334,6 +1392,11 @@ const ChatComposerNewComponent = ({
                         closeMenu();
                       }}
                       disabled={isLoading || disabled || !modelSupportsSearch}
+                      title={
+                        !modelSupportsSearch
+                          ? "Web search isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
+                          : undefined
+                      }
                     />
 
                     {/* 8a. Deep Research toggle */}
@@ -1346,6 +1409,11 @@ const ChatComposerNewComponent = ({
                         closeMenu();
                       }}
                       disabled={isLoading || disabled || !modelSupportsResearch}
+                      title={
+                        !modelSupportsResearch
+                          ? "Deep Research isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
+                          : undefined
+                      }
                     />
 
                     {/* 8b. Code execution toggle */}
@@ -1461,7 +1529,7 @@ const ChatComposerNewComponent = ({
               non-wrapping line at every width (fixes the Send-button-drops-to-a-
               second-line overflow bug). */}
           {!imageMode && (
-            <div className="order-3 flex shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
+            <div className="flex shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
               {(['chat', 'agiwork'] as const).map((mode) => (
                 <button
                   key={mode}
@@ -1485,7 +1553,7 @@ const ChatComposerNewComponent = ({
 
           {/* Image-mode pills (only when the user is generating an image). */}
           {imageMode && (
-            <div className={cn('flex items-center gap-1 order-3')}>
+            <div className={cn('flex shrink-0 items-center gap-1')}>
               {/* Image pill: click to exit image mode */}
               <button
                 type="button"
@@ -1546,55 +1614,15 @@ const ChatComposerNewComponent = ({
             </div>
           )}
 
-          {/* Textarea + Ghost-text overlay wrapper */}
-          <div
-            className={cn(
-              'relative flex-1 basis-full order-1',
-              emptyState ? 'min-h-[40px]' : 'min-h-[52px]',
-            )}
-          >
-            <GhostTextOverlay
-              inputText={message}
-              suggestion={suggestion}
-              isLoading={isSuggestionLoading}
-            />
-
-            <textarea
-              ref={textareaRef}
-              data-composer-textarea
-              value={message}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              placeholder={imageMode ? 'Describe or edit an image' : placeholder}
-              disabled={isLoading || composerDisabled}
-              className={cn(
-                'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
-                emptyState
-                  ? 'min-h-[40px] py-1.5 text-[18px] md:text-[18px]'
-                  : 'min-h-[52px] py-3 text-sm md:text-[15px]',
-              )}
-              rows={1}
-              aria-label="Message input"
-              aria-describedby={suggestion ? 'ghost-text-hint' : undefined}
-            />
-
-            {suggestion && (
-              <span id="ghost-text-hint" className="sr-only">
-                Suggestion available: {suggestion}. Press Tab to accept.
-              </span>
-            )}
-          </div>
-
           {/* Model selector. In normal mode the full ComposerFooter sits inline beside
               the send button. In image mode the image-model picker takes its place —
-              both use `order-4 ml-auto` so they right-align and push the mic + send to
-              the right edge of the toolbar. */}
+              both use `ml-auto` so they right-align and push the mic + send to the
+              right edge of the toolbar. In the flex-nowrap control row the footer is
+              the only shrinkable item (min-w-0), so it truncates instead of wrapping. */}
           {!imageMode && (
             <ComposerFooter
               inline
-              className="order-4 ml-auto min-w-0"
+              className="ml-auto min-w-0"
               showModelSelector
               lockModelSelector={false}
               showStyleSelector={!isFreeTrial}
@@ -1603,7 +1631,7 @@ const ChatComposerNewComponent = ({
           )}
 
           {imageMode && (
-            <div className="relative order-4 ml-auto">
+            <div className="relative ml-auto shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -1647,7 +1675,7 @@ const ChatComposerNewComponent = ({
               users see a visible-disabled control with a tooltip instead of the mic
               disappearing from the DOM. */}
           <div
-            className="relative order-5 shrink-0"
+            className="relative shrink-0"
             title={isFreeTrial ? 'Upgrade to use voice input' : undefined}
           >
             <VoiceInputButton
@@ -1668,8 +1696,9 @@ const ChatComposerNewComponent = ({
             hasContent={hasContent}
             disabled={composerDisabled}
             onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-            className="order-6 shrink-0"
+            className="shrink-0"
           />
+          </div>
         </div>
 
         {/* Hidden file input */}

@@ -118,6 +118,29 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeInTheDocument();
   });
 
+  it('keeps the control cluster on one line (flex-nowrap) so Send never drops to a 2nd row', () => {
+    // Bug 1: inside a conversation the sidebar narrows the composer column and the
+    // Send button wrapped to a second row. The prior flex-wrap+order layout broke
+    // lines on each control's CONTENT size, so min-w-0 alone couldn't stop the wrap.
+    // The fix puts the controls in their own flex-nowrap row — a hard CSS guarantee
+    // that they stay on one line (the footer shrinks via min-w-0 instead of wrapping).
+    const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+    const cluster = container.querySelector('.flex-nowrap') as HTMLElement | null;
+    expect(cluster).toBeTruthy();
+    expect(cluster!.className).toContain('min-w-0');
+
+    // The leading "+" control and the trailing Send button are BOTH in that one row,
+    // so flex-nowrap keeps them on the same line at any width.
+    const plus = screen.getByRole('button', { name: /more options/i });
+    const send = screen.getByRole('button', { name: /send message/i });
+    expect(cluster!.contains(plus)).toBe(true);
+    expect(cluster!.contains(send)).toBe(true);
+
+    // The textarea is the full-width row ABOVE the controls, not inside the cluster.
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    expect(cluster!.contains(textarea)).toBe(false);
+  });
+
   it('calls onSend with typed message on Cmd+Enter', async () => {
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
