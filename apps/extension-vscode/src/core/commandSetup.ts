@@ -35,6 +35,7 @@ import {
   type GroupedQuickPickItem,
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
+import { recordFailure } from './subsystemHealth';
 
 const execFileAsync = promisify(execFile);
 
@@ -102,9 +103,29 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     diagnosticsProvider,
   } = deps;
 
+  // Per-command registration guard. All commands below are elements of big
+  // array literals pushed to `context.subscriptions` — array literals evaluate
+  // left-to-right, so ONE synchronous `registerCommand` throw (e.g. a duplicate
+  // command id) would silently abort every later registration in the same
+  // literal. Registering through this helper isolates each failure: the error
+  // is recorded in subsystem health (status-bar warning + detail quick-pick),
+  // logged, and surfaced once via an error toast after setup — never swallowed
+  // silently, and never able to take down the remaining commands.
+  type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
+  const failedCommandIds: string[] = [];
+  const register = (id: string, handler: CommandHandler): vscode.Disposable => {
+    try {
+      return vscode.commands.registerCommand(id, handler);
+    } catch (err) {
+      failedCommandIds.push(id);
+      recordFailure(`command:${id}`, err);
+      return new vscode.Disposable(() => undefined);
+    }
+  };
+
   context.subscriptions.push(
     // ── context panel commands ──────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.addToContext', (uri?: vscode.Uri) => {
+    register('agi-workforce.addToContext', (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: No file to add to context.');
@@ -113,7 +134,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       contextPanelProvider.addFile(target);
     }),
 
-    vscode.commands.registerCommand('agi-workforce.removeFromContext', (uri?: vscode.Uri) => {
+    register('agi-workforce.removeFromContext', (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: No file to remove from context.');
@@ -122,15 +143,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       contextPanelProvider.removeFile(target);
     }),
 
-    vscode.commands.registerCommand('agi-workforce.clearContext', () => {
+    register('agi-workforce.clearContext', () => {
       contextPanelProvider.clearAll();
     }),
 
-    vscode.commands.registerCommand('agi-workforce.refreshContext', () => {
+    register('agi-workforce.refreshContext', () => {
       contextPanelProvider.refreshAutoContext();
     }),
 
-    vscode.commands.registerCommand('agi-workforce.mentionFileInChat', async (uri?: vscode.Uri) => {
+    register('agi-workforce.mentionFileInChat', async (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: No file selected to mention in chat.');
@@ -150,54 +171,51 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── diff commands ───────────────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.acceptDiff', async (sessionId: string) => {
+    register('agi-workforce.acceptDiff', async (sessionId: string) => {
       await diffDecorationProvider.acceptDiff(sessionId);
     }),
-    vscode.commands.registerCommand('agi-workforce.rejectDiff', (sessionId: string) => {
+    register('agi-workforce.rejectDiff', (sessionId: string) => {
       diffDecorationProvider.rejectDiff(sessionId);
     }),
-    vscode.commands.registerCommand('agi-workforce.acceptAllDiffs', async (uri: vscode.Uri) => {
+    register('agi-workforce.acceptAllDiffs', async (uri: vscode.Uri) => {
       await diffDecorationProvider.acceptAll(uri);
     }),
-    vscode.commands.registerCommand('agi-workforce.rejectAllDiffs', (uri: vscode.Uri) => {
+    register('agi-workforce.rejectAllDiffs', (uri: vscode.Uri) => {
       diffDecorationProvider.rejectAll(uri);
     }),
-    vscode.commands.registerCommand('agi-workforce.acceptCurrentDiff', async () => {
+    register('agi-workforce.acceptCurrentDiff', async () => {
       await diffDecorationProvider.acceptCurrentDiff();
     }),
-    vscode.commands.registerCommand('agi-workforce.rejectCurrentDiff', () => {
+    register('agi-workforce.rejectCurrentDiff', () => {
       diffDecorationProvider.rejectCurrentDiff();
     }),
-    vscode.commands.registerCommand('agi-workforce.acceptAllDiffsGlobal', async () => {
+    register('agi-workforce.acceptAllDiffsGlobal', async () => {
       await diffDecorationProvider.acceptAllGlobal();
     }),
-    vscode.commands.registerCommand('agi-workforce.rejectAllDiffsGlobal', () => {
+    register('agi-workforce.rejectAllDiffsGlobal', () => {
       diffDecorationProvider.rejectAllGlobal();
     }),
-    vscode.commands.registerCommand('agi-workforce.acceptBatch', async (batchId: string) => {
+    register('agi-workforce.acceptBatch', async (batchId: string) => {
       await diffDecorationProvider.acceptBatch(batchId);
     }),
-    vscode.commands.registerCommand('agi-workforce.rejectBatch', (batchId: string) => {
+    register('agi-workforce.rejectBatch', (batchId: string) => {
       diffDecorationProvider.rejectBatch(batchId);
     }),
-    vscode.commands.registerCommand(
-      'agi-workforce.showOriginalContext',
-      async (sessionId: string) => {
-        const session = diffDecorationProvider.getSession(sessionId);
-        if (session === undefined) {
-          vscode.window.showWarningMessage('AGI Workforce: Diff session not found.');
-          return;
-        }
-        const filePath = session.filePath ?? vscode.workspace.asRelativePath(session.uri);
-        await showOriginalContext(session.originalText, session.newText, filePath);
-      },
-    ),
-    vscode.commands.registerCommand('agi-workforce.showPatchLogs', () => {
+    register('agi-workforce.showOriginalContext', async (sessionId: string) => {
+      const session = diffDecorationProvider.getSession(sessionId);
+      if (session === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: Diff session not found.');
+        return;
+      }
+      const filePath = session.filePath ?? vscode.workspace.asRelativePath(session.uri);
+      await showOriginalContext(session.originalText, session.newText, filePath);
+    }),
+    register('agi-workforce.showPatchLogs', () => {
       getPatchOutputChannel().show(true);
     }),
 
     // ── inline command shortcuts ────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.chat', async () => {
+    register('agi-workforce.chat', async () => {
       try {
         await vscode.commands.executeCommand('workbench.action.chat.open');
       } catch {
@@ -209,11 +227,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.openChatInEditor', () => {
+    register('agi-workforce.openChatInEditor', () => {
       ChatEditorPanel.createOrShow(context.extensionUri, context.secrets, context);
     }),
 
-    vscode.commands.registerCommand('agi-workforce.agentMode', () => {
+    register('agi-workforce.agentMode', () => {
       AgentModePanel.createOrShow(
         context.extensionUri,
         context.secrets,
@@ -222,27 +240,27 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    vscode.commands.registerCommand('agi-workforce.explain', async () => {
+    register('agi-workforce.explain', async () => {
       await runInlineCommand(context, 'explain');
     }),
 
-    vscode.commands.registerCommand('agi-workforce.fix', async () => {
+    register('agi-workforce.fix', async () => {
       await runInlineCommand(context, 'fix');
     }),
 
-    vscode.commands.registerCommand('agi-workforce.refactor', async () => {
+    register('agi-workforce.refactor', async () => {
       await runInlineCommand(context, 'refactor');
     }),
 
-    vscode.commands.registerCommand('agi-workforce.generateTests', async () => {
+    register('agi-workforce.generateTests', async () => {
       await runInlineCommand(context, 'tests');
     }),
 
-    vscode.commands.registerCommand('agi-workforce.docs', async () => {
+    register('agi-workforce.docs', async () => {
       await runInlineCommand(context, 'docs');
     }),
 
-    vscode.commands.registerCommand('agi-workforce.codeReview', async () => {
+    register('agi-workforce.codeReview', async () => {
       const editor = vscode.window.activeTextEditor;
       if (editor === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: No active editor.');
@@ -287,7 +305,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── API key / auth commands ─────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.signIn', async () => {
+    register('agi-workforce.signIn', async () => {
       // Cloud-only surface: secretless device sign-in. Opens the browser connect
       // page, then polls for the approved token (deviceAuth). Requires the web
       // /connect/vscode endpoint (docs/web-vscode-signin-spec.md) to be live.
@@ -297,12 +315,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.signOut', async () => {
+    register('agi-workforce.signOut', async () => {
       await clearAccountToken(context.secrets);
       vscode.window.showInformationMessage('Signed out of AGI Cloud.');
     }),
 
-    vscode.commands.registerCommand('agi-workforce.setApiKey', async () => {
+    register('agi-workforce.setApiKey', async () => {
       const existing = await getApiKey(context.secrets);
       const placeholder = existing !== undefined ? '(already set — enter new key to replace)' : '';
 
@@ -332,7 +350,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         });
     }),
 
-    vscode.commands.registerCommand('agi-workforce.clearApiKey', async () => {
+    register('agi-workforce.clearApiKey', async () => {
       const choice = await vscode.window.showWarningMessage(
         'Clear the stored AGI Workforce API key?',
         { modal: true },
@@ -345,7 +363,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── model selection ─────────────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.selectModel', async () => {
+    register('agi-workforce.selectModel', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
 
       const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems().map(
@@ -387,60 +405,54 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── conversation commands ───────────────────────────────────────────────────
-    vscode.commands.registerCommand(
-      'agi-workforce.openConversation',
-      async (idOrItem: string | ConversationTreeItem) => {
-        const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.conversation.id;
-        const conversation = conversationStore.get(id);
-        if (conversation === undefined) {
-          vscode.window.showWarningMessage('AGI Workforce: Conversation not found.');
-          return;
-        }
+    register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
+      const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.conversation.id;
+      const conversation = conversationStore.get(id);
+      if (conversation === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: Conversation not found.');
+        return;
+      }
 
-        const lines: string[] = [
-          `# ${conversation.title}`,
-          '',
-          `*Model: ${conversation.model} · ${conversation.messages.length} messages*`,
-          '',
-        ];
-        for (const msg of conversation.messages) {
-          if (msg.role === 'system') continue;
-          const heading = msg.role === 'user' ? '**You**' : '**AGI Workforce**';
-          lines.push(`${heading}`, '', msg.content, '');
-        }
+      const lines: string[] = [
+        `# ${conversation.title}`,
+        '',
+        `*Model: ${conversation.model} · ${conversation.messages.length} messages*`,
+        '',
+      ];
+      for (const msg of conversation.messages) {
+        if (msg.role === 'system') continue;
+        const heading = msg.role === 'user' ? '**You**' : '**AGI Workforce**';
+        lines.push(`${heading}`, '', msg.content, '');
+      }
 
-        try {
-          const doc = await vscode.workspace.openTextDocument({
-            content: lines.join('\n'),
-            language: 'markdown',
-          });
-          await vscode.window.showTextDocument(doc, { preview: true });
-        } catch {
-          vscode.window.showErrorMessage('AGI Workforce: Failed to open conversation.');
-        }
-      },
-    ),
+      try {
+        const doc = await vscode.workspace.openTextDocument({
+          content: lines.join('\n'),
+          language: 'markdown',
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      } catch {
+        vscode.window.showErrorMessage('AGI Workforce: Failed to open conversation.');
+      }
+    }),
 
-    vscode.commands.registerCommand(
-      'agi-workforce.deleteConversation',
-      async (item: ConversationTreeItem) => {
-        const choice = await vscode.window.showWarningMessage(
-          `Delete conversation "${item.conversation.title}"?`,
-          { modal: true },
-          'Delete',
-        );
-        if (choice === 'Delete') {
-          conversationStore.delete(item.conversation.id);
-          conversationTreeProvider.refresh();
-        }
-      },
-    ),
+    register('agi-workforce.deleteConversation', async (item: ConversationTreeItem) => {
+      const choice = await vscode.window.showWarningMessage(
+        `Delete conversation "${item.conversation.title}"?`,
+        { modal: true },
+        'Delete',
+      );
+      if (choice === 'Delete') {
+        conversationStore.delete(item.conversation.id);
+        conversationTreeProvider.refresh();
+      }
+    }),
 
-    vscode.commands.registerCommand('agi-workforce.refreshConversations', () => {
+    register('agi-workforce.refreshConversations', () => {
       conversationTreeProvider.refresh();
     }),
 
-    vscode.commands.registerCommand('agi-workforce.showSessionsHistory', async () => {
+    register('agi-workforce.showSessionsHistory', async () => {
       const conversations = conversationStore.getAll();
 
       if (conversations.length === 0) {
@@ -483,7 +495,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── desktop bridge commands ─────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.sendToDesktop', async () => {
+    register('agi-workforce.sendToDesktop', async () => {
       const bridge = getDesktopBridge();
       if (bridge === undefined || bridge.status !== 'connected') {
         vscode.window.showWarningMessage(
@@ -518,7 +530,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.syncContextToDesktop', async () => {
+    register('agi-workforce.syncContextToDesktop', async () => {
       const bridge = getDesktopBridge();
       if (bridge === undefined || bridge.status !== 'connected') {
         vscode.window.showWarningMessage(
@@ -537,7 +549,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.triggerAgentAction', async () => {
+    register('agi-workforce.triggerAgentAction', async () => {
       const bridge = getDesktopBridge();
       if (bridge === undefined || bridge.status !== 'connected') {
         vscode.window.showWarningMessage(
@@ -586,7 +598,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── feedback ────────────────────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.sendFeedback', async () => {
+    register('agi-workforce.sendFeedback', async () => {
       const FEEDBACK_TYPES: vscode.QuickPickItem[] = [
         {
           label: '$(bug) Report a Bug',
@@ -655,7 +667,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── checkpoint commands ─────────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.createCheckpoint', async () => {
+    register('agi-workforce.createCheckpoint', async () => {
       const mgr = getCheckpointManager();
       if (mgr === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
@@ -684,7 +696,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.restoreCheckpoint', async () => {
+    register('agi-workforce.restoreCheckpoint', async () => {
       const mgr = getCheckpointManager();
       if (mgr === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
@@ -727,7 +739,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.listCheckpoints', async () => {
+    register('agi-workforce.listCheckpoints', async () => {
       const mgr = getCheckpointManager();
       if (mgr === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
@@ -776,7 +788,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     // affect the literal command we intend to run, and so shell metacharacters
     // in dynamic args (commit messages) are passed as a single argv entry —
     // never interpreted by a shell.
-    vscode.commands.registerCommand('agi.git.status', async () => {
+    register('agi.git.status', async () => {
       const folder = await getActiveWorkspaceFolder();
       if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
@@ -785,7 +797,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await runGitToOutputChannel(['status'], folder.uri.fsPath, 'git status');
     }),
 
-    vscode.commands.registerCommand('agi.git.diff', async () => {
+    register('agi.git.diff', async () => {
       const folder = await getActiveWorkspaceFolder();
       if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
@@ -794,7 +806,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await runGitToOutputChannel(['diff'], folder.uri.fsPath, 'git diff');
     }),
 
-    vscode.commands.registerCommand('agi.git.commit', async () => {
+    register('agi.git.commit', async () => {
       const msg = await vscode.window.showInputBox({
         prompt: 'Commit message',
         placeHolder: 'feat: ...',
@@ -844,7 +856,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       vscode.window.showInformationMessage(`AGI Workforce: committed "${msg.slice(0, 60)}"`);
     }),
 
-    vscode.commands.registerCommand('agi.test.run', async () => {
+    register('agi.test.run', async () => {
       // EXTV-3: refuse in untrusted workspaces
       if (!vscode.workspace.isTrusted) {
         vscode.window.showWarningMessage(
@@ -881,20 +893,20 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     // ── misc commands ───────────────────────────────────────────────────────────
-    vscode.commands.registerCommand('agi-workforce.newConversation', () => {
+    register('agi-workforce.newConversation', () => {
       sidebarProvider.resetConversation();
       sidebarProvider.reveal();
     }),
 
-    vscode.commands.registerCommand('agi-workforce.modelDashboard', () => {
+    register('agi-workforce.modelDashboard', () => {
       ModelMetricsPanel.createOrShow(context.extensionUri, context);
     }),
 
-    vscode.commands.registerCommand('agi-workforce.rewindLast', () => {
+    register('agi-workforce.rewindLast', () => {
       sidebarProvider.rewindLast();
     }),
 
-    vscode.commands.registerCommand('agi-workforce.openActionSheet', async () => {
+    register('agi-workforce.openActionSheet', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
       const currentMode = Config.agentMode();
       const currentEffort = Config.agentEffort();
@@ -1084,7 +1096,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.showTierStatus', async () => {
+    register('agi-workforce.showTierStatus', async () => {
       const tierInfo = await fetchTierInfo(context.secrets);
       const tier =
         tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'unknown';
@@ -1146,7 +1158,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.setAgentMode', async () => {
+    register('agi-workforce.setAgentMode', async () => {
       const currentMode = Config.agentMode();
       function capMode(s: string): string {
         return s.charAt(0).toUpperCase() + s.slice(1);
@@ -1193,7 +1205,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.setAgentEffort', async () => {
+    register('agi-workforce.setAgentEffort', async () => {
       const currentEffort = Config.agentEffort();
       function capEffort(s: string): string {
         return s.charAt(0).toUpperCase() + s.slice(1);
@@ -1243,7 +1255,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     // assistant should remember. Workspace-scoped (per the goal contract:
     // VS Code is NOT a synced chat surface), persisted in globalState ONLY.
     // The companion sidebar tree (agi-workforce.memory view) provides list/edit/delete.
-    vscode.commands.registerCommand('agi-workforce.memory', async () => {
+    register('agi-workforce.memory', async () => {
       const action = await vscode.window.showQuickPick(
         [
           { label: '$(add) Add a memory fact', detail: 'add' },
@@ -1302,11 +1314,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     // ── memory tree commands ────────────────────────────────────────────────────
 
-    vscode.commands.registerCommand('agi-workforce.memory.refresh', () => {
+    register('agi-workforce.memory.refresh', () => {
       memoryTreeProvider.refresh();
     }),
 
-    vscode.commands.registerCommand('agi-workforce.memory.create', async () => {
+    register('agi-workforce.memory.create', async () => {
       const text = await vscode.window.showInputBox({
         title: 'AGI Workforce — Add Memory Fact',
         prompt:
@@ -1331,7 +1343,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       vscode.window.showInformationMessage('Memory fact saved.');
     }),
 
-    vscode.commands.registerCommand('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
+    register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
       const newText = await vscode.window.showInputBox({
         title: 'AGI Workforce — Edit Memory Fact',
         value: item.fact.text,
@@ -1353,7 +1365,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    vscode.commands.registerCommand('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
+    register('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
       const confirm = await vscode.window.showWarningMessage(
         `Delete this memory fact?\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
         { modal: true },
@@ -1374,14 +1386,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     // sign-in flow instead of the retired invite-code/waitlist modal, which
     // always failed with "account_auth_not_wired" regardless of what the
     // user entered.
-    vscode.commands.registerCommand('agi-workforce.openInviteCodeModal', async () => {
+    register('agi-workforce.openInviteCodeModal', async () => {
       await vscode.commands.executeCommand('agi-workforce.signIn');
     }),
   );
 
   // ── W6-07: Shift+Tab mode cycle ──────────────────────────────────────────────
   context.subscriptions.push(
-    vscode.commands.registerCommand('agi-workforce.cycleAgentMode', async () => {
+    register('agi-workforce.cycleAgentMode', async () => {
       const modes: ReadonlyArray<'ask' | 'auto' | 'plan' | 'bypass'> = [
         'ask',
         'auto',
@@ -1403,7 +1415,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
   // ── W6-02: Account & usage panel ─────────────────────────────────────────────
   context.subscriptions.push(
-    vscode.commands.registerCommand('agi-workforce.showAccountUsage', async () => {
+    register('agi-workforce.showAccountUsage', async () => {
       const { getTokenCounter } = await import('../data/tokenCounter');
       const { fetchTierInfo } = await import('../utils/api');
 
@@ -1480,7 +1492,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
   // ── W6 P2: Mention file from project ─────────────────────────────────────────
   context.subscriptions.push(
-    vscode.commands.registerCommand('agi-workforce.mentionFileFromProject', async () => {
+    register('agi-workforce.mentionFileFromProject', async () => {
       const uris = await vscode.window.showOpenDialog({
         canSelectMany: false,
         openLabel: 'Mention in Chat',
@@ -1500,6 +1512,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
   );
+
+  // Surface registration failures loudly — a command that silently loses its
+  // handler shows up to the user as a dead menu entry / dead keybinding.
+  if (failedCommandIds.length > 0) {
+    console.error(
+      `[AGI Workforce] ${failedCommandIds.length} command registration(s) failed: ${failedCommandIds.join(', ')}`,
+    );
+    vscode.window.showErrorMessage(
+      `AGI Workforce: ${failedCommandIds.length} command(s) failed to register (${failedCommandIds.join(', ')}). ` +
+        'Check the AGI subsystem-health status bar item for details.',
+    );
+  }
 }
 
 function formatK(n: number): string {

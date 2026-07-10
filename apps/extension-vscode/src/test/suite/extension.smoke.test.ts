@@ -40,18 +40,26 @@ suite('AGI Workforce extension — smoke', () => {
       (ext.packageJSON as { contributes?: { commands?: Array<{ command: string }> } }).contributes
         ?.commands ?? []
     ).map((c) => c.command);
-    const all = await vscode.commands.getCommands(true);
-    for (const id of declared) {
-      assert.ok(
-        all.includes(id),
-        `command "${id}" declared in package.json is not registered at runtime`,
-      );
-    }
+    assert.ok(declared.length > 0, 'no commands declared in package.json contributes.commands');
+    const all = new Set(await vscode.commands.getCommands(true));
+    // Collect EVERY missing command before failing so a single run reports the
+    // full breakage surface instead of stopping at the first missing id.
+    const missing = declared.filter((id) => !all.has(id));
+    assert.deepStrictEqual(
+      missing,
+      [],
+      `${missing.length} command(s) declared in package.json are not registered at runtime:\n` +
+        missing.map((id) => `  - ${id}`).join('\n'),
+    );
   });
 
   test('newConversation command resolves without throwing', async () => {
     const all = await vscode.commands.getCommands(true);
-    if (!all.includes('agi-workforce.newConversation')) return; // skip if not present
+    // No silent skip: if the command is absent that is itself a failure.
+    assert.ok(
+      all.includes('agi-workforce.newConversation'),
+      'command "agi-workforce.newConversation" is not registered at runtime',
+    );
     await vscode.commands.executeCommand('agi-workforce.newConversation');
   });
 });
