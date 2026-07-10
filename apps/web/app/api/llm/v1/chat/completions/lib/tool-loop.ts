@@ -62,6 +62,7 @@ import {
   type SandboxSnapshot,
   type GeneratedFileWire,
 } from '@/lib/e2b/generated-files';
+import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
 import type { ProcessedRequest } from './request-processor';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -182,7 +183,7 @@ function sseDone(): SseLine {
  */
 const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
   [/\bweb_search|search_web|browser_search|perplexity/i, 'Searching the web'],
-  [/\bweb_fetch|fetch_url|http_request/i, 'Fetching page'],
+  [/\bweb_fetch|url_fetch|fetch_url|http_request/i, 'Fetching page'],
   [/\bcode_execut|execute_code|run_code|jupyter/i, 'Running code'],
   [/\bfile_read|view|read_file/i, 'Reading file'],
   [/\bfile_write|write_file|create_file/i, 'Writing file'],
@@ -200,6 +201,20 @@ export function toolStatusPhrase(toolName: string): string | undefined {
     if (pattern.test(toolName)) return phrase;
   }
   return undefined;
+}
+
+/**
+ * For url_fetch running events, upgrade the generic "Fetching page" phrase to
+ * "Fetching <domain>" (ChatGPT/Claude-style) when the args carry a parseable URL.
+ */
+function urlFetchDomainPhrase(args: Record<string, unknown> | undefined): string | undefined {
+  const raw = args?.['url'];
+  if (typeof raw !== 'string') return undefined;
+  try {
+    return `Fetching ${new URL(raw).hostname}`;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -227,7 +242,9 @@ export function toolStatusEvent(
   };
   // Only attach status_phrase and args on the running event to keep payloads small.
   if (status === 'running') {
-    const phrase = toolStatusPhrase(toolName);
+    const phrase =
+      (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
+      toolStatusPhrase(toolName);
     if (phrase) statusPayload['status_phrase'] = phrase;
     if (args && Object.keys(args).length > 0) statusPayload['args'] = args;
   }
@@ -309,6 +326,47 @@ function toolResultEvent(
             name: toolName,
             content: result,
             is_error: isError,
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+/** A citation source captured from a successful url_fetch. */
+export interface FetchedSource {
+  url: string;
+  title: string;
+}
+
+/**
+ * Emit an `x_search_results` SSE event carrying the CUMULATIVE list of fetched
+ * sources — the same content shape the Anthropic web_search path and the
+ * research loop's SourceAggregator emit, so the client's sources panel and [n]
+ * citations work unchanged. Emitting the full list each time keeps positions
+ * stable on the client, which replaces its source list per event.
+ *
+ * The additive `tool: 'url_fetch'` field lets clients distinguish fetch
+ * sources from web_search sources (e.g. to avoid synthesizing a web_search
+ * timeline entry). Existing fields are unchanged.
+ *
+ * Exported for unit testing only.
+ */
+export function fetchSourcesEvent(sources: FetchedSource[], responseModel: string): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_search_results: {
+            tool: 'url_fetch',
+            content: sources.map((source, index) => ({
+              type: 'web_search_result',
+              url: source.url,
+              title: source.title,
+              position: index + 1,
+            })),
           },
         },
         index: 0,
@@ -460,7 +518,24 @@ async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
   connectorExecutor?: ConnectorToolExecutor,
-): Promise<{ content: string; isError: boolean }> {
+): Promise<{ content: string; isError: boolean; source?: FetchedSource }> {
+  // Platform url_fetch: read-only page fetch, SSRF-guarded (see lib/url-fetch/).
+  // Executes on the auto path like E2B tools — no manual approval gate needed
+  // because it cannot mutate anything and every failure mode returns a
+  // structured error the model can react to. Successful fetches also return a
+  // `source` so the loop can emit it into the cumulative citations list.
+  if (isUrlFetchTool(toolCall.qualifiedName)) {
+    const outcome = await executeUrlFetch(toolCall.args);
+    if (!outcome.ok) {
+      return { content: `Fetch failed (${outcome.errorCode}): ${outcome.error}`, isError: true };
+    }
+    return {
+      content: `Fetched ${outcome.url} — ${outcome.title}\n\n${outcome.content}`,
+      isError: false,
+      source: { url: outcome.url, title: outcome.title },
+    };
+  }
+
   // E2B execution interception: if a code/file/folder execution tool is ever invoked, it
   // runs in the E2B sandbox (gated, fail-closed), never as a generic MCP tool.
   //
@@ -577,6 +652,7 @@ function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
  */
 function isToolOffered(qualifiedName: string, mcpTools: WebMcpToolDef[]): boolean {
   if (isExecutionTool(qualifiedName)) return true;
+  if (isUrlFetchTool(qualifiedName)) return true;
   return mcpTools.some((t) => t.qualifiedName === qualifiedName);
 }
 
@@ -621,6 +697,10 @@ export async function* runToolLoop(
 
   // Mutable message thread for re-invocations.
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
+
+  // Cumulative citation sources from url_fetch calls across ALL steps.
+  // Re-emitted in full whenever a new source lands so client positions stay stable.
+  const fetchedSources: FetchedSource[] = [];
 
   // Conversation-scoped E2B executor: resolved (created, or resumed from a paused
   // session) at most ONCE per loop invocation and reused across every execution-tool
@@ -686,7 +766,12 @@ export async function* runToolLoop(
       yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
     }
 
-    const results: { tc: PendingToolCall; content: string; isError: boolean }[] = [];
+    const results: {
+      tc: PendingToolCall;
+      content: string;
+      isError: boolean;
+      source?: FetchedSource;
+    }[] = [];
 
     // Execute read-only tools concurrently.
     const parallelResults = await Promise.all(
@@ -704,7 +789,8 @@ export async function* runToolLoop(
     }
 
     // Emit status + result events, and append tool result messages.
-    for (const { tc, content, isError } of results) {
+    let sourcesAdded = false;
+    for (const { tc, content, isError, source } of results) {
       yield encoder.encode(
         toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
       );
@@ -712,11 +798,21 @@ export async function* runToolLoop(
         toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
       );
 
+      // Fetched pages join the citations flow (dedupe by URL, stable positions).
+      if (source && !fetchedSources.some((s) => s.url === source.url)) {
+        fetchedSources.push(source);
+        sourcesAdded = true;
+      }
+
       messages.push({
         role: 'tool',
         content,
         tool_call_id: tc.id,
       });
+    }
+
+    if (sourcesAdded) {
+      yield encoder.encode(fetchSourcesEvent(fetchedSources, responseModel));
     }
   }
 
