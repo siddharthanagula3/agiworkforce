@@ -14,20 +14,31 @@
  * Cloud-only — gated behind FEATURES.connectors. When the flag is false a
  * waitlist placeholder is shown rather than a dead list.
  *
- * Connected state is local-only for now (stored in MMKV via settingsStore);
- * the actual OAuth flow will be routed through /api/connectors when
- * FEATURES.connectors flips to true.
+ * Connected state loads from GET /api/connectors (Neon-backed, Clerk-auth).
+ * Disconnect calls DELETE /api/connectors. Connect attempts POST — the server
+ * currently answers 501 for OAuth providers (per-provider OAuth flows are a
+ * tracked backend gap), so the connect action shows honest not-yet-available
+ * copy instead of faking a connection.
  */
 
-import { useCallback, useState } from 'react';
-import { View, Image, Pressable, Alert } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Image, Pressable, Alert, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Plug, Link, CheckCircle } from 'lucide-react-native';
+import { Plug, Link, CheckCircle, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import {
+  CloudSyncBlockedBanner,
+  SettingsInfo,
+  SettingsScreenShell,
+} from '@/src/features/settings/common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { useConnectorsStore } from '@/src/features/connectors/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import {
+  listConnectedConnectors,
+  disconnectConnector,
+  type ConnectedConnector,
+} from '@/services/connectors';
 
 // ---------------------------------------------------------------------------
 // simple-icons SVG paths (v16 confirmed present — mirrors ConnectorLogo.tsx)
@@ -432,13 +443,18 @@ function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?
 function ConnectorCard({
   entry,
   connected,
+  connectedAt,
   onPress,
 }: {
   entry: ConnectorEntry;
   connected: boolean;
+  connectedAt?: string;
   onPress: () => void;
 }) {
   const colors = useThemeColors();
+  const connectedLabel = connectedAt
+    ? `Connected ${new Date(connectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    : 'Connected';
 
   return (
     <Pressable
@@ -463,7 +479,7 @@ function ConnectorCard({
           {entry.name}
         </Text>
         <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-          {entry.description}
+          {connected ? connectedLabel : entry.description}
         </Text>
       </View>
       {connected ? (
@@ -526,44 +542,71 @@ function WaitlistPlaceholder() {
 
 export default function CloudConnectorsScreen() {
   const colors = useThemeColors();
-  // Connected IDs persisted locally via the connectors store until /api/connectors OAuth is active
-  const connectedIds = useConnectorsStore((s) => s.connectedIds);
-  const toggle = useConnectorsStore((s) => s.toggle);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const isCloudModeActive = appMode === 'cloud';
 
-  const isConnected = useCallback((id: string) => connectedIds.includes(id), [connectedIds]);
+  const [connections, setConnections] = useState<ConnectedConnector[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setConnections(await listConnectedConnectors());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load connectors');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // guardedFetch blocks cloud requests while chat is in Local mode — skip the
+  // doomed request and show the switch-to-cloud banner instead (same pattern
+  // as the Usage screen).
+  useEffect(() => {
+    if (FEATURES.connectors && isCloudModeActive) void load();
+  }, [load, isCloudModeActive]);
+
+  const connectionFor = useCallback(
+    (id: string) => connections?.find((c) => c.connectorId === id),
+    [connections],
+  );
 
   const handlePress = useCallback(
     (entry: ConnectorEntry) => {
-      // Unreachable while !FEATURES.connectors — the catalog below only renders
-      // when the flag is on. Kept as a defensive fallback with accurate copy
-      // (Connectors are gated by the feature flag, not by AGI Cloud sign-in).
-      if (!FEATURES.connectors) {
-        Alert.alert(
-          `${entry.name}`,
-          'Connectors aren’t available on mobile yet. We’ll notify you when they ship.',
-          [{ text: 'OK' }],
-        );
-        return;
-      }
-      if (isConnected(entry.id)) {
+      const connection = connectionFor(entry.id);
+      if (connection) {
         Alert.alert(`Disconnect ${entry.name}?`, 'Remove this connector from your account.', [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Disconnect',
             style: 'destructive',
-            onPress: () => toggle(entry.id),
+            onPress: () => {
+              disconnectConnector(entry.id)
+                .then(() => load())
+                .catch(() => {
+                  Alert.alert(
+                    'Could not disconnect',
+                    `Disconnecting ${entry.name} failed. Please try again.`,
+                  );
+                });
+            },
           },
         ]);
       } else {
-        // In a live version: router.push to an OAuth flow screen
+        // Server-side OAuth flows for individual providers are not live yet
+        // (POST /api/connectors answers 501 for OAuth connectors) — be honest
+        // rather than faking a connected state.
         Alert.alert(
           `Connect ${entry.name}`,
-          'OAuth flow will open in your browser when AGI Cloud connectors are active.',
+          `${entry.name} sign-in isn't available on mobile yet. It's coming soon.`,
           [{ text: 'OK' }],
         );
       }
     },
-    [isConnected, toggle],
+    [connectionFor, load],
   );
 
   return (
@@ -576,7 +619,52 @@ export default function CloudConnectorsScreen() {
 
       {!FEATURES.connectors && <WaitlistPlaceholder />}
 
+      {FEATURES.connectors && !isCloudModeActive && (
+        <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
+      )}
+
+      {FEATURES.connectors && isCloudModeActive && loading && !connections && (
+        <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+          <ActivityIndicator size="large" color={colors.teal} />
+        </View>
+      )}
+
+      {FEATURES.connectors && isCloudModeActive && error && (
+        <View
+          style={{
+            borderRadius: 12,
+            backgroundColor: colors.dangerSurface,
+            borderWidth: 1,
+            borderColor: colors.dangerBorder,
+            padding: 12,
+            marginBottom: 18,
+          }}
+        >
+          <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
+          <Pressable
+            onPress={() => void load()}
+            disabled={loading}
+            accessibilityLabel="Retry loading connectors"
+            accessibilityRole="button"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              marginTop: 10,
+              minHeight: 32,
+            }}
+          >
+            <RefreshCw size={14} color={colors.agentError} />
+            <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+              {loading ? 'Retrying…' : 'Retry'}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {FEATURES.connectors &&
+        isCloudModeActive &&
+        !error &&
         CATEGORIES.map((cat) => {
           const entries = CATALOG.filter((c) => c.category === cat);
           return (
@@ -610,7 +698,8 @@ export default function CloudConnectorsScreen() {
                     )}
                     <ConnectorCard
                       entry={entry}
-                      connected={isConnected(entry.id)}
+                      connected={!!connectionFor(entry.id)}
+                      connectedAt={connectionFor(entry.id)?.connectedAt}
                       onPress={() => handlePress(entry)}
                     />
                   </View>

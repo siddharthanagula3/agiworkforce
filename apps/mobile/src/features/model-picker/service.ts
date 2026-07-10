@@ -20,6 +20,7 @@ import {
   canAccessModelForSubscriptionTier,
   getAllowedModelsForTier,
   getMinimumRequiredTier,
+  normalizeBillingPlanTier,
   normalizeModelId,
   type EnvironmentAvailability,
   type ModelEnvironment,
@@ -405,19 +406,46 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
   return applyEnvironmentGate(def, undefined);
 }
 
-// Public-facing capability labels for specific cloud models: we surface what the
-// model is good for ("Super Fast", "Thinking") instead of the raw model id, while
-// the provider logo still identifies who makes it. Scoped to explicit ids so every
-// other model keeps its real name until we deliberately extend this mapping.
-// FIXME(P1): migrate these labels to a catalog-driven capability/label field so the
-// model-id keys are not hardcoded here (mobile cheapest-tier display names).
-/* eslint-disable no-restricted-syntax -- curated mobile display-name map; explicit model ids are intentional and degrade gracefully (override simply not applied if an id is renamed) */
-const CLOUD_DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+// ---------------------------------------------------------------------------
+// Subscription-tier presentation (Free/Basic = capability presets, Pro+ = real
+// provider model names).
+//
+// Free and Basic users pick CAPABILITIES ("Super Fast", "Thinking", "Coder");
+// the model-id mapping stays internal. Pro and above see the actual provider
+// models with no preset names anywhere. The underlying access set matches the
+// server gate exactly (economy list for Free/Basic — canAccessCloudModelForTier).
+//
+// FIXME(P1): migrate these labels to a catalog-driven capability/label field so
+// the model-id keys are not hardcoded here.
+// ---------------------------------------------------------------------------
+
+/* eslint-disable no-restricted-syntax -- curated capability-preset map over the economy tier list; explicit model ids are intentional and degrade gracefully (a renamed id simply keeps its real name) */
+const CAPABILITY_PRESET_NAMES: Record<string, string> = {
   'gpt-4.1-nano': 'Super Fast', // OpenAI: no reasoning tokens — fastest, cheapest
   'gemini-3.1-flash-lite': 'Super Fast', // Google: cheapest fast chat model
   'gpt-5-nano': 'Thinking', // OpenAI: supports reasoning tokens
+  'gpt-5.4-mini': 'Fast', // OpenAI: fast, affordable mini
+  'claude-haiku-4.5': 'Fast', // Anthropic: fastest tier
+  'deepseek-v4-flash': 'Coder', // DeepSeek: code-focused flash model
+  'qwen-3.5-plus': 'Balanced', // Qwen: multimodal all-rounder
+  'kimi-k2.6': 'Balanced', // Moonshot: multimodal all-rounder
+  'glm-5.2': 'Thinking', // Zhipu: reasoning model
+  sonar: 'Search', // Perplexity: search-grounded answers
 };
+
+/** Free plan keeps the picker minimal: only these presets appear as available
+ *  (OpenAI Super Fast/Thinking + Google Super Fast). Everything else shows as
+ *  locked upsell rows. NOTE: the QA spec also calls for a "Google Thinking"
+ *  free preset, but the economy tier list has no reasoning-capable Google
+ *  model — tracked gap, needs a catalog/tier decision, not a client hack. */
+const FREE_TIER_PRESET_MODEL_IDS = new Set(['gpt-4.1-nano', 'gpt-5-nano', 'gemini-3.1-flash-lite']);
 /* eslint-enable no-restricted-syntax */
+
+/** True when this subscription tier sees real provider model names (Pro+). */
+export function tierShowsRealModelNames(subscriptionTier?: string): boolean {
+  const tier = normalizeBillingPlanTier(subscriptionTier);
+  return tier === 'pro' || tier === 'max' || tier === 'team' || tier === 'enterprise';
+}
 
 function toCloudModelDef(
   model: CloudModelDef,
@@ -442,13 +470,15 @@ function toCloudModelDef(
       ? tierUpgradeLockReason(model.id)
       : undefined;
 
+  // Free/Basic (and signed-out previews) see capability presets; Pro+ sees
+  // real provider model names with no presets anywhere.
+  const presetName = tierShowsRealModelNames(subscriptionTier)
+    ? undefined
+    : CAPABILITY_PRESET_NAMES[model.id];
+
   const def: ModelDef = {
     id: model.id,
-    name:
-      CLOUD_DISPLAY_NAME_OVERRIDES[model.id] ||
-      model.name ||
-      CLOUD_ROUTE_FALLBACK_NAMES[model.provider] ||
-      'AGI Cloud',
+    name: presetName || model.name || CLOUD_ROUTE_FALLBACK_NAMES[model.provider] || 'AGI Cloud',
     provider: model.provider,
     providerLabel,
     contextWindow: model.contextWindow,
@@ -540,12 +570,18 @@ export function getModelListForCloudAccess(
   subscriptionTier?: string,
 ): ModelDef[] {
   if (!cloudUnlocked) return MODEL_LIST;
-  return [
-    ...LOCAL_MODEL_LIST,
-    ...Array.from(cloudModelSourceMap.values()).map((model) =>
-      toCloudModelDef(model, true, subscriptionTier),
-    ),
-  ];
+  let cloudDefs = Array.from(cloudModelSourceMap.values()).map((model) =>
+    toCloudModelDef(model, true, subscriptionTier),
+  );
+  // Free plan keeps the picker minimal: only the curated presets appear as
+  // available; the rest of the economy list is hidden (not shown at all) and
+  // premium models stay visible as locked upsell rows.
+  if (normalizeBillingPlanTier(subscriptionTier) === 'free') {
+    cloudDefs = cloudDefs.filter(
+      (def) => def.availability === 'locked' || FREE_TIER_PRESET_MODEL_IDS.has(def.id),
+    );
+  }
+  return [...LOCAL_MODEL_LIST, ...cloudDefs];
 }
 
 export function getModelsByProvider(providerId: string): ModelDef[] {
@@ -569,8 +605,10 @@ export function getDisplayName(id: string): string {
 export function getShortDisplayName(id: string): string {
   const autoMode = autoModeMap.get(id);
   if (autoMode) return autoMode.name;
+  // Always show the actual model name — the composer's model chip is the
+  // single source of truth for the active model. A generic "AGI Cloud" label
+  // here hid the selection and duplicated the mode toggle's Cloud copy.
   const model = getModelByIdForCloudAccess(id, true);
-  if (model?.surface === 'cloud_managed') return 'AGI Cloud';
   return model?.name ?? id;
 }
 
