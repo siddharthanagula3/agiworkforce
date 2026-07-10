@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, useClerk } from '@clerk/nextjs';
-import { Settings, LogOut, ChevronUp } from 'lucide-react';
+import { Settings, LogOut, ChevronUp, LibraryBig } from 'lucide-react';
 import {
   Sidebar,
   type SidebarSession,
@@ -204,6 +204,15 @@ export function WebAppShell({ children }: WebAppShellProps) {
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () => [
+      // Library — same persistent entry the chat page's sidebar carries, so
+      // navigating between /projects and /library keeps the link visible.
+      {
+        id: 'library',
+        label: 'Library',
+        icon: LibraryBig,
+        onClick: () => router.push('/library'),
+        isActive: false,
+      },
       {
         id: 'customize',
         label: 'Customize',
