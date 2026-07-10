@@ -49,3 +49,6 @@ e2e/.auth/
 
 # Chat app build (built from apps/desktop during CI)
 /public/chat/
+
+# clerk configuration (can include secrets)
+/.clerk/

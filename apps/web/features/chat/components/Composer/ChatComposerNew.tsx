@@ -25,7 +25,7 @@ import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
 import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
-import { SkillsMenu } from '../SkillsMenu';
+import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { SendButton } from './SendButton';
 import { ComposerFooter } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
@@ -259,6 +259,9 @@ const ChatComposerNewComponent = ({
     onError: (message) => setLocalNotice(message),
   });
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  // Settings-modal opener for the plus-menu Skills/Connectors/Plugins entries
+  // (founder directive 2026-07-10: entries open the modal pane, no inline lists).
+  const { openSettings } = useSettingsModal();
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
@@ -293,7 +296,6 @@ const ChatComposerNewComponent = ({
   const [codeExecutionEnabled, setCodeExecutionEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
-  const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
 
   // claude.ai-parity work-mode toggle (Chat | AGI Work). Segmented pill sits
   // immediately right of the "+" in the composer bottom row. When 'agiwork', a
@@ -479,7 +481,6 @@ const ChatComposerNewComponent = ({
     setResearchEnabled(false);
     setStyleMode('normal');
     setShowOverflowMenu(false);
-    setShowSkillsSubmenu(false);
     setShowStyleSubmenu(false);
     if (attachments.length > 0) {
       clearAttachments();
@@ -610,7 +611,6 @@ const ChatComposerNewComponent = ({
     function handleClickOutside(e: MouseEvent) {
       if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
         setShowOverflowMenu(false);
-        setShowSkillsSubmenu(false);
         setShowStyleSubmenu(false);
       }
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
@@ -626,7 +626,6 @@ const ChatComposerNewComponent = ({
     function handleEscapeKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
       setShowOverflowMenu(false);
-      setShowSkillsSubmenu(false);
       setShowStyleSubmenu(false);
       setShowMentions(false);
       setShowProjectMenu(false);
@@ -657,7 +656,6 @@ const ChatComposerNewComponent = ({
 
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
-    setShowSkillsSubmenu(false);
     setShowStyleSubmenu(false);
   }, []);
 
@@ -1135,192 +1133,194 @@ const ChatComposerNewComponent = ({
           {/* Control cluster — row 2, a single non-wrapping line (flex-nowrap). */}
           <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-2">
             {/* + Overflow Menu Button */}
-          <div className={cn('relative shrink-0')} ref={overflowRef}>
-            <button
-              onClick={() => {
-                const next = !showOverflowMenu;
-                setShowOverflowMenu(next);
-                if (!next) {
-                  setShowStyleSubmenu(false);
-                  setShowSkillsSubmenu(false);
-                }
-              }}
-              disabled={isLoading || composerDisabled}
-              className={cn(
-                'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
-                hasOverflowActive
-                  ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label="More options"
-              aria-expanded={showOverflowMenu}
-            >
-              <Plus className="h-5 w-5" />
-            </button>
+            <div className={cn('relative shrink-0')} ref={overflowRef}>
+              <button
+                onClick={() => {
+                  const next = !showOverflowMenu;
+                  setShowOverflowMenu(next);
+                  if (!next) {
+                    setShowStyleSubmenu(false);
+                  }
+                }}
+                disabled={isLoading || composerDisabled}
+                className={cn(
+                  'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                  hasOverflowActive
+                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
+                )}
+                aria-label="More options"
+                aria-expanded={showOverflowMenu}
+              >
+                <Plus className="h-5 w-5" />
+              </button>
 
-            {/* + Menu Popover */}
-            {showOverflowMenu && (
-              <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                {
-                  <>
-                    {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY below sm,
+              {/* + Menu Popover */}
+              {showOverflowMenu && (
+                <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                  {
+                    <>
+                      {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY below sm,
                         where the inline segmented toggle is hidden to free composer-row
                         width for the model selector. Keeps work-mode fully switchable on
                         the narrow (mobile) composer instead of dropping the control. */}
-                    {!imageMode && (
-                      <div className="sm:hidden">
-                        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-                          <span className="flex-1 text-left text-sm">Mode</span>
-                          <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
-                            {(['chat', 'agiwork'] as const).map((mode) => (
-                              <button
-                                key={mode}
-                                type="button"
-                                onClick={() => setWorkMode(mode)}
-                                disabled={isLoading || composerDisabled}
-                                aria-pressed={workMode === mode}
-                                className={cn(
-                                  'flex h-7 items-center rounded-full px-3 transition-colors',
-                                  workMode === mode
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground',
-                                  (isLoading || composerDisabled) &&
-                                    'cursor-not-allowed opacity-50',
-                                )}
-                              >
-                                {mode === 'chat' ? 'Chat' : 'AGI Work'}
-                              </button>
-                            ))}
+                      {!imageMode && (
+                        <div className="sm:hidden">
+                          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+                            <span className="flex-1 text-left text-sm">Mode</span>
+                            <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
+                              {(['chat', 'agiwork'] as const).map((mode) => (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => setWorkMode(mode)}
+                                  disabled={isLoading || composerDisabled}
+                                  aria-pressed={workMode === mode}
+                                  className={cn(
+                                    'flex h-7 items-center rounded-full px-3 transition-colors',
+                                    workMode === mode
+                                      ? 'bg-background text-foreground shadow-sm'
+                                      : 'text-muted-foreground hover:text-foreground',
+                                    (isLoading || composerDisabled) &&
+                                      'cursor-not-allowed opacity-50',
+                                  )}
+                                >
+                                  {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                                </button>
+                              ))}
+                            </div>
                           </div>
+                          <div className="my-1 border-t border-border/40" />
                         </div>
-                        <div className="my-1 border-t border-border/40" />
-                      </div>
-                    )}
-
-                    {/* 1. Add photos */}
-                    <button
-                      type="button"
-                      disabled={!modelSupportsVision || isFreeTrial}
-                      onClick={() => {
-                        fileInputRef.current?.click();
-                        closeMenu();
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                        (!modelSupportsVision || isFreeTrial) && 'cursor-not-allowed opacity-50',
                       )}
-                      title={
-                        isFreeTrial
-                          ? 'Upgrade to attach photos & files'
-                          : modelSupportsVision
-                            ? undefined
-                            : "This model can't read images"
-                      }
-                    >
-                      <Paperclip className="h-4 w-4 text-muted-foreground" />
-                      <span className="flex-1 text-left">Add photos &amp; files</span>
-                    </button>
 
-                    {/* 2. Create image */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImageMode(true);
-                        closeMenu();
-                        setTimeout(() => textareaRef.current?.focus(), 0);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                        imageMode && 'text-primary',
-                      )}
-                    >
-                      <ImagePlus
-                        className={cn(
-                          'h-4 w-4',
-                          imageMode ? 'text-primary' : 'text-muted-foreground',
-                        )}
-                      />
-                      <span className="flex-1 text-left">Create image</span>
-                    </button>
-
-                    {/* 3. Take a screenshot — desktop-only capability. Render-gated
-                        so it is ABSENT (not merely disabled) on web/mobile. */}
-                    {canTakeScreenshotCap && (
+                      {/* 1. Add photos */}
                       <button
                         type="button"
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                        disabled={!modelSupportsVision || isFreeTrial}
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                          closeMenu();
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                          (!modelSupportsVision || isFreeTrial) && 'cursor-not-allowed opacity-50',
+                        )}
+                        title={
+                          isFreeTrial
+                            ? 'Upgrade to attach photos & files'
+                            : modelSupportsVision
+                              ? undefined
+                              : "This model can't read images"
+                        }
                       >
-                        <Camera className="h-4 w-4" />
-                        <span className="flex-1 text-left">Take a screenshot</span>
+                        <Paperclip className="h-4 w-4 text-muted-foreground" />
+                        <span className="flex-1 text-left">Add photos &amp; files</span>
                       </button>
-                    )}
 
-                    {/* 4. Select working folder — desktop-only capability (local
+                      {/* 2. Create image */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageMode(true);
+                          closeMenu();
+                          setTimeout(() => textareaRef.current?.focus(), 0);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                          imageMode && 'text-primary',
+                        )}
+                      >
+                        <ImagePlus
+                          className={cn(
+                            'h-4 w-4',
+                            imageMode ? 'text-primary' : 'text-muted-foreground',
+                          )}
+                        />
+                        <span className="flex-1 text-left">Create image</span>
+                      </button>
+
+                      {/* 3. Take a screenshot — desktop-only capability. Render-gated
+                        so it is ABSENT (not merely disabled) on web/mobile. */}
+                      {canTakeScreenshotCap && (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                        >
+                          <Camera className="h-4 w-4" />
+                          <span className="flex-1 text-left">Take a screenshot</span>
+                        </button>
+                      )}
+
+                      {/* 4. Select working folder — desktop-only capability (local
                         File System Access). Render-gated: ABSENT on web/mobile.
                         The browser-API `canPickFolder` check is NOT the platform
                         gate; it only disables when the desktop browser lacks the
                         API. */}
-                    {canUseWorkingDirectory && (
+                      {canUseWorkingDirectory && (
+                        <button
+                          type="button"
+                          disabled={!canPickFolder}
+                          title={
+                            canPickFolder
+                              ? folderName
+                                ? `Working folder: ${folderName}`
+                                : undefined
+                              : 'Folder access is not supported in this browser'
+                          }
+                          onClick={() => {
+                            pickFolder();
+                            closeMenu();
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                            !canPickFolder && 'cursor-not-allowed opacity-50',
+                            canPickFolder && folderName
+                              ? 'text-amber-300 hover:bg-muted/60'
+                              : 'hover:bg-muted/60',
+                          )}
+                        >
+                          {folderName ? (
+                            <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
+                          ) : (
+                            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          )}
+                          <span className="flex-1 text-left">
+                            {folderName ? folderName : 'Add working folder'}
+                          </span>
+                          {folderName && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                clearFolder();
+                              }}
+                              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                              aria-label="Clear working folder"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                          {!canPickFolder && (
+                            <span className="text-[10px] text-muted-foreground">Not supported</span>
+                          )}
+                        </button>
+                      )}
+
+                      {/* Divider */}
+                      <div className="my-1 border-t border-border/30" />
+
+                      {/* 5. Skills -- entry point that opens the settings modal at
+                        the Skills pane (founder directive 2026-07-10: the plus-menu
+                        holds ENTRIES, not inline lists — the lists live in the
+                        settings modal). Per-message skill selection stays available
+                        via the @mention dropdown in the textarea. */}
                       <button
                         type="button"
-                        disabled={!canPickFolder}
-                        title={
-                          canPickFolder
-                            ? folderName
-                              ? `Working folder: ${folderName}`
-                              : undefined
-                            : 'Folder access is not supported in this browser'
-                        }
                         onClick={() => {
-                          pickFolder();
                           closeMenu();
-                        }}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                          !canPickFolder && 'cursor-not-allowed opacity-50',
-                          canPickFolder && folderName
-                            ? 'text-amber-300 hover:bg-muted/60'
-                            : 'hover:bg-muted/60',
-                        )}
-                      >
-                        {folderName ? (
-                          <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
-                        ) : (
-                          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        )}
-                        <span className="flex-1 text-left">
-                          {folderName ? folderName : 'Add working folder'}
-                        </span>
-                        {folderName && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearFolder();
-                            }}
-                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                            aria-label="Clear working folder"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                        {!canPickFolder && (
-                          <span className="text-[10px] text-muted-foreground">Not supported</span>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Divider */}
-                    <div className="my-1 border-t border-border/30" />
-
-                    {/* 5. Skills -- right flyout */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSkillsSubmenu((prev) => !prev);
-                          setShowStyleSubmenu(false);
+                          openSettings('skills');
                         }}
                         className={cn(
                           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
@@ -1339,224 +1339,208 @@ const ChatComposerNewComponent = ({
                         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
 
-                      {showSkillsSubmenu && (
-                        <div className="absolute left-full top-0 z-50 ml-1 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl">
-                          <SkillsMenu
-                            query=""
-                            onSelect={(skill) => {
-                              setSelectedSkill({
-                                id: skill.name,
-                                name: skill.name,
-                                description: skill.description,
-                                category: skill.source,
-                              });
-                              closeMenu();
-                            }}
-                            onClose={() => setShowSkillsSubmenu(false)}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 6. Connectors -- routes to the Connectors settings section.
-                        The web chat runtime's tool loop is assembled from
-                        operator-deployed MCP servers (loadWebMcpConfig), not from
-                        the user's connected-connector state (that row is only read
-                        back by /api/connectors itself, never by the chat route or
-                        tool-loop). Per-conversation connector enablement therefore
-                        has NO runtime backing today, so an inline connect toggle
-                        here would imply a mid-chat capability that does not exist.
-                        The honest surface is a link to the Connectors settings
-                        page, mirroring Plugins below — no fake toggles. */}
-                    <a
-                      href="/connectors"
-                      onClick={closeMenu}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                    >
-                      {/* Simple connector icon */}
-                      <svg
-                        className="h-4 w-4 text-muted-foreground"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        aria-hidden="true"
-                      >
-                        <circle cx="3.5" cy="8" r="2" />
-                        <circle cx="12.5" cy="8" r="2" />
-                        <path d="M5.5 8h5" />
-                      </svg>
-                      <span className="flex-1 text-left">Connectors</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    </a>
-
-                    {/* 7. Plugins */}
-                    <a
-                      href="/plugins"
-                      onClick={closeMenu}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                    >
-                      <svg
-                        className="h-4 w-4"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        aria-hidden="true"
-                      >
-                        <rect x="2" y="2" width="5" height="5" rx="1" />
-                        <rect x="9" y="2" width="5" height="5" rx="1" />
-                        <rect x="2" y="9" width="5" height="5" rx="1" />
-                        <path d="M11.5 9v6M9 11.5h6" />
-                      </svg>
-                      <span className="flex-1 text-left">Plugins</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    </a>
-
-                    {/* Divider */}
-                    <div className="my-1 border-t border-border/30" />
-
-                    {/* 8. Web search toggle */}
-                    <MenuToggleRow
-                      icon={Globe}
-                      label="Web search"
-                      checked={webSearchEnabled}
-                      onToggle={() => {
-                        handleWebSearchToggle();
-                        closeMenu();
-                      }}
-                      disabled={isLoading || disabled || !modelSupportsSearch}
-                      title={
-                        !modelSupportsSearch
-                          ? "Web search isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
-                          : undefined
-                      }
-                    />
-
-                    {/* 8a. Deep Research toggle */}
-                    <MenuToggleRow
-                      icon={Telescope}
-                      label="Deep Research"
-                      checked={researchEnabled}
-                      onToggle={() => {
-                        handleResearchToggle();
-                        closeMenu();
-                      }}
-                      disabled={isLoading || disabled || !modelSupportsResearch}
-                      title={
-                        !modelSupportsResearch
-                          ? "Deep Research isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
-                          : undefined
-                      }
-                    />
-
-                    {/* 8b. Code execution toggle */}
-                    <MenuToggleRow
-                      icon={Terminal}
-                      label="Run code"
-                      checked={codeExecutionEnabled}
-                      onToggle={() => {
-                        handleCodeExecutionToggle();
-                        closeMenu();
-                      }}
-                      disabled={isLoading || disabled || !modelSupportsCodeExecution}
-                    />
-
-                    {/* 8c. Extended thinking — enables thinking effort. Cycling the
-                        effort level lives in the model picker; here it's a simple
-                        on affordance so the control is not lost from the input row. */}
-                    <MenuToggleRow
-                      icon={Brain}
-                      label={
-                        thinkingEnabled
-                          ? `Extended thinking · ${EFFORT_LABEL[thinkingEffort]}`
-                          : 'Extended thinking'
-                      }
-                      checked={thinkingEnabled}
-                      onToggle={() => {
-                        handleThinkingClick();
-                        closeMenu();
-                      }}
-                      disabled={isLoading || disabled || !modelSupportsThinkingCap}
-                    />
-
-                    {/* 8d. Incognito / temporary chat toggle */}
-                    {activeConversationId && (
-                      <MenuToggleRow
-                        icon={EyeOff}
-                        label="Temporary chat"
-                        checked={isIncognito}
-                        onToggle={() => {
-                          handleIncognitoToggle();
-                          closeMenu();
-                        }}
-                        disabled={!canToggleIncognito}
-                      />
-                    )}
-
-                    {/* 9. Use style -- right flyout */}
-                    <div className="relative">
+                      {/* 6. Connectors -- entry point that opens the settings modal
+                        at the Connectors pane. An inline connect toggle here would
+                        imply a mid-chat capability that does not exist (per-
+                        conversation connector enablement has no runtime backing),
+                        so the honest surface is the settings pane — no fake
+                        toggles, no inline list. */}
                       <button
                         type="button"
                         onClick={() => {
-                          setShowStyleSubmenu((prev) => !prev);
-                          setShowSkillsSubmenu(false);
+                          closeMenu();
+                          openSettings('connectors');
                         }}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          styleMode !== 'normal' && 'text-primary',
-                        )}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                       >
-                        <Wand2
-                          className={cn(
-                            'h-4 w-4',
-                            styleMode !== 'normal' ? 'text-primary' : 'text-muted-foreground',
-                          )}
-                        />
-                        <span className="flex-1 text-left">
-                          {styleMode === 'normal'
-                            ? 'Use style'
-                            : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ?? 'Use style')}
-                        </span>
+                        {/* Simple connector icon */}
+                        <svg
+                          className="h-4 w-4 text-muted-foreground"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          aria-hidden="true"
+                        >
+                          <circle cx="3.5" cy="8" r="2" />
+                          <circle cx="12.5" cy="8" r="2" />
+                          <path d="M5.5 8h5" />
+                        </svg>
+                        <span className="flex-1 text-left">Connectors</span>
                         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
 
-                      {showStyleSubmenu && (
-                        <div className="absolute left-full top-0 z-50 ml-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                          {STYLE_OPTIONS.map((option) => (
-                            <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => {
-                                setStyleMode(option.id);
-                                closeMenu();
-                              }}
-                              className={cn(
-                                'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                                styleMode === option.id
-                                  ? 'bg-primary/10 text-primary'
-                                  : 'hover:bg-muted/60',
-                              )}
-                            >
-                              <span className="flex-1 text-left">{option.label}</span>
-                              <span className="text-[11px] text-muted-foreground">
-                                {option.description}
-                              </span>
-                              {styleMode === option.id && (
-                                <Check className="h-3 w-3 shrink-0 text-primary" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                }
-              </div>
-            )}
-          </div>
+                      {/* 7. Plugins -- entry point that opens the settings modal at
+                        the Plugins pane. */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeMenu();
+                          openSettings('plugins');
+                        }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          aria-hidden="true"
+                        >
+                          <rect x="2" y="2" width="5" height="5" rx="1" />
+                          <rect x="9" y="2" width="5" height="5" rx="1" />
+                          <rect x="2" y="9" width="5" height="5" rx="1" />
+                          <path d="M11.5 9v6M9 11.5h6" />
+                        </svg>
+                        <span className="flex-1 text-left">Plugins</span>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
 
-          {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai parity.
+                      {/* Divider */}
+                      <div className="my-1 border-t border-border/30" />
+
+                      {/* 8. Web search toggle */}
+                      <MenuToggleRow
+                        icon={Globe}
+                        label="Web search"
+                        checked={webSearchEnabled}
+                        onToggle={() => {
+                          handleWebSearchToggle();
+                          closeMenu();
+                        }}
+                        disabled={isLoading || disabled || !modelSupportsSearch}
+                        title={
+                          !modelSupportsSearch
+                            ? "Web search isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
+                            : undefined
+                        }
+                      />
+
+                      {/* 8a. Deep Research toggle */}
+                      <MenuToggleRow
+                        icon={Telescope}
+                        label="Deep Research"
+                        checked={researchEnabled}
+                        onToggle={() => {
+                          handleResearchToggle();
+                          closeMenu();
+                        }}
+                        disabled={isLoading || disabled || !modelSupportsResearch}
+                        title={
+                          !modelSupportsResearch
+                            ? "Deep Research isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
+                            : undefined
+                        }
+                      />
+
+                      {/* 8b. Code execution toggle */}
+                      <MenuToggleRow
+                        icon={Terminal}
+                        label="Run code"
+                        checked={codeExecutionEnabled}
+                        onToggle={() => {
+                          handleCodeExecutionToggle();
+                          closeMenu();
+                        }}
+                        disabled={isLoading || disabled || !modelSupportsCodeExecution}
+                      />
+
+                      {/* 8c. Extended thinking — enables thinking effort. Cycling the
+                        effort level lives in the model picker; here it's a simple
+                        on affordance so the control is not lost from the input row. */}
+                      <MenuToggleRow
+                        icon={Brain}
+                        label={
+                          thinkingEnabled
+                            ? `Extended thinking · ${EFFORT_LABEL[thinkingEffort]}`
+                            : 'Extended thinking'
+                        }
+                        checked={thinkingEnabled}
+                        onToggle={() => {
+                          handleThinkingClick();
+                          closeMenu();
+                        }}
+                        disabled={isLoading || disabled || !modelSupportsThinkingCap}
+                      />
+
+                      {/* 8d. Incognito / temporary chat toggle */}
+                      {activeConversationId && (
+                        <MenuToggleRow
+                          icon={EyeOff}
+                          label="Temporary chat"
+                          checked={isIncognito}
+                          onToggle={() => {
+                            handleIncognitoToggle();
+                            closeMenu();
+                          }}
+                          disabled={!canToggleIncognito}
+                        />
+                      )}
+
+                      {/* 9. Use style -- right flyout */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowStyleSubmenu((prev) => !prev);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                            styleMode !== 'normal' && 'text-primary',
+                          )}
+                        >
+                          <Wand2
+                            className={cn(
+                              'h-4 w-4',
+                              styleMode !== 'normal' ? 'text-primary' : 'text-muted-foreground',
+                            )}
+                          />
+                          <span className="flex-1 text-left">
+                            {styleMode === 'normal'
+                              ? 'Use style'
+                              : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ??
+                                'Use style')}
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+
+                        {showStyleSubmenu && (
+                          <div className="absolute left-full top-0 z-50 ml-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                            {STYLE_OPTIONS.map((option) => (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => {
+                                  setStyleMode(option.id);
+                                  closeMenu();
+                                }}
+                                className={cn(
+                                  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                                  styleMode === option.id
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'hover:bg-muted/60',
+                                )}
+                              >
+                                <span className="flex-1 text-left">{option.label}</span>
+                                <span className="text-[11px] text-muted-foreground">
+                                  {option.description}
+                                </span>
+                                {styleMode === option.id && (
+                                  <Check className="h-3 w-3 shrink-0 text-primary" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  }
+                </div>
+              )}
+            </div>
+
+            {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai parity.
               Sits immediately right of the "+" button. All the old always-present
               tool "pills" (Search / Research / Run code / Think / Incognito) moved
               INTO the + menu, so the composer bottom row stays a SINGLE
@@ -1568,82 +1552,144 @@ const ChatComposerNewComponent = ({
               coexist on one row, so — like claude.ai's mobile composer — the toggle and
               style drop out of the row, leaving the model selector visible, tappable,
               and clear of Send. */}
-          {!imageMode && (
-            <div className="hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
-              {(['chat', 'agiwork'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setWorkMode(mode)}
-                  disabled={isLoading || composerDisabled}
-                  aria-pressed={workMode === mode}
-                  className={cn(
-                    'flex h-7 items-center rounded-full px-3 transition-colors',
-                    workMode === mode
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                    (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  {mode === 'chat' ? 'Chat' : 'AGI Work'}
-                </button>
-              ))}
-            </div>
-          )}
+            {!imageMode && (
+              <div className="hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
+                {(['chat', 'agiwork'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setWorkMode(mode)}
+                    disabled={isLoading || composerDisabled}
+                    aria-pressed={workMode === mode}
+                    className={cn(
+                      'flex h-7 items-center rounded-full px-3 transition-colors',
+                      workMode === mode
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                      (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
+                    )}
+                  >
+                    {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {/* Image-mode pills (only when the user is generating an image). */}
-          {imageMode && (
-            <div className={cn('flex shrink-0 items-center gap-1')}>
-              {/* Image pill: click to exit image mode */}
-              <button
-                type="button"
-                onClick={() => {
-                  setImageMode(false);
-                  setImageAspectRatio('auto');
-                  setImageModelId(IMAGE_MODEL_DEFAULT);
-                }}
-                className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
-                aria-label="Exit image generation mode"
-                title="Click to exit image generation mode"
-              >
-                <ImageIcon className="h-3.5 w-3.5" />
-                <span>Image</span>
-                <X className="h-3 w-3 opacity-60" />
-              </button>
-
-              {/* Aspect ratio selector */}
-              <div className="relative">
+            {/* Image-mode pills (only when the user is generating an image). */}
+            {imageMode && (
+              <div className={cn('flex shrink-0 items-center gap-1')}>
+                {/* Image pill: click to exit image mode */}
                 <button
                   type="button"
                   onClick={() => {
-                    setShowImageAspectMenu((p) => !p);
-                    setShowImageModelMenu(false);
+                    setImageMode(false);
+                    setImageAspectRatio('auto');
+                    setImageModelId(IMAGE_MODEL_DEFAULT);
+                  }}
+                  className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
+                  aria-label="Exit image generation mode"
+                  title="Click to exit image generation mode"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  <span>Image</span>
+                  <X className="h-3 w-3 opacity-60" />
+                </button>
+
+                {/* Aspect ratio selector */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImageAspectMenu((p) => !p);
+                      setShowImageModelMenu(false);
+                    }}
+                    className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                    aria-label="Select aspect ratio"
+                  >
+                    {IMAGE_ASPECT_OPTIONS.find((o) => o.id === imageAspectRatio)?.label ?? 'Auto'}
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                  {showImageAspectMenu && (
+                    <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                      {IMAGE_ASPECT_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setImageAspectRatio(opt.id);
+                            setShowImageAspectMenu(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                            imageAspectRatio === opt.id
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-muted/60',
+                          )}
+                        >
+                          <span className="flex-1 text-left">{opt.label}</span>
+                          {imageAspectRatio === opt.id && (
+                            <Check className="h-3 w-3 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Model selector. In normal mode the full ComposerFooter sits inline beside
+              the send button. In image mode the image-model picker takes its place —
+              both use `ml-auto` so they right-align and push the mic + send to the
+              right edge of the toolbar. In the flex-nowrap control row the footer is
+              the only shrinkable item (min-w-0), so it truncates instead of wrapping. */}
+            {!imageMode && (
+              <ComposerFooter
+                inline
+                className="ml-auto min-w-0"
+                showModelSelector
+                lockModelSelector={false}
+                showStyleSelector={!isFreeTrial}
+                onUpgradeRequest={onUpgradeRequest}
+              />
+            )}
+
+            {imageMode && (
+              <div className="relative ml-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImageModelMenu((p) => !p);
+                    setShowImageAspectMenu(false);
                   }}
                   className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                  aria-label="Select aspect ratio"
+                  aria-label="Select image model"
                 >
-                  {IMAGE_ASPECT_OPTIONS.find((o) => o.id === imageAspectRatio)?.label ?? 'Auto'}
-                  <ChevronDown className="h-3 w-3" />
+                  <span className="max-w-[120px] truncate">
+                    {IMAGE_MODELS.find((m) => m.id === imageModelId)?.label ??
+                      'Gemini 3.1 Flash Image'}
+                  </span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
-                {showImageAspectMenu && (
-                  <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                    {IMAGE_ASPECT_OPTIONS.map((opt) => (
+                {showImageModelMenu && (
+                  <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                    {IMAGE_MODELS.map((m) => (
                       <button
-                        key={opt.id}
+                        key={m.id}
                         type="button"
                         onClick={() => {
-                          setImageAspectRatio(opt.id);
-                          setShowImageAspectMenu(false);
+                          setImageModelId(m.id);
+                          setShowImageModelMenu(false);
                         }}
                         className={cn(
                           'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                          imageAspectRatio === opt.id
+                          imageModelId === m.id
                             ? 'bg-primary/10 text-primary'
                             : 'hover:bg-muted/60',
                         )}
                       >
-                        <span className="flex-1 text-left">{opt.label}</span>
-                        {imageAspectRatio === opt.id && (
+                        <span className="flex-1 text-left">{m.label}</span>
+                        {imageModelId === m.id && (
                           <Check className="h-3 w-3 shrink-0 text-primary" />
                         )}
                       </button>
@@ -1651,93 +1697,35 @@ const ChatComposerNewComponent = ({
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Model selector. In normal mode the full ComposerFooter sits inline beside
-              the send button. In image mode the image-model picker takes its place —
-              both use `ml-auto` so they right-align and push the mic + send to the
-              right edge of the toolbar. In the flex-nowrap control row the footer is
-              the only shrinkable item (min-w-0), so it truncates instead of wrapping. */}
-          {!imageMode && (
-            <ComposerFooter
-              inline
-              className="ml-auto min-w-0"
-              showModelSelector
-              lockModelSelector={false}
-              showStyleSelector={!isFreeTrial}
-              onUpgradeRequest={onUpgradeRequest}
-            />
-          )}
-
-          {imageMode && (
-            <div className="relative ml-auto shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowImageModelMenu((p) => !p);
-                  setShowImageAspectMenu(false);
-                }}
-                className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                aria-label="Select image model"
-              >
-                <span className="max-w-[120px] truncate">
-                  {IMAGE_MODELS.find((m) => m.id === imageModelId)?.label ??
-                    'Gemini 3.1 Flash Image'}
-                </span>
-                <ChevronDown className="h-3 w-3 shrink-0" />
-              </button>
-              {showImageModelMenu && (
-                <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                  {IMAGE_MODELS.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setImageModelId(m.id);
-                        setShowImageModelMenu(false);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                        imageModelId === m.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
-                      )}
-                    >
-                      <span className="flex-1 text-left">{m.label}</span>
-                      {imageModelId === m.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Voice Input Button - always rendered (like Search/Research) so free-trial
+            {/* Voice Input Button - always rendered (like Search/Research) so free-trial
               users see a visible-disabled control with a tooltip instead of the mic
               disappearing from the DOM. */}
-          <div
-            className="relative shrink-0"
-            title={isFreeTrial ? 'Upgrade to use voice input' : undefined}
-          >
-            <VoiceInputButton
-              onTranscript={(text) => {
-                setMessage((prev) => {
-                  const separator = prev.trim() ? ' ' : '';
-                  return prev + separator + text;
-                });
-                setTimeout(() => textareaRef.current?.focus(), 50);
-              }}
-              disabled={isLoading || composerDisabled || isFreeTrial}
-            />
-          </div>
+            <div
+              className="relative shrink-0"
+              title={isFreeTrial ? 'Upgrade to use voice input' : undefined}
+            >
+              <VoiceInputButton
+                onTranscript={(text) => {
+                  setMessage((prev) => {
+                    const separator = prev.trim() ? ' ' : '';
+                    return prev + separator + text;
+                  });
+                  setTimeout(() => textareaRef.current?.focus(), 50);
+                }}
+                disabled={isLoading || composerDisabled || isFreeTrial}
+              />
+            </div>
 
-          {/* Send / Stop Button */}
-          <SendButton
-            mode={sendButtonMode}
-            hasContent={hasContent}
-            disabled={composerDisabled}
-            onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-            className="shrink-0"
-          />
+            {/* Send / Stop Button */}
+            <SendButton
+              mode={sendButtonMode}
+              hasContent={hasContent}
+              disabled={composerDisabled}
+              onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
+              className="shrink-0"
+            />
           </div>
         </div>
 
@@ -1877,7 +1865,8 @@ const ChatComposerNewComponent = ({
  * ChatComposerNew with memoization optimization.
  *
  * + menu matches Claude's structure:
- *   Add files/photos, Skills flyout, Connectors flyout, Web search toggle,
+ *   Add files/photos; Skills / Connectors / Plugins entries that open the
+ *   settings modal at their pane (no inline lists); Web search toggle;
  *   Use style flyout.
  *
  * Removed from + menu: Focus Mode, Agent Mode, Project Context, Tools group,
