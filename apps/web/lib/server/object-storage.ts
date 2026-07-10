@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 /**
@@ -83,6 +88,29 @@ export async function putObject(params: {
     }),
   );
   return { url: publicUrlForKey(params.key) };
+}
+
+/**
+ * Read an object's bytes back from R2 by key. Used by the authenticated
+ * same-origin file-serving route (`/api/files/[id]`) so generated-file bytes
+ * can be served from the app's own origin — the PDF/image renderer gates only
+ * accept `data:`, `blob:`, and same-origin sources, never the raw R2 public
+ * URL. Returns null when the object does not exist.
+ */
+export async function getObject(
+  key: string,
+): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  const client = getR2Client();
+  try {
+    const res = await client.send(new GetObjectCommand({ Bucket: getBucketName(), Key: key }));
+    if (!res.Body) return null;
+    const bytes = await res.Body.transformToByteArray();
+    return { data: Buffer.from(bytes), contentType: res.ContentType };
+  } catch (error) {
+    const name = (error as { name?: string } | null)?.name;
+    if (name === 'NoSuchKey' || name === 'NotFound') return null;
+    throw error;
+  }
 }
 
 /** Delete an object from R2 by key (best-effort cleanup). */
