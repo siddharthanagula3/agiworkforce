@@ -139,6 +139,15 @@ export interface MessageMetadata {
     requiredTier: string;
     reason?: string;
   };
+  /**
+   * How the assistant turn ended, for the Continue Generation affordance.
+   * Values: OpenAI-wire finish reasons ('stop' | 'length' | 'tool_calls' | ...),
+   * the legacy Anthropic passthrough 'max_tokens', or the client-only marker
+   * 'stopped' (user aborted mid-stream with partial content). Persisted with
+   * the message so a truncated turn still offers Continue after reload.
+   * See features/chat/lib/continue-generation.ts for the continuable predicate.
+   */
+  finishReason?: string;
   /** Media tool type for inline rendering (e.g. 'image-generation'). */
   toolType?: string;
   /** Generated image URL; displayed inline when toolType === 'image-generation'. */

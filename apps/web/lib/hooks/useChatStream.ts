@@ -23,6 +23,10 @@ import {
   createSendReplayMetadata,
   hasWebSearchSources,
 } from '@/features/chat/types/message-metadata';
+import {
+  CONTINUE_GENERATION_INSTRUCTION,
+  isMessageContinuable,
+} from '@/features/chat/lib/continue-generation';
 
 interface SendMessageOptions {
   model?: string;
@@ -57,6 +61,13 @@ export type ToolApprovalDecision = 'approved' | 'rejected';
 interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
   stopGeneration: () => void;
+  /**
+   * Continue Generation (ChatGPT/Claude parity): resume a truncated or
+   * user-stopped assistant turn. New tokens APPEND to the same assistant
+   * message (never a new bubble) and the merged full text is persisted.
+   * No-op unless the message is continuable (see isMessageContinuable).
+   */
+  continueGeneration: (assistantMessageId: string) => Promise<void>;
   /**
    * Resolve one pending tool-approval card (see the manual-approval flow). Records
    * the per-tool_call decision; once EVERY pending tool call in the suspended turn
@@ -394,10 +405,30 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const toolStartTimes = new Map<string, number>();
   const pendingCalls: PendingApprovalCall[] = [];
   let suspended = false;
-  let currentSearchResults: MessageMetadata['searchResults'];
-  let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'];
-  let currentResearch: MessageResearchState | undefined;
-  let currentGeneratedFiles: MessageMetadata['generatedFiles'];
+  // For a continuation/resume (seedContent set), start from the metadata the
+  // turn already accumulated so the terminal persist (which REPLACES the
+  // metadata jsonb wholesale) does not drop earlier search results, code
+  // output, generated files, or research state.
+  const seedMetadata =
+    ctx.seedContent !== undefined
+      ? useChatStore.getState().messages.find((m) => m.id === ctx.assistantMessageId)?.metadata
+      : undefined;
+  let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
+  let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'] =
+    seedMetadata?.codeExecutionResult;
+  let currentResearch: MessageResearchState | undefined = seedMetadata?.research
+    ? { ...seedMetadata.research }
+    : undefined;
+  let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
+  /**
+   * How this turn ended, from the OpenAI-wire `finish_reason` (last one seen —
+   * server tool loops emit intermediate 'tool_calls' before the final reason).
+   * 'length' / 'max_tokens' → truncated at the token cap (continuable);
+   * user abort with partial text sets the client-only marker 'stopped'.
+   * Recorded on the message metadata + persisted so the Continue affordance
+   * is honest and survives reload.
+   */
+  let finishReason: string | undefined;
 
   // ── Reasoning (thinking) accumulation ──────────────────────────────────────
   // updateMessage REPLACES metadata wholesale, so a bare `{ metadata: {...} }`
@@ -574,6 +605,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (currentResearch) {
       metadata.research = { ...currentResearch };
     }
+    if (finishReason) {
+      metadata.finishReason = finishReason;
+    }
     // Persist reasoning so it survives reload (previously dropped — only the answer
     // was saved). Read the accumulated thinking off the store bag. Always persist
     // isThinkingStreaming:false and a stable duration so a reloaded turn renders the
@@ -724,6 +758,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           finishRunningTools();
           setSearching(assistantMessageId, false);
           setExecutingCode(assistantMessageId, false);
+          if (finishReason) {
+            // Publish before persisting so the Continue affordance (finish_reason
+            // 'length'/'max_tokens') renders immediately, not only after reload.
+            patchMessageMeta({ finishReason });
+          }
           persistAssistant(fullAssistantContent);
           stopStreaming();
           setLoading(false);
@@ -997,6 +1036,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
 
           if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
+            const reason = parsed.choices?.[0]?.finish_reason;
+            if (typeof reason === 'string' && reason) {
+              // Keep the LAST reason seen: server tool loops emit intermediate
+              // 'tool_calls' chunks before the final 'stop'/'length'.
+              finishReason = reason;
+            }
             updateMessage(assistantMessageId, { isStreaming: false });
           }
         } catch {
@@ -1012,6 +1057,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       inThinkingBlock = false;
     }
     finishRunningTools();
+    if (finishReason) {
+      patchMessageMeta({ finishReason });
+    }
     persistAssistant(fullAssistantContent);
     stopStreaming();
     setLoading(false);
@@ -1032,6 +1080,18 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
 
     const researchActive = currentResearch && currentResearch.phase !== 'complete';
+
+    if (isAbort && !researchActive && fullAssistantContent) {
+      // User stopped mid-generation with partial text already streamed: record
+      // the client-only 'stopped' marker (drives the Continue affordance) and
+      // persist the partial so it survives reload. Teardown (isStreaming
+      // false, stopStreaming, setLoading) happens in the caller's abort
+      // handling — rethrow below as before.
+      finishReason = 'stopped';
+      patchMessageMeta({ finishReason });
+      persistAssistant(fullAssistantContent);
+    }
+
     if (researchActive && isAbort) {
       // Deep Research cancelled mid-run: record the interruption honestly and
       // persist the partial report/sources so the run survives reload.
@@ -1317,6 +1377,180 @@ export function useChatStream(): UseChatStreamReturn {
     ],
   );
 
+  /**
+   * Continue a truncated (finish_reason 'length'/'max_tokens') or user-stopped
+   * ('stopped') assistant turn. Reuses the normal completions route: the
+   * request history ends with the partial assistant message followed by an
+   * ephemeral user instruction to continue in place (never stored/rendered).
+   * consumeAssistantStream is seeded with the existing content + tool timeline
+   * so new tokens APPEND to the same bubble and the terminal persist saves the
+   * merged full text. Shares abortControllerRef with sendMessage so
+   * stopGeneration cancels a continuation too.
+   */
+  const continueGeneration = useCallback(
+    async (assistantMessageId: string) => {
+      const store = useChatStore.getState();
+      if (store.isStreaming) return;
+      const messageIndex = store.messages.findIndex((m) => m.id === assistantMessageId);
+      const message = messageIndex >= 0 ? store.messages[messageIndex] : undefined;
+      // No fake availability: only a truncated/stopped assistant turn with
+      // non-empty partial content can continue.
+      if (!message || !isMessageContinuable(message)) return;
+
+      const conversationId = store.activeConversationId;
+      if (!conversationId) {
+        setError('No active conversation. Please create a new conversation first.');
+        return;
+      }
+      const isTemporaryConversation = Boolean(
+        store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
+      );
+      // Continue with the model that produced the partial answer so the voice
+      // and capabilities stay coherent; fall back to the current selection.
+      const model = message.model || selectedModel;
+
+      const getAuthToken: AuthTokenProvider = async () => {
+        const token = await getToken();
+        if (!token) throw new Error('Not authenticated');
+        return token;
+      };
+      let authToken: string;
+      try {
+        authToken = await getAuthToken();
+      } catch {
+        setError('Not authenticated');
+        return;
+      }
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
+      // Thread: everything up to AND INCLUDING the partial assistant turn,
+      // then the ephemeral continue instruction (request-only, never stored).
+      const apiMessages: ApiMessage[] = store.messages
+        .slice(0, messageIndex + 1)
+        .map((m) => ({ role: m.role, content: m.content as MessageContent }));
+      apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
+
+      const seedContent = message.content;
+      const seedTools = message.metadata?.tools?.map((t) => ({ ...t }));
+      const priorMetadata = message.metadata;
+
+      // Clear the continuable marker while the continuation streams; it is
+      // re-recorded honestly at stream end (re-offered if truncated again).
+      updateMessage(assistantMessageId, {
+        isStreaming: true,
+        metadata: { ...priorMetadata, finishReason: undefined },
+      });
+      startStreaming(assistantMessageId);
+      setLoading(true);
+      setError(null);
+
+      try {
+        const headers = await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        });
+        const response = await fetch('/api/llm/v1/chat/completions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            messages: apiMessages,
+            conversation_id: conversationId,
+            stream: true,
+            use_prompt_cache: true,
+          }),
+          signal: abortControllerRef.current?.signal,
+        });
+
+        useFreeTrialStore.getState().applyHeaders(response.headers);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const { message: errMessage, code } = readChatApiErrorPayload(
+            errorData,
+            `Request failed: ${response.status}`,
+          );
+          throw new ChatApiError(errMessage, { code, status: response.status });
+        }
+
+        await consumeAssistantStream({
+          response,
+          assistantMessageId,
+          model,
+          conversationId,
+          isTemporaryConversation,
+          getAuthToken,
+          seedContent,
+          seedTools,
+        });
+      } catch (error) {
+        const isAbort =
+          typeof error === 'object' &&
+          error !== null &&
+          (error as { name?: unknown }).name === 'AbortError';
+        if (isAbort) {
+          // consumeAssistantStream already flushed + re-marked 'stopped' +
+          // persisted the merged partial; just tear down here.
+          updateMessage(assistantMessageId, { isStreaming: false });
+          stopStreaming();
+          setLoading(false);
+          return;
+        }
+
+        const errorMessage = getVisibleErrorMessage(error);
+        const errorCode = error instanceof ChatApiError ? error.code : undefined;
+        if (isFreeTrialErrorCode(errorCode)) {
+          // Nothing streamed; leave the partial turn exactly as it was
+          // (marker restored so Continue re-offers once the gate clears).
+          if (errorCode === 'website_trial_prompt_limit_reached') {
+            useFreeTrialStore.getState().markExhausted();
+          }
+          updateMessage(assistantMessageId, { isStreaming: false, metadata: priorMetadata });
+          setError(errorMessage);
+          stopStreaming();
+          setLoading(false);
+          return;
+        }
+
+        // Honest failure without destroying the partial answer: keep whatever
+        // has streamed (original partial + any continuation tokens) and append
+        // an error note, instead of handleStreamError's replace-with-error.
+        const streamedSoFar =
+          useChatStore.getState().messages.find((m) => m.id === assistantMessageId)?.content ??
+          seedContent;
+        const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage)}`;
+        updateMessage(assistantMessageId, {
+          isStreaming: false,
+          content: mergedContent,
+          error: true,
+        });
+        setError(errorMessage);
+        if (!isTemporaryConversation) {
+          saveMessageToDb(
+            conversationId,
+            {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: mergedContent,
+              model,
+              // Drop the continuable marker: an errored turn must not re-offer
+              // Continue after reload (Regenerate is the recovery path).
+              metadata: { ...priorMetadata, finishReason: undefined },
+            },
+            getAuthToken,
+          ).catch((err) => notifyPersistenceFailure('assistant', err));
+        }
+        stopStreaming();
+        setLoading(false);
+      }
+    },
+    [selectedModel, updateMessage, startStreaming, stopStreaming, setLoading, setError, getToken],
+  );
+
   const resolveToolApproval = useResolveToolApproval();
 
   const stopGeneration = useCallback(() => {
@@ -1331,6 +1565,7 @@ export function useChatStream(): UseChatStreamReturn {
   return {
     sendMessage,
     stopGeneration,
+    continueGeneration,
     resolveToolApproval,
     isStreaming,
   };

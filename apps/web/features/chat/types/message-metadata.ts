@@ -142,6 +142,14 @@ export interface WebChatMessageMetadata {
   // Streaming state
   isStreaming?: boolean;
 
+  /**
+   * How the assistant turn ended: OpenAI-wire finish reason ('stop' |
+   * 'length' | 'tool_calls' | ...), legacy Anthropic 'max_tokens', or the
+   * client-only 'stopped' (user aborted mid-stream). Drives the Continue
+   * Generation affordance — see features/chat/lib/continue-generation.ts.
+   */
+  finishReason?: string;
+
   // Safe replay metadata for regenerate. Raw skill bodies are intentionally not persisted.
   sendReplay?: SendReplayMetadata;
 
