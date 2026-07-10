@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'Documentation | AGI',
+  title: 'Documentation',
   description:
     'Reference for every AGI surface: CLI, Desktop, Mobile, Web, Chrome, and VS Code extension.',
   path: '/docs',
