@@ -37,7 +37,7 @@ describe('L1 Message Handling - Page-text sanitization', () => {
     const malicious = 'Hello​⁨﻿world';
     const cleaned = sanitizePageText(malicious);
     expect(cleaned).toBe('Helloworld');
-    expect(cleaned).not.toMatch(/[​⁨﻿]/);
+    expect(cleaned).not.toMatch(/[\u200B\u2068\uFEFF]/);
   });
 
   test('HAPPY_PATH: ordinary visible text passes through and budget is a finite cap', () => {

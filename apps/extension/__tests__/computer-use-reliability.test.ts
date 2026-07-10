@@ -1070,7 +1070,11 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
     // throwing when an element has an id but no aria-label.
     if (typeof CSS === 'undefined' || typeof CSS.escape !== 'function') {
       (globalThis as Record<string, unknown>).CSS = {
-        escape: (s: string) => String(s).replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~ -])/g, '\\$1'),
+        // Deliberate control-char fixture: CSS.escape must escape C0 controls
+        // (U+0000-U+001F) and DEL (U+007F) like the real implementation.
+        escape: (s: string) =>
+          // eslint-disable-next-line no-control-regex
+          String(s).replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~\x00-\x1f\x7f])/g, '\\$1'),
       };
     }
   });
