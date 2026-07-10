@@ -43,6 +43,8 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { buildToolLoopStream } from './tool-loop-anthropic';
+import { toolStatusEvent as loopToolStatusEvent, toolResultEvent } from './tool-loop';
+import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { reconcileUsage } from '@/lib/assert-quota';
@@ -65,6 +67,21 @@ export const DEFAULT_RESEARCH_BUDGET_MS = 4 * 60_000;
 
 /** Research notes appended back into the thread are capped per turn. */
 const MAX_NOTE_CHARS = 6_000;
+
+/**
+ * url_fetch inside gathering rounds (parity with OpenAI/Anthropic deep
+ * research, which read full pages during gathering): bounded so a fetch-happy
+ * model cannot blow the token or wall-clock budget.
+ */
+/** Total url_fetch executions across the whole run. */
+const MAX_RESEARCH_FETCHES = 8;
+/** url_fetch executions within a single gathering round. */
+const MAX_RESEARCH_FETCHES_PER_ROUND = 3;
+/** Fetch-resolution continuation turns within a single gathering round. */
+const MAX_FETCH_PASSES_PER_ROUND = 2;
+/** Per-page extracted-text cap inside research turns (tighter than the chat
+ *  loop's 20k: fetched text rides in up to several turns per round). */
+const RESEARCH_FETCH_MAX_CONTENT_CHARS = 12_000;
 
 /** Marker the model emits when it has gathered enough material. */
 export const READY_MARKER = 'READY_TO_REPORT';
@@ -225,11 +242,20 @@ export class SourceAggregator {
 
 // ─── Turn collection ──────────────────────────────────────────────────────────
 
+/** One complete function tool_call parsed from a turn's streamed fragments. */
+export interface ResearchToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
 interface TurnResult {
   text: string;
   finishReason: string | null;
   searchEvents: number;
   hadToolCalls: boolean;
+  /** Accumulated function tool_calls (only url_fetch is ever offered here). */
+  toolCalls: ResearchToolCall[];
   promptTokens: number;
   completionTokens: number;
 }
@@ -258,6 +284,10 @@ async function* collectTurn(
   let hadToolCalls = false;
   let promptTokens = 0;
   let completionTokens = 0;
+  // Accumulate streamed tool_call fragments by index (OpenAI streaming shape:
+  // name arrives first, arguments as partial-JSON fragments). Mirrors
+  // tool-loop.ts's collectProviderStream.
+  const toolCallAccum: Map<number, { id: string; name: string; argsJson: string }> = new Map();
 
   try {
     while (true) {
@@ -316,9 +346,28 @@ async function* collectTurn(
           }
         }
 
-        // Function tool_calls: research turns do not execute client/MCP tools.
+        // Function tool_calls: accumulate fragments so the loop can execute
+        // url_fetch calls (the only function tool research turns keep — see
+        // the tools filter in runResearchLoop).
         if (Array.isArray(delta?.['tool_calls']) && (delta['tool_calls'] as unknown[]).length > 0) {
           hadToolCalls = true;
+          for (const tc of delta['tool_calls'] as unknown[]) {
+            if (typeof tc !== 'object' || tc === null) continue;
+            const tcObj = tc as Record<string, unknown>;
+            const idx = typeof tcObj['index'] === 'number' ? tcObj['index'] : 0;
+            let entry = toolCallAccum.get(idx);
+            if (!entry) {
+              entry = { id: '', name: '', argsJson: '' };
+              toolCallAccum.set(idx, entry);
+            }
+            if (typeof tcObj['id'] === 'string' && tcObj['id']) entry.id = tcObj['id'];
+            const fn = tcObj['function'];
+            if (fn && typeof fn === 'object') {
+              const fnObj = fn as Record<string, unknown>;
+              if (typeof fnObj['name'] === 'string' && fnObj['name']) entry.name = fnObj['name'];
+              if (typeof fnObj['arguments'] === 'string') entry.argsJson += fnObj['arguments'];
+            }
+          }
         }
 
         const fr = choice?.['finish_reason'];
@@ -337,22 +386,51 @@ async function* collectTurn(
     reader.releaseLock();
   }
 
-  return { text, finishReason, searchEvents, hadToolCalls, promptTokens, completionTokens };
+  const toolCalls: ResearchToolCall[] = [];
+  for (const [, tc] of toolCallAccum) {
+    if (!tc.name) continue;
+    let args: Record<string, unknown> = {};
+    try {
+      args = JSON.parse(tc.argsJson || '{}') as Record<string, unknown>;
+    } catch {
+      args = { _raw: tc.argsJson };
+    }
+    toolCalls.push({ id: tc.id || crypto.randomUUID(), name: tc.name, args });
+  }
+
+  return {
+    text,
+    finishReason,
+    searchEvents,
+    hadToolCalls,
+    toolCalls,
+    promptTokens,
+    completionTokens,
+  };
 }
 
 // ─── Directives ───────────────────────────────────────────────────────────────
 
-function gatheringDirective(round: number, maxRounds: number, sources: SourceAggregator): string {
+function gatheringDirective(
+  round: number,
+  maxRounds: number,
+  sources: SourceAggregator,
+  canFetch: boolean,
+): string {
   const base =
     round === 1
       ? 'Research phase, round 1: break the request into 3-5 distinct, targeted web search queries covering different angles, then run those searches now.'
       : `Research phase, round ${round} of up to ${maxRounds}: review your notes so far, identify the biggest remaining gaps or unverified claims, and run more targeted web searches to close them.`;
+  const fetchNote = canFetch
+    ? ' When a specific page matters (the user provided a URL, or a search result looks central to the question), call the url_fetch tool to read that page in full before writing your notes.'
+    : '';
   const sourceNote =
     sources.size > 0
       ? ` You have collected ${sources.size} source${sources.size === 1 ? '' : 's'} so far.`
       : '';
   return (
     base +
+    fetchNote +
     sourceNote +
     ' Reply ONLY with concise research notes: key facts found, with the source they came from.' +
     ` Do not write the report yet. End your reply with the single line ${READY_MARKER} if you have enough material to write a thorough report, or ${CONTINUE_MARKER} if another round of searching is needed.`
@@ -418,18 +496,28 @@ export async function* runResearchLoop(
 
   const sources = new SourceAggregator();
   let totalSearches = 0;
+  let totalFetches = 0;
   let iteration = 0;
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
 
-  // Strip client-custom function tools: research turns only use provider-native
-  // web search (nothing in this loop executes function tool calls).
-  const nativeTools = (processed.llmRequest.tools ?? []).filter(
-    (t) => !(t && typeof t === 'object' && 'function' in (t as Record<string, unknown>)),
+  // Strip client-custom function tools EXCEPT the platform url_fetch tool:
+  // research turns use provider-native web search plus loop-executed url_fetch
+  // (request-processor only offers url_fetch when the resolved model supports
+  // function calling, so its presence here already implies support). No other
+  // function tool is executed by this loop, so none other is offered.
+  const researchTools = (processed.llmRequest.tools ?? []).filter((t) => {
+    if (!(t && typeof t === 'object')) return false;
+    const fn = (t as { function?: { name?: string } }).function;
+    if (fn) return isUrlFetchTool(fn.name ?? '');
+    return true;
+  });
+  const fetchAvailable = researchTools.some((t) =>
+    isUrlFetchTool((t as { function?: { name?: string } }).function?.name ?? ''),
   );
   const baseRequest = {
     ...processed.llmRequest,
-    tools: nativeTools.length > 0 ? nativeTools : undefined,
+    tools: researchTools.length > 0 ? researchTools : undefined,
     tool_choice: undefined,
     stream: true,
   };
@@ -481,6 +569,74 @@ export async function* runResearchLoop(
     }
   }
 
+  /**
+   * Execute one batch of url_fetch tool calls a gathering turn emitted:
+   * append the assistant tool_call turn + a tool result for EVERY call
+   * (providers reject dangling tool_calls) to `turnMessages`, stream
+   * url_fetch timeline/result events, and dedupe successful pages INTO the
+   * shared SourceAggregator so they join the same cumulative x_search_results
+   * list (stable positions) as the provider search results.
+   *
+   * Every call gets an honest result: non-url_fetch names (never offered) and
+   * over-budget calls get an explicit error result the model can react to.
+   */
+  async function* runFetchCalls(
+    calls: ResearchToolCall[],
+    assistantText: string,
+    turnMessages: ProcessedRequest['llmRequest']['messages'],
+    roundFetchCount: { count: number },
+  ): AsyncGenerator<Uint8Array> {
+    turnMessages.push({
+      role: 'assistant',
+      content: assistantText,
+      tool_calls: calls.map((c) => ({
+        id: c.id,
+        type: 'function' as const,
+        function: { name: c.name, arguments: JSON.stringify(c.args) },
+      })) as unknown[],
+    });
+
+    for (const call of calls) {
+      let content: string;
+      let isError: boolean;
+
+      if (!isUrlFetchTool(call.name)) {
+        content = `Tool "${call.name}" is not available in research mode.`;
+        isError = true;
+        yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
+      } else if (
+        totalFetches >= MAX_RESEARCH_FETCHES ||
+        roundFetchCount.count >= MAX_RESEARCH_FETCHES_PER_ROUND
+      ) {
+        content =
+          'Fetch budget for this research run is exhausted; continue with the material already gathered.';
+        isError = true;
+        yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
+      } else {
+        totalFetches += 1;
+        roundFetchCount.count += 1;
+        yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
+        const outcome = await executeUrlFetch(call.args, {
+          maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
+        });
+        if (outcome.ok) {
+          sources.add({ url: outcome.url, title: outcome.title });
+          content = `Fetched ${outcome.url} — ${outcome.title}\n\n${outcome.content}`;
+          isError = false;
+        } else {
+          content = `Fetch failed (${outcome.errorCode}): ${outcome.error}`;
+          isError = true;
+        }
+        yield encoder.encode(
+          loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
+        );
+        yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
+      }
+
+      turnMessages.push({ role: 'tool', content, tool_call_id: call.id });
+    }
+  }
+
   try {
     yield status('planning', 'Planning research');
 
@@ -496,17 +652,40 @@ export async function* runResearchLoop(
       yield encoder.encode(toolStatusEvent('running', responseModel, round));
 
       let turn: TurnResult;
+      let roundSearchEvents = 0;
       try {
         // Directives ride as 'user' turns: several providers (e.g. Google)
         // only honor the FIRST system message and silently drop the rest, so
         // a trailing system directive would never reach the model.
-        turn = yield* runTurn(
-          [
-            ...messages,
-            { role: 'user', content: gatheringDirective(round, maxGatherRounds, sources) },
-          ],
-          false,
-        );
+        const turnMessages: typeof messages = [
+          ...messages,
+          {
+            role: 'user',
+            content: gatheringDirective(round, maxGatherRounds, sources, fetchAvailable),
+          },
+        ];
+        turn = yield* runTurn(turnMessages, false);
+        roundSearchEvents += turn.searchEvents;
+
+        // url_fetch resolution passes: when the turn ended on tool_calls,
+        // execute the fetches (bounded), feed the results back, and let the
+        // model finish its notes for this round. Fetched text lives only in
+        // this round's turnMessages — the persistent thread gets the capped
+        // notes below, so the token budget stays under control.
+        let fetchPasses = 0;
+        const roundFetchCount = { count: 0 }; // per-round cap spans all passes
+        while (
+          turn.finishReason === 'tool_calls' &&
+          turn.toolCalls.length > 0 &&
+          fetchPasses < MAX_FETCH_PASSES_PER_ROUND
+        ) {
+          fetchPasses += 1;
+          yield* runFetchCalls(turn.toolCalls, turn.text, turnMessages, roundFetchCount);
+          const cumulativeAfterFetch = sources.toSearchResultsEvent(responseModel);
+          if (cumulativeAfterFetch) yield encoder.encode(cumulativeAfterFetch);
+          turn = yield* runTurn(turnMessages, false);
+          roundSearchEvents += turn.searchEvents;
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error(
@@ -538,7 +717,7 @@ export async function* runResearchLoop(
         break;
       }
 
-      totalSearches += Math.max(1, turn.searchEvents);
+      totalSearches += Math.max(1, roundSearchEvents);
       yield encoder.encode(toolStatusEvent('completed', responseModel, round));
 
       // Append the model's notes (truncated) so later turns build on them.
