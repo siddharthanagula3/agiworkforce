@@ -1,4 +1,10 @@
-import type { Artifact, ChatMessage, Conversation, WebSearchResult } from './types';
+import type {
+  Artifact,
+  ChatMessage,
+  Conversation,
+  GeneratedFileEntry,
+  WebSearchResult,
+} from './types';
 
 /**
  * ChatRuntime abstracts the transport layer between the chat UI and the backend.
@@ -199,6 +205,7 @@ export type StreamEvent =
     }
   | { type: 'artifact'; artifact: Artifact }
   | { type: 'search_results'; search: WebSearchResult }
+  | { type: 'generated_files'; files: GeneratedFileEntry[] }
   | { type: 'done' }
   | { type: 'error'; error: string };
 

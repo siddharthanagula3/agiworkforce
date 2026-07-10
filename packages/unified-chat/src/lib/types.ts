@@ -44,6 +44,14 @@ export interface ChatMessage {
   citations?: Citation[];
   toolCalls?: ToolCall[];
   webSearchResults?: WebSearchResult[];
+  /**
+   * Files the model generated in the managed-cloud sandbox this turn
+   * (`x_generated_files` SSE delta). URIs are already resolved by the
+   * runtime to fetchable URLs (absolute cloud URL on desktop Tauri;
+   * same-origin path on the embedded web build). Cloud mode only — local
+   * runtimes never emit these.
+   */
+  generatedFiles?: GeneratedFileEntry[];
   thinkingBlock?: ThinkingBlock;
   attachments?: Attachment[];
   artifacts?: Artifact[];
@@ -114,6 +122,24 @@ export interface Attachment {
   type: string;
   url?: string;
   size?: number;
+}
+
+/**
+ * UI-tier shape of one generated file on a message. Camel-case sibling of the
+ * `x_generated_files` wire descriptor (`GeneratedFileWire` in
+ * `@agiworkforce/services` cloud-contracts); runtimes map wire → entry and
+ * resolve `uri` to a fetchable URL before emitting.
+ */
+export interface GeneratedFileEntry {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  /** Fetchable download URL (auth handled by the host; see ChatHostBridge). */
+  uri: string;
+  byteCount: number;
+  /** Coarse kind for icons: pdf | docx | xlsx | pptx | csv | json | markdown | html | image | archive | other */
+  kind: string;
+  checksumSha256?: string;
 }
 
 export interface Conversation {

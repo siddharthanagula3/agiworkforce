@@ -25,6 +25,14 @@ export interface ChatHostBridge {
   addMessage?: (message: { role: string; content: string; id?: string }) => string | void;
   createConversation?: (title?: string) => string;
   selectConversation?: (id: string | null) => void;
+  /**
+   * Fetch a managed-cloud generated file's bytes with the host's auth
+   * (desktop Tauri: guarded fetch + Bearer JWT; embedded web build omits it
+   * and the shared UI falls back to a same-origin cookie fetch). Must reject
+   * on non-2xx so the UI can show an honest failure state. Cloud mode only —
+   * hosts must never route Local-mode content through this.
+   */
+  fetchCloudFile?: (uri: string) => Promise<Blob>;
 }
 
 export const HostBridgeContext = createContext<ChatHostBridge | null>(null);

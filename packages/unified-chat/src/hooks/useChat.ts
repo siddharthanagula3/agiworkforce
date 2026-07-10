@@ -305,6 +305,37 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           }
           break;
         }
+        case 'generated_files': {
+          if (event.files.length === 0) break;
+          if (!assistantMessageIdRef.current) {
+            const id = crypto.randomUUID();
+            assistantMessageIdRef.current = id;
+            addMsg({
+              id,
+              role: 'assistant',
+              content: '',
+              timestamp: new Date().toISOString(),
+              isStreaming: true,
+              generatedFiles: event.files,
+            });
+          } else {
+            const msgs = store.messagesByConversation[convId];
+            const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
+            if (msg) {
+              const existingFiles = msg.generatedFiles ?? [];
+              const merged = [...existingFiles];
+              for (const file of event.files) {
+                const idx = merged.findIndex((f) => f.id === file.id);
+                if (idx >= 0) merged[idx] = file;
+                else merged.push(file);
+              }
+              store.updateMessage(convId, assistantMessageIdRef.current, {
+                generatedFiles: merged,
+              });
+            }
+          }
+          break;
+        }
         case 'done': {
           // Mark the message as no longer streaming
           if (assistantMessageIdRef.current) {
