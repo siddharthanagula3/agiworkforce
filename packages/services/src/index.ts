@@ -25,6 +25,7 @@ export * from './artifact-sync';
 
 // Cloud API contracts — the ONE canonical schema per cloud endpoint served by
 // apps/web. Clients validate against these instead of hand-declaring shapes.
+export * from './cloud-contracts/generated-files';
 export * from './cloud-contracts/me';
 export * from './cloud-contracts/sync';
 
