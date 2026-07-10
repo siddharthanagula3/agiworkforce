@@ -52,6 +52,14 @@ pub async fn run_turn(
     let mut current_tool_calls = first.outcome.tool_calls.clone();
 
     for iteration in 0..params.effective_max {
+        // --- Cancellation guard (loop-top) -------------------------------------
+        // A user stop that arrived while the previous completion was streaming
+        // halts the loop before dispatching another tool batch, keeping the
+        // response accumulated so far. No-op for hosts that never cancel.
+        if host.is_cancelled() {
+            break;
+        }
+
         if current_tool_calls.is_empty() {
             break;
         }
@@ -171,6 +179,14 @@ pub async fn run_turn(
         }
 
         host.commit_tool_results(result_blocks, iteration).await;
+
+        // --- Cancellation guard (post-dispatch) --------------------------------
+        // A stop that arrived during this iteration's tool execution halts the
+        // loop before spending another model completion, matching desktop's
+        // was-stopped semantics (keep the partial, don't round-trip again).
+        if host.is_cancelled() {
+            break;
+        }
 
         // Continuation completion (retry-only + privacy re-validate, app-local).
         let continuation = complete_and_emit(host, TurnPhase::Continuation).await?;
