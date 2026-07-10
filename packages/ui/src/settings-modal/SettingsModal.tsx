@@ -21,7 +21,6 @@ import React, { useMemo, useState, useCallback } from 'react';
 import {
   X,
   Search,
-  Plus,
   Check,
   Settings2,
   UserCircle,
@@ -35,12 +34,22 @@ import {
   Brain,
   Bell,
   Lock,
-  SlidersHorizontal,
-  ArrowUpDown,
+  ArrowLeft,
+  AlertTriangle,
+  ChevronDown,
+  Plus,
+  Loader2,
+  Settings as SettingsIcon,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../cn';
-import type { SettingsDataAdapter, SettingsConnector, SettingsSkill } from './types';
+import { Menu, MenuItem } from '../sidebar/Menu';
+import type {
+  SettingsDataAdapter,
+  SettingsConnector,
+  SettingsSkill,
+  ConnectedConnector,
+} from './types';
 import type { SettingsNavGroupResolved } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
 
@@ -70,165 +79,831 @@ const ALL_NAV_ENTRIES: NavEntry[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// ConnectorCard — 2-column grid card matching reference 252
+// ConnectorsPanel — table view matching the claude.ai Directory references
+// (251-256): filter tabs All | Connected | Not connected, columns
+// Connector / Type / Status, search, and an in-place detail view.
+//
+// HONESTY RULES (docs/agent-context/known-flaws.md WEB-CONNECTORS row):
+//   - Statuses come ONLY from the adapter's real connection state.
+//   - A Connect button renders ONLY when the surface says the connect flow can
+//     actually complete (connector.canConnect + adapter.connectConnector);
+//     otherwise the row shows the surface-supplied statusLabel. No dead
+//     Connect buttons, no fabricated availability.
+//   - Amber warning states render only when the adapter supplies a real
+//     status === 'warning' signal; there is no synthetic health data.
 // ---------------------------------------------------------------------------
 
-function ConnectorCard({
+type ConnectorTab = 'all' | 'connected' | 'not-connected';
+
+const CONNECTOR_TABS: { key: ConnectorTab; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'connected', label: 'Connected' },
+  { key: 'not-connected', label: 'Not connected' },
+];
+
+function ConnectorStatusCell({
   connector,
-  connected,
+  connection,
+  canConnect,
+  mutating,
+  onConnect,
+}: {
+  connector: SettingsConnector;
+  connection: ConnectedConnector | undefined;
+  canConnect: boolean;
+  mutating: boolean;
+  onConnect: () => void;
+}) {
+  if (connection) {
+    if (connection.status === 'warning') {
+      return (
+        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-500">
+          <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+          {connection.warningLabel ?? 'Connection issue'}
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
+        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20">
+          <Check className="h-2.5 w-2.5" aria-hidden="true" />
+        </span>
+        Connected
+      </span>
+    );
+  }
+  if (canConnect) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onConnect();
+        }}
+        disabled={mutating}
+        aria-label={`Connect ${connector.name}`}
+        className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+      >
+        {mutating ? '...' : 'Connect'}
+      </button>
+    );
+  }
+  return (
+    <span className="text-xs text-muted-foreground">
+      {connector.statusLabel ?? 'Not connected'}
+    </span>
+  );
+}
+
+function ConnectorDetail({
+  connector,
+  connection,
+  canConnect,
   mutating,
   onConnect,
   onDisconnect,
+  onBack,
+  error,
 }: {
   connector: SettingsConnector;
-  connected: boolean;
+  connection: ConnectedConnector | undefined;
+  canConnect: boolean;
   mutating: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
+  onBack: () => void;
+  error?: string;
 }) {
-  const isReady = connector.phase <= 1 && connector.authType !== 'oauth';
-  // NOTE: this is the connector's action count, not a popularity ranking —
-  // do not relabel as "#N popular". We have no real usage data to back a
-  // popularity claim, so showing one would be a fabricated badge.
-  const actionCountLabel =
-    connector.actionCount > 0
-      ? `${connector.actionCount} action${connector.actionCount === 1 ? '' : 's'}`
-      : null;
-
   return (
-    <div className="group flex min-h-[108px] flex-col gap-2 rounded-lg border border-border/80 bg-card/40 p-3.5 transition-colors hover:bg-card/70">
-      {/* Top row: logo + name + connect button */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
+    <div className="flex flex-col gap-5">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Back
+      </button>
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <ConnectorLogo
             connectorId={connector.id}
             fallbackGradient={connector.iconBg}
             fallbackText={connector.iconText}
-            size="sm"
+            size="lg"
           />
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-sm font-medium text-foreground truncate">{connector.name}</span>
-              {connected && (
-                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
-                  <Check className="h-2 w-2 text-emerald-500" />
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <span className="truncate">{connector.name}</span>
+              {connection && connection.status !== 'warning' && (
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
+                  <Check className="h-2.5 w-2.5 text-emerald-500" aria-hidden="true" />
                 </span>
               )}
-            </div>
-            {actionCountLabel && (
-              <span className="text-[11px] text-muted-foreground">{actionCountLabel}</span>
-            )}
+            </h2>
+            <p className="text-xs text-muted-foreground">{connector.category}</p>
           </div>
         </div>
-
-        {/* Action button */}
         <div className="shrink-0">
-          {connected ? (
+          {connection ? (
             <button
               type="button"
               onClick={onDisconnect}
               disabled={mutating}
-              className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
               {mutating ? '...' : 'Disconnect'}
             </button>
-          ) : connector.phase > 1 ? (
-            <span className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
-              Soon
-            </span>
-          ) : !isReady ? (
-            <button
-              type="button"
-              className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
-            >
-              <Lock className="h-3 w-3" />
-              Connect
-            </button>
-          ) : (
+          ) : canConnect ? (
             <button
               type="button"
               onClick={onConnect}
               disabled={mutating}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-              aria-label={`Connect ${connector.name}`}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
             >
-              {mutating ? <span className="text-xs">...</span> : <Plus className="h-4 w-4" />}
+              {mutating ? '...' : 'Connect'}
             </button>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {connector.statusLabel ?? 'Not connected'}
+            </span>
           )}
         </div>
       </div>
 
-      {/* Description */}
-      <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
-        {connector.description}
-      </p>
+      {connection?.status === 'warning' && (
+        <p className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {connection.warningLabel ?? 'Connection issue'}
+        </p>
+      )}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+
+      <p className="text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+
+      {/* Details — real catalog metadata only (no invented author/URL/docs). */}
+      <div className="rounded-lg border border-border/80">
+        <div className="border-b border-border/60 px-3 py-2 text-xs font-semibold text-foreground">
+          Details
+        </div>
+        <dl className="divide-y divide-border/60 text-xs">
+          <div className="flex items-center justify-between px-3 py-2">
+            <dt className="text-muted-foreground">Type</dt>
+            <dd className="text-foreground">{connector.category}</dd>
+          </div>
+          <div className="flex items-center justify-between px-3 py-2">
+            <dt className="text-muted-foreground">Authentication</dt>
+            <dd className="uppercase text-foreground">{connector.authType.replace('_', ' ')}</dd>
+          </div>
+          {connector.actionCount > 0 && (
+            <div className="flex items-center justify-between px-3 py-2">
+              <dt className="text-muted-foreground">Actions</dt>
+              <dd className="text-foreground">{connector.actionCount}</dd>
+            </div>
+          )}
+          {connection?.connectedAt && (
+            <div className="flex items-center justify-between px-3 py-2">
+              <dt className="text-muted-foreground">Connected</dt>
+              <dd className="text-foreground">
+                {new Date(connection.connectedAt).toLocaleDateString()}
+              </dd>
+            </div>
+          )}
+        </dl>
+      </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ConnectorsPanel
+// useConnectorMutations — shared connect/disconnect runner with per-id
+// in-flight state and honest per-id error surfacing (failures render inline,
+// never as silent optimistic rollbacks).
 // ---------------------------------------------------------------------------
 
-const PARTNER_CHIP_LABEL = 'Anthropic & Partners';
-
-function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
-  const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('All');
+function useConnectorMutations(adapter?: SettingsDataAdapter) {
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const connectors = useMemo(() => adapter?.connectors ?? [], [adapter?.connectors]);
-  const connected = useMemo(
-    () => new Set((adapter?.connectedConnectors ?? []).map((c) => c.connectorId)),
-    [adapter?.connectedConnectors],
+  const run = useCallback(
+    async (id: string, action: ((cid: string) => Promise<void> | void) | undefined) => {
+      if (!action) return;
+      setMutatingIds((prev) => new Set([...prev, id]));
+      setErrors((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      try {
+        await action(id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Something went wrong. Try again.';
+        setErrors((prev) => ({ ...prev, [id]: message }));
+      } finally {
+        setMutatingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [],
   );
+
+  const connect = useCallback(
+    (id: string) => void run(id, adapter?.connectConnector),
+    [adapter?.connectConnector, run],
+  );
+  const disconnect = useCallback(
+    (id: string) => void run(id, adapter?.disconnectConnector),
+    [adapter?.disconnectConnector, run],
+  );
+
+  return { mutatingIds, errors, connect, disconnect };
+}
+
+// ---------------------------------------------------------------------------
+// skillAuthorLabel — honest projection of the real Skill.source field.
+// Personal/project/workspace layers are authored by the user; bundled skills
+// ship with the product. No other author metadata exists, so nothing else is
+// shown (no invented vendor names).
+// ---------------------------------------------------------------------------
+
+function skillAuthorLabel(source: string): string {
+  switch (source) {
+    case 'personal':
+    case 'project':
+    case 'workspace':
+      return 'You';
+    case 'bundled':
+      return 'AGI';
+    case 'managed-local':
+      return 'Managed';
+    default:
+      return source;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DirectoryBrowse — the shared Directory-style browse view (claude.ai refs
+// 251-256) reached from the Connectors "Add > Browse connectors" item and the
+// Skills "Browse" button. Tabs render ONLY real content: the connector
+// catalog and the loaded skill list (a Plugins tab appears only when the
+// adapter actually has plugins). Deliberately NO download counts, popularity
+// ranks, or partner cards — we have no such metrics (honesty rule).
+// ---------------------------------------------------------------------------
+
+type BrowseTab = 'connectors' | 'skills' | 'plugins';
+
+function DirectoryBrowse({
+  adapter,
+  initialTab,
+  onBack,
+  onOpenConnector,
+}: {
+  adapter?: SettingsDataAdapter;
+  initialTab: BrowseTab;
+  onBack: () => void;
+  /** Opens the connector detail view (gear on installed cards). Optional. */
+  onOpenConnector?: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<BrowseTab>(initialTab);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<'az' | 'za'>('az');
+  const [category, setCategory] = useState('All');
+  const { mutatingIds, errors, connect } = useConnectorMutations(adapter);
+
+  const connectors = useMemo(
+    () => (adapter?.connectors ?? []).filter((c) => !c.exclusive),
+    [adapter?.connectors],
+  );
+  const connectionById = useMemo(() => {
+    const map = new Map<string, ConnectedConnector>();
+    for (const c of adapter?.connectedConnectors ?? []) map.set(c.connectorId, c);
+    return map;
+  }, [adapter?.connectedConnectors]);
+  const skills = adapter?.skills ?? [];
+  const plugins = adapter?.plugins ?? [];
+
+  // The directory is shared across the Skills / Connectors / Plugins Browse
+  // buttons — all three tabs always render; an empty tab shows an honest
+  // empty state rather than being hidden.
+  const tabs: { key: BrowseTab; label: string }[] = [
+    { key: 'skills', label: 'Skills' },
+    { key: 'connectors', label: 'Connectors' },
+    { key: 'plugins', label: 'Plugins' },
+  ];
 
   const categories = useMemo(
     () => ['All', ...Array.from(new Set(connectors.map((c) => c.category)))],
     [connectors],
   );
 
+  const q = search.trim().toLowerCase();
+  const byName = (a: { name: string }, b: { name: string }) =>
+    sort === 'az' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+
+  const visibleConnectors = connectors
+    .filter((c) => (category === 'All' ? true : c.category === category))
+    .filter((c) =>
+      q ? c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) : true,
+    )
+    .sort(byName);
+  const visibleSkills = skills
+    .filter((s) =>
+      q ? s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) : true,
+    )
+    .sort(byName);
+  const visiblePlugins = plugins
+    .filter((pl) =>
+      q ? pl.name.toLowerCase().includes(q) || pl.description.toLowerCase().includes(q) : true,
+    )
+    .sort(byName);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Back
+      </button>
+
+      <div>
+        <h2 className="text-base font-semibold text-foreground">Browse directory</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Explore connectors and skills available in this environment.
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div role="tablist" aria-label="Directory sections" className="flex items-center gap-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              tab === t.key
+                ? 'bg-foreground text-background'
+                : 'border border-border text-muted-foreground hover:bg-muted',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search + filter + sort */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder={tab === 'connectors' ? 'Search connectors...' : 'Search...'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        {tab === 'connectors' && (
+          <select
+            aria-label="Filter by type"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2 text-xs text-foreground outline-none"
+          >
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        )}
+        <button
+          type="button"
+          onClick={() => setSort((s) => (s === 'az' ? 'za' : 'az'))}
+          aria-label={sort === 'az' ? 'Sort Z to A' : 'Sort A to Z'}
+          className="h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+        >
+          {sort === 'az' ? 'A-Z' : 'Z-A'}
+        </button>
+      </div>
+
+      {/* Card grids */}
+      {tab === 'connectors' &&
+        (visibleConnectors.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No connectors match.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {visibleConnectors.map((connector) => {
+              const connection = connectionById.get(connector.id);
+              const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
+              const mutating = mutatingIds.has(connector.id);
+              const error = errors[connector.id];
+              return (
+                <div
+                  key={connector.id}
+                  className="flex flex-col gap-2 rounded-lg border border-border/80 bg-card/40 p-3.5 transition-colors hover:bg-card/70"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ConnectorLogo
+                        connectorId={connector.id}
+                        fallbackGradient={connector.iconBg}
+                        fallbackText={connector.iconText}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {connector.name}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {connector.category}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      {mutating ? (
+                        <Loader2
+                          className="h-4 w-4 animate-spin text-muted-foreground"
+                          aria-label={`Connecting ${connector.name}`}
+                        />
+                      ) : connection ? (
+                        onOpenConnector ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenConnector(connector.id)}
+                            aria-label={`Configure ${connector.name}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <SettingsIcon className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20">
+                            <Check className="h-3 w-3 text-emerald-500" aria-hidden="true" />
+                          </span>
+                        )
+                      ) : canConnect ? (
+                        <button
+                          type="button"
+                          onClick={() => connect(connector.id)}
+                          aria-label={`Connect ${connector.name}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">
+                          {connector.statusLabel ?? 'Not connected'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
+                    {connector.description}
+                  </p>
+                  {error && <p className="text-[11px] text-red-500">{error}</p>}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+
+      {tab === 'skills' &&
+        (visibleSkills.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            {skills.length === 0 ? 'No skills loaded in this environment.' : 'No skills match.'}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {visibleSkills.map((skill) => (
+              <div
+                key={skill.id}
+                className="flex flex-col gap-1.5 rounded-lg border border-border/80 bg-card/40 p-3.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-mono text-sm text-foreground">/{skill.name}</span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {skillAuthorLabel(skill.source)}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
+                  {skill.description || 'No description.'}
+                </p>
+              </div>
+            ))}
+          </div>
+        ))}
+
+      {tab === 'plugins' &&
+        (visiblePlugins.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            {plugins.length === 0
+              ? 'No plugins installed. Plugins are available via the AGI CLI.'
+              : 'No plugins match.'}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {visiblePlugins.map((plugin) => (
+              <div
+                key={plugin.id}
+                className="flex flex-col gap-1.5 rounded-lg border border-border/80 bg-card/40 p-3.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {plugin.name}
+                    </span>
+                    {plugin.author && (
+                      <span className="text-[11px] text-muted-foreground">{plugin.author}</span>
+                    )}
+                  </div>
+                  <span
+                    className={cn(
+                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                      plugin.enabled
+                        ? 'bg-emerald-500/15 text-emerald-500'
+                        : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {plugin.enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
+                  {plugin.description || 'No description.'}
+                </p>
+              </div>
+            ))}
+          </div>
+        ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AddCustomConnectorForm — "Add custom connector" (BETA) form for a remote
+// MCP server. Submission goes through adapter.addCustomConnector; surfaces
+// without real persistence throw an honest "not yet supported" error which
+// renders inline — the form NEVER fakes a success.
+// ---------------------------------------------------------------------------
+
+function AddCustomConnectorForm({
+  adapter,
+  onBack,
+}: {
+  adapter?: SettingsDataAdapter;
+  onBack: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [oauthClientId, setOauthClientId] = useState('');
+  const [oauthClientSecret, setOauthClientSecret] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const trimmedUrl = url.trim();
+  const urlValid = /^https:\/\/.+/.test(trimmedUrl);
+  const canSubmit = name.trim().length > 0 && urlValid && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      if (!adapter?.addCustomConnector) {
+        throw new Error('Custom connectors are not yet supported in this environment.');
+      }
+      await adapter.addCustomConnector({
+        name: name.trim(),
+        url: trimmedUrl,
+        oauthClientId: oauthClientId.trim() || undefined,
+        oauthClientSecret: oauthClientSecret.trim() || undefined,
+      });
+      onBack();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add connector. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputClass =
+    'h-9 w-full rounded-lg border border-border bg-muted/30 px-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring';
+
+  return (
+    <div className="flex flex-col gap-4">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Back
+      </button>
+
+      <div>
+        <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+          Add custom connector
+          <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-500">
+            Beta
+          </span>
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Connect a remote MCP server to give the assistant new tools.{' '}
+          <a href="/docs" className="text-foreground underline underline-offset-2">
+            Learn more
+          </a>
+        </p>
+      </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-foreground">Name</span>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="My connector"
+          className={inputClass}
+        />
+      </label>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-foreground">Remote MCP server URL</span>
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://example.com/mcp"
+          className={inputClass}
+        />
+        {trimmedUrl.length > 0 && !urlValid && (
+          <span className="text-[11px] text-red-500">Enter a valid https:// URL.</span>
+        )}
+      </label>
+
+      {/* Advanced settings (collapsible) */}
+      <div className="rounded-lg border border-border/80">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          aria-expanded={showAdvanced}
+          className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-foreground"
+        >
+          Advanced settings
+          <ChevronDown
+            className={cn('h-3.5 w-3.5 transition-transform', showAdvanced && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
+        {showAdvanced && (
+          <div className="flex flex-col gap-3 border-t border-border/60 p-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-foreground">
+                OAuth Client ID (optional)
+              </span>
+              <input
+                type="text"
+                value={oauthClientId}
+                onChange={(e) => setOauthClientId(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-foreground">
+                OAuth Client Secret (optional)
+              </span>
+              <input
+                type="password"
+                value={oauthClientSecret}
+                onChange={(e) => setOauthClientSecret(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
+      <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Only use connectors from developers you trust. Custom connectors can read the conversation
+        context you share with their tools.
+      </p>
+
+      {error && <p className="text-xs text-red-500">{error}</p>}
+
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={!canSubmit}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+        >
+          {submitting ? 'Adding...' : 'Add'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
+  const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<ConnectorTab>('all');
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [view, setView] = useState<'table' | 'browse' | 'add-custom'>('table');
+  const {
+    mutatingIds,
+    errors: rowErrors,
+    connect: handleConnect,
+    disconnect: handleDisconnect,
+  } = useConnectorMutations(adapter);
+
+  const connectors = useMemo(
+    () => (adapter?.connectors ?? []).filter((c) => !c.exclusive),
+    [adapter?.connectors],
+  );
+  const connectionById = useMemo(() => {
+    const map = new Map<string, ConnectedConnector>();
+    for (const c of adapter?.connectedConnectors ?? []) map.set(c.connectorId, c);
+    return map;
+  }, [adapter?.connectedConnectors]);
+
+  const tabCounts = useMemo(() => {
+    let connected = 0;
+    for (const c of connectors) if (connectionById.has(c.id)) connected += 1;
+    return {
+      all: connectors.length,
+      connected,
+      'not-connected': connectors.length - connected,
+    } as Record<ConnectorTab, number>;
+  }, [connectors, connectionById]);
+
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
     return connectors.filter((c) => {
-      if (c.exclusive) return false;
-      if (activeCategory !== 'All' && c.category !== activeCategory) return false;
-      if (q) return c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q);
+      const isConnected = connectionById.has(c.id);
+      if (activeTab === 'connected' && !isConnected) return false;
+      if (activeTab === 'not-connected' && isConnected) return false;
+      if (q) {
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.description.toLowerCase().includes(q) ||
+          c.category.toLowerCase().includes(q)
+        );
+      }
       return true;
     });
-  }, [connectors, search, activeCategory]);
+  }, [connectors, connectionById, search, activeTab]);
 
-  const handleConnect = useCallback(
-    async (id: string) => {
-      setMutatingIds((prev) => new Set([...prev, id]));
-      try {
-        await adapter?.connectConnector?.(id);
-      } finally {
-        setMutatingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }
-    },
-    [adapter],
-  );
+  if (view === 'browse') {
+    return (
+      <DirectoryBrowse
+        adapter={adapter}
+        initialTab="connectors"
+        onBack={() => setView('table')}
+        onOpenConnector={(id) => {
+          setView('table');
+          setDetailId(id);
+        }}
+      />
+    );
+  }
 
-  const handleDisconnect = useCallback(
-    async (id: string) => {
-      setMutatingIds((prev) => new Set([...prev, id]));
-      try {
-        await adapter?.disconnectConnector?.(id);
-      } finally {
-        setMutatingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }
-    },
-    [adapter],
-  );
+  if (view === 'add-custom') {
+    return <AddCustomConnectorForm adapter={adapter} onBack={() => setView('table')} />;
+  }
+
+  const detailConnector = detailId ? connectors.find((c) => c.id === detailId) : undefined;
+  if (detailConnector) {
+    const canConnect = Boolean(detailConnector.canConnect && adapter?.connectConnector);
+    return (
+      <ConnectorDetail
+        connector={detailConnector}
+        connection={connectionById.get(detailConnector.id)}
+        canConnect={canConnect}
+        mutating={mutatingIds.has(detailConnector.id)}
+        onConnect={() => handleConnect(detailConnector.id)}
+        onDisconnect={() => handleDisconnect(detailConnector.id)}
+        onBack={() => setDetailId(null)}
+        error={rowErrors[detailConnector.id]}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -240,94 +915,145 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </p>
       </div>
 
-      {/* Search bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="Search connectors..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
-        />
-      </div>
-
-      {/* Anthropic & Partners chip + Filter/Sort */}
+      {/* Toolbar: filter tabs (left) + search + Add (right) */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* "Anthropic & Partners" primary chip */}
-          <button
-            type="button"
-            onClick={() => setActiveCategory('All')}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-              activeCategory === 'All'
-                ? 'bg-foreground text-background'
-                : 'border border-border text-muted-foreground hover:bg-muted',
-            )}
-          >
-            {PARTNER_CHIP_LABEL}
-          </button>
-
-          {/* Category chips (skip 'All' since partner chip covers it) */}
-          {categories.slice(1).map((cat) => (
+        <div role="tablist" aria-label="Filter connectors" className="flex items-center gap-1">
+          {CONNECTOR_TABS.map((tab) => (
             <button
-              key={cat}
+              key={tab.key}
               type="button"
-              onClick={() => setActiveCategory(cat)}
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              onClick={() => setActiveTab(tab.key)}
               className={cn(
                 'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                activeCategory === cat
+                activeTab === tab.key
                   ? 'bg-foreground text-background'
                   : 'border border-border text-muted-foreground hover:bg-muted',
               )}
             >
-              {cat}
+              {tab.label}
+              <span className="ml-1 opacity-60">{tabCounts[tab.key]}</span>
             </button>
           ))}
         </div>
-
-        {/* Filter / Sort buttons */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+        <div className="flex shrink-0 items-center gap-1.5">
+          <div className="relative w-48">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              placeholder="Search connectors..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <Menu
+            align="end"
+            trigger={({ toggle, open }) => (
+              <button
+                type="button"
+                onClick={toggle}
+                aria-haspopup="menu"
+                aria-expanded={open}
+                className="flex h-8 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+              >
+                Add
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+            menuClassName="w-52"
           >
-            <SlidersHorizontal className="h-3 w-3" />
-            Filter by
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
-          >
-            <ArrowUpDown className="h-3 w-3" />
-            Sort by
-          </button>
+            {({ close }) => (
+              <>
+                <MenuItem close={close} onSelect={() => setView('browse')}>
+                  Browse connectors
+                </MenuItem>
+                <MenuItem close={close} onSelect={() => setView('add-custom')}>
+                  Add custom connector
+                </MenuItem>
+              </>
+            )}
+          </Menu>
         </div>
       </div>
 
-      {/* Available to your team label */}
-      {filtered.length > 0 && (
-        <p className="text-xs font-medium text-muted-foreground">Available to your team</p>
-      )}
-
-      {/* 2-column card grid */}
+      {/* Table */}
       {filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          No connectors match your search.
+          {connectors.length === 0
+            ? 'No connectors available in this environment.'
+            : 'No connectors match your filters.'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {filtered.map((connector) => (
-            <ConnectorCard
-              key={connector.id}
-              connector={connector}
-              connected={connected.has(connector.id)}
-              mutating={mutatingIds.has(connector.id)}
-              onConnect={() => void handleConnect(connector.id)}
-              onDisconnect={() => void handleDisconnect(connector.id)}
-            />
-          ))}
+        <div className="overflow-hidden rounded-lg border border-border/80">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  Connector
+                </th>
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  Type
+                </th>
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {filtered.map((connector) => {
+                const connection = connectionById.get(connector.id);
+                const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
+                const rowError = rowErrors[connector.id];
+                return (
+                  <tr
+                    key={connector.id}
+                    onClick={() => setDetailId(connector.id)}
+                    className="cursor-pointer transition-colors hover:bg-muted/40"
+                  >
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <ConnectorLogo
+                          connectorId={connector.id}
+                          fallbackGradient={connector.iconBg}
+                          fallbackText={connector.iconText}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDetailId(connector.id);
+                            }}
+                            className="block max-w-full truncate text-sm font-medium text-foreground hover:underline"
+                          >
+                            {connector.name}
+                          </button>
+                          {rowError && (
+                            <p className="mt-0.5 text-[11px] text-red-500">{rowError}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                      {connector.category}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <ConnectorStatusCell
+                        connector={connector}
+                        connection={connection}
+                        canConnect={canConnect}
+                        mutating={mutatingIds.has(connector.id)}
+                        onConnect={() => handleConnect(connector.id)}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -335,11 +1061,19 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 }
 
 // ---------------------------------------------------------------------------
-// SkillsPanel
+// SkillsPanel — table view (columns Skill | Author) + Browse into the shared
+// directory. HONEST OMISSIONS (spec allows skipping where data/backing does
+// not exist):
+//   - No "Add" dropdown: @agiworkforce/skills is a read-only loader and
+//     /api/skills is GET-only — there is no create-with-AI, manual-authoring,
+//     or upload capability to wire, so no Add items render.
+//   - No "Last updated" column: the skill loader exposes no timestamps.
+//   - No download counts / popularity numbers anywhere (no real metrics).
 // ---------------------------------------------------------------------------
 
 function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
+  const [view, setView] = useState<'table' | 'browse'>('table');
   const skills = useMemo(() => adapter?.skills ?? [], [adapter?.skills]);
   const loading = adapter?.skillsLoading ?? false;
 
@@ -354,6 +1088,12 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     );
   }, [skills, search]);
 
+  if (view === 'browse') {
+    return (
+      <DirectoryBrowse adapter={adapter} initialTab="skills" onBack={() => setView('table')} />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -363,21 +1103,31 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </p>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="Search skills..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
-        />
+      {/* Toolbar: search + Browse */}
+      <div className="flex items-center gap-1.5">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder="Search skills..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setView('browse')}
+          className="h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          Browse
+        </button>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-lg bg-muted/40" />
+            <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/40" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -387,23 +1137,41 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
             : 'No skills match your search.'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {filtered.map((skill: SettingsSkill) => (
-            <div
-              key={skill.id}
-              className="flex items-center gap-3 rounded-lg border border-border/80 bg-card/40 p-3.5"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                <BookOpen className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">{skill.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
-                  {skill.description || skill.source}
-                </p>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-lg border border-border/80">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  Skill
+                </th>
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  Author
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {filtered.map((skill: SettingsSkill) => (
+                <tr key={skill.id} className="transition-colors hover:bg-muted/40">
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                        <BookOpen className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{skill.name}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {skill.description || skill.source}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    {skillAuthorLabel(skill.source)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -411,11 +1179,18 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 }
 
 // ---------------------------------------------------------------------------
-// PluginsPanel
+// PluginsPanel — table view (columns Plugin | Author | Skills | Last updated,
+// optional columns rendering only when at least one plugin supplies real
+// data) + Browse into the shared directory. The Add dropdown renders ONLY the
+// items whose adapter capability exists (onAddPluginMarketplace /
+// onUploadPlugin); with neither, the dropdown is omitted entirely. There is
+// deliberately NO "Create with AGI" item anywhere yet — no real
+// plugin-creation flow exists to back it.
 // ---------------------------------------------------------------------------
 
 function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
+  const [view, setView] = useState<'table' | 'browse'>('table');
   const plugins = useMemo(() => adapter?.plugins ?? [], [adapter?.plugins]);
   const loading = adapter?.pluginsLoading ?? false;
 
@@ -423,9 +1198,32 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     if (!search) return plugins;
     const q = search.toLowerCase();
     return plugins.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q),
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        (p.author ?? '').toLowerCase().includes(q),
     );
   }, [plugins, search]);
+
+  // Optional columns render only when real data exists somewhere in the list.
+  const hasAuthor = plugins.some((p) => p.author);
+  const hasSkillCount = plugins.some((p) => p.skillCount != null);
+  const hasUpdatedAt = plugins.some((p) => p.updatedAt);
+
+  const addItems: { label: string; onSelect: () => void }[] = [
+    ...(adapter?.onAddPluginMarketplace
+      ? [{ label: 'Add marketplace', onSelect: adapter.onAddPluginMarketplace }]
+      : []),
+    ...(adapter?.onUploadPlugin
+      ? [{ label: 'Upload plugin', onSelect: adapter.onUploadPlugin }]
+      : []),
+  ];
+
+  if (view === 'browse') {
+    return (
+      <DirectoryBrowse adapter={adapter} initialTab="plugins" onBack={() => setView('table')} />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -436,15 +1234,53 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </p>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="Search plugins..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
-        />
+      {/* Toolbar: search + Browse + Add (capability-gated) */}
+      <div className="flex items-center gap-1.5">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder="Search plugins..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setView('browse')}
+          className="h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          Browse
+        </button>
+        {addItems.length > 0 && (
+          <Menu
+            align="end"
+            trigger={({ toggle, open }) => (
+              <button
+                type="button"
+                onClick={toggle}
+                aria-haspopup="menu"
+                aria-expanded={open}
+                className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+              >
+                Add
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+            menuClassName="w-48"
+          >
+            {({ close }) => (
+              <>
+                {addItems.map((item) => (
+                  <MenuItem key={item.label} close={close} onSelect={item.onSelect}>
+                    {item.label}
+                  </MenuItem>
+                ))}
+              </>
+            )}
+          </Menu>
+        )}
       </div>
 
       {loading ? (
@@ -463,32 +1299,74 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map((plugin) => (
-            <div
-              key={plugin.id}
-              className="flex items-center gap-3 rounded-lg border border-border/80 bg-card/40 p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">{plugin.name}</p>
-                  <span
-                    className={cn(
-                      'rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                      plugin.enabled
-                        ? 'bg-emerald-500/15 text-emerald-500'
-                        : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {plugin.enabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
-                  {plugin.description || 'No description.'}
-                </p>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-lg border border-border/80">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <th scope="col" className="px-3 py-2 font-semibold">
+                  Plugin
+                </th>
+                {hasAuthor && (
+                  <th scope="col" className="px-3 py-2 font-semibold">
+                    Author
+                  </th>
+                )}
+                {hasSkillCount && (
+                  <th scope="col" className="px-3 py-2 font-semibold">
+                    Skills
+                  </th>
+                )}
+                {hasUpdatedAt && (
+                  <th scope="col" className="px-3 py-2 font-semibold">
+                    Last updated
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {filtered.map((plugin) => (
+                <tr key={plugin.id} className="transition-colors hover:bg-muted/40">
+                  <td className="px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {plugin.name}
+                        </p>
+                        <span
+                          className={cn(
+                            'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                            plugin.enabled
+                              ? 'bg-emerald-500/15 text-emerald-500'
+                              : 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {plugin.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {plugin.description || 'No description.'}
+                      </p>
+                    </div>
+                  </td>
+                  {hasAuthor && (
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                      {plugin.author ?? '-'}
+                    </td>
+                  )}
+                  {hasSkillCount && (
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                      {plugin.skillCount ?? '-'}
+                    </td>
+                  )}
+                  {hasUpdatedAt && (
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                      {plugin.updatedAt ? new Date(plugin.updatedAt).toLocaleDateString() : '-'}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
