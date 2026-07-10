@@ -140,6 +140,15 @@ export interface GeneratedFileEntry {
   /** Coarse kind for icons: pdf | docx | xlsx | pptx | csv | json | markdown | html | image | archive | other */
   kind: string;
   checksumSha256?: string;
+  /**
+   * Server-derived UI-ownership classification (wire `surface`; see
+   * `GeneratedFileSurface` in `@agiworkforce/services` cloud-contracts).
+   * Pass-through only — clients never re-derive it from mime/extension.
+   * Optional: absent on entries persisted before classification shipped.
+   */
+  surface?: 'artifact' | 'file';
+  /** Server-derived inline-render affordance (wire `previewable`). */
+  previewable?: boolean;
 }
 
 export interface Conversation {
