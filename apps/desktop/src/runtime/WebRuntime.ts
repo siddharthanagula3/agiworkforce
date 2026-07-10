@@ -134,6 +134,10 @@ export function mapGeneratedFilesPayload(payload: unknown): GeneratedFileEntry[]
     byteCount: f.byte_count,
     kind: f.kind,
     ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
+    // Server-derived classification (file-creation parity Wave A) — the
+    // contract defaults pre-classification payloads. Pass-through only.
+    surface: f.surface,
+    previewable: f.previewable,
   }));
 }
 
