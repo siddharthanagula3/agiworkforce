@@ -362,4 +362,39 @@ describe('ChatComposerNew', () => {
     fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
     expect(screen.getByRole('button', { name: /choose a project/i })).toBeInTheDocument();
   });
+
+  it('web search is a PERSISTENT toggle — stays on across sends (not fire-once)', async () => {
+    const onSendMock = vi.fn();
+    render(<ChatComposerNew onSend={onSendMock} />);
+
+    // Turn Web search on via the + menu.
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /web search/i }));
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+
+    // First send carries webSearchEnabled: true.
+    await userEvent.type(textarea, 'first');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+    await waitFor(() =>
+      expect(onSendMock).toHaveBeenLastCalledWith(
+        'first',
+        undefined,
+        undefined,
+        expect.objectContaining({ webSearchEnabled: true }),
+      ),
+    );
+
+    // Second send must STILL carry webSearchEnabled: true (fire-once would reset it).
+    await userEvent.type(textarea, 'second');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+    await waitFor(() =>
+      expect(onSendMock).toHaveBeenLastCalledWith(
+        'second',
+        undefined,
+        undefined,
+        expect.objectContaining({ webSearchEnabled: true }),
+      ),
+    );
+  });
 });
