@@ -567,10 +567,40 @@ export async function* runResearchLoop(
     iteration = Math.min(iteration + 1, maxIterations);
     yield status('synthesizing', 'Writing report');
     try {
-      yield* runTurn(
+      const synthesis = yield* runTurn(
         [...messages, { role: 'user', content: synthesisDirective(sources, cutShortReason) }],
         true,
       );
+      // Empty-synthesis guarantee: a run must NEVER end as a silent empty
+      // message (an empty body also skips client persistence, so the whole
+      // run would vanish on reload). If the model produced no report text,
+      // emit an honest failure as real content and an error status.
+      if (!synthesis.text.trim()) {
+        logger.error(
+          { provider: processed.provider, requestId: processed.requestId, sources: sources.size },
+          '[research-loop] synthesis turn produced no text',
+        );
+        yield status('error', 'Report generation returned no text');
+        yield encoder.encode(
+          sseData({
+            choices: [
+              {
+                delta: {
+                  content:
+                    `Deep research gathered ${sources.size} source${sources.size === 1 ? '' : 's'} across ${totalSearches} search${totalSearches === 1 ? '' : 'es'}, but the model returned an empty report.` +
+                    ' Try running the research again.',
+                },
+                index: 0,
+              },
+            ],
+            model: responseModel,
+          }),
+        );
+        const cumulativeOnEmpty = sources.toSearchResultsEvent(responseModel);
+        if (cumulativeOnEmpty) yield encoder.encode(cumulativeOnEmpty);
+        yield encoder.encode(sseDone());
+        return;
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(
