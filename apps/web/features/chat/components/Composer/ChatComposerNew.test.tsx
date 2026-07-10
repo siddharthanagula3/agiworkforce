@@ -66,7 +66,7 @@ vi.mock('./ComposerFooter', () => ({
 }));
 
 vi.mock('./InputFooter', () => ({
-  InputFooter: ({ hint }: { hint: string }) => <div data-testid="input-footer" data-hint={hint} />,
+  InputFooter: () => <div data-testid="input-footer" />,
 }));
 
 vi.mock('./ActiveModeTags', () => ({

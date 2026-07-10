@@ -451,7 +451,6 @@ function ModelRow({
 }
 
 interface ComposerFooterProps {
-  hint?: string;
   showModelSelector?: boolean;
   /** When true, shows a search input inside the model dropdown (code surface only). */
   showModelSearch?: boolean;
@@ -473,7 +472,6 @@ interface ComposerFooterProps {
 }
 
 export function ComposerFooter({
-  hint = 'Cmd+Enter to send · Enter for newline',
   showModelSelector = true,
   showModelSearch = false,
   onUpgradeRequest,
@@ -627,36 +625,24 @@ export function ComposerFooter({
         className={
           inline
             ? 'flex min-w-0 items-center gap-2'
-            : 'flex items-center justify-between gap-2 px-1'
+            : 'flex items-center justify-end gap-2 px-1'
         }
       >
-        {/* Left: keyboard hint. Always rendered (even inline) so the send shortcut is
-            disclosed somewhere in the UI instead of only in marketing copy — collapses
-            on narrow inline toolbars (md breakpoint) to avoid crowding the composer row.
-            INLINE OVERFLOW FIX: the hint is a flex child, so `min-w-0 shrink truncate`
-            (flex items are blockified, so overflow/ellipsis actually apply) lets it give
-            up width under pressure. Previously `whitespace-nowrap` with no max-width kept
-            the hint at its full intrinsic width even though every ancestor had min-w-0 —
-            inside a real conversation the sidebar narrows the composer column, and that
-            rigid hint (plus the model-name pill) pushed the Send button onto a 2nd row.
-            The model-name span's own max-w+truncate masked it, so the empty homepage
-            (wide column, no sidebar) never reproduced it. */}
-        <span
-          className={[
-            'text-xs text-muted-foreground',
-            inline ? 'hidden min-w-0 shrink truncate md:block' : 'whitespace-nowrap',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          {hint}
-        </span>
-
         {/* min-w-0 so the model selector button below can shrink (its name span
-            truncates) instead of forcing the control row to wrap. */}
+            truncates) instead of forcing the control row to wrap. The persistent
+            "Cmd+Enter to send" keyboard hint was removed (founder directive, matches
+            claude.ai which shows no persistent hint); the Enter/Cmd+Enter behavior in
+            ChatComposerNew is unchanged. */}
         <div className="flex min-w-0 items-center gap-2">
-          {/* Response style selector */}
-          {showStyleSelector && <StyleSelector />}
+          {/* Response style selector · hidden below sm so the model selector keeps a
+              usable width on the narrow (mobile) composer row. Style is a secondary
+              control and, like claude.ai's mobile composer, is dropped at small widths
+              rather than crushing the model picker. */}
+          {showStyleSelector && (
+            <div className="hidden sm:block">
+              <StyleSelector />
+            </div>
+          )}
 
           {/* Model selector */}
           {showModelSelector && lockModelSelector && (
@@ -689,9 +675,17 @@ export function ComposerFooter({
                   aria-label="Change model"
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
-                  {/* min-w-0 + truncate lets the model name shrink so the composer
-                      bottom row stays a single line at narrow widths (375px). */}
-                  <span className="min-w-0 max-w-[140px] truncate">{selectedModel.name}</span>
+                  {/* truncate lets the model name shrink so the composer bottom row
+                      stays a single line at narrow widths, while min-w-[3.5rem] gives it
+                      a GUARANTEED floor (~56px) so the label can never collapse to 0px
+                      (which previously left only the ~12px provider icon, overflowing
+                      UNDER the Send button at 375px). max-w-[140px] caps it on wide
+                      layouts. Floor + the narrow-width control trims in ChatComposerNew
+                      keep this selector visible, tappable, and clear of Send down to
+                      ~320px. */}
+                  <span className="min-w-[3.5rem] max-w-[140px] shrink truncate">
+                    {selectedModel.name}
+                  </span>
                   {supportsAdaptive && thinkingEnabled && (
                     <span className="text-xs text-muted-foreground/70">
                       {EFFORT_LABEL[thinkingEffort]}

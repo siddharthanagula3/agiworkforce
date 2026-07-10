@@ -3,7 +3,6 @@
 import { cn } from '@shared/lib/utils';
 
 interface InputFooterProps {
-  hint?: string;
   /** Credits consumed this period (0–totalCredits) */
   usedCredits?: number;
   /** Total credit allowance for the period */
@@ -19,7 +18,6 @@ function usageColor(pct: number): string {
 }
 
 export function InputFooter({
-  hint = 'Cmd+Enter to send · Enter for newline',
   usedCredits = 0,
   totalCredits = 100,
   hideCredits = false,
@@ -28,10 +26,7 @@ export function InputFooter({
   const barColor = usageColor(pct);
 
   return (
-    <div className="mt-2 flex items-center justify-between gap-4 px-1">
-      {/* Left · keyboard hint */}
-      <span className="text-xs text-muted-foreground">{hint}</span>
-
+    <div className="mt-2 flex items-center justify-end gap-4 px-1">
       {/* Right · credit usage bar */}
       {!hideCredits && (
         <div className="flex items-center gap-2 shrink-0">
