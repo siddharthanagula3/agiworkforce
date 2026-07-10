@@ -1881,6 +1881,48 @@ function injectStyles(): void {
     }
     .sp-drawer-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-drawer-tool-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    /* History sub-list inside the drawer.
+       CSP note (style-src 'self'): these rules used to be applied via
+       element.style.cssText at runtime, which Chrome blocks on extension
+       pages with a strict style-src — keep them here in the stylesheet. */
+    #sp-drawer-history-list {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    #sp-drawer-history-list[hidden] { display: none; }
+    .sp-drawer-history-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 2px; }
+    .sp-drawer-history-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+    }
+    .sp-drawer-history-text { flex: 1; min-width: 0; }
+    .sp-drawer-history-title {
+      font-size: 11px;
+      color: var(--agi-ext-text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-drawer-history-date { font-size: 9px; color: var(--agi-ext-text-muted); margin-top: 1px; }
+    .sp-drawer-history-delete {
+      background: none;
+      border: none;
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
     /* Connection / pairing */
     .sp-drawer-pairing-row {
       display: flex;
@@ -2603,7 +2645,13 @@ function el<K extends keyof HTMLElementTagNameMap>(
   ...children: (Node | string)[]
 ): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  for (const [k, v] of Object.entries(attrs)) {
+    // CSP (style-src 'self'): setAttribute('style', …) is an inline-style
+    // *attribute* and is blocked by style-src-attr on extension pages. Route
+    // style through the CSSOM (element.style.cssText), which CSP exempts.
+    if (k === 'style') e.style.cssText = v;
+    else e.setAttribute(k, v);
+  }
   for (const c of children) {
     if (typeof c === 'string') e.appendChild(document.createTextNode(c));
     else e.appendChild(c);
@@ -3982,12 +4030,47 @@ function buildUI(): void {
   let currentModelValue = 'auto';
 
   /**
-   * Resolves the chrome-extension URL for a provider logo SVG.
+   * Provider ids that have a bundled SVG under icons/providers/. Kept in sync
+   * with scripts/vendor-provider-icons.mjs output. Any provider id NOT in this
+   * set resolves to the generic glyph up front so a missing icon never emits a
+   * net::ERR_FILE_NOT_FOUND console error (an <img> onerror handler cannot
+   * suppress the network error once the 404 request has been made).
+   */
+  const BUNDLED_PROVIDER_ICON_IDS: ReadonlySet<string> = new Set([
+    'agi-cloud',
+    'anthropic',
+    'custom-openai-compatible',
+    'deepseek',
+    'google',
+    'lmstudio',
+    'managed_cloud',
+    'mistral',
+    'moonshot',
+    'nvidia_nim',
+    'ollama',
+    'open_router',
+    'openai',
+    'perplexity',
+    'qwen',
+    'runway',
+    'xai',
+    'zhipu',
+  ]);
+
+  /** Generic provider glyph used when a provider has no bundled icon. */
+  const GENERIC_PROVIDER_ICON_ID = 'custom-openai-compatible';
+
+  /**
+   * Resolves the chrome-extension URL for a provider logo SVG. Unknown
+   * provider ids resolve to the generic glyph instead of a 404ing URL.
    * Falls back to undefined when chrome.runtime is unavailable (tests / SSR).
    */
   function resolveProviderLogoUrl(providerId: string): string | undefined {
+    const iconId = BUNDLED_PROVIDER_ICON_IDS.has(providerId)
+      ? providerId
+      : GENERIC_PROVIDER_ICON_ID;
     try {
-      return chrome.runtime.getURL(`icons/providers/${providerId}.svg`);
+      return chrome.runtime.getURL(`icons/providers/${iconId}.svg`);
     } catch {
       return undefined;
     }
@@ -4034,6 +4117,13 @@ function buildUI(): void {
           alt: m.provider,
         }) as HTMLImageElement;
         img.addEventListener('error', () => {
+          // Defensive: allowlisted icon unexpectedly missing from the bundle.
+          // Retry once with the generic glyph, then degrade to a placeholder.
+          const genericUrl = resolveProviderLogoUrl(GENERIC_PROVIDER_ICON_ID);
+          if (genericUrl && img.src !== genericUrl) {
+            img.src = genericUrl;
+            return;
+          }
           const ph = el('div', { class: 'sp-model-option-logo-placeholder' });
           img.replaceWith(ph);
         });
@@ -4376,37 +4466,28 @@ function buildUI(): void {
   drawerHistoryBtn.appendChild(renderIcon(Clock, 13));
   drawerHistoryBtn.appendChild(document.createTextNode(' History'));
 
-  // History sub-list inside drawer (inline, not a floating dropdown)
+  // History sub-list inside drawer (inline, not a floating dropdown).
+  // Styled via stylesheet classes, NOT element.style.cssText — the manifest's
+  // style-src 'self' CSP blocks runtime cssText on extension pages.
   const drawerHistoryList = el('div', { id: 'sp-drawer-history-list', hidden: '' });
-  drawerHistoryList.style.cssText =
-    'margin-top: 6px; display: flex; flex-direction: column; gap: 3px;';
 
   function renderDrawerHistory(entries: ConversationEntry[]): void {
     clearChildren(drawerHistoryList);
     if (entries.length === 0) {
-      const empty = el('div', {}, 'No saved conversations');
-      empty.style.cssText = 'font-size:11px;color:var(--agi-ext-text-muted);padding:4px 2px;';
+      const empty = el('div', { class: 'sp-drawer-history-empty' }, 'No saved conversations');
       drawerHistoryList.appendChild(empty);
       return;
     }
     for (const entry of entries) {
-      const item = el('div', {});
-      item.style.cssText =
-        'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:pointer;background:var(--agi-ext-surface);border:1px solid var(--agi-ext-border);';
-      const textCol = el('div', {});
-      textCol.style.cssText = 'flex:1;min-width:0;';
-      const title = el('div', {}, entry.title);
-      title.style.cssText =
-        'font-size:11px;color:var(--agi-ext-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      const date = el('div', {}, formatHistoryDate(entry.savedAt));
-      date.style.cssText = 'font-size:9px;color:var(--agi-ext-text-muted);margin-top:1px;';
+      const item = el('div', { class: 'sp-drawer-history-item' });
+      const textCol = el('div', { class: 'sp-drawer-history-text' });
+      const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
+      const date = el('div', { class: 'sp-drawer-history-date' }, formatHistoryDate(entry.savedAt));
       textCol.appendChild(title);
       textCol.appendChild(date);
       item.appendChild(textCol);
 
-      const delBtn = el('button', { title: 'Delete' }, '✕');
-      delBtn.style.cssText =
-        'background:none;border:none;color:var(--agi-ext-text-muted);font-size:12px;cursor:pointer;padding:2px 4px;border-radius:3px;line-height:1;flex-shrink:0;';
+      const delBtn = el('button', { class: 'sp-drawer-history-delete', title: 'Delete' }, '✕');
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteConversation(entry.id)
