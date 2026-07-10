@@ -75,16 +75,14 @@ export function GreetingBanner({ onSendMessage }: GreetingBannerProps) {
         className="text-[28px] leading-[36px] font-normal tracking-tight"
         style={{
           color: 'var(--chat-text-primary)',
-          // `var(--font-display)` (Tailwind `@theme` token → next/font Newsreader
-          // variable) does not resolve on this route in local dev — the custom
-          // property is absent from the CSS actually served here. An unset
-          // var() with no fallback invalidates the WHOLE font-family value at
-          // computed-value time (not just that one token), which silently
-          // drops the entire declaration to the Tailwind default sans stack.
-          // Give var() an explicit fallback and reference the loaded
-          // @font-face family directly so the serif display font renders
-          // regardless of that token-delivery gap.
-          fontFamily: "var(--font-display, 'Newsreader'), 'Newsreader', Georgia, serif",
+          // Reference `--font-newsreader` directly: next/font sets this variable
+          // on <body> in app/layout.tsx, so it inherits reliably down to this
+          // /chat h1. `--font-display` is a Tailwind `@theme` value that is not
+          // guaranteed to be emitted to :root here, and an unresolved var() with
+          // no fallback silently drops the whole font-family to the sans stack —
+          // so the serif greeting would degrade. `--font-newsreader` + serif
+          // fallbacks renders the display serif dependably.
+          fontFamily: "var(--font-newsreader), Georgia, 'Times New Roman', serif",
         }}
       >
         {headline}
