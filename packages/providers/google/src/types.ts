@@ -41,6 +41,18 @@ export type GeminiToolConfig = {
     mode: 'AUTO' | 'ANY' | 'NONE';
     allowedFunctionNames?: string[];
   };
+  /**
+   * Required by Gemini (3.x; every Gemini model in our catalog) when a request
+   * combines built-in tools (e.g. google_search grounding) with
+   * functionDeclarations — without it the API 400s with INVALID_ARGUMENT
+   * ("Please enable tool_config.include_server_side_tool_invocations to use
+   * Built-in tools with Function calling."). When set, Gemini executes
+   * built-in tools server-side and may surface their invocations as extra
+   * parts alongside functionCall parts; translateGeminiStream ignores part
+   * shapes it does not know, so those pass through harmlessly while
+   * groundingMetadata still carries the sources.
+   */
+  includeServerSideToolInvocations?: boolean;
 };
 
 export interface GeminiThinkingConfig {

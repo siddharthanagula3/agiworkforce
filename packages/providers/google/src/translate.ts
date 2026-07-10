@@ -72,7 +72,22 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
       }
       return null;
     case 'tool_use':
-      return { functionCall: { name: block.name, args: block.input } };
+      // Gemini 3 strictly validates thought signatures on replayed functionCall
+      // parts: omitting one 400s with INVALID_ARGUMENT ("Function call is
+      // missing a thought_signature in functionCall parts", live repro
+      // 2026-07-10 on gemini-3.5-flash with the tool loop's replayed assistant
+      // turn). Our tool loops replay assistant tool calls over the
+      // OpenAI-compatible wire, which cannot carry Gemini's signature — from
+      // Gemini's perspective these are INJECTED function calls, and the docs
+      // (ai.google.dev/gemini-api/docs/generate-content/thought-signatures)
+      // document exactly this dummy value to skip validation for injected
+      // calls. Real-signature continuity needs the signature to survive the
+      // shared wire (same class as the Anthropic thinking-continuity fix) —
+      // tracked in known-flaws as GEMINI-FUNCTIONCALL-THOUGHT-SIGNATURE-01.
+      return {
+        functionCall: { name: block.name, args: block.input },
+        thoughtSignature: 'skip_thought_signature_validator',
+      };
     case 'tool_result': {
       const text =
         typeof block.content === 'string'
@@ -171,7 +186,22 @@ export function translateChatRequest(req: ChatRequest): GeminiGenerateContentReq
     ...vendorTools,
   ];
   const tools: GeminiTool[] | undefined = combinedTools.length > 0 ? combinedTools : undefined;
-  const toolConfig = translateToolChoice(req.toolChoice);
+  const choiceConfig = translateToolChoice(req.toolChoice);
+
+  // Gemini requires `toolConfig.includeServerSideToolInvocations: true` when a
+  // request carries BOTH built-in tools (rawVendorTools, e.g. google_search
+  // grounding) AND functionDeclarations — without it the API rejects the
+  // request with 400 INVALID_ARGUMENT ("Please enable
+  // tool_config.include_server_side_tool_invocations to use Built-in tools
+  // with Function calling."). Scoped narrowly to the combined case: requests
+  // with only one kind of tool keep their existing byte-identical body (the
+  // key is never emitted), and all catalog Gemini models are 3.x, which
+  // support the flag.
+  const combinesBuiltInAndFunctions =
+    declarations !== undefined && declarations.length > 0 && vendorTools.length > 0;
+  const toolConfig: GeminiToolConfig | undefined = combinesBuiltInAndFunctions
+    ? { ...(choiceConfig ?? {}), includeServerSideToolInvocations: true }
+    : choiceConfig;
 
   const generationConfig: NonNullable<GeminiGenerateContentRequest['generationConfig']> = {};
   if (req.temperature !== undefined) generationConfig.temperature = req.temperature;
