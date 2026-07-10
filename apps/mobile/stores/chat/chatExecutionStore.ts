@@ -1,12 +1,17 @@
 import { Alert, AppState } from 'react-native';
 import { create } from 'zustand';
-import { TIMEOUTS } from '@/lib/constants';
+import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
 import { QueueFullError } from '@agiworkforce/runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
-import { streamChat, type StreamDelta, type StreamGeneratedFile } from '@/services/streaming';
+import { streamChat, type StreamDelta } from '@/services/streaming';
+import {
+  parseGeneratedFilesDelta,
+  resolveGeneratedFileUri,
+  type GeneratedFileWire,
+} from '@agiworkforce/services';
 import {
   createToolCallAccumulator,
   accumulateToolCallDelta,
@@ -512,13 +517,19 @@ const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Map the server's x_generated_files wire descriptors (durable media URLs for
- * files the model created in the E2B sandbox) onto generated-file artifacts so
+ * Map the server's x_generated_files wire descriptors (files the model
+ * created in the E2B sandbox) onto generated-file artifacts so
  * InlineArtifactCard / ArtifactFullScreen / GeneratedFileCard render a
  * downloadable file card on the message.
+ *
+ * Wire `uri` is the RELATIVE authed route `/api/files/{id}` on the cloud
+ * origin (see the generated-files cloud contract) — resolve it against
+ * API_URL here so every downstream consumer (download, share, preview) holds
+ * a fetchable absolute URL. Auth (Bearer) is attached at fetch time by
+ * `downloadGeneratedFile` in services/fileCreation.ts.
  */
 export function generatedFileArtifactsFromWire(
-  files: StreamGeneratedFile[],
+  files: GeneratedFileWire[],
   createdAt: string,
 ): NonNullable<ChatMessage['artifacts']> {
   return files.map((f) => {
@@ -537,9 +548,9 @@ export function generatedFileArtifactsFromWire(
       kind,
       fileName: f.file_name,
       mimeType: f.mime_type,
-      uri: f.uri,
+      uri: resolveGeneratedFileUri(f.uri, API_URL),
       byteCount: f.byte_count,
-      checksumSha256: '',
+      checksumSha256: f.checksum_sha256 ?? '',
       previewDerivatives: [],
       createdAt,
     };
@@ -1175,7 +1186,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // emits one x_generated_files delta (durable media URLs) before [DONE];
       // onDone maps them to generated-file artifacts so GeneratedFileCard /
       // InlineArtifactCard render a downloadable file card.
-      const turnGeneratedFiles: StreamGeneratedFile[] = [];
+      const turnGeneratedFiles: GeneratedFileWire[] = [];
       // Structured delta.reasoning is a separate, genuinely incremental channel
       // (e.g. a provider's dedicated reasoning field) from the tag-embedded
       // thinking parsed out of cloudContentRaw below. Tracked separately because
@@ -1250,8 +1261,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);
 
-            if (delta.x_generated_files?.files?.length) {
-              turnGeneratedFiles.push(...delta.x_generated_files.files);
+            if (delta.x_generated_files) {
+              // Validate against the shared cloud contract; malformed
+              // descriptors are dropped per-file instead of trusted blindly.
+              turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
             }
 
             const thinkingStartedAt = thinkingStartTimes.get(conversationId);
