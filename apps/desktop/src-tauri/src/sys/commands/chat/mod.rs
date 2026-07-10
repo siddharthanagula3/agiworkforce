@@ -21,6 +21,7 @@ pub mod conversation;
 pub mod cost;
 pub mod export;
 pub mod intent;
+pub mod local_turn_host;
 pub mod maintenance;
 pub mod memory_handler;
 pub mod message_context;
