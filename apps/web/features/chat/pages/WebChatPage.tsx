@@ -32,6 +32,7 @@ import {
   Keyboard,
   Globe,
   LogOut,
+  FolderOpen,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
@@ -1614,6 +1615,17 @@ export default function WebChatPage() {
   // separate Directory modal (both removed).
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () => [
+      // Persistent Projects entry (claude.ai parity). The Projects *section* in
+      // the sidebar body only renders once the user has at least one project, so
+      // a zero-project user previously had NO way to reach /projects. This nav
+      // link is always present.
+      {
+        id: 'projects',
+        label: 'Projects',
+        icon: FolderOpen,
+        onClick: () => router.push('/projects'),
+        isActive: false,
+      },
       {
         id: 'customize',
         label: 'Customize',
@@ -1622,7 +1634,7 @@ export default function WebChatPage() {
         isActive: false,
       },
     ],
-    [openSettings],
+    [openSettings, router],
   );
 
   // Billing tier label for the user profile footer.
