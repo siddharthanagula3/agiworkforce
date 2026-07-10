@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import {
   BILLING_PLAN_PRICING,
   formatPrivacyModeLabel,
+  isPlanSelectableOnSurface,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -533,36 +534,41 @@ export default function PricingPage() {
               </Link>
             </Reveal>
 
-            <Reveal as="article" delay={40} className="agi-tier">
-              <h3 className="agi-tier-name">{basic.label}</h3>
-              <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{basicPrice}</span>
-                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
-              </p>
-              <p className="agi-tier-body">{t('basicTierBody')}</p>
-              <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('basicFeature1')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('basicFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('basicFeature3')}
-                </li>
-              </ul>
-              <button
-                type="button"
-                className="agi-tier-cta"
-                disabled={pendingPlan === 'basic'}
-                onClick={() => void handleUpgrade('basic')}
-              >
-                {t('basicCta')}
-              </button>
-            </Reveal>
+            {/* Basic is mobile-only (founder decision, 2026-07) — hidden from the
+                web plan-selection list; existing Basic subscribers still see it
+                as their current plan in billing. */}
+            {isPlanSelectableOnSurface('basic', 'web') && (
+              <Reveal as="article" delay={40} className="agi-tier">
+                <h3 className="agi-tier-name">{basic.label}</h3>
+                <p className="agi-tier-price">
+                  <span className="agi-tier-price-num">{basicPrice}</span>
+                  <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
+                </p>
+                <p className="agi-tier-body">{t('basicTierBody')}</p>
+                <ul className="agi-tier-features">
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature1')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature2')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature3')}
+                  </li>
+                </ul>
+                <button
+                  type="button"
+                  className="agi-tier-cta"
+                  disabled={pendingPlan === 'basic'}
+                  onClick={() => void handleUpgrade('basic')}
+                >
+                  {t('basicCta')}
+                </button>
+              </Reveal>
+            )}
 
             <Reveal as="article" delay={80} className="agi-tier">
               <h3 className="agi-tier-name">{pro.label}</h3>
@@ -693,66 +699,68 @@ export default function PricingPage() {
                 </tr>
               </thead>
               <tbody>
-                {compareRows.map((row, i) => (
-                  <tr
-                    key={row.planId}
-                    style={{
-                      background: row.highlighted
-                        ? 'var(--agi-amber-soft)'
-                        : i % 2 === 0
-                          ? 'transparent'
-                          : 'var(--agi-bg-2)',
-                    }}
-                  >
-                    <td
+                {compareRows
+                  .filter((row) => isPlanSelectableOnSurface(row.planId, 'web'))
+                  .map((row, i) => (
+                    <tr
+                      key={row.planId}
                       style={{
-                        padding: '14px 16px',
-                        borderBottom: '1px solid var(--agi-rule)',
-                        fontWeight: 600,
-                        color: row.highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
-                        whiteSpace: 'nowrap',
+                        background: row.highlighted
+                          ? 'var(--agi-amber-soft)'
+                          : i % 2 === 0
+                            ? 'transparent'
+                            : 'var(--agi-bg-2)',
                       }}
                     >
-                      {row.label}
-                    </td>
-                    <td
-                      style={{
-                        padding: '14px 16px',
-                        borderBottom: '1px solid var(--agi-rule)',
-                        color: 'var(--agi-ink)',
-                      }}
-                    >
-                      {row.price}
-                    </td>
-                    <td
-                      style={{
-                        padding: '14px 16px',
-                        borderBottom: '1px solid var(--agi-rule)',
-                        color: 'var(--agi-ink-2)',
-                      }}
-                    >
-                      {row.billingInterval}
-                    </td>
-                    <td
-                      style={{
-                        padding: '14px 16px',
-                        borderBottom: '1px solid var(--agi-rule)',
-                        color: 'var(--agi-ink-2)',
-                      }}
-                    >
-                      {row.usageCapacity}
-                    </td>
-                    <td
-                      style={{
-                        padding: '14px 16px',
-                        borderBottom: '1px solid var(--agi-rule)',
-                        color: 'var(--agi-ink-2)',
-                      }}
-                    >
-                      {row.bestFor}
-                    </td>
-                  </tr>
-                ))}
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          fontWeight: 600,
+                          color: row.highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.label}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink)',
+                        }}
+                      >
+                        {row.price}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                        }}
+                      >
+                        {row.billingInterval}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                        }}
+                      >
+                        {row.usageCapacity}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid var(--agi-rule)',
+                          color: 'var(--agi-ink-2)',
+                        }}
+                      >
+                        {row.bestFor}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

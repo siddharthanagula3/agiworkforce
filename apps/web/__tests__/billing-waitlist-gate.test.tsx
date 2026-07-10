@@ -104,6 +104,12 @@ vi.mock('sonner', () => ({
 vi.mock('@agiworkforce/types', () => ({
   getPlanPriceUsd: vi.fn(() => 29),
   getPlanUsageBudgetCents: vi.fn(() => 50000),
+  // Basic is mobile-only: not selectable on web/desktop.
+  isPlanSelectableOnSurface: (tier: string, surface: string) =>
+    !(tier === 'basic' && surface !== 'mobile'),
+  getBillingPlanPricing: (tier: string) => ({
+    label: tier.charAt(0).toUpperCase() + tier.slice(1),
+  }),
 }));
 
 // @/components/ui — minimal button stub
@@ -190,10 +196,11 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED=false (kill-swi
     it('redirects to /pricing#waitlist, does NOT call stripe service, when gate is off', async () => {
       render(React.createElement(BillingDashboard));
 
-      // The header CTA "Upgrade to Basic" button has the gradient-primary class.
+      // The header CTA reads "Upgrade to Pro" for a free web user — Basic is
+      // mobile-only (founder decision, 2026-07), so the web ladder skips it.
       const allUpgradeBtns = await screen.findAllByRole('button', { name: /upgrade/i });
       const upgradeBtn = allUpgradeBtns.find((btn) =>
-        btn.textContent?.toLowerCase().includes('basic'),
+        btn.textContent?.toLowerCase().includes('pro'),
       );
       expect(upgradeBtn).toBeTruthy();
 
@@ -203,8 +210,10 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED=false (kill-swi
         expect(window.location.href).toBe('/pricing#waitlist');
       });
 
-      // Confirm the stripe service was not called
-      const { upgradeToBasicPlan } = await import('@features/billing/services/stripe-payments');
+      // Confirm no stripe purchase flow was invoked (gate is off → waitlist).
+      const { upgradeToProPlan, upgradeToBasicPlan } =
+        await import('@features/billing/services/stripe-payments');
+      expect(upgradeToProPlan).not.toHaveBeenCalled();
       expect(upgradeToBasicPlan).not.toHaveBeenCalled();
     });
   });

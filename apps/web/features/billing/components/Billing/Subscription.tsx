@@ -20,7 +20,11 @@ import {
   ExternalLink,
   XCircle,
 } from 'lucide-react';
-import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
+import {
+  getPlanPriceUsd,
+  getPlanUsageBudgetCents,
+  isPlanSelectableOnSurface,
+} from '@agiworkforce/types';
 import { BillingInfo, normalizePlan, normalizeStatus } from './types';
 
 function formatPlanPrice(plan: 'basic' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
@@ -252,63 +256,66 @@ export const Subscription: React.FC<SubscriptionProps> = ({
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {/* Basic Plan */}
-              {normalizePlan(billing?.plan) === 'free' && (
-                <Card className="border-2 border-muted-foreground/30">
-                  <CardHeader>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="h-5 w-5 text-primary" />
-                      <CardTitle>Basic</CardTitle>
-                    </div>
-                    <div className="text-2xl font-bold">
-                      {billingPeriod === 'yearly' ? (
-                        <>
-                          <div className="text-3xl font-bold">
-                            {formatPlanPrice('basic', 'yearly')}
-                            <span className="text-lg text-muted-foreground">/month</span>
-                          </div>
-                          <div className="mt-1 text-sm text-muted-foreground">
-                            Billed yearly as {formatPlanBilledAmount('basic', 'yearly')}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {formatPlanPrice('basic', 'monthly')}
-                          <span className="text-sm text-muted-foreground">/month</span>
-                        </>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-2 text-sm">
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>{formatUsageBudgetLine('basic', billingPeriod)}</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Speed-optimized AI models</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Vision &amp; image analysis</span>
-                      </li>
-                      <li className="flex items-center space-x-2">
-                        <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Basic computer use</span>
-                      </li>
-                    </ul>
-                    <Button
-                      className="mt-4 w-full"
-                      variant="outline"
-                      onClick={() => onUpgrade('basic', billingPeriod)}
-                    >
-                      Get Basic
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
+              {/* Basic Plan — mobile-only (founder decision, 2026-07): shown as an
+                  upgrade option only on mobile, hidden on web/desktop. An existing
+                  Basic subscriber still sees their plan in the current-plan card above. */}
+              {normalizePlan(billing?.plan) === 'free' &&
+                isPlanSelectableOnSurface('basic', 'web') && (
+                  <Card className="border-2 border-muted-foreground/30">
+                    <CardHeader>
+                      <div className="flex items-center space-x-2">
+                        <Zap className="h-5 w-5 text-primary" />
+                        <CardTitle>Basic</CardTitle>
+                      </div>
+                      <div className="text-2xl font-bold">
+                        {billingPeriod === 'yearly' ? (
+                          <>
+                            <div className="text-3xl font-bold">
+                              {formatPlanPrice('basic', 'yearly')}
+                              <span className="text-lg text-muted-foreground">/month</span>
+                            </div>
+                            <div className="mt-1 text-sm text-muted-foreground">
+                              Billed yearly as {formatPlanBilledAmount('basic', 'yearly')}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {formatPlanPrice('basic', 'monthly')}
+                            <span className="text-sm text-muted-foreground">/month</span>
+                          </>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm">
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>{formatUsageBudgetLine('basic', billingPeriod)}</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Speed-optimized AI models</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Vision &amp; image analysis</span>
+                        </li>
+                        <li className="flex items-center space-x-2">
+                          <CheckCircle className="h-4 w-4 text-success" />
+                          <span>Basic computer use</span>
+                        </li>
+                      </ul>
+                      <Button
+                        className="mt-4 w-full"
+                        variant="outline"
+                        onClick={() => onUpgrade('basic', billingPeriod)}
+                      >
+                        Get Basic
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
 
               {/* Pro Plan */}
               {(normalizePlan(billing?.plan) === 'free' ||
