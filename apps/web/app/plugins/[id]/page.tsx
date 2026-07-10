@@ -1,23 +1,15 @@
-'use client';
-
-import { use } from 'react';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Layers, Link2, CheckCircle2, Circle, Puzzle } from 'lucide-react';
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@agiworkforce/ui';
-import { cn } from '@shared/lib/utils';
+import { ArrowLeft } from 'lucide-react';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { Header } from '../../../components/layout/Header';
+import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
-import type { Plugin } from '@/features/plugins/types';
-import { CONNECTORS } from '@/features/connectors/data/connectors';
-import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
-import { useConnectors } from '@/features/connectors/hooks/use-connectors';
+import { ConnectorChecklist } from './ConnectorChecklist';
 
-const CONNECTORS_BY_ID = new Map(CONNECTORS.map((connector) => [connector.id, connector]));
-
-function sourceBadgeClass(source: string): string {
-  if (source === 'builtin') return 'bg-primary/15 text-primary border-primary/20';
-  if (source === 'marketplace') return 'bg-blue-500/15 text-blue-400 border-blue-500/20';
-  return 'bg-muted/60 text-muted-foreground border-border/40';
+interface Props {
+  params: Promise<{ id: string }>;
 }
 
 function sourceLabel(source: string): string {
@@ -26,163 +18,107 @@ function sourceLabel(source: string): string {
   return 'Custom';
 }
 
-// ── Inner component · only rendered once plugin is confirmed non-null ──────────
-
-function PluginDetail({ plugin }: { plugin: Plugin }) {
-  const { connectedIds, loading: connectorsLoading } = useConnectors();
-
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Back link */}
-      <Link
-        href="/plugins"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Plugin Marketplace
-      </Link>
-
-      {/* Plugin header */}
-      <div className="mb-8 flex items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/15">
-          <Puzzle className="h-7 w-7 text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <h1 className="font-heading text-2xl font-bold leading-tight text-foreground">
-              {plugin.name}
-            </h1>
-            <Badge
-              className={cn('border text-[10px] font-medium', sourceBadgeClass(plugin.source))}
-            >
-              {sourceLabel(plugin.source)}
-            </Badge>
-          </div>
-          <p className="mb-1 text-sm text-muted-foreground">
-            by {plugin.author} &nbsp;&middot;&nbsp; v{plugin.version} &nbsp;&middot;&nbsp;{' '}
-            {plugin.category}
-          </p>
-        </div>
-        <Link
-          href="/plugins#request-access"
-          className="shrink-0 rounded-md border border-border/70 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
-          aria-label={`Request hosted marketplace access for ${plugin.name}`}
-        >
-          Request access
-        </Link>
-      </div>
-
-      {/* Description */}
-      <p className="mb-8 text-sm leading-relaxed text-foreground">{plugin.description}</p>
-
-      {/* Skills included */}
-      <Card className="mb-4">
-        <CardHeader className="pb-3">
-          <CardTitle as="h2" className="flex items-center gap-2 text-sm font-semibold">
-            <Layers className="h-4 w-4 text-primary" />
-            Included Skills
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {plugin.skills.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No skills bundled with this plugin.</p>
-          ) : (
-            <ul className="space-y-2">
-              {plugin.skills.map((skill) => (
-                <li
-                  key={skill}
-                  className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm text-foreground"
-                >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold text-primary">
-                    {skill.substring(0, 2).toUpperCase()}
-                  </span>
-                  {skill}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Required connectors with connection status */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle as="h2" className="flex items-center gap-2 text-sm font-semibold">
-            <Link2 className="h-4 w-4 text-primary" />
-            Required Connectors
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {plugin.connectors.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              This plugin does not require any connectors.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {plugin.connectors.map((connectorId) => {
-                const connected = !connectorsLoading && connectedIds.has(connectorId);
-                const connector = CONNECTORS_BY_ID.get(connectorId);
-                return (
-                  <li
-                    key={connectorId}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      {connected ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                      ) : (
-                        <Circle className="h-4 w-4 shrink-0 text-muted-foreground/50" />
-                      )}
-                      {connector && (
-                        <OfficialConnectorLogo
-                          connector={connector}
-                          className="h-6 w-6 rounded-md"
-                        />
-                      )}
-                      <span className="text-sm text-foreground">
-                        {connector?.name ?? connectorId}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {connectorsLoading ? (
-                        <span className="text-[11px] text-muted-foreground">Checking...</span>
-                      ) : connected ? (
-                        <Badge className="border border-emerald-500/20 bg-emerald-500/15 text-[10px] font-medium text-emerald-400">
-                          Connected
-                        </Badge>
-                      ) : (
-                        <Link
-                          href="/connectors"
-                          className="text-[11px] text-primary underline-offset-2 hover:underline"
-                        >
-                          Connect
-                        </Link>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+export function generateStaticParams() {
+  return PLUGIN_CATALOG.map((plugin) => ({ id: plugin.id }));
 }
 
-// ── Page entry point · resolves params, guards 404 before rendering detail ─────
-
-interface Props {
-  params: Promise<{ id: string }>;
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const plugin = PLUGIN_CATALOG.find((p) => p.id === id);
+  if (!plugin) return {};
+  return buildMetadata({
+    title: `${plugin.name} plugin`,
+    description: plugin.description,
+    path: `/plugins/${plugin.id}`,
+  });
 }
 
-export default function PluginDetailPage({ params }: Props) {
-  const { id } = use(params);
+export default async function PluginDetailPage({ params }: Props) {
+  const { id } = await params;
   const plugin = PLUGIN_CATALOG.find((p) => p.id === id);
 
   if (!plugin) {
     notFound();
   }
 
-  return <PluginDetail plugin={plugin} />;
+  return (
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+
+        <section className="agi-page-hero">
+          <Link href="/plugins" className="agi-cta-ghost" style={{ paddingTop: 0 }}>
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back to Plugins
+          </Link>
+          <h1 className="agi-page-h1" style={{ marginTop: 18 }}>
+            {plugin.name}.
+          </h1>
+          <p className="agi-page-lede">
+            {plugin.description}{' '}
+            <strong>Catalogue preview — hosted marketplace installation is not open yet.</strong>
+          </p>
+          <div className="agi-cta-row" style={{ marginTop: 28 }}>
+            <Link href="/plugins#request-access" className="agi-cta-primary">
+              Request marketplace access
+            </Link>
+          </div>
+        </section>
+
+        <section className="agi-section" aria-labelledby="agi-plugin-facts-title">
+          <p className="agi-section-eyebrow">The record</p>
+          <h2 id="agi-plugin-facts-title" className="agi-section-h2">
+            The facts, plainly stated.
+          </h2>
+          <dl className="agi-colophon">
+            <div className="agi-colophon-row">
+              <dt className="agi-colophon-key">Author</dt>
+              <dd className="agi-colophon-val">{plugin.author}</dd>
+            </div>
+            <div className="agi-colophon-row">
+              <dt className="agi-colophon-key">Version</dt>
+              <dd className="agi-colophon-val">v{plugin.version}</dd>
+            </div>
+            <div className="agi-colophon-row">
+              <dt className="agi-colophon-key">Category</dt>
+              <dd className="agi-colophon-val">{plugin.category}</dd>
+            </div>
+            <div className="agi-colophon-row">
+              <dt className="agi-colophon-key">Source</dt>
+              <dd className="agi-colophon-val">{sourceLabel(plugin.source)}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="agi-section" aria-labelledby="agi-plugin-skills-title">
+          <p className="agi-section-eyebrow">Included skills</p>
+          <h2 id="agi-plugin-skills-title" className="agi-section-h2">
+            What the pack teaches the agent.
+          </h2>
+          {plugin.skills.length === 0 ? (
+            <p className="agi-reason-p" style={{ margin: 0 }}>
+              No skills bundled with this plugin.
+            </p>
+          ) : (
+            <div className="agi-chip-row" aria-label={`Skills in ${plugin.name}`}>
+              {plugin.skills.map((skill) => (
+                <span key={skill} className="agi-chip">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="agi-section" aria-labelledby="agi-plugin-connectors-title">
+          <p className="agi-section-eyebrow">Required connectors</p>
+          <h2 id="agi-plugin-connectors-title" className="agi-section-h2">
+            Connect once, use everywhere in the pack.
+          </h2>
+          <ConnectorChecklist connectorIds={plugin.connectors} />
+        </section>
+
+        <MarketingFooter />
+      </main>
+    </div>
+  );
 }
