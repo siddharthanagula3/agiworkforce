@@ -889,7 +889,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               currentSearchResults = results;
               setSearchResults(assistantMessageId, results);
             }
-            finishTool('web_search', 'completed');
+            // url_fetch sources carry tool:'url_fetch' — their timeline entry is
+            // driven by mcp_tool_use status events, so don't synthesize a
+            // web_search entry for them.
+            if (searchResultsBlock.tool !== 'url_fetch') {
+              finishTool('web_search', 'completed');
+            }
           } else if (
             searchResultsBlock?.content &&
             typeof searchResultsBlock.content === 'object' &&
