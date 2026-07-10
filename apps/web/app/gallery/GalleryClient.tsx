@@ -6,6 +6,7 @@ import { X, Code, Layers, Plus } from 'lucide-react';
 import { useArtifactsStore } from '@/features/chat/stores/artifacts-store';
 import type { Artifact } from '@/features/chat/stores/artifacts-store';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
+import type { ArtifactData } from '@/features/chat/components/artifacts/ArtifactPreview';
 
 // ---------------------------------------------------------------------------
 // Inspiration examples (curated, static)
@@ -350,7 +351,7 @@ interface ArtifactCardProps {
   title: string;
   language: string;
   subtitle: string;
-  type?: 'html' | 'react' | 'svg' | 'mermaid' | 'code' | 'document';
+  type?: ArtifactData['type'];
   content?: string;
   onClick: () => void;
 }

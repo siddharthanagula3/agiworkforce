@@ -34,7 +34,14 @@ import {
   type GeneratedFile,
   type SharedArtifact,
 } from '@agiworkforce/types';
-import { GeneratedFileCard } from '@agiworkforce/unified-chat';
+import {
+  GeneratedFileCard,
+  SpreadsheetArtifact,
+  PresentationArtifact,
+  EmailArtifact,
+  parseTabular,
+  toCsv,
+} from '@agiworkforce/unified-chat';
 import { TypeIcon } from './InlineArtifactCards';
 import { cn } from '@shared/lib/utils';
 import {
@@ -61,7 +68,20 @@ export interface ArtifactVersion {
 
 export interface ArtifactData {
   id: string;
-  type: 'html' | 'react' | 'svg' | 'mermaid' | 'code' | 'document';
+  type:
+    | 'html'
+    | 'react'
+    | 'svg'
+    | 'mermaid'
+    | 'code'
+    | 'document'
+    // Shared-renderer types (spreadsheet/table/csv, presentation, email) —
+    // rendered by @agiworkforce/unified-chat components, not the sandbox.
+    | 'spreadsheet'
+    | 'table'
+    | 'csv'
+    | 'presentation'
+    | 'email';
   language?: string;
   title?: string;
   content: string;
@@ -634,6 +654,59 @@ export function ArtifactPreview({
 
   const canPreview = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
 
+  // Shared unified-chat renderers (spreadsheet/table/csv, presentation, email):
+  // rendered directly in the panel — no sandbox iframe, so the iframe-only
+  // controls (refresh / open-in-tab) stay hidden for these types.
+  const isTabular = ['spreadsheet', 'table', 'csv'].includes(artifact.type);
+  const isPresentation = artifact.type === 'presentation';
+  const isEmail = artifact.type === 'email';
+  const isSharedRendered = isTabular || isPresentation || isEmail;
+
+  // The unified-chat Artifact view of this artifact (content follows the
+  // version navigation, exactly like the sandbox preview does).
+  const sharedArtifactView = useMemo(
+    () => ({
+      id: artifact.id,
+      type: artifact.type,
+      title: artifact.title,
+      content: activeContent,
+      language: artifact.language,
+    }),
+    [artifact.id, artifact.type, artifact.title, artifact.language, activeContent],
+  );
+
+  // Tabular artifacts download as a real CSV (JSON array-of-objects content is
+  // serialized; unparseable content falls back to the raw text).
+  const handleDownloadCsv = () => {
+    const parsed = parseTabular(activeContent);
+    const blob = new Blob([parsed ? toCsv(parsed) : activeContent], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${artifact.title || 'spreadsheet'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const renderSharedPreview = (containerClassName: string) => (
+    <div className={cn('overflow-auto bg-background p-0', containerClassName)}>
+      {isTabular ? (
+        <SpreadsheetArtifact
+          artifact={sharedArtifactView}
+          className="h-full rounded-none border-0"
+        />
+      ) : isPresentation ? (
+        <PresentationArtifact artifact={sharedArtifactView} className="h-full rounded-none" />
+      ) : (
+        <EmailArtifact artifact={sharedArtifactView} className="rounded-none border-0" />
+      )}
+    </div>
+  );
+
   // A download action for the PDF fallback, only when real bytes exist:
   // a generated-file uri (compute output) or an inline data:/blob: content.
   const pdfDownload: (() => void) | null = generatedFileSummary.primaryUri
@@ -712,7 +785,8 @@ export function ArtifactPreview({
   // ============================================================================
   if (variant === 'panel') {
     // Whether to show the preview content (vs source code)
-    const showPreview = activeTab === 'preview' && (canPreview || isPdf || isDocx);
+    const showPreview =
+      activeTab === 'preview' && (canPreview || isPdf || isDocx || isSharedRendered);
     // Human-readable type label for the toolbar, e.g. "· HTML", "· MD".
     // For code/document artifacts the type alone is generic ("CODE"/"DOCUMENT");
     // prefer the language field which carries the actual format (ts, md, pdf...).
@@ -734,10 +808,11 @@ export function ArtifactPreview({
         <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-card/80 px-3 py-1.5">
           {/* LEFT: toggle + type icon + title + type + version chip */}
           <div className="flex min-w-0 items-center gap-2">
-            {/* Eye/Code segmented toggle — only for renderable artifacts.
+            {/* Eye/Code segmented toggle — for renderable artifacts (sandbox)
+                and shared-renderer types (spreadsheet/presentation/email).
                 PDF/DOCX are single-view (their "source" is an opaque data URI),
                 so they get no toggle per the claude.ai artifact header. */}
-            {canPreview && (
+            {(canPreview || isSharedRendered) && (
               <div className="flex shrink-0 items-center rounded-md border border-border/40 bg-muted/40 p-0.5">
                 <button
                   type="button"
@@ -871,6 +946,9 @@ export function ArtifactPreview({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  {isTabular && (
+                    <DropdownMenuItem onClick={handleDownloadCsv}>Download as CSV</DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => handleDownload('html')}>
                     Download as HTML
                   </DropdownMenuItem>
@@ -1030,6 +1108,9 @@ export function ArtifactPreview({
               </div>
             ))}
 
+          {/* Preview: shared renderers (spreadsheet / presentation / email) */}
+          {showPreview && isSharedRendered && renderSharedPreview('h-full w-full')}
+
           {/* Preview: PDF */}
           {showPreview && isPdf && renderPdfPreview('h-full w-full')}
 
@@ -1165,6 +1246,9 @@ export function ArtifactPreview({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {isTabular && (
+                <DropdownMenuItem onClick={handleDownloadCsv}>Download as CSV</DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => handleDownload('html')}>
                 Download as HTML
               </DropdownMenuItem>
@@ -1276,7 +1360,7 @@ export function ArtifactPreview({
         onValueChange={(v) => setActiveTab(v as 'preview' | 'code')}
         className="w-full"
       >
-        {(canPreview || isPdf || isDocx) && (
+        {(canPreview || isPdf || isDocx || isSharedRendered) && (
           <TabsList className="w-full justify-start rounded-none border-b border-border bg-muted/30 px-4">
             <TabsTrigger value="preview" className="gap-2">
               <Eye className="h-3.5 w-3.5" />
@@ -1301,6 +1385,13 @@ export function ArtifactPreview({
                 refreshKey={refreshKey}
               />
             </div>
+          </TabsContent>
+        )}
+
+        {/* Preview Tab · shared renderers (spreadsheet / presentation / email) */}
+        {isSharedRendered && (
+          <TabsContent value="preview" className="m-0 p-0">
+            {renderSharedPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
           </TabsContent>
         )}
 
