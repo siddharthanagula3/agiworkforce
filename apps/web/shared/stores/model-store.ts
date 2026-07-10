@@ -2,10 +2,16 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { ModelEnvironment, RoutingDecision, RoutingTaskType } from '@agiworkforce/types';
+import type {
+  ModelAvailability,
+  ModelEnvironment,
+  RoutingDecision,
+  RoutingTaskType,
+} from '@agiworkforce/types';
 import {
   MODEL_PRESETS,
   PROVIDER_LABELS,
+  getDisplayModels,
   getModelMetadata,
   normalizeModelId,
   type ModelMetadata,
@@ -24,6 +30,15 @@ export interface AIModel {
    * behave identically to before.
    */
   requiresEnvironment?: ModelEnvironment;
+  /**
+   * Selectability axis (absent ⇒ "live"). `coming_soon` rows are DISPLAY-ONLY:
+   * shown grayed in the picker, never selectable/routable. Sourced from the
+   * catalog (NOT modelPresets) so announced-but-unprovisioned models can appear
+   * without being routable.
+   */
+  availability?: ModelAvailability;
+  /** Reason shown on the coming_soon/unavailable row tooltip. */
+  unavailableReason?: string;
 }
 
 export type { RoutingDecision, RoutingTaskType };
@@ -138,7 +153,32 @@ function buildAvailableModels(): AIModel[] {
         : {}),
     }));
 
-  return [...autoModeEntries, ...manualEntries];
+  // Coming-soon (announced-but-unprovisioned) chat models. These are DELIBERATELY
+  // absent from MODEL_PRESETS (kept out of every routable/tier set — the
+  // availability invariant), so they are sourced directly from the catalog and
+  // rendered as grayed, NON-selectable rows. `getDisplayModels()` includes them;
+  // `getSelectableModels()` (live-only) drives what can actually be picked/sent.
+  const comingSoonEntries = getDisplayModels()
+    .filter(
+      (metadata) =>
+        metadata.availability === 'coming_soon' &&
+        CHAT_MODEL_TYPES.has(metadata.modelType) &&
+        !seen.has(metadata.id),
+    )
+    .map((metadata) => {
+      seen.add(metadata.id);
+      return {
+        id: metadata.id,
+        name: metadata.name,
+        provider: PROVIDER_LABELS[metadata.provider] ?? metadata.provider,
+        providerKey: metadata.provider,
+        description: describeModel(metadata),
+        availability: 'coming_soon' as ModelAvailability,
+        ...(metadata.unavailableReason ? { unavailableReason: metadata.unavailableReason } : {}),
+      };
+    });
+
+  return [...autoModeEntries, ...manualEntries, ...comingSoonEntries];
 }
 
 export const AVAILABLE_MODELS: AIModel[] = buildAvailableModels();

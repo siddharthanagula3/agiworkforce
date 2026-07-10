@@ -37,6 +37,12 @@
       "verifiedBy": "live-api-verification-2026-07-10",
       "status": "CORRECTION",
       "notes": "REVERTED the gpt-5.6 family (sol/terra/luna) added 2026-07-09 — LIVE curl to api.openai.com/v1/chat/completions with a real key returns HTTP 404 'model does not exist' for gpt-5.6-sol/-terra/-luna and bare gpt-5.6. The 2026-07-09 'verified from developers.openai.com' claim was a documentation hallucination, not provisioned models. Confirmed REAL and retained: gpt-5.5 (HTTP 200 with max_completion_tokens; the earlier 400 was the max_tokens-vs-max_completion_tokens param, not model absence), gpt-5.4/-mini/-nano/-pro, gpt-5-nano, gpt-4.1-nano. Latest real OpenAI flagship in this account = gpt-5.5. Lesson: verify model IDs against a live API call, not just doc pages."
+    },
+    {
+      "date": "2026-07-10",
+      "verifiedBy": "reasoning-effort-capability-wave-2026-07-10",
+      "status": "PASS",
+      "notes": "Added additive per-model `reasoning` capability blocks (control/supportedEfforts/defaultEffort/canDisableThinking/thinkingBudget/request paths) for every served model, sourced from docs/research/reasoning-effort-capability-matrix-2026-07-10.md (live-probed 2026-07-10). Fixed claude-haiku-4.5 capabilities.thinking false->true (live 200 with thinking_tokens; control=thinking_budget classic enabled+budget, NOT adaptive). Added GPT-5.6 family (sol/terra/luna) as availability:\"coming_soon\" (LIVE 404 on our key 2026-07-10 — NOT provisioned); bare gpt-5.6 routes to Sol; kept OUT of tierAllowedModels/modelPresets/SLOT_REGISTRY/taskRouting/defaultModel (enforced by new check:availability-invariant). 5.6 reasoning ladder none/low/medium/high/xhigh/max (max above xhigh). Ultra (multi_agent.enabled + max_concurrent_subagents, beta responses_multi_agent=v1), Pro (reasoning.mode:\"pro\"), persistent reasoning (reasoning.context), and programmatic tool calling (tool type programmatic_tool_calling + allowed_callers) are RESPONSES-API-ONLY and INERT this wave — our web chat route uses /chat/completions, so the at-GA wave must add a Responses path for those four; effort/vision/tools work on the existing chat path. Added inert tierPolicy.minTier authored data (NOT used to derive tierAllowedModels this wave — all budget models stay available for testing per founder). Gemini 3.x request path migrated to thinkingConfig.thinkingLevel (thinkingBudget kept as legacy fallback). 5.6 pricing/limits from founder screenshot corpus (Addendum D): ctx 1,050,000, max output 128K, knowledge cutoff 2026-02-16; short-context per-1M sol 5/0.5/30 (cache write 6.25), terra 2.5/0.25/15 (3.125), luna 1/0.1/6 (1.25); INERT longContext price tier sol 10/1/45, terra 5/0.5/22.5, luna 2/0.2/9 (5.6-only additive sub-block, applied by the AT-GA metering wave). reasoningDots sol 5 / terra 4 / luna 3."
     }
   ],
   "providers": {
@@ -630,7 +636,20 @@
       "qualityTier": "balanced",
       "bestFor": ["All Tasks", "Automatic Optimization", "Smart Routing"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
     },
     "auto-economy": {
       "id": "auto-economy",
@@ -660,7 +679,11 @@
       "qualityTier": "fast",
       "bestFor": ["Cost-Optimized", "Simple Tasks", "Quick Questions"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "auto-balanced": {
       "id": "auto-balanced",
@@ -690,7 +713,20 @@
       "qualityTier": "balanced",
       "bestFor": ["Quality/Cost Balance", "Most Tasks", "Coding"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
     },
     "auto-premium": {
       "id": "auto-premium",
@@ -720,7 +756,20 @@
       "qualityTier": "best",
       "bestFor": ["Maximum Performance", "Complex Tasks", "Research"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
     },
     "gpt-5.5": {
       "id": "gpt-5.5",
@@ -759,7 +808,326 @@
       "qualityTier": "best",
       "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Research"],
       "released": "April 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "low", "medium", "high", "xhigh"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
+    },
+    "gpt-5.6-sol": {
+      "id": "gpt-5.6-sol",
+      "apiModelId": "gpt-5.6-sol",
+      "name": "GPT-5.6 Sol",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "availability": "coming_soon",
+      "unavailableReason": "GA announced 2026-07-09; live curl to api.openai.com returns 404 on our key (2026-07-10). Not yet provisioned.",
+      "contextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-02-16",
+      "inputCost": 5,
+      "cached_input": 0.5,
+      "cached_write": 6.25,
+      "outputCost": 30,
+      "longContext": {
+        "inputCost": 10,
+        "cached_input": 1,
+        "cached_write": 12.5,
+        "outputCost": 45
+      },
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Multi-Agent"],
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "responsesEffortPath": "reasoning.effort",
+          "togglePath": null,
+          "budgetPath": null
+        },
+        "ultraMode": {
+          "enabled": false,
+          "param": "multi_agent.enabled",
+          "concurrencyParam": "multi_agent.max_concurrent_subagents",
+          "beta": "responses_multi_agent=v1",
+          "endpoint": "responses",
+          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
+        },
+        "proMode": {
+          "param": "reasoning.mode",
+          "value": "pro",
+          "endpoint": "responses"
+        },
+        "persistentReasoning": {
+          "param": "reasoning.context",
+          "values": ["auto", "all_turns", "current_turn"],
+          "continuationParam": "previous_response_id",
+          "zdrInclude": ["reasoning.encrypted_content"],
+          "endpoint": "responses"
+        }
+      },
+      "toolCalling": {
+        "programmatic": {
+          "toolType": "programmatic_tool_calling",
+          "optInParam": "allowed_callers",
+          "optInValues": ["direct", "programmatic"],
+          "runtime": "javascript-v8-isolated",
+          "responseItems": ["program", "function_call(caller)", "program_output"],
+          "endpoint": "responses"
+        }
+      },
+      "imageInput": {
+        "detailValues": ["auto", "original"]
+      },
+      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "released": "July 2026",
+      "deprecation_date": null,
+      "cachePolicy": {
+        "writeMultiplier": 1.25,
+        "readDiscount": 0.9,
+        "minCacheLifeMin": 30,
+        "explicitBreakpoints": true
+      },
+      "reasoningDots": 5,
+      "tierPolicy": {
+        "minTier": "pro"
+      }
+    },
+    "gpt-5.6-terra": {
+      "id": "gpt-5.6-terra",
+      "apiModelId": "gpt-5.6-terra",
+      "name": "GPT-5.6 Terra",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "availability": "coming_soon",
+      "unavailableReason": "GA announced 2026-07-09; live curl to api.openai.com returns 404 on our key (2026-07-10). Not yet provisioned.",
+      "contextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-02-16",
+      "inputCost": 2.5,
+      "cached_input": 0.25,
+      "cached_write": 3.125,
+      "outputCost": 15,
+      "longContext": {
+        "inputCost": 5,
+        "cached_input": 0.5,
+        "cached_write": 6.25,
+        "outputCost": 22.5
+      },
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Multi-Agent"],
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "responsesEffortPath": "reasoning.effort",
+          "togglePath": null,
+          "budgetPath": null
+        },
+        "ultraMode": {
+          "enabled": false,
+          "param": "multi_agent.enabled",
+          "concurrencyParam": "multi_agent.max_concurrent_subagents",
+          "beta": "responses_multi_agent=v1",
+          "endpoint": "responses",
+          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
+        },
+        "proMode": {
+          "param": "reasoning.mode",
+          "value": "pro",
+          "endpoint": "responses"
+        },
+        "persistentReasoning": {
+          "param": "reasoning.context",
+          "values": ["auto", "all_turns", "current_turn"],
+          "continuationParam": "previous_response_id",
+          "zdrInclude": ["reasoning.encrypted_content"],
+          "endpoint": "responses"
+        }
+      },
+      "toolCalling": {
+        "programmatic": {
+          "toolType": "programmatic_tool_calling",
+          "optInParam": "allowed_callers",
+          "optInValues": ["direct", "programmatic"],
+          "runtime": "javascript-v8-isolated",
+          "responseItems": ["program", "function_call(caller)", "program_output"],
+          "endpoint": "responses"
+        }
+      },
+      "imageInput": {
+        "detailValues": ["auto", "original"]
+      },
+      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "released": "July 2026",
+      "deprecation_date": null,
+      "cachePolicy": {
+        "writeMultiplier": 1.25,
+        "readDiscount": 0.9,
+        "minCacheLifeMin": 30,
+        "explicitBreakpoints": true
+      },
+      "reasoningDots": 4,
+      "tierPolicy": {
+        "minTier": "pro"
+      }
+    },
+    "gpt-5.6-luna": {
+      "id": "gpt-5.6-luna",
+      "apiModelId": "gpt-5.6-luna",
+      "name": "GPT-5.6 Luna",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "availability": "coming_soon",
+      "unavailableReason": "GA announced 2026-07-09; live curl to api.openai.com returns 404 on our key (2026-07-10). Not yet provisioned.",
+      "contextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-02-16",
+      "inputCost": 1,
+      "cached_input": 0.1,
+      "cached_write": 1.25,
+      "outputCost": 6,
+      "longContext": {
+        "inputCost": 2,
+        "cached_input": 0.2,
+        "cached_write": 2.5,
+        "outputCost": 9
+      },
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Multi-Agent"],
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "responsesEffortPath": "reasoning.effort",
+          "togglePath": null,
+          "budgetPath": null
+        },
+        "ultraMode": {
+          "enabled": false,
+          "param": "multi_agent.enabled",
+          "concurrencyParam": "multi_agent.max_concurrent_subagents",
+          "beta": "responses_multi_agent=v1",
+          "endpoint": "responses",
+          "responseItems": ["multi_agent_call", "multi_agent_call_output", "agent_message"]
+        },
+        "proMode": {
+          "param": "reasoning.mode",
+          "value": "pro",
+          "endpoint": "responses"
+        },
+        "persistentReasoning": {
+          "param": "reasoning.context",
+          "values": ["auto", "all_turns", "current_turn"],
+          "continuationParam": "previous_response_id",
+          "zdrInclude": ["reasoning.encrypted_content"],
+          "endpoint": "responses"
+        }
+      },
+      "toolCalling": {
+        "programmatic": {
+          "toolType": "programmatic_tool_calling",
+          "optInParam": "allowed_callers",
+          "optInValues": ["direct", "programmatic"],
+          "runtime": "javascript-v8-isolated",
+          "responseItems": ["program", "function_call(caller)", "program_output"],
+          "endpoint": "responses"
+        }
+      },
+      "imageInput": {
+        "detailValues": ["auto", "original"]
+      },
+      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "released": "July 2026",
+      "deprecation_date": null,
+      "cachePolicy": {
+        "writeMultiplier": 1.25,
+        "readDiscount": 0.9,
+        "minCacheLifeMin": 30,
+        "explicitBreakpoints": true
+      },
+      "reasoningDots": 3,
+      "tierPolicy": {
+        "minTier": "pro"
+      }
     },
     "claude-opus-4.8": {
       "id": "claude-opus-4.8",
@@ -799,7 +1167,23 @@
         "max": 1.35,
         "unit": "multiplier-vs-baseline"
       },
-      "tokenizer_drift_warning": "Claude Opus 4.8 inherits the Opus 4.7 tokenizer baseline (re-baselined 2026-04): the same input text can yield 1.0x to 1.35x tokens vs prior Claude families (Sonnet 4.6, Opus <=4.6). Re-baseline cost + latency budgets; cached prompts from earlier models may overshoot the context window. See packages/routing/src/three-tier-router.ts ESTIMATE_INFLATION."
+      "tokenizer_drift_warning": "Claude Opus 4.8 inherits the Opus 4.7 tokenizer baseline (re-baselined 2026-04): the same input text can yield 1.0x to 1.35x tokens vs prior Claude families (Sonnet 4.6, Opus <=4.6). Re-baseline cost + latency budgets; cached prompts from earlier models may overshoot the context window. See packages/routing/src/three-tier-router.ts ESTIMATE_INFLATION.",
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "request": {
+          "api": "messages",
+          "effortPath": "output_config.effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "max"
+      }
     },
     "claude-sonnet-4.6": {
       "id": "claude-sonnet-4.6",
@@ -839,7 +1223,23 @@
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks"],
       "released": "February 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "messages",
+          "effortPath": "output_config.effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
     },
     "claude-haiku-4.5": {
       "id": "claude-haiku-4.5",
@@ -856,7 +1256,7 @@
         "tools": true,
         "vision": true,
         "json": true,
-        "thinking": false,
+        "thinking": true,
         "computerUse": false,
         "agentic": true,
         "imageGen": false,
@@ -884,7 +1284,26 @@
         "Cost-Sensitive"
       ],
       "released": "October 2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_budget",
+        "canDisableThinking": true,
+        "thinkingBudget": {
+          "min": 1024,
+          "max": 32768,
+          "default": 8192
+        },
+        "request": {
+          "api": "messages",
+          "effortPath": null,
+          "togglePath": "thinking.type",
+          "budgetPath": "thinking.budget_tokens"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "gemini-3.1-pro-preview": {
       "id": "gemini-3.1-pro-preview",
@@ -924,7 +1343,23 @@
       "qualityTier": "balanced",
       "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
       "released": "February 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "gen",
+          "effortPath": "thinkingConfig.thinkingLevel",
+          "togglePath": null,
+          "budgetPath": "thinkingConfig.thinkingBudget"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
     },
     "gemini-3.1-flash-lite": {
       "id": "gemini-3.1-flash-lite",
@@ -964,7 +1399,14 @@
       "qualityTier": "fast",
       "bestFor": ["Ultra-Fast Inference", "Speed", "Cost-Sensitive", "Long Context"],
       "released": "March 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "gemini-3.1-flash-image": {
       "id": "gemini-3.1-flash-image",
@@ -996,7 +1438,11 @@
       "bestFor": ["Image Generation", "Native Gemini Image Gen"],
       "released": "March 2026",
       "deprecation_date": null,
-      "imageApi": "gemini"
+      "imageApi": "gemini",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "grok-4.3": {
       "id": "grok-4.3",
@@ -1034,7 +1480,23 @@
       "qualityTier": "best",
       "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
       "released": "April 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "always_on",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "high",
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "max"
+      }
     },
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
@@ -1074,7 +1536,23 @@
       "qualityTier": "fast",
       "bestFor": ["Cost-Effective", "Coding", "Long Context", "Multimodal", "High Volume"],
       "released": "April 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
@@ -1121,7 +1599,23 @@
       ],
       "released": "April 2026",
       "deprecation_date": null,
-      "pricingNote": "DeepSeek made its 75% V4-Pro launch discount permanent on 2026-05-22: flat $0.435/$0.87 per 1M tokens, cache-read $0.003625. No post-promo reversion."
+      "pricingNote": "DeepSeek made its 75% V4-Pro launch discount permanent on 2026-05-22: flat $0.435/$0.87 per 1M tokens, cache-read $0.003625. No post-promo reversion.",
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
     },
     "qwen-max": {
       "id": "qwen-max",
@@ -1159,7 +1653,26 @@
       "qualityTier": "balanced",
       "bestFor": ["Complex Reasoning", "Multilingual", "Research"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "canDisableThinking": true,
+        "thinkingBudget": {
+          "min": 0,
+          "max": 38912,
+          "default": 0
+        },
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": "enable_thinking",
+          "budgetPath": "thinking_budget"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
     },
     "qwen-flash": {
       "id": "qwen-flash",
@@ -1197,7 +1710,23 @@
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual", "Long Context"],
       "released": "November 2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "canDisableThinking": true,
+        "thinkingBudget": {
+          "min": 0,
+          "max": 38912,
+          "default": 0
+        },
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": "enable_thinking",
+          "budgetPath": "thinking_budget"
+        }
+      }
     },
     "qwen-turbo": {
       "id": "qwen-turbo",
@@ -1238,7 +1767,11 @@
       "deprecated": true,
       "deprecation_date": "2026-06-20",
       "supersedes_note": "qwen-turbo no longer updated; use qwen-flash (qwen3.5-flash API ID)",
-      "status": "deprecated"
+      "status": "deprecated",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "qwen-coder-flash": {
       "id": "qwen-coder-flash",
@@ -1276,7 +1809,11 @@
       "qualityTier": "fast",
       "bestFor": ["Code Generation", "Budget Coding", "Quick Edits"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "qwen-coder-plus": {
       "id": "qwen-coder-plus",
@@ -1314,7 +1851,18 @@
       "qualityTier": "balanced",
       "bestFor": ["Code Generation", "Agentic Coding", "Technical Tasks"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": "enable_thinking",
+          "budgetPath": null
+        }
+      }
     },
     "kimi-k2.6": {
       "id": "kimi-k2.6",
@@ -1368,7 +1916,21 @@
         "kimi-k2-instruct"
       ],
       "supersedes_effective_date": "2026-05-25",
-      "supersedes_note": "All kimi-k2-* and kimi-k2.5* aliases are EOL 2026-05-25 per Moonshot deprecation notice. Use kimi-k2.6 only; canonicalization map redirects legacy IDs for transitional compatibility."
+      "supersedes_note": "All kimi-k2-* and kimi-k2.5* aliases are EOL 2026-05-25 per Moonshot deprecation notice. Use kimi-k2.6 only; canonicalization map redirects legacy IDs for transitional compatibility.",
+      "reasoning": {
+        "capable": true,
+        "control": "always_on",
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "mistral-large-3": {
       "id": "mistral-large-3",
@@ -1406,7 +1968,11 @@
       "qualityTier": "balanced",
       "bestFor": ["Reasoning", "Multilingual", "Cost-Effective Flagship"],
       "released": "December 2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "mistral-medium-3": {
       "id": "mistral-medium-3",
@@ -1444,7 +2010,20 @@
       "qualityTier": "balanced",
       "bestFor": ["General Chat", "Multilingual", "Cost-Effective"],
       "released": "May 2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "high"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
     },
     "mistral-small-3": {
       "id": "mistral-small-3",
@@ -1475,7 +2054,20 @@
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual"],
       "released": "January 2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "high"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
     },
     "codestral-2": {
       "id": "codestral-2",
@@ -1511,7 +2103,11 @@
       "qualityTier": "fast",
       "bestFor": ["Code Generation", "FIM Completion", "Budget Coding"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "pixtral-large": {
       "id": "pixtral-large",
@@ -1542,7 +2138,11 @@
       "qualityTier": "balanced",
       "bestFor": ["Vision", "Image Analysis", "Multimodal"],
       "released": "November 2024",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "sonar": {
       "id": "sonar",
@@ -1576,7 +2176,14 @@
       "qualityTier": "fast",
       "bestFor": ["Web Search", "Quick Research", "Citations"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "sonar-reasoning": {
       "id": "sonar-reasoning",
@@ -1611,7 +2218,20 @@
       "qualityTier": "balanced",
       "bestFor": ["Search + Reasoning", "Analysis", "Citations"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
     },
     "sonar-reasoning-pro": {
       "id": "sonar-reasoning-pro",
@@ -1646,7 +2266,20 @@
       "qualityTier": "balanced",
       "bestFor": ["Deep Research", "Complex Analysis", "Citations"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
     },
     "sonar-pro": {
       "id": "sonar-pro",
@@ -1680,7 +2313,11 @@
       "qualityTier": "balanced",
       "bestFor": ["Professional Research", "Long Context Search"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "sonar-deep-research": {
       "id": "sonar-deep-research",
@@ -1714,7 +2351,23 @@
       "qualityTier": "best",
       "bestFor": ["Deep Research", "Multi-Source Synthesis", "Comprehensive Analysis"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
     },
     "imagen-4": {
       "id": "imagen-4",
@@ -1746,7 +2399,11 @@
       "bestFor": ["Photorealistic Images", "Creative Content"],
       "released": "January 2026",
       "deprecation_date": null,
-      "imageApi": "imagen"
+      "imageApi": "imagen",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "imagen-4-fast": {
       "id": "imagen-4-fast",
@@ -1780,7 +2437,11 @@
       "deprecation_date": null,
       "imagePerImageCost": 0.02,
       "imageApi": "imagen",
-      "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot."
+      "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "runway-gen-4": {
       "id": "runway-gen-4",
@@ -1813,7 +2474,11 @@
       "released": "2025",
       "deprecation_date": null,
       "videoPerSecondCost": 0.05,
-      "pricingNote": "Runway Gen-4 remains an alternate third-party video provider entry. Default AGI video routing uses the verified current Google Veo route unless product policy explicitly chooses Runway."
+      "pricingNote": "Runway Gen-4 remains an alternate third-party video provider entry. Default AGI video routing uses the verified current Google Veo route unless product policy explicitly chooses Runway.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "imagen-4-ultra": {
       "id": "imagen-4-ultra",
@@ -1845,7 +2510,11 @@
       "bestFor": ["Ultra HD Images", "Professional Quality"],
       "released": "January 2026",
       "deprecation_date": null,
-      "imageApi": "imagen"
+      "imageApi": "imagen",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "ideogram-2": {
       "id": "ideogram-2",
@@ -1876,7 +2545,11 @@
       "qualityTier": "fast",
       "bestFor": ["Text in Images", "Logos", "Typography"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "veo-3": {
       "id": "veo-3",
@@ -1907,7 +2580,11 @@
       "qualityTier": "best",
       "bestFor": ["Professional Video", "High Quality Clips"],
       "released": "January 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "stable-diffusion-xl": {
       "id": "stable-diffusion-xl",
@@ -1939,7 +2616,11 @@
       "bestFor": ["Open Source Image Gen", "Custom Style", "Self-Host Path"],
       "released": "July 2023",
       "deprecation_date": null,
-      "imageApi": "stability"
+      "imageApi": "stability",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "gpt-image-2": {
       "id": "gpt-image-2",
@@ -1973,7 +2654,11 @@
       "released": "April 2026",
       "deprecation_date": null,
       "imageApi": "openai",
-      "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high."
+      "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "tts-1": {
       "id": "tts-1",
@@ -2004,7 +2689,11 @@
       "qualityTier": "fast",
       "bestFor": ["Voice Generation", "Narration", "Accessibility"],
       "released": "November 2023",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "tts-1-hd": {
       "id": "tts-1-hd",
@@ -2035,7 +2724,11 @@
       "qualityTier": "balanced",
       "bestFor": ["Professional Audio", "High Quality Voice"],
       "released": "November 2023",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "whisper-1": {
       "id": "whisper-1",
@@ -2066,7 +2759,11 @@
       "qualityTier": "balanced",
       "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
       "released": "September 2022",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "nvidia/llama-3.3-70b-instruct": {
       "id": "nvidia/llama-3.3-70b-instruct",
@@ -2097,7 +2794,11 @@
       "qualityTier": "balanced",
       "bestFor": ["General Chat", "Coding", "Instruction Following"],
       "released": "2024",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "groq-llama-3.3-70b": {
       "id": "groq-llama-3.3-70b",
@@ -2131,7 +2832,11 @@
       "deprecated": true,
       "deprecation_date": "2026-08-16",
       "supersedes_note": "Groq shutdown 2026-08-16; replacements on Groq: openai/gpt-oss-120b (70b) / openai/gpt-oss-20b (8b)",
-      "status": "deprecated"
+      "status": "deprecated",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "groq-llama-3.1-8b": {
       "id": "groq-llama-3.1-8b",
@@ -2165,7 +2870,11 @@
       "deprecated": true,
       "deprecation_date": "2026-08-16",
       "supersedes_note": "Groq shutdown 2026-08-16; replacements on Groq: openai/gpt-oss-120b (70b) / openai/gpt-oss-20b (8b)",
-      "status": "deprecated"
+      "status": "deprecated",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "meta-llama/llama-3.3-70b-instruct:free": {
       "id": "meta-llama/llama-3.3-70b-instruct:free",
@@ -2196,7 +2905,11 @@
       "qualityTier": "balanced",
       "bestFor": ["General Chat", "Agentic Tasks", "Free Tier"],
       "released": "2024",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "mistralai/mistral-small-3.1-24b-instruct:free": {
       "id": "mistralai/mistral-small-3.1-24b-instruct:free",
@@ -2227,7 +2940,11 @@
       "qualityTier": "balanced",
       "bestFor": ["Vision Tasks", "Tool Use", "Free Tier"],
       "released": "2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "qwen/qwen3-coder:free": {
       "id": "qwen/qwen3-coder:free",
@@ -2258,7 +2975,11 @@
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Free Tier"],
       "released": "2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "nvidia/llama-3.3-nemotron-super-49b-v1:free": {
       "id": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
@@ -2289,7 +3010,11 @@
       "qualityTier": "best",
       "bestFor": ["Complex Reasoning", "Research", "Free Tier"],
       "released": "2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "gpt-5.4-mini": {
       "id": "gpt-5.4-mini",
@@ -2322,7 +3047,23 @@
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Computer Use", "Agent Workflows", "High-Volume Tasks"],
       "released": "March 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "low", "medium", "high", "xhigh"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "gpt-5-nano": {
       "id": "gpt-5-nano",
@@ -2354,7 +3095,23 @@
       "qualityTier": "fast",
       "bestFor": ["Light Chat", "Classification", "High-Volume Tasks", "Cost-Efficient"],
       "released": "August 2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "gpt-4.1-nano": {
       "id": "gpt-4.1-nano",
@@ -2386,7 +3143,14 @@
       "qualityTier": "fast",
       "bestFor": ["Light Chat", "Long Context", "Classification", "Cost-Efficient"],
       "released": "April 2025",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "gemini-3.5-flash": {
       "id": "gemini-3.5-flash",
@@ -2431,7 +3195,23 @@
       ],
       "released": "May 2026",
       "deprecation_date": null,
-      "maxOutputTokens": 64000
+      "maxOutputTokens": 64000,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "gen",
+          "effortPath": "thinkingConfig.thinkingLevel",
+          "togglePath": null,
+          "budgetPath": "thinkingConfig.thinkingBudget"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
     },
     "glm-5.2": {
       "id": "glm-5.2",
@@ -2476,7 +3256,21 @@
         "Chinese Language"
       ],
       "released": "June 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": "thinking.type",
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "qwen-3.5-plus": {
       "id": "qwen-3.5-plus",
@@ -2521,7 +3315,26 @@
         "Agent Tasks"
       ],
       "released": "April 2026",
-      "deprecation_date": null
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "thinking_toggle",
+        "canDisableThinking": true,
+        "thinkingBudget": {
+          "min": 0,
+          "max": 38912,
+          "default": 0
+        },
+        "request": {
+          "api": "chat",
+          "effortPath": null,
+          "togglePath": "enable_thinking",
+          "budgetPath": "thinking_budget"
+        }
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     },
     "nvidia/nemotron-3-ultra-550b-a55b": {
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
@@ -2553,7 +3366,11 @@
       "bestFor": ["Complex Reasoning", "Agentic Tasks", "Research"],
       "released": "June 2026",
       "deprecation_date": null,
-      "supersedes": ["nvidia/llama-3.1-nemotron-ultra-253b-v1"]
+      "supersedes": ["nvidia/llama-3.1-nemotron-ultra-253b-v1"],
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "nvidia/nemotron-3-super-120b-a12b": {
       "id": "nvidia/nemotron-3-super-120b-a12b",
@@ -2585,7 +3402,11 @@
       "bestFor": ["Agentic Tasks", "Tool Use", "Coding"],
       "released": "June 2026",
       "deprecation_date": null,
-      "supersedes": ["nvidia/llama-3.3-nemotron-super-49b-v1"]
+      "supersedes": ["nvidia/llama-3.3-nemotron-super-49b-v1"],
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     },
     "nvidia/nemotron-3-nano-30b-a3b": {
       "id": "nvidia/nemotron-3-nano-30b-a3b",
@@ -2617,7 +3438,11 @@
       "bestFor": ["Fast Responses", "Tool Use", "Cost-Effective"],
       "released": "June 2026",
       "deprecation_date": null,
-      "supersedes": ["nvidia/llama-3.1-nemotron-nano-8b-v1"]
+      "supersedes": ["nvidia/llama-3.1-nemotron-nano-8b-v1"],
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      }
     }
   },
   "tierAllowedModels": {

@@ -93,6 +93,110 @@ export interface ModelBenchmarks {
 /** Lifecycle status of a model. */
 export type ModelStatus = 'active' | 'beta' | 'deprecated';
 
+/**
+ * Per-model reasoning/effort control type. Sourced from
+ * docs/research/reasoning-effort-capability-matrix-2026-07-10.md. Drives BOTH the
+ * effort-flyout UI (what control to render) and the request path (which param to
+ * send). Absent `reasoning` block ⇒ treated as `none`.
+ *   - none            → not a reasoning model; hide effort UI entirely.
+ *   - always_on       → reasoner-only; cannot disable. Show levels if any, no off.
+ *   - thinking_toggle → boolean on/off (enable_thinking / thinking:{type}).
+ *   - thinking_budget → token budget (min/max/default).
+ *   - effort_levels   → discrete named levels; per-model allowed set.
+ */
+export type ReasoningControl =
+  | 'none'
+  | 'always_on'
+  | 'thinking_toggle'
+  | 'thinking_budget'
+  | 'effort_levels';
+
+/** Where in the provider request the reasoning params go (per API generation). */
+export interface ReasoningRequestPaths {
+  /** chat | responses | messages | gen. */
+  api: 'chat' | 'responses' | 'messages' | 'gen';
+  /** Path for the effort level string (e.g. reasoning_effort, output_config.effort). */
+  effortPath?: string | null;
+  /** Responses-API effort path when it differs from the chat path (GPT-5.6). */
+  responsesEffortPath?: string | null;
+  /** Path for the on/off toggle (e.g. enable_thinking, thinking.type). */
+  togglePath?: string | null;
+  /** Path for the token budget (e.g. thinking.budget_tokens, thinkingConfig.thinkingBudget). */
+  budgetPath?: string | null;
+}
+
+/** Token-budget bounds for `thinking_budget` control models. */
+export interface ReasoningBudget {
+  min: number;
+  max: number;
+  default: number;
+}
+
+/**
+ * GPT-5.6 Ultra (multi-agent) surface. RESPONSES-API-ONLY, beta-gated. Inert until
+ * the model flips to availability:"live" AND a Responses request path is added.
+ */
+export interface ReasoningUltraMode {
+  enabled: boolean;
+  param: string;
+  concurrencyParam?: string;
+  beta?: string;
+  endpoint: 'responses';
+  responseItems?: string[];
+}
+
+/** Additive per-model reasoning capability metadata. Absent ⇒ non-reasoning. */
+export interface ModelReasoning {
+  /** false ⇒ hide effort UI entirely. */
+  capable: boolean;
+  control: ReasoningControl;
+  /** effort_levels / always_on-with-levels: the model's ALLOWED effort set only. */
+  supportedEfforts?: string[];
+  defaultEffort?: string;
+  /** false for always_on reasoners that cannot turn thinking off. */
+  canDisableThinking?: boolean;
+  /** thinking_budget control only. */
+  thinkingBudget?: ReasoningBudget;
+  request?: ReasoningRequestPaths;
+  /**
+   * GPT-5.6 Ultra multi-agent (Responses API only). Object form carries the exact
+   * params; inert this wave (5.6 is coming_soon and the web route uses chat/completions).
+   */
+  ultraMode?: ReasoningUltraMode | boolean;
+  /** GPT-5.6 Pro mode (reasoning.mode:"pro", Responses-only). Inert this wave. */
+  proMode?: { param: string; value: string; endpoint: 'responses' };
+  /** GPT-5.6 persistent reasoning (reasoning.context, Responses-only). Inert this wave. */
+  persistentReasoning?: {
+    param: string;
+    values: string[];
+    continuationParam?: string;
+    zdrInclude?: string[];
+    endpoint: 'responses';
+  };
+}
+
+/**
+ * Availability axis — SEPARATE from lifecycle `status`. `status`/`deprecated`
+ * REMOVE a model from the picker; `availability` controls SELECTABILITY while the
+ * row stays VISIBLE. Absent ⇒ "live".
+ *   - live         → selectable + routable (default).
+ *   - coming_soon  → shown grayed, NOT selectable, NEVER routable (guardrail-enforced).
+ *   - unavailable  → shown disabled with a hard reason; same non-routable guarantee.
+ */
+export type ModelAvailability = 'live' | 'coming_soon' | 'unavailable';
+
+/**
+ * INERT authored tier policy (Addendum B). Nothing derives `tierAllowedModels`
+ * from this yet — it is future GA-wave data. `tierAllowedModels` remains the SSOT.
+ */
+export interface ModelTierPolicy {
+  minTier?: 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
+  budgetFloorFor?: string[];
+  retainOnNextGenGA?: boolean;
+  retireFromSelectableOn?: string;
+  keepForBudgetTier?: boolean;
+}
+
 /** Full model metadata entry as defined in models.json. */
 export interface ModelMetadata {
   id: string;
@@ -180,6 +284,53 @@ export interface ModelMetadata {
    *   - 'local-runtime' → an on-device local model runtime must be installed.
    */
   requiresEnvironment?: 'e2b' | 'local-runtime';
+  /** Additive per-model reasoning capability metadata. Absent ⇒ non-reasoning. */
+  reasoning?: ModelReasoning;
+  /** Selectability axis (separate from lifecycle `status`). Absent ⇒ "live". */
+  availability?: ModelAvailability;
+  /** Human-readable reason shown on coming_soon/unavailable rows. */
+  unavailableReason?: string;
+  /** Optional display-only expected-live date for coming_soon rows. */
+  expectedLiveDate?: string;
+  /** INERT authored tier policy (future GA wave). `tierAllowedModels` stays the SSOT. */
+  tierPolicy?: ModelTierPolicy;
+  /** GPT-5.6 capability hint (Sol 6 / Terra 4 / Luna 3) from the OpenAI compare page. */
+  reasoningDots?: number;
+  /** GPT-5.6 programmatic-tool-calling surface (Responses-only, inert this wave). */
+  toolCalling?: {
+    programmatic?: {
+      toolType: string;
+      optInParam: string;
+      optInValues: string[];
+      runtime: string;
+      responseItems: string[];
+      endpoint: 'responses';
+    };
+  };
+  /** GPT-5.6 image-input detail levels (chat + responses). */
+  imageInput?: { detailValues: string[] };
+  /** GPT-5.6 supported endpoints. */
+  endpoints?: string[];
+  /** Model knowledge cutoff date (ISO). */
+  knowledgeCutoff?: string;
+  /**
+   * INERT long-context price tier (GPT-5.6, Addendum D). 5.6-only additive
+   * sub-block; the AT-GA metering wave applies a per-request context-length split.
+   * Nothing reads it this wave.
+   */
+  longContext?: {
+    inputCost: number;
+    cached_input?: number;
+    cached_write?: number;
+    outputCost: number;
+  };
+  /** GPT-5.6 prompt-cache policy. */
+  cachePolicy?: {
+    writeMultiplier: number;
+    readDiscount: number;
+    minCacheLifeMin: number;
+    explicitBreakpoints: boolean;
+  };
 }
 
 /** The set of hosted execution environments a model may require. */
@@ -1502,6 +1653,50 @@ export function listCanonicalModels(): ModelMetadata[] {
 
 export function getModels(options: ModelQueryOptions = {}): ModelMetadata[] {
   return listCanonicalModels().filter((model) => matchesModelQueryOptions(model, options));
+}
+
+/** Availability of a model (absent field ⇒ "live"). */
+export function getModelAvailability(model: ModelMetadata): ModelAvailability {
+  return model.availability ?? 'live';
+}
+
+/** True when a model is live (selectable + routable). */
+export function isModelLive(model: ModelMetadata): boolean {
+  return getModelAvailability(model) === 'live';
+}
+
+/**
+ * The reasoning capability block for a model (absent ⇒ non-reasoning `none`).
+ * Single source both the effort-flyout UI and the request path read from.
+ */
+export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {
+  const meta = getModelMetadataById(modelId);
+  return meta?.reasoning ?? { capable: false, control: 'none' };
+}
+
+/**
+ * DISPLAY set — every non-deprecated model INCLUDING `coming_soon`. Drives the
+ * picker list + ordering. `coming_soon` rows render disabled (see getSelectableModels).
+ * `unavailable` rows are also shown-but-disabled.
+ */
+export function getDisplayModels(): ModelMetadata[] {
+  return getManualOverrideModels();
+}
+
+/**
+ * SELECTABLE set — `getDisplayModels()` filtered to `availability === "live"`.
+ * Drives what can actually be picked/sent. `coming_soon`/`unavailable` are
+ * display-only and NEVER selectable/routable. Environment gating is applied per
+ * surface separately (evaluateModelEnvironment) since it is runtime state.
+ */
+export function getSelectableModels(): ModelMetadata[] {
+  return getDisplayModels().filter(isModelLive);
+}
+
+/** True when a model id resolves to a live (selectable) catalog entry. */
+export function isModelSelectable(modelId: string | null | undefined): boolean {
+  const meta = getModelMetadataById(modelId);
+  return meta ? isModelLive(meta) : false;
 }
 
 function matchesModelQueryOptions(model: ModelMetadata, options: ModelQueryOptions = {}): boolean {
