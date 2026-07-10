@@ -49,6 +49,13 @@ const MODELS = vi.hoisted(() => [
     description: 'Fast',
   },
   {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
+    provider: 'Google',
+    providerKey: 'google',
+    description: 'Fast',
+  },
+  {
     id: 'gpt-5.6-sol',
     name: 'GPT-5.6 Sol',
     provider: 'OpenAI',
@@ -195,6 +202,17 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     sel.id = 'claude-opus-4.8';
     render(<ComposerFooter />);
     expect(effortChipLabels()).toEqual(['Low', 'Medium', 'High', 'xHigh', 'Max']);
+  });
+
+  it('(a2) Gemini 3.5 Flash folds `minimal` into `low` — no duplicate store-effort chip', () => {
+    sel.id = 'gemini-3.5-flash';
+    thinking.effort = 'low';
+    render(<ComposerFooter />);
+    const chips = effortChipLabels();
+    // supportedEfforts is [minimal,low,medium,high]; `minimal` (→ store 'low') is
+    // dropped so it can't double-highlight with Low.
+    expect(chips).toEqual(['Low', 'Medium', 'High']);
+    expect(chips).not.toContain('Minimal');
   });
 
   it('(d) Haiku 4.5 now supports thinking (effort control is present)', () => {
