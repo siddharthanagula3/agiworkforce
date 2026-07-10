@@ -752,10 +752,10 @@ export function ComposerFooter({
         }
       >
         {/* min-w-0 so the model selector button below can shrink (its name span
-            truncates) instead of forcing the control row to wrap. The persistent
-            "Cmd+Enter to send" keyboard hint was removed (founder directive, matches
-            claude.ai which shows no persistent hint); the Enter/Cmd+Enter behavior in
-            ChatComposerNew is unchanged. */}
+            truncates) instead of forcing the control row to wrap. No persistent
+            keyboard hint (founder directive, matches claude.ai). Send behavior in
+            ChatComposerNew: plain Enter sends, Shift+Enter newline (ChatGPT/Claude
+            convention), Cmd/Ctrl+Enter also sends. */}
         <div className="flex min-w-0 items-center gap-2">
           {/* Response style selector · hidden below sm so the model selector keeps a
               usable width on the narrow (mobile) composer row. Style is a secondary

@@ -888,7 +888,16 @@ const ChatComposerNewComponent = ({
         }
       }
 
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !showMentions) {
+      // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
+      // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
+      // Enter (slash/mentions) or mid-IME-composition (e.g. CJK candidates).
+      if (
+        e.key === 'Enter' &&
+        !e.shiftKey &&
+        !e.nativeEvent.isComposing &&
+        !showMentions &&
+        !showSlashMenu
+      ) {
         e.preventDefault();
         handleSubmit();
       }
@@ -1853,7 +1862,7 @@ const ChatComposerNewComponent = ({
 
       {/* Disclaimer · sits below the composer (outside the pill), ChatGPT/Claude-
           style. No persistent keyboard-send hint is shown (matches claude.ai; founder
-          directive) — Enter/Cmd+Enter behavior is handled in the textarea keydown. */}
+          directive) — plain-Enter/Cmd+Enter send is handled in the textarea keydown. */}
       <p className="mt-2 text-center text-[11px] text-muted-foreground">
         AGI can make mistakes. Check important info.
       </p>

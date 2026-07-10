@@ -168,6 +168,33 @@ describe('ChatComposerNew', () => {
     });
   });
 
+  it('calls onSend with typed message on plain Enter (ChatGPT/Claude convention)', async () => {
+    const onSendMock = vi.fn();
+    render(<ChatComposerNew onSend={onSendMock} />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'hello world');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(onSendMock).toHaveBeenCalledWith(
+        'hello world',
+        undefined,
+        undefined,
+        expect.objectContaining({ agentMode: 'solo', folderId: null }),
+      );
+    });
+  });
+
+  it('does not send on plain Enter while IME composing', async () => {
+    const onSendMock = vi.fn();
+    render(<ChatComposerNew onSend={onSendMock} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'こんにち');
+    fireEvent.keyDown(textarea, { key: 'Enter', isComposing: true });
+    expect(onSendMock).not.toHaveBeenCalled();
+  });
+
   it('does not send when message is empty', async () => {
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
