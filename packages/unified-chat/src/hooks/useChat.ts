@@ -9,6 +9,10 @@ import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { buildRoutingDecision } from '../lib/promptClassifier';
 import { getSendQueue, defaultBrowserStorage } from '../queue/sendQueue';
+import {
+  CONTINUE_GENERATION_INSTRUCTION,
+  isMessageContinuable,
+} from '../lib/continue-generation';
 
 interface UseChatOptions {
   hostBridge?: ChatHostBridge | null;
@@ -343,6 +347,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {
               const doneUpdates: Partial<ChatMessage> = { isStreaming: false };
+              // Record the turn's finish_reason (cloud/WebRuntime supplies it;
+              // local/native runtimes omit it) so the Continue-Generation
+              // affordance is honest and survives across the turn. Always write
+              // it — an undefined value clears any stale 'stopped'/'length'
+              // marker left by an interrupted prior attempt.
+              doneUpdates.metadata = { ...msg.metadata, finishReason: event.finishReason };
               // Mark thinking block as done
               if (msg.thinkingBlock) {
                 const hasCompletionStep = msg.thinkingBlock.steps.some((s) => s.type === 'done');
@@ -497,11 +507,98 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   const stopGeneration = useCallback(() => {
     if (runtime && activeConversationId) {
       runtime.stopGeneration(activeConversationId);
+      // User stopped mid-stream: the runtime's abort path emits no 'done'
+      // event, so settle the in-flight assistant message here. When it has
+      // partial text already streamed, mark finish_reason 'stopped' (mirrors
+      // web's useChatStream) so the Continue affordance is offered honestly.
+      const partialId = assistantMessageIdRef.current;
+      if (partialId) {
+        const store = useChatStore.getState();
+        const msg = store.messagesByConversation[activeConversationId]?.find(
+          (m) => m.id === partialId,
+        );
+        if (msg && msg.role === 'assistant') {
+          store.updateMessage(activeConversationId, partialId, {
+            isStreaming: false,
+            ...(msg.content.trim()
+              ? { metadata: { ...msg.metadata, finishReason: 'stopped' } }
+              : {}),
+          });
+        }
+      }
       assistantMessageIdRef.current = null;
       useChatStore.getState().stopStreaming();
     }
   }, [runtime, activeConversationId]);
 
+  /**
+   * Continue Generation (ChatGPT/Claude parity, cloud mode): resume a truncated
+   * (finish_reason 'length'/'max_tokens') or user-stopped ('stopped') assistant
+   * turn. Reuses the normal streaming path — the request thread ends with the
+   * partial assistant message followed by an ephemeral user instruction to
+   * continue in place (never stored/rendered). The assistant-message ref is
+   * pre-seeded to the partial's id so streamed tokens APPEND to the SAME bubble
+   * instead of creating a new one. No-op unless the message is continuable
+   * (see isMessageContinuable) — no fake availability.
+   */
+  const continueGeneration = useCallback(
+    (assistantMessageId: string) => {
+      if (!runtime || isStreamingRef.current) return;
+      const convId = useChatStore.getState().activeConversationId;
+      if (!convId) return;
+
+      const store = useChatStore.getState();
+      const conversationMessages = store.messagesByConversation[convId] ?? [];
+      const messageIndex = conversationMessages.findIndex((m) => m.id === assistantMessageId);
+      const message = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
+      // Only a truncated/stopped assistant turn with non-empty partial content
+      // can continue; continuing an earlier turn would fork history.
+      if (!message || messageIndex !== conversationMessages.length - 1) return;
+      if (!isMessageContinuable(message)) return;
+
+      // Continue with the model that produced the partial answer so voice and
+      // capabilities stay coherent; fall back to the current selection.
+      const model = message.model || useModelStore.getState().selectedModelId;
+
+      // Thread: everything up to AND INCLUDING the partial assistant turn, then
+      // the ephemeral continue instruction (request-only, never stored). The
+      // cloud wire uses messageHistory as the full thread (content arg ignored
+      // when history is present), so append the instruction as the last turn.
+      const messageHistory = [
+        ...conversationMessages
+          .slice(0, messageIndex + 1)
+          .map((m) => ({ role: m.role, content: m.content })),
+        { role: 'user', content: CONTINUE_GENERATION_INSTRUCTION },
+      ];
+
+      // Pre-seed the ref so 'content' events append to the SAME bubble, and
+      // clear the continuable marker while streaming (re-recorded honestly at
+      // stream end — re-offered if truncated again).
+      assistantMessageIdRef.current = assistantMessageId;
+      store.updateMessage(convId, assistantMessageId, {
+        isStreaming: true,
+        metadata: { ...message.metadata, finishReason: undefined },
+      });
+      store.startStreaming();
+
+      void runtime
+        .sendMessage(convId, CONTINUE_GENERATION_INSTRUCTION, {
+          model,
+          messageHistory,
+        })
+        .catch((err: unknown) => {
+          const errMessage = err instanceof Error ? err.message : String(err);
+          toast.error(errMessage || 'Failed to continue generation');
+        })
+        .finally(() => {
+          if (useChatStore.getState().isStreaming) {
+            useChatStore.getState().stopStreaming();
+          }
+        });
+    },
+    [runtime],
+  );
+
   const isStreaming = useChatStore((s) => s.isStreaming);
-  return { sendMessage, stopGeneration, isStreaming };
+  return { sendMessage, stopGeneration, continueGeneration, isStreaming };
 }

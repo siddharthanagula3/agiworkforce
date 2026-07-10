@@ -336,7 +336,7 @@ export function ChatInterface({
 
   // Chat logic
   useHostBridgeSync(hostBridge);
-  const { sendMessage, stopGeneration } = useChat(runtime, {
+  const { sendMessage, stopGeneration, continueGeneration } = useChat(runtime, {
     hostBridge,
     externalAddMessage: onAddMessage,
   });
@@ -581,6 +581,7 @@ export function ChatInterface({
               conversationId={activeConversationId}
               onArtifactClick={handleArtifactClick}
               showProvenanceFooter={showProvenanceFooter}
+              onContinueGeneration={continueGeneration}
             />
           ) : emptyStateSlot !== undefined ? (
             emptyStateSlot
