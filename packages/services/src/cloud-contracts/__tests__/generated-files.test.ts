@@ -19,6 +19,8 @@ const wireFile = {
   byte_count: 2048,
   kind: 'pdf',
   checksum_sha256: 'a'.repeat(64),
+  surface: 'file',
+  previewable: true,
 };
 
 describe('GeneratedFileWireSchema', () => {
@@ -34,6 +36,31 @@ describe('GeneratedFileWireSchema', () => {
   it('rejects a descriptor missing the uri', () => {
     const { uri: _omitted, ...rest } = wireFile;
     expect(GeneratedFileWireSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it('defaults surface/previewable on pre-classification payloads (backward compat)', () => {
+    const { surface: _s, previewable: _p, ...legacy } = wireFile;
+    const parsed = GeneratedFileWireSchema.parse(legacy);
+    expect(parsed.surface).toBe('file');
+    expect(parsed.previewable).toBe(false);
+  });
+
+  it('folds an unknown surface value to file instead of rejecting the descriptor', () => {
+    const parsed = GeneratedFileWireSchema.parse({ ...wireFile, surface: 'canvas' });
+    expect(parsed.surface).toBe('file');
+  });
+
+  it('accepts the artifact surface', () => {
+    const parsed = GeneratedFileWireSchema.parse({
+      ...wireFile,
+      file_name: 'index.html',
+      mime_type: 'text/html',
+      kind: 'html',
+      surface: 'artifact',
+      previewable: true,
+    });
+    expect(parsed.surface).toBe('artifact');
+    expect(parsed.previewable).toBe(true);
   });
 });
 
