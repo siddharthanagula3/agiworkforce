@@ -853,7 +853,22 @@ impl OpenAIAdapter {
                     "max_tokens clamped to per-request ceiling (FIX-007)"
                 );
             }
-            api_request["max_tokens"] = serde_json::json!(max_tokens);
+            // OpenAI-managed `/chat/completions` deprecated `max_tokens` and
+            // rejects it outright for gpt-5/o-series with a 400 ("Unsupported
+            // parameter: 'max_tokens' is not supported with this model. Use
+            // 'max_completion_tokens' instead."). Third-party OpenAI-compatible
+            // providers (xAI, Qwen, DeepSeek, Moonshot, local runtimes, …) that
+            // share this adapter still expect `max_tokens`, so only rename the
+            // field for OpenAI itself. Mirrors the crate's URL-based
+            // `OpenAiOpts::for_url` distinction (`crates/agiworkforce-llm/src/spec.rs`).
+            let max_tokens_field = if super::models_config::get_provider_for_model(&request.model)
+                == Some(Provider::OpenAI)
+            {
+                "max_completion_tokens"
+            } else {
+                "max_tokens"
+            };
+            api_request[max_tokens_field] = serde_json::json!(max_tokens);
         }
 
         // Add tools (nested format for OpenAI)
