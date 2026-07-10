@@ -78,7 +78,12 @@ fn trivial_request(model: &str) -> LLMRequest {
             multimodal_content: None,
         }],
         model: model.to_string(),
-        max_tokens: Some(32),
+        // Spend is kept trivial, but the cap must leave headroom for models that
+        // burn completion tokens on internal reasoning before emitting any
+        // visible text (gpt-5-nano, deepseek-v4-flash). At 32 tokens those models
+        // hit the length cap mid-reasoning and stream zero content deltas; 512 is
+        // still a fraction of a cent and lets the one-sentence greeting through.
+        max_tokens: Some(512),
         stream: true,
         ..Default::default()
     }
@@ -164,28 +169,35 @@ async fn smoke_one(provider: Provider, label: &'static str, model: &'static str,
 async fn live_provider_stream_smoke() {
     let keys = load_env_keys();
 
-    // (Provider, label, model id from models.json SSOT, key env var)
-    let targets: &[(Provider, &'static str, &'static str, &'static str)] = &[
-        (Provider::Anthropic, "anthropic", "claude-haiku-4.5", "ANTHROPIC_API_KEY"),
-        (Provider::DeepSeek, "deepseek", "deepseek-v4-flash", "DEEPSEEK_API_KEY"),
-        (Provider::Google, "google", "gemini-3.1-flash-lite", "GOOGLE_API_KEY"),
-        (Provider::OpenAI, "openai", "gpt-5-nano", "OPENAI_API_KEY"),
+    // (Provider, label, model id from models.json SSOT, accepted key env var
+    // names in priority order — first non-empty match wins). Most providers use
+    // a single canonical name; Google's key is written under several aliases
+    // across env files (GOOGLE_API_KEY / GOOGLE_AI_API_KEY / GEMINI_API_KEY),
+    // mirroring the web/gateway adapter fallback chain, so we accept all three.
+    let targets: &[(Provider, &'static str, &'static str, &'static [&'static str])] = &[
+        (Provider::Anthropic, "anthropic", "claude-haiku-4.5", &["ANTHROPIC_API_KEY"]),
+        (Provider::DeepSeek, "deepseek", "deepseek-v4-flash", &["DEEPSEEK_API_KEY"]),
+        (Provider::Google, "google", "gemini-3.1-flash-lite", &["GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"]),
+        (Provider::OpenAI, "openai", "gpt-5-nano", &["OPENAI_API_KEY"]),
         // Moonshot is OpenAI-compatible (Chat Completions) — a second live
         // exercise of the crate's OpenAI-compat runner alongside DeepSeek.
-        (Provider::Moonshot, "moonshot", "kimi-k2.6", "MOONSHOT_API_KEY"),
+        (Provider::Moonshot, "moonshot", "kimi-k2.6", &["MOONSHOT_API_KEY"]),
         // Additional OpenAI-compatible providers present in the env file — any
         // one with a live key proves the crate's OpenAI-compat runner end to
         // end through the new desktop path.
-        (Provider::XAI, "xai", "grok-4.3", "XAI_API_KEY"),
-        (Provider::Qwen, "qwen", "qwen-flash", "QWEN_API_KEY"),
-        (Provider::Zhipu, "zhipu", "glm-5.2", "ZHIPU_API_KEY"),
-        (Provider::Perplexity, "perplexity", "sonar", "PERPLEXITY_API_KEY"),
+        (Provider::XAI, "xai", "grok-4.3", &["XAI_API_KEY"]),
+        (Provider::Qwen, "qwen", "qwen-flash", &["QWEN_API_KEY"]),
+        (Provider::Zhipu, "zhipu", "glm-5.2", &["ZHIPU_API_KEY"]),
+        (Provider::Perplexity, "perplexity", "sonar", &["PERPLEXITY_API_KEY"]),
     ];
 
     let mut outcomes = Vec::new();
-    for (provider, label, model, key_env) in targets {
-        let Some(key) = keys.get(*key_env).filter(|k| !k.is_empty()) else {
-            eprintln!("[smoke] {label}: no {key_env} in env.local — skipping");
+    for (provider, label, model, key_envs) in targets {
+        let Some(key) = key_envs
+            .iter()
+            .find_map(|name| keys.get(*name).filter(|k| !k.is_empty()))
+        else {
+            eprintln!("[smoke] {label}: no {key_envs:?} in env.local — skipping");
             continue;
         };
         let o = smoke_one(*provider, label, model, key).await;
