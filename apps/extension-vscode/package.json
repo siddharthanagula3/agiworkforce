@@ -927,7 +927,7 @@
     "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint",
     "test": "vitest run",
     "test:webview": "vitest run --config vitest.webview.config.ts",
-    "test:integration": "tsc -p tsconfig.test.json && node out/test/runTests.js",
+    "test:integration": "tsc -p tsconfig.test.json && node esbuild.js && node out/test/runTests.js",
     "typecheck": "tsc --noEmit",
     "check:refs": "tsc -b tsconfig.build.json",
     "clean": "rimraf out",
