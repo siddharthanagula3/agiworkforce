@@ -89,20 +89,6 @@ vi.mock('@/hooks/useApiPromptCompletion', () => ({
     mockUseApiPromptCompletion(...args),
 }));
 
-const mockConnectConnector = vi.fn();
-const mockDisconnectConnector = vi.fn();
-
-vi.mock('@features/connectors/hooks/use-connectors', () => ({
-  useConnectors: () => ({
-    connectedIds: new Set<string>(),
-    connectedAtMap: {},
-    loading: false,
-    mutatingIds: new Set<string>(),
-    connect: mockConnectConnector,
-    disconnect: mockDisconnectConnector,
-  }),
-}));
-
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ChatComposerNew', () => {
@@ -263,18 +249,55 @@ describe('ChatComposerNew', () => {
     expect(screen.getByText('Connectors')).toBeInTheDocument();
   });
 
-  it('does not allow composer OAuth toggles to create fake connector connections', () => {
+  it('routes the Connectors row to settings instead of showing fake per-conversation toggles', () => {
+    // The web chat tool loop is assembled from operator-deployed MCP servers, not
+    // from the user's connected-connector state, so per-conversation connector
+    // enablement has no runtime backing. The composer must therefore link to the
+    // Connectors settings page (honest) and never render inline connect toggles
+    // that imply a mid-chat capability that does not exist.
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
-    fireEvent.click(screen.getByText('Connectors'));
 
-    const gmailToggle = screen.getByRole('switch', { name: /toggle gmail/i });
-    expect(gmailToggle).toBeDisabled();
+    const connectorsRow = screen.getByText('Connectors').closest('a');
+    expect(connectorsRow).not.toBeNull();
+    expect(connectorsRow).toHaveAttribute('href', '/connectors');
 
-    fireEvent.click(gmailToggle);
-    expect(mockConnectConnector).not.toHaveBeenCalled();
-    expect(mockDisconnectConnector).not.toHaveBeenCalled();
+    // No connector connect/disconnect toggle switch is rendered in the composer.
+    expect(screen.queryByRole('switch', { name: /toggle/i })).toBeNull();
+  });
+
+  it('Skills flyout lists skills from /api/skills and filters via the search box', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/skills')) {
+        return {
+          ok: true,
+          json: async () => ({
+            skills: [
+              { name: 'humanizer', description: 'Rewrite text to sound human', source: 'user' },
+              { name: 'brand-guidelines', description: 'Apply brand voice', source: 'builtin' },
+            ],
+          }),
+        } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByText('Skills'));
+
+    // Both skills load from the real /api/skills source.
+    expect(await screen.findByText('humanizer')).toBeInTheDocument();
+    expect(screen.getByText('brand-guidelines')).toBeInTheDocument();
+
+    // Typing in the flyout search box narrows the list.
+    const searchBox = screen.getByRole('textbox', { name: /search skills/i });
+    fireEvent.change(searchBox, { target: { value: 'brand' } });
+    expect(screen.queryByText('humanizer')).toBeNull();
+    expect(screen.getByText('brand-guidelines')).toBeInTheDocument();
   });
 
   it('disables Send button when loading', () => {
