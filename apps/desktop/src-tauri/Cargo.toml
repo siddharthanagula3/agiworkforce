@@ -29,6 +29,7 @@ await_holding_lock = "warn"
 
 [dependencies]
 agiworkforce-execpolicy = { path = "../../../crates/agiworkforce-execpolicy" }
+agiworkforce-llm = { path = "../../../crates/agiworkforce-llm" }
 agiworkforce-mcp = { path = "../../../crates/agiworkforce-mcp" }
 agiworkforce-sandbox-policy = { path = "../../../crates/agiworkforce-sandbox-policy" }
 
