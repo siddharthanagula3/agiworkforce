@@ -216,6 +216,7 @@ function makeFinalSseStream(): ReadableStream<Uint8Array> {
 // ---------------------------------------------------------------------------
 import { runAgentLoop } from '../src/features/computer-use/agentLoop';
 import { COMPUTER_USE_MODEL } from '../src/features/computer-use/cloudAgentClient';
+import { getRoutingSlotModel } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -384,10 +385,11 @@ describe('COMPUTER_USE_MODEL — sourced from models.json catalog', () => {
     expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);
   });
 
-  it('resolves to the default computer_use model (managed_cloud.taskRouting superseded by SLOT_REGISTRY)', () => {
-    // managed_cloud.taskRouting was cleared in favour of SLOT_REGISTRY; the constant
-    // now carries the byok fallback value ('gpt-5.4-mini') until the extension
-    // is updated to read from getRoutingSlotModel('computer_use').
-    expect(COMPUTER_USE_MODEL).toBe('gpt-5.4-mini');
+  it("resolves to the canonical SLOT_REGISTRY 'computer_use' slot model", () => {
+    // managed_cloud.taskRouting was cleared in favour of SLOT_REGISTRY; the
+    // extension now reads getRoutingSlotModel('computer_use') directly, so no
+    // model ID literal exists in either the client or this assertion.
+    expect(COMPUTER_USE_MODEL).toBe(getRoutingSlotModel('computer_use'));
+    expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);
   });
 });
