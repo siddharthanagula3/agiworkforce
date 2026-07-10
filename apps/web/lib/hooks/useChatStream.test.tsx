@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@/stores/chatStore';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
-import { useChatStream } from './useChatStream';
+import { useChatStream, saveMessageToDb } from './useChatStream';
 
 const authMocks = vi.hoisted(() => ({
   getToken: vi.fn(),
@@ -189,6 +189,90 @@ describe('useChatStream', () => {
       const assistantMsg = state.messages.find((m) => m.role === 'assistant');
       const searchEntry = assistantMsg?.metadata?.tools?.find((t) => t.name === 'web_search');
       expect(searchEntry, 'web_search tool entry should exist').toBeDefined();
+    });
+  });
+
+  // Regression: the persist-after-long-request path. A web-search / deep-research
+  // / long-generation stream outlives the Clerk JWT captured when the request
+  // started (~60s TTL), so persisting the assistant turn with that stale Bearer
+  // failed (401 on the save route + 403 CSRF_VALIDATION_FAILED via the CSRF
+  // fallback) and the answer vanished on reload. The fix: saveMessageToDb takes a
+  // token PROVIDER and fetches a fresh token at save time (and on each retry).
+  describe('saveMessageToDb durability (persist after a long stream)', () => {
+    function headerRecord(init: RequestInit | undefined): Record<string, string> {
+      return (init?.headers ?? {}) as Record<string, string>;
+    }
+
+    it('fetches a FRESH auth token at save time instead of reusing a stale one', async () => {
+      // First provider call (send-time) yields the token that would be expired by
+      // save time; every later call yields the refreshed token.
+      const getToken = vi
+        .fn<() => Promise<string>>()
+        .mockResolvedValueOnce('token-stale')
+        .mockResolvedValue('token-fresh');
+      const getAuthToken = async () => getToken();
+
+      // Simulate the request start consuming the send-time token.
+      await getAuthToken();
+
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: { id: 'saved-1' } }), { status: 200 }),
+      );
+
+      const saved = await saveMessageToDb(
+        'conv-1',
+        { id: 'msg-1', role: 'assistant', content: 'answer' },
+        getAuthToken,
+      );
+
+      expect(saved.id).toBe('saved-1');
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const [, init] = vi.mocked(fetch).mock.calls[0]!;
+      const headers = headerRecord(init);
+      // The save must carry the token fetched AT SAVE TIME, not the send-time one.
+      expect(headers['Authorization']).toBe('Bearer token-fresh');
+      // ...and a CSRF header (Bearer-authed requests bypass server CSRF, but the
+      // header is still attached uniformly).
+      expect(headers['x-csrf-token']).toBe('csrf-token');
+    });
+
+    it('re-fetches the token on each retry so an expiry between attempts self-heals', async () => {
+      const getToken = vi.fn<() => Promise<string>>().mockResolvedValue('token-fresh');
+      const getAuthToken = async () => getToken();
+
+      // First attempt: transient 500 (retryable). Second attempt: success.
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(new Response('err', { status: 500 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ message: { id: 'saved-2' } }), { status: 200 }),
+        );
+
+      const saved = await saveMessageToDb(
+        'conv-1',
+        { id: 'msg-2', role: 'assistant', content: 'answer' },
+        getAuthToken,
+        { retryDelayMs: 1 },
+      );
+
+      expect(saved.id).toBe('saved-2');
+      expect(fetch).toHaveBeenCalledTimes(2);
+      // One token fetch per attempt — a stale token cannot persist across retries.
+      expect(getToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('surfaces a 403 CSRF/auth rejection instead of silently dropping the turn', async () => {
+      const getAuthToken = async () => 'token-fresh';
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ code: 'CSRF_VALIDATION_FAILED' }), { status: 403 }),
+      );
+
+      await expect(
+        saveMessageToDb(
+          'conv-1',
+          { id: 'msg-3', role: 'assistant', content: 'answer' },
+          getAuthToken,
+        ),
+      ).rejects.toThrow('Failed to save message to DB: 403');
     });
   });
 
