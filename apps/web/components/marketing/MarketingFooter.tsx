@@ -52,11 +52,22 @@ const COMPANY = [
 export function MarketingFooter() {
   return (
     <footer className="agi-footer">
+      <div className="agi-footer-brandband">
+        <div className="agi-footer-brandband-copy">
+          <Link href="/" className="agi-footer-mark" aria-label="AGI home">
+            <AgiMark size={18} />
+            <span className="agi-footer-mark-word">AGI</span>
+          </Link>
+          <p className="agi-footer-tagline">
+            One AI workspace across six surfaces. <em>Local, your keys, or managed cloud</em> — you
+            see the route before anything leaves your device.
+          </p>
+        </div>
+        <span className="agi-footer-wordmark" aria-hidden="true">
+          AGI
+        </span>
+      </div>
       <div className="agi-footer-row">
-        <Link href="/" className="agi-footer-mark" aria-label="AGI home">
-          <AgiMark size={18} />
-          <span style={{ marginLeft: 8 }}>AGI</span>
-        </Link>
         <ul className="agi-footer-col">
           <li className="agi-footer-col-title">Product</li>
           {PRODUCT.map((l) => (
