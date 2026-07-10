@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { FinalCta } from '../../components/marketing/FlagshipSections';
+import { AgiMark } from '../../components/agi/AgiMark';
 import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -11,18 +12,34 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://agiworkforce.com/about' },
 };
 
+const PRINCIPLES: { title: string; body: string }[] = [
+  {
+    title: 'The route is always visible.',
+    body: 'Local, BYOK, and managed cloud are separate trust boundaries. A Local thread stays Local. Moving work anywhere else takes a label and your consent — never a silent hand-off.',
+  },
+  {
+    title: 'Your keys, your bill, no markup.',
+    body: 'Bring your own provider keys on Desktop and the CLI. Traffic goes straight to your provider; the keys stay encrypted on your machine. We do not sit in the middle of your spend.',
+  },
+  {
+    title: 'One workspace, six surfaces.',
+    body: 'Web, Desktop, Mobile, CLI, Chrome, and VS Code over one engine. Start where you work; the model choice and the boundaries come with you.',
+  },
+];
+
 const COLOPHON: { key: string; val: string }[] = [
+  { key: 'Company', val: 'AGI Automation LLC' },
   { key: 'Headquarters', val: 'Austin, Texas, USA' },
   { key: 'License', val: 'Proprietary' },
-  { key: 'Region', val: 'United States' },
-  { key: 'Set in', val: 'Geist Sans' },
   { key: 'Engine', val: 'Pure Rust CLI' },
-  { key: 'Surfaces', val: 'Desktop · Web · Mobile · CLI · Chrome · VS Code' },
+  { key: 'Surfaces', val: 'Web · Desktop · Mobile · CLI · Chrome · VS Code' },
   {
     key: 'Providers',
-    val: `Multi-provider. ${MARKETING.providers.display} wired, BYO endpoints supported`,
+    val: `Multi-provider. ${MARKETING.providers.display} wired, plus local models and BYO endpoints`,
   },
+  { key: 'Trust modes', val: 'Local · BYOK · Managed cloud (public alpha)' },
   { key: 'Data policy', val: POSITIONING.trustBoundary },
+  { key: 'Set in', val: 'Newsreader & Geist' },
   { key: 'Compliance', val: 'SOC 2 planned · GDPR and CCPA in progress' },
 ];
 
@@ -53,6 +70,51 @@ export default function AboutPage() {
               <li>BYOK · your keys</li>
               <li>Cloud · public alpha</li>
             </ul>
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-about-mission-title">
+          <p className="agi-fl-eyebrow">What we&rsquo;re building</p>
+          <h2 id="agi-about-mission-title" className="agi-fl-h2">
+            An AI workspace you can actually trust.
+          </h2>
+          <p className="agi-fl-section-lede">
+            AGI is a leading AI application suite across six first-class surfaces, with one
+            difference that matters: you choose Local models, your own provider keys, or AGI managed
+            cloud — instead of being locked into a single model lab. These are the rules the product
+            is built around.
+          </p>
+          <div className="agi-about-principles">
+            {PRINCIPLES.map((p) => (
+              <article key={p.title} className="agi-about-principle">
+                <h3 className="agi-about-principle-title">{p.title}</h3>
+                <p className="agi-about-principle-body">{p.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-about-founder-title">
+          <p className="agi-fl-eyebrow">The founder</p>
+          <div className="agi-about-founder">
+            <div className="agi-about-founder-mark" aria-hidden="true">
+              <AgiMark size={40} />
+            </div>
+            <div className="agi-about-founder-copy">
+              <h2 id="agi-about-founder-title" className="agi-fl-h2">
+                <em className="agi-fl-h1-em">&ldquo;You should own the choice of model.&rdquo;</em>
+              </h2>
+              <p className="agi-fl-section-lede">
+                AGI is built on a single conviction: the person doing the work should decide where it
+                runs and which model answers — not a vendor lock-in. Everything here follows from
+                that, from Local Mode that never phones home to BYOK that keeps your keys on your
+                machine.
+              </p>
+              <p className="agi-about-founder-name">
+                <span>Siddhartha Nagula</span>
+                <span className="agi-about-founder-role">Founder, AGI Automation LLC</span>
+              </p>
+            </div>
           </div>
         </section>
 
