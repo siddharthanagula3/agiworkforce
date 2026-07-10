@@ -329,3 +329,37 @@ describe('ToolTimeline · audit-trail collapse lifecycle', () => {
     });
   });
 });
+
+// ─── Manual tool-approval forwarding ──────────────────────────────────────────
+
+describe('ToolTimeline · manual approval', () => {
+  const awaitingTool = {
+    id: 'entry-1',
+    name: 'mcp__github__get_pull_request_diff',
+    status: 'awaiting_approval' as const,
+    toolCallId: 'call_1',
+    requiresApproval: true,
+    parameters: { owner: 'acme', repo: 'app', pull_number: 7 },
+  };
+
+  it('auto-expands and renders approve/reject for an awaiting_approval tool', () => {
+    render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />);
+    // The card is visible without a manual expand click (timeline auto-opens).
+    expect(screen.getByText('Approve')).toBeInTheDocument();
+    expect(screen.getByText('Reject')).toBeInTheDocument();
+  });
+
+  it('calls onApprove with the exact tool_call_id', () => {
+    const onApprove = vi.fn();
+    render(<ToolTimeline tools={[awaitingTool]} onApprove={onApprove} onReject={() => {}} />);
+    fireEvent.click(screen.getByText('Approve'));
+    expect(onApprove).toHaveBeenCalledWith('call_1');
+  });
+
+  it('calls onReject with the exact tool_call_id', () => {
+    const onReject = vi.fn();
+    render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={onReject} />);
+    fireEvent.click(screen.getByText('Reject'));
+    expect(onReject).toHaveBeenCalledWith('call_1');
+  });
+});

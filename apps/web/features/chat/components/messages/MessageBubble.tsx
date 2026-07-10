@@ -60,6 +60,7 @@ import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforc
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@/stores/chatStore';
+import { useToolApprovalResolver } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
@@ -258,6 +259,29 @@ const MessageBubbleComponent = function MessageBubble({
   const [showContributions, setShowContributions] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const isUser = message.role === 'user';
+
+  // Manual tool-approval wiring: an awaiting_approval tool card's approve/reject
+  // buttons drive the resume request. The resolver comes from ToolApprovalContext
+  // (mounted by the chat page, which owns the Clerk-authenticated resolver), via
+  // useContext — so MessageBubble stays provider-independent and renderable
+  // standalone. When no provider is present (standalone render / tests) the
+  // resolver is null and the approve/reject affordances are simply not wired.
+  const resolveToolApproval = useToolApprovalResolver();
+  const handleApproveTool = useCallback(
+    (toolCallId: string) => {
+      void resolveToolApproval?.(message.id, toolCallId, 'approved');
+    },
+    [resolveToolApproval, message.id],
+  );
+  const handleRejectTool = useCallback(
+    (toolCallId: string) => {
+      void resolveToolApproval?.(message.id, toolCallId, 'rejected');
+    },
+    [resolveToolApproval, message.id],
+  );
+  const approvalHandlers = resolveToolApproval
+    ? { onApprove: handleApproveTool, onReject: handleRejectTool }
+    : {};
 
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
@@ -543,6 +567,7 @@ const MessageBubbleComponent = function MessageBubble({
                           compact={false}
                           searchSources={searchSources}
                           searchQuery={searchQuery}
+                          {...approvalHandlers}
                         />
                       </div>,
                     );
@@ -558,6 +583,7 @@ const MessageBubbleComponent = function MessageBubble({
                         tools={remaining}
                         searchSources={searchSources}
                         searchQuery={searchQuery}
+                        {...approvalHandlers}
                       />
                     </div>,
                   );
@@ -608,6 +634,7 @@ const MessageBubbleComponent = function MessageBubble({
                 tools={toolTimeline}
                 searchSources={searchSources}
                 searchQuery={searchQuery}
+                {...approvalHandlers}
               />
             </div>
           )}
