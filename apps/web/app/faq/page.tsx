@@ -1,15 +1,17 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema, faqPageSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { MARKETING, POSITIONING } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'FAQ',
   description:
     'Frequently asked questions about providers, BYOK, Local mode, AGI managed cloud, and security.',
-  alternates: { canonical: 'https://agiworkforce.com/faq' },
-};
+  path: '/faq',
+});
 
 const QA: { q: string; a: string }[] = [
   {
@@ -53,6 +55,15 @@ const QA: { q: string; a: string }[] = [
 export default function FaqPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={[
+          faqPageSchema(QA),
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'FAQ', path: '/faq' },
+          ]),
+        ]}
+      />
       <main className="agi-shell">
         <Header />
 

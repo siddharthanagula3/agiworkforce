@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Security',
   description: 'How AGI protects your keys, your data, and your tool execution.',
-  alternates: { canonical: 'https://agiworkforce.com/security' },
-};
+  path: '/security',
+});
 
 const KEYS: { title: string; body: string }[] = [
   {

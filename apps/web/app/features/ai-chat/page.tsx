@@ -1,20 +1,29 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
 import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
 import { MARKETING } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI AI Chat | One Conversation Across Six Surfaces',
   description:
     'AI Chat in the AGI workspace: one composer with attachments, voice input, web search, slash commands, and per-chat model choice. Across six surfaces and three trust modes.',
-  alternates: { canonical: 'https://agiworkforce.com/features/ai-chat' },
-};
+  path: '/features/ai-chat',
+});
 
 export default function AiChatFeaturePage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'AI Chat', path: '/features/ai-chat' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

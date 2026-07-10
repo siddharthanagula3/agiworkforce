@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Data Processing Agreement',
   description: 'How to obtain a Data Processing Agreement (DPA) with AGI, and what it covers.',
-  alternates: { canonical: 'https://agiworkforce.com/dpa' },
-};
+  path: '/dpa',
+});
 
 export default function DpaPage() {
   return (

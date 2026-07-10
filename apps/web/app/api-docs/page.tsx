@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'API docs',
   description:
     'API reference for the AGI gateway. OpenAI-compatible endpoints, BYOK across providers.',
-  alternates: { canonical: 'https://agiworkforce.com/api-docs' },
-};
+  path: '/api-docs',
+});
 
 export default function ApiDocsPage() {
   return (
@@ -44,8 +44,8 @@ export default function ApiDocsPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">Reference</p>
           <p className="agi-page-lede" style={{ marginTop: 0, marginBottom: 24 }}>
-            The public OpenAPI bundle, Postman collection, and SDK examples publish at public launch.
-            For now, use the quick-start route and BYOK setup guide.
+            The public OpenAPI bundle, Postman collection, and SDK examples publish at public
+            launch. For now, use the quick-start route and BYOK setup guide.
           </p>
           <div className="agi-cta-row">
             <Link href="/docs/byok-env" className="agi-cta-primary">

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -7,12 +7,12 @@ import { CapabilityGrid, FinalCta } from '../../components/marketing/FlagshipSec
 import { LedgerSection } from '../../components/marketing/LandingSections';
 import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Integrations',
   description:
     'How AGI connects to other tools: MCP plugins, the native messaging bridge, and BYOK provider keys on Desktop and CLI.',
-  alternates: { canonical: 'https://agiworkforce.com/integrations' },
-};
+  path: '/integrations',
+});
 
 export default function IntegrationsPage() {
   return (

@@ -1,20 +1,29 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { LedgerSection } from '../../../components/marketing/LandingSections';
 import { CapabilityGrid, DevBand, FinalCta } from '../../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Tools & Connectors | MCP Servers, OAuth Apps & Tool Permissions',
   description:
     'How tools work inside the AGI workspace: MCP servers, OAuth connectors, web search, and a permission model where every tool call is reviewed before it runs.',
-  alternates: { canonical: 'https://agiworkforce.com/features/tools' },
-};
+  path: '/features/tools',
+});
 
 export default function FeaturesToolsPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'Tools & Connectors', path: '/features/tools' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

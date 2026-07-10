@@ -1,4 +1,6 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -12,12 +14,12 @@ import {
   POSITIONING,
 } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Startups: AGI',
   description:
     'How startups use AGI: ship product faster with multi-provider AI, BYOK on Desktop and CLI, and a CLI that fits CI.',
-  alternates: { canonical: 'https://agiworkforce.com/use-cases/startups' },
-};
+  path: '/use-cases/startups',
+});
 
 const PLAN_ROWS = MARKETING_FEATURE_MATRIX.individual.map((plan) => ({
   k: plan.label,
@@ -27,6 +29,13 @@ const PLAN_ROWS = MARKETING_FEATURE_MATRIX.individual.map((plan) => ({
 export default function StartupsPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Use Cases', path: '/use-cases' },
+          { name: 'Startups', path: '/use-cases/startups' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { RouteMap } from '../../components/marketing/LandingSections';
@@ -9,12 +9,12 @@ import {
 } from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Solutions: AI workflows for teams, developers, and operators',
   description:
     'Explore AGI solution pages for business teams, developers, startups, consultants, sales teams, IT service providers, and enterprise buyers.',
-  alternates: { canonical: 'https://agiworkforce.com/solutions' },
-};
+  path: '/solutions',
+});
 
 export default function SolutionsPage() {
   return (

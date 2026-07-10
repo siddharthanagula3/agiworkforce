@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { CapabilityGrid, FinalCta } from '../../components/marketing/FlagshipSections';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Customers',
   description:
     'Case studies will appear here once we have written permission to share customer names and outcomes.',
-  alternates: { canonical: 'https://agiworkforce.com/customers' },
-};
+  path: '/customers',
+});
 
 export default function CustomersPage() {
   return (

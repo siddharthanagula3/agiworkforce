@@ -1,4 +1,6 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -6,12 +8,12 @@ import { ProductFrame } from '../../../components/marketing/ProductFrame';
 import { FeatureGrid } from '../../../components/marketing/LandingSections';
 import { DevBand, FinalCta } from '../../../components/marketing/FlagshipSections';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Agents | Delegated Work With Explicit Permissions',
   description:
     'AGI agents are delegated, tool-using sessions: named agents and parallel subagents in the CLI, scheduled runs and dispatch with AGI Work on Desktop. Explicit approvals, sandboxed execution, and visible routes.',
-  alternates: { canonical: 'https://agiworkforce.com/features/agents' },
-};
+  path: '/features/agents',
+});
 
 const AGENT_FEATURES = [
   {
@@ -50,6 +52,13 @@ const AGENT_FEATURES = [
 export default function FeaturesAgentsPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Features', path: '/features' },
+          { name: 'Agents', path: '/features/agents' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

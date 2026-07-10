@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -7,12 +7,12 @@ import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI in VS Code: the @agi chat participant',
   description:
     'Chat with @agi inside VS Code with workspace-scoped context, six slash commands, and diff review. Plus an explicit local bridge to AGI Desktop. Developer preview.',
-  alternates: { canonical: 'https://agiworkforce.com/vscode-extension' },
-};
+  path: '/vscode-extension',
+});
 
 const SLASH: { cmd: string; desc: string }[] = [
   { cmd: '/explain', desc: 'Explain the selection in plain language' },

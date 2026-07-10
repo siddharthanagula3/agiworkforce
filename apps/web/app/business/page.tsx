@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { LedgerSection, RouteMap } from '../../components/marketing/LandingSections';
@@ -9,12 +9,12 @@ import {
 } from '../../components/marketing/FlagshipSections';
 import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI for Business: Local, BYOK, and managed-cloud workspaces',
   description:
     'A business AI workspace with chat, projects, artifacts, research, code, apps, and governance. Local, BYOK, and public-alpha managed cloud modes.',
-  alternates: { canonical: 'https://agiworkforce.com/business' },
-};
+  path: '/business',
+});
 
 export default function BusinessPage() {
   return (

@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { runHealthChecks } from '../../lib/server/health-check';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Status',
   description:
     "A live health signal for AGI's hosted services. Checked when you load the page. Plus release notes and support channels.",
-  alternates: { canonical: 'https://agiworkforce.com/status' },
-};
+  path: '/status',
+});
 
 type HealthState = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 

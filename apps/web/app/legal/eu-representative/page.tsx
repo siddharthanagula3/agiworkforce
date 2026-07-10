@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'EU Representative',
   description: 'EU representative status for AGI mobile and web users before the public launch.',
-  alternates: { canonical: 'https://agiworkforce.com/legal/eu-representative' },
-};
+  path: '/legal/eu-representative',
+});
 
 export default function EuRepresentativePage() {
   return (

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -7,11 +7,11 @@ import { CapabilityGrid, FinalCta } from '../../components/marketing/FlagshipSec
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Local: Run AI on Your Device, Free Forever',
   description: `Run AGI fully local with Ollama and LM Studio on Desktop and CLI, plus on-device Local Mode on Mobile. No account required, works offline. ${LAUNCH.publicLabel}.`,
-  alternates: { canonical: 'https://agiworkforce.com/local' },
-};
+  path: '/local',
+});
 
 export default function LocalPage() {
   return (

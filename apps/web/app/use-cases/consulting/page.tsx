@@ -1,4 +1,6 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
+import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
@@ -7,16 +9,23 @@ import { FeatureGrid, LedgerSection } from '../../../components/marketing/Landin
 import { FinalCta } from '../../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Consulting firms: AGI',
   description:
     'How consulting practices use AGI: research, deliverables, data analysis, and reporting at scale across multiple AI providers.',
-  alternates: { canonical: 'https://agiworkforce.com/use-cases/consulting' },
-};
+  path: '/use-cases/consulting',
+});
 
 export default function ConsultingPage() {
   return (
     <div data-design="agi">
+      <JsonLd
+        data={breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'Use Cases', path: '/use-cases' },
+          { name: 'Consulting', path: '/use-cases/consulting' },
+        ])}
+      />
       <main className="agi-shell">
         <Header />
 

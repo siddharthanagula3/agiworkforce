@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { GalleryClient } from './GalleryClient';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'Gallery',
   description:
     'Browse artifacts you have built with AGI, or explore curated examples to spark your next idea.',
-  alternates: { canonical: 'https://agiworkforce.com/gallery' },
-};
+  path: '/gallery',
+});
 
 export default function GalleryPage() {
   return (

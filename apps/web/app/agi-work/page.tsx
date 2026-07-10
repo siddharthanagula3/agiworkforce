@@ -1,16 +1,16 @@
-import type { Metadata } from 'next';
+import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { FeatureGrid, LedgerSection } from '../../components/marketing/LandingSections';
 import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
-export const metadata: Metadata = {
+export const metadata = buildMetadata({
   title: 'AGI Work: Scheduled work and dispatch on your desktop',
   description:
     'AGI Work is the Desktop mode for scheduled routines, local file work, approved tools, and mobile-to-desktop dispatch. Explicit approvals on every sensitive action.',
-  alternates: { canonical: 'https://agiworkforce.com/agi-work' },
-};
+  path: '/agi-work',
+});
 
 export default function AgiWorkPage() {
   return (
