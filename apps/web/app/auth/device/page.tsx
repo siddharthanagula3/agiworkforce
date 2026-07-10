@@ -183,9 +183,10 @@ function DeviceForm() {
         }}
       >
         <strong style={{ color: 'var(--agi-ink)' }}>Using AGI Cloud models?</strong> Approving here
-        signs your device in. Running models on AGI Cloud requires a Pro or Max plan.{' '}
+        signs your device in. AGI Cloud is open in public alpha with a small free Auto Economy cap;
+        paid plans add higher hosted capacity.{' '}
         <Link href="/pricing" style={{ color: 'var(--agi-ink)', fontWeight: 600 }}>
-          Upgrade to Pro or Max &rarr;
+          Compare plans &rarr;
         </Link>
       </div>
       <p style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>

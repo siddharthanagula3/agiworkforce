@@ -59,7 +59,7 @@ export default function IntegrationsPage() {
             {
               meta: 'Tools',
               title: 'MCP plugins',
-              body: 'Mount Model Context Protocol servers and scope their access. stdio is the shipped transport; SSE and streamable HTTP are planned.',
+              body: 'Mount Model Context Protocol servers and scope their access. stdio, SSE, and streamable HTTP transports are all supported.',
               href: '/features/plugins',
             },
             {
@@ -91,7 +91,7 @@ export default function IntegrationsPage() {
             },
             {
               k: 'MCP transports',
-              v: 'stdio shipped first. SSE and streamable HTTP are planned for the release path.',
+              v: 'stdio, SSE, and streamable HTTP are all supported.',
             },
             {
               k: 'Native messaging',

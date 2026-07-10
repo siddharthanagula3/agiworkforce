@@ -44,15 +44,15 @@ export default function ApiDocsPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">Reference</p>
           <p className="agi-page-lede" style={{ marginTop: 0, marginBottom: 24 }}>
-            The public OpenAPI bundle, Postman collection, and SDK examples open with the July 12
-            release. For now, use the quick-start route and BYOK setup guide.
+            The public OpenAPI bundle, Postman collection, and SDK examples publish at public launch.
+            For now, use the quick-start route and BYOK setup guide.
           </p>
           <div className="agi-cta-row">
             <Link href="/docs/byok-env" className="agi-cta-primary">
               BYOK setup
             </Link>
             <Link href="/waitlist" className="agi-cta-ghost">
-              Join API waitlist →
+              Team &amp; Enterprise early access →
             </Link>
           </div>
         </section>
