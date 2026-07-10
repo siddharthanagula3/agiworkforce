@@ -29,6 +29,12 @@ import {
   type SidebarSession,
   type SidebarProject,
   type SidebarNavItem,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@agiworkforce/ui';
 import { useChatProjectStore, type Project as UnifiedProject } from '@agiworkforce/unified-chat';
 import { useConversations } from '@/lib/hooks/useConversations';
@@ -38,14 +44,6 @@ import { useBillingStore } from '@/stores/unified/auth';
 import { useProjectStore } from '@/features/projects/stores/project-store';
 import { SidebarWordmark } from '@/components/agi/SidebarWordmark';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu';
 
 interface WebAppShellProps {
   children: React.ReactNode;
