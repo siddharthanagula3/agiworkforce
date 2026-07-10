@@ -51,8 +51,28 @@ describe('mapGeneratedFilesPayload', () => {
         byteCount: 2048,
         kind: 'pdf',
         checksumSha256: 'a'.repeat(64),
+        // Contract defaults for a pre-classification wire payload.
+        surface: 'file',
+        previewable: false,
       },
     ]);
+  });
+
+  it('passes the server-derived surface/previewable classification through', () => {
+    const entries = mapGeneratedFilesPayload({
+      files: [
+        {
+          ...wireFile,
+          file_name: 'page.html',
+          mime_type: 'text/html',
+          kind: 'html',
+          surface: 'artifact',
+          previewable: true,
+        },
+      ],
+    });
+    expect(entries[0]?.surface).toBe('artifact');
+    expect(entries[0]?.previewable).toBe(true);
   });
 
   it('passes absolute uris through unchanged and drops malformed entries', () => {

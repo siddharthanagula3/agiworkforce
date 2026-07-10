@@ -977,6 +977,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 kind: typeof f['kind'] === 'string' ? f['kind'] : 'other',
                 checksumSha256:
                   typeof f['checksum_sha256'] === 'string' ? f['checksum_sha256'] : undefined,
+                // Server-derived classification (file-creation parity Wave A).
+                // Pass-through only; absent on pre-classification payloads.
+                ...(f['surface'] === 'artifact' || f['surface'] === 'file'
+                  ? { surface: f['surface'] as 'artifact' | 'file' }
+                  : {}),
+                ...(typeof f['previewable'] === 'boolean' ? { previewable: f['previewable'] } : {}),
               }));
             if (incoming.length > 0) {
               const merged = [...(currentGeneratedFiles ?? [])];
