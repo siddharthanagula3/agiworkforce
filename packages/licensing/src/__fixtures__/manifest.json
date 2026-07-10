@@ -1,0 +1,100 @@
+{
+  "description": "Cross-language license verification corpus. Replay: verifyLicense(readFile(file), rootPublicKeys, nowMs) must equal expect.",
+  "rootPublicKeys": [
+    "2P6Z6i6TS/t0aPSeVCmdlQkAnlrCx3QALfNbclzMzLw=",
+    "oE9krCB2tOSlrLj1w89fPoNok3Jl/D89lW9XyeeWa2k="
+  ],
+  "referenceNowMs": 1782864000000,
+  "cases": [
+    {
+      "file": "valid.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": true,
+        "graceActive": false
+      },
+      "note": "Honestly signed by root key 1; now is inside [issuedAt, expiresAt]."
+    },
+    {
+      "file": "valid-rotated-key.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": true,
+        "graceActive": false
+      },
+      "note": "Signed by root key 2 (rotation). Accepted because root key 2 is in rootPublicKeys."
+    },
+    {
+      "file": "wrong-key.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "bad_signature"
+      },
+      "note": "Signed by an unauthorized key; no root key verifies it."
+    },
+    {
+      "file": "tampered.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "bad_signature"
+      },
+      "note": "Payload base64 byte-flipped after signing; signature no longer matches."
+    },
+    {
+      "file": "expired-past-grace.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "expired"
+      },
+      "note": "now is past expiresAt + graceDays. Distinct \"expired\" verdict → caller degrades to free tier."
+    },
+    {
+      "file": "expired-in-grace.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": true,
+        "graceActive": true
+      },
+      "note": "now is past expiresAt but within graceDays. Still valid; graceActive=true (renewal warning)."
+    },
+    {
+      "file": "not-yet-valid.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "not_yet_valid"
+      },
+      "note": "issuedAt is in the future relative to now."
+    },
+    {
+      "file": "malformed-json.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "malformed"
+      },
+      "note": "Raw bytes are not a JSON container."
+    },
+    {
+      "file": "malformed-schema.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "malformed"
+      },
+      "note": "Signature is valid, but claims omit a required field → schema rejects (proves sig-before-schema ordering yields a structured verdict, never a throw)."
+    },
+    {
+      "file": "wrong-format.agilicense",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "malformed"
+      },
+      "note": "Container format is \"agipolicy-v1\", not \"agilicense-v1\"."
+    }
+  ]
+}
