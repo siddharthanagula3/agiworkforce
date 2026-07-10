@@ -71,6 +71,8 @@ import { ComparisonResponse } from './ComparisonResponse';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
+import { ResearchActivity } from '../research/ResearchActivity';
+import type { MessageResearchState } from '@/stores/chatStore';
 import { dedupeResearchSources } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
@@ -218,6 +220,8 @@ interface Message {
     reaction?: 'thumbsUp' | 'thumbsDown' | null;
     /** Paywall feature that triggered a capability gate message. */
     paywall?: { feature: string; requiredTier: string };
+    /** Deep Research run state (activity header + persistence). */
+    research?: MessageResearchState;
   };
 }
 
@@ -546,6 +550,14 @@ const MessageBubbleComponent = function MessageBubble({
                 </span>
               )}
             </div>
+          )}
+
+          {/* Deep Research activity header (phase, elapsed time, counts) */}
+          {!isUser && message.metadata?.research && (
+            <ResearchActivity
+              research={message.metadata.research}
+              isStreaming={message.isStreaming ?? false}
+            />
           )}
 
           {/* Interleaved reasoning + tool flow */}

@@ -18,6 +18,27 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 
+/**
+ * Deep Research run state persisted on the assistant message. Populated from
+ * `x_research_status` SSE events while streaming and saved with the message so
+ * a research report survives reload with its activity summary intact.
+ */
+export interface MessageResearchState {
+  phase: 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error' | 'interrupted';
+  /** Human-readable phase label (e.g. "Searching the web (round 2)"). */
+  label?: string;
+  iteration?: number;
+  maxIterations?: number;
+  /** Total web searches observed across the run. */
+  searches?: number;
+  /** Deduped source count. */
+  sources?: number;
+  elapsedMs?: number;
+  startedAt?: string;
+  /** Honest error summary when the run failed mid-way. */
+  error?: string;
+}
+
 // Types
 /**
  * A single reasoning segment within one assistant turn. Multiple segments occur
@@ -71,6 +92,8 @@ export interface MessageMetadata {
   isExecutingCode?: boolean;
   /** Tool activity timeline rendered below assistant messages. */
   tools?: MessageToolEntry[];
+  /** Deep Research run state (activity header + persistence). */
+  research?: MessageResearchState;
   /** Code execution result from server-managed code_execution_20260120 tool */
   codeExecutionResult?: {
     stdout: string;
@@ -251,6 +274,8 @@ interface ChatState {
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean) => void;
   setToolTimeline: (id: string, tools: MessageToolEntry[]) => void;
+  /** Merge Deep Research run state into the message metadata. */
+  setResearchState: (id: string, research: MessageResearchState) => void;
   /** Update a single tool entry by toolCallId within the message's tool timeline. */
   updateToolEntry: (
     messageId: string,
@@ -457,6 +482,17 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/setToolTimeline',
+          ),
+
+        setResearchState: (id, research) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id ? { ...m, metadata: { ...m.metadata, research } } : m,
+              ),
+            }),
+            undefined,
+            'chat/setResearchState',
           ),
 
         updateToolEntry: (messageId, toolCallId, updates) =>
