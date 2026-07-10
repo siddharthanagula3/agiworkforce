@@ -136,6 +136,120 @@ export async function listMediaAssets(
 }
 
 /**
+ * One row of the Library listing (`GET /api/library`). Unlike `MediaAsset`
+ * (the older gallery shape) it carries `metadata` so the route can surface
+ * the persisted filename / surface / previewable / origin classification
+ * (Wave A, `generated-file-persist.ts`) with documented legacy fallbacks.
+ */
+export interface LibraryAssetRow {
+  id: string;
+  kind: string;
+  mimeType: string;
+  byteSize: number | null;
+  prompt: string | null;
+  provider: string | null;
+  model: string | null;
+  sourceSurface: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ListLibraryAssetsOptions {
+  kind?: MediaKind;
+  /** Filter on persisted classification; missing metadata folds to 'file'. */
+  surface?: 'artifact' | 'file';
+  /** Coarse provenance bucket derived from metadata.origin. */
+  origin?: 'generated' | 'uploaded';
+  /** Filename/prompt substring (ILIKE, wildcards escaped). */
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * `metadata.origin` values that mark a row as user-uploaded. No writer emits
+ * them yet (every current pipeline is generation), but the clause keeps the
+ * uploaded/generated filter honest when upload cataloging ships.
+ */
+const UPLOAD_ORIGINS = ['upload', 'uploaded'] as const;
+
+/** Escape `%`, `_` and `\` so user input matches literally under ILIKE. */
+function escapeIlike(term: string): string {
+  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
+  return {
+    id: String(row['id']),
+    kind: String(row['kind']),
+    mimeType: String(row['mime_type']),
+    byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+    prompt: (row['prompt'] as string | null) ?? null,
+    provider: (row['provider'] as string | null) ?? null,
+    model: (row['model'] as string | null) ?? null,
+    sourceSurface: (row['source_surface'] as string | null) ?? null,
+    metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+    createdAt: new Date(row['created_at'] as string).toISOString(),
+  };
+}
+
+/**
+ * Library listing over `media_assets` — owner-scoped, filterable, offset
+ * paginated (caller probes with limit+1 for has_more). LEGACY rows (before
+ * Wave A) have no `metadata.surface`; the surface filter treats them as
+ * 'file' via coalesce, mirroring the client contract's `.catch('file')`.
+ * Empty array when the table has not been migrated yet.
+ */
+export async function listLibraryAssets(
+  userId: string,
+  opts: ListLibraryAssetsOptions = {},
+): Promise<LibraryAssetRow[]> {
+  const db = getNeonDb();
+  const limit = Math.min(Math.max(opts.limit ?? 24, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const params: unknown[] = [userId];
+  const clauses: string[] = [];
+
+  if (opts.kind) {
+    params.push(opts.kind);
+    clauses.push(`and kind = $${params.length}`);
+  }
+  if (opts.surface) {
+    params.push(opts.surface);
+    clauses.push(`and coalesce(metadata->>'surface', 'file') = $${params.length}`);
+  }
+  if (opts.origin === 'uploaded') {
+    clauses.push(`and metadata->>'origin' in (${UPLOAD_ORIGINS.map((o) => `'${o}'`).join(', ')})`);
+  } else if (opts.origin === 'generated') {
+    clauses.push(
+      `and coalesce(metadata->>'origin', '') not in (${UPLOAD_ORIGINS.map((o) => `'${o}'`).join(', ')})`,
+    );
+  }
+  if (opts.search) {
+    params.push(`%${escapeIlike(opts.search)}%`);
+    clauses.push(
+      `and (coalesce(metadata->>'filename', '') ilike $${params.length} or coalesce(prompt, '') ilike $${params.length})`,
+    );
+  }
+
+  params.push(limit, offset);
+  try {
+    const rows = await db.query<Record<string, unknown>>(
+      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at
+         from public.media_assets
+        where user_id = $1 and deleted_at is null ${clauses.join(' ')}
+        order by created_at desc, id desc
+        limit $${params.length - 1} offset $${params.length}`,
+      params,
+    );
+    return rows.map(mapLibraryRow);
+  } catch (error) {
+    if (isSchemaNotReady(error)) return [];
+    throw error;
+  }
+}
+
+/**
  * One asset row with ownership + storage pointer, for the authenticated
  * byte-serving route (`/api/files/[id]`). Unlike the Library list shape this
  * includes `userId` (authorization check), `storagePathname` (R2 key), and
