@@ -129,7 +129,9 @@ export function Composer({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      // Plain Enter sends, Shift+Enter newline. Guard IME composition (e.g. CJK)
+      // so Enter committing a candidate never submits the message mid-compose.
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSend();
       }
