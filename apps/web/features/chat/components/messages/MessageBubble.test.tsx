@@ -416,4 +416,31 @@ describe('MessageBubble', () => {
       expect((window as unknown as Record<string, unknown>)['__TAURI__']).toBeUndefined();
     });
   });
+
+  // Regression: a non-renderable fenced code block (python/csv/json/generic) must
+  // render EXACTLY ONCE. It used to render twice — once via <MarkdownContent> and
+  // again via an inline <ArtifactBlock content={cleanedContent}> that re-parsed the
+  // same body — producing the visible stacked duplicate ("PYTHON" skeleton over the
+  // final "python" block). ArtifactBlock was removed from the message body; assert
+  // the code text appears only once.
+  describe('code block de-duplication', () => {
+    it('renders a python code block exactly once (no ArtifactBlock duplicate)', () => {
+      const sentinel = 'UNIQUE_PY_SENTINEL_42';
+      const msg = makeMessage({
+        id: 'msg-code',
+        role: 'assistant',
+        content: `Here is code:\n\n\`\`\`python\n${sentinel} = 1\nprint(${sentinel})\n\`\`\`\n`,
+      });
+      render(<MessageBubble message={msg} />);
+
+      // python is not a renderable artifact, so cleanedContent keeps the fence and
+      // MarkdownContent (mocked) renders it once. Count total occurrences in the DOM.
+      const occurrences = (document.body.textContent?.split(sentinel).length ?? 1) - 1;
+      // The sentinel appears twice inside the single rendered content (assignment +
+      // print), but it must NOT be duplicated by a second renderer: with the mocked
+      // MarkdownContent rendering content verbatim once, 2 occurrences === one render.
+      expect(occurrences).toBe(2);
+      expect(screen.getAllByTestId('markdown-content')).toHaveLength(1);
+    });
+  });
 });
