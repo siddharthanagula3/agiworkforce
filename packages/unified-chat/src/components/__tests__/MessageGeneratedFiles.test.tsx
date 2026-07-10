@@ -10,7 +10,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { HostBridgeContext, type ChatHostBridge } from '../../lib/hostBridge';
-import { MessageGeneratedFiles, generatedFileFromEntry } from '../MessageGeneratedFiles';
+import {
+  MessageGeneratedFiles,
+  generatedFileFromEntry,
+  hasRunningExecutionTool,
+  type MessageGeneratedFilesMessage,
+} from '../MessageGeneratedFiles';
 import type { GeneratedFileEntry } from '../../lib/types';
 
 const entry: GeneratedFileEntry = {
@@ -32,12 +37,26 @@ function bridgeWith(fetchCloudFile: ChatHostBridge['fetchCloudFile']): ChatHostB
   };
 }
 
-function renderWithBridge(bridge: ChatHostBridge | null) {
+function renderWithBridge(
+  bridge: ChatHostBridge | null,
+  msg: MessageGeneratedFilesMessage = message,
+) {
   return render(
     <HostBridgeContext.Provider value={bridge}>
-      <MessageGeneratedFiles message={message} />
+      <MessageGeneratedFiles message={msg} />
     </HostBridgeContext.Provider>,
   );
+}
+
+/** Deferred promise helper so tests can hold a download in flight. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (err: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -127,5 +146,193 @@ describe('MessageGeneratedFiles', () => {
 
     const error = await screen.findByTestId('generated-file-download-error');
     expect(error.textContent).toContain('HTTP 401');
+  });
+});
+
+describe('pending execution state (isRunning wiring)', () => {
+  const runningMessage: MessageGeneratedFilesMessage = {
+    generatedFiles: [],
+    isStreaming: true,
+    toolCalls: [{ id: 'tc-1', name: 'execute_code', args: {}, status: 'running' }],
+  };
+
+  it('shows an honest "Running code…" strip while execute_code runs and no files exist', () => {
+    renderWithBridge(null, runningMessage);
+    const pending = screen.getByTestId('generated-files-pending');
+    expect(pending.textContent).toContain('Running code…');
+    // Honest: no file card, no Download action — nothing claims a file exists.
+    expect(screen.queryByTestId('generated-file-card')).toBeNull();
+    expect(screen.queryByRole('button', { name: /download/i })).toBeNull();
+  });
+
+  it('labels write_file activity honestly', () => {
+    renderWithBridge(null, {
+      ...runningMessage,
+      toolCalls: [{ id: 'tc-2', name: 'write_file', args: {}, status: 'running' }],
+    });
+    expect(screen.getByTestId('generated-files-pending').textContent).toContain('Writing file…');
+  });
+
+  it('renders nothing once the turn ends without files (isStreaming false)', () => {
+    const { container } = renderWithBridge(null, { ...runningMessage, isStreaming: false });
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('renders nothing for non-execution running tools (e.g. web_search)', () => {
+    const { container } = renderWithBridge(null, {
+      ...runningMessage,
+      toolCalls: [{ id: 'tc-3', name: 'web_search', args: {}, status: 'running' }],
+    });
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('replaces the pending strip with real cards once files land, even mid-run', () => {
+    renderWithBridge(null, { ...runningMessage, generatedFiles: [entry] });
+    expect(screen.queryByTestId('generated-files-pending')).toBeNull();
+    expect(screen.getByTestId('generated-file-card')).toBeDefined();
+  });
+
+  it('hasRunningExecutionTool tracks streaming + execution tool status', () => {
+    expect(hasRunningExecutionTool(runningMessage)).toBe(true);
+    expect(hasRunningExecutionTool({ ...runningMessage, isStreaming: false })).toBe(false);
+    expect(
+      hasRunningExecutionTool({
+        ...runningMessage,
+        toolCalls: [{ id: 'tc-4', name: 'execute_code', args: {}, status: 'completed' }],
+      }),
+    ).toBe(false);
+    expect(hasRunningExecutionTool({ generatedFiles: [] })).toBe(false);
+  });
+});
+
+describe('per-file retry', () => {
+  it('retries the same download path from the error line and clears the error on success', async () => {
+    const fetchCloudFile = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('HTTP 500'))
+      .mockResolvedValueOnce(new Blob(['%PDF-1.7']));
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    renderWithBridge(bridgeWith(fetchCloudFile));
+    fireEvent.click(screen.getByRole('button', { name: /download generated file/i }));
+    const retry = await screen.findByRole('button', { name: /retry download of report\.pdf/i });
+
+    fireEvent.click(retry);
+    await waitFor(() => expect(fetchCloudFile).toHaveBeenCalledTimes(2));
+    expect(fetchCloudFile).toHaveBeenNthCalledWith(2, entry.uri);
+    await waitFor(() => expect(screen.queryByTestId('generated-file-download-error')).toBeNull());
+  });
+
+  it('disables Retry while the retried download is in flight', async () => {
+    const held = deferred<Blob>();
+    const fetchCloudFile = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('HTTP 500'))
+      .mockReturnValueOnce(held.promise);
+
+    renderWithBridge(bridgeWith(fetchCloudFile));
+    fireEvent.click(screen.getByRole('button', { name: /download generated file/i }));
+    const retry = await screen.findByRole('button', { name: /retry download of report\.pdf/i });
+
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole('button', {
+            name: /retry download of report\.pdf/i,
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true),
+    );
+    held.reject(new Error('HTTP 500'));
+    // After settling, the retry affordance re-enables for another attempt.
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole('button', {
+            name: /retry download of report\.pdf/i,
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+  });
+});
+
+describe('download all', () => {
+  const secondEntry: GeneratedFileEntry = {
+    id: 'gf-2',
+    fileName: 'data.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    uri: 'https://cloud.example/api/files/gf-2',
+    byteCount: 4096,
+    kind: 'xlsx',
+  };
+  const multiFileMessage: MessageGeneratedFilesMessage = {
+    generatedFiles: [entry, secondEntry],
+    createdAt: '2026-07-10T00:00:00.000Z',
+  };
+
+  it('is hidden for single-file turns', () => {
+    renderWithBridge(null);
+    expect(screen.queryByRole('button', { name: /download all generated files/i })).toBeNull();
+  });
+
+  it('sequentially downloads every file through the same per-file path', async () => {
+    const fetchCloudFile = vi.fn().mockResolvedValue(new Blob(['bytes']));
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    renderWithBridge(bridgeWith(fetchCloudFile), multiFileMessage);
+    fireEvent.click(screen.getByRole('button', { name: /download all generated files/i }));
+
+    await waitFor(() => expect(fetchCloudFile).toHaveBeenCalledTimes(2));
+    expect(fetchCloudFile).toHaveBeenNthCalledWith(1, entry.uri);
+    expect(fetchCloudFile).toHaveBeenNthCalledWith(2, secondEntry.uri);
+  });
+
+  it('disables the button while the bulk download runs', async () => {
+    const held = deferred<Blob>();
+    const fetchCloudFile = vi.fn().mockReturnValue(held.promise);
+
+    renderWithBridge(bridgeWith(fetchCloudFile), multiFileMessage);
+    const button = screen.getByRole('button', {
+      name: /download all generated files/i,
+    }) as HTMLButtonElement;
+    fireEvent.click(button);
+
+    await waitFor(() => expect(button.disabled).toBe(true));
+    held.reject(new Error('HTTP 500'));
+    await waitFor(() => expect(button.disabled).toBe(false));
+  });
+
+  it('surfaces per-file failures on their own error lines', async () => {
+    const fetchCloudFile = vi.fn((uri: string) =>
+      uri === entry.uri
+        ? Promise.reject(new Error('HTTP 500'))
+        : Promise.resolve(new Blob(['bytes'])),
+    );
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:mock'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    renderWithBridge(
+      bridgeWith(fetchCloudFile as ChatHostBridge['fetchCloudFile']),
+      multiFileMessage,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /download all generated files/i }));
+
+    await waitFor(() => expect(fetchCloudFile).toHaveBeenCalledTimes(2));
+    const errors = await screen.findAllByTestId('generated-file-download-error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.textContent).toContain('HTTP 500');
   });
 });
