@@ -115,6 +115,10 @@ vi.mock('@/constants/llm', () => ({
   },
   // isModelAllowedForTier: both models pass on max tier
   isModelAllowedForTier: (_id: string, _tier: string) => true,
+  // Reasoning-effort-capability wave: ComposerFooter now reads the per-model
+  // reasoning block to drive the effort flyout. These env-gating fixtures are
+  // non-reasoning, so the flyout stays hidden (irrelevant to env-lock assertions).
+  getModelReasoning: (_id: string) => ({ capable: false, control: 'none' }),
   FREE_TRIAL_MODELS: [],
   normalizeModelId: (id: string) => id,
 }));
