@@ -3,6 +3,7 @@
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@agiworkforce/ui';
+import type { SharedArtifact } from '@agiworkforce/types';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore } from '@/stores/chatStore';
@@ -89,11 +90,20 @@ function EmptyState() {
 // Preview/Code tabs, versioning, sharing, and download functionality.
 // ============================================================================
 
-function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
+function ArtifactViewer({
+  artifact,
+  versionHistory,
+  onClose,
+}: {
+  artifact: Artifact;
+  versionHistory: SharedArtifact[];
+  onClose: () => void;
+}) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <ArtifactPreview
         artifact={artifact}
+        versionHistory={versionHistory}
         className="mt-0 rounded-none border-0"
         variant="panel"
         onClose={onClose}
@@ -107,8 +117,14 @@ function ArtifactViewer({ artifact, onClose }: { artifact: Artifact; onClose: ()
 // ============================================================================
 
 export function ArtifactsPanel() {
-  const { getConversationArtifacts, selectedArtifactId, panelOpen, selectArtifact, setPanelOpen } =
-    useArtifactsStore();
+  const {
+    getConversationArtifacts,
+    getArtifactVersions,
+    selectedArtifactId,
+    panelOpen,
+    selectArtifact,
+    setPanelOpen,
+  } = useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const streaming = useStreamingArtifactStore((s) => s.streaming);
 
@@ -243,7 +259,11 @@ export function ArtifactsPanel() {
               {showStreamingView && streamingArtifact ? (
                 <StreamingArtifactView artifact={streamingArtifact} />
               ) : selectedArtifact ? (
-                <ArtifactViewer artifact={selectedArtifact} onClose={() => setPanelOpen(false)} />
+                <ArtifactViewer
+                  artifact={selectedArtifact}
+                  versionHistory={getArtifactVersions(selectedArtifact.id)}
+                  onClose={() => setPanelOpen(false)}
+                />
               ) : (
                 <EmptyState />
               )}

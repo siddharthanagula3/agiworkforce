@@ -395,6 +395,13 @@ type ArtifactsStoreReturn = {
   ) => void;
   getMessageArtifacts: (messageId: string) => Artifact[];
   getConversationArtifacts: (conversationId: string) => Artifact[];
+  /**
+   * Real edit history for an artifact, sourced from the shared store's
+   * content-keyed auto-versioning (`versionsById`). Each content-changing
+   * re-upsert of the same artifact id appends a version. Returns [] for
+   * single-version artifacts. Ordered oldest → newest.
+   */
+  getArtifactVersions: (id: string) => SharedArtifact[];
   addVersion: (artifactId: string, version: ArtifactVersion) => void;
   setCurrentVersion: (artifactId: string, versionIndex: number) => void;
   shareArtifact: (artifactId: string) => Promise<string>;
@@ -569,6 +576,10 @@ const actions = {
       .getState()
       .artifacts.filter((a) => a.conversationId === conversationId)
       .map(toArtifact);
+  },
+
+  getArtifactVersions(id: string): SharedArtifact[] {
+    return _sharedArtifactStore.getState().getArtifactVersions(id);
   },
 
   clearArtifactsForMessage(messageId: string): void {

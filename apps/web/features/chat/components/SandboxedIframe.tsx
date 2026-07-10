@@ -45,6 +45,12 @@ export interface SandboxedIframeProps {
   style?: React.CSSProperties;
   /** Bump this number to force a full iframe re-mount (clears state). */
   refreshKey?: number;
+  /**
+   * Called when the cross-origin sandbox reports a `render-error` (e.g. the
+   * artifact code threw while rendering). Only fires on the cross-origin
+   * sandbox path — the same-origin fallback cannot observe in-frame errors.
+   */
+  onRenderError?: (error: string) => void;
 }
 
 export function SandboxedIframe({
@@ -54,6 +60,7 @@ export function SandboxedIframe({
   className,
   style,
   refreshKey = 0,
+  onRenderError,
 }: SandboxedIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const sandboxOrigin = getSandboxOrigin();
@@ -102,12 +109,14 @@ export function SandboxedIframe({
           // ignore · payload re-posts on the onLoad path below
         }
       } else if (data.type === 'render-error') {
-        setRenderError(data.error ?? 'unknown render error');
+        const message = data.error ?? 'unknown render error';
+        setRenderError(message);
+        onRenderError?.(message);
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [sandboxOrigin, payload]);
+  }, [sandboxOrigin, payload, onRenderError]);
 
   // Also post on iframe load as a defensive backup against the case where
   // `sandbox-ready` was sent before our listener attached.
