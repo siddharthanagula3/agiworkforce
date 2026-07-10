@@ -12,6 +12,7 @@ import {
   providerRoutesToE2B,
 } from '@/lib/e2b/execution-tools';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
+import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -306,11 +307,16 @@ export const RESEARCH_SYSTEM_PROMPT =
   ' Do not pad the report with filler sentences; every paragraph must add new information.';
 
 /**
- * Mutates chatRequest in place: forces web_search on and prepends the research
- * system prompt. Should only be called when the model supports search (caller's guard).
+ * Mutates chatRequest in place: forces web_search AND web_fetch on and prepends
+ * the research system prompt. Should only be called when the model supports
+ * search (caller's guard). web_fetch lets research gathering rounds read full
+ * pages: Anthropic gets its native web_fetch server tool; other tool-calling
+ * providers get the platform url_fetch function tool (see the tool injection
+ * block below).
  */
 export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
   chatRequest.web_search = true;
+  chatRequest.web_fetch = true;
   const firstMessage = chatRequest.messages[0];
   if (firstMessage?.role === 'system') {
     firstMessage.content = RESEARCH_SYSTEM_PROMPT + '\n\n' + firstMessage.content;
@@ -1209,6 +1215,25 @@ export async function processRequest(
       ...(resolvedTools ?? []),
       { type: 'web_fetch_20260209', name: 'web_fetch', allowed_callers: ['direct'] },
     ];
+  }
+
+  // Platform url_fetch tool: URL-fetch parity for every provider WITHOUT a native
+  // web-fetch server tool (Anthropic keeps its native tool above). Executed by the
+  // agentic tool loop (SSRF-guarded, read-only — auto-approved like E2B tools).
+  //
+  // Offer ⊆ run constraint (same as E2B): only offered on streaming non-free-trial
+  // requests because only that path enters the tool loop in route.ts; offering it
+  // elsewhere would inject a tool_call nothing executes. Gated on the resolved
+  // model's `tools` capability (unknown models default to allowed so a missing
+  // catalog entry never silently drops the tool).
+  if (
+    chatRequest.web_fetch &&
+    providerLower !== 'anthropic' &&
+    chatRequest.stream &&
+    !freeTrial &&
+    (resolvedModelCaps?.tools ?? true)
+  ) {
+    resolvedTools = [...(resolvedTools ?? []), urlFetchToolDef()];
   }
 
   if (chatRequest.code_execution && (resolvedModelCaps?.codeExecution ?? true)) {

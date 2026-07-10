@@ -14,6 +14,7 @@ import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
 import { runResearchLoop } from './lib/research-loop';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
+import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
@@ -179,13 +180,23 @@ async function handleChatCompletions(request: NextRequest) {
         isExecutionTool((t as { function?: { name?: string } }).function?.name ?? ''),
       );
 
-    if (hasMcpTools || hasE2BTools) {
+    // Platform url_fetch tool offered by request-processor (web_fetch on a
+    // non-Anthropic provider). Same detection seam as E2B: function-tool shape only.
+    const hasUrlFetchTool =
+      !processed.freeTrial &&
+      (processed.llmRequest.tools ?? []).some((t) =>
+        isUrlFetchTool((t as { function?: { name?: string } }).function?.name ?? ''),
+      );
+
+    if (hasMcpTools || hasE2BTools || hasUrlFetchTool) {
       // Approval mode:
-      //   - E2B-only: 'auto' — E2B tools run in an isolated sandbox (no real fs/secrets),
-      //     and there is no /approve resume endpoint, so auto-run is both safe and
-      //     necessary. The loop uses runMcpTool → routeExecutionTool, fail-closed (explicit
-      //     error to model if E2B_API_KEY is absent or sandbox creation fails).
-      //   - MCP tools present (with or without E2B): 'manual' — keep the existing
+      //   - E2B-only and/or url_fetch-only: 'auto' — E2B tools run in an isolated sandbox
+      //     (no real fs/secrets) and url_fetch is read-only + SSRF-guarded, so auto-run is
+      //     both safe and necessary (no user prompt needed for a page read). The loop uses
+      //     runMcpTool → routeExecutionTool / executeUrlFetch, fail-closed (explicit error
+      //     to model if E2B_API_KEY is absent, sandbox creation fails, or a fetch is
+      //     blocked/unreachable).
+      //   - MCP tools present (with or without E2B/url_fetch): 'manual' — keep the existing
       //     fail-closed approval gate. If both MCP + E2B tools are present, MCP's manual
       //     gate takes precedence; E2B tool calls in that mix stall on approval (acceptable;
       //     mixed MCP+E2B is an edge case and the operator can enable the resume endpoint).
