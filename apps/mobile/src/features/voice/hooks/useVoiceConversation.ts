@@ -112,9 +112,15 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     let aiResponse: string | null | undefined;
     try {
       aiResponse = await optionsRef.current.sendMessage(trimmed);
-    } catch {
+    } catch (err) {
       if (activeRef.current) {
-        setTranscriptPreview('Voice message could not be sent. Try again.');
+        // Prefer the sender's real, user-readable reason (sign-in gate,
+        // mode mismatch, …) over the generic retry copy.
+        const message =
+          err instanceof Error && err.message.trim()
+            ? err.message
+            : 'Voice message could not be sent. Try again.';
+        setTranscriptPreview(message);
         setPhase('idle');
       }
       return;

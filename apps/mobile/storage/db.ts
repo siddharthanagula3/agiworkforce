@@ -95,10 +95,18 @@ async function openEncryptedDb(): Promise<DbHandle> {
   const sqliteDb = await SQLite.openDatabaseAsync(DB_NAME, { useNewConnection: false });
   const db = asDbHandle(sqliteDb);
 
-  await db.execAsync(`PRAGMA key = "x'${key}'";`);
-  await db.execAsync('PRAGMA journal_mode = WAL;');
-  await db.execAsync('PRAGMA foreign_keys = ON;');
-  await runMigrations(db);
+  try {
+    await db.execAsync(`PRAGMA key = "x'${key}'";`);
+    await db.execAsync('PRAGMA journal_mode = WAL;');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+    await runMigrations(db);
+  } catch (err) {
+    // Close the half-initialized native handle so a later getDb() retry
+    // starts from a clean connection instead of one with partial PRAGMA
+    // state (expo-sqlite reuses connections for the same DB name).
+    await db.closeAsync?.().catch(() => {});
+    throw err;
+  }
 
   dbInstance = db;
   return db;

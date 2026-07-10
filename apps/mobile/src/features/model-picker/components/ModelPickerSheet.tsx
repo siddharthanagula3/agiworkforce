@@ -27,10 +27,15 @@ import {
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 
-// Effort levels exposed on Mobile. The server accepts the full Effort axis
-// (EFFORT_VALUES in apps/web .../chat/completions/lib/request-processor.ts),
-// but the compact picker row keeps to the everyday trio.
-const EFFORT_OPTIONS: readonly Effort[] = ['low', 'medium', 'high'];
+// Full UI effort axis, filtered per provider capability: OpenAI has no 'max'
+// effort (OPENAI_REASONING_EFFORT in @agiworkforce/types); everyone else
+// exposes the complete spectrum.
+const FULL_EFFORT_OPTIONS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+function effortOptionsForProvider(providerId: string | undefined): readonly Effort[] {
+  if (providerId === 'openai') return ['low', 'medium', 'high', 'xhigh'];
+  return FULL_EFFORT_OPTIONS;
+}
 
 function groupBySurface(
   models: ModelDef[],
@@ -41,7 +46,24 @@ function groupBySurface(
 
   if (local.length > 0)
     sections.push({ sectionId: 'local', sectionLabel: 'On device', models: local });
-  if (cloud.length > 0) sections.push({ sectionId: 'cloud', sectionLabel: 'Cloud', models: cloud });
+
+  // Cloud models group by provider (OpenAI, Anthropic, Google, …) with
+  // available rows sorted before locked upsell rows within each provider.
+  const byProvider = new Map<string, { label: string; models: ModelDef[] }>();
+  for (const model of cloud) {
+    const entry = byProvider.get(model.provider) ?? { label: model.providerLabel, models: [] };
+    entry.models.push(model);
+    byProvider.set(model.provider, entry);
+  }
+  for (const [providerId, entry] of byProvider) {
+    const available = entry.models.filter((m) => m.availability !== 'locked');
+    const locked = entry.models.filter((m) => m.availability === 'locked');
+    sections.push({
+      sectionId: `cloud-${providerId}`,
+      sectionLabel: entry.label,
+      models: [...available, ...locked],
+    });
+  }
   return sections;
 }
 
@@ -166,6 +188,22 @@ export function ModelPickerSheet({
   const completeModelList = useMemo(
     () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier),
     [cloudUnlocked, subscriptionTier],
+  );
+
+  // Reasoning controls are capability-driven: only reasoning-capable models
+  // (capabilities.thinking in the shared catalog) show the effort selector,
+  // and the level set is filtered per provider. Auto modes route to capable
+  // models server-side, so they keep the full default axis.
+  const selectedModelDef = useMemo(
+    () => getModelByIdForCloudAccess(selectedModel, cloudUnlocked),
+    [selectedModel, cloudUnlocked],
+  );
+  const selectedSupportsReasoning =
+    isAutoMode(selectedModel) || !!selectedModelDef?.supportsThinking;
+  const effortOptions = useMemo(
+    () =>
+      effortOptionsForProvider(isAutoMode(selectedModel) ? undefined : selectedModelDef?.provider),
+    [selectedModel, selectedModelDef],
   );
   const modelList = useMemo(() => {
     if (modelScope === 'local') {
@@ -376,6 +414,12 @@ export function ModelPickerSheet({
         snapPoints={snapPoints}
         enablePanDownToClose
         enableDynamicSizing={false}
+        // Keyboard avoidance for the search input: extend the sheet above the
+        // keyboard while typing and restore it (blurring the input) on drag,
+        // so the effort selector and model list stay reachable.
+        keyboardBehavior="extend"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
         backdropComponent={renderBackdrop}
         backgroundStyle={{
           backgroundColor: colors.background,
@@ -478,7 +522,7 @@ export function ModelPickerSheet({
           ) : null}
         </View>
 
-        {modelScope === 'cloud' ? (
+        {modelScope === 'cloud' && selectedSupportsReasoning ? (
           <View
             style={{
               marginHorizontal: 16,
@@ -504,7 +548,7 @@ export function ModelPickerSheet({
                 gap: 2,
               }}
             >
-              {EFFORT_OPTIONS.map((effort) => {
+              {effortOptions.map((effort) => {
                 const selected = selectedEffort === effort;
                 return (
                   <Pressable

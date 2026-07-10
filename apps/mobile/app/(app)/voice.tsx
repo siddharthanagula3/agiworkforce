@@ -236,16 +236,27 @@ export default function VoiceScreen() {
 
   const sendVoiceMessage = useCallback(
     async (text: string) => {
-      const convId = convIdRef.current;
-      if (!convId) throw new Error('No voice conversation available');
+      let convId = convIdRef.current;
+      if (!convId) {
+        // The eager creation in the mount effect failed or hasn't resolved —
+        // retry on demand instead of failing the whole voice turn.
+        convId = await createConversation('Voice session');
+        convIdRef.current = convId;
+      }
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[convId] ?? []);
-      await sendMessage(convId, text, selectedModel);
+      const accepted = await sendMessage(convId, text, selectedModel);
+      if (!accepted) {
+        // A pre-flight gate blocked the send (sign-in, model/mode mismatch,
+        // queue full, …). The store's error is the real reason — throw it so
+        // the voice UI shows it instead of a misleading "Sent to chat."
+        throw new Error(useChatStore.getState().error ?? 'Message was not sent. Please try again.');
+      }
       return findNewAssistantResponse(
         useChatStore.getState().messages[convId] ?? [],
         previousMessageIds,
       );
     },
-    [sendMessage, selectedModel],
+    [createConversation, sendMessage, selectedModel],
   );
 
   const {

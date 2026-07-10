@@ -88,6 +88,7 @@ export default function ChatTabScreen() {
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearError = useChatStore((s) => s.clearError);
+  const setSendError = useChatStore((s) => s.setSendError);
 
   // Error state lives in the shared chat store, not scoped per-conversation --
   // without this, a stale error banner from a previous conversation (e.g. "no
@@ -277,10 +278,19 @@ export default function ChatTabScreen() {
             onAccepted: () => resolve(true),
           })
             .then((accepted) => resolve(accepted))
-            .catch(() => resolve(false));
+            .catch((err: unknown) => {
+              // The user has already been routed to the conversation screen —
+              // surface the failure in its SendErrorBanner, never silently.
+              console.warn('[ChatTabScreen] sendMessage rejected:', err);
+              setSendError('Message could not be sent. Please try again.');
+              resolve(false);
+            });
         });
-      } catch {
-        // Conversation creation failed — keep the draft so the user can retry.
+      } catch (err) {
+        // Conversation creation failed — tell the user and keep the draft so
+        // they can retry (the home tab has no error banner, so Alert here).
+        console.warn('[ChatTabScreen] createConversation failed:', err);
+        Alert.alert('Could not start the chat', 'Something went wrong. Please try again.');
         return false;
       }
     },
@@ -296,6 +306,7 @@ export default function ChatTabScreen() {
       failImageGeneration,
       deleteMessage,
       setPaywallError,
+      setSendError,
     ],
   );
 
@@ -348,21 +359,14 @@ export default function ChatTabScreen() {
       router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
       return;
     }
-    setAppMode('cloud');
-    if (activeMode === 'cloud') {
-      handleOpenModelPicker('cloud');
-      return;
+    // The toggle ONLY switches modes — model selection belongs to the
+    // composer's model chip. (It previously re-opened the model picker when
+    // already in Cloud, blurring the two responsibilities.)
+    if (activeMode !== 'cloud') {
+      setAppMode('cloud');
+      setModel(DEFAULT_CLOUD_MODEL_ID);
     }
-    setModel(DEFAULT_CLOUD_MODEL_ID);
-  }, [
-    activeMode,
-    cloudChatAvailable,
-    cloudUnlocked,
-    handleOpenModelPicker,
-    router,
-    setAppMode,
-    setModel,
-  ]);
+  }, [activeMode, cloudChatAvailable, cloudUnlocked, router, setAppMode, setModel]);
 
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
@@ -499,18 +503,19 @@ export default function ChatTabScreen() {
           >
             <Menu size={18} color={c.textSecondary} />
           </Pressable>
-          <Pressable
-            onPress={() => handleOpenModelPicker()}
-            className="flex-row items-center gap-1.5 rounded-full"
-            style={{ backgroundColor: c.inputSurface, paddingHorizontal: 12, height: 32 }}
-            accessibilityLabel={`Model: ${getShortDisplayName(selectedModel)}. Tap to change model`}
-            accessibilityRole="button"
-          >
-            <AgiMark size={18} />
-            <Text variant="subheading" style={{ color: c.textPrimary }}>
-              {getShortDisplayName(selectedModel)}
-            </Text>
-          </Pressable>
+          {/* The header owns ONLY the execution-mode toggle (Local | Cloud).
+              Model selection lives exclusively in the composer's model chip —
+              the old model pill here duplicated it and confusingly read
+              "AGI Cloud" like the toggle's Cloud segment. */}
+          <ModeToggle
+            mode={activeMode}
+            cloudJoined={waitlistJoined}
+            cloudUnlocked={cloudUnlocked}
+            waitlistRank={waitlistRank}
+            onTapLocal={handleTapLocalMode}
+            onTapCloud={handleTapCloudMode}
+            compact
+          />
         </View>
         {/* Already in the empty new-chat state -- a "new chat" action here would
             be a no-op, so this slot is the temporary-chat toggle instead. */}
@@ -541,16 +546,6 @@ export default function ChatTabScreen() {
           showsVerticalScrollIndicator={false}
           accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
         >
-          <View style={{ marginBottom: 18 }}>
-            <ModeToggle
-              mode={activeMode}
-              cloudJoined={waitlistJoined}
-              cloudUnlocked={cloudUnlocked}
-              waitlistRank={waitlistRank}
-              onTapLocal={handleTapLocalMode}
-              onTapCloud={handleTapCloudMode}
-            />
-          </View>
           {/* Centered brand mark above the greeting — the empty-state visual anchor,
               mirroring the Claude mobile new-chat screen (ref: claude_reference/
               263_mobile__new-chat-empty). Uses AGI's own mark, not Claude's star. */}

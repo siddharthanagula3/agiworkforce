@@ -99,6 +99,7 @@ export interface CombinedChatState {
   retryMessage: (conversationId: string, messageId: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   clearError: () => void;
+  setSendError: (message: string) => void;
   clearPaywallError: () => void;
   setPaywallError: (paywallError: PaywallErrorState) => void;
   searchConversations: (query: string) => void;
@@ -173,6 +174,7 @@ function buildCombinedState(
     retryMessage: exec.retryMessage,
     editMessage: exec.editMessage,
     clearError: exec.clearError,
+    setSendError: exec.setSendError,
     clearPaywallError: exec.clearPaywallError,
     setPaywallError: exec.setPaywallError,
     searchQuery: view.searchQuery,

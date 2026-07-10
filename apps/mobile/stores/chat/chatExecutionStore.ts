@@ -99,6 +99,9 @@ interface ExecutionState {
   retryMessage: (conversationId: string, messageId: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   clearError: () => void;
+  /** Surface a send failure in the SendErrorBanner — for callers whose own
+   *  catch would otherwise swallow the error with no UI. */
+  setSendError: (message: string) => void;
   clearPaywallError: () => void;
   setPaywallError: (paywallError: PaywallErrorState) => void;
 }
@@ -610,6 +613,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   isEditing: false,
 
   clearError: () => set({ error: null }),
+  setSendError: (message: string) => set({ error: message }),
   clearPaywallError: () => set({ paywallError: null }),
   setPaywallError: (paywallError) => set({ paywallError }),
 

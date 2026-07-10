@@ -7,6 +7,7 @@ import {
   Platform,
   ActionSheetIOS,
   Alert,
+  Keyboard,
   Modal,
   TextInput,
 } from 'react-native';
@@ -137,6 +138,7 @@ export default function ChatScreen() {
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const sendError = useChatStore((s) => s.error);
   const clearError = useChatStore((s) => s.clearError);
+  const setSendError = useChatStore((s) => s.setSendError);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
@@ -338,7 +340,13 @@ export default function ChatScreen() {
           onAccepted: () => resolve(true),
         })
           .then((accepted) => resolve(accepted))
-          .catch(() => resolve(false));
+          .catch((err: unknown) => {
+            // Never fail silently: surface the failure in the SendErrorBanner
+            // (the composer keeps the draft because we resolve false).
+            console.warn('[ChatScreen] sendMessage rejected:', err);
+            setSendError('Message could not be sent. Please try again.');
+            resolve(false);
+          });
       });
     },
     [
@@ -351,6 +359,7 @@ export default function ChatScreen() {
       failImageGeneration,
       deleteMessage,
       setPaywallError,
+      setSendError,
       stopSpeaking,
       quotedMessage,
       isOnline,
@@ -613,6 +622,9 @@ export default function ChatScreen() {
   }, [id, loadMessages]);
 
   const handleOpenVoiceMode = useCallback(() => {
+    // Voice mode is a fullscreen overlay, not a Modal — the composer keeps
+    // focus unless we dismiss explicitly, leaving the keyboard on top of it.
+    Keyboard.dismiss();
     setVoiceModeVisible(true);
   }, []);
 
@@ -637,7 +649,12 @@ export default function ChatScreen() {
       if (!id) throw new Error('No conversation');
       stopSpeaking();
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[id] ?? []);
-      await sendMessage(id, text, selectedModel);
+      const accepted = await sendMessage(id, text, selectedModel);
+      if (!accepted) {
+        // Pre-flight gate blocked the send — surface the store's real reason
+        // in the voice UI instead of a misleading "Sent to chat."
+        throw new Error(useChatStore.getState().error ?? 'Message was not sent. Please try again.');
+      }
       return (
         findNewAssistantResponse(useChatStore.getState().messages[id] ?? [], previousMessageIds) ??
         ''

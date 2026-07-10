@@ -193,34 +193,29 @@ async function request<T>(
     // when a user hits 150% of their tier cap. We parse the JSON here so callers
     // can catch ApiPaywallError separately from generic network errors.
     if (response.status === 429) {
-      let paywallPayload: Record<string, unknown> | null = null;
+      const bodyText = await response.text();
+      let parsed: Record<string, unknown> | null = null;
       try {
-        const bodyText = await response.text();
-        // Attempt parse; if it fails fall through to generic error below
-        const parsed = JSON.parse(bodyText) as Record<string, unknown>;
-        if (parsed && parsed.kind === 'paywall') {
-          paywallPayload = parsed;
-        } else {
-          // Not a paywall 429 — re-throw as generic error with body
-          const safeBody =
-            bodyText.length > 500 ? bodyText.slice(0, 500) + '...(truncated)' : bodyText;
-          throw new Error(`HTTP 429: ${safeBody}`);
-        }
-      } catch (parseErr) {
-        // If parseErr is already an Error we re-threw above, propagate it
-        if (parseErr instanceof Error && !parseErr.message.startsWith('{')) {
-          throw parseErr;
-        }
-        throw new Error(`HTTP 429`);
+        parsed = JSON.parse(bodyText) as Record<string, unknown>;
+      } catch {
+        // Non-JSON body (HTML error page, proxy output) — never show it raw.
       }
 
-      if (paywallPayload) {
+      if (parsed && parsed.kind === 'paywall') {
         throw new ApiPaywallError(
-          typeof paywallPayload.feature === 'string' ? paywallPayload.feature : 'token_cap',
-          typeof paywallPayload.requiredTier === 'string' ? paywallPayload.requiredTier : 'hobby',
-          typeof paywallPayload.reason === 'string' ? paywallPayload.reason : '',
+          typeof parsed.feature === 'string' ? parsed.feature : 'token_cap',
+          typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'hobby',
+          typeof parsed.reason === 'string' ? parsed.reason : '',
         );
       }
+
+      // Not a paywall 429 — surface a friendly rate-limit message.
+      const candidate = parsed?.error ?? parsed?.message;
+      throw new Error(
+        typeof candidate === 'string' && candidate.trim()
+          ? candidate
+          : 'Too many requests right now. Please wait a moment and try again.',
+      );
     }
 
     if (!response.ok) {
@@ -266,9 +261,18 @@ async function request<T>(
       if (friendlyMessage) {
         throw new Error(friendlyMessage);
       }
-      // Avoid leaking sensitive data — truncate long error bodies
-      const safeBody = body.length > 500 ? body.slice(0, 500) + '...(truncated)' : body;
-      throw new Error(`HTTP ${response.status}: ${safeBody}`);
+      // Non-JSON bodies (HTML error pages, proxy output) must never reach the
+      // UI verbatim. Log the raw body for diagnostics and surface a generic,
+      // user-readable message instead.
+      if (__DEV__) {
+        const safeBody = body.length > 500 ? body.slice(0, 500) + '...(truncated)' : body;
+        console.warn(`[api] ${init.method ?? 'GET'} ${path} -> HTTP ${response.status}:`, safeBody);
+      }
+      throw new Error(
+        response.status >= 500
+          ? 'The server hit a problem handling this request. Please try again.'
+          : `Request failed (HTTP ${response.status}). Please try again.`,
+      );
     }
 
     return (await response.json()) as T;

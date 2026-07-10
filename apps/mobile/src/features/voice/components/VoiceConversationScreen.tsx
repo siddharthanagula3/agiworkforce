@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { Alert, View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
+import { Alert, Keyboard, View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -195,6 +195,13 @@ export function VoiceConversationScreen({
   const pttMode = useSettingsStore((s) => s.voicePushToTalk);
   const setVoicePushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
   const selectedModel = useModelStore((s) => s.selectedModel);
+
+  // The overlay is absolutely positioned, not a Modal, so the composer's
+  // TextInput can keep (or regain, via a late transcript focus) keyboard
+  // focus underneath it. Voice mode must never show the keyboard.
+  useEffect(() => {
+    if (visible) Keyboard.dismiss();
+  }, [visible]);
 
   const {
     phase,

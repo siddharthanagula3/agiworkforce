@@ -1,13 +1,22 @@
 import { useState, useRef, useCallback, useEffect, useImperativeHandle } from 'react';
-import { Alert, View, TextInput, Pressable, Keyboard, Platform } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  View,
+  TextInput,
+  Pressable,
+  Keyboard,
+  Platform,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Link as LinkIcon, AudioLines } from 'lucide-react-native';
+import { Plus, Link as LinkIcon, AudioLines, ArrowUp, X } from 'lucide-react-native';
+import { Text } from '@/components/ui/text';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendButton } from './SendButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
-import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
+import { Waveform } from '@/src/features/voice/components/Waveform';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -24,6 +33,14 @@ import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/v
  *  converted into a compact "Pasted text" attachment instead of flooding the
  *  composer — matching ChatGPT/Claude mobile. */
 const LARGE_PASTE_THRESHOLD = 10_000;
+
+/** Format ms to MM:SS for the inline recording timer. */
+function formatRecordingDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
 
 interface ChatInputProps {
   /**
@@ -92,6 +109,7 @@ export function ChatInput({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
   const [voiceResetSignal, setVoiceResetSignal] = useState(0);
@@ -337,6 +355,7 @@ export function ChatInput({
       setVoiceResetSignal((value) => value + 1);
       return;
     }
+    setIsTranscribing(true);
     try {
       const uri = await VoiceService.stopRecording();
       const result = await VoiceService.transcribe(uri);
@@ -346,6 +365,7 @@ export function ChatInput({
     } catch {
       // ignore transcription errors from overlay send
     } finally {
+      setIsTranscribing(false);
       setVoiceResetSignal((value) => value + 1);
     }
   }, [applyTranscript, resetRecordingUi]);
@@ -428,15 +448,6 @@ export function ChatInput({
       className="px-4 pt-2"
       style={{ paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 6, 16) }}
     >
-      {/* Recording overlay -- shown while recording is active */}
-      <RecordingOverlay
-        visible={isRecording}
-        audioLevel={audioLevel}
-        durationMs={recordingDurationMs}
-        onCancel={handleOverlayCancel}
-        onSend={handleOverlaySend}
-      />
-
       {/* Attachment preview strip */}
       <AttachmentPreview
         attachments={attachments}
@@ -455,7 +466,8 @@ export function ChatInput({
 
       {/* Secondary chip row -- model + connectors. Temporary chat is a
           pre-conversation decision only, so its toggle lives on the
-          empty-state header (chat.tsx), not here. */}
+          empty-state header (chat.tsx), not here. Hidden while the composer
+          pill is in its recording/transcribing state. */}
       <View
         style={{
           flexDirection: 'row',
@@ -463,6 +475,7 @@ export function ChatInput({
           gap: 4,
           marginBottom: 8,
           paddingLeft: 4,
+          display: isRecording || isTranscribing ? 'none' : 'flex',
         }}
       >
         {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
@@ -488,26 +501,51 @@ export function ChatInput({
 
       {/* Main composer row -- [+] outside-left, single-line pill with the
           mic inside its right edge, circular send/stop/voice button
-          outside-right. Matches the ChatGPT mobile composer structure. */}
+          outside-right. Matches the ChatGPT mobile composer structure.
+          While recording, the SAME row morphs in place (ChatGPT reference):
+          left button becomes cancel (X), the pill shows a live waveform +
+          timer (then a "Transcribing" spinner), and the right circle becomes
+          the accept arrow. Nothing overlays the composer. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {/* [+] Add to Chat button -- outside the pill, left */}
-        <Pressable
-          onPress={handlePlusPress}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radii.full,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: themeColors.inputSurface,
-          }}
-          hitSlop={6}
-          accessibilityLabel="Add to chat"
-          accessibilityHint="Opens attachment, mode, and feature options"
-          accessibilityRole="button"
-        >
-          <Plus size={20} color={themeColors.textMuted} />
-        </Pressable>
+        {/* Left button -- [+] Add to Chat, or cancel-recording while recording */}
+        {isRecording || isTranscribing ? (
+          <Pressable
+            onPress={isRecording ? handleOverlayCancel : undefined}
+            disabled={!isRecording}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: radii.full,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: themeColors.inputSurface,
+              opacity: isRecording ? 1 : 0.5,
+            }}
+            hitSlop={6}
+            accessibilityLabel="Cancel recording"
+            accessibilityRole="button"
+          >
+            <X size={20} color={themeColors.textPrimary} />
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={handlePlusPress}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: radii.full,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: themeColors.inputSurface,
+            }}
+            hitSlop={6}
+            accessibilityLabel="Add to chat"
+            accessibilityHint="Opens attachment, mode, and feature options"
+            accessibilityRole="button"
+          >
+            <Plus size={20} color={themeColors.textMuted} />
+          </Pressable>
+        )}
 
         {/* Pill -- text input + mic, inside the rounded border */}
         <View
@@ -525,6 +563,63 @@ export function ChatInput({
             minHeight: 44,
           }}
         >
+          {/* Live waveform + timer while recording (in place of the input) */}
+          {isRecording ? (
+            <View
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 24,
+              }}
+              accessibilityRole="alert"
+              accessibilityLabel="Recording in progress"
+              testID="chat.composer.recording"
+            >
+              <View style={{ flex: 1, alignItems: 'flex-start' }}>
+                <Waveform
+                  color={themeColors.textSecondary}
+                  active
+                  audioLevel={audioLevel}
+                  barCount={24}
+                  maxHeight={20}
+                  minHeight={3}
+                  barWidth={2.5}
+                  gap={3}
+                />
+              </View>
+              <Text
+                style={{
+                  color: themeColors.textMuted,
+                  fontSize: 13,
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {formatRecordingDuration(recordingDurationMs)}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Transcribing state -- shown after accept, while STT runs */}
+          {!isRecording && isTranscribing ? (
+            <View
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                minHeight: 24,
+              }}
+              accessibilityRole="alert"
+              accessibilityLabel="Transcribing"
+              testID="chat.composer.transcribing"
+            >
+              <ActivityIndicator size="small" color={themeColors.textMuted} />
+              <Text style={{ color: themeColors.textMuted, fontSize: 15 }}>Transcribing</Text>
+            </View>
+          ) : null}
+
           <TextInput
             ref={inputRef}
             testID="chat.composer.input"
@@ -535,6 +630,9 @@ export function ChatInput({
               paddingVertical: 0,
               minHeight: 24,
               maxHeight: 160,
+              // Kept mounted (draft + focus state survive) but hidden while
+              // the pill shows the recording/transcribing state.
+              display: isRecording || isTranscribing ? 'none' : 'flex',
             }}
             placeholder={placeholder}
             placeholderTextColor={themeColors.textMuted}
@@ -550,7 +648,12 @@ export function ChatInput({
             accessibilityHint="Type your message to the AI assistant"
           />
 
-          <View testID="chat.composer.mic">
+          {/* Kept mounted while recording -- VoiceInputButton owns the live
+              capture session; unmounting it mid-recording would kill it. */}
+          <View
+            testID="chat.composer.mic"
+            style={{ display: isRecording || isTranscribing ? 'none' : 'flex' }}
+          >
             <VoiceInputButton
               onTranscription={handleTranscription}
               onRecordingStart={handleRecordingStart}
@@ -568,7 +671,27 @@ export function ChatInput({
             ChatGPT reference's waveform button), idle+content sends,
             streaming stops. */}
         <View testID="chat.composer.send">
-          {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
+          {isRecording || isTranscribing ? (
+            <Pressable
+              onPress={isRecording ? handleOverlaySend : undefined}
+              disabled={!isRecording}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: radii.full,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: themeColors.textPrimary,
+                opacity: isRecording ? 1 : 0.5,
+              }}
+              hitSlop={6}
+              accessibilityLabel="Use recording"
+              accessibilityHint="Stops recording and transcribes it into the message"
+              accessibilityRole="button"
+            >
+              <ArrowUp size={18} color={themeColors.surfaceElevated} />
+            </Pressable>
+          ) : sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
             <Pressable
               onPress={onOpenVoiceMode}
               style={{
