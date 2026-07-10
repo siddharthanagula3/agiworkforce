@@ -252,8 +252,12 @@ export interface ToolEntry {
   id?: string;
   /** Display name of the tool (e.g. "Read", "Bash", "WebSearch") */
   name: string;
-  status: 'running' | 'completed' | 'failed' | 'pending';
+  status: 'running' | 'completed' | 'failed' | 'pending' | 'awaiting_approval';
   durationMs?: number;
+  /** Set for a manual-approval card — the exact tool_call_id the resume must decide. */
+  toolCallId?: string;
+  /** When true, render approve/reject affordances (manual-approval gate). */
+  requiresApproval?: boolean;
   /** Short arg preview shown in the card (e.g. file path or command) */
   args?: string;
   /** Optional parameters map forwarded to ToolCallCard */
@@ -284,6 +288,12 @@ interface ToolTimelineProps {
   searchSources?: ResearchSource[];
   /** The search query string corresponding to searchSources. */
   searchQuery?: string;
+  /**
+   * Manual-approval callbacks. When provided, awaiting_approval cards render
+   * approve/reject buttons; the argument is the tool_call_id being decided.
+   */
+  onApprove?: (toolCallId: string) => void;
+  onReject?: (toolCallId: string) => void;
 }
 
 interface EntryGroup {
@@ -306,6 +316,8 @@ function toToolCallStatus(status: ToolEntry['status']): ToolCallStatus {
       return 'complete';
     case 'failed':
       return 'error';
+    case 'awaiting_approval':
+      return 'awaiting_approval';
     default:
       return 'pending';
   }
@@ -456,12 +468,16 @@ function TimelineStepRow({
   showParameters,
   searchSources,
   searchQuery,
+  onApprove,
+  onReject,
 }: {
   tool: ToolEntry;
   toolCall: ToolCall;
   showParameters: boolean;
   searchSources?: ResearchSource[];
   searchQuery?: string;
+  onApprove?: (toolCallId: string) => void;
+  onReject?: (toolCallId: string) => void;
 }) {
   const filename = getFileName(tool.args);
   const hasFile = filename != null;
@@ -493,7 +509,12 @@ function TimelineStepRow({
           {isWebSearch ? (
             <span className="text-sm text-foreground">{humanLabel}</span>
           ) : (
-            <ToolCallCard toolCall={displayToolCall} showParameters={showParameters} />
+            <ToolCallCard
+              toolCall={displayToolCall}
+              showParameters={showParameters}
+              onApprove={onApprove}
+              onReject={onReject}
+            />
           )}
         </div>
       </div>
@@ -521,6 +542,8 @@ function ToolTimeline({
   compact: compactProp,
   searchSources,
   searchQuery,
+  onApprove,
+  onReject,
 }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -528,11 +551,17 @@ function ToolTimeline({
   const [compactExpanded, setCompactExpanded] = useState(false);
 
   const hasRunning = useMemo(() => tools.some((t) => t.status === 'running'), [tools]);
+  // A tool awaiting approval must keep the timeline OPEN so the approve/reject
+  // buttons are visible (they live inside the expandable list).
+  const hasAwaiting = useMemo(() => tools.some((t) => t.status === 'awaiting_approval'), [tools]);
   const errorCount = useMemo(() => tools.filter((t) => t.status === 'failed').length, [tools]);
 
-  // Compact mode: explicit prop OR auto when step count > threshold (and not running)
+  // Compact mode: explicit prop OR auto when step count > threshold (and neither
+  // running nor awaiting approval).
   const isCompact =
-    compactProp !== undefined ? compactProp : !hasRunning && tools.length > COMPACT_THRESHOLD;
+    compactProp !== undefined
+      ? compactProp
+      : !hasRunning && !hasAwaiting && tools.length > COMPACT_THRESHOLD;
 
   // Reset userForcedClosed when all running tools finish so next batch auto-expands
   const prevHasRunning = useRef(hasRunning);
@@ -543,8 +572,9 @@ function ToolTimeline({
     prevHasRunning.current = hasRunning;
   }, [hasRunning]);
 
-  // Auto-expand while tools are running, but respect the user's manual close
-  const isOpen = userForcedClosed ? false : hasRunning || isExpanded;
+  // Auto-expand while tools are running or awaiting approval, but respect the
+  // user's manual close.
+  const isOpen = userForcedClosed ? false : hasRunning || hasAwaiting || isExpanded;
 
   const groups = useMemo(() => groupTools(tools), [tools]);
   const summary = useMemo(() => buildCompactSummary(tools), [tools]);
@@ -695,6 +725,8 @@ function ToolTimeline({
                                 showParameters={Boolean(tool.args ?? tool.parameters)}
                                 searchSources={attachSources ? searchSources : undefined}
                                 searchQuery={attachSources ? searchQuery : undefined}
+                                onApprove={onApprove}
+                                onReject={onReject}
                               />
                             );
                           })}
@@ -705,12 +737,15 @@ function ToolTimeline({
                     return group.entries.map((tool, ti) => {
                       const id = stableId(tool, gi * 100 + ti);
                       const toolCall: ToolCall = {
-                        id,
+                        // Approval cards carry the tool_call_id as the card id so
+                        // onApprove/onReject can address the exact pending call.
+                        id: tool.toolCallId ?? id,
                         name: tool.name,
                         status: toToolCallStatus(tool.status),
                         durationMs: tool.durationMs,
                         parameters: buildParameters(tool.args, tool.parameters),
                         result: tool.result,
+                        requiresApproval: tool.requiresApproval,
                       };
                       const attachSources =
                         !sourcesAttached &&
@@ -726,6 +761,8 @@ function ToolTimeline({
                           showParameters={Boolean(tool.args ?? tool.parameters)}
                           searchSources={attachSources ? searchSources : undefined}
                           searchQuery={attachSources ? searchQuery : undefined}
+                          onApprove={onApprove}
+                          onReject={onReject}
                         />
                       );
                     });
@@ -757,6 +794,9 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   if (prev.compact !== next.compact) return false;
   if (prev.searchQuery !== next.searchQuery) return false;
   if ((prev.searchSources?.length ?? 0) !== (next.searchSources?.length ?? 0)) return false;
+  // Approval callbacks are stable useCallback refs; a change means a different
+  // wiring and must re-render so the buttons dispatch to the new handler.
+  if (prev.onApprove !== next.onApprove || prev.onReject !== next.onReject) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
   for (let i = 0; i < prev.tools.length; i++) {
@@ -771,7 +811,9 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
       p.args !== n.args ||
       p.parallelGroup !== n.parallelGroup ||
       p.error !== n.error ||
-      p.result !== n.result
+      p.result !== n.result ||
+      p.requiresApproval !== n.requiresApproval ||
+      p.toolCallId !== n.toolCallId
     ) {
       return false;
     }

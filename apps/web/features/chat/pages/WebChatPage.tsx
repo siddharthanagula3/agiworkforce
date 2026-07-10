@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { useChatStream } from '@/lib/hooks/useChatStream';
+import { useChatStream, ToolApprovalProvider } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -433,7 +433,7 @@ export default function WebChatPage() {
   }, []);
 
   // Streaming send + store state
-  const { sendMessage, stopGeneration, isStreaming } = useChatStream();
+  const { sendMessage, stopGeneration, isStreaming, resolveToolApproval } = useChatStream();
 
   // Notification banner: appears after 3s of streaming if the user hasn't
   // already granted/denied the Notification permission in this session.
@@ -1939,19 +1939,23 @@ export default function WebChatPage() {
           ) : (
             <>
               <div className="min-h-0 flex-1 overflow-hidden">
-                <ChatMessageList
-                  messages={chatMessages}
-                  isLoading={isLoading && !isStreaming}
-                  isUserTyping={isUserTyping}
-                  onRegenerate={handleRegenerateMessage}
-                  onEdit={handleEditMessage}
-                  onDelete={handleDeleteMessage}
-                  onReact={handleReactMessage}
-                  onRegenerateImage={handleRegenerateImageInPlace}
-                  onSendMessage={setComposerPrefill}
-                  onPaywallUpgrade={handleOpenUpgradeDialog}
-                  onPaywallDismiss={handlePaywallDismiss}
-                />
+                {/* Provide the manual tool-approval resolver to per-message
+                    approval cards (MessageBubble consumes it via context). */}
+                <ToolApprovalProvider value={resolveToolApproval}>
+                  <ChatMessageList
+                    messages={chatMessages}
+                    isLoading={isLoading && !isStreaming}
+                    isUserTyping={isUserTyping}
+                    onRegenerate={handleRegenerateMessage}
+                    onEdit={handleEditMessage}
+                    onDelete={handleDeleteMessage}
+                    onReact={handleReactMessage}
+                    onRegenerateImage={handleRegenerateImageInPlace}
+                    onSendMessage={setComposerPrefill}
+                    onPaywallUpgrade={handleOpenUpgradeDialog}
+                    onPaywallDismiss={handlePaywallDismiss}
+                  />
+                </ToolApprovalProvider>
               </div>
 
               {/* Composer + Send Preview disclosure · docked in normal flow (not
