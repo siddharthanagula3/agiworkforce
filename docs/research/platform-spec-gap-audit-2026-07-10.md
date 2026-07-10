@@ -52,3 +52,52 @@ AGI Work desktop core (folder selection, 693-line planner, 2,901-line git execut
 ## Monorepo vs spec sections 40–64 (structural)
 
 No top-level `sdk/`. Runtime fragmented across `packages/runtime` + `llm-runtime` + `local-llm` + Rust `crates/agiworkforce-llm` (not one runtime layer). Providers are one package, not per-provider packages. 18 `crates/*` mirror TS concerns (known split-brain). No eval or telemetry packages. `apps/` 7-surface layout matches the spec; `services/` are stubs.
+
+## Detailed evidence — Part-2/3 addendum (file paths per item)
+
+### Message actions / rendering / interrupt state
+
+- fork/branch: desktop only (`apps/desktop/src/features/chat/MessageBubble/useMessageActions.ts` `onFork`); web edit-rollback-branch via `apps/web/lib/pendingEdit.ts`; unified-chat `BranchNavigator` exists but unwired; mobile missing.
+- bookmark: desktop only (`toggleMessageBookmark`). pin: web only. export: mobile only (`FileExportButton`). speak/read-aloud: desktop only (`useTauriStreamListeners.ts:669`).
+- share / translate / view-raw-response: missing on all surfaces.
+- edited-timestamp: desktop renders (`MessageBubble/MessageHeader.tsx:79`); web persists `edited` (`services/conversation-storage.ts:63`) but renders no indicator; mobile none.
+- LaTeX: web `lib/markdown-config.ts` (remark-math+rehype-katex), desktop `MessageContent.tsx`, mobile `MathBlock` — shared unified-chat renderer is regex-only (parity drift).
+- Mermaid: artifact-rendered on web/desktop/unified; mobile gated off ("requires sandbox").
+- Interrupted state: `apps/web/lib/hooks/useChatStream.ts:1010` persists partial text on abort; no `status:'interrupted'` enum, no continue affordance (roadmap W1.A).
+
+### Composer
+
+- Drafts: mobile real (`apps/mobile/src/features/chat/draftStore.ts`, encrypted MMKV); web partial (`setDraftContent` in `v3/WebEmptyChat.tsx`); desktop none.
+- PromptStash: desktop (`stores/promptStashStore.ts` + `PromptStash.tsx`) + unified-chat export; missing web/mobile. Variables/substitution: missing all. Composer undo/redo: missing all. Slash/@-mention autocomplete: web+desktop; missing mobile.
+
+### Attachments
+
+- Web ALLOWED_MIME_TYPES in `hooks/use-attachments.ts` includes pdf/office/code, but `ChatComposerNew.tsx:1737` hardcodes `accept="image/*"` — document upload dead-ends (bug). Mobile allowlist at `app/(app)/(tabs)/chat.tsx:433`. OCR / virus scan / upload progress+resume: missing all; thumbnails client-side only.
+
+### Memory
+
+- Project memory desktop-only (`apps/desktop/src-tauri/src/core/agi/project_memory.rs`); web/mobile `0010_memory.sql` flat schema. Cloud retrieval is ILIKE (`apps/web/app/api/memory/search/route.ts`, comment "upgrade to vector later"). Import from ChatGPT/Claude exports exists (`packages/api/src/memoryImport.ts`). Org/team memory, connector-sourced memory: missing.
+
+### Auth
+
+- Clerk prebuilt UI; enabled strategies live in Clerk Dashboard (unknowable from code). Custom TOTP 2FA (`0025_two_factor.sql`, `TwoFactorPanel`) step-up only — does not gate login; Clerk MFA unused. SSO/SAML = Neon metadata store (`api/admin/sso`, `api/auth/sso-check`) never wired to a Clerk SAML flow. Sessions: "log out all devices" only; `desktop_devices`/`mobile_devices` have no list/revoke UI. RBAC = custom Neon teams(0007)/orgs(0015), not Clerk Organizations, per-route enforcement.
+
+### Subscription
+
+- Tier drift: `packages/types/src/billing-catalog.ts` (basic/team/enterprise) vs DB constraint 0030 (legacy `hobby`, no basic/team) vs `PLAN_HIERARCHY` (omits basic). No education plan. Invoices real (`api/billing/invoices` → `stripe.invoices.list`). Per-provider usage breakdown TODO (`use-billing-queries.ts:256`); `increment_usage()` no-op'd in 0044 (double-charge fix).
+
+### Settings
+
+- Developer section: hooks/feature-flags/logs viewer missing everywhere (desktop has config.toml editor + agent timeouts only). Desktop local-model tuning: `LocalRuntimeSettings.tsx` endpoint URLs only; no `n_gpu_layers`/threads/quantization controls. Data controls + notification prefs exist on all 3.
+
+### Notifications
+
+- Mobile push client real (`services/notifications.ts`, token → `/api/mobile/push-token` → `mobile_devices`); no expo-server-sdk/exp.host send path in repo. No email provider anywhere. Web `apps/web/hooks/useNotifications.ts` imports `@/lib/tauri-mock` — non-functional stub; desktop `NotificationCenter.tsx` real. Quiet hours: mobile (`stores/notificationPrefsStore.ts`).
+
+### Analytics / providers / testing / release / design
+
+- No product-analytics SaaS; Sentry real on web+desktop, missing mobile+CLI; perf monitoring desktop-only (`services/performance.ts`).
+- Provider adapters real: anthropic, openai, google, xai, mistral, groq, openrouter, deepseek, perplexity, qwen, zhipu, moonshot, lmstudio, ollama. Missing vs spec: cohere, together, fireworks, cerebras. CLI auto-probes ollama+lmstudio only.
+- AI-eval harness missing: `.golden.test.ts` are I/O snapshots; routing tests deterministic-unit only.
+- CI gating is real (13 workflows, `-D warnings`, SHA-pinned actions). Desktop release via tauri-action (macOS signing "being reconfigured" per release notes); mobile EAS; extension + VS Code store publishing missing (build-only).
+- `packages/ui` ~55 primitives; `packages/design-tokens` single palette; Storybook absent (zero stories).
