@@ -7,7 +7,8 @@
 
 use super::http_client_factory::{create_http_client, HttpClientConfig};
 use crate::core::llm::provider_adapter::ProviderAdapterFactory;
-use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk};
+use crate::core::llm::sse_parser::StreamChunk;
+use crate::core::llm::stream_engine::decode_direct_stream;
 use crate::core::llm::{LLMProvider, LLMRequest, LLMResponse, Provider};
 use async_trait::async_trait;
 use futures_util::Stream;
@@ -500,7 +501,10 @@ impl LLMProvider for DirectApiProvider {
             ))));
         }
 
-        Ok(Box::pin(parse_sse_stream(res, self.provider)))
+        // Wave 5 c2: SSE/NDJSON decode now runs through the shared
+        // `agiworkforce-llm` dialect runners via the desktop stream_engine
+        // facade, replacing desktop's duplicate `parse_sse_stream` decoder.
+        Ok(Box::pin(decode_direct_stream(res, self.provider)))
     }
 
     fn is_configured(&self) -> bool {

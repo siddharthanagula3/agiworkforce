@@ -22,6 +22,7 @@ pub mod provider_adapter;
 pub mod providers;
 pub mod server_tools;
 pub mod sse_parser;
+pub mod stream_engine;
 pub mod thinking;
 pub mod token_counter;
 pub mod tool_executor;
