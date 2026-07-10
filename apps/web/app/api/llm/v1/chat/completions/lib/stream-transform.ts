@@ -11,6 +11,11 @@ import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
 import type { ProcessedRequest } from './request-processor';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { withSseHeartbeat } from './sse-heartbeat';
+import {
+  collectGeneratedFileRefs,
+  persistGeneratedFiles,
+  type GeneratedFileRef,
+} from '@/lib/server/container-files';
 // ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. · no extra imports needed
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
@@ -628,10 +633,23 @@ export async function buildAdapterStreamResponse(
   const encoder = new TextEncoder();
   let firstTokenTimestampMs: number | null = null;
 
+  // Provider-generated file refs seen this turn (OpenAI container-file
+  // citations / Anthropic code-execution outputs), deduped by file id. The
+  // bytes live in the provider's EPHEMERAL sandbox (OpenAI containers expire
+  // ~20 min), so they are fetched + persisted at end of turn and announced as
+  // an `x_generated_files` delta before [DONE]. Managed-gateway path only —
+  // the fetchers use the platform provider keys that created these ids.
+  const generatedFileRefs = new Map<string, GeneratedFileRef>();
+
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       for await (const chunk of chunks) {
         ingestUsageChunk(usage, chunk);
+        try {
+          collectGeneratedFileRefs(chunk, generatedFileRefs);
+        } catch {
+          /* scanning is best-effort; never break the stream */
+        }
         const wireEvents = assembler.sseChunks(chunk);
         if (wireEvents.length === 0) continue;
 
@@ -675,6 +693,58 @@ export async function buildAdapterStreamResponse(
               break;
             }
           }
+        }
+      }
+
+      // Persist provider-sandbox files BEFORE closing the stream so the
+      // client receives durable, same-origin renderable URLs in-band. Honest
+      // states: failures keep the log warn AND surface an inline note — the
+      // user is never silently shown nothing.
+      if (generatedFileRefs.size > 0) {
+        try {
+          const { files, failedCount } = await persistGeneratedFiles({
+            userId,
+            refs: [...generatedFileRefs.values()],
+            model: modelUsed,
+          });
+          if (files.length > 0) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  choices: [
+                    {
+                      delta: { x_generated_files: { files: files.map((f) => f.wire) } },
+                      index: 0,
+                    },
+                  ],
+                  model: responseModelName,
+                })}\n\n`,
+              ),
+            );
+          }
+          if (failedCount > 0) {
+            const plural = failedCount === 1 ? 'file' : 'files';
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  choices: [
+                    {
+                      delta: {
+                        content: `\n\n*Note: ${failedCount} generated ${plural} could not be retrieved from the code-execution sandbox and ${failedCount === 1 ? 'is' : 'are'} not attached.*`,
+                      },
+                      index: 0,
+                    },
+                  ],
+                  model: responseModelName,
+                })}\n\n`,
+              ),
+            );
+          }
+        } catch (err) {
+          logger.warn(
+            { err, requestId, userId, provider: providerUsed },
+            'Generated-file persistence failed at end of stream',
+          );
         }
       }
 

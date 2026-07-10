@@ -1,24 +1,34 @@
 /**
  * E2B generated-file harvest — the bridge from "the model wrote a file in the
- * sandbox" to "the user sees a downloadable file card in chat".
+ * sandbox" to "the user sees a renderable file card in chat".
  *
  * The execution loop (tool-loop.ts) snapshots the sandbox workspace when the
  * E2B executor is first resolved, and at turn end diffs a fresh listing against
- * that baseline. New/changed files are read out of the sandbox, persisted
- * durably through the media layer (R2 via storeMedia + media_assets row, same
- * mechanism image-gen and provider-container files use), and emitted to the
- * client as an `x_generated_files` SSE delta so surfaces can render a file
- * card with a real download URL — the sandbox itself is ephemeral.
+ * that baseline. New/changed files are read out of the sandbox and persisted
+ * through the SHARED generated-file persistence core
+ * (lib/server/generated-file-persist.ts — same seam OpenAI container files and
+ * Anthropic code-execution files use), then emitted to the client as an
+ * `x_generated_files` SSE delta. The wire `uri` is the authenticated
+ * same-origin `/api/files/{id}` route, which the web renderer gates (PDF
+ * viewer, inline images, spreadsheet fetch) accept — the sandbox itself is
+ * ephemeral and the raw R2 URL is cross-origin.
  *
- * Best-effort by design: every failure degrades to "no file card", never to a
- * broken turn. Caps bound the work: max files per turn, max bytes per file.
+ * Best-effort by design: every failure degrades to "no file card" plus an
+ * honest note from the caller, never to a broken turn. Caps bound the work:
+ * max files per turn, max bytes per file.
  */
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import { storeMedia, isMediaStorageConfigured } from '@/lib/server/media-storage';
-import { insertMediaAsset, type MediaKind } from '@/lib/server/media-assets';
+import {
+  persistGeneratedFileBytes,
+  MAX_GENERATED_FILE_BYTES,
+  type GeneratedFileWire,
+} from '@/lib/server/generated-file-persist';
+import { isMediaStorageConfigured } from '@/lib/server/media-storage';
 import type { E2BExecutor, SandboxFileEntry } from './types';
+
+export type { GeneratedFileWire };
 
 /** Workspace root the sandbox code contexts run in (E2B default home). */
 const WORKSPACE_ROOT = '/home/user';
@@ -26,8 +36,6 @@ const WORKSPACE_ROOT = '/home/user';
 const MAX_LIST_DEPTH = 3;
 /** Max files harvested per turn — beyond this, later files are dropped (logged). */
 const MAX_FILES_PER_TURN = 8;
-/** Max bytes per harvested file. */
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
 /** Never harvest these (runtime noise, hidden files, package dirs). */
 const IGNORED_DIR_NAMES = new Set([
   'node_modules',
@@ -60,38 +68,11 @@ const MIME_BY_EXT: Record<string, string> = {
   ts: 'text/typescript',
 };
 
-/** Wire shape of one harvested file in the `x_generated_files` SSE delta. */
-export interface GeneratedFileWire {
-  id: string;
-  file_name: string;
-  mime_type: string;
-  /** Durable download URL (media storage), NOT a sandbox path. */
-  uri: string;
-  byte_count: number;
-  /** Coarse kind for client icons: pdf | docx | xlsx | pptx | csv | json | markdown | html | image | archive | other */
-  kind: string;
-}
-
 export type SandboxSnapshot = Map<string, number>;
 
 function mimeFor(fileName: string): string {
   const ext = fileName.toLowerCase().split('.').pop() ?? '';
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
-}
-
-function kindFor(fileName: string, mime: string): string {
-  const ext = fileName.toLowerCase().split('.').pop() ?? '';
-  if (['pdf', 'docx', 'xlsx', 'pptx', 'csv', 'json', 'html'].includes(ext)) return ext;
-  if (ext === 'md' || ext === 'markdown') return 'markdown';
-  if (mime.startsWith('image/')) return 'image';
-  if (ext === 'zip' || ext === 'tar' || ext === 'gz') return 'archive';
-  return 'other';
-}
-
-function mediaKindFor(mime: string): MediaKind {
-  if (mime.startsWith('image/')) return 'image';
-  if (mime.startsWith('video/')) return 'video';
-  return 'file';
 }
 
 /** Recursively list workspace files (bounded depth, ignore dirs skipped). */
@@ -131,9 +112,17 @@ export async function snapshotSandboxFiles(executor: E2BExecutor): Promise<Sandb
   return snapshot;
 }
 
+export interface HarvestResult {
+  files: GeneratedFileWire[];
+  /** Count of new/changed files that could NOT be persisted (caller surfaces an honest note). */
+  failedCount: number;
+}
+
 /**
  * Diff the workspace against `baseline`, persist new/changed files durably,
- * and return their wire descriptors. Best-effort: failures skip that file.
+ * and return their wire descriptors plus how many files failed to persist.
+ * Best-effort: failures skip that file but are COUNTED so the caller can
+ * surface an honest "file could not be retrieved" note instead of silence.
  */
 export async function harvestGeneratedFiles(params: {
   executor: E2BExecutor;
@@ -141,20 +130,20 @@ export async function harvestGeneratedFiles(params: {
   userId: string;
   model?: string;
   prompt?: string;
-}): Promise<GeneratedFileWire[]> {
+}): Promise<HarvestResult> {
   const { executor, baseline, userId, model, prompt } = params;
-  if (!executor.readFileBytes || !isMediaStorageConfigured()) return [];
+  if (!executor.readFileBytes || !isMediaStorageConfigured()) return { files: [], failedCount: 0 };
 
   let files: SandboxFileEntry[];
   try {
     files = await listWorkspace(executor);
   } catch (err) {
     logger.warn({ err }, '[e2b] harvest listing failed');
-    return [];
+    return { files: [], failedCount: 0 };
   }
 
   const changed = files.filter((f) => baseline.get(f.path) !== f.byteSize);
-  if (changed.length === 0) return [];
+  if (changed.length === 0) return { files: [], failedCount: 0 };
   if (changed.length > MAX_FILES_PER_TURN) {
     logger.warn(
       { total: changed.length, kept: MAX_FILES_PER_TURN },
@@ -163,45 +152,39 @@ export async function harvestGeneratedFiles(params: {
   }
 
   const out: GeneratedFileWire[] = [];
+  let failedCount = 0;
   for (const f of changed.slice(0, MAX_FILES_PER_TURN)) {
-    if (f.byteSize > MAX_FILE_BYTES) {
+    if (f.byteSize > MAX_GENERATED_FILE_BYTES) {
       logger.warn({ path: f.path, size: f.byteSize }, '[e2b] harvest skipped: file too large');
+      failedCount += 1;
       continue;
     }
     try {
       const bytes = await executor.readFileBytes(f.path);
-      if (!bytes) continue;
-      const mimeType = mimeFor(f.name);
-      const stored = await storeMedia({
+      if (!bytes) {
+        failedCount += 1;
+        continue;
+      }
+      const outcome = await persistGeneratedFileBytes({
         userId,
-        kind: mediaKindFor(mimeType),
         data: Buffer.from(bytes),
-        contentType: mimeType,
-      });
-      const assetId = await insertMediaAsset({
-        userId,
-        kind: mediaKindFor(mimeType),
-        mimeType,
-        byteSize: stored.byteSize,
-        storageUrl: stored.url,
-        storagePathname: stored.pathname,
-        prompt,
+        mimeType: mimeFor(f.name),
+        filename: f.name,
         provider: 'e2b',
+        origin: 'e2b-execution',
         model,
-        sourceSurface: 'web',
-        metadata: { filename: f.name, origin: 'e2b-execution', sandboxPath: f.path },
+        prompt,
+        extraMetadata: { sandboxPath: f.path },
       });
-      out.push({
-        id: assetId ?? crypto.randomUUID(),
-        file_name: f.name,
-        mime_type: mimeType,
-        uri: stored.url,
-        byte_count: stored.byteSize,
-        kind: kindFor(f.name, mimeType),
-      });
+      if (outcome.ok) {
+        out.push(outcome.file);
+      } else {
+        failedCount += 1;
+      }
     } catch (err) {
       logger.warn({ err, path: f.path }, '[e2b] harvest failed for file; skipping');
+      failedCount += 1;
     }
   }
-  return out;
+  return { files: out, failedCount };
 }
