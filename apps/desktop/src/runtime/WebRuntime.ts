@@ -297,6 +297,32 @@ export class WebRuntime implements ChatRuntime {
             this.emit({ type: 'search_results', search });
           }
 
+          // Platform-executed tool results (`x_tool_result`): the web tool
+          // loop runs MCP/E2B tools server-side and reports completion keyed
+          // by the SAME tool_call_id it forwarded in the raw `tool_calls`
+          // deltas above. Finishing the call here flips the UI entry off
+          // 'running' as soon as execution ends — which also keeps the shared
+          // generated-files pending strip honest (it must not claim
+          // "Running code…" while the model is merely streaming text).
+          const toolResultPayload = delta?.['x_tool_result'];
+          if (toolResultPayload && typeof toolResultPayload === 'object') {
+            const tr = toolResultPayload as Record<string, unknown>;
+            const toolCallId = typeof tr['tool_call_id'] === 'string' ? tr['tool_call_id'] : '';
+            if (toolCallId) {
+              const resultContent = typeof tr['content'] === 'string' ? tr['content'] : undefined;
+              const isError = tr['is_error'] === true;
+              this.emit({
+                type: 'tool_result',
+                toolCallId,
+                ...(isError
+                  ? { error: resultContent ?? 'Tool execution failed' }
+                  : resultContent !== undefined
+                    ? { result: resultContent }
+                    : {}),
+              });
+            }
+          }
+
           // Managed-cloud sandbox files (emitted once before [DONE]).
           const generatedFiles = mapGeneratedFilesPayload(delta?.['x_generated_files']);
           if (generatedFiles.length > 0) {
