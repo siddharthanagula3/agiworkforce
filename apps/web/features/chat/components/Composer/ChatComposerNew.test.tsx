@@ -89,6 +89,19 @@ vi.mock('@/hooks/useApiPromptCompletion', () => ({
     mockUseApiPromptCompletion(...args),
 }));
 
+// Router + project store: the composer uses next/navigation's useRouter (AGI Work
+// project selector navigation) and the shared project store (project list). Neither
+// has a provider in unit tests, so stub both.
+const mockRouterPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockRouterPush, replace: vi.fn(), prefetch: vi.fn() }),
+}));
+
+vi.mock('@features/projects', () => ({
+  useProjectStore: (selector: (s: { projects: unknown[] }) => unknown) =>
+    selector({ projects: [] }),
+}));
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ChatComposerNew', () => {
@@ -326,19 +339,27 @@ describe('ChatComposerNew', () => {
     expect(screen.getByTestId('composer-footer')).toBeInTheDocument();
   });
 
-  it('web search pill is visible outside the + menu for quick toggle', () => {
+  it('shows a Chat | AGI Work segmented toggle (claude.ai parity) in the input row', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
-    // Search pill is always visible (not inside the + menu popover)
-    const searchPills = screen.getAllByRole('button', { name: /toggle web search/i });
-    expect(searchPills.length).toBeGreaterThan(0);
+    // The segmented work-mode toggle replaces the old always-present tool pills.
+    expect(screen.getByRole('button', { name: 'Chat' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'AGI Work' })).toBeInTheDocument();
+    // Tools no longer sit in the input area as always-present pills.
+    expect(screen.queryByRole('button', { name: /toggle web search/i })).not.toBeInTheDocument();
   });
 
-  it('web search pill toggles aria-pressed state', () => {
+  it('web search + deep research live inside the + menu (not the input area)', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
-    const [searchBtn] = screen.getAllByRole('button', { name: /toggle web search/i });
-    expect(searchBtn).toBeDefined();
-    expect(searchBtn).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(searchBtn!);
-    expect(searchBtn).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    expect(screen.getByRole('button', { name: /web search/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /deep research/i })).toBeInTheDocument();
+  });
+
+  it('toggling to AGI Work reveals the project selector row', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    // Chat mode: no project selector.
+    expect(screen.queryByRole('button', { name: /choose a project/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    expect(screen.getByRole('button', { name: /choose a project/i })).toBeInTheDocument();
   });
 });

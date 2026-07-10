@@ -43,6 +43,8 @@ import { FREE_TRIAL_MAX_INPUT_CHARS, getFreeTrialRemaining } from '../../stores/
 import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
+import { useProjectStore } from '@features/projects';
+import { useRouter } from 'next/navigation';
 
 interface ChatComposerProps {
   onSend: (
@@ -287,6 +289,21 @@ const ChatComposerNewComponent = ({
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
+
+  // claude.ai-parity work-mode toggle (Chat | AGI Work). Segmented pill sits
+  // immediately right of the "+" in the composer bottom row. When 'agiwork', a
+  // Project selector row renders BELOW the composer (web = projects only; the
+  // local-folder variant is desktop-only). Kept in local state — the mode is a
+  // composer affordance and does not change the send contract today.
+  const [workMode, setWorkMode] = useState<'chat' | 'agiwork'>('chat');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [projectQuery, setProjectQuery] = useState('');
+  const router = useRouter();
+  // Real projects from the shared store (hydrated from /api/projects by the page).
+  const projects = useProjectStore((s) => s.projects);
+  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
+  const projectMenuRef = useRef<HTMLDivElement>(null);
 
   // Image generation mode state
   const [imageMode, setImageMode] = useState(false);
@@ -581,6 +598,9 @@ const ChatComposerNewComponent = ({
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
         setShowMentions(false);
       }
+      if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
+        setShowProjectMenu(false);
+      }
     }
     // The composer textarea's onKeyDown only fires while the textarea has focus; once the
     // "+" menu opens, focus moves into the popover, so Escape must be handled at the
@@ -591,6 +611,7 @@ const ChatComposerNewComponent = ({
       setShowSkillsSubmenu(false);
       setShowStyleSubmenu(false);
       setShowMentions(false);
+      setShowProjectMenu(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscapeKey);
@@ -749,79 +770,84 @@ const ChatComposerNewComponent = ({
     }
   }, [onStop]);
 
-  const handleSubmit = useCallback(
-    () => {
-      if (!message.trim() && attachments.length === 0) return;
-      if (isLoading || disabled) return;
-      if (trialExhausted) {
-        onUpgradeRequest?.();
-        return;
-      }
+  const handleSubmit = useCallback(() => {
+    if (!message.trim() && attachments.length === 0) return;
+    if (isLoading || disabled) return;
+    if (trialExhausted) {
+      onUpgradeRequest?.();
+      return;
+    }
 
-      // Image generation mode: delegate entirely to parent via onGenerateImage.
-      if (imageMode) {
-        const prompt = message.trim();
-        if (!prompt) return;
-        onGenerateImage?.(prompt, { aspectRatio: imageAspectRatio, modelId: imageModelId });
-        clearComposerState();
-        return;
-      }
-
-      if (isFreeTrial && attachments.length > 0) {
-        setLocalNotice(
-          'The website free trial is text-only. Upgrade for hosted file and image uploads.',
-        );
-        return;
-      }
-      if (isFreeTrial && message.trim().length > FREE_TRIAL_MAX_INPUT_CHARS) {
-        setLocalNotice(
-          'This prompt is too large for the website free trial. Shorten it or upgrade for larger hosted prompts.',
-        );
-        return;
-      }
-
-      const result = onSend(
-        message,
-        attachments.length > 0 ? attachments : undefined,
-        selectedSkill?.id,
-        {
-          agentMode,
-          folderId: selectedFolderId,
-          webSearchEnabled,
-          thinkingEnabled,
-          codeExecutionEnabled,
-          researchEnabled,
-          styleMode: styleMode !== 'normal' ? styleMode : undefined,
-          skillBody: skillBody ?? undefined,
-          skillName: selectedSkill?.name ?? undefined,
-        },
-      );
-
-      if (result === false) return;
+    // Image generation mode: delegate entirely to parent via onGenerateImage.
+    if (imageMode) {
+      const prompt = message.trim();
+      if (!prompt) return;
+      onGenerateImage?.(prompt, { aspectRatio: imageAspectRatio, modelId: imageModelId });
       clearComposerState();
-    }, // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
+      return;
+    }
+
+    if (isFreeTrial && attachments.length > 0) {
+      setLocalNotice(
+        'The website free trial is text-only. Upgrade for hosted file and image uploads.',
+      );
+      return;
+    }
+    if (isFreeTrial && message.trim().length > FREE_TRIAL_MAX_INPUT_CHARS) {
+      setLocalNotice(
+        'This prompt is too large for the website free trial. Shorten it or upgrade for larger hosted prompts.',
+      );
+      return;
+    }
+
+    const result = onSend(
       message,
-      attachments,
-      selectedSkill,
-      skillBody,
-      isLoading,
-      disabled,
-      trialExhausted,
-      isFreeTrial,
-      onUpgradeRequest,
-      imageMode,
-      imageAspectRatio,
-      imageModelId,
-      onGenerateImage,
-      agentMode,
-      selectedFolderId,
-      thinkingEnabled,
-      codeExecutionEnabled,
-      onSend,
-      clearComposerState,
-    ],
-  );
+      attachments.length > 0 ? attachments : undefined,
+      selectedSkill?.id,
+      {
+        agentMode,
+        folderId: selectedFolderId,
+        webSearchEnabled,
+        thinkingEnabled,
+        codeExecutionEnabled,
+        researchEnabled,
+        styleMode: styleMode !== 'normal' ? styleMode : undefined,
+        skillBody: skillBody ?? undefined,
+        skillName: selectedSkill?.name ?? undefined,
+      },
+    );
+
+    if (result === false) return;
+    clearComposerState();
+  }, [
+    message,
+    attachments,
+    selectedSkill,
+    skillBody,
+    isLoading,
+    disabled,
+    trialExhausted,
+    isFreeTrial,
+    onUpgradeRequest,
+    imageMode,
+    imageAspectRatio,
+    imageModelId,
+    onGenerateImage,
+    agentMode,
+    selectedFolderId,
+    // web search / research / style toggles MUST be in the dep array: they are
+    // read directly in the body, and omitting them (previous eslint-disable)
+    // made handleSubmit close over STALE values — toggling "Web search" then
+    // sending without another keystroke sent web_search:false, so the model
+    // never searched and replied "I can't browse the web" (audit DEMO-BLOCKER).
+    webSearchEnabled,
+    researchEnabled,
+    styleMode,
+    thinkingEnabled,
+    codeExecutionEnabled,
+    onSend,
+    clearComposerState,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1332,6 +1358,38 @@ const ChatComposerNewComponent = ({
                       disabled={isLoading || disabled || !modelSupportsCodeExecution}
                     />
 
+                    {/* 8c. Extended thinking — enables thinking effort. Cycling the
+                        effort level lives in the model picker; here it's a simple
+                        on affordance so the control is not lost from the input row. */}
+                    <MenuToggleRow
+                      icon={Brain}
+                      label={
+                        thinkingEnabled
+                          ? `Extended thinking · ${EFFORT_LABEL[thinkingEffort]}`
+                          : 'Extended thinking'
+                      }
+                      checked={thinkingEnabled}
+                      onToggle={() => {
+                        handleThinkingClick();
+                        closeMenu();
+                      }}
+                      disabled={isLoading || disabled || !modelSupportsThinkingCap}
+                    />
+
+                    {/* 8d. Incognito / temporary chat toggle */}
+                    {activeConversationId && (
+                      <MenuToggleRow
+                        icon={EyeOff}
+                        label="Temporary chat"
+                        checked={isIncognito}
+                        onToggle={() => {
+                          handleIncognitoToggle();
+                          closeMenu();
+                        }}
+                        disabled={!canToggleIncognito}
+                      />
+                    )}
+
                     {/* 9. Use style -- right flyout */}
                     <div className="relative">
                       <button
@@ -1394,186 +1452,97 @@ const ChatComposerNewComponent = ({
             )}
           </div>
 
-          {/* Quick Toggle Pills · shown for everyone (incl. free Hobby trial);
-              each toggle is gated by the selected model's capabilities below. */}
-          {
-            <div className={cn('flex items-center gap-1 order-3')}>
-              <button
-                onClick={handleWebSearchToggle}
-                disabled={isLoading || disabled || !modelSupportsSearch}
-                className={cn(
-                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                  webSearchEnabled
-                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled || !modelSupportsSearch) &&
-                    'cursor-not-allowed opacity-50',
-                )}
-                aria-label="Toggle web search"
-                aria-pressed={webSearchEnabled}
-                title={modelSupportsSearch ? undefined : "This model can't search the web"}
-              >
-                <Globe className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Search</span>
-              </button>
-
-              <button
-                onClick={handleResearchToggle}
-                disabled={isLoading || disabled || !modelSupportsResearch}
-                className={cn(
-                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                  researchEnabled
-                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled || !modelSupportsResearch) &&
-                    'cursor-not-allowed opacity-50',
-                )}
-                aria-label="Toggle deep research"
-                aria-pressed={researchEnabled}
-                title={
-                  modelSupportsResearch ? undefined : "This model doesn't support Deep Research"
-                }
-              >
-                <Telescope className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Research</span>
-              </button>
-
-              <button
-                onClick={handleCodeExecutionToggle}
-                disabled={isLoading || disabled || !modelSupportsCodeExecution}
-                className={cn(
-                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                  codeExecutionEnabled
-                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled || !modelSupportsCodeExecution) &&
-                    'cursor-not-allowed opacity-50',
-                )}
-                aria-label="Toggle code execution"
-                aria-pressed={codeExecutionEnabled}
-                title={modelSupportsCodeExecution ? undefined : "This model can't run code"}
-              >
-                <Terminal className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Code</span>
-              </button>
-
-              <button
-                onClick={handleThinkingClick}
-                disabled={isLoading || disabled || !modelSupportsThinkingCap}
-                className={cn(
-                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                  thinkingEnabled
-                    ? 'bg-muted/60 text-[var(--chat-accent-primary)] ring-1 ring-border'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled || !modelSupportsThinkingCap) &&
-                    'cursor-not-allowed opacity-50',
-                )}
-                aria-label={
-                  thinkingEnabled
-                    ? `Effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle.`
-                    : 'Enable thinking effort'
-                }
-                aria-pressed={thinkingEnabled}
-                title={
-                  thinkingEnabled
-                    ? `Thinking effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle levels.`
-                    : 'Enable extended thinking with effort control'
-                }
-              >
-                <Brain className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">
-                  {thinkingEnabled ? EFFORT_LABEL[thinkingEffort] : 'Think'}
-                </span>
-              </button>
-
-              {activeConversationId ? (
+          {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai parity.
+              Sits immediately right of the "+" button. All the old always-present
+              tool "pills" (Search / Research / Run code / Think / Incognito) moved
+              INTO the + menu, so the composer bottom row stays a SINGLE
+              non-wrapping line at every width (fixes the Send-button-drops-to-a-
+              second-line overflow bug). */}
+          {!imageMode && (
+            <div className="order-3 flex shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
+              {(['chat', 'agiwork'] as const).map((mode) => (
                 <button
-                  onClick={handleIncognitoToggle}
-                  disabled={!canToggleIncognito}
+                  key={mode}
+                  type="button"
+                  onClick={() => setWorkMode(mode)}
+                  disabled={isLoading || composerDisabled}
+                  aria-pressed={workMode === mode}
                   className={cn(
-                    'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                    isIncognito
-                      ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                    !canToggleIncognito && 'cursor-not-allowed opacity-50',
+                    'flex h-7 items-center rounded-full px-3 transition-colors',
+                    workMode === mode
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                    (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
                   )}
-                  aria-label={isIncognito ? 'Disable incognito mode' : 'Enable incognito mode'}
-                  aria-pressed={isIncognito}
-                  title={
-                    isIncognito
-                      ? 'Temporary mode is on for this conversation. Click to disable.'
-                      : 'Make the current conversation temporary.'
-                  }
                 >
-                  <EyeOff className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Incognito</span>
+                  {mode === 'chat' ? 'Chat' : 'AGI Work'}
                 </button>
-              ) : null}
-
-              {/* Image mode active pill — visible only when imageMode is on */}
-              {imageMode && (
-                <>
-                  {/* Image pill: click to exit image mode */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageMode(false);
-                      setImageAspectRatio('auto');
-                      setImageModelId(IMAGE_MODEL_DEFAULT);
-                    }}
-                    className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
-                    aria-label="Exit image generation mode"
-                    title="Click to exit image generation mode"
-                  >
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    <span>Image</span>
-                    <X className="h-3 w-3 opacity-60" />
-                  </button>
-
-                  {/* Aspect ratio selector */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowImageAspectMenu((p) => !p);
-                        setShowImageModelMenu(false);
-                      }}
-                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                      aria-label="Select aspect ratio"
-                    >
-                      {IMAGE_ASPECT_OPTIONS.find((o) => o.id === imageAspectRatio)?.label ?? 'Auto'}
-                      <ChevronDown className="h-3 w-3" />
-                    </button>
-                    {showImageAspectMenu && (
-                      <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                        {IMAGE_ASPECT_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => {
-                              setImageAspectRatio(opt.id);
-                              setShowImageAspectMenu(false);
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                              imageAspectRatio === opt.id
-                                ? 'bg-primary/10 text-primary'
-                                : 'hover:bg-muted/60',
-                            )}
-                          >
-                            <span className="flex-1 text-left">{opt.label}</span>
-                            {imageAspectRatio === opt.id && (
-                              <Check className="h-3 w-3 shrink-0 text-primary" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+              ))}
             </div>
-          }
+          )}
+
+          {/* Image-mode pills (only when the user is generating an image). */}
+          {imageMode && (
+            <div className={cn('flex items-center gap-1 order-3')}>
+              {/* Image pill: click to exit image mode */}
+              <button
+                type="button"
+                onClick={() => {
+                  setImageMode(false);
+                  setImageAspectRatio('auto');
+                  setImageModelId(IMAGE_MODEL_DEFAULT);
+                }}
+                className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
+                aria-label="Exit image generation mode"
+                title="Click to exit image generation mode"
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+                <span>Image</span>
+                <X className="h-3 w-3 opacity-60" />
+              </button>
+
+              {/* Aspect ratio selector */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImageAspectMenu((p) => !p);
+                    setShowImageModelMenu(false);
+                  }}
+                  className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                  aria-label="Select aspect ratio"
+                >
+                  {IMAGE_ASPECT_OPTIONS.find((o) => o.id === imageAspectRatio)?.label ?? 'Auto'}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+                {showImageAspectMenu && (
+                  <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                    {IMAGE_ASPECT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setImageAspectRatio(opt.id);
+                          setShowImageAspectMenu(false);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                          imageAspectRatio === opt.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <span className="flex-1 text-left">{opt.label}</span>
+                        {imageAspectRatio === opt.id && (
+                          <Check className="h-3 w-3 shrink-0 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Textarea + Ghost-text overlay wrapper */}
           <div
@@ -1717,6 +1686,111 @@ const ChatComposerNewComponent = ({
           aria-label="Image upload"
         />
       </div>
+
+      {/* AGI Work project selector row — claude.ai Cowork "Project ⌄" parity.
+          Renders BELOW the composer when the work-mode toggle is 'agiwork'. On
+          web this lists the user's real Projects (from the shared project store,
+          hydrated from /api/projects). The local-folder variant is desktop-only.
+          NOTE: attaching the chosen project to the created conversation is a
+          server follow-up (createConversation does not yet accept projectId — see
+          WebChatPage). Today this selects/º navigates to the project context. */}
+      {workMode === 'agiwork' && !isFreeTrial && (
+        <div className="relative mt-2 flex items-center gap-2" ref={projectMenuRef}>
+          <span className="text-xs text-muted-foreground">Project</span>
+          <button
+            type="button"
+            onClick={() => setShowProjectMenu((v) => !v)}
+            className="flex h-8 min-w-0 items-center gap-1.5 rounded-lg border border-[var(--chat-glass-border)] bg-muted/40 px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60"
+            aria-haspopup="listbox"
+            aria-expanded={showProjectMenu}
+          >
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="max-w-[200px] truncate">
+              {selectedProject ? selectedProject.name : 'Choose a project'}
+            </span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </button>
+          {selectedProject && (
+            <button
+              type="button"
+              onClick={() => setSelectedProjectId(null)}
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+              aria-label="Clear selected project"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {showProjectMenu && (
+            <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+              <input
+                type="text"
+                value={projectQuery}
+                onChange={(e) => setProjectQuery(e.target.value)}
+                placeholder="Search projects"
+                className="mb-1.5 w-full rounded-lg border border-border/60 bg-transparent px-2.5 py-1.5 text-xs outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+                aria-label="Search projects"
+              />
+              <div className="max-h-56 overflow-y-auto">
+                {projects
+                  .filter((p) => p.name.toLowerCase().includes(projectQuery.toLowerCase()))
+                  .slice(0, 20)
+                  .map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(p.id);
+                        setShowProjectMenu(false);
+                        setProjectQuery('');
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors',
+                        selectedProjectId === p.id
+                          ? 'bg-primary/10 text-primary'
+                          : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 truncate">{p.name}</span>
+                      {selectedProjectId === p.id && (
+                        <Check className="h-3 w-3 shrink-0 text-primary" />
+                      )}
+                    </button>
+                  ))}
+                {projects.filter((p) => p.name.toLowerCase().includes(projectQuery.toLowerCase()))
+                  .length === 0 && (
+                  <p className="px-2.5 py-2 text-xs text-muted-foreground">No projects found.</p>
+                )}
+              </div>
+              <div className="my-1 border-t border-border/30" />
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProjectMenu(false);
+                  router.push('/projects?new=1');
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+              >
+                <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1">Create new project</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProjectMenu(false);
+                  router.push('/projects');
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+              >
+                <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1">View all projects</span>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Disclaimer · sits below the composer (outside the pill), ChatGPT/Claude-
           style. The 'Cmd+Enter to send' keyboard hint lives in ComposerFooter (visible
