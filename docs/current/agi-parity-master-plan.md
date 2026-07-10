@@ -47,14 +47,25 @@ Continue the wave pattern already in use: scoped worktree agents per capability/
 
 ## Wave queue (post current in-flight)
 
-1. Land composer parity + SEO/GEO/AEO (in flight) → then delete the used `.agents/skills/*` (frontend-design, seo-geo, ai-seo, programmatic-seo, web-design-guidelines) after max-value extraction.
-2. Artifact-viewer parity build (spec-driven) + inline-vs-panel + type-specific headers + version history.
-3. Capability parity + real wiring: web search, deep research, URL fetch, sandbox (E2B fallback metered), file creation, tool-call/result rendering, thinking blocks — each researched vs official docs, wired, Playwright-verified.
-4. Rendering parity: PDF, image, spreadsheet, presentation, email, code-block chrome, citations.
-5. Message-lifecycle unification (shared status enum, persisted interrupted/cancel/continue).
-6. Cross-surface parity: desktop v3 + mobile onto shared chat core; then VSCode/CLI/Chrome capability verification.
-7. Roll marketing redesign across all 105 pages (after founder aesthetic sign-off).
-8. Assemble the comprehensive reverse-engineering documentation.
+Progress log (session 2026-07-10, all on `chore/repo-restructure-2026-07`, each gate-verified — tsc 0 + web suite + boundaries):
+
+- ✅ **Composer parity** (`7eae67658` and predecessors): one-row no-overflow layout, plus-menu tools, Chat/AGI-Work toggle, model picker — live-verified 1440 + 375px.
+- ✅ **Web search + persistence** (`751877973`): honest web-search toggle + fixed the stale-Bearer-on-long-stream bug (long answers were 401/CSRF-403 dropped on save; now fetch a fresh token at save time). Live-verified persist-across-reload.
+- ✅ **Artifact viewer parity** (`d9f02a9ed`): type-specific header, eye/code pill gated to renderable, real content-keyed version chip, copy/export menu, empty + render-error states; fixed a duplicate-download + binary-doc-corruption bug.
+- ✅ **Reasoning/thinking persistence** (`bdbdf2798`): fixed metadata-wholesale-replace that erased thinking on block-close; persists "Thought for Ns" across reload; multi-block reasoning flow.
+- ✅ **Citations** (`6cbe3e042`): dedupe by real provider URL, stable numbering, favicons, "N sources" — no placeholders.
+- ✅ **Media rendering** (`0dce24674`, `97ac9f701`): raster images render inline w/ lightbox + broken-image fallback (fixed sanitize schema stripping `data:`/`blob:` image srcs); PDF viewer given a real validated source + honest fallback (fixed markdown-text-as-PDF-src bug + sandbox-crashes-data-URL bug). PDF byte pipeline on web still unwired (honest fallback until then).
+- ✅ **Reverse-engineering docs + capability parity gap board** (`089c9beea`): `docs/architecture/reverse-engineering/` (index + areas 1–12), honest done/partial/gap status per capability.
+- ⏳ **Consolidated signed-in live-verification checkpoint** across the above — in flight.
+
+Remaining queue:
+
+1. Delete the used `.agents/skills/*` (frontend-design, seo-geo, ai-seo, programmatic-seo, web-design-guidelines) after max-value extraction (SEO/GEO/AEO already merged `98fdb14ab`).
+2. Capability wiring gaps (grounded, from the gap board): **deep research** backend (`app/api/research` missing), **URL fetch** tool (none exists), sandbox (E2B fallback metered), file-creation/generated-file byte pipeline on web (unblocks the PDF/image byte path), tool-call/result rendering polish.
+3. Rendering parity remainder: spreadsheet, presentation, email, code-block chrome (image + PDF + citations + thinking DONE this session).
+4. Message-lifecycle unification (shared status enum, persisted interrupted/cancel/continue).
+5. Cross-surface parity (the Stop hook's largest open area — only web addressed so far): desktop v3 + mobile onto shared chat core; then VSCode/CLI/Chrome capability verification — each needs its own surface tooling (Tauri / XcodeBuildMCP / etc.).
+6. Roll marketing redesign across all 105 pages (after founder aesthetic sign-off).
 
 ## Founder-gated
 
