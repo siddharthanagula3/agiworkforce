@@ -74,6 +74,31 @@ function describeModel(metadata: ModelMetadata): string {
   return 'Fast and cost-efficient';
 }
 
+/**
+ * Whether a model is CURRENT (safe to show in the primary picker). Excludes any
+ * model the catalog marks deprecated — explicitly (`deprecated: true` /
+ * `status: 'deprecated'`) or by a `deprecation_date` already in the past. The
+ * picker must show only the latest models (claude.ai parity); a superseded/old
+ * version must never appear in the list. Future-dated `deprecation_date`s are
+ * still current (the model is scheduled but not yet retired).
+ */
+function isCurrentModel(metadata: ModelMetadata): boolean {
+  // These lifecycle fields exist in the canonical models.json but are not part of
+  // the web's narrower local ModelMetadata interface — read them defensively.
+  const lifecycle = metadata as unknown as {
+    deprecated?: boolean;
+    status?: string;
+    deprecation_date?: string | null;
+  };
+  if (lifecycle.deprecated === true) return false;
+  if (lifecycle.status === 'deprecated') return false;
+  if (lifecycle.deprecation_date) {
+    const retiresAt = Date.parse(lifecycle.deprecation_date);
+    if (!Number.isNaN(retiresAt) && retiresAt <= Date.now()) return false;
+  }
+  return true;
+}
+
 function buildAvailableModels(): AIModel[] {
   const seen = new Set<string>();
   const autoModeEntries = (MODEL_PRESETS['managed_cloud'] ?? []).map((entry) => ({
@@ -98,7 +123,7 @@ function buildAvailableModels(): AIModel[] {
     .map((modelId) => getModelMetadata(modelId))
     .filter(
       (metadata): metadata is ModelMetadata =>
-        !!metadata && CHAT_MODEL_TYPES.has(metadata.modelType),
+        !!metadata && CHAT_MODEL_TYPES.has(metadata.modelType) && isCurrentModel(metadata),
     )
     .map((metadata) => ({
       id: metadata.id,
