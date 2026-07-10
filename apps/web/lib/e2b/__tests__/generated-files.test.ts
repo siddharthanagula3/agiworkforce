@@ -127,10 +127,20 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
     expect(files[0]!.kind).toBe('image');
   });
 
-  it('returns [] when media storage is unconfigured (never throws)', async () => {
+  it('counts changed files as failed when media storage is unconfigured (honest note, never silence)', async () => {
     mockIsConfigured.mockReturnValue(false);
     const executor = makeExecutor({ '/home/user': [file('/home/user/a.txt', 5)] });
     expect(await harvestGeneratedFiles({ executor, baseline: new Map(), userId: 'u1' })).toEqual({
+      files: [],
+      failedCount: 1,
+    });
+  });
+
+  it('returns failedCount 0 when storage is unconfigured but nothing changed', async () => {
+    mockIsConfigured.mockReturnValue(false);
+    const executor = makeExecutor({ '/home/user': [file('/home/user/a.txt', 5)] });
+    const baseline = await snapshotSandboxFiles(executor);
+    expect(await harvestGeneratedFiles({ executor, baseline, userId: 'u1' })).toEqual({
       files: [],
       failedCount: 0,
     });
