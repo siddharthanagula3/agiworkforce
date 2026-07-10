@@ -33,6 +33,7 @@ import {
   Globe,
   LogOut,
   FolderOpen,
+  LibraryBig,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
@@ -1703,6 +1704,15 @@ export default function WebChatPage() {
         label: 'Projects',
         icon: FolderOpen,
         onClick: () => router.push('/projects'),
+        isActive: false,
+      },
+      // Library — browse generated files without scrolling back to their
+      // origin message (ChatGPT-Library / mobile-LibraryScreen parity).
+      {
+        id: 'library',
+        label: 'Library',
+        icon: LibraryBig,
+        onClick: () => router.push('/library'),
         isActive: false,
       },
       {
