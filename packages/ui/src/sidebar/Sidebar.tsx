@@ -196,6 +196,8 @@ export function Sidebar(props: SidebarProps) {
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
   /** Per-project "show more chats" state. */
   const [projectShowAllChats, setProjectShowAllChats] = useState<Set<string>>(new Set());
+  /** Keeps the hover-revealed header actions visible while the "…" menu is open. */
+  const [projectsHeaderMenuOpen, setProjectsHeaderMenuOpen] = useState(false);
   /**
    * ChatGPT-style "Organize chats" preference: 'by-project' (default) groups
    * the Chats list by project; 'one-list' shows all chats in a flat list.
@@ -642,9 +644,18 @@ export function Sidebar(props: SidebarProps) {
                       )}
                     />
                   </button>
-                  {/* Right-side actions: always visible at muted color, brighten on hover.
-                      Rendered only when the relevant handlers are present. */}
-                  <div className="flex shrink-0 items-center gap-0.5">
+                  {/* Right-side actions (ChatGPT pattern): hidden at rest, revealed
+                      on header hover or keyboard focus-within (a11y: hover-only
+                      affordances must also appear on focus), and pinned visible
+                      while the "…" menu is open. Rendered only when the relevant
+                      handlers are present. */}
+                  <div
+                    className={cn(
+                      'flex shrink-0 items-center gap-0.5 transition-opacity',
+                      'opacity-0 group-hover/projhdr:opacity-100 group-focus-within/projhdr:opacity-100',
+                      projectsHeaderMenuOpen && 'opacity-100',
+                    )}
+                  >
                     {onProjectCreate && (
                       <button
                         type="button"
@@ -662,6 +673,7 @@ export function Sidebar(props: SidebarProps) {
                     {/* "..." opens the ChatGPT-style "Organize chats" menu */}
                     <Menu
                       align="end"
+                      onOpenChange={setProjectsHeaderMenuOpen}
                       trigger={({ toggle }) => (
                         <button
                           type="button"
@@ -1001,7 +1013,6 @@ function ProjectRow({
   onSelectSession,
 }: ProjectRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [rowHovered, setRowHovered] = useState(false);
 
   const isExpanded = expandedProjectIds.has(project.id);
   const showAllChats = projectShowAllChats.has(project.id);
@@ -1032,12 +1043,10 @@ function ProjectRow({
       {/* Main project row */}
       <div
         className={cn(
-          'relative flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors',
+          'group/projrow relative flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors',
           'hover:bg-[hsl(var(--accent))] cursor-pointer',
-          (menuOpen || isExpanded || rowHovered) && 'bg-[hsl(var(--accent))]',
+          (menuOpen || isExpanded) && 'bg-[hsl(var(--accent))]',
         )}
-        onMouseEnter={() => setRowHovered(true)}
-        onMouseLeave={() => setRowHovered(false)}
       >
         {/* Folder icon + project name — clicking toggles expand */}
         <button
@@ -1065,11 +1074,13 @@ function ProjectRow({
           </span>
         </button>
 
-        {/* Hover actions: compose + more-menu (visible on hover OR while menu open / expanded) */}
+        {/* Hover actions (ChatGPT pattern): hidden at rest, revealed on row
+            hover or keyboard focus-within, pinned while the menu is open. */}
         <div
           className={cn(
             'flex shrink-0 items-center gap-0.5 transition-opacity',
-            menuOpen || isExpanded || rowHovered ? 'opacity-100' : 'opacity-0',
+            'opacity-0 group-hover/projrow:opacity-100 group-focus-within/projrow:opacity-100',
+            menuOpen && 'opacity-100',
           )}
         >
           {/* New chat in project (compose icon) */}
@@ -1091,6 +1102,7 @@ function ProjectRow({
           {/* More actions menu */}
           <Menu
             align="end"
+            onOpenChange={setMenuOpen}
             trigger={({ toggle }) => (
               <button
                 type="button"
@@ -1098,7 +1110,6 @@ function ProjectRow({
                 title="More options"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setMenuOpen(true);
                   toggle();
                 }}
                 className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
@@ -1110,10 +1121,7 @@ function ProjectRow({
             className="relative"
           >
             {({ close }) => {
-              const handleClose = () => {
-                setMenuOpen(false);
-                close();
-              };
+              const handleClose = close;
               return (
                 <>
                   {onShare && (
@@ -1227,7 +1235,7 @@ function ProjectRow({
                   }
                   className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))]/70 transition-colors hover:text-[hsl(var(--muted-foreground))]"
                 >
-                  Show {projectSessions.length - PROJECT_CHATS_SHOW_LIMIT} more
+                  Show more
                 </button>
               )}
               {showAllChats && projectSessions.length > PROJECT_CHATS_SHOW_LIMIT && (
