@@ -53,6 +53,24 @@ export interface ThinkingSegment {
   durationSeconds?: number;
 }
 
+/**
+ * One tool/provider-generated file announced by the `x_generated_files` SSE
+ * delta. `uri` is the authenticated SAME-ORIGIN `/api/files/{id}` route (the
+ * only url shape the PDF/image renderer gates accept), except in the
+ * pre-migration fallback where it is the raw storage URL (download only).
+ */
+export interface GeneratedFileMetadataEntry {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  uri: string;
+  byteCount: number;
+  /** Coarse icon kind: pdf | docx | xlsx | pptx | csv | json | markdown | html | image | archive | other */
+  kind: string;
+  /** SHA-256 of the stored bytes (integrity verification across surfaces). */
+  checksumSha256?: string;
+}
+
 export interface MessageMetadata {
   /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
   privacyMode?: 'local' | 'byok' | 'managed';
@@ -105,6 +123,13 @@ export interface MessageMetadata {
   computeSession?: ComputeSession;
   generatedFile?: GeneratedFile;
   artifactManifest?: ArtifactManifest;
+  /**
+   * Files produced by tool/provider runs this turn (`x_generated_files` SSE
+   * delta). Images render inline (thumbnail + lightbox), PDFs feed the
+   * artifact PDF viewer, CSVs the spreadsheet renderer, everything else a
+   * download chip. Persisted in messages.metadata so a reload re-renders them.
+   */
+  generatedFiles?: GeneratedFileMetadataEntry[];
   documentData?: { title?: string; content?: string; [key: string]: unknown };
   /** Persisted user reaction (stored in cloud messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
