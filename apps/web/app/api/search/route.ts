@@ -8,6 +8,11 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+
+// Postgres SQLSTATE for undefined_function — raised when a called function
+// signature does not exist (e.g. a migration adding/altering it hasn't run).
+const PG_UNDEFINED_FUNCTION = '42883';
 
 const TrackSearchSchema = z.object({
   query: z.string().min(1).max(500),
@@ -116,11 +121,29 @@ async function handleGet(request: NextRequest) {
   // every other user).
   if (type === 'popular') {
     const days = parseInt(url.searchParams.get('days') ?? '7', 10);
-    const rows = await db.query<PopularSearchRow>(
-      'select * from get_popular_searches($1, $2, $3)',
-      [userId, limit, days],
-    );
-    return NextResponse.json({ searches: rows });
+    try {
+      const rows = await db.query<PopularSearchRow>(
+        'select * from get_popular_searches($1, $2, $3)',
+        [userId, limit, days],
+      );
+      return NextResponse.json({ searches: rows });
+    } catch (error) {
+      // The user-scoped 3-arg get_popular_searches(text, int, int) lands with
+      // migration 0045. On an environment where 0045 hasn't been applied, the
+      // old 2-arg overload is the only one present and Postgres raises
+      // undefined_function (42883) for the 3-arg call. Popular searches is a
+      // best-effort pre-fill for the search modal — degrade to an empty list
+      // instead of 500-ing the whole modal open. Mirrors the
+      // PG_UNDEFINED_COLUMN migration-lag fallback in /api/projects/[id] (PUT).
+      // Any other DB error still propagates so real bugs are not masked.
+      if ((error as { code?: string } | null)?.code === PG_UNDEFINED_FUNCTION) {
+        logger.warn(
+          '[search] get_popular_searches unavailable (migration 0045 not applied?); returning empty list',
+        );
+        return NextResponse.json({ searches: [] });
+      }
+      throw error;
+    }
   }
 
   // Search suggestions
