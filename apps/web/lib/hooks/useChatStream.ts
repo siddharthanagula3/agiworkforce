@@ -136,6 +136,19 @@ const DEFAULT_SAVE_RETRY_DELAY_MS = 350;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Provider that yields a CURRENTLY-valid Clerk session token. Clerk JWTs are
+ * short-lived (~60s default), so a token captured when a request STARTS is
+ * expired by the time a long web-search / deep-research / long-generation
+ * stream finishes — persisting the assistant turn with that stale Bearer then
+ * fails (401 on the save route, plus 403 CSRF_VALIDATION_FAILED because an
+ * expired Bearer no longer qualifies for the Bearer CSRF-bypass and the
+ * cookie-derived session no longer matches the userId-bound CSRF token). The
+ * save path therefore takes a PROVIDER, not a captured string, and calls it at
+ * save time (and on every retry) so `getToken()` hands back a fresh token.
+ */
+type AuthTokenProvider = () => Promise<string>;
+
 interface SaveRetryOptions {
   /** Total attempts including the first try. Default 3 (1 + 2 retries). */
   maxAttempts?: number;
@@ -171,7 +184,7 @@ async function saveMessageToDb(
     model?: string;
     metadata?: MessageMetadata;
   },
-  authToken: string,
+  getAuthToken: AuthTokenProvider,
   options: SaveRetryOptions = {},
 ): Promise<{ id: string }> {
   const maxAttempts = options.maxAttempts ?? DEFAULT_SAVE_MAX_ATTEMPTS;
@@ -181,6 +194,11 @@ async function saveMessageToDb(
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let response: Response;
     try {
+      // Fetch a FRESH token for THIS attempt. Reusing a token captured when the
+      // request started would already be expired after a long stream (see
+      // AuthTokenProvider). Clerk's getToken() returns a valid token, refreshing
+      // the session as needed, so a slow response always persists.
+      const authToken = await getAuthToken();
       const headers = await addCsrfHeaders({
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
@@ -329,7 +347,7 @@ interface ConsumeStreamContext {
   model: string;
   conversationId: string;
   isTemporaryConversation: boolean;
-  authToken: string;
+  getAuthToken: AuthTokenProvider;
   /** Seed the accumulated assistant text (for the resume continuation). */
   seedContent?: string;
   /** Seed the tool timeline (for the resume continuation, so prior cards persist). */
@@ -353,7 +371,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     model,
     conversationId,
     isTemporaryConversation,
-    authToken,
+    getAuthToken,
   } = ctx;
 
   const store = useChatStore.getState();
@@ -499,7 +517,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         model,
         metadata: buildAssistantMetadata(),
       },
-      authToken,
+      getAuthToken,
     )
       .then((saved) => {
         if (saved?.id && saved.id !== assistantMessageId) {
@@ -867,10 +885,14 @@ export function useChatStream(): UseChatStreamReturn {
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillBody),
       });
-      const authToken = await getToken();
-      if (!authToken) {
-        throw new Error('Not authenticated');
-      }
+      // Provider (not a captured string): every save fetches a fresh token at
+      // call time so a long stream cannot outlive it. See AuthTokenProvider.
+      const getAuthToken: AuthTokenProvider = async () => {
+        const token = await getToken();
+        if (!token) throw new Error('Not authenticated');
+        return token;
+      };
+      const authToken = await getAuthToken();
 
       const userMessageId = crypto.randomUUID();
       const userMessage: Message = {
@@ -897,7 +919,7 @@ export function useChatStream(): UseChatStreamReturn {
             content: content.trim(),
             metadata: sendReplay ? { sendReplay } : undefined,
           },
-          authToken,
+          getAuthToken,
         )
           .then((saved) => {
             if (saved?.id && saved.id !== userMessageId) {
@@ -1021,7 +1043,7 @@ export function useChatStream(): UseChatStreamReturn {
           model,
           conversationId,
           isTemporaryConversation,
-          authToken,
+          getAuthToken,
           seedTools: skillSeed,
         });
 
@@ -1043,7 +1065,7 @@ export function useChatStream(): UseChatStreamReturn {
           model,
           conversationId,
           isTemporaryConversation,
-          authToken,
+          getAuthToken,
           setError,
           stopStreaming,
           setLoading,
@@ -1135,8 +1157,17 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
       if (turn.decisions.size < turn.calls.length) return;
       turn.resolving = true;
 
-      const authToken = await getToken();
-      if (!authToken) {
+      // Provider so the terminal persist after a long resume continuation uses a
+      // fresh token (see AuthTokenProvider), not one captured here.
+      const getAuthToken: AuthTokenProvider = async () => {
+        const token = await getToken();
+        if (!token) throw new Error('Not authenticated');
+        return token;
+      };
+      let authToken: string;
+      try {
+        authToken = await getAuthToken();
+      } catch {
         turn.resolving = false;
         setError('Not authenticated');
         return;
@@ -1208,7 +1239,7 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
           model: turn.model,
           conversationId: turn.conversationId,
           isTemporaryConversation: turn.isTemporaryConversation,
-          authToken,
+          getAuthToken,
           seedContent: assistantContent,
           seedTools: seedTools ? seedTools.map((t) => ({ ...t })) : undefined,
         });
@@ -1249,7 +1280,7 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
           model: turn.model,
           conversationId: turn.conversationId,
           isTemporaryConversation: turn.isTemporaryConversation,
-          authToken,
+          getAuthToken,
           setError,
           stopStreaming,
           setLoading,
@@ -1268,7 +1299,7 @@ interface StreamErrorContext {
   model: string;
   conversationId: string;
   isTemporaryConversation: boolean;
-  authToken: string;
+  getAuthToken: AuthTokenProvider;
   setError: (message: string | null) => void;
   stopStreaming: () => void;
   setLoading: (loading: boolean) => void;
@@ -1281,7 +1312,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     model,
     conversationId,
     isTemporaryConversation,
-    authToken,
+    getAuthToken,
     setError,
     stopStreaming,
     setLoading,
@@ -1348,7 +1379,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
         content: errorContent,
         model,
       },
-      authToken,
+      getAuthToken,
     )
       .then((saved) => {
         if (saved?.id && saved.id !== assistantMessageId) {

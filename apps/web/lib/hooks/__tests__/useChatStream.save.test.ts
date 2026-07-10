@@ -15,6 +15,9 @@ import { saveMessageToDb, notifyPersistenceFailure } from '../useChatStream';
 
 const MSG = { id: 'client-id-1', role: 'assistant', content: 'hi', model: 'm' };
 const FAST = { retryDelayMs: 0 }; // no real backoff in tests
+// saveMessageToDb now takes a token PROVIDER (fetched fresh at save time so a
+// long stream cannot outlive it), not a captured string.
+const TOK = async () => 'tok';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -35,7 +38,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
       .mockResolvedValue(jsonResponse(200, { message: { id: 'server-id-9' } }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const saved = await saveMessageToDb('conv-1', MSG, 'tok', FAST);
+    const saved = await saveMessageToDb('conv-1', MSG, TOK, FAST);
 
     expect(saved).toEqual({ id: 'server-id-9' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -46,7 +49,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     // still saved, so the store id must stay in sync — never invent a uuid.
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, {})));
 
-    const saved = await saveMessageToDb('conv-1', MSG, 'tok', FAST);
+    const saved = await saveMessageToDb('conv-1', MSG, TOK, FAST);
 
     expect(saved).toEqual({ id: 'client-id-1' });
   });
@@ -58,7 +61,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(429, { error: 'rate limited' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(saveMessageToDb('conv-1', MSG, 'tok', FAST)).rejects.toThrow(/429/);
+    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(/429/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -69,7 +72,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
       .mockResolvedValueOnce(jsonResponse(200, { message: { id: 'server-id-2' } }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const saved = await saveMessageToDb('conv-1', MSG, 'tok', FAST);
+    const saved = await saveMessageToDb('conv-1', MSG, TOK, FAST);
 
     expect(saved).toEqual({ id: 'server-id-2' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -79,7 +82,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(500, { error: 'boom' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(saveMessageToDb('conv-1', MSG, 'tok', FAST)).rejects.toThrow(
+    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(
       /save message to DB/i,
     );
     expect(fetchMock).toHaveBeenCalledTimes(3); // default maxAttempts = 3
@@ -89,7 +92,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(404, { error: 'not found' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(saveMessageToDb('conv-1', MSG, 'tok', FAST)).rejects.toThrow(
+    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(
       /save message to DB/i,
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -102,7 +105,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
       .mockResolvedValueOnce(jsonResponse(200, { message: { id: 'server-id-3' } }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const saved = await saveMessageToDb('conv-1', MSG, 'tok', FAST);
+    const saved = await saveMessageToDb('conv-1', MSG, TOK, FAST);
 
     expect(saved).toEqual({ id: 'server-id-3' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -112,7 +115,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(saveMessageToDb('conv-1', MSG, 'tok', FAST)).rejects.toThrow();
+    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
