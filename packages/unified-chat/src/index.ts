@@ -9,6 +9,12 @@ export * from './lib/greetings';
 export { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from './lib/artifact-sandbox';
 export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
 export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
+export {
+  isContinuableFinishReason,
+  isMessageContinuable,
+  CONTINUE_GENERATION_INSTRUCTION,
+} from './lib/continue-generation';
+export type { ContinuableMessageLike } from './lib/continue-generation';
 export { classifyPrompt, buildRoutingDecision, TASK_LABEL } from './lib/promptClassifier';
 export type { ClassifiedTask, ClassificationResult, ClassifyOptions } from './lib/promptClassifier';
 export {
