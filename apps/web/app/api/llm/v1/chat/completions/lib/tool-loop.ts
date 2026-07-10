@@ -836,6 +836,7 @@ export async function* runToolLoop(
       content: string;
       isError: boolean;
       source?: FetchedSource;
+      pngResults?: string[];
     }[] = [];
 
     // Execute read-only tools concurrently.
@@ -851,6 +852,12 @@ export async function* runToolLoop(
     for (const tc of mutating) {
       const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
       results.push({ tc, ...result });
+    }
+
+    // Collect runCode chart PNGs (rich results that never touch the sandbox
+    // disk) for the end-of-turn generated-file persistence.
+    for (const r of results) {
+      if (r.pngResults && r.pngResults.length > 0) turnPngResults.push(...r.pngResults);
     }
 
     // Emit status + result events, and append tool result messages.

@@ -76,7 +76,11 @@ describe('/chat route', () => {
 });
 
 describe('WebChatRuntime', () => {
-  it('instantiates without throwing', async () => {
+  // The dynamic import below pulls the whole chat-runtime graph; under full
+  // parallel suite load the import alone can exceed the 5s default (observed
+  // 5.9s), while the test passes in ~3s in isolation. Explicit timeout keeps
+  // this load-sensitive import-weight test from flaking the suite.
+  it('instantiates without throwing', { timeout: 20_000 }, async () => {
     vi.doMock('@/services/cloudDb', () => ({
       getNeonClient: () => ({
         auth: {
