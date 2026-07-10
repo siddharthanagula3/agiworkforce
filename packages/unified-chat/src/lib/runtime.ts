@@ -59,6 +59,20 @@ export interface ChatRuntime {
   getPlatform?(): 'desktop' | 'web' | 'mobile';
 
   /**
+   * True when this runtime can resume a truncated/user-stopped assistant turn
+   * IN PLACE (Continue Generation): reissue the completion with the history up
+   * to+including the partial plus an ephemeral continue instruction, and append
+   * to the SAME assistant message. Only the cloud SSE path (`WebRuntime`, and
+   * `CloudRuntime` once DCL-4 wires it) can do this — its `sendMessage` sends
+   * the full `messageHistory` as the thread. Local/native runtimes
+   * (`TauriRuntime`) drop `messageHistory` and persist each send as a new user
+   * turn via the Rust backend, so continuing in place is impossible there.
+   * When absent/false, surfaces MUST NOT show a Continue affordance (no fake
+   * availability) — see `useChat` / `MessageList`.
+   */
+  supportsContinueGeneration?: boolean;
+
+  /**
    * Persist an edit to an artifact's content (backs `ArtifactPanel`'s
    * edit-in-place `onSaveEdit`). Backends that version artifacts (e.g.
    * desktop's `ArtifactState`) create a new version. Returns only `id` +

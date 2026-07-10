@@ -507,12 +507,16 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   const stopGeneration = useCallback(() => {
     if (runtime && activeConversationId) {
       runtime.stopGeneration(activeConversationId);
-      // User stopped mid-stream: the runtime's abort path emits no 'done'
-      // event, so settle the in-flight assistant message here. When it has
-      // partial text already streamed, mark finish_reason 'stopped' (mirrors
-      // web's useChatStream) so the Continue affordance is offered honestly.
+      // Continue-Generation (cloud/Web runtime only): the abort path emits no
+      // 'done' event, so settle the in-flight assistant message here and, when
+      // it has partial text already streamed, mark finish_reason 'stopped'
+      // (mirrors web's useChatStream) so the Continue affordance is offered
+      // honestly. Gated on the runtime capability — local/native runtimes
+      // (TauriRuntime) can't resume in place, so they must NOT get the marker
+      // (it would surface a fake, broken Continue button in the Tauri build,
+      // which uses TauriRuntime for both local and cloud).
       const partialId = assistantMessageIdRef.current;
-      if (partialId) {
+      if (runtime.supportsContinueGeneration && partialId) {
         const store = useChatStore.getState();
         const msg = store.messagesByConversation[activeConversationId]?.find(
           (m) => m.id === partialId,
@@ -543,7 +547,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
    */
   const continueGeneration = useCallback(
     (assistantMessageId: string) => {
-      if (!runtime || isStreamingRef.current) return;
+      // Only the cloud/Web runtime can resume a turn in place; never reissue
+      // through a runtime that would persist the instruction as a new turn.
+      if (!runtime || !runtime.supportsContinueGeneration || isStreamingRef.current) return;
       const convId = useChatStore.getState().activeConversationId;
       if (!convId) return;
 

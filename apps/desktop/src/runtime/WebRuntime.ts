@@ -149,6 +149,14 @@ export class WebRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
 
+  /**
+   * Cloud SSE path supports Continue Generation: `sendMessage` sends the full
+   * `messageHistory` as the thread, so a truncated/stopped turn can be reissued
+   * with the partial + an ephemeral continue instruction and streamed back into
+   * the same message. (TauriRuntime omits this — it drops `messageHistory`.)
+   */
+  readonly supportsContinueGeneration = true;
+
   private emit(event: StreamEvent): void {
     for (const cb of this._streamCallbacks) {
       cb(event);
