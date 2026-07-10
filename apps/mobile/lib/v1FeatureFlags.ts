@@ -106,9 +106,11 @@ export const FEATURES = {
   /** External messaging integrations (WhatsApp, Telegram, Slack). */
   messaging: false,
 
-  /** Server-OAuth connectors. Disabled until the connectors feature ships (not a
-   *  cloud-access gate — signing in does not unlock connectors). */
-  connectors: false,
+  /** Connectors directory. 2026-07-06: enabled — the screen renders the real
+   *  catalog and loads/removes connection state via GET/DELETE /api/connectors.
+   *  Per-provider server-side OAuth flows are NOT live yet (POST answers 501
+   *  for OAuth providers), so the connect action shows honest coming-soon copy. */
+  connectors: true,
 
   /** Web search via server-side API.
    *  2026-06-27: enabled — the chat-completions body now carries `web_search:true`

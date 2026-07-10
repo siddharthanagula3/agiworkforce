@@ -285,6 +285,24 @@ export default function CloudUsageScreen() {
               }}
             >
               <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
+              <Pressable
+                onPress={() => void load()}
+                disabled={loading}
+                accessibilityLabel="Retry loading usage"
+                accessibilityRole="button"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 10,
+                  minHeight: 32,
+                }}
+              >
+                <RefreshCw size={14} color={colors.agentError} />
+                <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+                  {loading ? 'Retrying…' : 'Retry'}
+                </Text>
+              </Pressable>
             </View>
           )}
 

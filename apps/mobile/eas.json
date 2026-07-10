@@ -50,7 +50,7 @@
       "extends": "base",
       "distribution": "internal",
       "channel": "preview",
-      "autoIncrement": "buildNumber",
+      "autoIncrement": true,
       "env": {
         "APP_ENV": "preview",
         "EXPO_PUBLIC_APP_ENV": "preview"

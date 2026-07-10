@@ -240,11 +240,18 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
         jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
       }));
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // Log the real failure (e.g. expo-sqlite's "Calling the 'execAsync'
+      // function has failed" from the encrypted metadata write) for
+      // diagnostics, but never show internal driver errors to the user.
+      console.error(`[installStore] prepareModel(${model.id}) failed:`, err);
       set((state) => ({
         jobs: {
           ...state.jobs,
-          [model.id]: { status: 'failed', progress: 0, error: message },
+          [model.id]: {
+            status: 'failed',
+            progress: 0,
+            error: 'Unable to prepare the model. Please try again.',
+          },
         },
       }));
       throw err;
