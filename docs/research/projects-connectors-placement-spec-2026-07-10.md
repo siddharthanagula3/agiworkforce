@@ -13,12 +13,11 @@ Stable reference images: `/Users/siddhartha/Desktop/reference/claude_reference/2
 
 ## Connectors (claude.ai pattern — founder: "should not be outside; in the modal itself")
 
-Connectors must NOT be a flat submenu/list "outside" (e.g. expanding inline from the composer plus-menu). Two sanctioned surfaces, both modals:
+Connectors must NOT be a flat submenu/list "outside" (e.g. expanding inline from the composer plus-menu). Founder clarification (2026-07-10, follow-up message): **the home is the SETTINGS MODAL** — `Skills`, `Connectors`, `Plugins` appear as plain items in the settings modal's left nav, directly after the core settings items (General/Account/Privacy/Billing/Usage/…), **with NO separate "Customize" group heading** (unlike claude.ai's sidebar which groups them under "Customize" — we deliberately drop that heading).
 
-1. **Settings modal → Customize → Connectors** (ref: claude.ai settings modal): left nav has Settings (General/Account/Privacy/Billing/Usage/Capabilities/…) and a **Customize** group with `Skills`, `Connectors`, `Plugins`. The Connectors pane is a TABLE: filter tabs `All | Connected | Not connected`, columns Connector / Type / Status (✓ connected, "Reconnect"/"Connection issue" warnings in amber, `Connect` buttons), search icon + `Add ⌄` button top-right.
-2. **Directory modal** (refs 251–256): a large centered modal titled `Directory`, left tab rail `Skills | Connectors | Plugins`, search field, `Anthropic & Partners` chip, `Filter by`/`Sort by` dropdowns, card GRID (icon, name, popularity/badges like BETA/New/Trending, one-line description, `+` to add / gear when configured / spinner while connecting). Clicking a connector opens a DETAIL view inside the same modal (`< Back`, icon+name+tagline, description, "Developed by X" + trust note, `Tools (N)` chip list of tool names, Details: Author / Connector URL with copy / Documentation / Support / Privacy Policy links, `Disconnect` button).
-
-The composer plus-menu keeps only a `Connectors ›` ENTRY that opens one of these modals (entry point, not the list itself). Skills and Plugins entries follow the same rule — the Directory modal is the shared home for all three.
+- **Connectors pane** (in the settings modal): a TABLE — filter tabs `All | Connected | Not connected`, columns Connector / Type / Status (✓ connected; amber "Reconnect" / "Connection issue" warnings; `Connect` buttons for unconnected), search icon + `Add ⌄` button top-right. Clicking a connector may open a DETAIL view in place (`< Back`, icon+name+tagline, description, "Developed by X" + trust note, `Tools (N)` chip list, Details: Author / Connector URL with copy / Documentation / Support / Privacy Policy, `Disconnect`) — per claude.ai refs 251–256.
+- **Skills / Plugins panes**: same pattern (list/grid of real installed+available items; no fake popularity ranks).
+- The composer plus-menu keeps only `Skills ›` / `Connectors ›` / `Plugins ›` ENTRIES that open the settings modal at that pane (entry points, not the lists themselves).
 
 ## Scope notes
 
