@@ -48,8 +48,13 @@ export function getWebviewContent(
 ): string {
   // Build CSP-safe URIs for any local assets we might need
   const cspSource = webview.cspSource;
-  const modelOptionsHtml = MODEL_PICKER_OPTIONS.map(
-    (option) => `<option value="${option.id}">${escapeHtml(option.label)}</option>`,
+  // Availability invariant: non-live catalog models (`coming_soon`/`unavailable`)
+  // render as disabled "Coming soon" rows — visible but never selectable,
+  // mirroring the web picker (getSelectableModels vs getDisplayModels).
+  const modelOptionsHtml = MODEL_PICKER_OPTIONS.map((option) =>
+    option.availability === 'live'
+      ? `<option value="${option.id}">${escapeHtml(option.label)}</option>`
+      : `<option value="${option.id}" disabled>${escapeHtml(option.label)} — Coming soon</option>`,
   ).join('');
   const modeLabel = escapeHtml(AGENT_MODE_LABEL[initialMode]);
   const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
