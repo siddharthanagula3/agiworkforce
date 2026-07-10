@@ -1,0 +1,26 @@
+[package]
+name = "agiworkforce-licensing"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[lib]
+name = "agiworkforce_licensing"
+path = "src/lib.rs"
+
+[features]
+# Test/fixture-signing helpers. Gated so production builds never expose the
+# private-key signing surface; the fixture-replay tests do not need it (they
+# only verify), but the boundary/rotation/tamper unit tests do.
+test-support = []
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+ed25519-dalek = "2"
+
+[dev-dependencies]
+pretty_assertions = "1"
