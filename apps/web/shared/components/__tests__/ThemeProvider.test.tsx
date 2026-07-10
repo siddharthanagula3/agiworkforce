@@ -20,29 +20,20 @@ import {
   DEFAULT_THEME,
 } from '../ThemeConstants';
 
-// Mock next-themes so tests do not depend on Next.js SSR context
+// Mock next-themes so tests do not depend on Next.js SSR context. next-themes
+// owns the <html> class + localStorage; the bridge delegates to its setTheme.
+const mockSetTheme = vi.fn();
+let mockTheme = 'system';
 vi.mock('next-themes', () => {
-  let _theme = 'system';
-  const _listeners: Array<() => void> = [];
-
-  const mockUseTheme = vi.fn(() => ({
-    theme: _theme,
-    setTheme: (t: string) => {
-      _theme = t;
-      _listeners.forEach((l) => l());
-    },
-    resolvedTheme: _theme === 'system' ? 'dark' : _theme,
-  }));
-
   const ThemeProvider = ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children);
-
   return {
     ThemeProvider,
-    useTheme: mockUseTheme,
-    __resetTheme: () => {
-      _theme = 'system';
-    },
+    useTheme: () => ({
+      theme: mockTheme,
+      setTheme: mockSetTheme,
+      resolvedTheme: mockTheme === 'system' ? 'dark' : mockTheme,
+    }),
   };
 });
 
@@ -139,6 +130,8 @@ describe('ThemeProvider DOM integration', () => {
     document.documentElement.classList.remove('dark', 'light');
     document.documentElement.removeAttribute('data-theme');
     localStorage.clear();
+    mockSetTheme.mockClear();
+    mockTheme = 'system';
   });
 
   afterEach(() => {
@@ -154,7 +147,7 @@ describe('ThemeProvider DOM integration', () => {
     expect(getByText('hello')).toBeTruthy();
   });
 
-  it('persists theme selection to localStorage via ThemeContext setTheme', () => {
+  it('delegates theme changes to next-themes (which owns <html> class + storage)', () => {
     const { result } = renderHook(() => useThemeContext(), {
       wrapper: ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
     });
@@ -163,38 +156,36 @@ describe('ThemeProvider DOM integration', () => {
       result.current.setTheme('dark');
     });
 
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+    // The bug was: setTheme dispatched a dead CustomEvent nothing listened to.
+    // It must now call next-themes' setTheme so the app actually re-themes.
+    expect(mockSetTheme).toHaveBeenCalledWith('dark');
   });
 
-  it('reads initial theme from localStorage', () => {
-    localStorage.setItem(THEME_STORAGE_KEY, 'light');
+  it('surfaces the theme selected in next-themes', () => {
+    mockTheme = 'light';
 
     const { result } = renderHook(() => useThemeContext(), {
       wrapper: ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
     });
 
-    // The stored preference should be surfaced as the theme value
-    expect(['light', 'system', 'dark']).toContain(result.current.theme);
+    expect(result.current.theme).toBe('light');
+    expect(result.current.actualTheme).toBe('light');
   });
 
-  it('syncs data-theme attribute when document.documentElement has "dark" class', () => {
-    document.documentElement.classList.add('dark');
+  it('mirrors data-theme from the resolved next-themes theme (dark)', () => {
+    mockTheme = 'system'; // resolves to dark in the mock
 
-    // ThemeContextBridge uses a MutationObserver to sync. We trigger it by
-    // rendering and checking the attribute is set.
     render(
       <ThemeProvider>
         <div />
       </ThemeProvider>,
     );
 
-    // Allow MutationObserver microtask to fire
-    // (jsdom processes sync mutations before the assertion)
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('syncs data-theme attribute when document.documentElement has no "dark" class', () => {
-    document.documentElement.classList.remove('dark');
+  it('mirrors data-theme from the resolved next-themes theme (light)', () => {
+    mockTheme = 'light';
 
     render(
       <ThemeProvider>

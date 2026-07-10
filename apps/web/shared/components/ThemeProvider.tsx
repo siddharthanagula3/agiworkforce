@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { ThemeProvider as NextThemesProvider } from 'next-themes';
-import { type Theme, THEME_STORAGE_KEY, DEFAULT_THEME, getSystemTheme } from './ThemeConstants';
+import React, { useCallback, useEffect } from 'react';
+import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from 'next-themes';
+import { type Theme, THEME_STORAGE_KEY, DEFAULT_THEME } from './ThemeConstants';
 import { ThemeContext } from './ThemeContext';
 
 const NoncedNextThemesProvider = NextThemesProvider as React.ComponentType<
@@ -8,48 +8,29 @@ const NoncedNextThemesProvider = NextThemesProvider as React.ComponentType<
 >;
 
 /**
- * Inner context bridge: reads the resolved theme from next-themes via
- * window.document.documentElement and re-exposes it through ThemeContext.
- * This keeps all existing consumers of useThemeContext() working unchanged.
+ * Inner context bridge: delegates directly to next-themes (which owns the
+ * <html class> and localStorage persistence) and re-exposes its state through
+ * ThemeContext so all existing useThemeContext() consumers keep working.
  */
 function ThemeContextBridge({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return DEFAULT_THEME;
-    return (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || DEFAULT_THEME;
-  });
+  const { theme: nextTheme, resolvedTheme, setTheme: setNextTheme } = useNextTheme();
 
-  const [actualTheme, setActualTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'dark';
-    return document.documentElement.classList.contains('dark') ? 'dark' : getSystemTheme();
-  });
+  const theme = (nextTheme as Theme | undefined) ?? DEFAULT_THEME;
+  const actualTheme: 'light' | 'dark' = resolvedTheme === 'light' ? 'light' : 'dark';
 
-  // Sync actualTheme with the class applied by next-themes to <html>
+  // Mirror the resolved theme onto data-theme for any CSS selectors that use it.
   useEffect(() => {
-    const observer = new MutationObserver(() => {
-      const resolved = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-      setActualTheme(resolved);
-      // Keep data-theme attribute in sync for any CSS selectors that use it
-      document.documentElement.setAttribute('data-theme', resolved);
-    });
-    observer.observe(document.documentElement, { attributeFilter: ['class'] });
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-theme', actualTheme);
+  }, [actualTheme]);
 
-    // Run once immediately to sync initial state
-    const initial = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-    setActualTheme(initial);
-    document.documentElement.setAttribute('data-theme', initial);
-
-    return () => observer.disconnect();
-  }, []);
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-    localStorage.setItem(THEME_STORAGE_KEY, newTheme);
-    // Delegate actual DOM mutation to next-themes via a CustomEvent so the
-    // NextThemesProvider picks it up on the next render cycle.  In practice
-    // consumers should call next-themes' useTheme().setTheme() directly when
-    // they need to switch themes; this shim keeps the legacy API functional.
-    window.dispatchEvent(new CustomEvent('agi:set-theme', { detail: newTheme }));
-  };
+  const setTheme = useCallback(
+    (newTheme: Theme) => {
+      // next-themes applies the <html> class + persists to THEME_STORAGE_KEY.
+      setNextTheme(newTheme);
+    },
+    [setNextTheme],
+  );
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, actualTheme }}>
