@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-06-23",
+  "lastUpdated": "2026-07-09",
   "verificationLog": [
     {
       "date": "2026-06-03",
@@ -25,14 +25,26 @@
       "verifiedBy": "screenshot-verified-openai-compare-2026-06-23",
       "status": "PASS",
       "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com): gpt-5-nano = $0.05 input / $0.01 cached / $0.40 output, 400K ctx, reasoning tokens SUPPORTED (released Aug 2025, still served); gpt-4.1-nano = $0.10 input / $0.03 cached / $0.40 output, 1,047,576 ctx, NO reasoning tokens, fine-tuning supported (released Apr 2025, still served). Added to tierAllowedModels.economy and modelPresets.openai. Prior catalog had no nano tier (cheapest OpenAI was gpt-5.4-mini at $0.75/$4.50). For fixed-price cost control prefer gpt-4.1-nano (cannot emit reasoning tokens). Release dates from public launch info (GPT-5 nano Aug 2025, GPT-4.1 nano Apr 2025); the Compare page shows knowledge-cutoff, not release."
+    },
+    {
+      "date": "2026-07-09",
+      "verifiedBy": "research-agent-2026-07-09",
+      "status": "PASS",
+      "notes": "Added GPT-5.6 family (GA 2026-07-09), verified from developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (platform.openai.com/docs/models now 301s to this host). Exact API IDs gpt-5.6-sol/-terra/-luna; bare alias gpt-5.6 routes to Sol per the sol page. All: 1,050,000 ctx, 128K max output, reasoning+vision+tools+streaming, knowledge cutoff 2026-02-16. Pricing per 1M: sol $5/$0.50/$30, terra $2.50/$0.25/$15, luna $1/$0.10/$6. No dated snapshot IDs published yet for 5.6 (do not invent). computerUse/codeExecution enumerated on the terra page (web search, file search, image generation, code interpreter, computer use, MCP); carried to sol/luna as family-level API tools pending per-page enumeration. gpt-5.5 NOT deprecated: still listed as Default frontier model with gpt-5.5 + gpt-5.5-2026-04-23 IDs; 5.6 launched alongside, not replacing. Benchmarks intentionally omitted for 5.6 (none published on the model pages)."
     }
   ],
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 1
+      },
       "modelPrefixes": ["ideogram"],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
       "defaultModel": "gemini-3.1-flash-lite",
@@ -42,8 +54,14 @@
     "openai": {
       "label": "OpenAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 1
+      },
       "modelPrefixes": ["gpt-", "o1", "o3", "o4", "tts-", "whisper", "gpt-image"],
       "aliases": [],
       "defaultModel": "gpt-5.5",
@@ -61,8 +79,14 @@
     "anthropic": {
       "label": "Anthropic",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
-      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
+      "tokenMultiplier": {
+        "prompt": 1.05,
+        "completion": 1.05
+      },
+      "defaultPricing": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15
+      },
       "modelPrefixes": ["claude"],
       "aliases": [],
       "defaultModel": "claude-sonnet-4.6",
@@ -80,8 +104,14 @@
     "google": {
       "label": "Google",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 0.95, "completion": 0.95 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 5 },
+      "tokenMultiplier": {
+        "prompt": 0.95,
+        "completion": 0.95
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 5
+      },
       "modelPrefixes": ["gemini", "imagen", "veo"],
       "aliases": [],
       "defaultModel": "gemini-3.5-flash",
@@ -98,8 +128,14 @@
     "xai": {
       "label": "xAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.5 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 0.5
+      },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
       "defaultModel": "grok-4.3",
@@ -116,8 +152,14 @@
     "deepseek": {
       "label": "DeepSeek",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
-      "defaultPricing": { "inputPerMillion": 0.14, "outputPerMillion": 0.28 },
+      "tokenMultiplier": {
+        "prompt": 1.05,
+        "completion": 1.05
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.14,
+        "outputPerMillion": 0.28
+      },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
       "defaultModel": "deepseek-v4-flash",
@@ -134,8 +176,14 @@
     "qwen": {
       "label": "Qwen",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 2 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 2
+      },
       "modelPrefixes": ["qwen"],
       "aliases": ["qwen", "alibaba"],
       "defaultModel": "qwen-max",
@@ -152,8 +200,14 @@
     "moonshot": {
       "label": "Moonshot AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.95, "outputPerMillion": 4 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4
+      },
       "modelPrefixes": ["kimi", "moonshot"],
       "aliases": ["moonshot", "kimi"],
       "defaultModel": "kimi-k2.6",
@@ -170,8 +224,14 @@
     "perplexity": {
       "label": "Perplexity",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 1
+      },
       "modelPrefixes": ["sonar"],
       "aliases": ["perplexity", "pplx", "sonar"],
       "defaultModel": "sonar-deep-research",
@@ -188,8 +248,14 @@
     "zhipu": {
       "label": "ZhipuAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 1.4, "outputPerMillion": 4.4 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4
+      },
       "modelPrefixes": ["glm"],
       "aliases": ["zhipu", "zhipuai", "bigmodel", "glm", "z.ai", "zai"],
       "defaultModel": "glm-5.2",
@@ -206,8 +272,14 @@
     "mistral": {
       "label": "Mistral AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 1.5 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 1.5
+      },
       "modelPrefixes": ["mistral", "codestral", "pixtral"],
       "aliases": ["mistral", "mistral-ai", "mistral_ai"],
       "defaultModel": "mistral-large-3",
@@ -224,8 +296,14 @@
     "groq": {
       "label": "Groq",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.27, "outputPerMillion": 0.27 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.27,
+        "outputPerMillion": 0.27
+      },
       "modelPrefixes": [],
       "aliases": ["groq"],
       "taskRouting": {},
@@ -234,8 +312,14 @@
     "together": {
       "label": "Together AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.88, "outputPerMillion": 0.88 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.88,
+        "outputPerMillion": 0.88
+      },
       "modelPrefixes": [],
       "aliases": ["together", "together-ai", "together_ai", "togetherai"],
       "taskRouting": {},
@@ -244,8 +328,14 @@
     "fireworks": {
       "label": "Fireworks AI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.9, "outputPerMillion": 0.9 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.9,
+        "outputPerMillion": 0.9
+      },
       "modelPrefixes": ["accounts/fireworks"],
       "aliases": ["fireworks", "fireworks-ai", "fireworks_ai", "fireworksai"],
       "taskRouting": {},
@@ -254,8 +344,14 @@
     "cerebras": {
       "label": "Cerebras",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.1, "outputPerMillion": 0.1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.1
+      },
       "modelPrefixes": [],
       "aliases": ["cerebras"],
       "taskRouting": {},
@@ -264,8 +360,14 @@
     "deepinfra": {
       "label": "DeepInfra",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.35, "outputPerMillion": 0.35 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.35,
+        "outputPerMillion": 0.35
+      },
       "modelPrefixes": [],
       "aliases": ["deepinfra", "deep-infra", "deep_infra"],
       "taskRouting": {},
@@ -274,8 +376,14 @@
     "cohere": {
       "label": "Cohere",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 2.5, "outputPerMillion": 10 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 2.5,
+        "outputPerMillion": 10
+      },
       "modelPrefixes": ["command"],
       "aliases": ["cohere"],
       "taskRouting": {},
@@ -284,8 +392,14 @@
     "ai21": {
       "label": "AI21 Labs",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.2, "outputPerMillion": 0.8 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.2,
+        "outputPerMillion": 0.8
+      },
       "modelPrefixes": ["jamba"],
       "aliases": ["ai21", "ai21-labs", "ai21_labs"],
       "taskRouting": {},
@@ -294,8 +408,14 @@
     "sambanova": {
       "label": "Sambanova",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.1, "outputPerMillion": 0.1 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.1
+      },
       "modelPrefixes": ["Meta-Llama"],
       "aliases": ["sambanova", "samba-nova", "samba_nova"],
       "taskRouting": {},
@@ -304,8 +424,14 @@
     "azure": {
       "label": "Azure OpenAI",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 2.5, "outputPerMillion": 10 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 2.5,
+        "outputPerMillion": 10
+      },
       "modelPrefixes": [],
       "aliases": ["azure", "azure-openai", "azure_openai"],
       "defaultModel": "gpt-5.5",
@@ -322,8 +448,14 @@
     "bedrock": {
       "label": "AWS Bedrock",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 3, "outputPerMillion": 15 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15
+      },
       "modelPrefixes": ["anthropic.", "amazon.", "meta.", "ai21.", "cohere.", "mistral."],
       "aliases": ["bedrock", "aws-bedrock", "aws_bedrock"],
       "taskRouting": {},
@@ -332,8 +464,14 @@
     "nvidia_nim": {
       "label": "NVIDIA NIM",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0.5, "outputPerMillion": 1.5 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 1.5
+      },
       "modelPrefixes": ["nvidia/", "meta/", "mistralai/"],
       "aliases": ["nvidia_nim", "nvidia-nim", "nim"],
       "defaultModel": "nvidia/nemotron-3-super-120b-a12b",
@@ -350,8 +488,14 @@
     "open_router": {
       "label": "OpenRouter",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
       "defaultModel": "meta-llama/llama-3.3-70b-instruct:free",
@@ -368,8 +512,14 @@
     "ollama": {
       "label": "Ollama (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -379,8 +529,14 @@
     "lmstudio": {
       "label": "LM Studio (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -390,8 +546,14 @@
     "llamacpp": {
       "label": "llama.cpp (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -401,8 +563,14 @@
     "vllm": {
       "label": "vLLM (Local)",
       "sseDelimiter": "\n",
-      "tokenMultiplier": { "prompt": 1.1, "completion": 1.1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1.1,
+        "completion": 1.1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": [],
       "aliases": [],
       "defaultModel": "",
@@ -412,8 +580,14 @@
     "runway": {
       "label": "Runway",
       "sseDelimiter": "\n\n",
-      "tokenMultiplier": { "prompt": 1, "completion": 1 },
-      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
       "modelPrefixes": ["runway", "gen4_"],
       "aliases": ["runway-ml", "runwayml"],
       "defaultModel": "runway-gen-4",
@@ -567,12 +741,114 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 84.5, "humaneval": 98, "mmlu": 92.5, "gpqa": 86, "aime": 92 },
+      "benchmarks": {
+        "swebench": 84.5,
+        "humaneval": 98,
+        "mmlu": 92.5,
+        "gpqa": 86,
+        "aime": 92
+      },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Research"],
       "released": "April 2026",
+      "deprecation_date": null
+    },
+    "gpt-5.6-sol": {
+      "id": "gpt-5.6-sol",
+      "apiModelId": "gpt-5.6-sol",
+      "name": "GPT-5.6 Sol",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "inputCost": 5,
+      "outputCost": 30,
+      "cached_input": 0.5,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks"],
+      "released": "July 2026",
+      "deprecation_date": null
+    },
+    "gpt-5.6-terra": {
+      "id": "gpt-5.6-terra",
+      "apiModelId": "gpt-5.6-terra",
+      "name": "GPT-5.6 Terra",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "inputCost": 2.5,
+      "outputCost": 15,
+      "cached_input": 0.25,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "medium",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Balanced Reasoning", "Coding", "Agentic Tasks"],
+      "released": "July 2026",
+      "deprecation_date": null
+    },
+    "gpt-5.6-luna": {
+      "id": "gpt-5.6-luna",
+      "apiModelId": "gpt-5.6-luna",
+      "name": "GPT-5.6 Luna",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 1050000,
+      "inputCost": 1,
+      "outputCost": 6,
+      "cached_input": 0.1,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "good",
+      "bestFor": ["Fast Reasoning", "High-volume Tasks"],
+      "released": "July 2026",
       "deprecation_date": null
     },
     "claude-opus-4.8": {
@@ -608,7 +884,11 @@
       "released": "May 2026",
       "deprecation_date": null,
       "tokenizer_drift_factor": 0.35,
-      "tokenizer_drift_range": { "min": 1, "max": 1.35, "unit": "multiplier-vs-baseline" },
+      "tokenizer_drift_range": {
+        "min": 1,
+        "max": 1.35,
+        "unit": "multiplier-vs-baseline"
+      },
       "tokenizer_drift_warning": "Claude Opus 4.8 inherits the Opus 4.7 tokenizer baseline (re-baselined 2026-04): the same input text can yield 1.0x to 1.35x tokens vs prior Claude families (Sonnet 4.6, Opus <=4.6). Re-baseline cost + latency budgets; cached prompts from earlier models may overshoot the context window. See packages/routing/src/three-tier-router.ts ESTIMATE_INFLATION."
     },
     "claude-sonnet-4.6": {
@@ -637,7 +917,13 @@
         "codeExecution": false,
         "caching": true
       },
-      "benchmarks": { "swebench": 78.5, "humaneval": 96.2, "mmlu": 89.5, "gpqa": 76, "aime": 88 },
+      "benchmarks": {
+        "swebench": 78.5,
+        "humaneval": 96.2,
+        "mmlu": 89.5,
+        "gpqa": 76,
+        "aime": 88
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -670,7 +956,13 @@
         "codeExecution": false,
         "caching": true
       },
-      "benchmarks": { "swebench": 45, "humaneval": 88, "mmlu": 85, "gpqa": 55, "aime": 40 },
+      "benchmarks": {
+        "swebench": 45,
+        "humaneval": 88,
+        "mmlu": 85,
+        "gpqa": 55,
+        "aime": 40
+      },
       "speed": "very-fast",
       "quality": "good",
       "qualityTier": "fast",
@@ -710,7 +1002,13 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 74.2, "humaneval": 93.5, "mmlu": 89.5, "gpqa": 91.9, "aime": 95 },
+      "benchmarks": {
+        "swebench": 74.2,
+        "humaneval": 93.5,
+        "mmlu": 89.5,
+        "gpqa": 91.9,
+        "aime": 95
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -744,7 +1042,13 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 76.2, "humaneval": 91, "mmlu": 88.6, "gpqa": 60, "aime": 88 },
+      "benchmarks": {
+        "swebench": 76.2,
+        "humaneval": 91,
+        "mmlu": 88.6,
+        "gpqa": 60,
+        "aime": 88
+      },
       "speed": "very-fast",
       "quality": "good",
       "qualityTier": "fast",
@@ -808,7 +1112,13 @@
         "codeExecution": true,
         "caching": false
       },
-      "benchmarks": { "swebench": 68, "humaneval": 96.5, "mmlu": 91.5, "gpqa": 80, "aime": 82 },
+      "benchmarks": {
+        "swebench": 68,
+        "humaneval": 96.5,
+        "mmlu": 91.5,
+        "gpqa": 80,
+        "aime": 82
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "best",
@@ -842,7 +1152,13 @@
         "codeExecution": false,
         "caching": true
       },
-      "benchmarks": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
+      "benchmarks": {
+        "swebench": 75,
+        "humaneval": 95,
+        "mmlu": 87,
+        "gpqa": 75,
+        "aime": 85
+      },
       "speed": "very-fast",
       "quality": "excellent",
       "qualityTier": "fast",
@@ -876,7 +1192,13 @@
         "codeExecution": false,
         "caching": true
       },
-      "benchmarks": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
+      "benchmarks": {
+        "swebench": 81,
+        "humaneval": 96,
+        "mmlu": 92,
+        "gpqa": 87,
+        "aime": 95
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "best",
@@ -915,7 +1237,13 @@
         "codeExecution": true,
         "caching": false
       },
-      "benchmarks": { "swebench": 58, "humaneval": 93, "mmlu": 88, "gpqa": 65, "aime": 60 },
+      "benchmarks": {
+        "swebench": 58,
+        "humaneval": 93,
+        "mmlu": 88,
+        "gpqa": 65,
+        "aime": 60
+      },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -947,7 +1275,13 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "swebench": 25, "humaneval": 70, "mmlu": 75, "gpqa": 35, "aime": 25 },
+      "benchmarks": {
+        "swebench": 25,
+        "humaneval": 70,
+        "mmlu": 75,
+        "gpqa": 35,
+        "aime": 25
+      },
       "speed": "very-fast",
       "quality": "fair",
       "qualityTier": "fast",
@@ -979,7 +1313,13 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "swebench": 28, "humaneval": 72, "mmlu": 76, "gpqa": 38, "aime": 28 },
+      "benchmarks": {
+        "swebench": 28,
+        "humaneval": 72,
+        "mmlu": 76,
+        "gpqa": 38,
+        "aime": 28
+      },
       "speed": "very-fast",
       "quality": "fair",
       "qualityTier": "fast",
@@ -1014,7 +1354,13 @@
         "codeExecution": true,
         "caching": false
       },
-      "benchmarks": { "swebench": 40, "humaneval": 82, "mmlu": 70, "gpqa": 35, "aime": 25 },
+      "benchmarks": {
+        "swebench": 40,
+        "humaneval": 82,
+        "mmlu": 70,
+        "gpqa": 35,
+        "aime": 25
+      },
       "speed": "very-fast",
       "quality": "good",
       "qualityTier": "fast",
@@ -1046,7 +1392,13 @@
         "codeExecution": true,
         "caching": false
       },
-      "benchmarks": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
+      "benchmarks": {
+        "swebench": 52,
+        "humaneval": 88,
+        "mmlu": 82,
+        "gpqa": 50,
+        "aime": 45
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1079,7 +1431,13 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 80.2, "humaneval": 96, "mmlu": 89, "gpqa": 86, "aime": 99 },
+      "benchmarks": {
+        "swebench": 80.2,
+        "humaneval": 96,
+        "mmlu": 89,
+        "gpqa": 86,
+        "aime": 99
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "best",
@@ -1126,7 +1484,13 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "swebench": 55, "humaneval": 92, "mmlu": 88, "gpqa": 68, "aime": 62 },
+      "benchmarks": {
+        "swebench": 55,
+        "humaneval": 92,
+        "mmlu": 88,
+        "gpqa": 68,
+        "aime": 62
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1158,7 +1522,13 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "swebench": 42, "humaneval": 85, "mmlu": 84, "gpqa": 55, "aime": 45 },
+      "benchmarks": {
+        "swebench": 42,
+        "humaneval": 85,
+        "mmlu": 84,
+        "gpqa": 55,
+        "aime": 45
+      },
       "speed": "fast",
       "quality": "good",
       "qualityTier": "balanced",
@@ -1221,7 +1591,11 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "swebench": 48, "humaneval": 90, "mmlu": 72 },
+      "benchmarks": {
+        "swebench": 48,
+        "humaneval": 90,
+        "mmlu": 72
+      },
       "speed": "very-fast",
       "quality": "good",
       "qualityTier": "fast",
@@ -1284,7 +1658,9 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "mmlu": 75 },
+      "benchmarks": {
+        "mmlu": 75
+      },
       "speed": "fast",
       "quality": "good",
       "qualityTier": "fast",
@@ -1316,7 +1692,10 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "mmlu": 82, "gpqa": 55 },
+      "benchmarks": {
+        "mmlu": 82,
+        "gpqa": 55
+      },
       "speed": "medium",
       "quality": "good",
       "qualityTier": "balanced",
@@ -1348,7 +1727,10 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "mmlu": 85, "gpqa": 62 },
+      "benchmarks": {
+        "mmlu": 85,
+        "gpqa": 62
+      },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1380,7 +1762,9 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "mmlu": 88 },
+      "benchmarks": {
+        "mmlu": 88
+      },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -1412,7 +1796,9 @@
         "codeExecution": false,
         "caching": false
       },
-      "benchmarks": { "mmlu": 88 },
+      "benchmarks": {
+        "mmlu": 88
+      },
       "speed": "slow",
       "quality": "excellent",
       "qualityTier": "best",
@@ -2118,7 +2504,11 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
+      "benchmarks": {
+        "sweBenchPro": 55.1,
+        "terminalBench2": 76.2,
+        "osWorldVerified": 78.4
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -2158,7 +2548,13 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
+      "benchmarks": {
+        "swebench": 79,
+        "humaneval": 92,
+        "mmlu": 90,
+        "gpqa": 84,
+        "aime": 92
+      },
       "speed": "medium",
       "quality": "excellent",
       "qualityTier": "best",
@@ -2197,7 +2593,13 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 70, "humaneval": 94, "mmlu": 90, "gpqa": 78, "aime": 88 },
+      "benchmarks": {
+        "swebench": 70,
+        "humaneval": 94,
+        "mmlu": 90,
+        "gpqa": 78,
+        "aime": 88
+      },
       "speed": "fast",
       "quality": "excellent",
       "qualityTier": "balanced",
@@ -2319,7 +2721,8 @@
       "qwen-3.5-plus",
       "kimi-k2.6",
       "glm-5.2",
-      "sonar"
+      "sonar",
+      "gpt-5.6-luna"
     ],
     "pro_additions": [
       "claude-sonnet-4.6",
@@ -2328,66 +2731,169 @@
       "deepseek-v4-pro",
       "qwen-max",
       "sonar-deep-research",
-      "gpt-5.5"
+      "gpt-5.5",
+      "gpt-5.6-terra"
     ],
-    "flagship_additions": ["claude-opus-4.8", "grok-4.3"]
+    "flagship_additions": ["claude-opus-4.8", "grok-4.3", "gpt-5.6-sol"]
   },
   "modelPresets": {
     "managed_cloud": [
-      { "value": "auto-economy", "label": "Auto (Economy)" },
-      { "value": "auto-balanced", "label": "Auto Balanced" },
-      { "value": "auto-premium", "label": "Auto (Best Model)" }
+      {
+        "value": "auto-economy",
+        "label": "Auto (Economy)"
+      },
+      {
+        "value": "auto-balanced",
+        "label": "Auto Balanced"
+      },
+      {
+        "value": "auto-premium",
+        "label": "Auto (Best Model)"
+      }
     ],
     "ollama": [],
     "lmstudio": [],
     "llamacpp": [],
     "vllm": [],
     "openai": [
-      { "value": "gpt-5.5", "label": "GPT-5.5" },
-      { "value": "gpt-5.4-mini", "label": "GPT-5.4 Mini" },
-      { "value": "gpt-5-nano", "label": "GPT-5 Nano" },
-      { "value": "gpt-4.1-nano", "label": "GPT-4.1 Nano" }
+      {
+        "value": "gpt-5.6-sol",
+        "label": "GPT-5.6 Sol"
+      },
+      {
+        "value": "gpt-5.6-terra",
+        "label": "GPT-5.6 Terra"
+      },
+      {
+        "value": "gpt-5.6-luna",
+        "label": "GPT-5.6 Luna"
+      },
+      {
+        "value": "gpt-5.5",
+        "label": "GPT-5.5"
+      },
+      {
+        "value": "gpt-5.4-mini",
+        "label": "GPT-5.4 Mini"
+      },
+      {
+        "value": "gpt-5-nano",
+        "label": "GPT-5 Nano"
+      },
+      {
+        "value": "gpt-4.1-nano",
+        "label": "GPT-4.1 Nano"
+      }
     ],
     "anthropic": [
-      { "value": "claude-sonnet-4.6", "label": "Claude 4.6 Sonnet" },
-      { "value": "claude-haiku-4.5", "label": "Claude 4.5 Haiku" }
+      {
+        "value": "claude-sonnet-4.6",
+        "label": "Claude 4.6 Sonnet"
+      },
+      {
+        "value": "claude-haiku-4.5",
+        "label": "Claude 4.5 Haiku"
+      }
     ],
     "google": [
-      { "value": "gemini-3.5-flash", "label": "Gemini 3.5 Flash" },
-      { "value": "gemini-3.1-pro-preview", "label": "Gemini 3.1 Pro" },
-      { "value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite" }
+      {
+        "value": "gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash"
+      },
+      {
+        "value": "gemini-3.1-pro-preview",
+        "label": "Gemini 3.1 Pro"
+      },
+      {
+        "value": "gemini-3.1-flash-lite",
+        "label": "Gemini 3.1 Flash Lite"
+      }
     ],
-    "xai": [{ "value": "grok-4.3", "label": "Grok 4.3" }],
+    "xai": [
+      {
+        "value": "grok-4.3",
+        "label": "Grok 4.3"
+      }
+    ],
     "deepseek": [
-      { "value": "deepseek-v4-pro", "label": "DeepSeek V4 Pro" },
-      { "value": "deepseek-v4-flash", "label": "DeepSeek V4 Flash" }
+      {
+        "value": "deepseek-v4-pro",
+        "label": "DeepSeek V4 Pro"
+      },
+      {
+        "value": "deepseek-v4-flash",
+        "label": "DeepSeek V4 Flash"
+      }
     ],
     "qwen": [
-      { "value": "qwen-3.5-plus", "label": "Qwen 3.5 Plus" },
-      { "value": "qwen-max", "label": "Qwen Max" }
+      {
+        "value": "qwen-3.5-plus",
+        "label": "Qwen 3.5 Plus"
+      },
+      {
+        "value": "qwen-max",
+        "label": "Qwen Max"
+      }
     ],
-    "moonshot": [{ "value": "kimi-k2.6", "label": "Kimi K2.6" }],
+    "moonshot": [
+      {
+        "value": "kimi-k2.6",
+        "label": "Kimi K2.6"
+      }
+    ],
     "perplexity": [],
-    "zhipu": [{ "value": "glm-5.2", "label": "GLM-5.2" }],
+    "zhipu": [
+      {
+        "value": "glm-5.2",
+        "label": "GLM-5.2"
+      }
+    ],
     "mistral": [
-      { "value": "mistral-large-3", "label": "Mistral Large 3" },
-      { "value": "mistral-medium-3", "label": "Mistral Medium 3.1" },
-      { "value": "mistral-small-3", "label": "Mistral Small 4" },
-      { "value": "codestral-2", "label": "Codestral 2" },
-      { "value": "pixtral-large", "label": "Pixtral Large" }
+      {
+        "value": "mistral-large-3",
+        "label": "Mistral Large 3"
+      },
+      {
+        "value": "mistral-medium-3",
+        "label": "Mistral Medium 3.1"
+      },
+      {
+        "value": "mistral-small-3",
+        "label": "Mistral Small 4"
+      },
+      {
+        "value": "codestral-2",
+        "label": "Codestral 2"
+      },
+      {
+        "value": "pixtral-large",
+        "label": "Pixtral Large"
+      }
     ],
     "groq": [
-      { "value": "groq-llama-3.3-70b", "label": "Llama 3.3 70B (Groq)" },
-      { "value": "groq-llama-3.1-8b", "label": "Llama 3.1 8B Instant (Groq)" }
+      {
+        "value": "groq-llama-3.3-70b",
+        "label": "Llama 3.3 70B (Groq)"
+      },
+      {
+        "value": "groq-llama-3.1-8b",
+        "label": "Llama 3.1 8B Instant (Groq)"
+      }
     ],
     "nvidia_nim": [],
     "open_router": [
-      { "value": "meta-llama/llama-3.3-70b-instruct:free", "label": "Llama 3.3 70B (Free)" },
+      {
+        "value": "meta-llama/llama-3.3-70b-instruct:free",
+        "label": "Llama 3.3 70B (Free)"
+      },
       {
         "value": "mistralai/mistral-small-3.1-24b-instruct:free",
         "label": "Mistral Small 3.1 (Free)"
       },
-      { "value": "qwen/qwen3-coder:free", "label": "Qwen3 Coder (Free)" },
+      {
+        "value": "qwen/qwen3-coder:free",
+        "label": "Qwen3 Coder (Free)"
+      },
       {
         "value": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
         "label": "Nemotron Super 49B (Free)"
