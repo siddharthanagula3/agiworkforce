@@ -137,8 +137,15 @@ export { DownloadCard } from './components/DownloadCard';
 export type { DownloadCardProps } from './components/DownloadCard';
 export { GeneratedFileCard } from './components/GeneratedFileCard';
 export type { GeneratedFileCardProps } from './components/GeneratedFileCard';
-export { MessageGeneratedFiles, generatedFileFromEntry } from './components/MessageGeneratedFiles';
-export type { MessageGeneratedFilesProps } from './components/MessageGeneratedFiles';
+export {
+  MessageGeneratedFiles,
+  generatedFileFromEntry,
+  hasRunningExecutionTool,
+} from './components/MessageGeneratedFiles';
+export type {
+  MessageGeneratedFilesProps,
+  MessageGeneratedFilesMessage,
+} from './components/MessageGeneratedFiles';
 export { SendPreview } from './components/SendPreview';
 export type { SendPreviewProps } from './components/SendPreview';
 export { ImageGenCard } from './components/ImageGenCard';

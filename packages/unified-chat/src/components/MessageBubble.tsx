@@ -7,7 +7,7 @@ import { ThinkingBlock } from './ThinkingBlock';
 import { LegacyWebSearchCard } from './WebSearchCard';
 import { CitationPill } from './CitationPill';
 import { DownloadCard } from './DownloadCard';
-import { MessageGeneratedFiles } from './MessageGeneratedFiles';
+import { MessageGeneratedFiles, hasRunningExecutionTool } from './MessageGeneratedFiles';
 import type { ChatMessage, Artifact, ToolCall } from '../lib/types';
 
 interface MessageBubbleProps {
@@ -528,10 +528,11 @@ export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: Mes
       )}
 
       {/* Managed-cloud sandbox files (x_generated_files) — shared cards with
-          an authed Download action. Never present on Local-mode messages. */}
-      {message.generatedFiles && message.generatedFiles.length > 0 && (
-        <MessageGeneratedFiles message={message} />
-      )}
+          an authed Download action. Never present on Local-mode messages.
+          Also renders while an E2B execution tool is still running so the
+          user sees an honest "Running code…" strip before any file exists. */}
+      {((message.generatedFiles && message.generatedFiles.length > 0) ||
+        hasRunningExecutionTool(message)) && <MessageGeneratedFiles message={message} />}
 
       {!isStreaming && isLast && (
         <ActionBar messageId={message.id} content={message.content} onRetry={onRetry} />
