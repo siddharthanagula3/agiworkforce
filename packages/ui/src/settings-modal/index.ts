@@ -4,6 +4,7 @@ export type {
   SettingsDataAdapter,
   SettingsConnector,
   ConnectedConnector,
+  CustomConnectorInput,
   SettingsSkill,
   SettingsPlugin,
   SettingsSectionKey,
