@@ -3094,4 +3094,112 @@ mod tests {
         assert_eq!(assistant_content[1]["name"], "bash");
         assert_eq!(assistant_content[1]["input"]["command"], "ls -la");
     }
+
+    #[test]
+    fn openai_chat_model_body_has_messages_and_max_completion_tokens() {
+        // BUG 2 regression: a catalog OpenAI chat model (gpt-5-nano) must produce
+        // a Chat Completions body carrying `messages` (never a Responses-shaped
+        // body with `input` and no `messages`, which OpenAI rejects with 400
+        // "Missing required parameter: 'messages'"). OpenAI-managed
+        // /chat/completions also deprecated `max_tokens` for gpt-5/o-series and
+        // rejects it, so the cap must serialize as `max_completion_tokens`.
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Reply with a short one-sentence greeting.".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "gpt-5-nano".to_string(),
+            max_tokens: Some(32),
+            stream: true,
+            ..Default::default()
+        };
+
+        let adapted = adapter.adapt_request(&request).expect("adapt ok");
+
+        // Chat Completions shape, not Responses.
+        assert!(
+            adapted.get("messages").and_then(|m| m.as_array()).is_some(),
+            "OpenAI chat model body must contain a `messages` array, got: {adapted}"
+        );
+        assert!(
+            adapted.get("input").is_none(),
+            "OpenAI chat model body must NOT contain a Responses-API `input` field"
+        );
+        assert_eq!(adapted["messages"][0]["role"], "user");
+        assert_eq!(
+            adapted["messages"][0]["content"],
+            "Reply with a short one-sentence greeting."
+        );
+        // apiModelId for gpt-5-nano equals its internal id.
+        assert_eq!(adapted["model"], "gpt-5-nano");
+        // OpenAI-managed models require max_completion_tokens, not max_tokens.
+        assert_eq!(adapted["max_completion_tokens"], 32);
+        assert!(
+            adapted.get("max_tokens").is_none(),
+            "OpenAI body must not send deprecated `max_tokens`"
+        );
+    }
+
+    #[test]
+    fn openai_compat_third_party_keeps_max_tokens() {
+        // Behavior-preserving: third-party OpenAI-compatible providers that share
+        // OpenAIAdapter (e.g. xAI/grok) must keep the classic `max_tokens` field —
+        // only OpenAI-managed models get the `max_completion_tokens` rename.
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::XAI);
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "hi".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "grok-4.3".to_string(),
+            max_tokens: Some(32),
+            stream: true,
+            ..Default::default()
+        };
+
+        let adapted = adapter.adapt_request(&request).expect("adapt ok");
+        assert!(
+            adapted.get("messages").is_some(),
+            "grok body must contain messages"
+        );
+        assert_eq!(adapted["max_tokens"], 32);
+        assert!(
+            adapted.get("max_completion_tokens").is_none(),
+            "third-party OpenAI-compat must not use max_completion_tokens"
+        );
+    }
+
+    #[test]
+    fn anthropic_body_carries_api_model_id_not_dotted_internal() {
+        // BUG 1 regression: the Anthropic Messages body must carry the wire
+        // apiModelId (`claude-haiku-4-5`), never the dotted internal catalog id
+        // (`claude-haiku-4.5`) which Anthropic 404s.
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "hi".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-haiku-4.5".to_string(),
+            max_tokens: Some(32),
+            stream: true,
+            ..Default::default()
+        };
+
+        let adapted = adapter.adapt_request(&request).expect("adapt ok");
+        assert_eq!(
+            adapted["model"], "claude-haiku-4-5",
+            "Anthropic wire model must be the apiModelId, not the dotted internal id"
+        );
+    }
 }
