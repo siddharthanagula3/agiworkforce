@@ -205,17 +205,13 @@ impl LocalChatTurnHost {
     /// Build the continuation request from the accrued history, mirroring the
     /// inline loop's `followup_request` exactly.
     fn continuation_request(&self) -> LLMRequest {
-        LLMRequest {
-            messages: self.current_messages.clone(),
-            model: self.model.clone(),
-            temperature: Some(DEFAULT_TEMPERATURE),
-            max_tokens: Some(DEFAULT_MAX_TOKENS),
-            stream: false,
-            tools: self.tools.clone(),
-            tool_choice: self.tool_choice.clone(),
-            thinking_mode: self.thinking_mode,
-            ..Default::default()
-        }
+        continuation_request(
+            &self.current_messages,
+            &self.model,
+            &self.tools,
+            &self.tool_choice,
+            self.thinking_mode,
+        )
     }
 }
 
@@ -287,22 +283,10 @@ impl TurnHost for LocalChatTurnHost {
         if self.pending_calls.is_empty() {
             return;
         }
-        let tool_calls = self
-            .pending_calls
-            .iter()
-            .map(|stc| crate::core::llm::ToolCall {
-                id: stc.id.clone(),
-                name: stc.name.clone(),
-                arguments: stc.arguments.clone(),
-            })
-            .collect();
-        self.current_messages.push(ChatMessage {
-            role: "assistant".to_string(),
-            content: completion.outcome.text.clone(),
-            tool_calls: Some(tool_calls),
-            tool_call_id: None,
-            multimodal_content: None,
-        });
+        self.current_messages.push(assistant_tool_message(
+            &completion.outcome.text,
+            &self.pending_calls,
+        ));
     }
 
     fn classify(&self, _call: &CoreToolCall) -> ToolClass {
@@ -407,13 +391,7 @@ impl TurnHost for LocalChatTurnHost {
     async fn commit_tool_results(&mut self, blocks: Vec<ResultBlock>, _iteration: usize) {
         // Push each result as a `tool`-role message, exactly like the inline loop.
         for block in blocks {
-            self.current_messages.push(ChatMessage {
-                role: "tool".to_string(),
-                content: block.content,
-                tool_calls: None,
-                tool_call_id: Some(block.tool_use_id),
-                multimodal_content: None,
-            });
+            self.current_messages.push(tool_result_message(block));
         }
         self.tool_iterations += 1;
     }
@@ -460,22 +438,16 @@ impl TurnHost for LocalChatTurnHost {
 
             let _ = self.app_handle.emit(
                 "chat:agent-progress",
-                serde_json::json!({
-                    "conversation_id": self.conversation_id,
-                    "iteration": display_iteration,
-                    "max_iterations": max,
-                    "status": "executing_tools",
-                    "tool_count": tool_count,
-                }),
+                agent_progress_payload(self.conversation_id, display_iteration, *max, *tool_count),
             );
             let _ = self.app_handle.emit(
                 "chat:tool-calls",
-                serde_json::json!({
-                    "conversation_id": self.conversation_id,
-                    "message_id": self.frontend_message_id,
-                    "tool_calls": self.pending_calls,
-                    "iteration": display_iteration,
-                }),
+                tool_calls_payload(
+                    self.conversation_id,
+                    &self.frontend_message_id,
+                    &self.pending_calls,
+                    display_iteration,
+                ),
             );
         }
     }
@@ -549,6 +521,93 @@ fn chat_outcome_from_route(
         stop_reason: outcome.response.finish_reason.clone(),
     };
     (chat, normalized)
+}
+
+/// The `chat:agent-progress` payload emitted at the top of each tool iteration.
+/// Byte-for-byte the inline loop's non-streaming shape (`iteration` is 1-based).
+fn agent_progress_payload(
+    conversation_id: i64,
+    iteration: usize,
+    max_iterations: usize,
+    tool_count: usize,
+) -> serde_json::Value {
+    serde_json::json!({
+        "conversation_id": conversation_id,
+        "iteration": iteration,
+        "max_iterations": max_iterations,
+        "status": "executing_tools",
+        "tool_count": tool_count,
+    })
+}
+
+/// The `chat:tool-calls` payload emitted before dispatching a tool batch.
+/// `message_id` serializes to `null` when absent, matching the inline loop's
+/// `request.frontend_message_id.clone()`.
+fn tool_calls_payload(
+    conversation_id: i64,
+    message_id: &Option<String>,
+    calls: &[StreamingToolCall],
+    iteration: usize,
+) -> serde_json::Value {
+    serde_json::json!({
+        "conversation_id": conversation_id,
+        "message_id": message_id,
+        "tool_calls": calls,
+        "iteration": iteration,
+    })
+}
+
+/// The `assistant`-role message pushed before a tool batch (content + the
+/// batch's tool calls), mirroring the inline loop's assistant push exactly.
+fn assistant_tool_message(content: &str, calls: &[StreamingToolCall]) -> ChatMessage {
+    let tool_calls = calls
+        .iter()
+        .map(|stc| crate::core::llm::ToolCall {
+            id: stc.id.clone(),
+            name: stc.name.clone(),
+            arguments: stc.arguments.clone(),
+        })
+        .collect();
+    ChatMessage {
+        role: "assistant".to_string(),
+        content: content.to_string(),
+        tool_calls: Some(tool_calls),
+        tool_call_id: None,
+        multimodal_content: None,
+    }
+}
+
+/// The `tool`-role message for one tool result, mirroring the inline loop's push.
+fn tool_result_message(block: ResultBlock) -> ChatMessage {
+    ChatMessage {
+        role: "tool".to_string(),
+        content: block.content,
+        tool_calls: None,
+        tool_call_id: Some(block.tool_use_id),
+        multimodal_content: None,
+    }
+}
+
+/// The continuation (`followup`) request built from accrued history, mirroring
+/// the inline non-streaming loop's `followup_request` exactly.
+fn continuation_request(
+    messages: &[ChatMessage],
+    model: &str,
+    tools: &Option<Vec<ToolDefinition>>,
+    tool_choice: &Option<ToolChoice>,
+    thinking_mode: Option<bool>,
+) -> LLMRequest {
+    LLMRequest {
+        messages: messages.to_vec(),
+        model: model.to_string(),
+        temperature: Some(DEFAULT_TEMPERATURE),
+        max_tokens: Some(DEFAULT_MAX_TOKENS),
+        stream: false,
+        tools: tools.clone(),
+        tool_choice: tool_choice.clone(),
+        thinking_mode,
+        ..Default::default()
+    }
 }
 
 /// Parse a tool-call arguments string into JSON for the engine's internal use
@@ -850,6 +909,104 @@ mod tests {
         assert_eq!(h.committed.len(), 1);
         assert_eq!(h.assistant_texts, vec!["step one"]);
         assert_eq!(outcome.response, "step one");
+    }
+
+    #[test]
+    fn agent_progress_payload_matches_inline_shape() {
+        // Exact shape of the inline non-streaming loop's `chat:agent-progress`
+        // emit (send_message_execution.rs:1651-1660), 1-based iteration.
+        let payload = super::agent_progress_payload(42, 3, 25, 2);
+        assert_eq!(
+            payload,
+            serde_json::json!({
+                "conversation_id": 42,
+                "iteration": 3,
+                "max_iterations": 25,
+                "status": "executing_tools",
+                "tool_count": 2,
+            })
+        );
+    }
+
+    #[test]
+    fn tool_calls_payload_matches_inline_shape() {
+        use super::StreamingToolCall;
+        let calls = vec![StreamingToolCall {
+            index: 0,
+            id: "tool_call_1_0".to_string(),
+            name: "read_file".to_string(),
+            arguments: "{\"path\":\"a\"}".to_string(),
+        }];
+        // With a message id present.
+        let payload =
+            super::tool_calls_payload(42, &Some("fmid".to_string()), &calls, 1);
+        assert_eq!(
+            payload,
+            serde_json::json!({
+                "conversation_id": 42,
+                "message_id": "fmid",
+                "tool_calls": [{
+                    "index": 0,
+                    "id": "tool_call_1_0",
+                    "name": "read_file",
+                    "arguments": "{\"path\":\"a\"}",
+                }],
+                "iteration": 1,
+            })
+        );
+        // Absent message id serializes to null, as `request.frontend_message_id` did.
+        let payload_none = super::tool_calls_payload(42, &None, &calls, 1);
+        assert_eq!(payload_none["message_id"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn message_builders_match_inline_shapes() {
+        use super::StreamingToolCall;
+        let calls = vec![StreamingToolCall {
+            index: 0,
+            id: "id_1".to_string(),
+            name: "read_file".to_string(),
+            arguments: "{}".to_string(),
+        }];
+        let assistant = super::assistant_tool_message("thinking", &calls);
+        assert_eq!(assistant.role, "assistant");
+        assert_eq!(assistant.content, "thinking");
+        assert!(assistant.tool_call_id.is_none());
+        let at = assistant.tool_calls.expect("assistant carries tool calls");
+        assert_eq!(at.len(), 1);
+        assert_eq!(at[0].id, "id_1");
+        assert_eq!(at[0].name, "read_file");
+        assert_eq!(at[0].arguments, "{}");
+
+        let tool_msg = super::tool_result_message(ResultBlock {
+            tool_use_id: "id_1".to_string(),
+            content: "output".to_string(),
+            is_error: false,
+        });
+        assert_eq!(tool_msg.role, "tool");
+        assert_eq!(tool_msg.content, "output");
+        assert_eq!(tool_msg.tool_call_id.as_deref(), Some("id_1"));
+        assert!(tool_msg.tool_calls.is_none());
+    }
+
+    #[test]
+    fn continuation_request_matches_inline_shape() {
+        use crate::sys::commands::chat::state::{DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE};
+        let messages = vec![crate::core::llm::ChatMessage {
+            role: "user".to_string(),
+            content: "hi".to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        }];
+        let req = super::continuation_request(&messages, "m", &None, &None, Some(false));
+        assert_eq!(req.model, "m");
+        assert!(!req.stream);
+        assert_eq!(req.temperature, Some(DEFAULT_TEMPERATURE));
+        assert_eq!(req.max_tokens, Some(DEFAULT_MAX_TOKENS));
+        assert_eq!(req.thinking_mode, Some(false));
+        assert_eq!(req.messages.len(), 1);
+        assert!(req.tools.is_none());
     }
 
     #[test]
