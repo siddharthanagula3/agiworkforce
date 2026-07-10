@@ -22,8 +22,14 @@
  *   - DEFAULT FAIL-CLOSED: every tool call is queued as 'awaiting_approval'.
  *   - When `approvalMode` is 'auto', tools execute immediately without a user prompt.
  *   - When 'manual' (default), the loop returns a special SSE event `x_tool_approval_request`
- *     and suspends execution. The client must call POST /api/llm/v1/chat/completions/approve
- *     to resume.
+ *     and suspends execution. The suspend is STATELESS: no server-side loop state is
+ *     persisted — the assistant tool_call turn is streamed to the client and the loop
+ *     returns. The client resumes by calling POST /api/llm/v1/chat/completions/approve
+ *     (approve/route.ts) with the full thread INCLUDING the suspended assistant tool_call
+ *     turn plus a per-tool_call_id approval decision. On resume, runToolLoop is invoked
+ *     again with `options.resume`, which executes ONLY the approved+pending tool calls
+ *     (re-running every guard) and appends a denial tool result for rejected/undecided
+ *     ones, then continues the normal loop. See the `resume` preamble in runToolLoop.
  *   - Parallel-safe tools (read-only) are executed concurrently; mutating tools are
  *     serialized (mirrors Codex parallel.rs).
  *
@@ -101,6 +107,26 @@ export type ConnectorToolExecutor = (
   args: Record<string, unknown>,
 ) => Promise<{ handled: boolean; content: string; isError: boolean }>;
 
+/** One per-tool_call approval decision carried on a resume request. */
+export interface ToolApprovalDecision {
+  /** The exact tool_call_id the user is deciding on. */
+  toolCallId: string;
+  decision: 'approved' | 'rejected';
+}
+
+/**
+ * Resume payload for the manual-approval flow (see approve/route.ts). The
+ * suspended assistant tool_call turn is carried back in the message thread
+ * (`processed.llmRequest.messages`, last assistant message with tool_calls);
+ * `approvals` says, per tool_call_id, whether the authenticated user approved
+ * or rejected it. runToolLoop executes ONLY approved calls that match a pending
+ * tool_call id (re-running every guard) and appends a denial tool result for
+ * rejected/undecided ones — fail-closed.
+ */
+export interface ResumeApproval {
+  approvals: ToolApprovalDecision[];
+}
+
 export interface ToolLoopOptions {
   /** Maximum number of model re-invocations. Default: 10. */
   maxSteps?: number;
@@ -108,6 +134,13 @@ export interface ToolLoopOptions {
   approvalMode?: ApprovalMode;
   /** Resolved MCP tool defs to inject (fetched once by the caller). */
   mcpTools?: WebMcpToolDef[];
+  /**
+   * Manual-approval resume payload. When present, the loop runs the resume
+   * preamble (execute approved+pending tool calls, deny the rest) BEFORE the
+   * first provider call, then continues the normal loop. Only meaningful with
+   * `approvalMode: 'manual'`.
+   */
+  resume?: ResumeApproval;
   /**
    * Authenticated user id — required for the generated-file harvest (files the
    * model writes in the E2B sandbox are persisted to the user's media library
@@ -499,6 +532,57 @@ async function runMcpTool(
   }
 }
 
+/**
+ * Parse the `tool_calls` array from a client-supplied assistant message (the
+ * suspended turn replayed on a resume request) into PendingToolCall[]. Mirrors
+ * the accumulation in `collectProviderStream` but reads the already-complete
+ * OpenAI tool_call shape: `{ id, type:'function', function:{ name, arguments } }`
+ * where `arguments` is a JSON-encoded string.
+ */
+function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
+  const out: PendingToolCall[] = [];
+  for (const tc of toolCalls) {
+    if (!tc || typeof tc !== 'object') continue;
+    const o = tc as Record<string, unknown>;
+    const id = typeof o['id'] === 'string' ? o['id'] : '';
+    const fn = o['function'];
+    if (!id || !fn || typeof fn !== 'object') continue;
+    const fnObj = fn as Record<string, unknown>;
+    const name = typeof fnObj['name'] === 'string' ? fnObj['name'] : '';
+    if (!name) continue;
+    let args: Record<string, unknown> = {};
+    const rawArgs = fnObj['arguments'];
+    if (typeof rawArgs === 'string') {
+      try {
+        args = JSON.parse(rawArgs || '{}') as Record<string, unknown>;
+      } catch {
+        args = { _raw: rawArgs };
+      }
+    } else if (rawArgs && typeof rawArgs === 'object') {
+      args = rawArgs as Record<string, unknown>;
+    }
+    out.push({ id, qualifiedName: name, args });
+  }
+  return out;
+}
+
+/**
+ * True when a tool name was actually OFFERED on this request — i.e. it is in the
+ * freshly-loaded per-request `mcpTools` catalog (operator MCP + the user's
+ * connected connectors), or it is an E2B execution tool. Used by the resume
+ * preamble as a fail-closed gate: an approval for a tool the model was never
+ * offered (a hallucinated/forged qualified name) is NOT executed. This is a
+ * defense-in-depth layer ON TOP of the per-tool guards inside runMcpTool
+ * (connector re-gate, SSRF, unknown-server rejection).
+ */
+function isToolOffered(qualifiedName: string, mcpTools: WebMcpToolDef[]): boolean {
+  if (isExecutionTool(qualifiedName)) return true;
+  return mcpTools.some((t) => t.qualifiedName === qualifiedName);
+}
+
+/** Text appended as the tool result when a user rejects (or does not approve) a tool. */
+const TOOL_DENIED_MESSAGE = 'The user denied permission to run this tool.';
+
 // ─── Main loop ────────────────────────────────────────────────────────────────
 
 /**
@@ -584,7 +668,164 @@ export async function* runToolLoop(
     }
   }
 
+  /**
+   * Execute a batch of tool calls and stream their status/result events, then
+   * append each `role: 'tool'` result message to the thread. Shared by the
+   * auto-mode loop body and the manual-approval resume preamble so both paths
+   * run IDENTICAL execution + guard logic (runMcpTool re-runs the connector
+   * gate, SSRF, and unknown-server rejection on every call). Read-only tools run
+   * concurrently; mutating tools serialize (mirrors Codex parallel.rs).
+   */
+  async function* runAndStreamToolCalls(calls: PendingToolCall[]): AsyncGenerator<Uint8Array> {
+    const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
+    const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
+
+    // Emit "running" status for all tools. Include tc.args so the client can
+    // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
+    for (const tc of calls) {
+      yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
+    }
+
+    const results: { tc: PendingToolCall; content: string; isError: boolean }[] = [];
+
+    // Execute read-only tools concurrently.
+    const parallelResults = await Promise.all(
+      readOnly.map(async (tc) => {
+        const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
+        return { tc, ...result };
+      }),
+    );
+    results.push(...parallelResults);
+
+    // Execute mutating tools serially.
+    for (const tc of mutating) {
+      const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
+      results.push({ tc, ...result });
+    }
+
+    // Emit status + result events, and append tool result messages.
+    for (const { tc, content, isError } of results) {
+      yield encoder.encode(
+        toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
+      );
+      yield encoder.encode(
+        toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
+      );
+
+      messages.push({
+        role: 'tool',
+        content,
+        tool_call_id: tc.id,
+      });
+    }
+  }
+
   try {
+    // ── Manual-approval resume preamble (stateless) ─────────────────────────
+    // When resuming, the suspended assistant tool_call turn is the last
+    // assistant message in `messages` (replayed by the client). We execute ONLY
+    // the approved+pending calls and append a denial result for the rest, then
+    // fall into the normal loop which re-invokes the model with the completed
+    // thread. No provider call precedes this — the model already produced the
+    // tool_calls in the suspended turn.
+    if (options.resume) {
+      // Locate the suspended assistant tool_call turn.
+      let pending: PendingToolCall[] = [];
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i]!;
+        const tcs = m.tool_calls;
+        if (m.role === 'assistant' && Array.isArray(tcs) && tcs.length > 0) {
+          pending = parseAssistantToolCalls(tcs);
+          break;
+        }
+      }
+
+      if (pending.length === 0) {
+        yield encoder.encode(
+          sseData({
+            choices: [
+              { delta: { content: '\n\nError: no pending tool call to resume.' }, index: 0 },
+            ],
+            model: responseModel,
+          }),
+        );
+        yield encoder.encode(sseDone());
+        return;
+      }
+
+      const pendingIds = new Set(pending.map((p) => p.id));
+
+      // SECURITY (defense-in-depth; approve/route.ts also rejects this early):
+      // every approval MUST reference a pending tool_call id. A decision for an
+      // id that is not actually pending is a forged/mismatched request — reject
+      // the whole resume and execute NOTHING.
+      for (const a of options.resume.approvals) {
+        if (!pendingIds.has(a.toolCallId)) {
+          yield encoder.encode(
+            sseData({
+              choices: [
+                {
+                  delta: { content: '\n\nError: approval references an unknown tool call.' },
+                  index: 0,
+                },
+              ],
+              model: responseModel,
+            }),
+          );
+          yield encoder.encode(sseDone());
+          return;
+        }
+      }
+
+      // NOTE: the resume endpoint (approve/route.ts) forces extended thinking OFF
+      // on the continuation, so a suspended Anthropic thinking turn resumes with
+      // thinking disabled — no signed-thinking-block requirement, no provider
+      // rejection (see known-flaw MCP-APPROVAL-RESUME for the stateless-resume
+      // rationale). The loop therefore needs no Anthropic-specific special case.
+
+      // Idempotency: skip any pending call that already has a tool result in the
+      // replayed thread (e.g. a client double-submit).
+      const alreadyResolved = new Set(
+        messages
+          .filter((m) => m.role === 'tool' && typeof m.tool_call_id === 'string')
+          .map((m) => m.tool_call_id),
+      );
+      const approvalById = new Map(
+        options.resume.approvals.map((a) => [a.toolCallId, a.decision] as const),
+      );
+
+      const toRun: PendingToolCall[] = [];
+      for (const p of pending) {
+        if (alreadyResolved.has(p.id)) continue;
+        const decision = approvalById.get(p.id);
+        if (decision === 'approved' && isToolOffered(p.qualifiedName, mcpTools)) {
+          toRun.push(p);
+        } else if (decision === 'approved') {
+          // Approved but the tool is not in the offered catalog (hallucinated /
+          // forged qualified name): fail-closed — append an error result, do not
+          // execute.
+          const content = `Tool "${p.qualifiedName}" is not available and was not executed.`;
+          yield encoder.encode(
+            toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
+          );
+          messages.push({ role: 'tool', content, tool_call_id: p.id });
+        } else {
+          // Rejected OR undecided (fail-closed default): append a denial result
+          // so the model can respond without the tool.
+          yield encoder.encode(
+            toolResultEvent(p.id, p.qualifiedName, TOOL_DENIED_MESSAGE, false, responseModel),
+          );
+          messages.push({ role: 'tool', content: TOOL_DENIED_MESSAGE, tool_call_id: p.id });
+        }
+      }
+
+      if (toRun.length > 0) {
+        yield* runAndStreamToolCalls(toRun);
+      }
+      // Fall through into the loop: the next provider call sees the completed
+      // thread (assistant tool_calls + every tool result) and continues.
+    }
+
     let step = 0;
     while (step < maxSteps) {
       step++;
@@ -688,49 +929,9 @@ export async function* runToolLoop(
         return;
       }
 
-      // Auto mode: execute tools.
-      // Partition into parallel (read-only) and serial (mutating) groups.
-      const readOnly = pendingToolCalls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
-      const mutating = pendingToolCalls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
-
-      // Emit "running" status for all tools. Include tc.args so the client can
-      // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
-      for (const tc of pendingToolCalls) {
-        yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
-      }
-
-      // Execute read-only tools concurrently.
-      const results: { tc: PendingToolCall; content: string; isError: boolean }[] = [];
-
-      const parallelResults = await Promise.all(
-        readOnly.map(async (tc) => {
-          const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
-          return { tc, ...result };
-        }),
-      );
-      results.push(...parallelResults);
-
-      // Execute mutating tools serially.
-      for (const tc of mutating) {
-        const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
-        results.push({ tc, ...result });
-      }
-
-      // Emit status + result events, and append tool result messages.
-      for (const { tc, content, isError } of results) {
-        yield encoder.encode(
-          toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
-        );
-        yield encoder.encode(
-          toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
-        );
-
-        messages.push({
-          role: 'tool',
-          content,
-          tool_call_id: tc.id,
-        });
-      }
+      // Auto mode: execute tools (shared with the resume preamble so both paths
+      // run identical execution + guard logic).
+      yield* runAndStreamToolCalls(pendingToolCalls);
 
       // Continue to next step.
     }
