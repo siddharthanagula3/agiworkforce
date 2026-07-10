@@ -17,6 +17,7 @@ import {
   resolveAutoModeModel,
   evaluateModelEnvironment,
   PROVIDER_DISPLAY,
+  type ModelAvailability,
   type ProviderId,
   type EnvironmentAvailability,
   type ModelEnvironment,
@@ -27,6 +28,14 @@ export interface ModelPickerOption {
   label: string;
   description: string;
   detail: string;
+  /**
+   * Catalog availability (absent field in models.json ⇒ "live"). Non-live rows
+   * (`coming_soon` / `unavailable`) are DISPLAY-ONLY: the webview renders them
+   * disabled with a "Coming soon" suffix (mirrors the web picker) and they are
+   * never selectable or routable — same invariant as
+   * `getSelectableModels()` vs `getDisplayModels()` in packages/types.
+   */
+  availability: ModelAvailability;
 }
 
 // ─── Environment-gating helper ────────────────────────────────────────────────
@@ -142,6 +151,12 @@ export function buildGroupedQuickPickItems(): GroupedQuickPickItem[] {
     for (const opt of modelsForProvider) {
       const metadata = getModelMetadataById(opt.id);
 
+      // Availability invariant: non-live models (`coming_soon`/`unavailable`)
+      // are NEVER selectable/routable on any surface. QuickPickItem has no
+      // disabled state, so they are excluded here (the webview dropdown shows
+      // them disabled with a "Coming soon" suffix instead, matching web).
+      if (metadata != null && (metadata.availability ?? 'live') !== 'live') continue;
+
       // P3 Phase A: gate models whose `requiresEnvironment` flag is set.
       // evaluateModelEnvironment is fail-closed: absent flag → selectable: true
       // (no-op for every current model). Phase B replaces environmentAvailability
@@ -248,32 +263,45 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
     label: 'Auto (Balanced)',
     description: 'Smart routing — best model per task',
     detail: 'Recommended: AGI Workforce picks the optimal model automatically',
+    availability: 'live',
   },
   {
     id: 'auto-economy',
     label: 'Auto (Economy)',
     description: 'Smart routing — fastest and cheapest',
     detail: 'Best for quick questions and simple tasks',
+    availability: 'live',
   },
   {
     id: 'auto-premium',
     label: 'Auto (Premium)',
     description: 'Smart routing — highest quality',
     detail: 'Best for complex reasoning and long contexts',
+    availability: 'live',
   },
   ...MANUAL_MODEL_OPTIONS.map((option) => ({
     id: option.id,
     label: option.label,
     description: option.description,
     detail: option.detail,
+    availability: getModelMetadataById(option.id)?.availability ?? ('live' as ModelAvailability),
   })),
 ];
 
-const MODEL_PICKER_OPTION_IDS = new Set(MODEL_PICKER_OPTIONS.map((option) => option.id));
+/**
+ * SELECTABLE picker ids — auto modes + live catalog models only. Non-live
+ * (`coming_soon`/`unavailable`) ids are display-only and must never round-trip
+ * through configuration into a request.
+ */
+const SELECTABLE_MODEL_PICKER_OPTION_IDS = new Set(
+  MODEL_PICKER_OPTIONS.filter((option) => option.availability === 'live').map(
+    (option) => option.id,
+  ),
+);
 
 export function normalizeConfiguredModelId(modelId: string | null | undefined): string {
   const normalized = normalizeModelId(modelId) ?? modelId ?? 'auto-economy';
-  return MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto-economy';
+  return SELECTABLE_MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto-economy';
 }
 
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {

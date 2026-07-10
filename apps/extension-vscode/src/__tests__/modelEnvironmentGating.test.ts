@@ -63,8 +63,8 @@ describe('evaluateModelEnvironment — logic', () => {
 // ─── Suite 2: Real catalog — safety property ──────────────────────────────────
 
 describe('buildGroupedQuickPickItems — real catalog, no flagged models', () => {
-  it('every model from getCoreManualModelOptions() appears in the picker output', async () => {
-    const { getCoreManualModelOptions } = await import('@agiworkforce/types');
+  it('every LIVE model appears in the picker output; non-live models never do', async () => {
+    const { getCoreManualModelOptions, isModelSelectable } = await import('@agiworkforce/types');
     const { buildGroupedQuickPickItems } = await import('../features/model-picker/modelConstants');
 
     const manualOptions = getCoreManualModelOptions();
@@ -72,7 +72,11 @@ describe('buildGroupedQuickPickItems — real catalog, no flagged models', () =>
     const pickerIds = new Set(items.map((i) => i.modelId).filter(Boolean));
 
     for (const opt of manualOptions) {
-      expect(pickerIds.has(opt.id)).toBe(true);
+      // Availability invariant: `coming_soon`/`unavailable` catalog entries are
+      // display-only and must NEVER surface as selectable quick-pick items.
+      expect(pickerIds.has(opt.id), `picker selectability mismatch for ${opt.id}`).toBe(
+        isModelSelectable(opt.id),
+      );
     }
   });
 });
