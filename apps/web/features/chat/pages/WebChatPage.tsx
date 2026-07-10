@@ -89,6 +89,7 @@ import {
   consumePendingEdit,
   type PendingEditRollback,
 } from '../lib/pendingEdit';
+import { isStaleActiveConversation } from '../lib/staleActiveConversation';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
@@ -561,6 +562,33 @@ export default function WebChatPage() {
   useEffect(() => {
     pendingEditRollbackRef.current = null;
   }, [displayedConversationId]);
+
+  // Reconcile a stale active conversation with the empty/new-chat view. Navigating
+  // back to `/chat` home via a route change (logo click, browser back) does NOT run
+  // `handleNewChat`, so the store can still mark a prior conversation active with its
+  // completed assistant turns in `messages` while the greeting shows. `ComposerFooter`
+  // reads that raw store to gate the "Switch model mid-conversation?" cache warning, so
+  // the dialog wrongly fires on the empty homepage (DEMO-BLOCKER). Clear the store when
+  // the view is genuinely empty and no send/stream is in flight (see
+  // `isStaleActiveConversation` for the race-safe guard).
+  useEffect(() => {
+    if (
+      isStaleActiveConversation({
+        displayedConversationId,
+        activeConversationId,
+        isStreaming,
+        isLoading,
+      })
+    ) {
+      setActiveConversation(null);
+    }
+  }, [
+    displayedConversationId,
+    activeConversationId,
+    isStreaming,
+    isLoading,
+    setActiveConversation,
+  ]);
 
   const displayedMessages = useMemo(
     () =>
