@@ -28,6 +28,18 @@ export interface StaleActiveConversationInput {
   isStreaming: boolean;
   /** True while a send is in flight (never reset mid-send). */
   isLoading: boolean;
+  /**
+   * True for the whole duration of a `sendContent` call — set synchronously
+   * BEFORE `createConversation` mutates the store. `isStreaming`/`isLoading`
+   * alone leave a race window: a brand-new-chat send calls `createConversation`
+   * (which sets `activeConversationId` and toggles `isLoading` back off in its
+   * own `finally`) and only THEN commits `bareChatSessionId`. In the render
+   * between those steps the store is active, `displayedConversationId` is still
+   * null, and neither stream nor load flag is set — which this predicate would
+   * otherwise misread as a stale homepage and clear, orphaning the first
+   * turn's streaming assistant message. Treat an in-flight send as never stale.
+   */
+  isSending?: boolean;
 }
 
 /**
@@ -38,8 +50,9 @@ export interface StaleActiveConversationInput {
  * sets `bareChatSessionId` → `displayedConversationId` before appending messages).
  */
 export function isStaleActiveConversation(input: StaleActiveConversationInput): boolean {
-  const { displayedConversationId, activeConversationId, isStreaming, isLoading } = input;
-  if (isStreaming || isLoading) return false;
+  const { displayedConversationId, activeConversationId, isStreaming, isLoading, isSending } =
+    input;
+  if (isStreaming || isLoading || isSending) return false;
   if (displayedConversationId) return false;
   return Boolean(activeConversationId);
 }
