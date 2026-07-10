@@ -299,8 +299,10 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      // Cmd/Ctrl+Enter sends; plain Enter inserts newline (Claude/ChatGPT/Codex Desktop pattern)
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
+      // convention). Cmd/Ctrl+Enter also sends. IME composition (e.g. CJK) must not
+      // submit mid-candidate, so guard on isComposing.
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSend();
       }
@@ -309,7 +311,6 @@ export function ChatInput({
   );
 
   const [focused, setFocused] = useState(false);
-  const modKey = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl';
 
   const placeholder = disabled
     ? (disabledMessage ?? 'Connect to start chatting')
@@ -508,7 +509,7 @@ export function ChatInput({
                 <button
                   type="button"
                   onClick={handleSend}
-                  aria-label={`Send message (${modKey}+Enter)`}
+                  aria-label="Send message (Enter)"
                   disabled={disabled || noModelSelected}
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150',
