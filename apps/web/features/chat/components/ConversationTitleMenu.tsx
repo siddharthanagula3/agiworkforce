@@ -26,7 +26,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@shared/ui/dropdown-menu';
+} from '@agiworkforce/ui';
 
 export interface ConversationTitleMenuProps {
   /** Current conversation title (already filtered to non-empty, != 'New Chat'). */
