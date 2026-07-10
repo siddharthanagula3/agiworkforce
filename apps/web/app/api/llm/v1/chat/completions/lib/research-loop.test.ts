@@ -9,8 +9,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/llm-providers/factory', () => ({
-  LLMProviderFactory: { streamRequest: vi.fn() },
+vi.mock('./tool-loop-anthropic', () => ({
+  buildToolLoopStream: vi.fn(),
 }));
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
@@ -25,7 +25,7 @@ vi.mock('@/lib/assert-quota', () => ({
   reconcileUsage: vi.fn(async () => undefined),
 }));
 
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import { buildToolLoopStream } from './tool-loop-anthropic';
 import { CreditService } from '@/lib/services/credit-service';
 import { reconcileUsage } from '@/lib/assert-quota';
 import {
@@ -36,7 +36,9 @@ import {
 } from './research-loop';
 import type { ProcessedRequest } from './request-processor';
 
-const streamRequestMock = vi.mocked(LLMProviderFactory.streamRequest);
+// buildToolLoopStream(provider, processed, stepRequest, responseModel) -- the
+// per-step llmRequest is argument index 2.
+const streamRequestMock = vi.mocked(buildToolLoopStream);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -265,7 +267,7 @@ describe('runResearchLoop', () => {
     expect(run.doneCount).toBe(1);
 
     // Synthesis turn saw the gathered notes and the numbered source list.
-    const synthesisRequest = streamRequestMock.mock.calls[1]?.[1] as {
+    const synthesisRequest = streamRequestMock.mock.calls[1]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     const synthDirective = synthesisRequest.messages[synthesisRequest.messages.length - 1];
@@ -333,7 +335,7 @@ describe('runResearchLoop', () => {
     );
     // Round 1: searches=2 (<3, continue). Round 2: searches=4 (>=3, stop). +synthesis.
     expect(streamRequestMock).toHaveBeenCalledTimes(3);
-    const synthesisRequest = streamRequestMock.mock.calls[2]?.[1] as {
+    const synthesisRequest = streamRequestMock.mock.calls[2]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     const directive = synthesisRequest.messages[synthesisRequest.messages.length - 1];
@@ -363,7 +365,7 @@ describe('runResearchLoop', () => {
     const calls = streamRequestMock.mock.calls.length;
     expect(calls).toBeGreaterThanOrEqual(2);
     expect(calls).toBeLessThan(8);
-    const synthesisRequest = streamRequestMock.mock.calls[calls - 1]?.[1] as {
+    const synthesisRequest = streamRequestMock.mock.calls[calls - 1]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     expect(synthesisRequest.messages[synthesisRequest.messages.length - 1]?.content).toContain(
@@ -400,7 +402,7 @@ describe('runResearchLoop', () => {
     expect(streamRequestMock).toHaveBeenCalledTimes(3);
     expect(forwardedContent(run)).toBe('partial report [1]');
     expect(lastSearchResults(run)?.[0]).toMatchObject({ url: 'https://kept.com', position: 1 });
-    const synthesisRequest = streamRequestMock.mock.calls[2]?.[1] as {
+    const synthesisRequest = streamRequestMock.mock.calls[2]?.[2] as {
       messages: Array<{ role: string; content: string }>;
     };
     expect(synthesisRequest.messages[synthesisRequest.messages.length - 1]?.content).toContain(
@@ -490,7 +492,7 @@ describe('runResearchLoop', () => {
       .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
 
     await collectRun(runResearchLoop(processed, BILLING));
-    const firstRequest = streamRequestMock.mock.calls[0]?.[1] as { tools?: unknown[] };
+    const firstRequest = streamRequestMock.mock.calls[0]?.[2] as { tools?: unknown[] };
     expect(firstRequest.tools).toEqual([{ google_search: {} }]);
   });
 });
