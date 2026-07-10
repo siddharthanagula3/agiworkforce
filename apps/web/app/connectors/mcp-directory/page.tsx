@@ -7,7 +7,7 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'MCP Directory',
   description:
-    'Browse community-built MCP servers for databases, APIs, developer tools, and more. Connect any MCP-compatible server to AGI.',
+    'Reference MCP servers you can connect to AGI. A full browsable, searchable directory is coming soon.',
   alternates: { canonical: 'https://agiworkforce.com/connectors/mcp-directory' },
 };
 
@@ -64,14 +64,15 @@ export default function McpDirectoryPage() {
             MCP Directory.
           </h1>
           <p className="agi-page-lede">
-            Community and official MCP servers for databases, APIs, developer tools, search, and
-            browser automation. Copy a server URL into the custom connector dialog when you are
-            ready to connect it.
+            A full browsable, searchable directory is coming soon. Until then, here are a few
+            well-known reference servers &mdash; all maintained in the official Model Context
+            Protocol servers repository. Copy a server&rsquo;s setup into the custom connector dialog
+            when you are ready to connect it.
           </p>
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Featured MCP servers</p>
+          <p className="agi-section-eyebrow">Reference servers &middot; official repo</p>
           <div className="agi-route-grid">
             {FEATURED_MCPS.map((mcp) => (
               <a

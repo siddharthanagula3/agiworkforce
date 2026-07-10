@@ -134,8 +134,8 @@ export default function CliPage() {
             One binary. 15 core subcommands.
           </h2>
           <p className="agi-fl-section-lede">
-            Everything below ships in the agi binary today. Short aliases where it counts: e for
-            exec, a for apply.
+            Every subcommand below ships in the agi binary at public launch. Short aliases where it
+            counts: e for exec, a for apply.
           </p>
           <table className="agi-ledger">
             <tbody>

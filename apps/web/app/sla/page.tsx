@@ -17,15 +17,16 @@ export default function SlaPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">SLA.</h1>
           <p className="agi-page-lede">
-            What we commit to keep up, and what happens when we don&rsquo;t.{' '}
+            What we plan to commit to at general availability, and what happens when we miss.{' '}
             <strong>
-              The targets below apply to paid tiers (Hobby and above). Local + BYOK free tiers run
-              on best-effort.
+              AGI is pre-launch: the numbers below are planned targets for paid tiers, not yet a
+              binding contractual commitment. They take effect when paid plans reach general
+              availability. Local + BYOK free modes run on best-effort.
             </strong>
           </p>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Uptime targets</p>
+          <p className="agi-section-eyebrow">Planned uptime targets (at GA)</p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -59,7 +60,7 @@ export default function SlaPage() {
           </table>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Response times by tier</p>
+          <p className="agi-section-eyebrow">Planned response times by tier</p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -70,7 +71,7 @@ export default function SlaPage() {
             </thead>
             <tbody>
               <tr>
-                <td>Hobby</td>
+                <td>Free</td>
                 <td>48 hours</td>
                 <td>Email</td>
               </tr>
@@ -80,8 +81,8 @@ export default function SlaPage() {
                 <td>Priority email</td>
               </tr>
               <tr>
-                <td>Pro+ / Max</td>
-                <td>12 / 8 hours</td>
+                <td>Max</td>
+                <td>8 hours</td>
                 <td>Priority email</td>
               </tr>
               <tr>
@@ -93,11 +94,12 @@ export default function SlaPage() {
           </table>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Service credits</p>
+          <p className="agi-section-eyebrow">Planned service credits</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            If we miss the uptime target in a given month, paid customers can claim a service
-            credit. The credit equals 10% of the monthly fee for each 0.1% below target, capped at
-            50% of the monthly fee. To claim: email{' '}
+            Once paid plans reach general availability, the intended policy is: if we miss the uptime
+            target in a given month, paid customers can claim a service credit equal to 10% of the
+            monthly fee for each 0.1% below target, capped at 50% of the monthly fee. Final credit
+            terms are confirmed in your plan agreement at launch. To reach us: email{' '}
             <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
               contact@agiworkforce.com
             </a>{' '}
