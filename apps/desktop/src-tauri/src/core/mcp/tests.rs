@@ -139,6 +139,161 @@ while True:
     }
 }
 
+/// Roundtrip smoke through the NEW desktop HTTP/SSE → `agiworkforce-mcp`
+/// engine path (Wave 5 stage d2): `McpSession::connect` with
+/// `TransportConfig::Http` (legacy split-endpoint convention, POST
+/// `{url}/message`) against a real loopback MCP server scripted in python3's
+/// stdlib http.server. Host-driven initialize (2025-11-25) →
+/// `notifications/initialized` → `tools/list` → `tools/call`. Skips when
+/// python3 is absent.
+#[cfg(test)]
+mod http_engine_smoke {
+    use crate::core::mcp::{config::McpServerConfig, session::McpSession};
+    use crate::core::mcp::{HttpSseConfig, TransportConfig};
+    use std::collections::HashMap;
+
+    const PY_HTTP_SERVER: &str = r#"
+import json
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        pass
+
+    def do_POST(self):
+        if self.path != "/message":
+            self.send_response(404)
+            self.end_headers()
+            return
+        length = int(self.headers.get("Content-Length", "0"))
+        frame = json.loads(self.rfile.read(length))
+        method = frame.get("method", "")
+        rid = frame.get("id")
+        if method.startswith("notifications/"):
+            assert "id" not in frame, "notification must not carry an id"
+            self.send_response(202)
+            self.end_headers()
+            return
+        if method == "initialize":
+            result = {
+                "protocolVersion": frame["params"]["protocolVersion"],
+                "capabilities": {"tools": {}},
+                "serverInfo": {
+                    "name": "py-http-smoke:" + frame["params"]["clientInfo"]["name"],
+                    "version": "0.0.1",
+                },
+            }
+        elif method == "tools/list":
+            result = {"tools": [{
+                "name": "echo",
+                "description": "Echo the input back.",
+                "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
+            }]}
+        elif method == "tools/call":
+            text = frame["params"]["arguments"].get("text", "")
+            result = {"content": [{"type": "text", "text": text}], "isError": False}
+        else:
+            result = {}
+        body = json.dumps({"jsonrpc": "2.0", "id": rid, "result": result}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+print(server.server_address[1], flush=True)
+server.serve_forever()
+"#;
+
+    fn python3_available() -> bool {
+        std::process::Command::new("python3")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    #[tokio::test]
+    async fn http_engine_roundtrip_initialize_list_call() {
+        use std::io::{BufRead, BufReader};
+
+        if !python3_available() {
+            eprintln!("python3 unavailable; skipping http engine smoke");
+            return;
+        }
+
+        // Spawn the loopback server; it prints its ephemeral port first.
+        let mut server = std::process::Command::new("python3")
+            .args(["-u", "-c", PY_HTTP_SERVER])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn python http server");
+        let port = {
+            let stdout = server.stdout.take().expect("server stdout");
+            let mut line = String::new();
+            BufReader::new(stdout)
+                .read_line(&mut line)
+                .expect("read port line");
+            line.trim().parse::<u16>().expect("port number")
+        };
+
+        struct ServerGuard(std::process::Child);
+        impl Drop for ServerGuard {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let _guard = ServerGuard(server);
+
+        let config = McpServerConfig {
+            command: String::new(),
+            args: Vec::new(),
+            env: HashMap::new(),
+            enabled: true,
+            transport: Some(TransportConfig::Http(HttpSseConfig {
+                url: format!("http://127.0.0.1:{port}"),
+                ..Default::default()
+            })),
+        };
+
+        let session = McpSession::connect("py-http-smoke".to_string(), config)
+            .await
+            .expect("connect via engine http transport");
+        assert_eq!(session.transport_type(), "http-sse");
+
+        let init = session.initialize().await.expect("initialize");
+        assert_eq!(init.protocol_version, "2025-11-25");
+        assert_eq!(init.server_info.name, "py-http-smoke:AGI Workforce");
+
+        let tools = session.list_tools().await.expect("tools/list");
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "echo");
+
+        let mut args = HashMap::new();
+        args.insert(
+            "text".to_string(),
+            serde_json::Value::String("http-engine-roundtrip".to_string()),
+        );
+        let result = session.call_tool("echo", args).await.expect("tools/call");
+        assert_eq!(result.is_error, Some(false));
+        let first = result.content.first().expect("tool content");
+        assert_eq!(
+            serde_json::to_value(first).unwrap()["text"],
+            "http-engine-roundtrip"
+        );
+
+        assert!(session.is_alive(), "session should be alive mid-roundtrip");
+
+        session.shutdown().await.expect("shutdown");
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use crate::core::mcp::{
