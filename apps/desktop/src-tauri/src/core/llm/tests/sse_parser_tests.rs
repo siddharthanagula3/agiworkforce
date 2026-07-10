@@ -374,233 +374,9 @@ mod production_parser_tests {
     // Anthropic format tests
     // =========================================================================
 
-    #[test]
-    fn test_anthropic_content_block_delta_text() {
-        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello from Claude\"}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert_eq!(chunk.content, "Hello from Claude");
-        assert!(!chunk.done);
-        assert!(!chunk.keepalive);
-    }
-
-    #[test]
-    fn test_anthropic_message_start_with_model() {
-        let event = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_abc\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-6\",\"usage\":{\"input_tokens\":25,\"output_tokens\":0}}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert_eq!(chunk.model.as_deref(), Some("claude-sonnet-4-6"));
-        assert!(!chunk.done);
-        // Usage from message_start contains input tokens
-        let usage = chunk.usage.unwrap();
-        assert_eq!(usage.prompt_tokens, Some(25));
-        assert_eq!(usage.completion_tokens, Some(0));
-    }
-
-    #[test]
-    fn test_anthropic_message_delta_stop() {
-        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":10,\"output_tokens\":50}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert!(chunk.done);
-        assert_eq!(chunk.finish_reason.as_deref(), Some("end_turn"));
-        let usage = chunk.usage.unwrap();
-        assert_eq!(usage.prompt_tokens, Some(10));
-        assert_eq!(usage.completion_tokens, Some(50));
-        assert_eq!(usage.total_tokens, Some(60));
-    }
-
-    #[test]
-    fn test_anthropic_message_stop() {
-        let event = "event: message_stop\ndata: {\"type\":\"message_stop\"}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert!(chunk.done);
-    }
-
-    #[test]
-    fn test_anthropic_tool_use_content_block_start() {
-        let event = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_abc\",\"name\":\"get_weather\",\"input\":{}}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        let tool_calls = chunk.tool_calls.unwrap();
-        assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].id, "toolu_abc");
-        assert_eq!(tool_calls[0].name, "get_weather");
-        assert_eq!(tool_calls[0].index, 1);
-    }
-
-    #[test]
-    fn test_anthropic_input_json_delta() {
-        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"NYC\\\"\"}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        let tool_calls = chunk.tool_calls.unwrap();
-        assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].index, 1);
-        assert!(tool_calls[0].arguments.contains("NYC"));
-    }
-
-    #[test]
-    fn test_anthropic_ping_event() {
-        let event = "event: ping\ndata: {}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        // Ping event is handled inside parse_anthropic_sse as a no-op content event
-        // (keepalive detection happens at the SseStreamParser level, not in parse_anthropic_sse)
-        assert!(chunk.content.is_empty());
-        assert!(!chunk.done);
-    }
-
-    #[test]
-    fn test_anthropic_error_event() {
-        let event = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}";
-
-        let result = parse_sse_event(event, Provider::Anthropic);
-
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Overloaded"));
-        assert!(err_msg.contains("overloaded_error"));
-    }
-
-    #[test]
-    fn test_anthropic_message_delta_tool_use_stop() {
-        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"input_tokens\":20,\"output_tokens\":30}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert!(chunk.done);
-        assert_eq!(chunk.finish_reason.as_deref(), Some("tool_use"));
-    }
-
-    #[test]
-    fn test_anthropic_thinking_delta_ignored() {
-        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me think...\"}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        // Thinking deltas should not appear as content
-        assert!(chunk.content.is_empty());
-    }
-
-    #[test]
-    fn test_anthropic_content_block_stop_is_noop() {
-        let event =
-            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert!(!chunk.done);
-        assert!(chunk.content.is_empty());
-    }
-
     // =========================================================================
     // Google/Gemini format tests
     // =========================================================================
-
-    #[test]
-    fn test_google_text_content() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":"Hello from Gemini"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15}}"#;
-
-        let chunk = parse_sse_event(event, Provider::Google).unwrap();
-
-        assert_eq!(chunk.content, "Hello from Gemini");
-        assert!(chunk.done);
-        assert_eq!(chunk.finish_reason.as_deref(), Some("STOP"));
-        let usage = chunk.usage.unwrap();
-        assert_eq!(usage.prompt_tokens, Some(10));
-        assert_eq!(usage.completion_tokens, Some(5));
-        assert_eq!(usage.total_tokens, Some(15));
-    }
-
-    #[test]
-    fn test_google_streaming_partial_no_finish() {
-        let event =
-            r#"data: {"candidates":[{"content":{"parts":[{"text":"Partial "}],"role":"model"}}]}"#;
-
-        let chunk = parse_sse_event(event, Provider::Google).unwrap();
-
-        assert_eq!(chunk.content, "Partial ");
-        assert!(!chunk.done);
-        assert!(chunk.finish_reason.is_none());
-    }
-
-    #[test]
-    fn test_google_api_error() {
-        let event = r#"data: {"error":{"code":429,"status":"RESOURCE_EXHAUSTED","message":"Quota exceeded"}}"#;
-
-        let result = parse_sse_event(event, Provider::Google);
-
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("429"));
-        assert!(err_msg.contains("RESOURCE_EXHAUSTED"));
-        assert!(err_msg.contains("Quota exceeded"));
-    }
-
-    #[test]
-    fn test_google_safety_filter_block() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"SAFETY"}]}"#;
-
-        let result = parse_sse_event(event, Provider::Google);
-
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("safety filters"));
-    }
-
-    #[test]
-    fn test_google_recitation_block() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":""}],"role":"model"},"finishReason":"RECITATION"}]}"#;
-
-        let result = parse_sse_event(event, Provider::Google);
-
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("recitation"));
-    }
-
-    #[test]
-    fn test_google_function_call() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"search_web","args":{"query":"weather NYC"}}}],"role":"model"},"finishReason":"STOP"}]}"#;
-
-        let chunk = parse_sse_event(event, Provider::Google).unwrap();
-
-        assert!(chunk.done);
-        let tool_calls = chunk.tool_calls.unwrap();
-        assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].name, "search_web");
-        assert!(tool_calls[0].arguments.contains("weather NYC"));
-        // Google-generated IDs start with "call_"
-        assert!(tool_calls[0].id.starts_with("call_"));
-    }
-
-    #[test]
-    fn test_google_empty_candidates() {
-        let event = r#"data: {"candidates":[]}"#;
-
-        let chunk = parse_sse_event(event, Provider::Google).unwrap();
-
-        assert!(chunk.content.is_empty());
-        assert!(!chunk.done);
-    }
-
-    #[test]
-    fn test_google_malformed_json_returns_error() {
-        let event = "data: not json at all";
-
-        let result = parse_sse_event(event, Provider::Google);
-
-        assert!(result.is_err());
-    }
 
     // =========================================================================
     // Ollama format tests
@@ -714,26 +490,6 @@ mod production_parser_tests {
     }
 
     #[test]
-    fn test_anthropic_no_data_line_produces_empty_chunk() {
-        // An event with only an event: line and no data: line
-        let event = "event: content_block_stop";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert!(chunk.content.is_empty());
-        assert!(!chunk.done);
-    }
-
-    #[test]
-    fn test_google_with_model_field() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":"ok"}],"role":"model"}}],"model":"gemini-3-pro-preview"}"#;
-
-        let chunk = parse_sse_event(event, Provider::Google).unwrap();
-
-        assert_eq!(chunk.model.as_deref(), Some("gemini-3-pro-preview"));
-    }
-
-    #[test]
     fn test_openai_credits_info_parsed() {
         let event = r#"data: {"choices":[{"delta":{},"finish_reason":"stop"}],"credits":{"cost_cents":0.5,"remaining_cents":99.5}}"#;
 
@@ -842,19 +598,6 @@ mod stream_buffer_tests {
     }
 
     #[test]
-    fn test_anthropic_multi_line_event_data_accumulation() {
-        // Anthropic events have event: and data: lines
-        // parse_sse_event handles the full multi-line event after process_buffer
-        // splits by double-newline.
-        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"accumulated text\"}}";
-
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-
-        assert_eq!(chunk.content, "accumulated text");
-        assert!(!chunk.done);
-    }
-
-    #[test]
     fn test_buffer_accumulates_content_across_chunks() {
         // Simulates what the caller does: accumulate content from multiple chunks
         let events = [
@@ -878,26 +621,6 @@ mod stream_buffer_tests {
         assert_eq!(accumulated, "The quick brown fox");
         assert!(final_chunk.is_some(), "Must have a final chunk");
         assert_eq!(final_chunk.unwrap().finish_reason.as_deref(), Some("stop"));
-    }
-
-    #[test]
-    fn test_google_events_in_buffer() {
-        let raw = concat!(
-            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Part 1\"}],\"role\":\"model\"}}]}\n\n",
-            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" Part 2\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8}}\n\n",
-        );
-
-        let chunks = split_and_parse_events(raw, Provider::Google);
-
-        assert_eq!(chunks.len(), 2);
-        assert_eq!(chunks[0].content, "Part 1");
-        assert!(!chunks[0].done);
-        assert_eq!(chunks[1].content, " Part 2");
-        assert!(chunks[1].done);
-        let usage = chunks[1].usage.as_ref().unwrap();
-        assert_eq!(usage.prompt_tokens, Some(5));
-        assert_eq!(usage.completion_tokens, Some(3));
-        assert_eq!(usage.total_tokens, Some(8));
     }
 
     #[test]

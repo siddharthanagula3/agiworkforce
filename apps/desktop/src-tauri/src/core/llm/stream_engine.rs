@@ -1,0 +1,411 @@
+//! Desktop bridge onto the shared `agiworkforce-llm` provider engine.
+//!
+//! Wave 5 stage c2 (`docs/plans/rust-engine-extraction-2026-07-09.md`): the
+//! per-provider SSE/NDJSON *decode mechanics* now live in
+//! `crates/agiworkforce-llm`. This module is the thin desktop-side facade that
+//! keeps desktop's IPC contract byte-for-byte: it drives the crate's
+//! dialect byte-stream runners and re-projects their [`StreamEvent`] stream
+//! back into desktop's app-local [`StreamChunk`] shape that
+//! `sys/commands/chat/stream_runtime.rs` accumulates.
+//!
+//! What stays app-local (desktop concerns, by construction):
+//! - the `StreamChunk`/`TokenUsage`/`StreamingToolCall` IPC boundary types
+//!   (`crate::core::llm::sse_parser`);
+//! - request building (`provider_adapter`), auth, key resolution, base-URL
+//!   validation, and the HTTP client factory (`providers`);
+//! - idle-timeout governance — `consume_llm_stream` already wraps
+//!   `stream.next()` in desktop's configured idle timeout, so the crate
+//!   watchdog is given an effectively-unbounded budget here to preserve the
+//!   exact pre-swap behavior;
+//! - user-facing error phrasing for in-stream provider error frames and
+//!   Gemini safety-filter blocks (the crate reports these structurally; the
+//!   desktop UX strings are reproduced here so the swap is behavior-preserving).
+//!
+//! reqwest note: desktop is on reqwest 0.13 while the crate pins 0.12, so the
+//! full `stream_chat` entry (which threads a `reqwest::Client`) is not usable
+//! across the version boundary. The crate's `run_*_stream` byte-stream runners
+//! are generic over `Stream<Item = Result<Bytes, LlmError>>`, so no reqwest
+//! type crosses the boundary — desktop keeps its own 0.13 client, POSTs the
+//! request, and feeds `Response::bytes_stream()` (error-mapped) into the crate.
+//! Adopting request serialization (c2c) is deferred on the reqwest convergence.
+
+use std::error::Error;
+use std::time::Duration;
+
+use agiworkforce_llm::{
+    LlmError, StreamEvent, Usage as CrateUsage, run_anthropic_stream, run_gemini_stream,
+    run_openai_compat_stream,
+};
+use futures_util::{Stream, StreamExt};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+
+use crate::core::llm::Provider;
+use crate::core::llm::sse_parser::{StreamChunk, StreamingToolCall, TokenUsage};
+
+type ChunkResult = Result<StreamChunk, Box<dyn Error + Send + Sync>>;
+
+/// Which shared decoder to drive for a desktop provider.
+///
+/// Mirrors the pre-swap `sse_parser::parse_sse_event` routing exactly: only
+/// Anthropic (Messages API) and Google (Gemini `generateContent`) get
+/// specialized dialects; every other BYOK cloud provider DirectApiProvider
+/// serves speaks OpenAI-compatible Chat Completions. Ollama has its own native
+/// provider path (`providers/ollama.rs`) and never reaches DirectApiProvider,
+/// so `OllamaNative` is intentionally not represented here.
+#[derive(Clone, Copy)]
+enum Decoder {
+    Anthropic,
+    Gemini,
+    OpenAiCompat,
+}
+
+fn decoder_for(provider: Provider) -> Decoder {
+    match provider {
+        Provider::Anthropic => Decoder::Anthropic,
+        Provider::Google => Decoder::Gemini,
+        _ => Decoder::OpenAiCompat,
+    }
+}
+
+fn empty_chunk() -> StreamChunk {
+    StreamChunk {
+        content: String::new(),
+        done: false,
+        finish_reason: None,
+        model: None,
+        usage: None,
+        credits: None,
+        tool_calls: None,
+        reasoning: None,
+        keepalive: false,
+    }
+}
+
+/// Map the crate's cumulative [`CrateUsage`] onto desktop's `TokenUsage`.
+/// Only called when the provider actually reported usage (the crate emits
+/// `StreamEvent::Usage` only on seeing a usage object), so the values are real
+/// rather than defaulted.
+fn map_usage(u: &CrateUsage) -> TokenUsage {
+    let input = u.input_tokens;
+    let output = u.output_tokens;
+    TokenUsage {
+        prompt_tokens: Some(input),
+        completion_tokens: Some(output),
+        total_tokens: Some(input.saturating_add(output)),
+        cache_read_input_tokens: (u.cache_read_input_tokens > 0)
+            .then_some(u.cache_read_input_tokens),
+        cache_creation_input_tokens: (u.cache_creation_input_tokens > 0)
+            .then_some(u.cache_creation_input_tokens),
+    }
+}
+
+/// Surface an in-stream provider error frame as a terminal error, preserving
+/// the pre-swap desktop behavior where `parse_*_sse` returned `Err` on
+/// `{"error": ...}`. The crate reports such frames it does not interpret as
+/// `StreamEvent::Vendor`, carrying the raw payload.
+fn extract_stream_error(data: &serde_json::Value) -> Option<Box<dyn Error + Send + Sync>> {
+    let err = data.get("error")?;
+    let msg = if let Some(s) = err.as_str() {
+        s.to_string()
+    } else {
+        let message = err
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown error");
+        match err.get("type").and_then(|t| t.as_str()) {
+            Some(t) if !t.is_empty() => format!("Provider stream error ({t}): {message}"),
+            _ => format!("Provider stream error: {message}"),
+        }
+    };
+    Some(msg.into())
+}
+
+/// Reproduce desktop's user-facing errors for Gemini safety/recitation blocks.
+/// The crate carries the raw `finishReason` through to `StreamEvent::End`; the
+/// pre-swap `parse_google_sse` turned these into terminal errors with these
+/// exact strings.
+fn gemini_block_error(reason: &str) -> Option<&'static str> {
+    match reason {
+        "SAFETY" | "BLOCKLIST" | "PROHIBITED_CONTENT" | "SPII" => Some(
+            "Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings.",
+        ),
+        "RECITATION" => Some(
+            "Response was blocked due to recitation concerns. Try rephrasing your request.",
+        ),
+        "MALFORMED_FUNCTION_CALL" => Some(
+            "Google returned a malformed function call. Try simplifying your request or tool definitions.",
+        ),
+        _ => None,
+    }
+}
+
+/// Drive the shared `agiworkforce-llm` decoder for `provider` over an already
+/// opened (HTTP 200) streaming response and re-project it into desktop's
+/// `StreamChunk` stream. The returned stream is a drop-in replacement for the
+/// old `sse_parser::parse_sse_stream(res, provider)`.
+///
+/// Cancellation is preserved: when the consumer drops the returned stream
+/// (user stop / early return), byte pulling halts and the backing connection
+/// is released, matching the pre-swap lazy-poll behavior.
+pub fn decode_direct_stream(
+    response: reqwest::Response,
+    provider: Provider,
+) -> impl Stream<Item = ChunkResult> + Send {
+    let byte_stream = response.bytes_stream().map(|r| {
+        r.map_err(|e| LlmError::Read {
+            message: e.to_string(),
+        })
+    });
+    decode_bytes(Box::pin(byte_stream), decoder_for(provider))
+}
+
+/// The reqwest-decoupled core of the swap: drive the shared dialect runner
+/// over a byte stream and project its [`StreamEvent`]s into desktop
+/// `StreamChunk`s. Separated from [`decode_direct_stream`] so the projection +
+/// crate-runner integration can be regression-tested with canned byte fixtures
+/// (no network). Cancellation is preserved: when the consumer drops the
+/// receiver, byte pulling halts and the backing connection is released.
+fn decode_bytes<S>(byte_stream: S, decoder: Decoder) -> UnboundedReceiverStream<ChunkResult>
+where
+    S: Stream<Item = Result<bytes::Bytes, LlmError>> + Send + Unpin + 'static,
+{
+    let is_gemini = matches!(decoder, Decoder::Gemini);
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ChunkResult>();
+
+    // Stop draining the provider once the consumer drops the receiver.
+    let tx_probe = tx.clone();
+    let byte_stream = Box::pin(byte_stream.take_while(move |_| {
+        let open = !tx_probe.is_closed();
+        async move { open }
+    }));
+
+    tokio::spawn(async move {
+        // Idle governance stays with `consume_llm_stream`; keep the crate
+        // watchdog effectively unbounded so idle-timeout behavior is unchanged.
+        let idle = Duration::from_secs(86_400);
+        let tx_events = tx.clone();
+        let mut on_event = move |event: StreamEvent| match event {
+            StreamEvent::TextDelta { text } => {
+                let mut c = empty_chunk();
+                c.content = text;
+                let _ = tx_events.send(Ok(c));
+            }
+            StreamEvent::ReasoningDelta { text } => {
+                let mut c = empty_chunk();
+                c.reasoning = Some(text);
+                let _ = tx_events.send(Ok(c));
+            }
+            StreamEvent::ToolCallStart { index, id, name } => {
+                let mut c = empty_chunk();
+                c.tool_calls = Some(vec![StreamingToolCall {
+                    index,
+                    id,
+                    name,
+                    arguments: String::new(),
+                }]);
+                let _ = tx_events.send(Ok(c));
+            }
+            StreamEvent::ToolCallArgsDelta { index, fragment } => {
+                let mut c = empty_chunk();
+                c.tool_calls = Some(vec![StreamingToolCall {
+                    index,
+                    id: String::new(),
+                    name: String::new(),
+                    arguments: fragment,
+                }]);
+                let _ = tx_events.send(Ok(c));
+            }
+            StreamEvent::Usage { usage } => {
+                let mut c = empty_chunk();
+                c.usage = Some(map_usage(&usage));
+                let _ = tx_events.send(Ok(c));
+            }
+            StreamEvent::Keepalive => {
+                let mut c = empty_chunk();
+                c.keepalive = true;
+                let _ = tx_events.send(Ok(c));
+            }
+            StreamEvent::Vendor { event: _, data } => {
+                if let Some(err) = extract_stream_error(&data) {
+                    let _ = tx_events.send(Err(err));
+                } else {
+                    // Non-error vendor frame the crate did not interpret
+                    // (e.g. role-only openers). Treat as a keepalive: no
+                    // content, but the stream is alive.
+                    let mut c = empty_chunk();
+                    c.keepalive = true;
+                    let _ = tx_events.send(Ok(c));
+                }
+            }
+            StreamEvent::End { stop_reason } => {
+                if is_gemini {
+                    if let Some(msg) = stop_reason.as_deref().and_then(gemini_block_error) {
+                        let _ = tx_events.send(Err(msg.into()));
+                        return;
+                    }
+                }
+                let mut c = empty_chunk();
+                c.done = true;
+                c.finish_reason = stop_reason;
+                let _ = tx_events.send(Ok(c));
+            }
+        };
+
+        let result = match decoder {
+            Decoder::Anthropic => run_anthropic_stream(byte_stream, idle, &mut on_event).await,
+            Decoder::Gemini => run_gemini_stream(byte_stream, idle, &mut on_event).await,
+            Decoder::OpenAiCompat => {
+                run_openai_compat_stream(byte_stream, idle, &mut on_event).await
+            }
+        };
+
+        if let Err(err) = result {
+            let _ = tx.send(Err(Box::<dyn Error + Send + Sync>::from(err.to_string())));
+        }
+    });
+
+    UnboundedReceiverStream::new(rx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use std::collections::BTreeMap;
+
+    /// Split a byte fixture into fixed-size pieces so the test exercises the
+    /// crate's line + UTF-8 reassembly across chunk boundaries through the
+    /// desktop adapter, then wrap each piece as a `Result<Bytes, LlmError>`.
+    fn chunked(raw: &[u8], size: usize) -> Vec<Result<Bytes, LlmError>> {
+        raw.chunks(size)
+            .map(|c| Ok(Bytes::copy_from_slice(c)))
+            .collect()
+    }
+
+    /// Mirror of `stream_runtime::consume_llm_stream`'s accumulation so the
+    /// assertion is against the exact end-to-end contract the frontend sees,
+    /// not the intermediate per-chunk shape.
+    #[derive(Default)]
+    struct Acc {
+        content: String,
+        reasoning: String,
+        finish: Option<String>,
+        usage: Option<TokenUsage>,
+        tools: BTreeMap<usize, StreamingToolCall>,
+        err: Option<String>,
+    }
+
+    async fn accumulate(pieces: Vec<Result<Bytes, LlmError>>, decoder: Decoder) -> Acc {
+        let stream = futures_util::stream::iter(pieces);
+        let mut out = Box::pin(decode_bytes(stream, decoder));
+        let mut a = Acc::default();
+        while let Some(item) = out.next().await {
+            match item {
+                Ok(chunk) => {
+                    if chunk.keepalive {
+                        continue;
+                    }
+                    a.content.push_str(&chunk.content);
+                    if let Some(r) = chunk.reasoning {
+                        a.reasoning.push_str(&r);
+                    }
+                    if let Some(fr) = chunk.finish_reason {
+                        a.finish = Some(fr);
+                    }
+                    if let Some(u) = chunk.usage {
+                        a.usage = Some(u);
+                    }
+                    if let Some(tcs) = chunk.tool_calls {
+                        for tc in tcs {
+                            let e = a.tools.entry(tc.index).or_insert(StreamingToolCall {
+                                index: tc.index,
+                                id: String::new(),
+                                name: String::new(),
+                                arguments: String::new(),
+                            });
+                            if !tc.id.is_empty() {
+                                e.id = tc.id;
+                            }
+                            if !tc.name.is_empty() {
+                                e.name = tc.name;
+                            }
+                            e.arguments.push_str(&tc.arguments);
+                        }
+                    }
+                }
+                Err(e) => {
+                    a.err = Some(e.to_string());
+                    break;
+                }
+            }
+        }
+        a
+    }
+
+    #[tokio::test]
+    async fn openai_compat_text_and_usage_accumulate() {
+        let raw = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"lo \\u00e9\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: {\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2}}\n\n",
+            "data: [DONE]\n\n",
+        );
+        // 7-byte pieces force mid-line and mid-JSON splits.
+        let a = accumulate(chunked(raw.as_bytes(), 7), Decoder::OpenAiCompat).await;
+        assert!(a.err.is_none(), "unexpected error: {:?}", a.err);
+        assert_eq!(a.content, "Hello \u{e9}");
+        assert_eq!(a.finish.as_deref(), Some("stop"));
+        let usage = a.usage.expect("usage present");
+        assert_eq!(usage.prompt_tokens, Some(5));
+        assert_eq!(usage.completion_tokens, Some(2));
+    }
+
+    #[tokio::test]
+    async fn openai_compat_tool_call_args_accumulate_by_index() {
+        // Tool call at index 1, id+name then split arguments across two events
+        // (Bug #27 shape) — the crate assembler tracks the explicit index and
+        // the desktop accumulator merges by index.
+        let raw = concat!(
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call_x\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"src/\"}}]}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"function\":{\"arguments\":\"main.rs\\\"}\"}}]}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+        let a = accumulate(chunked(raw.as_bytes(), 11), Decoder::OpenAiCompat).await;
+        assert!(a.err.is_none(), "unexpected error: {:?}", a.err);
+        assert_eq!(a.finish.as_deref(), Some("tool_calls"));
+        assert_eq!(a.tools.len(), 1);
+        let tc = a.tools.get(&1).expect("tool at index 1");
+        assert_eq!(tc.id, "call_x");
+        assert_eq!(tc.name, "read_file");
+        assert_eq!(tc.arguments, "{\"path\":\"src/main.rs\"}");
+    }
+
+    #[tokio::test]
+    async fn gemini_safety_finish_reason_is_terminal_error() {
+        // Desktop's pre-swap parse_google_sse turned a SAFETY finishReason into
+        // a user-facing terminal error; the adapter reproduces that from the
+        // crate's End{stop_reason}.
+        let raw =
+            "data: {\"candidates\":[{\"finishReason\":\"SAFETY\",\"content\":{\"parts\":[]}}]}\n\n";
+        let a = accumulate(chunked(raw.as_bytes(), 9), Decoder::Gemini).await;
+        let err = a.err.expect("safety block should surface as terminal error");
+        assert!(err.contains("safety filters"), "unexpected error: {err}");
+    }
+
+    #[tokio::test]
+    async fn anthropic_text_and_stop_reason_accumulate() {
+        let raw = concat!(
+            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"m\",\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n",
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi\"}}\n\n",
+            "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":3}}\n\n",
+            "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+        );
+        let a = accumulate(chunked(raw.as_bytes(), 13), Decoder::Anthropic).await;
+        assert!(a.err.is_none(), "unexpected error: {:?}", a.err);
+        assert_eq!(a.content, "Hi");
+        assert_eq!(a.finish.as_deref(), Some("end_turn"));
+        assert!(a.usage.is_some());
+    }
+}

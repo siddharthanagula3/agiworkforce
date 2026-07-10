@@ -390,182 +390,13 @@ mod llm_test_cases {
     // Anthropic SSE parser — happy path
     // -----------------------------------------------------------------------
 
-    #[test]
-    fn test_parse_anthropic_sse_message_start() {
-        let event = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-opus-4-5\",\"usage\":{\"input_tokens\":25,\"output_tokens\":0}}}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert_eq!(chunk.model.as_deref(), Some("claude-opus-4-5"));
-        assert!(!chunk.done);
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_text_delta() {
-        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello from Claude\"}}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert_eq!(chunk.content, "Hello from Claude");
-        assert!(!chunk.done);
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_message_stop() {
-        let event = "event: message_stop\ndata: {\"type\":\"message_stop\"}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(chunk.done);
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_message_delta_end_turn() {
-        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(chunk.done);
-        assert_eq!(chunk.finish_reason.as_deref(), Some("end_turn"));
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_message_delta_tool_use() {
-        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"}}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(chunk.done);
-        assert_eq!(chunk.finish_reason.as_deref(), Some("tool_use"));
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_content_block_start_tool_use() {
-        let event = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01\",\"name\":\"read_file\",\"input\":{}}}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(chunk.tool_calls.is_some());
-        let tcs = chunk.tool_calls.unwrap();
-        assert_eq!(tcs.len(), 1);
-        assert_eq!(tcs[0].id, "toolu_01");
-        assert_eq!(tcs[0].name, "read_file");
-        assert_eq!(tcs[0].index, 0);
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_input_json_delta() {
-        let event = "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"path\\\":\\\"/tmp\"}}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(chunk.tool_calls.is_some());
-        let tcs = chunk.tool_calls.unwrap();
-        assert_eq!(tcs.len(), 1);
-        assert!(tcs[0].arguments.contains("/tmp"));
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_ping_event_produces_no_content() {
-        let event = "event: ping\ndata: {}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(chunk.content.is_empty());
-        assert!(!chunk.done);
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_with_usage_in_message_delta() {
-        let event = "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"input_tokens\":100,\"output_tokens\":50}}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(chunk.done);
-        let usage = chunk.usage.expect("usage should be present");
-        assert_eq!(usage.prompt_tokens, Some(100));
-        assert_eq!(usage.completion_tokens, Some(50));
-        assert_eq!(usage.total_tokens, Some(150));
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_content_block_stop_does_not_set_done() {
-        // content_block_stop is an intermediate event — does not signal stream end
-        let event =
-            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).expect("parse failed");
-        assert!(!chunk.done);
-        assert!(chunk.content.is_empty());
-    }
-
     // -----------------------------------------------------------------------
     // Anthropic SSE parser — error paths
     // -----------------------------------------------------------------------
 
-    #[test]
-    fn test_parse_anthropic_sse_api_error_returns_err() {
-        let event = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}";
-        let result = parse_sse_event(event, Provider::Anthropic);
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("Overloaded") || msg.contains("overloaded_error"));
-    }
-
-    #[test]
-    fn test_parse_anthropic_sse_malformed_json_returns_err() {
-        let event = "event: content_block_delta\ndata: {invalid}";
-        let result = parse_sse_event(event, Provider::Anthropic);
-        assert!(result.is_err());
-    }
-
     // -----------------------------------------------------------------------
     // Google SSE parser — happy path
     // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_parse_google_sse_basic_content() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"text":"Hello from Gemini"}]},"finishReason":null}]}"#;
-        let chunk = parse_sse_event(event, Provider::Google).expect("parse failed");
-        assert_eq!(chunk.content, "Hello from Gemini");
-        assert!(!chunk.done);
-    }
-
-    #[test]
-    fn test_parse_google_sse_finish_reason_stop() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[]},"finishReason":"STOP"}]}"#;
-        let chunk = parse_sse_event(event, Provider::Google).expect("parse failed");
-        assert!(chunk.done);
-        assert_eq!(chunk.finish_reason.as_deref(), Some("STOP"));
-    }
-
-    #[test]
-    fn test_parse_google_sse_with_usage_metadata() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15}}"#;
-        let chunk = parse_sse_event(event, Provider::Google).expect("parse failed");
-        let usage = chunk.usage.expect("usage should be present");
-        assert_eq!(usage.prompt_tokens, Some(10));
-        assert_eq!(usage.completion_tokens, Some(5));
-        assert_eq!(usage.total_tokens, Some(15));
-    }
-
-    #[test]
-    fn test_parse_google_sse_safety_filter_returns_err() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[]},"finishReason":"SAFETY"}]}"#;
-        let result = parse_sse_event(event, Provider::Google);
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.to_lowercase().contains("safety"));
-    }
-
-    #[test]
-    fn test_parse_google_sse_recitation_returns_err() {
-        let event =
-            r#"data: {"candidates":[{"content":{"parts":[]},"finishReason":"RECITATION"}]}"#;
-        let result = parse_sse_event(event, Provider::Google);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_parse_google_sse_api_error_returns_err() {
-        let event = r#"data: {"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED"}}"#;
-        let result = parse_sse_event(event, Provider::Google);
-        assert!(result.is_err());
-        let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("Quota exceeded") || msg.contains("RESOURCE_EXHAUSTED"));
-    }
-
-    #[test]
-    fn test_parse_google_sse_function_call_tool() {
-        let event = r#"data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_stock_price","args":{"ticker":"AAPL"}}}]}}]}"#;
-        let chunk = parse_sse_event(event, Provider::Google).expect("parse failed");
-        assert!(chunk.tool_calls.is_some());
-        let tcs = chunk.tool_calls.unwrap();
-        assert_eq!(tcs.len(), 1);
-        assert_eq!(tcs[0].name, "get_stock_price");
-        assert!(tcs[0].arguments.contains("AAPL"));
-    }
 
     // -----------------------------------------------------------------------
     // Ollama SSE parser — happy path
@@ -687,15 +518,6 @@ mod llm_test_cases {
     // -----------------------------------------------------------------------
     // is_keepalive_event (via parse_sse_event behaviour)
     // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_anthropic_ping_event_has_no_content() {
-        // event: ping + data: {} is a keepalive from Anthropic
-        let event = "event: ping\ndata: {}";
-        let chunk = parse_sse_event(event, Provider::Anthropic).unwrap();
-        assert!(chunk.content.is_empty());
-        assert!(!chunk.done);
-    }
 
     // -----------------------------------------------------------------------
     // Edge cases
