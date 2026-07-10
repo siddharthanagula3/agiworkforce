@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
+import { getPlanUsageBudgetCents } from '@agiworkforce/types';
 import { useBillingStore } from '@/stores/unified/auth';
 
 type UsageResponse = {
@@ -116,28 +117,35 @@ export function UsageSection() {
   const billingTier = useBillingStore((s) => s.subscription?.tier);
   const rawTier = usage?.plan_tier ?? billingTier ?? 'free';
   const planName = rawTier[0]!.toUpperCase() + rawTier.slice(1);
-  const creditPercent = Math.min(100, Math.max(0, usage?.usage_percentage ?? 0));
 
-  // "Today" bar: today_cost vs monthly allocation (prorated for a single day).
-  // Denominator is 1/30 of the monthly allocation so a full day's run reads as ~100%.
-  // Falls back to monthly allocation as denominator when prorate is 0.
+  // Ceiling for every usage bar is the tier's REAL included monthly budget from
+  // the billing catalog (e.g. Pro = $10/mo), not the raw ledger allocation. A
+  // seeded/large `credits_allocated_cents` (observed as $1,000,000 in QA) made
+  // usage_percentage — and every bar computed off it — read a permanent 0%.
+  const monthlyBudgetCents = useMemo(() => getPlanUsageBudgetCents(rawTier), [rawTier]);
+  const usedCents = Math.max(0, usage?.credits_used_cents ?? 0);
+  const remainingCents = Math.max(0, monthlyBudgetCents - usedCents);
+  const creditPercent =
+    monthlyBudgetCents > 0
+      ? Math.min(100, Math.max(0, Math.round((usedCents / monthlyBudgetCents) * 100)))
+      : 0;
+
+  // "Today" bar: today_cost vs a prorated 1/30 slice of the monthly budget so a
+  // full day's run reads as ~100%.
   const todayPercent = useMemo(() => {
-    const allocated = usage?.credits_allocated_cents ?? 0;
     const todayCost = analytics?.stats?.today_cost ?? 0;
-    const dailyAllocation = allocated > 0 ? Math.round(allocated / 30) : 0;
+    const dailyAllocation = monthlyBudgetCents > 0 ? Math.round(monthlyBudgetCents / 30) : 0;
     return dailyAllocation > 0 ? Math.min(100, Math.round((todayCost / dailyAllocation) * 100)) : 0;
-  }, [analytics, usage]);
+  }, [analytics, monthlyBudgetCents]);
 
-  // "Weekly usage" bar: week_cost vs prorated weekly allocation (7/30 of monthly).
-  // Using a prorated denominator keeps the bar meaningful and comparable to the monthly bar.
+  // "Weekly usage" bar: week_cost vs a prorated 7/30 slice of the monthly budget.
   const weeklyPercent = useMemo(() => {
-    const allocated = usage?.credits_allocated_cents ?? 0;
     const weekCost = analytics?.stats?.week_cost ?? 0;
-    const weeklyAllocation = allocated > 0 ? Math.round((allocated * 7) / 30) : 0;
+    const weeklyAllocation = monthlyBudgetCents > 0 ? Math.round((monthlyBudgetCents * 7) / 30) : 0;
     return weeklyAllocation > 0
       ? Math.min(100, Math.round((weekCost / weeklyAllocation) * 100))
       : 0;
-  }, [analytics, usage]);
+  }, [analytics, monthlyBudgetCents]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -260,15 +268,15 @@ export function UsageSection() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Monthly credit allowance</span>
-                <span>{money(usage?.credits_allocated_cents ?? 0)}</span>
+                <span>{money(monthlyBudgetCents)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Used this period</span>
-                <span>{money(usage?.credits_used_cents ?? 0)}</span>
+                <span>{money(usedCents)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Remaining</span>
-                <span>{money(usage?.credits_remaining_cents ?? 0)}</span>
+                <span>{money(remainingCents)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>Spent today / this week</span>
