@@ -212,8 +212,11 @@ export function WaitlistModalProvider({ children }: { children: ReactNode }) {
 
   // Greet new visitors with the Team & Enterprise early-access prompt once per
   // session: after a short delay, on marketing pages only, and never twice.
+  // Demo kill-switch: set NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT=1 to guarantee
+  // the auto-prompt never fires (e.g. during a live demo of the marketing site).
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'] === '1') return;
     if (AUTO_PROMPT_BLOCKLIST.some((p) => pathname?.startsWith(p))) return;
     let prompted = false;
     try {
