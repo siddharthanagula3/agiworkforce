@@ -206,7 +206,17 @@ export type StreamEvent =
   | { type: 'artifact'; artifact: Artifact }
   | { type: 'search_results'; search: WebSearchResult }
   | { type: 'generated_files'; files: GeneratedFileEntry[] }
-  | { type: 'done' }
+  | {
+      type: 'done';
+      /**
+       * OpenAI-wire `finish_reason` for the turn (last one seen — server tool
+       * loops emit intermediate 'tool_calls' before the final reason). Drives
+       * the Continue-Generation affordance: 'length'/'max_tokens' mark a
+       * truncated turn as continuable. Optional — runtimes without a finish
+       * signal (e.g. Tauri local `chat:stream-end`) omit it.
+       */
+      finishReason?: string;
+    }
   | { type: 'error'; error: string };
 
 export type StreamCallback = (event: StreamEvent) => void;

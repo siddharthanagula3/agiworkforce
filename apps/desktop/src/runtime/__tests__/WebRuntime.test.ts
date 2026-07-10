@@ -268,6 +268,67 @@ describe('WebRuntime x_generated_files stream handling', () => {
     expect(events.some((e) => e.type === 'tool_result')).toBe(false);
   });
 
+  it('captures the OpenAI-wire finish_reason and emits it on the done event (Continue-Generation)', async () => {
+    const runtime = new WebRuntime();
+    const events = collectEvents(runtime);
+
+    sendCloudMessage.mockImplementation(
+      async (
+        _conversationId: string,
+        _content: string,
+        _model: string,
+        onChunk: (text: string) => void,
+        onDone: () => void,
+        _onError: (err: Error) => void,
+        _signal: AbortSignal,
+        onPayload: (payload: Record<string, unknown>) => void,
+      ) => {
+        onChunk('partial answer that got cut');
+        // Server tool loops emit an intermediate 'tool_calls' reason before the
+        // final one — the LAST reason seen must win.
+        onPayload({ choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }] });
+        onPayload({ choices: [{ delta: {}, finish_reason: 'length', index: 0 }] });
+        onDone();
+      },
+    );
+
+    await runtime.sendMessage('conv_1', 'write a long essay');
+
+    const done = events.find((e) => e.type === 'done');
+    expect(done).toBeDefined();
+    if (done?.type !== 'done') throw new Error('unreachable');
+    expect(done.finishReason).toBe('length');
+  });
+
+  it('omits finishReason on the done event when the stream carries no finish_reason', async () => {
+    const runtime = new WebRuntime();
+    const events = collectEvents(runtime);
+
+    sendCloudMessage.mockImplementation(
+      async (
+        _conversationId: string,
+        _content: string,
+        _model: string,
+        onChunk: (text: string) => void,
+        onDone: () => void,
+        _onError: (err: Error) => void,
+        _signal: AbortSignal,
+        onPayload: (payload: Record<string, unknown>) => void,
+      ) => {
+        onChunk('answer');
+        onPayload({ choices: [{ delta: { content: 'answer' }, index: 0 }] });
+        onDone();
+      },
+    );
+
+    await runtime.sendMessage('conv_1', 'hi');
+
+    const done = events.find((e) => e.type === 'done');
+    expect(done).toBeDefined();
+    if (done?.type !== 'done') throw new Error('unreachable');
+    expect(done.finishReason).toBeUndefined();
+  });
+
   it('emits no generated_files event for deltas without x_generated_files', async () => {
     const runtime = new WebRuntime();
     const events = collectEvents(runtime);
