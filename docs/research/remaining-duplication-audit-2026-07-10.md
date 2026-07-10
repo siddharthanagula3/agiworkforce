@@ -1,0 +1,51 @@
+# Remaining Duplication Audit — AGI Workforce Monorepo
+
+Read-only. Scope: what is STILL duplicated per-surface after the DONE consolidations (providers, MCP/LLM/agent-core crates, sync-apply, cloud-contracts, settings shell, unified-chat). Method: for each surface × capability, checked whether it IMPORTS the shared owner or contains its own implementation; verdicts derived from actual import lines + LOC, not from filename similarity. Service-layer exception applied: per-app privacy-mode/quota/permission ORCHESTRATION is correct-per-app, not a dup finding — only shared contracts + mechanics count.
+
+Shared owners referenced: `@agiworkforce/unified-chat`, `/ui`, `/services`, `/types`, `/stores`, `/skills`, `/providers`, `/runtime`, `/data-layer`; Rust `crates/agiworkforce-agent-core`.
+
+---
+
+## Verdict matrix
+
+| #   | Capability                           | Verdict                                                    | Shared owner                                                 | Forks                                                                                                       |
+| --- | ------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| 1   | Chat shell / composer / message-list | DUPLICATED-3x (in practice)                                | `unified-chat` `ChatInterface` (consumed only by desktop)    | web WebChatPage (dormant shared path exists), mobile RN native                                              |
+| 1b  | Markdown renderer                    | SHARED                                                     | `unified-chat` `MarkdownContent`                             | web + desktop consume it                                                                                    |
+| 2   | Settings sections                    | PARTIALLY-SHARED (shell web-only; sections DUP-3x)         | `ui/settings-modal` shell + Connectors/Skills/Plugins panels | web/desktop/mobile section bodies                                                                           |
+| 3   | Connector catalog                    | DUPLICATED-4x                                              | none                                                         | web TS, desktop TS, desktop Rust, mobile TS                                                                 |
+| 4   | Auth token/session                   | PARTIALLY-SHARED (Clerk owns refresh per-surface, correct) | `data-layer/clerk`, `services` parseMeResponse               | desktop non-Clerk session store (only real fork); 2 web stores (web-local merge)                            |
+| 5   | Memory client store                  | PARTIALLY-SHARED (owner used web-only)                     | `unified-chat` memoryStore                                   | desktop 1180, mobile 500+services, vscode                                                                   |
+| 6   | Billing tier/usage math              | SHARED (one source)                                        | `types/billing-catalog.ts` + `tierAtLeast`                   | none for math; desktop `services/stripe.ts` is a parallel billing backend to remove                         |
+| 7   | Search store/service                 | DUPLICATED-3x                                              | none (only `ui/SearchOverlay` shell)                         | web ~1600, desktop ~950, mobile stub                                                                        |
+| 8a  | Storage safe-wrapper                 | PARTIALLY-SHARED / DUP-2x                                  | none                                                         | web+desktop `localStorage.ts`/`storageFallback.ts` (byte-identical fallback); mobile/desktop KV unavoidable |
+| 8b  | Cloud REST client                    | DUPLICATED-3x + egressGuard DUP-2x                         | none (runtime `routeToCloud` too narrow)                     | web 887, desktop 507+296, mobile 382                                                                        |
+| 8c  | Notifications                        | Types DUP-Nx; impls unavoidable                            | none                                                         | Notification type redefined in api/desktop; delivery impls platform-bound                                   |
+| 8d  | Analytics/telemetry                  | DUPLICATED-4x                                              | none                                                         | web 322, desktop 412, mobile 109, vscode 316                                                                |
+| 9   | Tool loop                            | Legitimate 2-impl (not avoidable)                          | `agent-core` crate (desktop+CLI), web `tool-loop.ts`         | mobile delegates server-side                                                                                |
+| 9b  | Artifact rendering                   | DUPLICATED-3x+                                             | `unified-chat/artifact-components`                           | desktop forks all 3 locally; web+mobile own stacks                                                          |
+| 9c  | Sandbox / E2B                        | SINGLE-OWNER web, not extracted                            | `apps/web/lib/e2b/`                                          | —                                                                                                           |
+| 10  | Projects store                       | PARTIALLY-SHARED (owner web-only)                          | `unified-chat` projectStore                                  | desktop 630, mobile                                                                                         |
+| 10  | Skills                               | SHARED                                                     | `packages/skills`                                            | 0 core (desktop marketplace store single-surface)                                                           |
+| 10  | Plugins                              | SINGLE-SURFACE (web)                                       | —                                                            | none                                                                                                        |
+| 10  | Files/uploads                        | per-surface (platform-bound)                               | none                                                         | desktop/mobile/web-api                                                                                      |
+
+---
+
+## Evidence highlights (load-bearing, verified)
+
+- **Chat shell:** `apps/web/app/chat/page.tsx` + `[sessionId]/page.tsx` both `dynamic(import '@features/chat/pages/WebChatPage')` (2050 LOC) → renders LOCAL `ChatMessageList.tsx` (606), `MessageBubble.tsx` (1168), `ChatComposerNew.tsx` (1842). The shared-shell path `WebShellV3.tsx`(164)+`UnifiedChatPage.tsx`(67) rendering `<ChatInterface>` EXISTS but has ZERO route references (verified). Desktop `features/v3/DesktopShellV3.tsx` imports+renders `ChatInterface` — shared. Mobile native RN, no unified-chat import.
+- **Connectors:** 4 catalogs, none importing a shared source: web `features/connectors/data/connectors.ts` (1199), desktop `features/connectors/connectorDefinitions.ts` (1021), desktop Rust `src-tauri/src/core/mcp/connectors.rs` (1577), mobile `features/connectors/components/connectorData.ts` (152). Drift test already exists: `apps/desktop/wdio/specs/connector-mapping-drift.spec.ts`. Rust catalog is NOT in shared crates.
+- **Billing:** `packages/types/src/billing-catalog.ts` (280) is the single source of tier prices + usage-budget math (`INCLUDED_USAGE_BUDGET_RATIO`, `getPlanUsageBudgetCents`, `getPlanPriceUsd`); `tierAtLeast` in `types/design-system/user-identity.ts`. All surfaces import it. Enforcement centralized in `apps/web/lib/assert-quota.ts` (779). BUT `apps/desktop/src/services/stripe.ts` (353) is a parallel `StripeService` invoking Tauri `billing_initialize`/`stripe_create_subscription`/`trackUsage`, initialized with `stripeApiKey`+`webhookSecret` — called from `stores/auth.ts:1050` + `billing/usageSlice.ts:73,112`. Coexists with the correct `lib/stripeCheckout.ts`→web `/api/checkout`. Duplicate billing backend that expects Stripe secrets on the desktop client.
+- **Auth:** refresh mechanics are Clerk-owned per surface (cookie / expo-secure-store / vscode-secrets) = correct per-platform binding, NOT dup. Only genuine fork = desktop `services/cloudAccountAuth.ts` (577) hand-rolling `{access_token, refresh_token, expires_at}` + JWT-exp decode. Two web stores (`stores/unified/auth.ts` 330, `shared/stores/authentication-store.ts` 438) are a web-local merge, both read the same Clerk cookie.
+- **Networking:** no shared REST client. web `shared/lib/api.ts` (887), desktop `api/cloudApi.ts` (507)+`api/client.ts` (296), mobile `services/api.ts` (382) each reinvent request/401-refresh/paywall(429+403)/error-normalization. egressGuard duplicated: mobile `lib/egressGuard.ts` (192) + desktop `lib/egressGuard.ts` (144).
+- **Memory/Projects:** shared owners exist in `unified-chat` (memoryStore 362, projectStore 137) but only web consumes them; desktop forks (memoryStore 1180, projectStore 630) importing only `@agiworkforce/types`; mobile forks with MMKV. Pure sync/merge rules already shared in `packages/services/src/sync-apply/{memory,projects}.ts` — it's the client CRUD/persist layer that's duplicated.
+- **Artifacts:** desktop `features/chat/artifact-components/{ReactPreview,PresentationArtifact,SpreadsheetArtifact}.tsx` are near-identical local forks of the exported `unified-chat/artifact-components/*` (same LOC, diff shows drift), imported via `./` not `@agiworkforce/unified-chat`.
+
+---
+
+## Prioritized remaining-duplication work-list (ranked by extraction value)
+
+Ranking weights: trust-boundary risk > dup-LOC > drift-cost. Trust-boundary code outranks equal-LOC UI dup per repo policy.
+
+See top-10 ranked list in the final message.
