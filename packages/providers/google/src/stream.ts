@@ -98,7 +98,20 @@ export async function* parseGeminiStream(
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      // SSE frames separated by blank lines. Gemini sends `data: <json>\n\n`.
+      // Normalize CRLF to LF before frame-splitting. The LIVE Gemini
+      // `alt=sse` wire separates frames with `\r\n\r\n` (verified byte-level
+      // 2026-07-10); the previous LF-only `indexOf('\n\n')` never matched, so
+      // EVERY real chunk fell through to the trailing-buffer path as one
+      // unparseable multi-event blob -> PARSE_ERROR_SENTINEL -> all text /
+      // grounding / usage silently dropped (only a synthetic stop survived).
+      // Recorded LF-framed fixtures kept the byte-parity tests green, which
+      // is why this only surfaced on a live run. A trailing lone '\r' is held
+      // back so a CR/LF pair split across two reads still normalizes.
+      const holdCr = buffer.endsWith('\r') ? '\r' : '';
+      if (holdCr) buffer = buffer.slice(0, -1);
+      buffer = buffer.replace(/\r\n/g, '\n') + holdCr;
+
+      // SSE frames separated by blank lines. Gemini sends `data: <json>` frames.
       let frameEnd: number;
       while ((frameEnd = buffer.indexOf('\n\n')) !== -1) {
         const frame = buffer.slice(0, frameEnd);
