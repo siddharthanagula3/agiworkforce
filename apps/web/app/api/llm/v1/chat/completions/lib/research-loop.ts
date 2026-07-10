@@ -8,10 +8,13 @@
  * call a provider "deep research" model; we orchestrate the run ourselves.
  *
  * REUSE:
- *   - `LLMProviderFactory.streamRequest` -- provider calls unchanged. Every
- *     non-Anthropic provider normalizes its stream to OpenAI-compatible SSE
- *     (route.ts only enters this loop for those providers; Anthropic raw
- *     streams keep the existing single-turn `buildStreamResponse` path).
+ *   - `buildToolLoopStream` (tool-loop-anthropic.ts) -- the same table-driven
+ *     per-provider adapter dispatch the agentic tool loop uses (restructure
+ *     Wave 2, task #34): packages/providers adapters via ADAPTER_PROVIDERS +
+ *     startProviderStream, reshaped onto OpenAI-compatible SSE bytes by
+ *     OpenAIWireAssembler. Every provider therefore reaches this loop on the
+ *     same normalized wire (route.ts still keeps Anthropic on the existing
+ *     single-turn research path for now -- scope, not a wire limitation).
  *   - Provider-native web search tools injected by request-processor.ts
  *     (google_search / web_search_preview) run inside each turn; the loop
  *     never fabricates search results.
@@ -39,7 +42,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import { LLMProviderFactory } from '@/lib/llm-providers/factory';
+import { buildToolLoopStream } from './tool-loop-anthropic';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { reconcileUsage } from '@/lib/assert-quota';
@@ -454,7 +457,12 @@ export async function* runResearchLoop(
     forwardContent: boolean,
   ): AsyncGenerator<Uint8Array, TurnResult> {
     const stepRequest = { ...baseRequest, messages: turnMessages };
-    const stream = await LLMProviderFactory.streamRequest(processed.provider, stepRequest);
+    const stream = await buildToolLoopStream(
+      processed.provider.toLowerCase(),
+      processed,
+      stepRequest,
+      responseModel,
+    );
     const gen = collectTurn(stream, sources, forwardContent);
     try {
       while (true) {
@@ -597,8 +605,19 @@ export async function* runResearchLoop(
   } finally {
     // Billing reconciliation runs whether the run completed, errored, or was
     // cancelled (generator.return on client abort) -- multi-turn usage must be
-    // settled against the single-turn reservation.
+    // settled against the single-turn reservation. Usage is read from the
+    // trailing usage-only wire event, which OpenAIWireAssembler emits only in
+    // 'openai-passthrough' wireMode; 'legacy-web' providers (google/anthropic)
+    // surface no usage on this wire, so their runs keep the upfront
+    // reservation un-reconciled -- same disclosed gap as the agentic tool
+    // loop (tool-loop.ts bills reservation-only), logged below for visibility.
     const totalTokens = totalPromptTokens + totalCompletionTokens;
+    if (totalTokens === 0) {
+      logger.warn(
+        { provider: processed.provider, requestId: processed.requestId },
+        '[research-loop] no usage observed on wire; skipping reconciliation (reservation stands)',
+      );
+    }
     if (totalTokens > 0) {
       try {
         const actualCostCents = LLMCostCalculator.calculateCost(
