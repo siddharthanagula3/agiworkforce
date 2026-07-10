@@ -1,0 +1,101 @@
+{
+  "description": "Cross-language org-policy verification corpus. Replay: verifyOrgPolicy(readFile(file), licenseClaims, nowMs, { baseline }) must equal expect. When a case omits \"baseline\", the default product baseline is used.",
+  "licenseClaims": {
+    "licenseId": "lic_0001",
+    "orgId": "org_acme",
+    "orgName": "Acme, Inc.",
+    "edition": "enterprise",
+    "seats": 50,
+    "issuedAt": 1780272000000,
+    "expiresAt": 1785456000000,
+    "graceDays": 14,
+    "features": ["example-flag-a", "example-flag-b"],
+    "policyKeys": ["B+E69ZYKtODd+Dr1FPcflE9t/ZbnHPH97QaUZI9gHN4="]
+  },
+  "referenceNowMs": 1782864000000,
+  "cases": [
+    {
+      "file": "valid-tightening.agipolicy",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": true
+      },
+      "note": "Restricts providers, forbids BYOK, blocks managed-cloud egress, bounds retention — all tighter than the default baseline."
+    },
+    {
+      "file": "valid-unrestricted.agipolicy",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": true
+      },
+      "note": "Every field equals the default baseline (not MORE permissive) → accepted."
+    },
+    {
+      "file": "forged-key.agipolicy",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "bad_signature"
+      },
+      "note": "Signed by a key absent from the license policyKeys → not authorized."
+    },
+    {
+      "file": "tampered.agipolicy",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "bad_signature"
+      },
+      "note": "Payload byte-flipped after signing."
+    },
+    {
+      "file": "org-mismatch.agipolicy",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "org_mismatch"
+      },
+      "note": "Signature is valid but the policy binds a different org than the license."
+    },
+    {
+      "file": "not-yet-valid.agipolicy",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "not_yet_valid"
+      },
+      "note": "Policy issuedAt is after now."
+    },
+    {
+      "file": "over-granting.agipolicy",
+      "nowMs": 1782864000000,
+      "baseline": {
+        "allowedProviders": ["anthropic"],
+        "allowedModels": ["local:*"],
+        "byok": "forbidden",
+        "egress": {
+          "managedCloud": false,
+          "byokDomainsAllowlist": []
+        },
+        "retentionDays": 30,
+        "auditExport": {
+          "required": true
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "not_tightening"
+      },
+      "note": "Evaluated against the priorPolicyBaseline: re-enables managed cloud, broadens providers, loosens BYOK, extends retention, drops audit → violates monotonic tightening."
+    },
+    {
+      "file": "malformed-schema.agipolicy",
+      "nowMs": 1782864000000,
+      "expect": {
+        "ok": false,
+        "code": "malformed"
+      },
+      "note": "Signature valid, but a required field is missing → schema rejects."
+    }
+  ]
+}

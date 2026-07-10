@@ -1,0 +1,5 @@
+{
+  "format": "agipolicy-v1",
+  "payload": "eyJwb2xpY3lJZCI6InBvbF8wMDA1Iiwib3JnSWQiOiJvcmdfb3RoZXIiLCJ2ZXJzaW9uIjoxLCJpc3N1ZWRBdCI6MTc4MjAwMDAwMDAwMCwiYWxsb3dlZFByb3ZpZGVycyI6WyJhbnRocm9waWMiLCJvcGVuYWkiXSwiYWxsb3dlZE1vZGVscyI6WyJsb2NhbDoqIl0sImJ5b2siOiJmb3JiaWRkZW4iLCJlZ3Jlc3MiOnsibWFuYWdlZENsb3VkIjpmYWxzZSwiYnlva0RvbWFpbnNBbGxvd2xpc3QiOltdfSwicmV0ZW50aW9uRGF5cyI6MzAsImF1ZGl0RXhwb3J0Ijp7InJlcXVpcmVkIjp0cnVlfX0=",
+  "signature": "0hYGAXDsiJ+vFOKt/wGDYeWCuFAyemFUA0daTRFdEBrnEOWtgMWdRtSwU1O6N7bavWNiWSawyNLBcVn3GXtfCQ=="
+}

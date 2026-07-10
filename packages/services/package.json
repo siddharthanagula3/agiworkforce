@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@agiworkforce/licensing": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "zod": "^4.4.2"
   },
