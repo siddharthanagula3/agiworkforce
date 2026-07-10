@@ -581,7 +581,9 @@ export function ChatInterface({
               conversationId={activeConversationId}
               onArtifactClick={handleArtifactClick}
               showProvenanceFooter={showProvenanceFooter}
-              onContinueGeneration={continueGeneration}
+              onContinueGeneration={
+                runtime?.supportsContinueGeneration ? continueGeneration : undefined
+              }
             />
           ) : emptyStateSlot !== undefined ? (
             emptyStateSlot
