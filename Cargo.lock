@@ -211,6 +211,7 @@ version = "1.2.0"
 dependencies = [
  "accessibility-sys",
  "aes-gcm",
+ "agiworkforce-agent-core",
  "agiworkforce-execpolicy",
  "agiworkforce-llm",
  "agiworkforce-mcp",

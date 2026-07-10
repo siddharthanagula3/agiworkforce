@@ -1604,172 +1604,34 @@ async fn run_nonstreaming_chat(
         };
 
         match result {
-            Ok(mut outcome) => {
-                let max_tool_iterations = 25;
-                let mut tool_iteration = 0;
-                let mut current_messages = llm_request.messages.clone();
-                let mut final_content = outcome.response.content.clone();
-                let mut final_reasoning_content = outcome.response.reasoning_content.clone();
-                let mut final_reasoning_tokens = outcome
-                    .response
-                    .reasoning_tokens
-                    .or(outcome.response.thinking_tokens);
-                let mut total_tool_tokens: u32 = 0;
+            Ok(outcome) => {
+                // Wave 5e2: the non-streaming tool loop now runs on the shared
+                // `agiworkforce-agent-core` engine via `LocalChatTurnHost`. The
+                // engine owns turn sequencing / tool-batch dispatch / iteration
+                // + cancellation guards; the host keeps the router calls, Tauri
+                // events, message accrual, and token/reasoning accounting.
+                let turn = local_turn_host::run_local_chat_tool_loop(
+                    runtime.router.clone(),
+                    candidate,
+                    runtime.app_handle.clone(),
+                    conversation.id,
+                    request.frontend_message_id.clone(),
+                    &llm_request,
+                    model.clone(),
+                    outcome,
+                    request.project_folder.clone(),
+                    request.conversation_mode.clone(),
+                    request.thinking_mode,
+                    tool_registry.clone(),
+                )
+                .await;
 
-                while let Some(ref tool_calls) = outcome.response.tool_calls {
-                    if tool_calls.is_empty() {
-                        break;
-                    }
-
-                    tool_iteration += 1;
-                    if tool_iteration > max_tool_iterations {
-                        warn!(
-                            "[Chat] Tool iteration limit reached ({}), stopping tool execution",
-                            max_tool_iterations
-                        );
-                        let _ = runtime.app_handle.emit(
-                            "chat:agent-progress",
-                            serde_json::json!({
-                                "conversation_id": conversation.id,
-                                "iteration": tool_iteration - 1,
-                                "max_iterations": max_tool_iterations,
-                                "status": "limit_reached"
-                            }),
-                        );
-                        break;
-                    }
-
-                    info!(
-                        "[Chat] LLM requested {} tool call(s) (iteration {})",
-                        tool_calls.len(),
-                        tool_iteration
-                    );
-
-                    let normalized_tool_calls =
-                        normalize_tool_calls(tool_calls, &format!("tool_call_{}", tool_iteration));
-
-                    let _ = runtime.app_handle.emit(
-                        "chat:agent-progress",
-                        serde_json::json!({
-                            "conversation_id": conversation.id,
-                            "iteration": tool_iteration,
-                            "max_iterations": max_tool_iterations,
-                            "status": "executing_tools",
-                            "tool_count": tool_calls.len()
-                        }),
-                    );
-
-                    let _ = runtime.app_handle.emit(
-                        "chat:tool-calls",
-                        serde_json::json!({
-                            "conversation_id": conversation.id,
-                            "message_id": request.frontend_message_id.clone(),
-                            "tool_calls": normalized_tool_calls,
-                            "iteration": tool_iteration
-                        }),
-                    );
-
-                    let tool_calls_for_message: Vec<crate::core::llm::ToolCall> =
-                        normalized_tool_calls
-                            .iter()
-                            .map(|tool_call| crate::core::llm::ToolCall {
-                                id: tool_call.id.clone(),
-                                name: tool_call.name.clone(),
-                                arguments: tool_call.arguments.clone(),
-                            })
-                            .collect();
-                    current_messages.push(crate::core::llm::ChatMessage {
-                        role: "assistant".to_string(),
-                        content: outcome.response.content.clone(),
-                        tool_calls: Some(tool_calls_for_message),
-                        tool_call_id: None,
-                        multimodal_content: None,
-                    });
-
-                    let frontend_message_id =
-                        request.frontend_message_id.clone().unwrap_or_default();
-                    let (tool_results, _batch_failures) = execute_tool_calls_batch(
-                        &normalized_tool_calls,
-                        &runtime.app_handle,
-                        conversation.id,
-                        &frontend_message_id,
-                        request.project_folder.clone(),
-                        request.conversation_mode.clone(),
-                        0,
-                        tool_registry.clone(),
-                    )
-                    .await;
-
-                    for result in &tool_results {
-                        current_messages.push(crate::core::llm::ChatMessage {
-                            role: "tool".to_string(),
-                            content: result.to_message_content(),
-                            tool_calls: None,
-                            tool_call_id: Some(result.tool_call_id.clone()),
-                            multimodal_content: None,
-                        });
-                    }
-
-                    let followup_request = crate::core::llm::LLMRequest {
-                        messages: current_messages.clone(),
-                        model: model.clone(),
-                        temperature: Some(DEFAULT_TEMPERATURE),
-                        max_tokens: Some(DEFAULT_MAX_TOKENS),
-                        stream: false,
-                        tools: llm_request.tools.clone(),
-                        tool_choice: llm_request.tool_choice.clone(),
-                        thinking_mode: request.thinking_mode,
-                        ..Default::default()
-                    };
-
-                    let batch_has_media = tool_results
-                        .iter()
-                        .any(|result| is_media_generation_tool(&result.tool_name));
-                    let nonstream_followup_timeout =
-                        resolve_followup_invoke_timeout_secs(false, batch_has_media);
-
-                    let followup_result = {
-                        let router = runtime.router.read().await;
-                        tokio::time::timeout(
-                            std::time::Duration::from_secs(nonstream_followup_timeout),
-                            router.invoke_candidate(&candidate, &followup_request),
-                        )
-                        .await
-                    };
-
-                    match followup_result {
-                        Ok(Ok(new_outcome)) => {
-                            total_tool_tokens += new_outcome.response.tokens.unwrap_or(0);
-                            final_content = new_outcome.response.content.clone();
-                            final_reasoning_content =
-                                new_outcome.response.reasoning_content.clone();
-                            final_reasoning_tokens = new_outcome
-                                .response
-                                .reasoning_tokens
-                                .or(new_outcome.response.thinking_tokens);
-
-                            if new_outcome.response.finish_reason.as_deref() == Some("pause_turn") {
-                                info!(
-                                    "[Chat] Received pause_turn, continuing conversation (iteration {})",
-                                    tool_iteration
-                                );
-                            }
-
-                            outcome = new_outcome;
-                        }
-                        Ok(Err(error)) => {
-                            error!("[Chat] Follow-up LLM call failed: {}", error);
-                            break;
-                        }
-                        Err(_) => {
-                            error!(
-                                "[Chat] Follow-up LLM call timed out after {}s",
-                                nonstream_followup_timeout
-                            );
-                            break;
-                        }
-                    }
-                }
+                let outcome = turn.last_outcome;
+                let tool_iteration = turn.tool_iterations;
+                let total_tool_tokens = turn.total_tool_tokens;
+                let final_content = turn.final_content;
+                let final_reasoning_content = turn.final_reasoning_content;
+                let final_reasoning_tokens = turn.final_reasoning_tokens;
 
                 if tool_iteration > 0 {
                     info!(
