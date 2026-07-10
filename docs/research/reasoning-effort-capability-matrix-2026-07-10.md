@@ -744,3 +744,57 @@ selectable model has a `minTier`.
   availability guardrail (Addendum A) and the `minTier` derivation (Addendum B)
   together guarantee nothing is offered or routed to the wrong tier or before
   it's real.
+
+---
+
+# Addendum D — GPT-5.6 pricing, limits, and platform deltas (founder screenshot corpus, 2026-07-10)
+
+Source: founder-provided full-page screenshots of `developers.openai.com` (pricing,
+compare-models, prompt-caching, background-mode, websocket-mode, compaction,
+using-gpt-5.6, tools guides), captured 2026-07-10. These are the exact numbers for
+the `coming_soon` catalog entries and the AT-GA cost accounting.
+
+## Pricing (per 1M tokens; short context vs long context)
+
+| Model         | Input | Cached input | Cache writes | Output | Long-ctx input | Long-ctx cached | Long-ctx writes | Long-ctx output |
+| ------------- | ----- | ------------ | ------------ | ------ | -------------- | --------------- | --------------- | --------------- |
+| gpt-5.6-sol   | $5.00 | $0.50        | $6.25        | $30.00 | $10.00         | $1.00           | $12.50          | $45.00          |
+| gpt-5.6-terra | $2.50 | $0.25        | $3.125       | $15.00 | $5.00          | $0.50           | $6.25           | $22.50          |
+| gpt-5.6-luna  | $1.00 | $0.10        | $1.25        | $6.00  | $2.00          | $0.20           | $2.50           | $9.00           |
+
+- Cache writes = 1.25× uncached input (consistent with the caching guide); cached
+  reads = 90% off. GPT-5.6-family minimum cache lifetime: **30 minutes**
+  (`prompt_cache_options.ttl`, default `30m`); explicit breakpoints via
+  `prompt_cache_breakpoint: {"mode":"explicit"}` (max 4; `implicit` is default).
+- The long-context price tier means our cost accounting needs a per-request
+  context-length split for 5.6 — flag for the AT-GA metering wave (models.json
+  `cost` today has one input/output pair; add `longContext` sub-block on the 5.6
+  entries now, inert).
+
+## Limits / metadata (compare-models page)
+
+- Context window **1,050,000**; max output **128,000**; knowledge cutoff
+  **2026-02-16** — all three models identical.
+- Reasoning dots: Sol 5, Terra 4, Luna 3 (speed 4/4 all three) → `reasoningDots`.
+- Endpoints confirmed for ALL three: `v1/chat/completions`, `v1/responses`,
+  `v1/batch` (base model + effort work on our byte-stable chat contract; only
+  Ultra/Pro/persistent/PTC need Responses — unchanged from Addendum C).
+- Rate limits (TPM): Free — none (no free-tier access); Tier1 500K all three;
+  Tier5 40M (sol/terra) / 180M (luna).
+
+## Platform deltas worth tracking (not 5.6-catalog work)
+
+- **Prompt objects deprecated**: `v1/prompts` shuts down 2026-11-30 — we don't use
+  them; keep prompts in code (already our pattern).
+- **Responses WebSocket mode** (`wss://api.openai.com/v1/responses`,
+  `previous_response_id` chaining, 60-min connections) and **server-side
+  compaction** (`context_management: [{type:"compaction", compact_threshold}]` +
+  standalone `/responses/compact`) exist for long agentic loops — candidates for
+  the desktop/CLI harness later, NOT web chat now.
+- **Background mode** (`background:true` on Responses, poll/cancel/resume-stream
+  by `sequence_number`) — the official pattern for deep-research-length runs;
+  relevant when we wire `app/api/research`.
+- Web search tool: `web_search` (Responses) with `search_context_size`,
+  `filters` (allowed domains), `sources` include, `return_images`; annotations
+  arrive as `url_citation` on message items — matches the citation pipeline we
+  already built for BYOK OpenAI later.
