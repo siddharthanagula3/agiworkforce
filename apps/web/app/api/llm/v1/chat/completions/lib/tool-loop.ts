@@ -309,8 +309,10 @@ function generatedFilesEvent(files: GeneratedFileWire[], responseModel: string):
 
 /**
  * Emit an `x_tool_result` SSE event once a tool has executed.
+ * Exported for reuse by the research loop's url_fetch execution (same wire
+ * shape either way) and for unit tests.
  */
-function toolResultEvent(
+export function toolResultEvent(
   toolId: string,
   toolName: string,
   result: string,
