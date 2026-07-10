@@ -585,6 +585,98 @@ already covered by `gpt-`; no provider-map change needed.
 
 ---
 
+# Addendum C — GPT-5.6 exact API surfaces (from official docs, 2026-07-10)
+
+Sourced by WebFetch of `developers.openai.com/api/docs/guides/latest-model`,
+`.../guides/tools-multi-agent`, `.../guides/tools-programmatic-tool-calling`, and
+the `gpt-5.6-sol` model page — exact param names, not OCR. These resolve the
+UNKNOWNs previously flagged (Ultra mode, Pro mode, persistent reasoning,
+programmatic tool calling). They are for the AT-GA implementation wave; today the
+models still 404 on our key, so everything below is inert until `availability`
+flips to `live`.
+
+## Confirmed exact params
+
+| Feature                       | Exact param                                                                     | Values / shape                                                                               | Endpoint               | Notes                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reasoning effort              | `reasoning.effort` (Responses) / `reasoning_effort` (chat)                      | `none, low, medium, high, xhigh, max` — **`max` is above `xhigh`** (highest, quality-first)  | **chat + responses**   | GPT-5.5 tops at `xhigh`; 5.6 adds `max`                                                                                                                                                                                                                                                                                                                  |
+| **Ultra mode** (multi-agent)  | **`multi_agent.enabled`** (bool) + `multi_agent.max_concurrent_subagents` (int) | root agent spawns a subagent tree                                                            | **Responses API ONLY** | **Beta-gated: `betas:["responses_multi_agent=v1"]`** (HTTP/SDK `client.beta.responses`) or `OpenAI-Beta: responses_multi_agent=v1` (WS). Response items: `multi_agent_call`, `multi_agent_call_output`, `agent_message`. Guide says **all GPT-5.6 models** eligible (sol shown in examples) — NOT documented as sol-only                                 |
+| **Pro mode**                  | **`reasoning.mode: "pro"`**                                                     | single value `pro`                                                                           | **Responses API ONLY** | deeper single-agent reasoning                                                                                                                                                                                                                                                                                                                            |
+| **Persistent reasoning**      | **`reasoning.context`**                                                         | `auto, all_turns, current_turn`                                                              | **Responses API ONLY** | + `previous_response_id` for continuation; for ZDR/`store:false` add `include:["reasoning.encrypted_content"]`                                                                                                                                                                                                                                           |
+| **Programmatic tool calling** | tool `{ "type": "programmatic_tool_calling" }` + per-tool **`allowed_callers`** | `allowed_callers`: `["programmatic"]` \| `["direct","programmatic"]` \| default `["direct"]` | **Responses API ONLY** | Model emits JS (isolated V8, top-level await, no Node/fs/network). Response items: `program` (JS, `call_id`+`fingerprint`), `function_call` (has `caller` linking to parent program), `program_output` (`status: completed\|incomplete`). Opt-in is `allowed_callers`, NOT `allowed_tools` (`allowed_tools` is the separate Responses tool-subset param) |
+| Original image input          | `detail: "original"` (also `"auto"`)                                            | preserves original image dimensions                                                          | chat + responses       | image-input detail level                                                                                                                                                                                                                                                                                                                                 |
+
+**Endpoint split** — Responses-API-ONLY: Ultra (`multi_agent`), Pro
+(`reasoning.mode`), persistent reasoning (`reasoning.context`), programmatic tool
+calling. Available on BOTH chat/completions and Responses: `reasoning_effort`,
+function calling, structured outputs, image `detail`. Supported endpoints for the
+models: `v1/chat/completions`, `v1/responses`, `v1/batch`.
+
+**Still unpublished / not found:** no dated snapshot ids for 5.6 (do not invent);
+the programmatic-tool-calling guide's full error-handling shape and multi-agent
+per-subagent config schema are summarized on the guides but not exhaustively
+specified — treat the item-type names above as authoritative and fetch the guide
+again at implementation time for edge fields.
+
+## Enriched schema fields for the coming-soon 5.6 entries
+
+Extend each `gpt-5.6-*` entry's `reasoning`/capabilities blocks with the exact
+paths below (shown for Sol; Terra/Luna are identical in capability — they differ
+only in price and `reasoningDots`). Replaces the placeholder `ultraMode:true`
+with a full, implementable surface.
+
+```jsonc
+"reasoning": {
+  "capable": true,
+  "control": "effort_levels",
+  "supportedEfforts": ["none","low","medium","high","xhigh","max"], // max = highest, above xhigh
+  "defaultEffort": "medium",
+  "canDisableThinking": true,                 // effort "none"
+  "request": { "api": "chat", "effortPath": "reasoning_effort",       // chat/completions
+               "responsesEffortPath": "reasoning.effort" },           // Responses API
+  "ultraMode": {                              // Responses API only, beta-gated
+    "enabled": false,
+    "param": "multi_agent.enabled",
+    "concurrencyParam": "multi_agent.max_concurrent_subagents",
+    "beta": "responses_multi_agent=v1",
+    "endpoint": "responses",
+    "responseItems": ["multi_agent_call","multi_agent_call_output","agent_message"]
+  },
+  "proMode": {                                // Responses API only
+    "param": "reasoning.mode", "value": "pro", "endpoint": "responses"
+  },
+  "persistentReasoning": {                    // Responses API only
+    "param": "reasoning.context",
+    "values": ["auto","all_turns","current_turn"],
+    "continuationParam": "previous_response_id",
+    "zdrInclude": ["reasoning.encrypted_content"],
+    "endpoint": "responses"
+  }
+},
+"toolCalling": {
+  "programmatic": {                           // Responses API only
+    "toolType": "programmatic_tool_calling",
+    "optInParam": "allowed_callers",          // NOT allowed_tools
+    "optInValues": ["direct","programmatic"],
+    "runtime": "javascript-v8-isolated",      // top-level await; no node/fs/network
+    "responseItems": ["program","function_call(caller)","program_output"],
+    "endpoint": "responses"
+  }
+},
+"imageInput": { "detailValues": ["auto","original"] },  // "original" preserves dimensions
+"endpoints": ["v1/chat/completions","v1/responses","v1/batch"]
+```
+
+**UI implication (extends Addendum A):** when 5.6 goes live, the effort chip row
+gains `max`; Ultra/Pro/persistent-reasoning/programmatic-tool-calling are
+**Responses-API-only** capabilities — surface Ultra and Pro as separate toggles
+(not effort chips), and gate them on the request going through the Responses path
+(our current web chat route uses chat/completions; using these four features
+requires routing 5.6 through Responses + the multi-agent beta header). Flag this
+as an implementation dependency for the AT-GA wave.
+
+---
+
 # Addendum B — Tier / roadmap policy (post-GA newest→Pro+, retained cheap→Free/Basic)
 
 Requirement to encode (for the implementation wave; **do not apply the GA
