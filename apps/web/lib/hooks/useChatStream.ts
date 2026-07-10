@@ -8,6 +8,7 @@ import {
   type Message,
   type Attachment,
   type MessageMetadata,
+  type MessageResearchState,
   type MessageToolEntry,
 } from '@/stores/chatStore';
 import { useThinkingStore } from '@shared/stores/thinking-store';
@@ -383,6 +384,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const setSearchResults = store.setSearchResults;
   const setCodeExecutionResult = store.setCodeExecutionResult;
   const setToolTimeline = store.setToolTimeline;
+  const setResearchState = store.setResearchState;
   const stopStreaming = store.stopStreaming;
   const setLoading = store.setLoading;
 
@@ -394,6 +396,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let suspended = false;
   let currentSearchResults: MessageMetadata['searchResults'];
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'];
+  let currentResearch: MessageResearchState | undefined;
 
   // ── Reasoning (thinking) accumulation ──────────────────────────────────────
   // updateMessage REPLACES metadata wholesale, so a bare `{ metadata: {...} }`
@@ -564,6 +567,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (currentCodeExecutionResult) {
       metadata.codeExecutionResult = currentCodeExecutionResult;
     }
+    if (currentResearch) {
+      metadata.research = { ...currentResearch };
+    }
     // Persist reasoning so it survives reload (previously dropped — only the answer
     // was saved). Read the accumulated thinking off the store bag. Always persist
     // isThinkingStreaming:false and a stable duration so a reloaded turn renders the
@@ -691,232 +697,328 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   // them alongside new events.
   if (toolTimeline.length > 0) publishToolTimeline();
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
 
-      const data = trimmedLine.slice(6);
-      if (data === '[DONE]') {
-        flushContentBuffer(true);
-        if (inThinkingBlock) {
-          closeThinkingSegment();
-          inThinkingBlock = false;
+        const data = trimmedLine.slice(6);
+        if (data === '[DONE]') {
+          flushContentBuffer(true);
+          if (inThinkingBlock) {
+            closeThinkingSegment();
+            inThinkingBlock = false;
+          }
+          finishRunningTools();
+          setSearching(assistantMessageId, false);
+          setExecutingCode(assistantMessageId, false);
+          persistAssistant(fullAssistantContent);
+          stopStreaming();
+          setLoading(false);
+          return { suspended, pendingCalls };
         }
-        finishRunningTools();
-        setSearching(assistantMessageId, false);
-        setExecutingCode(assistantMessageId, false);
-        persistAssistant(fullAssistantContent);
+
+        try {
+          const parsed = JSON.parse(data);
+
+          let chunk: string | null = null;
+          if (parsed.choices?.[0]?.delta?.content != null) {
+            chunk = parsed.choices[0].delta.content;
+          } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            chunk = parsed.delta.text;
+          }
+
+          if (chunk !== null) {
+            contentBuffer += chunk;
+            flushContentBuffer(false);
+          }
+
+          // Deep Research run status (additive x_research_status event).
+          const researchStatus = parsed.choices?.[0]?.delta?.x_research_status;
+          if (researchStatus && typeof researchStatus === 'object') {
+            const phase = researchStatus.phase;
+            if (
+              phase === 'planning' ||
+              phase === 'searching' ||
+              phase === 'synthesizing' ||
+              phase === 'complete' ||
+              phase === 'error'
+            ) {
+              currentResearch = {
+                phase,
+                label: typeof researchStatus.label === 'string' ? researchStatus.label : undefined,
+                iteration:
+                  typeof researchStatus.iteration === 'number'
+                    ? researchStatus.iteration
+                    : currentResearch?.iteration,
+                maxIterations:
+                  typeof researchStatus.max_iterations === 'number'
+                    ? researchStatus.max_iterations
+                    : currentResearch?.maxIterations,
+                searches:
+                  typeof researchStatus.searches === 'number'
+                    ? researchStatus.searches
+                    : currentResearch?.searches,
+                sources:
+                  typeof researchStatus.sources === 'number'
+                    ? researchStatus.sources
+                    : currentResearch?.sources,
+                elapsedMs:
+                  typeof researchStatus.elapsed_ms === 'number'
+                    ? researchStatus.elapsed_ms
+                    : currentResearch?.elapsedMs,
+                startedAt: currentResearch?.startedAt ?? new Date().toISOString(),
+                error:
+                  phase === 'error'
+                    ? typeof researchStatus.label === 'string'
+                      ? researchStatus.label
+                      : 'Research run failed'
+                    : undefined,
+              };
+              setResearchState(assistantMessageId, { ...currentResearch });
+            }
+          }
+
+          // Tool status indicators.
+          const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
+          if (toolStatus?.type === 'server_tool_use') {
+            startTool(toolStatus.name, toolStatus.status);
+          }
+          if (toolStatus?.type === 'mcp_tool_use') {
+            if (toolStatus.status === 'running') {
+              const phrase =
+                typeof toolStatus.status_phrase === 'string' ? toolStatus.status_phrase : undefined;
+              const parameters =
+                toolStatus.args != null &&
+                typeof toolStatus.args === 'object' &&
+                !Array.isArray(toolStatus.args)
+                  ? (toolStatus.args as Record<string, unknown>)
+                  : undefined;
+              startTool(toolStatus.name, undefined, phrase, parameters);
+            } else if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
+              finishTool(toolStatus.name, toolStatus.status);
+            }
+          }
+          if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
+            setSearching(assistantMessageId, true);
+          } else if (toolStatus?.status === 'executing') {
+            setExecutingCode(assistantMessageId, true);
+          }
+
+          // Manual-approval request: surface an awaiting_approval card and record
+          // the pending call so the caller can build the resume request.
+          const approvalReq = parsed.choices?.[0]?.delta?.x_tool_approval_request;
+          if (approvalReq && typeof approvalReq === 'object') {
+            const tcId = (approvalReq as Record<string, unknown>)['tool_call_id'];
+            const name = (approvalReq as Record<string, unknown>)['name'];
+            const rawArgs = (approvalReq as Record<string, unknown>)['args'];
+            if (typeof tcId === 'string' && tcId && typeof name === 'string' && name) {
+              const args =
+                rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
+                  ? (rawArgs as Record<string, unknown>)
+                  : {};
+              suspended = true;
+              pendingCalls.push({ toolCallId: tcId, name, args });
+              const id = createToolId(name);
+              toolTimeline.push({
+                id,
+                name,
+                status: 'awaiting_approval',
+                requiresApproval: true,
+                toolCallId: tcId,
+                parameters: Object.keys(args).length > 0 ? args : undefined,
+              });
+              publishToolTimeline();
+            }
+          }
+
+          // Code execution result.
+          const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
+          if (codeResultBlock) {
+            const content = Array.isArray(codeResultBlock.content)
+              ? (codeResultBlock.content as Record<string, unknown>[])
+              : [];
+            const textItem = content.find((c) => c['type'] === 'text');
+            const rawText = (textItem?.['text'] as string) || '';
+            const images = content
+              .filter((c) => c['type'] === 'image')
+              .map((c) => {
+                const src = c['source'] as Record<string, unknown> | undefined;
+                return {
+                  mediaType: (src?.['media_type'] as string) || 'image/png',
+                  data: (src?.['data'] as string) || '',
+                };
+              })
+              .filter((img) => img.data);
+
+            const stdout = rawText.match(/<stdout>([\s\S]*?)<\/stdout>/)?.[1] ?? rawText;
+            const stderr = rawText.match(/<stderr>([\s\S]*?)<\/stderr>/)?.[1] ?? '';
+            const returnCode = parseInt(
+              rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
+              10,
+            );
+            currentCodeExecutionResult = {
+              stdout,
+              stderr,
+              returnCode,
+              images: images.length > 0 ? images : undefined,
+            };
+            setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult);
+            finishTool('code_execution', 'completed');
+          }
+
+          // Web search results.
+          const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
+          if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
+            const results = (searchResultsBlock.content as Record<string, unknown>[])
+              .filter((r) => r['type'] === 'web_search_result' && r['url'])
+              .map((r) => ({
+                url: r['url'] as string,
+                title: (r['title'] as string) || (r['url'] as string),
+                snippet: (r['encrypted_content'] as string) || '',
+              }));
+            if (results.length > 0) {
+              currentSearchResults = results;
+              setSearchResults(assistantMessageId, results);
+            }
+            finishTool('web_search', 'completed');
+          } else if (
+            searchResultsBlock?.content &&
+            typeof searchResultsBlock.content === 'object' &&
+            !Array.isArray(searchResultsBlock.content) &&
+            (searchResultsBlock.content as Record<string, unknown>)['type'] ===
+              'web_search_tool_result_error'
+          ) {
+            const errorCode =
+              ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
+                | string
+                | undefined) || 'unknown_error';
+            finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
+          }
+
+          // Platform-executed tool results (MCP / E2B sandbox).
+          const toolResultBlock = parsed.choices?.[0]?.delta?.x_tool_result;
+          if (toolResultBlock) {
+            const { name, content, is_error } = toolResultBlock as {
+              tool_call_id?: string;
+              name?: string;
+              content?: unknown;
+              is_error?: boolean;
+            };
+            if (name) {
+              // Include 'failed' so a denial result event (server emits one for a
+              // rejected tool, isError:false) lands on the card the client already
+              // flipped to 'failed' on reject, instead of creating a duplicate.
+              let idx = findLastToolIndex(name, [
+                'running',
+                'completed',
+                'awaiting_approval',
+                'failed',
+              ]);
+              if (idx < 0) {
+                const id = createToolId(name);
+                toolStartTimes.set(id, Date.now());
+                toolTimeline.push({ id, name, status: 'running' });
+                idx = toolTimeline.length - 1;
+              }
+              const entry = toolTimeline[idx];
+              if (entry) {
+                const resultText =
+                  typeof content === 'string'
+                    ? content
+                    : Array.isArray(content)
+                      ? (content as Record<string, unknown>[])
+                          .filter((c) => c['type'] === 'text')
+                          .map((c) => c['text'] as string)
+                          .join('\n')
+                      : content != null
+                        ? String(content)
+                        : '';
+                entry.result = resultText;
+                entry.status = is_error ? 'failed' : 'completed';
+                entry.error = is_error ? resultText : entry.error;
+              }
+              publishToolTimeline();
+            }
+          }
+
+          if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
+            updateMessage(assistantMessageId, { isStreaming: false });
+          }
+        } catch {
+          // Ignore parse errors for incomplete chunks.
+        }
+      }
+    }
+
+    // Stream ended without an explicit [DONE].
+    flushContentBuffer(true);
+    if (inThinkingBlock) {
+      closeThinkingSegment();
+      inThinkingBlock = false;
+    }
+    finishRunningTools();
+    persistAssistant(fullAssistantContent);
+    stopStreaming();
+    setLoading(false);
+    return { suspended, pendingCalls };
+  } catch (error) {
+    // Browsers reject an aborted fetch read with a DOMException named
+    // 'AbortError' -- DOMException is NOT instanceof Error, so a plain
+    // `instanceof Error` check misclassifies user cancellation as a failure.
+    const isAbort =
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { name?: unknown }).name === 'AbortError';
+
+    // Flush the held-back content tail so an interrupted turn keeps (and
+    // persists) exactly what streamed, not up-to-11 chars less.
+    if (isAbort) {
+      flushContentBuffer(true);
+    }
+
+    const researchActive = currentResearch && currentResearch.phase !== 'complete';
+    if (researchActive && isAbort) {
+      // Deep Research cancelled mid-run: record the interruption honestly and
+      // persist the partial report/sources so the run survives reload.
+      currentResearch = { ...currentResearch!, phase: 'interrupted' };
+      setResearchState(assistantMessageId, { ...currentResearch });
+      finishRunningTools();
+      persistAssistant(fullAssistantContent);
+    } else if (researchActive && !isAbort) {
+      // Deep Research failed mid-run with a partial report already streamed:
+      // keep the partial content, append an honest error note, record the
+      // failure on the research state, persist, and tear down here (rethrowing
+      // would let handleStreamError overwrite the partial with a bare error).
+      const errorMessage = getVisibleErrorMessage(error);
+      currentResearch = { ...currentResearch!, phase: 'error', error: errorMessage };
+      setResearchState(assistantMessageId, { ...currentResearch });
+      finishRunningTools('failed', errorMessage);
+      if (fullAssistantContent) {
+        flushContentBuffer(true);
+        const partialContent = `${fullAssistantContent}\n\n${buildAssistantErrorContent(errorMessage)}`;
+        updateMessage(assistantMessageId, {
+          isStreaming: false,
+          content: partialContent,
+          error: true,
+        });
+        persistAssistant(partialContent);
+        useChatStore.getState().setError(errorMessage);
         stopStreaming();
         setLoading(false);
         return { suspended, pendingCalls };
       }
-
-      try {
-        const parsed = JSON.parse(data);
-
-        let chunk: string | null = null;
-        if (parsed.choices?.[0]?.delta?.content != null) {
-          chunk = parsed.choices[0].delta.content;
-        } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-          chunk = parsed.delta.text;
-        }
-
-        if (chunk !== null) {
-          contentBuffer += chunk;
-          flushContentBuffer(false);
-        }
-
-        // Tool status indicators.
-        const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
-        if (toolStatus?.type === 'server_tool_use') {
-          startTool(toolStatus.name, toolStatus.status);
-        }
-        if (toolStatus?.type === 'mcp_tool_use') {
-          if (toolStatus.status === 'running') {
-            const phrase =
-              typeof toolStatus.status_phrase === 'string' ? toolStatus.status_phrase : undefined;
-            const parameters =
-              toolStatus.args != null &&
-              typeof toolStatus.args === 'object' &&
-              !Array.isArray(toolStatus.args)
-                ? (toolStatus.args as Record<string, unknown>)
-                : undefined;
-            startTool(toolStatus.name, undefined, phrase, parameters);
-          } else if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
-            finishTool(toolStatus.name, toolStatus.status);
-          }
-        }
-        if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
-          setSearching(assistantMessageId, true);
-        } else if (toolStatus?.status === 'executing') {
-          setExecutingCode(assistantMessageId, true);
-        }
-
-        // Manual-approval request: surface an awaiting_approval card and record
-        // the pending call so the caller can build the resume request.
-        const approvalReq = parsed.choices?.[0]?.delta?.x_tool_approval_request;
-        if (approvalReq && typeof approvalReq === 'object') {
-          const tcId = (approvalReq as Record<string, unknown>)['tool_call_id'];
-          const name = (approvalReq as Record<string, unknown>)['name'];
-          const rawArgs = (approvalReq as Record<string, unknown>)['args'];
-          if (typeof tcId === 'string' && tcId && typeof name === 'string' && name) {
-            const args =
-              rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
-                ? (rawArgs as Record<string, unknown>)
-                : {};
-            suspended = true;
-            pendingCalls.push({ toolCallId: tcId, name, args });
-            const id = createToolId(name);
-            toolTimeline.push({
-              id,
-              name,
-              status: 'awaiting_approval',
-              requiresApproval: true,
-              toolCallId: tcId,
-              parameters: Object.keys(args).length > 0 ? args : undefined,
-            });
-            publishToolTimeline();
-          }
-        }
-
-        // Code execution result.
-        const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
-        if (codeResultBlock) {
-          const content = Array.isArray(codeResultBlock.content)
-            ? (codeResultBlock.content as Record<string, unknown>[])
-            : [];
-          const textItem = content.find((c) => c['type'] === 'text');
-          const rawText = (textItem?.['text'] as string) || '';
-          const images = content
-            .filter((c) => c['type'] === 'image')
-            .map((c) => {
-              const src = c['source'] as Record<string, unknown> | undefined;
-              return {
-                mediaType: (src?.['media_type'] as string) || 'image/png',
-                data: (src?.['data'] as string) || '',
-              };
-            })
-            .filter((img) => img.data);
-
-          const stdout = rawText.match(/<stdout>([\s\S]*?)<\/stdout>/)?.[1] ?? rawText;
-          const stderr = rawText.match(/<stderr>([\s\S]*?)<\/stderr>/)?.[1] ?? '';
-          const returnCode = parseInt(
-            rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
-            10,
-          );
-          currentCodeExecutionResult = {
-            stdout,
-            stderr,
-            returnCode,
-            images: images.length > 0 ? images : undefined,
-          };
-          setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult);
-          finishTool('code_execution', 'completed');
-        }
-
-        // Web search results.
-        const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
-        if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
-          const results = (searchResultsBlock.content as Record<string, unknown>[])
-            .filter((r) => r['type'] === 'web_search_result' && r['url'])
-            .map((r) => ({
-              url: r['url'] as string,
-              title: (r['title'] as string) || (r['url'] as string),
-              snippet: (r['encrypted_content'] as string) || '',
-            }));
-          if (results.length > 0) {
-            currentSearchResults = results;
-            setSearchResults(assistantMessageId, results);
-          }
-          finishTool('web_search', 'completed');
-        } else if (
-          searchResultsBlock?.content &&
-          typeof searchResultsBlock.content === 'object' &&
-          !Array.isArray(searchResultsBlock.content) &&
-          (searchResultsBlock.content as Record<string, unknown>)['type'] ===
-            'web_search_tool_result_error'
-        ) {
-          const errorCode =
-            ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
-              | string
-              | undefined) || 'unknown_error';
-          finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
-        }
-
-        // Platform-executed tool results (MCP / E2B sandbox).
-        const toolResultBlock = parsed.choices?.[0]?.delta?.x_tool_result;
-        if (toolResultBlock) {
-          const { name, content, is_error } = toolResultBlock as {
-            tool_call_id?: string;
-            name?: string;
-            content?: unknown;
-            is_error?: boolean;
-          };
-          if (name) {
-            // Include 'failed' so a denial result event (server emits one for a
-            // rejected tool, isError:false) lands on the card the client already
-            // flipped to 'failed' on reject, instead of creating a duplicate.
-            let idx = findLastToolIndex(name, [
-              'running',
-              'completed',
-              'awaiting_approval',
-              'failed',
-            ]);
-            if (idx < 0) {
-              const id = createToolId(name);
-              toolStartTimes.set(id, Date.now());
-              toolTimeline.push({ id, name, status: 'running' });
-              idx = toolTimeline.length - 1;
-            }
-            const entry = toolTimeline[idx];
-            if (entry) {
-              const resultText =
-                typeof content === 'string'
-                  ? content
-                  : Array.isArray(content)
-                    ? (content as Record<string, unknown>[])
-                        .filter((c) => c['type'] === 'text')
-                        .map((c) => c['text'] as string)
-                        .join('\n')
-                    : content != null
-                      ? String(content)
-                      : '';
-              entry.result = resultText;
-              entry.status = is_error ? 'failed' : 'completed';
-              entry.error = is_error ? resultText : entry.error;
-            }
-            publishToolTimeline();
-          }
-        }
-
-        if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
-          updateMessage(assistantMessageId, { isStreaming: false });
-        }
-      } catch {
-        // Ignore parse errors for incomplete chunks.
-      }
     }
+    throw error;
   }
-
-  // Stream ended without an explicit [DONE].
-  flushContentBuffer(true);
-  if (inThinkingBlock) {
-    closeThinkingSegment();
-    inThinkingBlock = false;
-  }
-  finishRunningTools();
-  persistAssistant(fullAssistantContent);
-  stopStreaming();
-  setLoading(false);
-  return { suspended, pendingCalls };
 }
 
 /**
@@ -1403,7 +1505,13 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     updateMessage,
   } = ctx;
 
-  if (error instanceof Error && error.name === 'AbortError') {
+  // DOMException named 'AbortError' is what browsers reject an aborted fetch
+  // with; it is NOT instanceof Error, so check the name shape instead.
+  const isAbort =
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError';
+  if (isAbort) {
     updateMessage(assistantMessageId, { isStreaming: false });
     stopStreaming();
     setLoading(false);
