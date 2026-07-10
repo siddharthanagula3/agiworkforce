@@ -22,6 +22,30 @@
 
 import { z } from 'zod';
 
+/**
+ * Which UI surface owns a generated output. Derived DETERMINISTICALLY on the
+ * server at persistence time (`apps/web/lib/server/generated-file-persist.ts`
+ * `classifyGeneratedFile`) from mime + extension — clients must never
+ * re-derive it.
+ *
+ *   - 'artifact': source-text output that renders/edits in a panel surface
+ *     (html, svg, markdown, mermaid, json, code/plain text).
+ *   - 'file': downloadable deliverable (xlsx, docx, pptx, pdf, csv, archives,
+ *     binaries). Raster images/charts (PNG matplotlib output etc.) are
+ *     'file' + `previewable: true`: like ChatGPT container-file citations and
+ *     Claude file outputs they are byte deliverables the client may render
+ *     inline, not editable-source artifacts — there is no source text for an
+ *     artifact panel to show.
+ *
+ * Relationship to `kind`: `kind` is the coarse ICON taxonomy (what badge/icon
+ * a card shows); `surface` is the OWNERSHIP taxonomy (which UI opens it) and
+ * `previewable` the inline-render affordance. They are derived side by side
+ * by the same server module and intentionally not merged — e.g. an `.svg` has
+ * kind 'image' (icon) but surface 'artifact' (editable source).
+ */
+export const GENERATED_FILE_SURFACES = ['artifact', 'file'] as const;
+export type GeneratedFileSurface = (typeof GENERATED_FILE_SURFACES)[number];
+
 export const GeneratedFileWireSchema = z.object({
   id: z.string().min(1),
   file_name: z.string().min(1),
@@ -33,6 +57,19 @@ export const GeneratedFileWireSchema = z.object({
   kind: z.string(),
   /** SHA-256 of the stored bytes (hash in == hash out verification). */
   checksum_sha256: z.string().optional(),
+  /**
+   * UI ownership classification (see `GeneratedFileSurface`). Optional with
+   * default so pre-classification persisted payloads and older servers still
+   * parse; `.catch` folds a future unknown surface value to the safe
+   * 'file' rendering instead of dropping the whole descriptor.
+   */
+  surface: z.enum(GENERATED_FILE_SURFACES).default('file').catch('file'),
+  /**
+   * Whether the client may inline-render the bytes (raster images/charts,
+   * pdf, docx/xlsx/pptx/csv with shared renderers, and all artifacts).
+   * Optional-with-default for the same backward compatibility as `surface`.
+   */
+  previewable: z.boolean().default(false).catch(false),
 });
 export type GeneratedFileWire = z.infer<typeof GeneratedFileWireSchema>;
 
