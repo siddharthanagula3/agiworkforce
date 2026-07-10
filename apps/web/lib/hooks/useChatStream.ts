@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useEffect } from 'react';
+import { createContext, useCallback, useContext, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { toast } from 'sonner';
 import {
@@ -50,9 +50,24 @@ const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
   explanatory: 'Be thorough and educational. Explain concepts in detail with examples.',
 };
 
+/** Decision the user made on a single pending tool call. */
+export type ToolApprovalDecision = 'approved' | 'rejected';
+
 interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
   stopGeneration: () => void;
+  /**
+   * Resolve one pending tool-approval card (see the manual-approval flow). Records
+   * the per-tool_call decision; once EVERY pending tool call in the suspended turn
+   * is decided, POSTs the resume request (thread + suspended assistant tool_call
+   * turn + tool_approvals) to /api/llm/v1/chat/completions/approve and streams the
+   * continuation into the same assistant message.
+   */
+  resolveToolApproval: (
+    assistantMessageId: string,
+    toolCallId: string,
+    decision: ToolApprovalDecision,
+  ) => Promise<void>;
   isStreaming: boolean;
 }
 
@@ -246,6 +261,562 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
 
 export { saveMessageToDb, notifyPersistenceFailure };
 
+// ─── Shared SSE-stream types + module-level approval registry ───────────────
+
+type MessageContent = string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+type ApiMessage = {
+  role: string;
+  content: MessageContent;
+  tool_calls?: unknown[];
+  tool_call_id?: string;
+};
+
+/** One tool call the server suspended for user approval (from x_tool_approval_request). */
+interface PendingApprovalCall {
+  toolCallId: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * Context captured for a suspended turn so the resume request can be rebuilt
+ * statelessly (the server keeps no loop state). Keyed by assistantMessageId in a
+ * MODULE-level registry so any component (e.g. a per-message MessageBubble) can
+ * resolve the approval, not only the hook instance that sent the message.
+ */
+interface PendingTurn {
+  priorMessages: ApiMessage[];
+  model: string;
+  conversationId: string;
+  isTemporaryConversation: boolean;
+  calls: PendingApprovalCall[];
+  decisions: Map<string, ToolApprovalDecision>;
+  /** Set once the resume request has been dispatched, to prevent double-submit. */
+  resolving: boolean;
+}
+
+const pendingTurns = new Map<string, PendingTurn>();
+
+/** TEST-ONLY: clear the module-level pending-approval registry between tests. */
+export function __resetPendingTurnsForTests(): void {
+  pendingTurns.clear();
+}
+
+/**
+ * Context carrying the tool-approval resolver down to per-message components
+ * (MessageBubble) WITHOUT prop-drilling through the memoized message-list layers.
+ * The provider is mounted by the chat page (which owns the Clerk-authenticated
+ * resolver); `useToolApprovalResolver()` returns `null` when no provider is
+ * present, so a standalone/provider-less render (e.g. unit tests) simply leaves
+ * the approve/reject affordances unwired instead of calling useAuth and throwing.
+ */
+type ResolveToolApprovalFn = UseChatStreamReturn['resolveToolApproval'];
+const ToolApprovalContext = createContext<ResolveToolApprovalFn | null>(null);
+export const ToolApprovalProvider = ToolApprovalContext.Provider;
+export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
+  return useContext(ToolApprovalContext);
+}
+
+interface StreamOutcome {
+  /** True when the turn suspended on a tool-approval request (no final answer yet). */
+  suspended: boolean;
+  pendingCalls: PendingApprovalCall[];
+}
+
+interface ConsumeStreamContext {
+  response: Response;
+  assistantMessageId: string;
+  model: string;
+  conversationId: string;
+  isTemporaryConversation: boolean;
+  authToken: string;
+  /** Seed the accumulated assistant text (for the resume continuation). */
+  seedContent?: string;
+  /** Seed the tool timeline (for the resume continuation, so prior cards persist). */
+  seedTools?: MessageToolEntry[];
+}
+
+/**
+ * Consume an OpenAI-compatible SSE stream into the given assistant message.
+ * Owns the thinking-marker holdback, tool-timeline bookkeeping, x_tool_* event
+ * handling, and the terminal persistence + streaming teardown. Shared by
+ * `sendMessage` (initial request) and `resolveToolApproval` (resume
+ * continuation) so both drive IDENTICAL rendering + persistence.
+ *
+ * Returns a StreamOutcome describing whether the turn suspended on a
+ * tool-approval request and, if so, which tool calls are pending.
+ */
+async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<StreamOutcome> {
+  const {
+    response,
+    assistantMessageId,
+    model,
+    conversationId,
+    isTemporaryConversation,
+    authToken,
+  } = ctx;
+
+  const store = useChatStore.getState();
+  const updateMessage = store.updateMessage;
+  const appendToMessage = store.appendToMessage;
+  const appendToThinking = store.appendToThinking;
+  const setSearching = store.setSearching;
+  const setExecutingCode = store.setExecutingCode;
+  const setSearchResults = store.setSearchResults;
+  const setCodeExecutionResult = store.setCodeExecutionResult;
+  const setToolTimeline = store.setToolTimeline;
+  const stopStreaming = store.stopStreaming;
+  const setLoading = store.setLoading;
+
+  const toolTimeline: MessageToolEntry[] = ctx.seedTools
+    ? ctx.seedTools.map((t) => ({ ...t }))
+    : [];
+  const toolStartTimes = new Map<string, number>();
+  const pendingCalls: PendingApprovalCall[] = [];
+  let suspended = false;
+  let currentSearchResults: MessageMetadata['searchResults'];
+  let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'];
+
+  const publishToolTimeline = () => {
+    if (toolTimeline.length === 0) return;
+    setToolTimeline(
+      assistantMessageId,
+      toolTimeline.map((tool) => ({ ...tool })),
+    );
+  };
+
+  const findLastToolIndex = (name: string, statuses?: MessageToolEntry['status'][]) => {
+    for (let index = toolTimeline.length - 1; index >= 0; index -= 1) {
+      const tool = toolTimeline[index];
+      if (!tool || tool.name !== name) continue;
+      if (!statuses || statuses.includes(tool.status)) return index;
+    }
+    return -1;
+  };
+
+  const createToolId = (name: string) =>
+    `${assistantMessageId}-${name.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}-${
+      toolTimeline.length + 1
+    }`;
+
+  const normalizeToolName = (name: unknown) =>
+    typeof name === 'string' && name.trim() ? name.trim() : 'server_tool';
+
+  const startTool = (
+    rawName: unknown,
+    args?: string,
+    statusPhrase?: string,
+    parameters?: Record<string, unknown>,
+  ) => {
+    const name = normalizeToolName(rawName);
+    const existingIndex = findLastToolIndex(name, ['pending', 'running']);
+    if (existingIndex >= 0) {
+      const existing = toolTimeline[existingIndex];
+      if (existing) {
+        existing.status = 'running';
+        existing.args = args ?? existing.args;
+        if (statusPhrase) existing.statusPhrase = statusPhrase;
+        if (parameters && Object.keys(parameters).length > 0) existing.parameters = parameters;
+      }
+      publishToolTimeline();
+      return;
+    }
+
+    const id = createToolId(name);
+    toolStartTimes.set(id, Date.now());
+    toolTimeline.push({
+      id,
+      name,
+      status: 'running',
+      args,
+      statusPhrase,
+      parameters,
+    });
+    publishToolTimeline();
+  };
+
+  const finishTool = (
+    rawName: unknown,
+    status: Extract<MessageToolEntry['status'], 'completed' | 'failed'>,
+    error?: string,
+  ) => {
+    const name = normalizeToolName(rawName);
+    let index = findLastToolIndex(name, ['pending', 'running']);
+    if (index < 0) {
+      const id = createToolId(name);
+      toolStartTimes.set(id, Date.now());
+      toolTimeline.push({ id, name, status: 'running' });
+      index = toolTimeline.length - 1;
+    }
+
+    const tool = toolTimeline[index];
+    if (!tool) return;
+    const startedAt = tool.id ? toolStartTimes.get(tool.id) : undefined;
+    tool.status = status;
+    tool.durationMs = startedAt ? Date.now() - startedAt : tool.durationMs;
+    tool.error = error;
+    publishToolTimeline();
+  };
+
+  const finishRunningTools = (
+    status: Extract<MessageToolEntry['status'], 'completed' | 'failed'> = 'completed',
+    error?: string,
+  ) => {
+    for (const tool of toolTimeline) {
+      // Leave awaiting_approval cards untouched — a suspended turn must not be
+      // force-completed by the trailing flush; it is resolved by the user.
+      if (tool.status !== 'pending' && tool.status !== 'running') continue;
+      const startedAt = tool.id ? toolStartTimes.get(tool.id) : undefined;
+      tool.status = status;
+      tool.durationMs = startedAt ? Date.now() - startedAt : tool.durationMs;
+      tool.error = error;
+    }
+    publishToolTimeline();
+  };
+
+  const buildAssistantMetadata = (): MessageMetadata | undefined => {
+    const metadata: MessageMetadata = {};
+    if (toolTimeline.length > 0) {
+      metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
+    }
+    if (hasWebSearchSources(currentSearchResults)) {
+      metadata.searchResults = currentSearchResults;
+    }
+    if (currentCodeExecutionResult) {
+      metadata.codeExecutionResult = currentCodeExecutionResult;
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+  };
+
+  const persistAssistant = (fullContent: string) => {
+    if (!fullContent || isTemporaryConversation) return;
+    saveMessageToDb(
+      conversationId,
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: fullContent,
+        model,
+        metadata: buildAssistantMetadata(),
+      },
+      authToken,
+    )
+      .then((saved) => {
+        if (saved?.id && saved.id !== assistantMessageId) {
+          updateMessage(assistantMessageId, { id: saved.id });
+        }
+      })
+      .catch((err) => notifyPersistenceFailure('assistant', err));
+  };
+
+  if (!response.body) {
+    throw new Error('No response body');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullAssistantContent = ctx.seedContent ?? '';
+  let inThinkingBlock = false;
+  let contentBuffer = '';
+
+  const HOLD_BACK = 11;
+
+  const flushContentBuffer = (isFinal = false) => {
+    while (true) {
+      const openIdx = contentBuffer.indexOf('<thinking>');
+      const closeIdx = contentBuffer.indexOf('</thinking>');
+
+      if (!inThinkingBlock && openIdx !== -1) {
+        const before = contentBuffer.slice(0, openIdx);
+        if (before) {
+          fullAssistantContent += before;
+          appendToMessage(assistantMessageId, before);
+        }
+        inThinkingBlock = true;
+        updateMessage(assistantMessageId, {
+          metadata: {
+            isThinkingStreaming: true,
+            thinkingStartedAt: new Date().toISOString(),
+          },
+        });
+        contentBuffer = contentBuffer.slice(openIdx + '<thinking>'.length);
+        continue;
+      }
+
+      if (inThinkingBlock && closeIdx !== -1) {
+        const thinkingPart = contentBuffer.slice(0, closeIdx);
+        if (thinkingPart) {
+          appendToThinking(assistantMessageId, thinkingPart);
+        }
+        inThinkingBlock = false;
+        updateMessage(assistantMessageId, {
+          metadata: {
+            isThinkingStreaming: false,
+            thinkingCompletedAt: new Date().toISOString(),
+          },
+        });
+        contentBuffer = contentBuffer.slice(closeIdx + '</thinking>'.length);
+        continue;
+      }
+
+      if (isFinal) {
+        if (contentBuffer) {
+          if (inThinkingBlock) {
+            appendToThinking(assistantMessageId, contentBuffer);
+          } else {
+            fullAssistantContent += contentBuffer;
+            appendToMessage(assistantMessageId, contentBuffer);
+          }
+          contentBuffer = '';
+        }
+      } else if (contentBuffer.length > HOLD_BACK) {
+        const safe = contentBuffer.slice(0, contentBuffer.length - HOLD_BACK);
+        if (inThinkingBlock) {
+          appendToThinking(assistantMessageId, safe);
+        } else {
+          fullAssistantContent += safe;
+          appendToMessage(assistantMessageId, safe);
+        }
+        contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
+      }
+      break;
+    }
+  };
+
+  // Seed the store with any prior tool cards so the resume continuation renders
+  // them alongside new events.
+  if (toolTimeline.length > 0) publishToolTimeline();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+
+      const data = trimmedLine.slice(6);
+      if (data === '[DONE]') {
+        flushContentBuffer(true);
+        if (inThinkingBlock) {
+          updateMessage(assistantMessageId, {
+            metadata: {
+              isThinkingStreaming: false,
+              thinkingCompletedAt: new Date().toISOString(),
+            },
+          });
+          inThinkingBlock = false;
+        }
+        finishRunningTools();
+        setSearching(assistantMessageId, false);
+        setExecutingCode(assistantMessageId, false);
+        persistAssistant(fullAssistantContent);
+        stopStreaming();
+        setLoading(false);
+        return { suspended, pendingCalls };
+      }
+
+      try {
+        const parsed = JSON.parse(data);
+
+        let chunk: string | null = null;
+        if (parsed.choices?.[0]?.delta?.content != null) {
+          chunk = parsed.choices[0].delta.content;
+        } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+          chunk = parsed.delta.text;
+        }
+
+        if (chunk !== null) {
+          contentBuffer += chunk;
+          flushContentBuffer(false);
+        }
+
+        // Tool status indicators.
+        const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
+        if (toolStatus?.type === 'server_tool_use') {
+          startTool(toolStatus.name, toolStatus.status);
+        }
+        if (toolStatus?.type === 'mcp_tool_use') {
+          if (toolStatus.status === 'running') {
+            const phrase =
+              typeof toolStatus.status_phrase === 'string' ? toolStatus.status_phrase : undefined;
+            const parameters =
+              toolStatus.args != null &&
+              typeof toolStatus.args === 'object' &&
+              !Array.isArray(toolStatus.args)
+                ? (toolStatus.args as Record<string, unknown>)
+                : undefined;
+            startTool(toolStatus.name, undefined, phrase, parameters);
+          } else if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
+            finishTool(toolStatus.name, toolStatus.status);
+          }
+        }
+        if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
+          setSearching(assistantMessageId, true);
+        } else if (toolStatus?.status === 'executing') {
+          setExecutingCode(assistantMessageId, true);
+        }
+
+        // Manual-approval request: surface an awaiting_approval card and record
+        // the pending call so the caller can build the resume request.
+        const approvalReq = parsed.choices?.[0]?.delta?.x_tool_approval_request;
+        if (approvalReq && typeof approvalReq === 'object') {
+          const tcId = (approvalReq as Record<string, unknown>)['tool_call_id'];
+          const name = (approvalReq as Record<string, unknown>)['name'];
+          const rawArgs = (approvalReq as Record<string, unknown>)['args'];
+          if (typeof tcId === 'string' && tcId && typeof name === 'string' && name) {
+            const args =
+              rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
+                ? (rawArgs as Record<string, unknown>)
+                : {};
+            suspended = true;
+            pendingCalls.push({ toolCallId: tcId, name, args });
+            const id = createToolId(name);
+            toolTimeline.push({
+              id,
+              name,
+              status: 'awaiting_approval',
+              requiresApproval: true,
+              toolCallId: tcId,
+              parameters: Object.keys(args).length > 0 ? args : undefined,
+            });
+            publishToolTimeline();
+          }
+        }
+
+        // Code execution result.
+        const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
+        if (codeResultBlock) {
+          const content = Array.isArray(codeResultBlock.content)
+            ? (codeResultBlock.content as Record<string, unknown>[])
+            : [];
+          const textItem = content.find((c) => c['type'] === 'text');
+          const rawText = (textItem?.['text'] as string) || '';
+          const images = content
+            .filter((c) => c['type'] === 'image')
+            .map((c) => {
+              const src = c['source'] as Record<string, unknown> | undefined;
+              return {
+                mediaType: (src?.['media_type'] as string) || 'image/png',
+                data: (src?.['data'] as string) || '',
+              };
+            })
+            .filter((img) => img.data);
+
+          const stdout = rawText.match(/<stdout>([\s\S]*?)<\/stdout>/)?.[1] ?? rawText;
+          const stderr = rawText.match(/<stderr>([\s\S]*?)<\/stderr>/)?.[1] ?? '';
+          const returnCode = parseInt(
+            rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
+            10,
+          );
+          currentCodeExecutionResult = {
+            stdout,
+            stderr,
+            returnCode,
+            images: images.length > 0 ? images : undefined,
+          };
+          setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult);
+          finishTool('code_execution', 'completed');
+        }
+
+        // Web search results.
+        const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
+        if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
+          const results = (searchResultsBlock.content as Record<string, unknown>[])
+            .filter((r) => r['type'] === 'web_search_result' && r['url'])
+            .map((r) => ({
+              url: r['url'] as string,
+              title: (r['title'] as string) || (r['url'] as string),
+              snippet: (r['encrypted_content'] as string) || '',
+            }));
+          if (results.length > 0) {
+            currentSearchResults = results;
+            setSearchResults(assistantMessageId, results);
+          }
+          finishTool('web_search', 'completed');
+        } else if (
+          searchResultsBlock?.content &&
+          typeof searchResultsBlock.content === 'object' &&
+          !Array.isArray(searchResultsBlock.content) &&
+          (searchResultsBlock.content as Record<string, unknown>)['type'] ===
+            'web_search_tool_result_error'
+        ) {
+          const errorCode =
+            ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
+              | string
+              | undefined) || 'unknown_error';
+          finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
+        }
+
+        // Platform-executed tool results (MCP / E2B sandbox).
+        const toolResultBlock = parsed.choices?.[0]?.delta?.x_tool_result;
+        if (toolResultBlock) {
+          const { name, content, is_error } = toolResultBlock as {
+            tool_call_id?: string;
+            name?: string;
+            content?: unknown;
+            is_error?: boolean;
+          };
+          if (name) {
+            // Include 'failed' so a denial result event (server emits one for a
+            // rejected tool, isError:false) lands on the card the client already
+            // flipped to 'failed' on reject, instead of creating a duplicate.
+            let idx = findLastToolIndex(name, [
+              'running',
+              'completed',
+              'awaiting_approval',
+              'failed',
+            ]);
+            if (idx < 0) {
+              const id = createToolId(name);
+              toolStartTimes.set(id, Date.now());
+              toolTimeline.push({ id, name, status: 'running' });
+              idx = toolTimeline.length - 1;
+            }
+            const entry = toolTimeline[idx];
+            if (entry) {
+              const resultText =
+                typeof content === 'string'
+                  ? content
+                  : Array.isArray(content)
+                    ? (content as Record<string, unknown>[])
+                        .filter((c) => c['type'] === 'text')
+                        .map((c) => c['text'] as string)
+                        .join('\n')
+                    : content != null
+                      ? String(content)
+                      : '';
+              entry.result = resultText;
+              entry.status = is_error ? 'failed' : 'completed';
+              entry.error = is_error ? resultText : entry.error;
+            }
+            publishToolTimeline();
+          }
+        }
+
+        if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
+          updateMessage(assistantMessageId, { isStreaming: false });
+        }
+      } catch {
+        // Ignore parse errors for incomplete chunks.
+      }
+    }
+  }
+
+  // Stream ended without an explicit [DONE].
+  flushContentBuffer(true);
+  finishRunningTools();
+  persistAssistant(fullAssistantContent);
+  stopStreaming();
+  setLoading(false);
+  return { suspended, pendingCalls };
+}
+
 /**
  * Hook for handling SSE streaming chat with the LLM API
  */
@@ -253,16 +824,8 @@ export function useChatStream(): UseChatStreamReturn {
   const { getToken } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Store actions
   const addMessage = useChatStore((state) => state.addMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
-  const appendToMessage = useChatStore((state) => state.appendToMessage);
-  const appendToThinking = useChatStore((state) => state.appendToThinking);
-  const setSearching = useChatStore((state) => state.setSearching);
-  const setSearchResults = useChatStore((state) => state.setSearchResults);
-  const setExecutingCode = useChatStore((state) => state.setExecutingCode);
-  const setToolTimeline = useChatStore((state) => state.setToolTimeline);
-  const setCodeExecutionResult = useChatStore((state) => state.setCodeExecutionResult);
   const startStreaming = useChatStore((state) => state.startStreaming);
   const stopStreaming = useChatStore((state) => state.stopStreaming);
   const setLoading = useChatStore((state) => state.setLoading);
@@ -274,15 +837,6 @@ export function useChatStream(): UseChatStreamReturn {
   // The chatStore is a global singleton, so streamed tokens continue updating
   // the message list even after the originating component unmounts (e.g.
   // navigation from /chat to /chat/[id] on the first message).
-  //
-  // Crucially, we must preserve the AbortController reference so the in-flight
-  // fetch() call (which captured abortControllerRef, not a copy of the signal)
-  // can still read a valid signal after unmount. Nulling it here caused a
-  // TypeError ("Cannot read properties of null (reading 'signal')") on every
-  // first-message navigation, producing a silent empty assistant turn.
-  //
-  // The browser closes the HTTP connection when the tab is closed.
-  // Explicit user cancellation goes through stopGeneration() instead.
   useEffect(() => {
     return () => {
       // intentionally empty: preserve controller across unmount
@@ -293,7 +847,6 @@ export function useChatStream(): UseChatStreamReturn {
     async (content: string, options: SendMessageOptions = {}) => {
       if (!content.trim()) return;
 
-      // Get conversation ID - either from options or read fresh from store to avoid stale closures
       const conversationId = options.conversationId || useChatStore.getState().activeConversationId;
       if (!conversationId) {
         console.error('[useChatStream] No conversation ID available');
@@ -301,7 +854,6 @@ export function useChatStream(): UseChatStreamReturn {
         return;
       }
 
-      // Cancel any existing stream
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -320,7 +872,6 @@ export function useChatStream(): UseChatStreamReturn {
         throw new Error('Not authenticated');
       }
 
-      // Add user message to UI immediately
       const userMessageId = crypto.randomUUID();
       const userMessage: Message = {
         id: userMessageId,
@@ -332,11 +883,11 @@ export function useChatStream(): UseChatStreamReturn {
       };
       addMessage(userMessage);
 
-      // Save user message to database (fire and forget, don't block)
-      // Skip DB persistence for temporary/incognito conversations
-      const isTemporaryConversation = useChatStore
-        .getState()
-        .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary;
+      const isTemporaryConversation = Boolean(
+        useChatStore
+          .getState()
+          .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
+      );
       if (!isTemporaryConversation) {
         saveMessageToDb(
           conversationId,
@@ -356,7 +907,6 @@ export function useChatStream(): UseChatStreamReturn {
           .catch((err) => notifyPersistenceFailure('user', err));
       }
 
-      // Create assistant message placeholder
       const assistantMessageId = crypto.randomUUID();
       const assistantMessage: Message = {
         id: assistantMessageId,
@@ -371,132 +921,9 @@ export function useChatStream(): UseChatStreamReturn {
       setLoading(true);
       setError(null);
 
-      const toolTimeline: MessageToolEntry[] = [];
-      const toolStartTimes = new Map<string, number>();
-      let currentSearchResults: MessageMetadata['searchResults'];
-      let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'];
-
-      const publishToolTimeline = () => {
-        if (toolTimeline.length === 0) return;
-        setToolTimeline(
-          assistantMessageId,
-          toolTimeline.map((tool) => ({ ...tool })),
-        );
-      };
-
-      const findLastToolIndex = (name: string, statuses?: MessageToolEntry['status'][]) => {
-        for (let index = toolTimeline.length - 1; index >= 0; index -= 1) {
-          const tool = toolTimeline[index];
-          if (!tool || tool.name !== name) continue;
-          if (!statuses || statuses.includes(tool.status)) return index;
-        }
-        return -1;
-      };
-
-      const createToolId = (name: string) =>
-        `${assistantMessageId}-${name.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}-${
-          toolTimeline.length + 1
-        }`;
-
-      const normalizeToolName = (name: unknown) =>
-        typeof name === 'string' && name.trim() ? name.trim() : 'server_tool';
-
-      const startTool = (
-        rawName: unknown,
-        args?: string,
-        statusPhrase?: string,
-        parameters?: Record<string, unknown>,
-      ) => {
-        const name = normalizeToolName(rawName);
-        const existingIndex = findLastToolIndex(name, ['pending', 'running']);
-        if (existingIndex >= 0) {
-          const existing = toolTimeline[existingIndex];
-          if (existing) {
-            existing.status = 'running';
-            existing.args = args ?? existing.args;
-            if (statusPhrase) existing.statusPhrase = statusPhrase;
-            if (parameters && Object.keys(parameters).length > 0) existing.parameters = parameters;
-          }
-          publishToolTimeline();
-          return;
-        }
-
-        const id = createToolId(name);
-        toolStartTimes.set(id, Date.now());
-        toolTimeline.push({
-          id,
-          name,
-          status: 'running',
-          args,
-          statusPhrase,
-          parameters,
-        });
-        publishToolTimeline();
-      };
-
-      const finishTool = (
-        rawName: unknown,
-        status: Extract<MessageToolEntry['status'], 'completed' | 'failed'>,
-        error?: string,
-      ) => {
-        const name = normalizeToolName(rawName);
-        let index = findLastToolIndex(name, ['pending', 'running']);
-        if (index < 0) {
-          const id = createToolId(name);
-          toolStartTimes.set(id, Date.now());
-          toolTimeline.push({ id, name, status: 'running' });
-          index = toolTimeline.length - 1;
-        }
-
-        const tool = toolTimeline[index];
-        if (!tool) return;
-        const startedAt = tool.id ? toolStartTimes.get(tool.id) : undefined;
-        tool.status = status;
-        tool.durationMs = startedAt ? Date.now() - startedAt : tool.durationMs;
-        tool.error = error;
-        publishToolTimeline();
-      };
-
-      const finishRunningTools = (
-        status: Extract<MessageToolEntry['status'], 'completed' | 'failed'> = 'completed',
-        error?: string,
-      ) => {
-        for (const tool of toolTimeline) {
-          if (tool.status !== 'pending' && tool.status !== 'running') continue;
-          const startedAt = tool.id ? toolStartTimes.get(tool.id) : undefined;
-          tool.status = status;
-          tool.durationMs = startedAt ? Date.now() - startedAt : tool.durationMs;
-          tool.error = error;
-        }
-        publishToolTimeline();
-      };
-
-      const buildAssistantMetadata = (): MessageMetadata | undefined => {
-        const metadata: MessageMetadata = {};
-        if (toolTimeline.length > 0) {
-          metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
-        }
-        if (hasWebSearchSources(currentSearchResults)) {
-          metadata.searchResults = currentSearchResults;
-        }
-        if (currentCodeExecutionResult) {
-          metadata.codeExecutionResult = currentCodeExecutionResult;
-        }
-
-        return Object.keys(metadata).length > 0 ? metadata : undefined;
-      };
-
       try {
-        // Message content can be string or array (for multimodal)
-        type MessageContent =
-          | string
-          | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-        type ApiMessage = { role: string; content: MessageContent };
-
-        // Get current messages from store to avoid stale closure
         const currentMessages = useChatStore.getState().messages;
 
-        // Build messages array for API (exclude the placeholder assistant message we just added)
         const apiMessages: ApiMessage[] = [
           ...currentMessages
             .filter((m) => m.id !== assistantMessageId)
@@ -506,24 +933,10 @@ export function useChatStream(): UseChatStreamReturn {
             })),
         ];
 
-        // Prepend the selected skill's body as a system message. This is injected
-        // invisibly and does not appear in chat bubbles.
         if (options.skillBody) {
           apiMessages.unshift({ role: 'system', content: options.skillBody });
-
-          // Emit a synthetic timeline step so the skill load is visible as a
-          // timeline entry (type mcp_tool_use, name "Read skill: <name>").
-          // The step completes immediately since loading is synchronous here.
-          const skillStepName = options.skillName
-            ? `Read skill: ${options.skillName}`
-            : 'Read skill';
-          startTool(skillStepName);
-          finishTool(skillStepName, 'completed');
         }
 
-        // Prepend a style system message when the user has selected a non-default style.
-        // This is injected invisibly into the API call and does not appear in chat bubbles.
-        // Placed after skillBody so style sits at index 0 (processed last by the model).
         if (options.styleMode && options.styleMode !== 'normal') {
           const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
           if (styleInstruction) {
@@ -531,7 +944,6 @@ export function useChatStream(): UseChatStreamReturn {
           }
         }
 
-        // If there are image attachments, format the last user message for the API
         if (options.attachments?.some((a) => a.type === 'image')) {
           const lastUserMsgIndex = apiMessages.length - 1;
           if (lastUserMsgIndex >= 0 && apiMessages[lastUserMsgIndex]?.role === 'user') {
@@ -590,430 +1002,59 @@ export function useChatStream(): UseChatStreamReturn {
           });
         }
 
-        if (!response.body) {
-          throw new Error('No response body');
-        }
-
-        // Parse SSE stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullAssistantContent = '';
-        // Extended-thinking state: tracks whether we're currently inside a <thinking> block
-        let inThinkingBlock = false;
-        // Content buffer for split-chunk thinking marker detection.
-        // SSE chunks can arrive mid-tag (e.g. "<thin" then "king>"), so we
-        // accumulate raw content here and scan for complete markers before
-        // dispatching to the thinking or regular content paths.
-        let contentBuffer = '';
-
-        // Minimum bytes to hold back so a split marker at the tail is caught
-        // on the next iteration. Length of "</thinking>" minus 1 = 11 chars.
-        const HOLD_BACK = 11;
-
-        /**
-         * Flush as much of contentBuffer as is safe without losing a partial
-         * marker at the tail.
-         *
-         * The caller passes `isFinal = true` when the stream is done so we
-         * emit everything regardless of a potential partial marker.
-         */
-        const flushContentBuffer = (isFinal = false) => {
-          // Process all complete <thinking> / </thinking> markers in the buffer.
-          while (true) {
-            const openIdx = contentBuffer.indexOf('<thinking>');
-            const closeIdx = contentBuffer.indexOf('</thinking>');
-
-            if (!inThinkingBlock && openIdx !== -1) {
-              // Emit everything before the marker as regular content.
-              const before = contentBuffer.slice(0, openIdx);
-              if (before) {
-                fullAssistantContent += before;
-                appendToMessage(assistantMessageId, before);
-              }
-              inThinkingBlock = true;
-              updateMessage(assistantMessageId, {
-                metadata: {
-                  isThinkingStreaming: true,
-                  thinkingStartedAt: new Date().toISOString(),
-                },
-              });
-              contentBuffer = contentBuffer.slice(openIdx + '<thinking>'.length);
-              continue;
-            }
-
-            if (inThinkingBlock && closeIdx !== -1) {
-              // Emit thinking content before the closing marker.
-              const thinkingPart = contentBuffer.slice(0, closeIdx);
-              if (thinkingPart) {
-                appendToThinking(assistantMessageId, thinkingPart);
-              }
-              inThinkingBlock = false;
-              updateMessage(assistantMessageId, {
-                metadata: {
-                  isThinkingStreaming: false,
-                  thinkingCompletedAt: new Date().toISOString(),
-                },
-              });
-              contentBuffer = contentBuffer.slice(closeIdx + '</thinking>'.length);
-              continue;
-            }
-
-            // No complete marker found. If final, emit everything; otherwise
-            // hold back enough bytes to catch a split marker on the next call.
-            if (isFinal) {
-              if (contentBuffer) {
-                if (inThinkingBlock) {
-                  appendToThinking(assistantMessageId, contentBuffer);
-                } else {
-                  fullAssistantContent += contentBuffer;
-                  appendToMessage(assistantMessageId, contentBuffer);
-                }
-                contentBuffer = '';
-              }
-            } else if (contentBuffer.length > HOLD_BACK) {
-              const safe = contentBuffer.slice(0, contentBuffer.length - HOLD_BACK);
-              if (inThinkingBlock) {
-                appendToThinking(assistantMessageId, safe);
-              } else {
-                fullAssistantContent += safe;
-                appendToMessage(assistantMessageId, safe);
-              }
-              contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
-            }
-            break;
-          }
-        };
-
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
-
-            const data = trimmedLine.slice(6);
-            if (data === '[DONE]') {
-              // Flush any remaining buffered content before closing.
-              flushContentBuffer(true);
-              // Close any dangling thinking block
-              if (inThinkingBlock) {
-                updateMessage(assistantMessageId, {
-                  metadata: {
-                    isThinkingStreaming: false,
-                    thinkingCompletedAt: new Date().toISOString(),
-                  },
-                });
-                inThinkingBlock = false;
-              }
-              // Clear any lingering tool indicators
-              finishRunningTools();
-              setSearching(assistantMessageId, false);
-              setExecutingCode(assistantMessageId, false);
-              if (fullAssistantContent && !isTemporaryConversation) {
-                saveMessageToDb(
-                  conversationId,
-                  {
-                    id: assistantMessageId,
-                    role: 'assistant',
-                    content: fullAssistantContent,
-                    model,
-                    metadata: buildAssistantMetadata(),
-                  },
-                  authToken,
-                )
-                  .then((saved) => {
-                    if (saved?.id && saved.id !== assistantMessageId) {
-                      updateMessage(assistantMessageId, { id: saved.id });
-                    }
-                  })
-                  .catch((err) => notifyPersistenceFailure('assistant', err));
-              }
-              stopStreaming();
-              setLoading(false);
-              return;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-
-              // Resolve content chunk from OpenAI-compatible or raw Anthropic format
-              let chunk: string | null = null;
-              if (parsed.choices?.[0]?.delta?.content != null) {
-                chunk = parsed.choices[0].delta.content;
-              } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                chunk = parsed.delta.text;
-              }
-
-              if (chunk !== null) {
-                // Accumulate into content buffer and scan for split thinking markers.
-                contentBuffer += chunk;
-                flushContentBuffer(false);
-              }
-
-              // Handle server-managed tool status indicators
-              const toolStatus = parsed.choices?.[0]?.delta?.x_tool_status;
-              if (toolStatus?.type === 'server_tool_use') {
-                startTool(toolStatus.name, toolStatus.status);
-              }
-              if (toolStatus?.type === 'mcp_tool_use') {
-                // Platform-executed tools (MCP and E2B) reported via mcp_tool_use status events
-                if (toolStatus.status === 'running') {
-                  // Forward the optional status_phrase emitted by tool-loop.ts so the
-                  // timeline running-state header shows a playful per-tool label.
-                  const phrase =
-                    typeof toolStatus.status_phrase === 'string'
-                      ? toolStatus.status_phrase
-                      : undefined;
-                  // Forward tool args (e.g. {language, code} for execute_code) so
-                  // ToolCallCard's detectCodeBlock can render a syntax-highlighted
-                  // Request block. Only set when the server included them.
-                  const parameters =
-                    toolStatus.args != null &&
-                    typeof toolStatus.args === 'object' &&
-                    !Array.isArray(toolStatus.args)
-                      ? (toolStatus.args as Record<string, unknown>)
-                      : undefined;
-                  startTool(toolStatus.name, undefined, phrase, parameters);
-                } else if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
-                  finishTool(toolStatus.name, toolStatus.status);
-                }
-              }
-              if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
-                setSearching(assistantMessageId, true);
-              } else if (toolStatus?.status === 'executing') {
-                setExecutingCode(assistantMessageId, true);
-              }
-
-              // Handle code execution result
-              const codeResultBlock = parsed.choices?.[0]?.delta?.x_code_result;
-              if (codeResultBlock) {
-                const content = Array.isArray(codeResultBlock.content)
-                  ? (codeResultBlock.content as Record<string, unknown>[])
-                  : [];
-                const textItem = content.find((c) => c['type'] === 'text');
-                const rawText = (textItem?.['text'] as string) || '';
-                const images = content
-                  .filter((c) => c['type'] === 'image')
-                  .map((c) => {
-                    const src = c['source'] as Record<string, unknown> | undefined;
-                    return {
-                      mediaType: (src?.['media_type'] as string) || 'image/png',
-                      data: (src?.['data'] as string) || '',
-                    };
-                  })
-                  .filter((img) => img.data);
-
-                // Parse stdout/stderr/return_code from the text block.
-                // Anthropic formats this as: <stdout>...</stdout><stderr>...</stderr><return_code>N</return_code>
-                const stdout = rawText.match(/<stdout>([\s\S]*?)<\/stdout>/)?.[1] ?? rawText;
-                const stderr = rawText.match(/<stderr>([\s\S]*?)<\/stderr>/)?.[1] ?? '';
-                const returnCode = parseInt(
-                  rawText.match(/<return_code>(\d+)<\/return_code>/)?.[1] ?? '0',
-                  10,
-                );
-                currentCodeExecutionResult = {
-                  stdout,
-                  stderr,
-                  returnCode,
-                  images: images.length > 0 ? images : undefined,
-                };
-                setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult);
-                finishTool('code_execution', 'completed');
-              }
-
-              // Handle web search results (server-managed tool completed)
-              const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
-              if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
-                const results = (searchResultsBlock.content as Record<string, unknown>[])
-                  .filter((r) => r['type'] === 'web_search_result' && r['url'])
-                  .map((r) => ({
-                    url: r['url'] as string,
-                    title: (r['title'] as string) || (r['url'] as string),
-                    snippet: (r['encrypted_content'] as string) || '',
-                  }));
-                if (results.length > 0) {
-                  currentSearchResults = results;
-                  setSearchResults(assistantMessageId, results);
-                }
-                finishTool('web_search', 'completed');
-              } else if (
-                searchResultsBlock?.content &&
-                typeof searchResultsBlock.content === 'object' &&
-                !Array.isArray(searchResultsBlock.content) &&
-                (searchResultsBlock.content as Record<string, unknown>)['type'] ===
-                  'web_search_tool_result_error'
-              ) {
-                // Anthropic reports a failed web_search sub-tool call as a single error
-                // object (not an array) with shape { type: 'web_search_tool_result_error',
-                // error_code: string }. Surface it as a failed tool run instead of silently
-                // finishing (or never finishing) the tool.
-                const errorCode =
-                  ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
-                    | string
-                    | undefined) || 'unknown_error';
-                finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
-              }
-
-              // Handle platform-executed tool results (MCP / E2B sandbox)
-              const toolResultBlock = parsed.choices?.[0]?.delta?.x_tool_result;
-              if (toolResultBlock) {
-                const { name, content, is_error } = toolResultBlock as {
-                  tool_call_id?: string;
-                  name?: string;
-                  content?: unknown;
-                  is_error?: boolean;
-                };
-                if (name) {
-                  // Find by name — the local array is the authority; toolCallId is not set
-                  // on streaming entries so matching by name is the correct strategy here.
-                  let idx = findLastToolIndex(name, ['running', 'completed']);
-                  if (idx < 0) {
-                    // Guard: create entry if status event was missed
-                    const id = createToolId(name);
-                    toolStartTimes.set(id, Date.now());
-                    toolTimeline.push({ id, name, status: 'running' });
-                    idx = toolTimeline.length - 1;
-                  }
-                  const entry = toolTimeline[idx];
-                  if (entry) {
-                    const resultText =
-                      typeof content === 'string'
-                        ? content
-                        : Array.isArray(content)
-                          ? (content as Record<string, unknown>[])
-                              .filter((c) => c['type'] === 'text')
-                              .map((c) => c['text'] as string)
-                              .join('\n')
-                          : content != null
-                            ? String(content)
-                            : '';
-                    entry.result = resultText;
-                    entry.status = is_error ? 'failed' : 'completed';
-                    entry.error = is_error ? resultText : entry.error;
-                  }
-                  publishToolTimeline();
-                }
-              }
-
-              // Handle finish reason
-              // We keep the originally selected model name for display consistency - the API
-              // may return a different model name due to fallback or version differences.
-              if (parsed.choices?.[0]?.finish_reason || parsed.type === 'message_stop') {
-                updateMessage(assistantMessageId, { isStreaming: false });
-              }
-            } catch {
-              // Ignore parse errors for incomplete chunks
-            }
-          }
-        }
-
-        // Flush any remaining buffered content (in case [DONE] wasn't received)
-        flushContentBuffer(true);
-        // Save the complete assistant message to database (in case [DONE] wasn't received)
-        finishRunningTools();
-        if (fullAssistantContent && !isTemporaryConversation) {
-          saveMessageToDb(
-            conversationId,
-            {
-              id: assistantMessageId,
-              role: 'assistant',
-              content: fullAssistantContent,
-              model,
-              metadata: buildAssistantMetadata(),
-            },
-            authToken,
-          )
-            .then((saved) => {
-              if (saved?.id && saved.id !== assistantMessageId) {
-                updateMessage(assistantMessageId, { id: saved.id });
-              }
-            })
-            .catch((err) => notifyPersistenceFailure('assistant', err));
-        }
-
-        // Ensure streaming is stopped
-        stopStreaming();
-        setLoading(false);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          // User cancelled - update message to show partial content
-          updateMessage(assistantMessageId, { isStreaming: false });
-        } else {
-          const errorMessage = getVisibleErrorMessage(error);
-          const errorCode = error instanceof ChatApiError ? error.code : undefined;
-          if (isFreeTrialErrorCode(errorCode)) {
-            if (errorCode === 'website_trial_prompt_limit_reached') {
-              useFreeTrialStore.getState().markExhausted();
-            }
-            finishRunningTools('failed', errorMessage);
-            updateMessage(assistantMessageId, {
-              isStreaming: false,
-              content: '',
-              error: false,
-              metadata: {
-                paywall: buildFreeTrialPaywallSlot(errorCode, errorMessage),
-              },
-            });
-            setError(errorMessage);
-            stopStreaming();
-            setLoading(false);
-            return;
-          }
-
-          finishRunningTools('failed', errorMessage);
-
-          const errorContent = buildAssistantErrorContent(errorMessage);
-          updateMessage(assistantMessageId, {
-            isStreaming: false,
-            content: errorContent,
-            error: true,
-          });
-          setError(errorMessage);
-
-          // Persist the failed generation so a reload doesn't silently drop the
-          // error state (previously only the success path called saveMessageToDb).
-          if (!isTemporaryConversation) {
-            saveMessageToDb(
-              conversationId,
+        // Skill load surfaces as a completed timeline step (seeded, so it renders
+        // regardless of stream contents). Injected invisibly into the API call
+        // above via the system message; here it becomes a visible timeline entry.
+        const skillSeed: MessageToolEntry[] | undefined = options.skillBody
+          ? [
               {
-                id: assistantMessageId,
-                role: 'assistant',
-                content: errorContent,
-                model,
-                metadata: buildAssistantMetadata(),
+                id: `${assistantMessageId}-skill`,
+                name: options.skillName ? `Read skill: ${options.skillName}` : 'Read skill',
+                status: 'completed',
               },
-              authToken,
-            )
-              .then((saved) => {
-                if (saved?.id && saved.id !== assistantMessageId) {
-                  updateMessage(assistantMessageId, { id: saved.id });
-                }
-              })
-              .catch((err) => notifyPersistenceFailure('assistant', err));
-          }
+            ]
+          : undefined;
+
+        const outcome = await consumeAssistantStream({
+          response,
+          assistantMessageId,
+          model,
+          conversationId,
+          isTemporaryConversation,
+          authToken,
+          seedTools: skillSeed,
+        });
+
+        // Register the suspended turn so its approval cards can drive a resume.
+        if (outcome.suspended && outcome.pendingCalls.length > 0) {
+          pendingTurns.set(assistantMessageId, {
+            priorMessages: apiMessages,
+            model,
+            conversationId,
+            isTemporaryConversation,
+            calls: outcome.pendingCalls,
+            decisions: new Map(),
+            resolving: false,
+          });
         }
-        stopStreaming();
-        setLoading(false);
+      } catch (error) {
+        handleStreamError(error, {
+          assistantMessageId,
+          model,
+          conversationId,
+          isTemporaryConversation,
+          authToken,
+          setError,
+          stopStreaming,
+          setLoading,
+          updateMessage,
+        });
       }
     },
     [
       selectedModel,
       addMessage,
       updateMessage,
-      appendToMessage,
-      appendToThinking,
-      setSearching,
-      setSearchResults,
-      setExecutingCode,
-      setToolTimeline,
-      setCodeExecutionResult,
       startStreaming,
       stopStreaming,
       setLoading,
@@ -1021,6 +1062,8 @@ export function useChatStream(): UseChatStreamReturn {
       getToken,
     ],
   );
+
+  const resolveToolApproval = useResolveToolApproval();
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1034,6 +1077,287 @@ export function useChatStream(): UseChatStreamReturn {
   return {
     sendMessage,
     stopGeneration,
+    resolveToolApproval,
     isStreaming,
   };
+}
+
+/**
+ * Lightweight hook exposing ONLY `resolveToolApproval`. It subscribes to no
+ * reactive store slice (reads stable actions via getState()), so a component
+ * that renders once per message (e.g. MessageBubble) can wire approve/reject
+ * without incurring a re-render on every streaming toggle. useChatStream reuses
+ * it so there is a single implementation of the resume flow.
+ */
+export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApproval'] {
+  const { getToken } = useAuth();
+  const abortRef = useRef<AbortController | null>(null);
+
+  return useCallback(
+    async (
+      assistantMessageId: string,
+      toolCallId: string,
+      decision: ToolApprovalDecision,
+    ): Promise<void> => {
+      const store = useChatStore.getState();
+      const {
+        startStreaming,
+        stopStreaming,
+        setLoading,
+        setError,
+        updateMessage,
+        updateToolEntry,
+      } = store;
+
+      const turn = pendingTurns.get(assistantMessageId);
+      if (!turn || turn.resolving) return;
+      if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
+
+      turn.decisions.set(toolCallId, decision);
+
+      // Reflect the decision on the card immediately: approved → running (the
+      // continuation's status/result events land on it), rejected → failed.
+      if (decision === 'approved') {
+        updateToolEntry(assistantMessageId, toolCallId, {
+          status: 'running',
+          requiresApproval: false,
+        });
+      } else {
+        updateToolEntry(assistantMessageId, toolCallId, {
+          status: 'failed',
+          requiresApproval: false,
+          error: 'You denied this tool.',
+          result: 'The user denied permission to run this tool.',
+        });
+      }
+
+      // Wait until EVERY pending call in the turn is decided before resuming.
+      if (turn.decisions.size < turn.calls.length) return;
+      turn.resolving = true;
+
+      const authToken = await getToken();
+      if (!authToken) {
+        turn.resolving = false;
+        setError('Not authenticated');
+        return;
+      }
+
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      abortRef.current = new AbortController();
+
+      // Reconstruct the suspended assistant tool_call turn (standard OpenAI
+      // continue-after-tool shape) and the per-tool approval decisions.
+      const assistantContent =
+        useChatStore.getState().messages.find((m) => m.id === assistantMessageId)?.content ?? '';
+      const assistantToolCallMessage: ApiMessage = {
+        role: 'assistant',
+        content: assistantContent,
+        tool_calls: turn.calls.map((c) => ({
+          id: c.toolCallId,
+          type: 'function',
+          function: { name: c.name, arguments: JSON.stringify(c.args) },
+        })),
+      };
+      const toolApprovals = turn.calls.map((c) => ({
+        tool_call_id: c.toolCallId,
+        decision: turn.decisions.get(c.toolCallId) ?? 'rejected',
+      }));
+
+      const seedTools = useChatStore.getState().messages.find((m) => m.id === assistantMessageId)
+        ?.metadata?.tools;
+
+      startStreaming(assistantMessageId);
+      setLoading(true);
+      setError(null);
+
+      try {
+        const headers = await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        });
+        const response = await fetch('/api/llm/v1/chat/completions/approve', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: turn.model,
+            messages: [...turn.priorMessages, assistantToolCallMessage],
+            conversation_id: turn.conversationId,
+            stream: true,
+            tool_approvals: toolApprovals,
+            use_prompt_cache: true,
+          }),
+          signal: abortRef.current?.signal,
+        });
+
+        useFreeTrialStore.getState().applyHeaders(response.headers);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const { message, code } = readChatApiErrorPayload(
+            errorData,
+            `Resume failed: ${response.status}`,
+          );
+          throw new ChatApiError(message, { code, status: response.status });
+        }
+
+        const outcome = await consumeAssistantStream({
+          response,
+          assistantMessageId,
+          model: turn.model,
+          conversationId: turn.conversationId,
+          isTemporaryConversation: turn.isTemporaryConversation,
+          authToken,
+          seedContent: assistantContent,
+          seedTools: seedTools ? seedTools.map((t) => ({ ...t })) : undefined,
+        });
+
+        if (outcome.suspended && outcome.pendingCalls.length > 0) {
+          // The continuation suspended again (a further tool needs approval):
+          // register a fresh turn carrying the now-longer thread (assistant
+          // tool_call turn + this batch's tool results).
+          pendingTurns.set(assistantMessageId, {
+            priorMessages: [
+              ...turn.priorMessages,
+              assistantToolCallMessage,
+              ...turn.calls.map(
+                (c): ApiMessage => ({
+                  role: 'tool',
+                  content:
+                    turn.decisions.get(c.toolCallId) === 'approved'
+                      ? '(executed)'
+                      : 'The user denied permission to run this tool.',
+                  tool_call_id: c.toolCallId,
+                }),
+              ),
+            ],
+            model: turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            calls: outcome.pendingCalls,
+            decisions: new Map(),
+            resolving: false,
+          });
+        } else {
+          pendingTurns.delete(assistantMessageId);
+        }
+      } catch (error) {
+        pendingTurns.delete(assistantMessageId);
+        handleStreamError(error, {
+          assistantMessageId,
+          model: turn.model,
+          conversationId: turn.conversationId,
+          isTemporaryConversation: turn.isTemporaryConversation,
+          authToken,
+          setError,
+          stopStreaming,
+          setLoading,
+          updateMessage,
+        });
+      }
+    },
+    [getToken],
+  );
+}
+
+// ─── Error handling shared by sendMessage + resolveToolApproval ─────────────
+
+interface StreamErrorContext {
+  assistantMessageId: string;
+  model: string;
+  conversationId: string;
+  isTemporaryConversation: boolean;
+  authToken: string;
+  setError: (message: string | null) => void;
+  stopStreaming: () => void;
+  setLoading: (loading: boolean) => void;
+  updateMessage: (id: string, updates: Partial<Message>) => void;
+}
+
+function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
+  const {
+    assistantMessageId,
+    model,
+    conversationId,
+    isTemporaryConversation,
+    authToken,
+    setError,
+    stopStreaming,
+    setLoading,
+    updateMessage,
+  } = ctx;
+
+  if (error instanceof Error && error.name === 'AbortError') {
+    updateMessage(assistantMessageId, { isStreaming: false });
+    stopStreaming();
+    setLoading(false);
+    return;
+  }
+
+  const errorMessage = getVisibleErrorMessage(error);
+
+  // Mark any in-flight tool cards as failed (a mid-stream error leaves them
+  // running otherwise). awaiting_approval cards are left as-is.
+  const failing = useChatStore.getState().messages.find((m) => m.id === assistantMessageId)
+    ?.metadata?.tools;
+  if (failing && failing.some((t) => t.status === 'pending' || t.status === 'running')) {
+    useChatStore.getState().setToolTimeline(
+      assistantMessageId,
+      failing.map((t) =>
+        t.status === 'pending' || t.status === 'running'
+          ? { ...t, status: 'failed' as const, error: errorMessage }
+          : { ...t },
+      ),
+    );
+  }
+
+  const errorCode = error instanceof ChatApiError ? error.code : undefined;
+  if (isFreeTrialErrorCode(errorCode)) {
+    if (errorCode === 'website_trial_prompt_limit_reached') {
+      useFreeTrialStore.getState().markExhausted();
+    }
+    updateMessage(assistantMessageId, {
+      isStreaming: false,
+      content: '',
+      error: false,
+      metadata: {
+        paywall: buildFreeTrialPaywallSlot(errorCode, errorMessage),
+      },
+    });
+    setError(errorMessage);
+    stopStreaming();
+    setLoading(false);
+    return;
+  }
+
+  const errorContent = buildAssistantErrorContent(errorMessage);
+  updateMessage(assistantMessageId, {
+    isStreaming: false,
+    content: errorContent,
+    error: true,
+  });
+  setError(errorMessage);
+
+  if (!isTemporaryConversation) {
+    saveMessageToDb(
+      conversationId,
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: errorContent,
+        model,
+      },
+      authToken,
+    )
+      .then((saved) => {
+        if (saved?.id && saved.id !== assistantMessageId) {
+          updateMessage(assistantMessageId, { id: saved.id });
+        }
+      })
+      .catch((err) => notifyPersistenceFailure('assistant', err));
+  }
+
+  stopStreaming();
+  setLoading(false);
 }
