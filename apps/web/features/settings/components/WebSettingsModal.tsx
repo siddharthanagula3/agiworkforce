@@ -22,7 +22,7 @@
  *   plugins      -> PluginsPanel    (built-in to shared shell via adapter)
  */
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
 import type { SettingsDataAdapter, SettingsSkill } from '@agiworkforce/ui';
@@ -89,6 +89,16 @@ const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
 
 // ---------------------------------------------------------------------------
 // Connector catalog -> SettingsConnector shape
+//
+// HONEST WEB SEMANTICS (known-flaws WEB-CONNECTORS row): the catalog's
+// `exclusive` connectors are local-only (filesystem/terminal/browser/vision/
+// ollama) — the cloud web server cannot run them, so they are excluded
+// entirely. For everything else, POST /api/connectors deliberately 501s
+// (no per-provider authorization flow is implemented on web yet), so NO
+// connector renders a Connect button here (canConnect: false) — the table
+// shows a truthful status label instead of a button that is known to fail.
+// Connected state still renders from real data: active user_connectors rows
+// (GET /api/connectors) and, for GitHub, real GitHub App installations.
 // ---------------------------------------------------------------------------
 
 const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
@@ -101,6 +111,8 @@ const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
   phase: c.phase,
   iconBg: c.iconBg,
   iconText: c.iconText,
+  canConnect: false,
+  statusLabel: c.phase > 1 ? 'Coming soon' : 'Not yet available on web',
 }));
 
 // ---------------------------------------------------------------------------
@@ -170,9 +182,19 @@ export function WebSettingsModal({
   );
 
   // ── Connected connectors state ─────────────────────────────────────────────
+  // Two REAL sources (no optimistic fakery):
+  //   1. Active user_connectors rows (GET /api/connectors) — the per-user
+  //      enablement gate.
+  //   2. GitHub App installations (GET /api/github/installations) — GitHub
+  //      cannot have a user_connectors row (known-flaws WEB-CONNECTORS row);
+  //      the installation IS the real "connected" signal, matching what the
+  //      chat tool loop actually offers.
 
   const [connectedConnectors, setConnectedConnectors] = useState<
     { connectorId: string; connectedAt?: string }[]
+  >([]);
+  const [githubInstallations, setGithubInstallations] = useState<
+    { installation_id: number; created_at?: string }[]
   >([]);
 
   useEffect(() => {
@@ -189,55 +211,88 @@ export function WebSettingsModal({
       .catch(() => {
         // degrade gracefully
       });
+    fetch('/api/github/installations', { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const json = (await res.json()) as {
+          installations: Array<{ installation_id: number; created_at?: string }>;
+        };
+        if (!cancelled) setGithubInstallations(json.installations ?? []);
+      })
+      .catch(() => {
+        // degrade gracefully
+      });
     return () => {
       cancelled = true;
     };
   }, [open]);
 
+  const mergedConnectedConnectors = useMemo(() => {
+    const rows = connectedConnectors.filter((c) => c.connectorId !== 'github');
+    if (githubInstallations.length > 0) {
+      rows.push({ connectorId: 'github', connectedAt: githubInstallations[0]?.created_at });
+    }
+    return rows;
+  }, [connectedConnectors, githubInstallations]);
+
   const connectConnector = useCallback(async (id: string) => {
+    // Web has no working per-provider authorization flow yet, so the catalog
+    // is mapped with canConnect: false and the shared panel never invokes
+    // this. Kept non-optimistic for when a real flow lands: POST first, only
+    // reflect state the server confirmed, surface failures to the panel.
     const connector = SETTINGS_CONNECTORS.find((c) => c.id === id);
     if (!connector) return;
-    setConnectedConnectors((prev) => [
-      ...prev,
-      { connectorId: id, connectedAt: new Date().toISOString() },
-    ]);
-    try {
-      const csrfToken = await getCsrfToken();
-      const res = await fetch('/api/connectors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-        body: JSON.stringify({ connectorId: id, authType: connector.authType }),
-      });
-      if (!res.ok) {
-        setConnectedConnectors((prev) => prev.filter((c) => c.connectorId !== id));
-      }
-    } catch {
-      setConnectedConnectors((prev) => prev.filter((c) => c.connectorId !== id));
+    const csrfToken = await getCsrfToken();
+    const res = await fetch('/api/connectors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+      body: JSON.stringify({ connectorId: id, authType: connector.authType }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? `Could not connect ${connector.name}.`);
     }
+    const json = (await res.json()) as {
+      connector: { connectorId: string; connectedAt?: string };
+    };
+    setConnectedConnectors((prev) => [
+      ...prev.filter((c) => c.connectorId !== id),
+      { connectorId: json.connector.connectorId, connectedAt: json.connector.connectedAt },
+    ]);
   }, []);
 
-  const disconnectConnector = useCallback(async (id: string) => {
-    setConnectedConnectors((prev) => prev.filter((c) => c.connectorId !== id));
-    try {
+  const disconnectConnector = useCallback(
+    async (id: string) => {
       const csrfToken = await getCsrfToken();
+      if (id === 'github') {
+        // GitHub "connected" state is its App installations; disconnect
+        // removes each installation via the real installations endpoint.
+        for (const installation of githubInstallations) {
+          const res = await fetch('/api/github/installations', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+            credentials: 'include',
+            body: JSON.stringify({ installationId: installation.installation_id }),
+          });
+          if (!res.ok) {
+            throw new Error('Could not disconnect GitHub. Try again.');
+          }
+        }
+        setGithubInstallations([]);
+        return;
+      }
       const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: { 'x-csrf-token': csrfToken },
         credentials: 'include',
       });
       if (!res.ok) {
-        const refetch = await fetch('/api/connectors', { credentials: 'include' });
-        if (refetch.ok) {
-          const json = (await refetch.json()) as {
-            connectors: Array<{ connectorId: string; connectedAt?: string }>;
-          };
-          setConnectedConnectors(json.connectors ?? []);
-        }
+        throw new Error('Could not disconnect. Try again.');
       }
-    } catch {
-      // leave optimistic state
-    }
-  }, []);
+      setConnectedConnectors((prev) => prev.filter((c) => c.connectorId !== id));
+    },
+    [githubInstallations],
+  );
 
   // ── Skills state ───────────────────────────────────────────────────────────
 
@@ -278,11 +333,24 @@ export function WebSettingsModal({
 
   // ── Data adapter ───────────────────────────────────────────────────────────
 
+  // Custom remote-MCP connectors have NO web persistence today:
+  // /api/connectors allowlists catalog IDs (arbitrary IDs are rejected) and
+  // remote-MCP endpoints are operator-configured server-side (known-flaws
+  // WEB-CONNECTORS row). The form renders per spec, but submitting must be
+  // honest — throw so the shared form surfaces the message, never a fake
+  // success.
+  const addCustomConnector = useCallback(async () => {
+    throw new Error(
+      'Custom connectors are not yet supported on web. Remote MCP servers are configured by the operator today.',
+    );
+  }, []);
+
   const adapter: SettingsDataAdapter = {
     connectors: SETTINGS_CONNECTORS,
-    connectedConnectors,
+    connectedConnectors: mergedConnectedConnectors,
     connectConnector,
     disconnectConnector,
+    addCustomConnector,
     skills,
     skillsLoading,
     plugins: [],

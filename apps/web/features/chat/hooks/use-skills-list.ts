@@ -27,7 +27,6 @@ export interface UseSkillsListResult {
 /**
  * Shared hook for browsing skills. Fetches metadata from /api/skills on mount
  * and lazily loads skill bodies on demand. Used by DirectoryModal and CustomizePage.
- * (SkillsMenu in the composer uses its own local fetch for the list-picker UX.)
  */
 export function useSkillsList(): UseSkillsListResult {
   const [skills, setSkills] = useState<SkillItem[]>([]);
