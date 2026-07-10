@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Switch, Button } from '@agiworkforce/ui';
+import { Switch } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
   fetchPreferenceNamespace,
@@ -141,10 +141,12 @@ export function CapabilitiesSection() {
           >
             View and manage memory
           </Link>
-
-          <Button variant="outline" size="sm" asChild className="text-xs">
-            <Link href="/settings/memory#import">Import memory from other AI providers</Link>
-          </Button>
+          {/*
+            The "Import memory from other AI providers" row was removed: the web
+            import flow is a placeholder (no working provider import endpoint), so
+            surfacing a Start-import control would be a dead/fake control. It will
+            return here once the import backend ships.
+          */}
         </div>
       </section>
 
@@ -192,6 +194,14 @@ export function CapabilitiesSection() {
           />,
         )}
       </section>
+
+      <p className="text-xs text-muted-foreground">
+        Skills have moved to{' '}
+        <Link href="/skills" className="text-[var(--chat-accent-primary)] hover:underline">
+          Customize → Skills
+        </Link>
+        .
+      </p>
     </div>
   );
 }

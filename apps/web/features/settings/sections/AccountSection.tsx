@@ -2,9 +2,31 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useClerk } from '@clerk/nextjs';
+import { useClerk, useSession } from '@clerk/nextjs';
 import { Copy, Check, LogOut, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+
+function formatDateTime(value: Date | null | undefined): string {
+  if (!value) return '—';
+  return value.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 export function AccountSection() {
   // Read from the real, populated auth store (the one the sidebar/header use)
@@ -13,6 +35,8 @@ export function AccountSection() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { signOut: clerkSignOut } = useClerk();
+  // Live Clerk session — the source for the current device's real timestamps.
+  const { session } = useSession();
   const router = useRouter();
 
   const orgId = user?.id ?? null;
@@ -38,11 +62,8 @@ export function AccountSection() {
     try {
       // Use the SAME sign-out path as the sidebar's "Log out" (useAuthStore.logout()
       // followed by Clerk's signOut). useAuthStore.logout() calls cleanupAllStores(),
-      // which clears the per-user localStorage-backed stores (workforce, mission,
-      // notifications, chat, multi-agent chat, usage warnings, artifacts, layout,
-      // settings, user profile). The old useBillingStore.signOut() path only reset
-      // useChatStore, leaving the rest of those stores populated with the previous
-      // user's data for the next signed-in session.
+      // which clears the per-user localStorage-backed stores. Clerk's signOut with no
+      // sessionId ends all sessions for this browser.
       await logout();
       await clerkSignOut({ redirectUrl: '/login' });
     } catch (err) {
@@ -51,19 +72,67 @@ export function AccountSection() {
     }
   }, [logout, clerkSignOut]);
 
+  // ── Delete account (canonical, working flow on this surface) ───────────────
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSucceeded, setDeleteSucceeded] = useState(false);
+  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string | null>(null);
+
+  const handleDeleteAccount = useCallback(async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+      const res = await fetch('/api/user/delete-account', { method: 'DELETE', headers });
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          data !== null && typeof data === 'object' && 'error' in data
+            ? String((data as { error?: unknown }).error)
+            : 'Account deletion failed.';
+        throw new Error(msg);
+      }
+      const serverMessage =
+        data !== null && typeof data === 'object' && 'message' in data
+          ? String((data as { message?: unknown }).message)
+          : null;
+      setDeleteSuccessMessage(
+        serverMessage ?? 'Your account deletion has been scheduled. You will be signed out now.',
+      );
+      setIsDeleting(false);
+      setDeleteSucceeded(true);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Account deletion failed.');
+      setIsDeleting(false);
+    }
+  }, []);
+
+  const handleDeleteSuccessContinue = useCallback(() => {
+    setShowDeleteDialog(false);
+    void (async () => {
+      await logout();
+      await clerkSignOut({ redirectUrl: '/' });
+      router.replace('/');
+    })();
+  }, [logout, clerkSignOut, router]);
+
+  // Current-session row derived from the live Clerk session. We do NOT invent
+  // extra device rows: Clerk's client SDK only exposes the active session, so
+  // showing more would be fabricated. Location is intentionally omitted (no
+  // geo-IP signal on the client) rather than filled with a fake value.
   const sessionRows: Array<{
     device: string;
-    location: string;
     created: string;
     updated: string;
     isCurrent: boolean;
-  }> = user
+  }> = session
     ? [
         {
           device: getDeviceLabel(),
-          location: 'Unknown',
-          created: 'Unknown',
-          updated: 'Now',
+          created: formatDateTime(session.createdAt),
+          updated: formatDateTime(session.lastActiveAt),
           isCurrent: true,
         },
       ]
@@ -159,7 +228,7 @@ export function AccountSection() {
         )}
       </section>
 
-      {/* Delete account */}
+      {/* Delete account — real, working flow (confirm dialog -> DELETE /api/user/delete-account) */}
       <section
         style={{
           border: '1px solid var(--settings-destructive)',
@@ -194,22 +263,19 @@ export function AccountSection() {
               Delete account
             </p>
             <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-              Deleting your account is handled from the General section&apos;s Danger Zone.
+              To delete your account and all associated data, confirm below. This cannot be undone.
             </p>
           </div>
-          {/*
-            This surface intentionally has no delete-account implementation of its
-            own. GeneralSection's Danger Zone (data-testid="danger-zone") is the one
-            canonical, working delete flow (confirm-text dialog -> DELETE
-            /api/user/delete-account); PrivacySection has its own separate working
-            copy. Rather than adding a third drifted implementation here, this just
-            routes to the canonical section via the modal's own client-side router
-            (same mechanism WebSettingsModal's rail uses for section switching), so
-            it stays inside the Settings modal instead of doing a full page nav.
-          */}
           <button
             type="button"
-            onClick={() => router.push('/settings/general')}
+            data-testid="delete-account-trigger"
+            onClick={() => {
+              setDeleteConfirmInput('');
+              setDeleteError(null);
+              setDeleteSucceeded(false);
+              setDeleteSuccessMessage(null);
+              setShowDeleteDialog(true);
+            }}
             style={{
               flexShrink: 0,
               display: 'inline-flex',
@@ -352,7 +418,7 @@ export function AccountSection() {
                     background: 'var(--bg-hover, rgba(255,255,255,0.03))',
                   }}
                 >
-                  {['Device', 'Location', 'Created', 'Updated'].map((col) => (
+                  {['Device', 'Created', 'Last active'].map((col) => (
                     <th
                       key={col}
                       style={{
@@ -400,7 +466,6 @@ export function AccountSection() {
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-3)' }}>{row.location}</td>
                     <td
                       style={{ padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
                     >
@@ -417,7 +482,92 @@ export function AccountSection() {
             </table>
           </div>
         )}
+        <p style={{ padding: '12px 20px 16px', fontSize: 11, color: 'var(--text-3)', margin: 0 }}>
+          Showing the session for this device. Use &ldquo;Log out of all devices&rdquo; above to end
+          every active session.
+        </p>
       </section>
+
+      {/* Deletion confirmation dialog */}
+      <AlertDialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          if (!isDeleting && !deleteSucceeded) setShowDeleteDialog(open);
+        }}
+      >
+        <AlertDialogContent>
+          {deleteSucceeded ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle data-testid="delete-account-success-title">
+                  Account deletion scheduled
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {deleteSuccessMessage ??
+                    'Your account deletion has been scheduled. You will be signed out now.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogAction
+                  data-testid="delete-account-success-continue"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleDeleteSuccessContinue();
+                  }}
+                >
+                  Continue
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete your account and all associated data. There is a
+                  24-hour grace window before deletion completes. After that, this action cannot be
+                  reversed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="py-1">
+                <label
+                  htmlFor="account-delete-confirm-input"
+                  className="mb-2 block text-[13px] text-foreground"
+                >
+                  Type <strong>DELETE</strong> to confirm:
+                </label>
+                <input
+                  id="account-delete-confirm-input"
+                  type="text"
+                  value={deleteConfirmInput}
+                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                  placeholder="DELETE"
+                  autoComplete="off"
+                  data-testid="delete-confirm-input"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                />
+                {deleteError !== null && (
+                  <p className="mt-2 text-xs text-destructive">{deleteError}</p>
+                )}
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="delete-account-confirm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void handleDeleteAccount();
+                  }}
+                  disabled={deleteConfirmInput !== 'DELETE' || isDeleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete account'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
