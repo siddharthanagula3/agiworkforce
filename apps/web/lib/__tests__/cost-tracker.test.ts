@@ -245,6 +245,22 @@ describe('worked cost examples — all token classes, per provider', () => {
     expect(getModelUsageReport(SESSION_A).get('claude-opus-4.8')!.costUsd).toBeCloseTo(36.55, 6);
   });
 
+  it('anthropic 1h cache write bills at 2x input; the 5m remainder at 1.25x', () => {
+    // claude-sonnet-4-6: input=$3/M, no catalog cached_write.
+    //   1h write 400k * (3 * 2.0  = $6.00/M) /1e6 = $2.40
+    //   5m write 600k * (3 * 1.25 = $3.75/M) /1e6 = $2.25   (1M total − 400k @ 1h)
+    //   total = $4.65
+    // Exercises the 2x 1h premium explicitly — the other examples leave
+    // cacheCreation1hInputTokens at 0, so only this case can fail on that rate.
+    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationInputTokens: 1_000_000,
+      cacheCreation1hInputTokens: 400_000,
+    });
+    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-4-6')!.costUsd).toBeCloseTo(4.65, 6);
+  });
+
   it('openai (inclusive prompt): cached subset subtracted from input, read at 0.1x fallback', () => {
     // gpt-5.5: input=$5/M, output=$30/M, no catalog cached_input → read = 0.1*5 = $0.5/M.
     // OpenAI prompt_tokens INCLUDE the cached hits, so the cached subset is
