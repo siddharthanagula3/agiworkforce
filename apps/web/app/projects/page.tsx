@@ -4,11 +4,10 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ProjectGallery, ProjectCard, useChatProjectStore } from '@agiworkforce/unified-chat';
 import type { Project } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
 import { useProjectStore } from '@features/projects/stores/project-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { WebAppShell } from '@/components/layout/WebAppShell';
 
 /**
  * /projects · top-level Projects hub on web.
@@ -104,264 +103,248 @@ export default function ProjectsPage() {
   const useGallery = sortMode === 'updated';
 
   return (
-    <main
-      data-design="agi"
-      style={{
-        minHeight: '100vh',
-        background: 'var(--agi-bg-2)',
-        padding: '48px 32px',
-        color: 'var(--agi-ink)',
-      }}
-    >
-      <div
+    <WebAppShell>
+      <main
+        data-design="agi"
         style={{
-          maxWidth: 1040,
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
+          minHeight: '100%',
+          background: 'var(--agi-bg-2)',
+          padding: '48px 32px',
+          color: 'var(--agi-ink)',
         }}
       >
-        {/* Back navigation */}
-        <div style={{ marginBottom: 8 }}>
-          <Link
-            href="/chat"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 13,
-              color: 'var(--agi-ink-2)',
-              textDecoration: 'none',
-            }}
-          >
-            <ArrowLeft style={{ width: 14, height: 14 }} />
-            Back to Chat
-          </Link>
-        </div>
-
-        {/* Page header with sort control */}
         <div
           style={{
+            maxWidth: 1040,
+            margin: '0 auto',
             display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 16,
+            flexDirection: 'column',
+            gap: 24,
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <h1
-              style={{
-                fontFamily: 'var(--serif)',
-                fontSize: 28,
-                fontWeight: 500,
-                color: 'var(--agi-ink)',
-                margin: 0,
-              }}
-            >
-              Projects
-            </h1>
-            <p
-              style={{
-                fontSize: 14,
-                color: 'var(--agi-ink-2)',
-                margin: 0,
-                maxWidth: 640,
-                lineHeight: 1.55,
-              }}
-            >
-              Group related conversations under a shared project. Each project can carry its own
-              files, instructions, and chat history. Stored on this device in v1; cloud sync arrives
-              with Cloud Managed.
-            </p>
-          </div>
-
-          {/* Sort menu */}
-          <div ref={sortMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
-            <button
-              type="button"
-              data-testid="projects-sort-btn"
-              onClick={() => setSortMenuOpen((v) => !v)}
-              aria-expanded={sortMenuOpen}
-              aria-haspopup="menu"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 14px',
-                border: '1px solid var(--agi-rule-strong)',
-                borderRadius: 9999,
-                background: 'transparent',
-                color: 'var(--agi-ink-2)',
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span>Sort: {SORT_LABELS[sortMode]}</span>
-              <span style={{ fontSize: 10, opacity: 0.6 }}>&#9660;</span>
-            </button>
-
-            {sortMenuOpen && (
-              <div
-                role="menu"
-                aria-label="Sort projects by"
+          {/* Page header with sort control */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 16,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <h1
                 style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 4px)',
-                  right: 0,
-                  zIndex: 50,
-                  minWidth: 180,
-                  background: 'var(--agi-bg-3)',
-                  border: '1px solid var(--agi-rule-strong)',
-                  borderRadius: 10,
-                  boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
-                  overflow: 'hidden',
+                  fontFamily: 'var(--serif)',
+                  fontSize: 28,
+                  fontWeight: 500,
+                  color: 'var(--agi-ink)',
+                  margin: 0,
                 }}
               >
-                {(Object.entries(SORT_LABELS) as [SortMode, string][]).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    role="menuitem"
-                    data-testid={`projects-sort-${mode}`}
-                    onClick={() => {
-                      setSortMode(mode);
-                      setSortMenuOpen(false);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      width: '100%',
-                      padding: '9px 14px',
-                      background: 'transparent',
-                      border: 'none',
-                      textAlign: 'left',
-                      fontSize: 13,
-                      color: sortMode === mode ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
-                      fontWeight: sortMode === mode ? 600 : 400,
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                    }}
-                  >
-                    <span>{label}</span>
-                    {sortMode === mode && (
-                      <span style={{ fontSize: 12, color: 'var(--agi-amber)' }}>&#10003;</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                Projects
+              </h1>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: 'var(--agi-ink-2)',
+                  margin: 0,
+                  maxWidth: 640,
+                  lineHeight: 1.55,
+                }}
+              >
+                Group related conversations under a shared project. Each project can carry its own
+                files, instructions, and chat history. Stored on this device in v1; cloud sync
+                arrives with Cloud Managed.
+              </p>
+            </div>
 
-        {/* Backdrop to close menu on outside click */}
-        {sortMenuOpen && (
-          <div
-            style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-            onClick={() => setSortMenuOpen(false)}
-            aria-hidden
-          />
-        )}
+            {/* Sort menu */}
+            <div ref={sortMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+              <button
+                type="button"
+                data-testid="projects-sort-btn"
+                onClick={() => setSortMenuOpen((v) => !v)}
+                aria-expanded={sortMenuOpen}
+                aria-haspopup="menu"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 14px',
+                  border: '1px solid var(--agi-rule-strong)',
+                  borderRadius: 9999,
+                  background: 'transparent',
+                  color: 'var(--agi-ink-2)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span>Sort: {SORT_LABELS[sortMode]}</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>&#9660;</span>
+              </button>
 
-        <section
-          style={{
-            border: '1px solid var(--agi-rule)',
-            borderRadius: 16,
-            background: 'var(--agi-bg-3)',
-            padding: '20px 24px',
-            minHeight: 480,
-          }}
-        >
-          {useGallery ? (
-            /* Default sort: delegate to ProjectGallery (keeps search + create form) */
-            <ProjectGallery
-              title={null}
-              description=""
-              layout="grid"
-              onCreate={handleCreateProject}
-              onSelect={(project) => {
-                router.push(`/projects/${encodeURIComponent(project.id)}`);
-              }}
-              onEditProject={(project) => setEditProject(project)}
-              onArchiveProject={() => {
-                /* archive stays a local store mutation handled inside the gallery */
-              }}
-              onDeleteProject={(project) => {
-                void handleDeleteProjectServer(project.id);
-              }}
-            />
-          ) : (
-            /* Custom sort: render sorted ProjectCard grid */
-            <div>
-              {sortedProjects.length === 0 ? (
+              {sortMenuOpen && (
                 <div
+                  role="menu"
+                  aria-label="Sort projects by"
                   style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    padding: '48px 16px',
-                    textAlign: 'center',
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    right: 0,
+                    zIndex: 50,
+                    minWidth: 180,
+                    background: 'var(--agi-bg-3)',
+                    border: '1px solid var(--agi-rule-strong)',
+                    borderRadius: 10,
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+                    overflow: 'hidden',
                   }}
                 >
-                  <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
-                    No projects yet.
-                  </p>
-                  <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0, opacity: 0.7 }}>
-                    Switch to &ldquo;Updated (newest)&rdquo; sort to create one.
-                  </p>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                    gap: 12,
-                  }}
-                >
-                  {sortedProjects.map((project) => (
-                    <ProjectCard
-                      key={project.id}
-                      project={project}
-                      onSelect={(p) => {
-                        setActiveProject(p.id);
-                        router.push(`/projects/${encodeURIComponent(p.id)}`);
+                  {(Object.entries(SORT_LABELS) as [SortMode, string][]).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="menuitem"
+                      data-testid={`projects-sort-${mode}`}
+                      onClick={() => {
+                        setSortMode(mode);
+                        setSortMenuOpen(false);
                       }}
-                      onEdit={(p) => setEditProject(p)}
-                      onArchive={(p) => updateProject(p.id, { isArchived: true })}
-                      onDelete={(p) => void handleDeleteProjectServer(p.id)}
-                    />
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        padding: '9px 14px',
+                        background: 'transparent',
+                        border: 'none',
+                        textAlign: 'left',
+                        fontSize: 13,
+                        color: sortMode === mode ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
+                        fontWeight: sortMode === mode ? 600 : 400,
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      }}
+                    >
+                      <span>{label}</span>
+                      {sortMode === mode && (
+                        <span style={{ fontSize: 12, color: 'var(--agi-amber)' }}>&#10003;</span>
+                      )}
+                    </button>
                   ))}
                 </div>
               )}
             </div>
-          )}
-        </section>
-      </div>
+          </div>
 
-      {editProject && (
-        <ProjectSettingsDialog
-          open={!!editProject}
-          onOpenChange={(open) => {
-            if (!open) setEditProject(null);
-          }}
-          project={editProject}
-          onUpdate={(id, updates) => updateProject(id, updates)}
-          onDelete={(id) => {
-            removeProject(id);
-            setEditProject(null);
-          }}
-        />
-      )}
-    </main>
+          {/* Backdrop to close menu on outside click */}
+          {sortMenuOpen && (
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+              onClick={() => setSortMenuOpen(false)}
+              aria-hidden
+            />
+          )}
+
+          <section
+            style={{
+              border: '1px solid var(--agi-rule)',
+              borderRadius: 16,
+              background: 'var(--agi-bg-3)',
+              padding: '20px 24px',
+              minHeight: 480,
+            }}
+          >
+            {useGallery ? (
+              /* Default sort: delegate to ProjectGallery (keeps search + create form) */
+              <ProjectGallery
+                title={null}
+                description=""
+                layout="grid"
+                onCreate={handleCreateProject}
+                onSelect={(project) => {
+                  router.push(`/projects/${encodeURIComponent(project.id)}`);
+                }}
+                onEditProject={(project) => setEditProject(project)}
+                onArchiveProject={() => {
+                  /* archive stays a local store mutation handled inside the gallery */
+                }}
+                onDeleteProject={(project) => {
+                  void handleDeleteProjectServer(project.id);
+                }}
+              />
+            ) : (
+              /* Custom sort: render sorted ProjectCard grid */
+              <div>
+                {sortedProjects.length === 0 ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      padding: '48px 16px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
+                      No projects yet.
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0, opacity: 0.7 }}>
+                      Switch to &ldquo;Updated (newest)&rdquo; sort to create one.
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                      gap: 12,
+                    }}
+                  >
+                    {sortedProjects.map((project) => (
+                      <ProjectCard
+                        key={project.id}
+                        project={project}
+                        onSelect={(p) => {
+                          setActiveProject(p.id);
+                          router.push(`/projects/${encodeURIComponent(p.id)}`);
+                        }}
+                        onEdit={(p) => setEditProject(p)}
+                        onArchive={(p) => updateProject(p.id, { isArchived: true })}
+                        onDelete={(p) => void handleDeleteProjectServer(p.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+
+        {editProject && (
+          <ProjectSettingsDialog
+            open={!!editProject}
+            onOpenChange={(open) => {
+              if (!open) setEditProject(null);
+            }}
+            project={editProject}
+            onUpdate={(id, updates) => updateProject(id, updates)}
+            onDelete={(id) => {
+              removeProject(id);
+              setEditProject(null);
+            }}
+          />
+        )}
+      </main>
+    </WebAppShell>
   );
 }
