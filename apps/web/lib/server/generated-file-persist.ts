@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createHash } from 'crypto';
+import type { GeneratedFileSurface } from '@agiworkforce/services';
 import { storeMedia, isMediaStorageConfigured } from '@/lib/server/media-storage';
 import { insertMediaAsset, type MediaKind } from '@/lib/server/media-assets';
 import { logger } from '@/lib/logger';
@@ -42,6 +43,15 @@ export interface GeneratedFileWire {
   kind: string;
   /** SHA-256 of the stored bytes (hash in == hash out verification). */
   checksum_sha256: string;
+  /**
+   * UI-ownership classification, derived here at persistence time by
+   * `classifyGeneratedFile` (mime + extension, deterministic) — clients
+   * never re-derive it. See `GeneratedFileSurface` in the cloud contract
+   * for the taxonomy and its relationship to `kind`.
+   */
+  surface: GeneratedFileSurface;
+  /** Client may inline-render the bytes (images/charts, pdf, office/csv). */
+  previewable: boolean;
 }
 
 // Compile-time drift anchor: the emitted wire shape must stay assignable to
@@ -64,6 +74,105 @@ export function generatedFileKind(fileName: string, mime: string): string {
   if (mime.startsWith('image/')) return 'image';
   if (ext === 'zip' || ext === 'tar' || ext === 'gz') return 'archive';
   return 'other';
+}
+
+/** Classification of one generated file: which UI surface owns it. */
+export interface GeneratedFileClassification {
+  surface: GeneratedFileSurface;
+  previewable: boolean;
+}
+
+/**
+ * Source-text formats that render/edit in a panel surface ('artifact'):
+ * html, svg, markdown, mermaid, json, and code/plain text.
+ */
+const ARTIFACT_EXTENSIONS: ReadonlySet<string> = new Set([
+  'html',
+  'htm',
+  'md',
+  'markdown',
+  'mmd',
+  'mermaid',
+  'json',
+  'txt',
+  'tex',
+  'xml',
+  'yaml',
+  'yml',
+  'toml',
+  // Code text.
+  'py',
+  'js',
+  'jsx',
+  'ts',
+  'tsx',
+  'css',
+  'sh',
+  'bash',
+  'sql',
+  'rb',
+  'java',
+  'c',
+  'h',
+  'cpp',
+  'hpp',
+  'cs',
+  'go',
+  'rs',
+  'php',
+]);
+
+/**
+ * Download deliverables the web app can still inline-render (PDF viewer,
+ * docx/spreadsheet/presentation shared renderers in ArtifactPreview).
+ */
+const PREVIEWABLE_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
+  'pdf',
+  'docx',
+  'xlsx',
+  'pptx',
+  'csv',
+  'tsv',
+]);
+
+/**
+ * THE classification function for the artifact/file conceptual split
+ * (file-creation parity plan Wave A). Deterministic on mime + extension;
+ * runs server-side at persistence time only — every wire descriptor and
+ * `media_assets` metadata row gets its result, and clients treat it as
+ * authoritative instead of re-deriving.
+ *
+ *   - 'artifact': source text a panel can render/edit (html, svg, markdown,
+ *     mermaid, json, code/plain text). Always previewable.
+ *   - 'file' + previewable: byte deliverables with an inline renderer —
+ *     raster images/charts (how ChatGPT/Claude treat matplotlib PNGs:
+ *     downloadable file, inline preview), pdf, docx/xlsx/pptx/csv.
+ *   - 'file' + !previewable: archives and unknown binaries (download only).
+ */
+export function classifyGeneratedFile(fileName: string, mime: string): GeneratedFileClassification {
+  const ext = fileName.toLowerCase().split('.').pop() ?? '';
+  const mimeLower = mime.toLowerCase();
+  // SVG before the generic image/ check: editable source text, not raster.
+  if (ext === 'svg' || mimeLower.startsWith('image/svg')) {
+    return { surface: 'artifact', previewable: true };
+  }
+  if (ARTIFACT_EXTENSIONS.has(ext)) return { surface: 'artifact', previewable: true };
+  if (PREVIEWABLE_FILE_EXTENSIONS.has(ext)) return { surface: 'file', previewable: true };
+  if (mimeLower.startsWith('image/')) return { surface: 'file', previewable: true };
+  // Mime fallbacks for extension-less/unknown names. text/csv & tsv are
+  // spreadsheet deliverables, checked before the generic text/* artifact rule.
+  if (mimeLower === 'text/csv' || mimeLower === 'text/tab-separated-values') {
+    return { surface: 'file', previewable: true };
+  }
+  if (mimeLower === 'application/pdf') return { surface: 'file', previewable: true };
+  if (
+    mimeLower.startsWith('text/') ||
+    mimeLower === 'application/json' ||
+    mimeLower === 'application/xml'
+  ) {
+    return { surface: 'artifact', previewable: true };
+  }
+  return { surface: 'file', previewable: false };
 }
 
 function mediaKindFor(mime: string): MediaKind {
@@ -103,6 +212,7 @@ export async function persistGeneratedFileBytes(params: {
 
   try {
     const kind = mediaKindFor(mimeType);
+    const classification = classifyGeneratedFile(filename, mimeType);
     const checksum = createHash('sha256').update(data).digest('hex');
     const stored = await storeMedia({ userId, kind, data, contentType: mimeType });
     const assetId = await insertMediaAsset({
@@ -120,6 +230,10 @@ export async function persistGeneratedFileBytes(params: {
         filename,
         origin,
         checksumSha256: checksum,
+        // Persisted so the library page (Wave D) can filter artifact vs
+        // file without re-deriving classification from mime/extension.
+        surface: classification.surface,
+        previewable: classification.previewable,
         ...(params.extraMetadata ?? {}),
       },
     });
@@ -137,6 +251,8 @@ export async function persistGeneratedFileBytes(params: {
         byte_count: stored.byteSize,
         kind: generatedFileKind(filename, mimeType),
         checksum_sha256: checksum,
+        surface: classification.surface,
+        previewable: classification.previewable,
       },
     };
   } catch (err) {
