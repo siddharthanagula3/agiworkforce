@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { WaitlistModalProvider, WaitlistTrigger } from './WaitlistModal';
 
 const mockJoinPublicWaitlist = vi.fn();
@@ -11,6 +11,32 @@ vi.mock('@/lib/services/waitlistServiceClient', () => ({
 describe('WaitlistModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    try {
+      window.sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+  });
+
+  it('does not auto-open when the demo kill-switch env flag is set', () => {
+    vi.useFakeTimers();
+    const prev = process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'];
+    process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'] = '1';
+    try {
+      render(
+        <WaitlistModalProvider>
+          <span>app</span>
+        </WaitlistModalProvider>,
+      );
+      // Advance well past the 5s auto-prompt delay; the modal must stay closed.
+      act(() => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(screen.queryByText(/request team & enterprise access/i)).not.toBeInTheDocument();
+    } finally {
+      process.env['NEXT_PUBLIC_DISABLE_WAITLIST_AUTOPROMPT'] = prev;
+      vi.useRealTimers();
+    }
   });
 
   it('renders a /waitlist link fallback when no provider is mounted', () => {
