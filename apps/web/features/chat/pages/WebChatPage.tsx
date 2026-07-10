@@ -25,6 +25,7 @@ import {
   X as XIcon,
   Settings,
   ChevronUp,
+  ChevronDown,
   ChevronRight,
   CreditCard,
   Download,
@@ -32,6 +33,9 @@ import {
   Keyboard,
   Globe,
   LogOut,
+  Pencil,
+  Trash2,
+  FolderInput,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
@@ -65,6 +69,7 @@ import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcuts
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
+import { SidebarWordmark } from '@/components/agi/SidebarWordmark';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
@@ -359,6 +364,11 @@ export default function WebChatPage() {
   // work with the shared <Sidebar> component (which has no dialog state).
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
+
+  // Header conversation-title inline rename state. When renaming, the centered
+  // title becomes an <input>; committing calls handleRenameSession.
+  const [isRenamingTitle, setIsRenamingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
 
   // Project settings dialog state (opened from sidebar row context menu)
   const [projectSettingsId, setProjectSettingsId] = useState<string | null>(null);
@@ -1159,6 +1169,21 @@ export default function WebChatPage() {
     [updateConversation],
   );
 
+  // Header title dropdown → Rename: seed the inline input with the current title.
+  const startTitleRename = useCallback(() => {
+    setTitleDraft(activeConversationTitle ?? '');
+    setIsRenamingTitle(true);
+  }, [activeConversationTitle]);
+
+  // Commit the inline header rename (Enter / blur). No-ops on empty/unchanged.
+  const commitTitleRename = useCallback(() => {
+    const next = titleDraft.trim();
+    if (displayedConversationId && next && next !== activeConversationTitle) {
+      handleRenameSession(displayedConversationId, next);
+    }
+    setIsRenamingTitle(false);
+  }, [titleDraft, displayedConversationId, activeConversationTitle, handleRenameSession]);
+
   // ---------------------------------------------------------------------------
   // Project sidebar row handlers
   // ---------------------------------------------------------------------------
@@ -1782,6 +1807,7 @@ export default function WebChatPage() {
         isLoading={isLoading && conversations.length === 0}
         error={conversations.length === 0 ? chatError : null}
         mode="cloud"
+        headerSlot={<SidebarWordmark />}
         onNewChat={handleNewChat}
         onToggleCollapse={handleToggleSidebar}
         onOpenSearch={handleOpenSearch}
@@ -1833,11 +1859,84 @@ export default function WebChatPage() {
               )}
             </div>
 
-            {/* Conversation title - centered in header when in an active chat */}
+            {/* Conversation title - centered in header when in an active chat.
+                A dropdown trigger (chevron) exposes Rename / Move to project /
+                Delete; Rename swaps the title for an inline input. */}
             {activeConversationTitle && activeConversationTitle !== 'New Chat' && (
-              <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 max-w-[40%] truncate text-sm font-medium text-[var(--chat-text-secondary)]">
-                {activeConversationTitle}
-              </h1>
+              <div className="absolute left-1/2 flex max-w-[46%] -translate-x-1/2 items-center">
+                {isRenamingTitle ? (
+                  <input
+                    autoFocus
+                    aria-label="Rename conversation"
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={commitTitleRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitTitleRename();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setIsRenamingTitle(false);
+                      }
+                    }}
+                    className="w-[240px] max-w-full rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-center text-sm font-medium text-[var(--chat-text-primary)] outline-none focus:ring-2 focus:ring-primary"
+                  />
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Conversation options"
+                        className="flex min-w-0 items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-black/[0.04] hover:text-[var(--chat-text-primary)] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <span className="truncate">{activeConversationTitle}</span>
+                        <ChevronDown
+                          className="h-3.5 w-3.5 shrink-0 opacity-60"
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="w-52">
+                      <DropdownMenuItem onSelect={() => startTitleRename()}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Rename
+                      </DropdownMenuItem>
+                      {sidebarProjects.length > 0 && displayedConversationId && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <FolderInput className="mr-2 h-4 w-4" />
+                            Move to project
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
+                            {sidebarProjects.map((p) => (
+                              <DropdownMenuItem
+                                key={p.id}
+                                onSelect={() =>
+                                  handleMoveToProjectSession(displayedConversationId, p.id)
+                                }
+                              >
+                                <span className="truncate">{p.name}</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => {
+                          if (displayedConversationId)
+                            void handleDeleteSession(displayedConversationId);
+                        }}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             )}
 
             <div className="flex items-center gap-1.5">

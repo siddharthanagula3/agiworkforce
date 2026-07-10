@@ -467,8 +467,12 @@ export function Sidebar(props: SidebarProps) {
         )}
         style={{ width }}
       >
-        {/* Header: collapse + compose + search */}
+        {/* Header: brand wordmark (optional) + collapse + compose + search */}
         <div className="border-b border-[hsl(var(--border))] p-4">
+          {/* Brand row — only rendered when a surface supplies a headerSlot
+              (e.g. the web app-shell wordmark). Surfaces that pass no headerSlot
+              stay byte-identical to the previous layout. */}
+          {headerSlot && <div className="mb-3 flex items-center">{headerSlot}</div>}
           <div className="mb-3 flex items-center justify-between">
             <button
               type="button"
@@ -479,7 +483,6 @@ export function Sidebar(props: SidebarProps) {
               <PanelLeft className="h-4 w-4" />
             </button>
             <div className="flex items-center gap-1.5">
-              {headerSlot}
               <button
                 type="button"
                 onClick={onNewChat}
