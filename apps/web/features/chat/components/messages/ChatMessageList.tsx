@@ -25,8 +25,9 @@ import { InlinePaywallCard } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ArrowRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { isMessageContinuable } from '../../lib/continue-generation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +42,15 @@ export interface ChatMessageListProps {
   messages: ChatMessage[];
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
+  /**
+   * Continue Generation: called with the LAST assistant message's id when it
+   * ended early (truncated at the token cap, or user-stopped with partial
+   * text) and the user clicks the Continue button rendered below it. The
+   * affordance only appears when this callback is provided AND the message is
+   * continuable (metadata.finishReason 'length'/'max_tokens'/'stopped' with
+   * non-empty content) — surfaces that don't opt in see no behavior change.
+   */
+  onContinue?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
@@ -356,6 +366,7 @@ const ChatMessageListComponent = ({
   messages,
   isLoading,
   onRegenerate,
+  onContinue,
   onEdit,
   onDelete,
   onReact,
@@ -390,6 +401,14 @@ const ChatMessageListComponent = ({
   );
 
   const showTypingIndicator = isLoading && messages.length > 0 && !lastMessage?.isStreaming;
+
+  /**
+   * Continue Generation (ChatGPT/Claude parity): offered ONLY on the last
+   * message, only when it is a continuable assistant turn (truncated or
+   * user-stopped with partial text — see isMessageContinuable), and never
+   * while a request is in flight. No fake availability.
+   */
+  const showContinue = Boolean(onContinue && !isLoading && isMessageContinuable(lastMessage));
 
   /** Show follow-up suggestions when last message is a completed assistant reply */
   const showFollowUps =
@@ -515,6 +534,22 @@ const ChatMessageListComponent = ({
             );
           })}
 
+          {/* Continue Generation button · below the truncated/stopped last
+              assistant message (ChatGPT/Claude placement). */}
+          {showContinue && lastMessage && (
+            <div className="px-4 pt-1 md:px-12 lg:px-20">
+              <button
+                type="button"
+                onClick={() => onContinue?.(lastMessage.id)}
+                className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                aria-label="Continue generating this response"
+              >
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                Continue generating
+              </button>
+            </div>
+          )}
+
           {/* Typing indicator while waiting for the first streaming chunk */}
           <AnimatePresence>
             {showTypingIndicator && (
@@ -574,6 +609,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.isLoading === next.isLoading &&
     prev.isUserTyping === next.isUserTyping &&
     prev.onRegenerate === next.onRegenerate &&
+    prev.onContinue === next.onContinue &&
     prev.onDelete === next.onDelete &&
     prev.onReact === next.onReact &&
     prev.onRegenerateImage === next.onRegenerateImage &&
@@ -594,6 +630,9 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
         prevMeta?.isThinkingStreaming === nextMeta?.isThinkingStreaming &&
         prevMeta?.reaction === nextMeta?.reaction &&
         prevMeta?.paywall === nextMeta?.paywall &&
+        // Continue affordance: a finishReason patch can arrive on its own store
+        // update (after the isStreaming flip), so it must invalidate the memo.
+        prevMeta?.finishReason === nextMeta?.finishReason &&
         prevMeta?.tools?.length === nextMeta?.tools?.length &&
         prevMeta?.tools?.at(-1)?.status === nextMeta?.tools?.at(-1)?.status &&
         prevMeta?.isSearching === nextMeta?.isSearching &&

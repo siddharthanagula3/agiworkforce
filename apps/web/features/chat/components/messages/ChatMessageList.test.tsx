@@ -391,3 +391,94 @@ describe('ChatMessageList message grouping', () => {
     expect(assistantGroups).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Continue Generation button (task #88)
+// ---------------------------------------------------------------------------
+
+describe('ChatMessageList Continue Generation', () => {
+  const continueButton = () =>
+    screen.queryByRole('button', { name: /continue generating this response/i });
+
+  function truncatedThread(finishReason: string, content = 'partial answer') {
+    return [
+      makeMessage({ id: 'u1', role: 'user', content: 'write something long' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content,
+        metadata: { finishReason },
+      }),
+    ];
+  }
+
+  it("shows Continue below a token-cap-truncated last assistant message (finish_reason 'length')", () => {
+    render(<ChatMessageList messages={truncatedThread('length')} onContinue={vi.fn()} />);
+    expect(continueButton()).toBeInTheDocument();
+  });
+
+  it("shows Continue for a user-stopped last message with partial content ('stopped')", () => {
+    render(<ChatMessageList messages={truncatedThread('stopped')} onContinue={vi.fn()} />);
+    expect(continueButton()).toBeInTheDocument();
+  });
+
+  it('calls onContinue with the last assistant message id', () => {
+    const onContinue = vi.fn();
+    render(<ChatMessageList messages={truncatedThread('max_tokens')} onContinue={onContinue} />);
+    fireEvent.click(continueButton()!);
+    expect(onContinue).toHaveBeenCalledWith('a1');
+  });
+
+  it('does NOT show Continue on a normally-completed turn', () => {
+    render(<ChatMessageList messages={truncatedThread('stop')} onContinue={vi.fn()} />);
+    expect(continueButton()).not.toBeInTheDocument();
+  });
+
+  it('does NOT show Continue when there is no recorded finish reason', () => {
+    const messages = [
+      makeMessage({ id: 'u1', role: 'user', content: 'q' }),
+      makeMessage({ id: 'a1', role: 'assistant', content: 'complete answer' }),
+    ];
+    render(<ChatMessageList messages={messages} onContinue={vi.fn()} />);
+    expect(continueButton()).not.toBeInTheDocument();
+  });
+
+  it('does NOT show Continue when the partial content is empty (no fake availability)', () => {
+    render(<ChatMessageList messages={truncatedThread('stopped', '')} onContinue={vi.fn()} />);
+    expect(continueButton()).not.toBeInTheDocument();
+  });
+
+  it('does NOT show Continue when the truncated message is not the last one', () => {
+    const messages = [
+      ...truncatedThread('length'),
+      makeMessage({ id: 'u2', role: 'user', content: 'never mind, new question' }),
+    ];
+    render(<ChatMessageList messages={messages} onContinue={vi.fn()} />);
+    expect(continueButton()).not.toBeInTheDocument();
+  });
+
+  it('does NOT show Continue while a request is in flight or while streaming', () => {
+    const { rerender } = render(
+      <ChatMessageList messages={truncatedThread('length')} onContinue={vi.fn()} isLoading />,
+    );
+    expect(continueButton()).not.toBeInTheDocument();
+
+    const streaming = [
+      makeMessage({ id: 'u1', role: 'user', content: 'q' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content: 'partial',
+        isStreaming: true,
+        metadata: { finishReason: 'length' },
+      }),
+    ];
+    rerender(<ChatMessageList messages={streaming} onContinue={vi.fn()} />);
+    expect(continueButton()).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the affordance when the surface has not opted in (no onContinue)', () => {
+    render(<ChatMessageList messages={truncatedThread('length')} />);
+    expect(continueButton()).not.toBeInTheDocument();
+  });
+});
