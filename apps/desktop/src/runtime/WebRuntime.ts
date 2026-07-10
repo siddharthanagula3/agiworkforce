@@ -14,12 +14,14 @@
 import type {
   ChatRuntime,
   Artifact,
+  GeneratedFileEntry,
   SendMessageOptions,
   StreamCallback,
   StreamEvent,
   WebSearchResult,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
+import { parseGeneratedFilesDelta, resolveGeneratedFileUri } from '@agiworkforce/services';
 import {
   listCloudConversations,
   createCloudConversation,
@@ -27,6 +29,7 @@ import {
   deleteCloudConversation,
   updateCloudConversationTitle,
   sendCloudMessage,
+  CLOUD_API_BASE_URL,
   type CloudConversation,
   type CloudMessage,
 } from '../api/cloudApi';
@@ -114,6 +117,24 @@ function mapSearchPayload(payload: unknown): WebSearchResult | null {
     resultCount: resultItems.length,
     status: errorEntry ? 'failed' : 'completed',
   };
+}
+
+/**
+ * Map an `x_generated_files` delta payload onto UI entries. Wire uris are
+ * relative same-origin paths (`/api/files/{id}`); resolve them against the
+ * desktop cloud base URL (empty on the embedded web build, where the browser
+ * resolves against the current origin). Exported for unit tests.
+ */
+export function mapGeneratedFilesPayload(payload: unknown): GeneratedFileEntry[] {
+  return parseGeneratedFilesDelta(payload).map((f) => ({
+    id: f.id,
+    fileName: f.file_name,
+    mimeType: f.mime_type,
+    uri: resolveGeneratedFileUri(f.uri, CLOUD_API_BASE_URL),
+    byteCount: f.byte_count,
+    kind: f.kind,
+    ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +295,12 @@ export class WebRuntime implements ChatRuntime {
           const search = mapSearchPayload(searchPayload);
           if (search) {
             this.emit({ type: 'search_results', search });
+          }
+
+          // Managed-cloud sandbox files (emitted once before [DONE]).
+          const generatedFiles = mapGeneratedFilesPayload(delta?.['x_generated_files']);
+          if (generatedFiles.length > 0) {
+            this.emit({ type: 'generated_files', files: generatedFiles });
           }
         },
         options?.webSearch,

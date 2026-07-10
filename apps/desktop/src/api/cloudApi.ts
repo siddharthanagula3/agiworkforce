@@ -10,8 +10,10 @@ import { isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { API_BASE_URL } from './config';
 
-// Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS
-const CLOUD_API_BASE_URL = isTauri ? API_BASE_URL : '';
+// Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS.
+// Exported so runtimes can resolve relative wire uris (e.g. the
+// `x_generated_files` `/api/files/{id}` paths) against the same base.
+export const CLOUD_API_BASE_URL = isTauri ? API_BASE_URL : '';
 
 // ============================================================================
 // Type Definitions

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 import { guardedFetch } from './lib/egressGuard';
+import { getAuthHeaders, CLOUD_API_BASE_URL } from './api/cloudApi';
 import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
 import {
   cleanupAgentWorkflowEventListeners,
@@ -1336,6 +1337,25 @@ const DesktopShell = () => {
       selectConversation: (id) => {
         if (!id) return;
         useDesktopChatStore.getState().selectConversation(id);
+      },
+      // Managed-cloud generated files (x_generated_files): fetch bytes from
+      // the authenticated /api/files route. Bearer is ONLY attached to uris on
+      // our cloud API base (never leaked to arbitrary hosts); guardedFetch
+      // keeps the Local-mode egress chokepoint in front of the request.
+      fetchCloudFile: async (uri: string) => {
+        const isOurCloudUri = CLOUD_API_BASE_URL
+          ? uri.startsWith(`${CLOUD_API_BASE_URL}/`)
+          : uri.startsWith('/');
+        const headers: Record<string, string> = {};
+        if (isOurCloudUri) {
+          const auth = await getAuthHeaders();
+          if (auth['Authorization']) headers['Authorization'] = auth['Authorization'];
+        }
+        const res = await guardedFetch(uri, { headers, credentials: 'include' });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        return res.blob();
       },
     }),
     [],
