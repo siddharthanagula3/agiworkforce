@@ -36,9 +36,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
-import { PresentationArtifact } from './artifact-components/PresentationArtifact';
-import { ReactPreview } from './artifact-components/ReactPreview';
-import { SpreadsheetArtifact } from './artifact-components/SpreadsheetArtifact';
+import {
+  PresentationArtifact,
+  ReactPreview,
+  SpreadsheetArtifact,
+} from '@agiworkforce/unified-chat';
 import { ChartArtifact } from './artifacts/ChartArtifact';
 import { CodeArtifact } from './artifacts/CodeArtifact';
 import { HtmlArtifact } from './artifacts/HtmlArtifact';

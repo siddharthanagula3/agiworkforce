@@ -232,7 +232,7 @@ function getFileExtension(artifact: Artifact): string {
   if (artifact.type === 'presentation') return 'md';
   if (artifact.type === 'markdown') return 'md';
   if (artifact.type === 'svg') return 'svg';
-  if (artifact.type === 'react') return 'tsx';
+  if (artifact.type === 'react' || artifact.type === 'component') return 'tsx';
   return artifact.type === 'chart' || artifact.type === 'diagram' ? 'json' : 'txt';
 }
 
@@ -257,6 +257,7 @@ function getArtifactIcon(type: string): React.ReactNode {
     case 'svg':
       return <ImageIcon className="h-4 w-4" />;
     case 'react':
+    case 'component':
       return <Layers className="h-4 w-4" />;
     default:
       return <Code2 className="h-4 w-4" />;
@@ -758,7 +759,7 @@ export function ArtifactRenderer({
           <SvgArtifact artifact={artifact} />
         ) : artifact.type === 'markdown' ? (
           <MarkdownArtifact artifact={artifact} isDark={isDark} />
-        ) : artifact.type === 'react' ? (
+        ) : artifact.type === 'react' || artifact.type === 'component' ? (
           <ReactPreview code={artifact.content} />
         ) : artifact.type === 'spreadsheet' ? (
           <SpreadsheetArtifact artifact={artifact} />

@@ -351,6 +351,17 @@ function renderInline(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : parts;
 }
 
+/**
+ * MarkdownLite — reusable wrapper around the lightweight markdown renderer.
+ *
+ * Renders headings, lists, tables, code blocks, blockquotes, and inline
+ * formatting without pulling in react-markdown. Used by MessageBubble for
+ * assistant text and by artifact renderers (e.g. PresentationArtifact slides).
+ */
+export function MarkdownLite({ content, className }: { content: string; className?: string }) {
+  return <div className={className}>{renderContent(content)}</div>;
+}
+
 function formatToolArgsPreview(toolCall: ToolCall): string | null {
   const entries = Object.entries(toolCall.args ?? {});
   if (entries.length === 0) {
