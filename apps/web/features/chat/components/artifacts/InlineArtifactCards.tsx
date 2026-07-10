@@ -5,10 +5,13 @@ import { useMounted } from '@shared/hooks/useMounted';
 import {
   FileCode,
   Code2,
+  FileSpreadsheet,
   FileText,
   Image as ImageIcon,
   Globe,
   ChevronRight,
+  Mail,
+  Presentation,
   Shield,
 } from 'lucide-react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
@@ -43,6 +46,15 @@ function typeBadge(type: ArtifactData['type']): string {
       return 'Code';
     case 'document':
       return 'Document';
+    case 'spreadsheet':
+    case 'csv':
+      return 'Spreadsheet';
+    case 'table':
+      return 'Table';
+    case 'presentation':
+      return 'Slides';
+    case 'email':
+      return 'Email';
     default:
       return 'File';
   }
@@ -60,6 +72,14 @@ export function TypeIcon({ type, className }: { type: ArtifactData['type']; clas
       return <ImageIcon className={cls} aria-hidden="true" />;
     case 'mermaid':
       return <FileCode className={cls} aria-hidden="true" />;
+    case 'spreadsheet':
+    case 'table':
+    case 'csv':
+      return <FileSpreadsheet className={cls} aria-hidden="true" />;
+    case 'presentation':
+      return <Presentation className={cls} aria-hidden="true" />;
+    case 'email':
+      return <Mail className={cls} aria-hidden="true" />;
     default:
       return <FileText className={cls} aria-hidden="true" />;
   }
