@@ -109,6 +109,16 @@ pub struct McpTimeouts {
     /// exhaust memory with one giant response). `None` (default) is unbounded,
     /// matching the original CLI behavior. Desktop sets 50 MB.
     pub max_response_bytes: Option<u64>,
+    /// Optional TCP connect timeout on the remote-transport reqwest client.
+    /// `None` (default) leaves reqwest's default (no connect cap — CLI parity).
+    /// Desktop sets 30s.
+    pub connect_timeout: Option<Duration>,
+    /// Optional per-read socket timeout on the SSE/legacy client so a stalled
+    /// stream (server accepted TCP, then went silent between chunks) errors
+    /// out instead of hanging; the legacy supervisor then reconnects. Healthy
+    /// streams are unaffected — every chunk/heartbeat resets the timer. `None`
+    /// (default) is unbounded (CLI parity). Desktop sets 60s.
+    pub sse_read_timeout: Option<Duration>,
 }
 
 impl Default for McpTimeouts {
@@ -122,6 +132,8 @@ impl Default for McpTimeouts {
             validate_urls: false,
             verify_tls: true,
             max_response_bytes: None,
+            connect_timeout: None,
+            sse_read_timeout: None,
         }
     }
 }

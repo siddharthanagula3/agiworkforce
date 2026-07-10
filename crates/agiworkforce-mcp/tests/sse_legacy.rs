@@ -253,15 +253,19 @@ async fn legacy_sse_stream_reconnects_after_drop() {
 }
 
 #[tokio::test]
-async fn validate_urls_enforces_https_for_remote_hosts() {
+async fn cleartext_remote_bringup_succeeds_post_only() {
+    // Desktop parity: cleartext http to a remote host is allowed for POSTs
+    // (the old desktop POST path had no HTTPS check); only the SSE GET is
+    // refused, inside the supervisor (`enforce_https_for_remote`, covered by
+    // its unit tests). Bringup is lazy and must therefore succeed.
     let timeouts = McpTimeouts {
         validate_urls: true,
         ..McpTimeouts::default()
     };
-    let err = match McpClient::connect_without_handshake(
+    let mut client = McpClient::connect_without_handshake(
         "cleartext-remote",
         TransportConfig::SseLegacy {
-            // Public (passes SSRF) but cleartext http — must be refused.
+            // Public (passes SSRF), cleartext http: POST-only mode.
             base_url: "http://mcp.example.com/".to_string(),
             headers: HashMap::new(),
         },
@@ -269,14 +273,8 @@ async fn validate_urls_enforces_https_for_remote_hosts() {
         support::decline_hooks(),
     )
     .await
-    {
-        Ok(_) => panic!("cleartext remote http must be rejected"),
-        Err(e) => e,
-    };
-    assert!(
-        format!("{:#}", err.as_anyhow()).contains("must use HTTPS"),
-        "unexpected error: {err}"
-    );
+    .expect("bringup must be lazy and succeed in POST-only mode");
+    let _ = client.shutdown().await;
 }
 
 #[tokio::test]
