@@ -86,8 +86,6 @@ pub(crate) async fn connect_legacy(
     if timeouts.validate_urls {
         crate::security::validate_server_url(base_url)
             .with_context(|| format!("[{name}] SSE-legacy"))?;
-        crate::security::enforce_https_for_remote(base_url)
-            .with_context(|| format!("[{name}] SSE-legacy"))?;
     }
     let client = build_sse_client(&timeouts)?;
 
@@ -145,6 +143,16 @@ fn spawn_legacy_sse_supervisor(
 ) {
     let server_name = name.to_string();
     tokio::spawn(async move {
+        // Desktop parity (connect_sse): the SSE GET refuses cleartext HTTP to
+        // non-localhost hosts so credentials cannot transit a network
+        // unencrypted. POSTs are unaffected (they matched desktop's POST path,
+        // which had no such check) — the transport degrades to POST-only.
+        if let Err(e) = crate::security::enforce_https_for_remote(&sse_url) {
+            eprintln!(
+                "[{server_name}] SSE-legacy: {e:#}; continuing POST-only (no SSE listener)"
+            );
+            std::future::pending::<()>().await;
+        }
         let mut attempts: u32 = 0;
         while attempts < LEGACY_SSE_MAX_RECONNECT_ATTEMPTS {
             match open_sse_stream(&server_name, &client, &sse_url, &headers).await {
@@ -200,6 +208,12 @@ fn build_sse_client(timeouts: &McpTimeouts) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder();
     if !timeouts.verify_tls {
         builder = builder.danger_accept_invalid_certs(true);
+    }
+    if let Some(ct) = timeouts.connect_timeout {
+        builder = builder.connect_timeout(ct);
+    }
+    if let Some(rt) = timeouts.sse_read_timeout {
+        builder = builder.read_timeout(rt);
     }
     builder.build().context("build reqwest client")
 }
