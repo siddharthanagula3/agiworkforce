@@ -208,16 +208,16 @@ export interface SettingsNavGroupResolved {
 }
 
 /**
- * Web settings IA (matches the Claude web reference): a "Settings" group and a
- * "Customize" group. Web-only entries (Security, Notifications) live at the end
- * of the Settings group. Memory is folded into Capabilities (reachable via a
- * chevron link, deep-linkable at /settings/memory) and Plugins is omitted —
- * web has no plugins backend, so exposing it in the nav would be a dead control.
- * AGI Code is omitted: web has no AGI-Code settings surface to back it.
+ * Web settings IA (founder directive, 2026-07-10): ONE flat, unlabeled list.
+ * Skills / Connectors / Plugins are plain items directly after the core
+ * settings items — deliberately NO "Customize" group heading (unlike
+ * claude.ai's sidebar, which groups them; we drop that heading). Memory is
+ * folded into Capabilities (reachable via a chevron link, deep-linkable at
+ * /settings/memory). AGI Code is omitted: web has no AGI-Code settings
+ * surface to back it.
  */
 export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
   {
-    label: 'Settings',
     items: [
       { key: 'general', label: 'General', icon: Settings2 },
       { key: 'account', label: 'Account', icon: UserRound },
@@ -227,13 +227,9 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'capabilities', label: 'Capabilities', icon: Zap },
       { key: 'security', label: 'Security', icon: Lock },
       { key: 'notifications', label: 'Notifications', icon: Bell },
-    ],
-  },
-  {
-    label: 'Customize',
-    items: [
       { key: 'skills', label: 'Skills', icon: BookOpen },
       { key: 'connectors', label: 'Connectors', icon: Plug },
+      { key: 'plugins', label: 'Plugins', icon: Puzzle },
     ],
   },
 ];

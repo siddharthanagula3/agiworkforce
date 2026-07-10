@@ -30,11 +30,32 @@ export interface SettingsConnector {
   /** 1-2 char fallback text */
   iconText: string;
   exclusive?: boolean;
+  /**
+   * Whether THIS surface can actually complete a connect flow for the
+   * connector. When false (or when the adapter has no connectConnector), the
+   * connectors table renders `statusLabel` instead of a Connect button —
+   * honesty rule: never show a Connect button that is known to fail.
+   */
+  canConnect?: boolean;
+  /**
+   * Muted status text for unconnected connectors whose connect flow is not
+   * available on this surface (e.g. "Coming soon", "Not yet available on web").
+   * Falls back to "Not connected" when omitted.
+   */
+  statusLabel?: string;
 }
 
 export interface ConnectedConnector {
   connectorId: string;
   connectedAt?: string;
+  /**
+   * Optional real health state for a connected connector. Only supply when a
+   * genuine signal exists (e.g. an expired token detected server-side); the
+   * table renders an amber warning for 'warning'. No signal = 'connected'.
+   */
+  status?: 'connected' | 'warning';
+  /** Short label shown with the amber warning state (e.g. "Reconnect"). */
+  warningLabel?: string;
 }
 
 // ─── Skill / Plugin contract ──────────────────────────────────────────────────
@@ -52,6 +73,23 @@ export interface SettingsPlugin {
   name: string;
   description: string;
   enabled: boolean;
+  /** Vendor/org name. Optional — only render when real data exists. */
+  author?: string;
+  /** Count of skills bundled by the plugin. Optional — real data only. */
+  skillCount?: number;
+  /** ISO timestamp of the plugin's last update. Optional — real data only. */
+  updatedAt?: string;
+}
+
+// ─── Custom connector input ───────────────────────────────────────────────────
+
+/** Payload from the "Add custom connector" form (remote MCP server). */
+export interface CustomConnectorInput {
+  name: string;
+  /** Remote MCP server URL. */
+  url: string;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
 }
 
 // ─── Data adapter interface (injected per surface) ────────────────────────────
@@ -70,10 +108,24 @@ export interface SettingsDataAdapter {
   connectedConnectors?: ConnectedConnector[];
   connectConnector?: (id: string) => Promise<void> | void;
   disconnectConnector?: (id: string) => Promise<void> | void;
+  /**
+   * Persist a user-supplied custom remote-MCP connector. Surfaces without
+   * real persistence must throw an honest "not yet supported" Error (the
+   * form surfaces the message) rather than faking success.
+   */
+  addCustomConnector?: (input: CustomConnectorInput) => Promise<void> | void;
 
   skills?: SettingsSkill[];
   skillsLoading?: boolean;
 
   plugins?: SettingsPlugin[];
   pluginsLoading?: boolean;
+  /**
+   * Plugin "Add" capabilities. Each item in the Plugins pane's Add dropdown
+   * renders ONLY when its callback is supplied (surfaces without a real
+   * marketplace/upload flow supply none, and the dropdown is omitted
+   * entirely — no stubbed dead items).
+   */
+  onAddPluginMarketplace?: () => void;
+  onUploadPlugin?: () => void;
 }
