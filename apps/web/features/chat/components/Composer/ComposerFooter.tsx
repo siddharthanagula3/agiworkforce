@@ -142,12 +142,21 @@ const EFFORT_CHIP_DESCRIPTION: Record<string, string> = {
  * set renders no chips (the on/off switch is the whole control).
  */
 function effortChipsFor(r: ModelReasoning): string[] {
-  if (r.control === 'thinking_budget') {
-    return r.supportedEfforts && r.supportedEfforts.length > 0
-      ? r.supportedEfforts
-      : ['low', 'medium', 'high'];
-  }
-  return r.supportedEfforts ?? [];
+  const base =
+    r.control === 'thinking_budget'
+      ? r.supportedEfforts && r.supportedEfforts.length > 0
+        ? r.supportedEfforts
+        : ['low', 'medium', 'high']
+      : (r.supportedEfforts ?? []);
+  // The UI store's Effort vocab (low|medium|high|xhigh|max) cannot represent
+  // `minimal`, so `minimal` maps to `low` (chipToStoreEffort). When a model's set
+  // has BOTH, drop `minimal` to avoid two chips resolving to the same store value
+  // (which would double-highlight and make clicking `minimal` light up `low`). The
+  // request path treats them equivalently (non-union effort values are dropped to
+  // the provider default). No catalog model has `minimal` without `low`.
+  return base.includes('minimal') && base.includes('low')
+    ? base.filter((e) => e !== 'minimal')
+    : base;
 }
 
 /** Whether the flyout should show a separate on/off switch (vs a `none` chip). */
