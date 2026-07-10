@@ -16,6 +16,7 @@ import {
   Terminal,
   Code2,
   Globe,
+  Lock,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -48,7 +49,11 @@ export type SettingsNavKey =
   | 'notifications'
   | 'voice'
   | 'extensions'
-  | 'developer';
+  | 'developer'
+  // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
+  // desktop panel renderer — see apps/desktop settings-ia contract test).
+  | 'security'
+  | 'skills';
 
 export interface SettingsNavEntry {
   key: SettingsNavKey;
@@ -179,4 +184,56 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   },
   { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
   { label: 'Advanced', keys: ['developer'] },
+];
+
+// ---------------------------------------------------------------------------
+// Web projection — grouped nav rendered by the shared SettingsModal shell.
+// ---------------------------------------------------------------------------
+
+/**
+ * A resolved nav entry (key + label + icon) — the shape the shared shell
+ * renders directly, so a surface can inject its own groups without the shell
+ * needing to know about SETTINGS_NAV lookups.
+ */
+export interface SettingsNavItem {
+  key: SettingsNavKey;
+  label: string;
+  icon: LucideIcon;
+}
+
+/** A rendered group: optional heading + its items, in order. */
+export interface SettingsNavGroupResolved {
+  label?: string;
+  items: SettingsNavItem[];
+}
+
+/**
+ * Web settings IA (matches the Claude web reference): a "Settings" group and a
+ * "Customize" group. Web-only entries (Security, Notifications) live at the end
+ * of the Settings group. Memory is folded into Capabilities (reachable via a
+ * chevron link, deep-linkable at /settings/memory) and Plugins is omitted —
+ * web has no plugins backend, so exposing it in the nav would be a dead control.
+ * AGI Code is omitted: web has no AGI-Code settings surface to back it.
+ */
+export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
+  {
+    label: 'Settings',
+    items: [
+      { key: 'general', label: 'General', icon: Settings2 },
+      { key: 'account', label: 'Account', icon: UserRound },
+      { key: 'privacy', label: 'Privacy', icon: Shield },
+      { key: 'billing', label: 'Billing', icon: CreditCard },
+      { key: 'usage', label: 'Usage', icon: Gauge },
+      { key: 'capabilities', label: 'Capabilities', icon: Zap },
+      { key: 'security', label: 'Security', icon: Lock },
+      { key: 'notifications', label: 'Notifications', icon: Bell },
+    ],
+  },
+  {
+    label: 'Customize',
+    items: [
+      { key: 'skills', label: 'Skills', icon: BookOpen },
+      { key: 'connectors', label: 'Connectors', icon: Plug },
+    ],
+  },
 ];

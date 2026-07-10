@@ -307,8 +307,11 @@ export {
 export {
   SETTINGS_NAV,
   SETTINGS_NAV_GROUPS,
+  SETTINGS_NAV_GROUPS_WEB,
   type SettingsNavEntry,
   type SettingsNavGroup,
+  type SettingsNavGroupResolved,
+  type SettingsNavItem,
   type SettingsNavKey,
 } from './settings-nav';
 export {
