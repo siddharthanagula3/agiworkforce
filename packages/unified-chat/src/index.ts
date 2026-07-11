@@ -106,6 +106,8 @@ export type { AgentControlProps } from './components/AgentControl';
 export { ModelSelector } from './components/ModelSelector';
 export type { ModelSelectorProps } from './components/ModelSelector';
 export { AttachmentMenu } from './components/AttachmentMenu';
+export { SendButton } from './components/SendButton';
+export type { SendButtonProps, SendButtonMode } from './components/SendButton';
 export { Disclaimer } from './components/Disclaimer';
 
 // Sidebar components
