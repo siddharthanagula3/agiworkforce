@@ -892,7 +892,7 @@ export function ConnectorsPage() {
                     onBack={() => setSelectedConnector(null)}
                     onConnect={() => setOverviewConnector(selectedConnector)}
                     onDisconnect={() => void handleDisconnect(selectedConnector.id)}
-                    onUpgrade={() => router.push('/pricing#waitlist')}
+                    onUpgrade={() => router.push('/pricing')}
                   />
                 ) : (
                   /* Placeholder shown on desktop when nothing is selected */
