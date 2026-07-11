@@ -121,7 +121,7 @@ mod h13_resolve_model_for_strategy {
             500,
             "fallback-model",
         );
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod h13_resolve_model_for_strategy {
             100,
             "fallback-model",
         );
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
     }
 
     #[test]
@@ -171,7 +171,7 @@ mod h13_resolve_model_for_strategy {
             2000,
             "fallback-model",
         );
-        assert_eq!(model, "claude-sonnet-4.6");
+        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "chat"));
     }
 
     #[test]
@@ -181,7 +181,7 @@ mod h13_resolve_model_for_strategy {
             5000,
             "fallback-model",
         );
-        assert_eq!(model, "gpt-5.5");
+        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "chat"));
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod h13_resolve_model_for_strategy {
             8000,
             "fallback-model",
         );
-        assert_eq!(model, "claude-sonnet-4.6");
+        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "chat"));
     }
 
     #[test]
@@ -201,7 +201,7 @@ mod h13_resolve_model_for_strategy {
             20000,
             "fallback-model",
         );
-        assert_eq!(model, "claude-opus-4.8");
+        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "complex_reasoning"));
     }
 
     #[test]
@@ -261,42 +261,42 @@ mod h13_resolve_model_for_strategy {
     fn auto_balanced_boundary_at_500() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 500, "fallback");
-        assert_eq!(model, "claude-sonnet-4.6");
+        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "chat"));
     }
 
     #[test]
     fn auto_premium_boundary_at_16000() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 16000, "fallback");
-        assert_eq!(model, "claude-opus-4.8");
+        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "complex_reasoning"));
     }
 
     #[test]
     fn auto_economy_boundary_at_999() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 999, "fallback");
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
     }
 
     #[test]
     fn auto_balanced_boundary_at_499() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 499, "fallback");
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
     }
 
     #[test]
     fn auto_balanced_boundary_at_4000() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 4000, "fallback");
-        assert_eq!(model, "gpt-5.5");
+        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "chat"));
     }
 
     #[test]
     fn auto_premium_boundary_at_15999() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 15999, "fallback");
-        assert_eq!(model, "claude-sonnet-4.6");
+        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "chat"));
     }
 }
 
