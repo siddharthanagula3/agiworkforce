@@ -81,6 +81,30 @@ describe('isOurCloudHost — host classification', () => {
   it('exposes config-derived exact hosts', () => {
     expect(OUR_CLOUD_HOSTS).toContain('agiworkforce.com');
   });
+
+  it('DRIFT REGRESSION: classifies vercel.app (mobile used to miss it) as ours', () => {
+    // vercel.app was on desktop's denylist but NOT mobile's, so mobile Local
+    // mode wouldn't have blocked a *.vercel.app host. After reconciling to the
+    // shared union it must classify as ours here too.
+    expect(OUR_CLOUD_HOSTS).toContain('vercel.app');
+    expect(isOurCloudHost('vercel.app')).toBe(true);
+    expect(isOurCloudHost('my-app.vercel.app')).toBe(true);
+    // Look-alike must still NOT match (boundary-safe suffix preserved).
+    expect(isOurCloudHost('evilvercel.app')).toBe(false);
+  });
+});
+
+describe('guardedFetch — DRIFT REGRESSION (vercel.app mobile missed is now blocked in Local mode)', () => {
+  // Before the shared-policy reconcile, mobile's denylist omitted vercel.app, so
+  // Local mode would have LEAKED to a *.vercel.app deploy. Assert the guard now
+  // throws BEFORE any network I/O (secureFetch not called) for that host.
+  it('BLOCKS a *.vercel.app host in Local mode before any network I/O', async () => {
+    mockAppMode = 'local';
+    await expect(
+      guardedFetch('https://our-web.vercel.app/api/cloud-chat', { method: 'POST' }),
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('guardedFetch — Local mode (block our-cloud, allow provider)', () => {
