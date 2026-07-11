@@ -410,25 +410,29 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
 
-  it('unlocks economy-list models for a signed-in free-tier user', () => {
-    // The server's free-trial path accepts economy-list models from free users
-    // (apps/web/lib/free-trial-config.ts), so the picker must not lock them.
+  it('shows and selects the curated free preset (nano) cloud models for a free-tier user', () => {
+    // Product decision (2026-07-11): the free-tier picker is NANO-ONLY — it
+    // shows the curated FREE_TIER_PRESET_MODEL_IDS (gpt-5-nano, gpt-4.1-nano,
+    // gemini-3.1-flash-lite) as selectable, flagship models as locked upsells,
+    // and curates non-preset economy models (e.g. the default gpt-5.4-mini) OUT
+    // of the list even though the server still accepts them (see cross-surface
+    // follow-up in known-flaws MOBILE-JEST-REGRESSION).
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'free' });
 
-    const economyModel = getModelByIdForCloudAccess('gpt-5.4-mini', true, 'free');
-    expect(economyModel?.availability).toBe('ready');
+    // A curated free preset (nano) is ready + selectable.
+    expect(getModelByIdForCloudAccess('gpt-5-nano', true, 'free')?.availability).toBe('ready');
     // Flagship models stay tier-locked for free users.
     expect(getModelByIdForCloudAccess('claude-opus-4.8', true, 'free')?.availability).toBe(
       'locked',
     );
 
-    // Preset display names ("Fast") repeat across providers, so target the row
-    // by its stable per-model testID rather than the ambiguous label.
-    const { getByTestId } = renderPicker({ modelScope: 'cloud' });
-    fireEvent.press(getByTestId('model-row-gpt-5.4-mini'));
+    const { getByTestId, queryByTestId } = renderPicker({ modelScope: 'cloud' });
+    // Non-preset economy model (the default) is curated out of the free picker.
+    expect(queryByTestId('model-row-gpt-5.4-mini')).toBeNull();
+    fireEvent.press(getByTestId('model-row-gpt-5-nano'));
 
-    expect(useModelStore.getState().selectedModel).toBe('gpt-5.4-mini');
+    expect(useModelStore.getState().selectedModel).toBe('gpt-5-nano');
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
   });
 
