@@ -82,26 +82,13 @@ export const PENDING_REHYDRATION_TTL_MS = 30_000;
 /** Maximum attempts for code generation */
 export const CODE_GENERATION_MAX_ATTEMPTS = 10;
 
-// =============================================================================
-// Plan Hierarchy
-// =============================================================================
-
-export const PLAN_HIERARCHY: Record<string, number> = {
-  free: 0,
-  pro: 1,
-  max: 2,
-  team: 3,
-  enterprise: 4,
-} as const;
-
-/**
- * Get the hierarchy level for a plan tier.
- * @param plan - The plan tier name
- * @returns The hierarchy level (0-4), defaults to 0 for unknown plans
- */
-export function getPlanLevel(plan: string): number {
-  return PLAN_HIERARCHY[plan.toLowerCase()] ?? 0;
-}
+// NOTE: A `PLAN_HIERARCHY`/`getPlanLevel` pair lived here but was DEAD CODE
+// (zero consumers repo-wide) and drifted from the real tier model — it lacked
+// `basic` and predated the pricing update. The canonical tier ordering is
+// `TIER_ORDER`/`tierAtLeast` in `@agiworkforce/types` design-system/user-identity
+// (local|byok|basic|pro|max), and billing plan tiers are the SSOT in
+// `@agiworkforce/types` billing-catalog. Removed 2026-07-10 to avoid a stale,
+// misleading second hierarchy.
 
 // =============================================================================
 // Pricing Display Configuration
