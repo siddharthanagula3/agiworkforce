@@ -87,6 +87,7 @@ export function ModelRow({
   return (
     <View>
       <Pressable
+        testID={`model-row-${model.id}`}
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={400}
