@@ -21,10 +21,18 @@
  * copy instead of faking a connection.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { View, Image, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Image,
+  Pressable,
+  Alert,
+  ActivityIndicator,
+  ScrollView,
+  TextInput,
+} from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Plug, Link, CheckCircle, RefreshCw } from 'lucide-react-native';
+import { Plug, Link, CheckCircle, RefreshCw, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
@@ -549,6 +557,10 @@ export default function CloudConnectorsScreen() {
   const [connections, setConnections] = useState<ConnectedConnector[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Directory filter chips (All | Connected | <category>) + search — mirrors the
+  // reference connectors directory layout.
+  const [activeFilter, setActiveFilter] = useState<string>('All');
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -609,11 +621,31 @@ export default function CloudConnectorsScreen() {
     [connectionFor, load],
   );
 
+  // Chip options: All + Connected + every catalog category.
+  const filters = useMemo(() => ['All', 'Connected', ...CATEGORIES], []);
+
+  // Apply the active chip + search query to the catalog.
+  const visibleEntries = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return CATALOG.filter((entry) => {
+      if (activeFilter === 'Connected' && !connectionFor(entry.id)) return false;
+      if (activeFilter !== 'All' && activeFilter !== 'Connected' && entry.category !== activeFilter)
+        return false;
+      if (
+        q &&
+        !entry.name.toLowerCase().includes(q) &&
+        !entry.description.toLowerCase().includes(q)
+      )
+        return false;
+      return true;
+    });
+  }, [activeFilter, search, connectionFor]);
+
   return (
     <SettingsScreenShell title="Connectors">
       <SettingsInfo
         title="Connect your tools to AGI Cloud"
-        body="Connectors let AGI read and act across your apps. Each connector uses server-side OAuth — your credentials never leave AGI Cloud."
+        body="Connect your apps and services so AGI can access and act on your data. Each connector uses server-side OAuth — your credentials never leave AGI Cloud."
         icon={Plug}
       />
 
@@ -662,52 +694,108 @@ export default function CloudConnectorsScreen() {
         </View>
       )}
 
-      {FEATURES.connectors &&
-        isCloudModeActive &&
-        !error &&
-        CATEGORIES.map((cat) => {
-          const entries = CATALOG.filter((c) => c.category === cat);
-          return (
-            <View key={cat} style={{ marginBottom: 18 }}>
-              <Text
-                style={{
-                  color: colors.textMuted,
-                  fontSize: 11,
-                  fontWeight: '700',
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  marginBottom: 7,
-                  paddingHorizontal: 2,
-                }}
-              >
-                {cat}
-              </Text>
-              <View
-                style={{
-                  borderRadius: 14,
-                  backgroundColor: colors.surfaceElevated,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  overflow: 'hidden',
-                }}
-              >
-                {entries.map((entry, idx) => (
-                  <View key={entry.id}>
-                    {idx > 0 && (
-                      <View style={{ height: 1, backgroundColor: colors.border, marginLeft: 66 }} />
-                    )}
-                    <ConnectorCard
-                      entry={entry}
-                      connected={!!connectionFor(entry.id)}
-                      connectedAt={connectionFor(entry.id)?.connectedAt}
-                      onPress={() => handlePress(entry)}
-                    />
-                  </View>
-                ))}
-              </View>
+      {FEATURES.connectors && isCloudModeActive && !error && (
+        <>
+          {/* Search field */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              borderRadius: 12,
+              backgroundColor: colors.surfaceElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingHorizontal: 12,
+              height: 42,
+              marginBottom: 12,
+            }}
+          >
+            <Search size={16} color={colors.textMuted} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search connectors"
+              placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Search connectors"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
+            />
+          </View>
+
+          {/* Filter chips (All | Connected | categories) */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingVertical: 2, marginBottom: 14 }}
+          >
+            {filters.map((f) => {
+              const active = f === activeFilter;
+              return (
+                <Pressable
+                  key={f}
+                  onPress={() => setActiveFilter(f)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`${f} connectors`}
+                  style={{
+                    paddingHorizontal: 14,
+                    height: 34,
+                    borderRadius: 17,
+                    justifyContent: 'center',
+                    backgroundColor: active ? colors.textPrimary : colors.surfaceElevated,
+                    borderWidth: 1,
+                    borderColor: active ? colors.textPrimary : colors.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: active ? colors.background : colors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: '600',
+                    }}
+                  >
+                    {f}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* Filtered flat list */}
+          {visibleEntries.length === 0 ? (
+            <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
+              <Link size={28} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted, fontSize: 14 }}>No connectors found</Text>
             </View>
-          );
-        })}
+          ) : (
+            <View
+              style={{
+                borderRadius: 14,
+                backgroundColor: colors.surfaceElevated,
+                borderWidth: 1,
+                borderColor: colors.border,
+                overflow: 'hidden',
+              }}
+            >
+              {visibleEntries.map((entry, idx) => (
+                <View key={entry.id}>
+                  {idx > 0 && (
+                    <View style={{ height: 1, backgroundColor: colors.border, marginLeft: 66 }} />
+                  )}
+                  <ConnectorCard
+                    entry={entry}
+                    connected={!!connectionFor(entry.id)}
+                    connectedAt={connectionFor(entry.id)?.connectedAt}
+                    onPress={() => handlePress(entry)}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      )}
     </SettingsScreenShell>
   );
 }
