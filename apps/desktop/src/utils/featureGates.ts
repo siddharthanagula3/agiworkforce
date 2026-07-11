@@ -1,5 +1,5 @@
 import { getPlanById, GRACE_PERIOD_DAYS } from '../constants/pricing';
-import type { SubscriptionInfo, UsageStats } from '../services/stripe';
+import type { SubscriptionInfo, UsageStats } from '../types/billing';
 
 export type FeatureId =
   | 'unlimited_automations'
