@@ -355,6 +355,23 @@ fn api_model_id_for_any(catalog: &SharedModelsCatalog, model_id: &str) -> Option
     })
 }
 
+/// Resolve a user- or config-supplied model identifier to the **wire id** the
+/// provider API expects (`apiModelId`). The shared `models.json` catalog carries
+/// both the dotted display `id` (`claude-haiku-4.5`, used on web/desktop/mobile)
+/// and the dashed `apiModelId` (`claude-haiku-4-5`, the actual wire id). Callers
+/// that put a model into a provider request body must resolve through this so a
+/// dotted display id does not 404 the provider.
+///
+/// Falls back to the input unchanged when the id is not in the shared catalog
+/// (local/Ollama/custom models, or already-wire ids), so it is safe to apply at
+/// the request boundary for every provider. Display, pricing, and provider
+/// inference intentionally keep the dotted catalog `id` and must NOT call this.
+pub fn api_wire_id(model_id: &str) -> String {
+    shared_catalog()
+        .and_then(|catalog| api_model_id_for_any(catalog, model_id))
+        .unwrap_or_else(|| model_id.to_string())
+}
+
 fn shared_catalog_lookup_aliases() -> Vec<(String, String)> {
     let Some(catalog) = shared_catalog() else {
         return Vec::new();
@@ -1321,6 +1338,19 @@ mod tests {
     fn default_model_exists() {
         let cat = Catalog::bundled();
         assert!(cat.find(default_model()).is_some());
+    }
+
+    #[test]
+    fn api_wire_id_resolves_dotted_display_id_to_wire_id() {
+        // A dotted display id (the form web/desktop/mobile use) must resolve to
+        // the dashed provider wire id so it does not 404 at the provider.
+        assert_eq!(api_wire_id("claude-haiku-4.5"), "claude-haiku-4-5");
+        // An already-wire id is returned unchanged (idempotent).
+        assert_eq!(api_wire_id("claude-haiku-4-5"), "claude-haiku-4-5");
+        // Case-insensitive on the display id.
+        assert_eq!(api_wire_id("Claude-Haiku-4.5"), "claude-haiku-4-5");
+        // Unknown ids (local/Ollama/custom) fall through unchanged.
+        assert_eq!(api_wire_id("my-local-model:latest"), "my-local-model:latest");
     }
 
     #[test]
