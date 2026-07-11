@@ -43,6 +43,7 @@ exports[`ArtifactPanel parity snapshots > renders empty-state panel (no artifact
       class="flex items-center gap-1"
     >
       <button
+        aria-label="Maximize panel"
         class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-7 w-7"
         data-state="closed"
       >
@@ -74,6 +75,7 @@ exports[`ArtifactPanel parity snapshots > renders empty-state panel (no artifact
         </svg>
       </button>
       <button
+        aria-label="Close panel"
         class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-7 w-7"
         data-state="closed"
       >
@@ -188,6 +190,7 @@ exports[`ArtifactPanel parity snapshots > renders panel header with Copy/Expand 
         class="flex items-center gap-1"
       >
         <button
+          aria-label="Maximize panel"
           class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-7 w-7"
           data-state="closed"
         >
@@ -219,6 +222,7 @@ exports[`ArtifactPanel parity snapshots > renders panel header with Copy/Expand 
           </svg>
         </button>
         <button
+          aria-label="Close panel"
           class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-7 w-7"
           data-state="closed"
         >

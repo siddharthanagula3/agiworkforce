@@ -517,6 +517,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => setIsExpanded(!isExpanded)}
+                  aria-label={isExpanded ? 'Minimize panel' : 'Maximize panel'}
                 >
                   {isExpanded ? (
                     <Minimize2 className="h-3.5 w-3.5" />
@@ -537,6 +538,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                     closePanel();
                     onClose?.();
                   }}
+                  aria-label="Close panel"
                 >
                   <X className="h-3.5 w-3.5" />
                 </Button>
