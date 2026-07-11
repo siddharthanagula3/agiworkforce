@@ -34,9 +34,14 @@ const MAX_FILE_SIZE_BYTES = MAX_ATTACHMENT_BYTES;
  * composer that owns the `<input type="file">` element can build its
  * `accept` attribute and gating logic from this single source of truth
  * instead of hardcoding a separate, narrower list that drifts out of sync
- * with what this hook actually accepts (see `ChatComposerNew.tsx`'s
- * `accept="image/*"` — tracked as a fast-follow, not fixed here since that
- * file is out of scope for this pass).
+ * with what this hook actually accepts. NOTE: `ChatComposerNew.tsx` keeps
+ * `accept="image/*"` INTENTIONALLY — its `handleFileDrop` deliberately filters
+ * to `image/*` and surfaces an honest "Web chat currently accepts images only.
+ * Other file types require Cloud file support." message. So the narrow `accept`
+ * matches real behavior; do NOT widen it to this full allowlist until the web
+ * Cloud file-upload pipeline for documents is actually wired (else the picker
+ * would offer docs the handler then rejects). This broader allowlist exists for
+ * that future document path + other consumers.
  */
 export const ALLOWED_MIME_TYPES = new Set([
   // Images
