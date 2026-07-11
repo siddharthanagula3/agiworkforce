@@ -110,6 +110,8 @@ mod h1_contains_word {
 // ---------------------------------------------------------------------------
 mod h13_resolve_model_for_strategy {
     use crate::core::llm::llm_router::LLMRouter;
+    use crate::core::llm::models_config::get_task_model;
+    use crate::core::llm::Provider;
     use crate::core::llm::RoutingStrategy;
 
     #[test]
@@ -124,27 +126,32 @@ mod h13_resolve_model_for_strategy {
 
     #[test]
     fn auto_economy_medium_tokens_selects_managed_chat_model() {
-        // 1000 ≤ tokens < 8000 → ManagedCloud "chat" task → models.json picks
-        // the current managed-chat default (gpt-5.4-mini).
+        // 1000 ≤ tokens < 8000 → ManagedCloud "chat" task. Assert the ROUTING
+        // decision (economy-medium → ManagedCloud chat) against the SSOT rather
+        // than a hard-coded id, so it can't drift when models.json changes the
+        // managed-chat default (repo rule: read model ids from models.json).
         let model = LLMRouter::resolve_model_for_strategy(
             RoutingStrategy::AutoEconomy,
             2000,
             "fallback-model",
         );
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model.as_str(), get_task_model(&Provider::ManagedCloud, "chat"));
     }
 
     #[test]
     fn auto_economy_large_tokens_uses_long_context_catalog_model() {
-        // 8000 ≤ tokens → ManagedCloud "long_context" task → models.json
-        // picks the current long-context default (Gemini for the 1M-token
-        // window).
+        // 8000 ≤ tokens → ManagedCloud "long_context" task. Assert the routing
+        // decision against the SSOT (not a hard-coded id) so it survives
+        // models.json long-context-default changes.
         let model = LLMRouter::resolve_model_for_strategy(
             RoutingStrategy::AutoEconomy,
             10000,
             "fallback-model",
         );
-        assert_eq!(model, "gemini-3.1-pro-preview");
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::ManagedCloud, "long_context")
+        );
     }
 
     #[test]
@@ -230,19 +237,24 @@ mod h13_resolve_model_for_strategy {
     // Boundary tests
     #[test]
     fn auto_economy_boundary_at_1000() {
-        // token_count == 1000 should NOT pick the fast OpenAI economy model (< 1000)
-        // Crosses into ManagedCloud "chat" task — current catalog default is gpt-5.4-mini.
+        // token_count == 1000 should NOT pick the fast OpenAI economy model (< 1000);
+        // it crosses into the ManagedCloud "chat" task. Assert the routing decision
+        // against the SSOT, not a hard-coded id.
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 1000, "fallback");
-        assert_eq!(model, "gpt-5.4-mini");
+        assert_eq!(model.as_str(), get_task_model(&Provider::ManagedCloud, "chat"));
     }
 
     #[test]
     fn auto_economy_boundary_at_8000() {
-        // token_count == 8000 should switch to the long-context catalog default.
+        // token_count == 8000 switches to the ManagedCloud "long_context" task.
+        // Assert the routing decision against the SSOT, not a hard-coded id.
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 8000, "fallback");
-        assert_eq!(model, "gemini-3.1-pro-preview");
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::ManagedCloud, "long_context")
+        );
     }
 
     #[test]
