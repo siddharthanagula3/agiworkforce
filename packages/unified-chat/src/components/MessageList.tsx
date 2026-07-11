@@ -128,57 +128,63 @@ export function MessageList({
 
   return (
     <div className="relative h-full">
-      <div ref={scrollerRef} className="h-full overflow-y-auto px-4 py-4">
-        {messages.map((msg, idx) => (
-          <div
-            key={msg.id}
-            className={`mb-4 ${msg.role === 'user' ? 'flex justify-end' : 'flex flex-col items-start'}`}
-          >
-            <MessageBubble
-              message={msg}
-              isLast={idx === messages.length - 1}
-              onArtifactClick={onArtifactClick}
-            />
-            {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
-              <ProvenanceFooter message={msg} />
-            )}
+      {/* Flat conversation feed (web parity): no per-role row striping, generous
+          vertical rhythm via per-row py-3, and every row's content centred in a
+          readable max-w-3xl column that lines up with the composer. */}
+      <div ref={scrollerRef} className="h-full overflow-y-auto py-2">
+        {messages.map((msg) => (
+          <div key={msg.id} data-message-row={msg.role} className="px-4 py-3">
+            <div className="mx-auto w-full max-w-3xl">
+              <div
+                className={
+                  msg.role === 'user' ? 'flex justify-end' : 'flex flex-col items-stretch'
+                }
+              >
+                <MessageBubble message={msg} onArtifactClick={onArtifactClick} />
+                {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
+                  <ProvenanceFooter message={msg} />
+                )}
+              </div>
+            </div>
           </div>
         ))}
         {showContinue && lastMessage ? (
-          <div className="mb-4 flex justify-start">
-            <button
-              type="button"
-              onClick={() => onContinueGeneration?.(lastMessage.id)}
-              aria-label="Continue generating the previous response"
-              className="
-                inline-flex items-center gap-2
-                rounded-full border px-3 py-1.5
-                text-xs font-medium
-                transition hover:scale-[1.02] active:scale-[0.98]
-                focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
-              "
-              style={{
-                background: 'var(--chat-surface-elevated)',
-                color: 'var(--chat-text-primary)',
-                borderColor: 'var(--chat-border-strong)',
-              }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.25"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+          <div className="px-4 pb-3">
+            <div className="mx-auto flex w-full max-w-3xl justify-start">
+              <button
+                type="button"
+                onClick={() => onContinueGeneration?.(lastMessage.id)}
+                aria-label="Continue generating the previous response"
+                className="
+                  inline-flex items-center gap-2
+                  rounded-full border px-3 py-1.5
+                  text-xs font-medium
+                  transition hover:scale-[1.02] active:scale-[0.98]
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+                "
+                style={{
+                  background: 'var(--chat-surface-elevated)',
+                  color: 'var(--chat-text-primary)',
+                  borderColor: 'var(--chat-border-strong)',
+                }}
               >
-                <path d="M5 3l14 9-14 9V3z" />
-              </svg>
-              <span>Continue generating</span>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.25"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 3l14 9-14 9V3z" />
+                </svg>
+                <span>Continue generating</span>
+              </button>
+            </div>
           </div>
         ) : null}
         <div ref={bottomRef} />
