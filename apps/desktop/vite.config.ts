@@ -55,8 +55,13 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       }
     : {};
 
-  // Build target: Use esnext for modern builds, with platform-specific fallbacks
-  const buildTarget = isWindows ? 'chrome105' : 'safari14';
+  // Build target: Use esnext for modern builds, with platform-specific fallbacks.
+  // macOS Tauri uses the WKWebView, which supports ES2020+ natively. `safari14`
+  // was too conservative: Vite 8's esbuild refuses to downlevel some destructuring
+  // to `safari14` (throws "Transforming destructuring … not supported yet"),
+  // breaking the release build even though Safari 14 runs destructuring fine.
+  // `safari15` stops the spurious transform while staying WKWebView-compatible.
+  const buildTarget = isWindows ? 'chrome105' : 'safari15';
 
   const config: UserConfig = {
     base: isWebBuild ? '/' : undefined,
