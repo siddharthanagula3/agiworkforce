@@ -138,8 +138,12 @@ jest.mock('../src/features/voice/components/VoiceInputButton', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
   return {
-    VoiceInputButton: (props: { resetSignal?: number }) => {
+    VoiceInputButton: (props: { resetSignal?: number; onRecordingStart?: () => void }) => {
       lastVoiceResetSignal = props.resetSignal;
+      // Capture onRecordingStart so tests can drive the component into its
+      // recording state (which reveals the inline "Use recording" send button
+      // wired to handleOverlaySend — the RecordingOverlay component was removed).
+      capturedRecordingStart = props.onRecordingStart;
       return (
         <Pressable testID="voice-input-button" accessibilityLabel="Voice input">
           <Text>Mic</Text>
@@ -148,6 +152,8 @@ jest.mock('../src/features/voice/components/VoiceInputButton', () => {
     },
   };
 });
+
+let capturedRecordingStart: (() => void) | undefined;
 
 let capturedOverlaySend: (() => void) | undefined;
 let capturedOverlayCancel: (() => void) | undefined;
@@ -259,6 +265,7 @@ describe('ChatInput', () => {
     lastVoiceResetSignal = undefined;
     capturedOverlaySend = undefined;
     capturedOverlayCancel = undefined;
+    capturedRecordingStart = undefined;
     capturedAttachmentPreviewProps = undefined;
   });
 
@@ -498,11 +505,16 @@ describe('ChatInput', () => {
       const VoiceService = require('../src/features/voice/services/voice');
       VoiceService.isRecording.mockReturnValue(false);
 
-      renderInput();
+      const { getByLabelText } = renderInput();
+      // Drive the component into its recording state so the inline "Use
+      // recording" send button (wired to handleOverlaySend) renders.
+      act(() => {
+        capturedRecordingStart!();
+      });
       const signalBefore = lastVoiceResetSignal;
 
       await act(async () => {
-        await capturedOverlaySend!();
+        fireEvent.press(getByLabelText('Use recording'));
       });
 
       await waitFor(() => {
@@ -518,11 +530,14 @@ describe('ChatInput', () => {
       VoiceService.transcribe.mockResolvedValue({ text: 'hello from voice' });
 
       const onSend = jest.fn();
-      renderInput({ onSend });
+      const { getByLabelText } = renderInput({ onSend });
+      act(() => {
+        capturedRecordingStart!();
+      });
       const signalBefore = lastVoiceResetSignal;
 
       await act(async () => {
-        await capturedOverlaySend!();
+        fireEvent.press(getByLabelText('Use recording'));
       });
 
       await waitFor(() => {
