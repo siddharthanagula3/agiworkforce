@@ -363,7 +363,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             mutedColor={themeColors.textMuted}
             onPress={handleOpenStyleSelector}
           />
-          {FEATURES.connectors ? (
+          {appMode === 'cloud' && FEATURES.connectors ? (
             <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
               label="Connectors"
