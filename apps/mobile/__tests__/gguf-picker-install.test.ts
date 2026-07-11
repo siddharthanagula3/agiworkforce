@@ -149,13 +149,17 @@ describe('installStore.prepareModel GGUF branch', () => {
   it('surfaces download failures as failed jobs (same contract as ExecuTorch path)', async () => {
     (downloadModel as jest.Mock).mockRejectedValue(new Error('checksum mismatch'));
 
+    // The RAW error still propagates to the caller (for logging/diagnostics)…
     await expect(useModelInstallStore.getState().prepareModel(visionModelDef)).rejects.toThrow(
       'checksum mismatch',
     );
+    // …but the failed JOB carries a generic user-safe message by design — the
+    // store deliberately never surfaces internal driver errors (e.g. sqlite
+    // execAsync failures) to the UI (see installStore prepareModel catch).
     expect(useModelInstallStore.getState().jobs['qwen3-vl-2b-instruct']).toEqual({
       status: 'failed',
       progress: 0,
-      error: 'checksum mismatch',
+      error: 'Unable to prepare the model. Please try again.',
     });
   });
 
