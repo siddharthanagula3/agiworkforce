@@ -970,3 +970,42 @@ describe('ChatInterface artifact panel wiring', () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ChatInput composer — web-parity control row (2026-07-10)
+// The shared ChatInput was aligned to web's ChatComposerNew: a single
+// non-wrapping control row, a round "+" trigger, and the shared 3-state
+// SendButton. These structural assertions guard that look from regressing.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ChatInput composer structure (web parity)', () => {
+  beforeEach(resetStores);
+
+  function markup() {
+    // runtime={null} still renders the composer (disabled). This is the same
+    // path the ChatInterface host-ownership tests above exercise.
+    return renderToStaticMarkup(
+      <ChatInterface runtime={null} sidebarSlot={null} enableSearchOverlay={false} />,
+    );
+  }
+
+  it('renders the round "+" attachment trigger', () => {
+    const html = markup();
+    expect(html).toContain('aria-label="Add attachment"');
+    // Round trigger (rounded-full), matching web's composer — not the old rounded-lg.
+    expect(html).toMatch(/aria-label="Add attachment"[^>]*class="[^"]*rounded-full/);
+  });
+
+  it('renders the shared SendButton in the send state with Enter affordance', () => {
+    const html = markup();
+    expect(html).toContain('aria-label="Send message (Enter)"');
+  });
+
+  it('lays the control cluster out as a single non-wrapping row (flex-nowrap)', () => {
+    const html = markup();
+    // web deliberately uses flex-nowrap so the send button never drops a line.
+    expect(html).toContain('flex-nowrap');
+    // The old wrapping layout used gap-y-1 on a flex-wrap row; it must be gone.
+    expect(html).not.toContain('flex-wrap items-center gap-x-2 gap-y-1');
+  });
+});
