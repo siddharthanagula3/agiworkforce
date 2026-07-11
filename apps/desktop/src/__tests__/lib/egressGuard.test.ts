@@ -77,6 +77,38 @@ describe('isOurCloudHost', () => {
     // Provider hosts must never be on the denylist.
     expect(OUR_CLOUD_HOSTS).not.toContain('api.anthropic.com');
   });
+
+  it('DRIFT REGRESSION: classifies the Clerk hosts desktop used to miss as ours', () => {
+    // These two Clerk domains were on mobile's denylist but NOT desktop's, so
+    // desktop Local mode wouldn't have blocked them. After reconciling to the
+    // shared union they must classify as ours on both surfaces.
+    expect(OUR_CLOUD_HOSTS).toContain('clerk.dev');
+    expect(OUR_CLOUD_HOSTS).toContain('clerk.services');
+    expect(isOurCloudHost('clerk.dev')).toBe(true);
+    expect(isOurCloudHost('foo.clerk.dev')).toBe(true);
+    expect(isOurCloudHost('clerk.services')).toBe(true);
+    expect(isOurCloudHost('frontend-api.clerk.services')).toBe(true);
+  });
+});
+
+describe('guardedFetch — DRIFT REGRESSION (Clerk hosts desktop missed are now blocked in Local mode)', () => {
+  // Before the shared-policy reconcile, desktop's denylist omitted clerk.dev and
+  // clerk.services, so Local mode would have LEAKED account/auth traffic to them.
+  // These assert the guard now throws BEFORE any network call for those hosts.
+  const PREVIOUSLY_LEAKED = [
+    'https://foo.clerk.dev/v1/client',
+    'https://frontend-api.clerk.services/v1/environment',
+  ];
+
+  it.each(['local', 'byok'])('blocks the previously-drifted Clerk hosts in %s mode', async (mode) => {
+    getStateMock.mockReturnValue({ privacyMode: mode });
+    for (const url of PREVIOUSLY_LEAKED) {
+      await expect(guardedFetch(url, { method: 'POST' })).rejects.toThrow(
+        /blocked our-cloud egress/,
+      );
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('guardedFetch — privacy mode "local"', () => {

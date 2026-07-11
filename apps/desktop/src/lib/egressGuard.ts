@@ -42,49 +42,16 @@
 // the same import edge egressGuard used directly; the cloudAccountAuth → egressGuard
 // → appModeStore cycle stays broken on the cloudAccountAuth side (lazy require).
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
+// Host policy lives in ONE shared module (@agiworkforce/services) so desktop and
+// mobile can never drift apart again — they used to define separate denylists
+// and each failed to block some of our-cloud hosts the other blocked. The
+// reconciled UNION + the boundary-safe suffix matcher are shared; only the
+// platform-bound guardedFetch wrapper + privacy-mode read stay here.
+import { OUR_CLOUD_HOSTS, isOurCloudHost } from '@agiworkforce/services';
 
-/**
- * Hostname suffixes that belong to OUR cloud infrastructure. Matched by
- * boundary-safe suffix (exact host OR `*.<suffix>`), so `notagiworkforce.com`
- * does NOT match `agiworkforce.com`.
- *
- * Sources (do not invent — confirmed from repo):
- *  - `agiworkforce.com` — public web app (api/config.ts WEB_APP_URL) and the
- *    API gateway `www.agiworkforce.com` (api/config.ts API_BASE_URL) plus the
- *    managed gateway `gateway.agiworkforce.com` (features/chat/index.tsx).
- *  - `vercel.app` — Vercel preview/prod deploys of our web + LLM endpoints
- *    (api/cloudApi.ts comments: "OpenAI-compatible endpoint deployed on Vercel").
- *  - `neon.tech` — our managed Postgres (Neon) — see CLAUDE.md cloud stack.
- *  - `clerk.com` / `clerk.accounts.dev` — our managed auth provider (Clerk).
- *
- * NOTE: BYOK provider hosts (api.anthropic.com, api.openai.com,
- * generativelanguage.googleapis.com, ...) are deliberately ABSENT so BYOK
- * client-direct streaming to the user's own provider is never blocked.
- */
-export const OUR_CLOUD_HOSTS: readonly string[] = [
-  'agiworkforce.com', // web app + www API gateway + gateway.* managed gateway
-  'vercel.app', // Vercel-hosted web + LLM endpoints
-  'neon.tech', // managed Postgres
-  'clerk.com', // managed auth (Clerk)
-  'clerk.accounts.dev', // managed auth (Clerk dev/frontend API)
-];
-
-/**
- * Returns true when `host` is one of OUR cloud hosts.
- *
- * Boundary-safe suffix match: a host matches a denylist entry `d` only when it
- * equals `d` exactly or ends with `.<d>`. Comparison is case-insensitive and
- * ignores any trailing dot (FQDN form).
- */
-export function isOurCloudHost(host: string | null | undefined): boolean {
-  if (!host) return false;
-  // Normalize: lowercase, strip a trailing FQDN dot.
-  const normalized = host.toLowerCase().replace(/\.$/, '');
-  if (normalized.length === 0) return false;
-  return OUR_CLOUD_HOSTS.some(
-    (denied) => normalized === denied || normalized.endsWith(`.${denied}`),
-  );
-}
+// Re-export so existing desktop importers (and the egress tests) keep their
+// `../lib/egressGuard` import path.
+export { OUR_CLOUD_HOSTS, isOurCloudHost };
 
 /**
  * True when we are in a Local trust boundary (Local OR BYOK) and must block

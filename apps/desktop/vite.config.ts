@@ -301,6 +301,10 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         ),
         '@agiworkforce/utils/uuidv7': path.resolve(__dirname, '../../packages/utils/src/uuidv7.ts'),
         '@agiworkforce/utils': path.resolve(__dirname, '../../packages/utils/src/index.ts'),
+        // Resolve the shared service layer (incl. the shared egress host policy)
+        // to workspace src so worktree/dev builds and vitest pick up local
+        // changes, mirroring the runtime/utils aliases above.
+        '@agiworkforce/services': path.resolve(__dirname, '../../packages/services/src/index.ts'),
         ...webTauriAliases,
       },
     },
