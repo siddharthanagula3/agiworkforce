@@ -968,7 +968,12 @@ mod tests {
 
     #[test]
     fn explicit_thinking_mode_false_disables_even_with_trigger() {
-        // User explicitly turned off thinking in UI, message has "ultrathink"
+        // User explicitly turned off thinking in UI, message has "ultrathink".
+        // Explicit false wins over the trigger word AND must emit an explicit
+        // disable signal (Some(Enabled(false))), not None: some providers default
+        // thinking ON at the API level, so the "false" must survive to the
+        // provider layer rather than being omitted (see resolve_thinking_parameter
+        // §2). Either way thinking is disabled — the trigger never re-enables it.
         let thinking = resolve_thinking_parameter(
             "claude-sonnet-4-6",
             Some(false),
@@ -976,7 +981,10 @@ mod tests {
             false,
             "ultrathink about this",
         );
-        assert!(thinking.is_none());
+        match thinking {
+            Some(ThinkingParameter::Enabled(false)) => {}
+            other => panic!("Expected explicit-disable Some(Enabled(false)), got {other:?}"),
+        }
     }
 
     #[test]
