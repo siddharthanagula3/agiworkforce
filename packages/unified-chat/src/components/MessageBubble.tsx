@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Wrench } from 'lucide-react';
+import { Copy, Check, Wrench } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '@agiworkforce/ui';
 import { ActionBar } from './ActionBar';
@@ -12,15 +12,14 @@ import type { ChatMessage, Artifact, ToolCall } from '../lib/types';
 
 interface MessageBubbleProps {
   message: ChatMessage;
-  isLast: boolean;
+  /**
+   * @deprecated No longer consumed. The assistant action row now renders below
+   * every completed message (web parity), not only the last turn. Kept optional
+   * so existing callers/tests can still pass it without a type error.
+   */
+  isLast?: boolean;
   onRetry?: (messageId: string) => void;
   onArtifactClick?: (artifact: Artifact) => void;
-}
-
-// Format a timestamp string to "h:mm AM/PM"
-function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 /**
@@ -424,9 +423,20 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
   );
 }
 
-export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: MessageBubbleProps) {
+export function MessageBubble({ message, onRetry, onArtifactClick }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard write failed silently — shared package renders no toast
+    }
+  }
 
   function handleDownloadArtifact(artifact: Artifact) {
     const ext =
@@ -458,20 +468,37 @@ export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: Mes
     return (
       <div
         data-role="user"
-        className="message-enter flex max-w-[80%] min-w-0 flex-col items-end gap-1"
+        className="group message-enter flex max-w-[85%] min-w-0 flex-col items-end gap-1"
       >
+        {/* Right-aligned rounded bubble (web .user-bubble parity: px-4 py-2.5,
+            radius-2xl, --chat-user-bubble-bg). No per-message timestamp — the
+            web feed uses date dividers + provenance for time cues, not a stamp
+            under every user turn. */}
         <div
           className={cn(
-            'w-fit max-w-full rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-3',
+            'w-fit max-w-full rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-2.5',
             'text-[15px] leading-relaxed text-[var(--chat-text-primary)]',
             'whitespace-pre-wrap break-words',
           )}
         >
           {message.content}
         </div>
-        <span className="text-[12px] text-[var(--chat-text-muted)] pr-1">
-          {message.createdAt ? formatTime(message.createdAt) : ''}
-        </span>
+        {/* Hover-only copy (web parity: user actions reveal on hover). Copy is
+            fully self-contained; no other user actions are wired on desktop. */}
+        <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={copied ? 'Copied' : 'Copy message'}
+            onClick={handleCopy}
+            className={cn(
+              'h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+              copied && 'text-[var(--chat-accent-secondary)]',
+            )}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -488,12 +515,26 @@ export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: Mes
       ))}
 
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
-        {renderContent(message.content)}
-        {isStreaming && (
-          <span
-            aria-hidden
-            className="inline-block w-0.5 h-4 bg-[var(--chat-text-primary)] ml-0.5 align-middle animate-pulse"
-          />
+        {isStreaming && !message.content.trim() ? (
+          /* Pre-first-token placeholder (web parity): a pulsing dot + "Thinking…"
+             instead of a bare blinking caret on an empty bubble. */
+          <div className="flex items-center gap-2 text-[var(--chat-text-muted)]">
+            <span
+              aria-hidden
+              className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--chat-accent-primary)]"
+            />
+            <span className="text-sm">Thinking…</span>
+          </div>
+        ) : (
+          <>
+            {renderContent(message.content)}
+            {isStreaming && (
+              <span
+                aria-hidden
+                className="inline-block w-0.5 h-4 bg-[var(--chat-text-primary)] ml-0.5 align-middle animate-pulse"
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -534,7 +575,12 @@ export function MessageBubble({ message, isLast, onRetry, onArtifactClick }: Mes
       {((message.generatedFiles && message.generatedFiles.length > 0) ||
         hasRunningExecutionTool(message)) && <MessageGeneratedFiles message={message} />}
 
-      {!isStreaming && isLast && (
+      {/* Action row (web parity): assistant actions sit below EVERY completed
+          message, always visible — not only the last turn. ActionBar renders
+          Copy (self-contained); retry/feedback appear only when their handlers
+          are wired (honest omission on desktop today). `isLast` no longer gates
+          the row. */}
+      {!isStreaming && (
         <ActionBar messageId={message.id} content={message.content} onRetry={onRetry} />
       )}
     </div>
