@@ -246,7 +246,11 @@ describe('ModelPickerSheet', () => {
     const { getByText, getAllByText } = renderPicker({ modelScope: 'all' });
 
     expect(getByText('On device')).toBeTruthy();
-    expect(getByText('Cloud')).toBeTruthy();
+    // Cloud models are grouped by PROVIDER (OpenAI, Anthropic, …), not under a
+    // single "Cloud" header. Assert the first locked model's provider section
+    // renders — derived from the catalog so it can't drift (see repeated-bug
+    // class: never assert hard-coded catalog strings).
+    expect(getByText(LOCKED_CLOUD_MODELS[0]!.providerLabel)).toBeTruthy();
     expect(getAllByText('Sign in').length).toBeGreaterThan(0);
   });
 
@@ -270,9 +274,13 @@ describe('ModelPickerSheet', () => {
 
   it('marks cloud rows as invite-gated but tappable', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+    const { getAllByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    const lockedRow = getByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`);
+    // Preset display names (e.g. "Fast") repeat across providers, so scope to
+    // the first matching locked row — all locked rows share the same gating.
+    const lockedRow = getAllByLabelText(
+      `${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`,
+    )[0]!;
     expect(lockedRow.props.accessibilityState.disabled).toBe(false);
   });
 
@@ -328,9 +336,11 @@ describe('ModelPickerSheet', () => {
 
   it('does not select locked cloud rows and routes to sign-in (public alpha, no invite/waitlist gate)', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+    const { getAllByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    fireEvent.press(getByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`));
+    fireEvent.press(
+      getAllByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`)[0]!,
+    );
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
@@ -340,12 +350,14 @@ describe('ModelPickerSheet', () => {
   it('delegates locked cloud rows to the parent invite surface when provided', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const onOpenCloudAccess = jest.fn();
-    const { getByLabelText } = renderPicker({
+    const { getAllByLabelText } = renderPicker({
       onOpenCloudAccess,
       modelScope: 'cloud',
     });
 
-    fireEvent.press(getByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`));
+    fireEvent.press(
+      getAllByLabelText(`${lockedModel.name}, sign in required, ${CLOUD_LOCK_REASON}`)[0]!,
+    );
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
@@ -359,11 +371,15 @@ describe('ModelPickerSheet', () => {
     // actual intent (invite/sign-in unlock, not subscription-tier gating) holds.
     useTierStore.setState({ tier: 'max' });
     const cloudModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText, getByText } = renderPicker({ modelScope: 'cloud' });
+    // At Max tier + unlocked, the row renders the REAL model name (not the
+    // free-tier preset the LOCKED snapshot carries), so resolve the rendered
+    // name to find the row.
+    const renderedName = getModelByIdForCloudAccess(cloudModel.id, true, 'max')!.name;
+    const { getAllByLabelText, getByText } = renderPicker({ modelScope: 'cloud' });
 
     expect(getByText('AGI Cloud models are managed separately from Local Mode.')).toBeTruthy();
 
-    fireEvent.press(getByLabelText(cloudModel.name));
+    fireEvent.press(getAllByLabelText(renderedName)[0]!);
 
     expect(useModelStore.getState().selectedModel).toBe(cloudModel.id);
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
@@ -407,8 +423,10 @@ describe('ModelPickerSheet', () => {
       'locked',
     );
 
-    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
-    fireEvent.press(getByLabelText(economyModel!.name));
+    // Preset display names ("Fast") repeat across providers, so target the row
+    // by its stable per-model testID rather than the ambiguous label.
+    const { getByTestId } = renderPicker({ modelScope: 'cloud' });
+    fireEvent.press(getByTestId('model-row-gpt-5.4-mini'));
 
     expect(useModelStore.getState().selectedModel).toBe('gpt-5.4-mini');
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
@@ -472,6 +490,10 @@ describe('ModelPickerSheet', () => {
   it('sets a per-conversation effort override without changing the model or closing the sheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
+    // The reasoning-effort selector only renders for a reasoning-capable model
+    // (component gate: modelScope==='cloud' && selectedSupportsReasoning), so
+    // select one first.
+    useModelStore.getState().setModel('claude-opus-4.8');
     const { getByLabelText } = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
 
     expect(getByLabelText('Reasoning effort Medium').props.accessibilityState.selected).toBe(true);
@@ -481,12 +503,15 @@ describe('ModelPickerSheet', () => {
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('high');
     expect(getByLabelText('Reasoning effort High').props.accessibilityState.selected).toBe(true);
     // Effort and model choice are independent: no selection change, no close.
-    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.8');
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
 
   it('writes the project-default effort when no conversation id is provided', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    // Effort selector needs a reasoning-capable model selected (see above).
+    useModelStore.getState().setModel('claude-opus-4.8');
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     fireEvent.press(getByLabelText('Reasoning effort Low'));
