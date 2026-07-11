@@ -223,7 +223,15 @@ export const UsageDashboard: React.FC = () => {
 
           <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
             <h3 className="text-sm font-medium text-muted-foreground">Monthly Usage</h3>
-            {monthlyLimit > 0 ? (
+            {!billingUsageStats ? (
+              // Per-model usage metering is server-side; the desktop client has
+              // no honest source for it, so show an explicit unavailable state
+              // rather than a misleading 0%.
+              <>
+                <p className="text-2xl font-bold mt-2 text-muted-foreground">—</p>
+                <p className="text-xs text-muted-foreground mt-1">Metered server-side</p>
+              </>
+            ) : monthlyLimit > 0 ? (
               <>
                 <p className="text-2xl font-bold mt-2 text-amber-500">
                   {creditPercentage.toFixed(1)}%
@@ -253,10 +261,17 @@ export const UsageDashboard: React.FC = () => {
 
           <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
             <h3 className="text-sm font-medium text-muted-foreground">LLM Tokens</h3>
-            <p className="text-2xl font-bold mt-2 text-blue-500">
-              {billingUsageStats?.llm_tokens_used.toLocaleString() ?? '0'}
+            <p
+              className={cn(
+                'text-2xl font-bold mt-2',
+                billingUsageStats ? 'text-blue-500' : 'text-muted-foreground',
+              )}
+            >
+              {billingUsageStats ? billingUsageStats.llm_tokens_used.toLocaleString() : '—'}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Total tokens processing</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {billingUsageStats ? 'Total tokens processing' : 'Metered server-side'}
+            </p>
           </div>
 
           <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
