@@ -483,8 +483,13 @@ export function ChatInput({
               )}
             </div>
 
-            {/* Right: Model selector + mic + send */}
-            <div className="ml-auto flex max-w-full shrink-0 items-center justify-end gap-1.5">
+            {/* Right: Model selector + mic + send.
+                min-w-0 (NOT shrink-0) so the model pill is the item that
+                truncates first as the column narrows — mirroring web, where the
+                shrinkable model area shares the nowrap row. The mic + send below
+                are shrink-0, so under flex-nowrap + the container's overflow-hidden
+                the send button can never be pushed off-edge or clipped. */}
+            <div className="ml-auto flex min-w-0 max-w-full items-center justify-end gap-1.5">
               {/* Inline model selector popover */}
               <ModelSelector
                 onSettingsClick={onModelSelectorClick}
@@ -499,7 +504,7 @@ export function ChatInput({
                   onClick={startVoice}
                   aria-label={voiceState === 'listening' ? 'Stop recording' : 'Voice input'}
                   className={cn(
-                    'flex h-9 w-9 items-center justify-center rounded-full',
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
                     'transition-colors duration-150',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                     voiceState === 'listening'
