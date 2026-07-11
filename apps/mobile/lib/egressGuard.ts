@@ -24,6 +24,11 @@
  * Allowed requests keep all of secureFetch's behaviour.
  */
 import NetInfo from '@react-native-community/netinfo';
+import {
+  OUR_CLOUD_HOSTS as SHARED_OUR_CLOUD_HOSTS,
+  isOurCloudHost as isSharedOurCloudHost,
+  matchesCloudHost,
+} from '@agiworkforce/services';
 import { API_URL, WS_URL } from '@/lib/constants';
 import { secureFetch, type SecureFetchOptions } from '@/services/secureFetch';
 
@@ -69,57 +74,48 @@ function hostOfConfig(urlString: string): string {
 }
 
 /**
- * Real managed-cloud hosts, discovered from the mobile config — NOT invented.
+ * Config-derived managed-cloud hosts, discovered from the mobile config — NOT
+ * invented. These are UNIONED on top of the shared floor
+ * ({@link SHARED_OUR_CLOUD_HOSTS} from @agiworkforce/services) so a
+ * non-default/staging deployment host still gets blocked in Local mode even if
+ * it is not one of the shared apex domains.
  *
  *   - API_URL  → our HTTP API + api-gateway base (services/api.ts,
  *     services/streaming.ts, lib/providerStreamClient.ts all hit `${API_URL}/...`)
  *     Default: agiworkforce.com. The gateway lives at api.agiworkforce.com.
  *   - WS_URL   → signaling relay (lib/constants.ts) → signaling.agiworkforce.com
- *   - *.neon.tech → our managed Postgres (cloud chat persistence)
- *   - Clerk    → our managed auth (@clerk/expo)
  *
- * We block by exact host AND by apex-suffix so any current/future subdomain of
- * our domains (api., signaling., telemetry., …) is covered without guessing
- * exact names.
+ * The shared floor already covers agiworkforce.com / neon.tech / Clerk / Vercel;
+ * these entries only ADD hosts (never remove), keeping the guard fail-closed.
  */
 const apiHost = hostOfConfig(API_URL); // e.g. agiworkforce.com
 const wsHost = hostOfConfig(WS_URL); // e.g. signaling.agiworkforce.com
 
-/** Apex domains whose every subdomain is our managed cloud. */
-const OUR_CLOUD_APEX_SUFFIXES: readonly string[] = [
-  // Our product domain + every subdomain (api., signaling., telemetry., app., …).
-  'agiworkforce.com',
-  // Our managed Postgres (Neon) — any project/branch subdomain.
-  'neon.tech',
-  // Our managed auth (Clerk) — FAPI + accounts subdomains across Clerk's domains.
-  'clerk.com',
-  'clerk.accounts.dev',
-  'clerk.dev',
-  'clerk.services',
-].filter(Boolean);
-
-/** Exact hosts that are our managed cloud (derived from config; deduped). */
-export const OUR_CLOUD_HOSTS: readonly string[] = Array.from(
+/** Config-derived hosts, deduped and non-empty. Matched boundary-safe (apex + subdomains). */
+const CONFIG_CLOUD_HOSTS: readonly string[] = Array.from(
   new Set([apiHost, wsHost].filter((h): h is string => h.length > 0)),
+);
+
+/**
+ * Our managed-cloud hosts as seen by this surface: the shared reconciled floor
+ * plus this build's config-derived hosts. Exposed for diagnostics/tests.
+ */
+export const OUR_CLOUD_HOSTS: readonly string[] = Array.from(
+  new Set([...SHARED_OUR_CLOUD_HOSTS, ...CONFIG_CLOUD_HOSTS]),
 );
 
 /**
  * True if `host` is one of our managed-cloud hosts.
  *
- * Matches: an exact configured host, OR a host that is the apex / a subdomain
- * of one of our apex domains. Empty/malformed hosts are treated as NOT-ours so
- * the caller still falls through to `secureFetch` (which fails closed on
- * malformed URLs when pinning is enforced) — we never want a parse failure to
- * *whitelist* an our-cloud bypass, and our-cloud hosts always parse cleanly.
+ * Matches the shared reconciled floor OR a config-derived host, both by
+ * boundary-safe suffix (exact host or `*.<suffix>`). Empty/malformed hosts are
+ * treated as NOT-ours so the caller still falls through to `secureFetch` (which
+ * fails closed on malformed URLs when pinning is enforced) — we never want a
+ * parse failure to *whitelist* an our-cloud bypass, and our-cloud hosts always
+ * parse cleanly.
  */
 export function isOurCloudHost(host: string | undefined | null): boolean {
-  if (!host) return false;
-  const h = host.toLowerCase();
-  if (OUR_CLOUD_HOSTS.includes(h)) return true;
-  for (const apex of OUR_CLOUD_APEX_SUFFIXES) {
-    if (h === apex || h.endsWith(`.${apex}`)) return true;
-  }
-  return false;
+  return isSharedOurCloudHost(host) || matchesCloudHost(host, CONFIG_CLOUD_HOSTS);
 }
 
 /**
