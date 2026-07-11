@@ -9,13 +9,14 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react';
+import { Mic, Plus } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { AttachmentMenu } from './AttachmentMenu';
 import { ModelSelector } from './ModelSelector';
+import { SendButton } from './SendButton';
 import { AgentControl } from './AgentControl';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
@@ -89,6 +90,10 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  // Tracks whether the (uncontrolled) textarea has trimmed content, so the send
+  // button can reflect the empty/non-empty state like web's composer (greyed +
+  // disabled when there is nothing to send). Updated on every keystroke.
+  const [hasTextContent, setHasTextContent] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -151,13 +156,15 @@ export function ChatInput({
       textareaRef.current.value = draftContent;
       textareaRef.current.focus();
       adjustHeight();
+      setHasTextContent(draftContent.trim().length > 0);
       setDraftContent('');
     }
   }, [draftContent, setDraftContent, adjustHeight]);
 
   const handleChange = useCallback(
-    (_e: ChangeEvent<HTMLTextAreaElement>) => {
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
       adjustHeight();
+      setHasTextContent(e.target.value.trim().length > 0);
     },
     [adjustHeight],
   );
@@ -284,6 +291,7 @@ export function ChatInput({
     onSend(content, agentMode, effort, attachedFiles.length > 0 ? attachedFiles : undefined);
     el.value = '';
     el.style.height = 'auto';
+    setHasTextContent(false);
     setAttachedFiles([]);
   }, [
     disabled,
@@ -398,9 +406,15 @@ export function ChatInput({
           aria-label="Chat message input"
         />
 
-        {/* Bottom toolbar */}
+        {/* Bottom toolbar.
+            SINGLE non-wrapping control row (flex-nowrap) — mirrors web's
+            ChatComposerNew, which deliberately avoids flex-wrap so the send
+            button can never drop to a second line as the column narrows.
+            The min-w-0 shrink chain lets the left group (plus + AgentControl
+            chips) and the model selector collapse first, while the voice + send
+            buttons stay shrink-0 and pinned to the right edge. */}
         <div className="flex flex-col gap-1 px-3 pt-1.5 pb-2">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="flex flex-nowrap items-center gap-1 sm:gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               {/* Left: Plus button — opens attachment menu */}
               <div className="flex shrink-0 items-center">
@@ -438,15 +452,17 @@ export function ChatInput({
                     aria-label="Add attachment"
                     aria-expanded={attachmentMenuOpen}
                     className={cn(
-                      'relative flex h-8 w-8 items-center justify-center rounded-lg',
-                      'text-[var(--chat-text-secondary)] transition-colors duration-150',
-                      'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
+                      // Round "+" trigger matching web's composer (h-9 rounded-full,
+                      // accent tint when files are attached or the menu is open).
+                      'relative flex h-9 w-9 items-center justify-center rounded-full',
+                      'transition-colors duration-150',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                      (attachedFiles.length > 0 || attachmentMenuOpen) &&
-                        'text-[var(--chat-accent-primary)]',
+                      attachedFiles.length > 0 || attachmentMenuOpen
+                        ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+                        : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
                     )}
                   >
-                    <Plus size={16} />
+                    <Plus size={18} />
                     {attachedFiles.length > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-white">
                         {attachedFiles.length}
@@ -483,7 +499,7 @@ export function ChatInput({
                   onClick={startVoice}
                   aria-label={voiceState === 'listening' ? 'Stop recording' : 'Voice input'}
                   className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full',
+                    'flex h-9 w-9 items-center justify-center rounded-full',
                     'transition-colors duration-150',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                     voiceState === 'listening'
@@ -495,33 +511,18 @@ export function ChatInput({
                 </button>
               )}
 
-              {/* Send / Stop — round accent circle */}
-              {isStreaming ? (
-                <button
-                  type="button"
-                  onClick={onStop}
-                  aria-label="Stop generation"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-white transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
-                >
-                  <Square size={13} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSend}
-                  aria-label="Send message (Enter)"
-                  disabled={disabled || noModelSelected}
-                  className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                    disabled || noModelSelected
-                      ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)] cursor-not-allowed'
-                      : 'bg-[var(--chat-accent-primary)] text-white hover:opacity-80',
-                  )}
-                >
-                  <ArrowUp size={16} strokeWidth={2} />
-                </button>
-              )}
+              {/* Send / Stop — shared 3-state SendButton (mirrors web's composer).
+                  The desktop chat store only models `isStreaming`, so we drive
+                  the honest two reachable states (stop while streaming, otherwise
+                  send). The button's `queue` state exists in the shared API for
+                  web parity but is never fabricated here. */}
+              <SendButton
+                mode={isStreaming ? 'stop' : 'send'}
+                hasContent={hasTextContent || attachedFiles.length > 0}
+                disabled={disabled || noModelSelected}
+                onClick={isStreaming ? onStop : handleSend}
+                className="shrink-0"
+              />
             </div>
           </div>
         </div>
