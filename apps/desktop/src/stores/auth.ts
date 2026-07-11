@@ -25,7 +25,7 @@ import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zus
 import { storageFallback } from '../lib/storageFallback';
 import { accountApi } from '../api/accountApi';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
-import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
+import type { CustomerInfo, SubscriptionInfo } from '../types/billing';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
 import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/cloudAccountTypes';
@@ -156,7 +156,6 @@ interface AuthState {
   stripeCustomerId: string | null;
   stripeCustomer: CustomerInfo | null;
   stripeSubscription: SubscriptionInfo | null;
-  stripeInitialized: boolean;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Credits (merged from accountStore + billingStore)
@@ -232,12 +231,14 @@ interface AuthActions {
 
   // ─────────────────────────────────────────────────────────────────────────
   // Billing Methods (from billingStore)
+  //
+  // Customer/subscription records are populated by the cloud auth
+  // orchestrator from the web `/api/auth/me` response. Checkout, portal, and
+  // cancellation route through the web REST API (`lib/stripeCheckout.ts`).
+  // The desktop client never holds Stripe secrets or talks to Stripe directly.
   // ─────────────────────────────────────────────────────────────────────────
-  initializeStripe: (stripeApiKey: string, webhookSecret: string) => Promise<void>;
   setStripeCustomer: (customer: CustomerInfo | null) => void;
-  fetchCustomerByEmail: (email: string) => Promise<CustomerInfo | null>;
   setStripeSubscription: (subscription: SubscriptionInfo | null) => void;
-  fetchActiveSubscription: (customerId: string) => Promise<void>;
   isSubscriptionActive: () => boolean;
   isInGracePeriod: () => boolean;
   getCurrentPlan: () => string;
@@ -451,7 +452,6 @@ function getDefaultState(): AuthState {
     stripeCustomerId: null,
     stripeCustomer: null,
     stripeSubscription: null,
-    stripeInitialized: false,
 
     // Credits
     credits: null,
@@ -1043,45 +1043,15 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
 
         // ═══════════════════════════════════════════════════════════════════
         // Billing Methods (from billingStore)
+        //
+        // Subscription/customer records are set by the cloud auth orchestrator
+        // from the web `/api/auth/me` response — the desktop never queries
+        // Stripe directly. Checkout/portal/cancel go through the web REST API
+        // (`lib/stripeCheckout.ts`). No Stripe secrets live on the client.
         // ═══════════════════════════════════════════════════════════════════
-
-        initializeStripe: async (stripeApiKey: string, webhookSecret: string) => {
-          try {
-            await StripeService.initialize(stripeApiKey, webhookSecret);
-            set(
-              { stripeInitialized: true, error: null },
-              undefined,
-              'auth/initializeStripe/success',
-            );
-          } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Failed to initialize billing';
-            set(
-              { error: errorMessage, stripeInitialized: false },
-              undefined,
-              'auth/initializeStripe/error',
-            );
-            throw error;
-          }
-        },
 
         setStripeCustomer: (customer) =>
           set({ stripeCustomer: customer, customer }, undefined, 'auth/setStripeCustomer'),
-
-        fetchCustomerByEmail: async (email: string) => {
-          try {
-            set({ error: null }, undefined, 'auth/fetchCustomerByEmail/start');
-            const customer = await StripeService.getCustomerByEmail(email);
-            if (customer) {
-              set({ stripeCustomer: customer }, undefined, 'auth/fetchCustomerByEmail/success');
-            }
-            return customer;
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to get customer';
-            set({ error: errorMessage }, undefined, 'auth/fetchCustomerByEmail/error');
-            throw error;
-          }
-        },
 
         setStripeSubscription: (subscription) =>
           set(
@@ -1089,31 +1059,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             undefined,
             'auth/setStripeSubscription',
           ),
-
-        fetchActiveSubscription: async (customerId: string) => {
-          try {
-            set(
-              { subscriptionFetchStatus: 'fetching', error: null },
-              undefined,
-              'auth/fetchActiveSubscription/start',
-            );
-            const subscription = await StripeService.getActiveSubscription(customerId);
-            set(
-              { stripeSubscription: subscription, subscriptionFetchStatus: 'succeeded' },
-              undefined,
-              'auth/fetchActiveSubscription/success',
-            );
-          } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Failed to fetch active subscription';
-            set(
-              { error: errorMessage, subscriptionFetchStatus: 'failed' },
-              undefined,
-              'auth/fetchActiveSubscription/error',
-            );
-            throw error;
-          }
-        },
 
         isSubscriptionActive: () => {
           const { stripeSubscription } = get();
@@ -1460,7 +1405,7 @@ export const selectCustomer = selectStripeCustomer;
 export const selectSubscription = selectStripeSubscription;
 
 // Type exports for backwards compatibility
-export type { CustomerInfo, SubscriptionInfo } from '../services/stripe';
+export type { CustomerInfo, SubscriptionInfo } from '../types/billing';
 
 // DesktopAccount type for backwards compatibility
 export interface DesktopAccount {
