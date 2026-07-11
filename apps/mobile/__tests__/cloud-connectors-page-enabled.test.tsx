@@ -37,12 +37,24 @@ jest.mock('lucide-react-native', () => {
     CheckCircle: icon,
     ArrowLeft: icon,
     ChevronRight: icon,
+    RefreshCw: icon,
+    Search: icon,
+    CloudOff: icon,
   };
 });
 
 jest.mock('../src/features/connectors/store', () => ({
   useConnectorsStore: (selector: (s: { connectedIds: string[]; toggle: () => void }) => unknown) =>
     selector({ connectedIds: [], toggle: jest.fn() }),
+}));
+
+// The connectors screen shows a "Chat is set to Local Mode" blocked banner
+// unless the app is in Cloud mode (connectors are a cloud-managed feature —
+// same trust gate as the AddToChatSheet). Put the screen in Cloud mode so the
+// interactive catalog renders and the shipped-feature assertions below apply.
+jest.mock('@/src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: (selector: (s: { appMode: string; setAppMode: () => void }) => unknown) =>
+    selector({ appMode: 'cloud', setAppMode: jest.fn() }),
 }));
 
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { connectors: true } }));
