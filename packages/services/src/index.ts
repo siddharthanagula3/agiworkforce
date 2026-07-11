@@ -7,6 +7,11 @@
  * @packageDocumentation
  */
 
+// Our-cloud egress host policy — the ONE shared classifier of "is this host our
+// managed cloud?" used by every surface's egress guard to BLOCK Local-mode leaks.
+// Reconciled union of the desktop + mobile denylists (they had drifted).
+export * from './egress-policy';
+
 // Artifact publish service — local export now, BYOK/managed publish gated until
 // the managed artifact publishing boundary is proven.
 export * from './artifacts';
