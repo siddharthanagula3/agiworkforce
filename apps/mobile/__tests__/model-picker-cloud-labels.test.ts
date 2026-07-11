@@ -18,7 +18,15 @@ describe('mobile cloud model labels', () => {
       /AGI Cloud (OpenAI|Anthropic|Google|xAI|DeepSeek)/,
     );
     expect(unlockedModels.length).toBeGreaterThan(0);
-    expect(getShortDisplayName(unlockedModels[0]!.id)).toBe('AGI Cloud');
+    // getShortDisplayName intentionally returns the ACTUAL model name (not a
+    // generic "AGI Cloud" — that hid the selection and duplicated the mode
+    // toggle's Cloud copy; see service.ts). It must still be AGI-owned (a
+    // capability preset like "Super Fast" for free presets), never a raw
+    // provider string.
+    expect(getShortDisplayName(unlockedModels[0]!.id)).toBe(unlockedModels[0]!.name);
+    expect(getShortDisplayName(unlockedModels[0]!.id)).not.toMatch(
+      /OpenAI|Anthropic|Google|xAI|DeepSeek/,
+    );
     expect(
       unlockedModels.map((model) => `${model.description} ${model.detailLabel}`).join(' '),
     ).not.toMatch(/route/i);
@@ -47,12 +55,22 @@ describe('mobile cloud model labels', () => {
   });
 
   it('uses the shared OpenAI probe model after cloud invite access', () => {
-    const unlockedCloudModels = getModelListForCloudAccess(true).filter(
+    expect(DEFAULT_CLOUD_MODEL_ID).toBe('gpt-5.4-mini');
+
+    // The probe/default IS available in the picker for a paying tier…
+    const paidCloudModels = getModelListForCloudAccess(true, 'pro').filter(
       (model) => model.surface === 'cloud_managed',
     );
+    expect(paidCloudModels.some((model) => model.id === 'gpt-5.4-mini')).toBe(true);
 
-    expect(DEFAULT_CLOUD_MODEL_ID).toBe('gpt-5.4-mini');
-    expect(unlockedCloudModels.some((model) => model.id === 'gpt-5.4-mini')).toBe(true);
+    // …but the free-tier picker is nano-only (product decision 2026-07-11), so
+    // the non-preset probe/default is curated OUT of the free list even though
+    // it stays cloud-selectable (isSelectableModelIdForCloudAccess below).
+    const freeCloudModels = getModelListForCloudAccess(true, 'free').filter(
+      (model) => model.surface === 'cloud_managed',
+    );
+    expect(freeCloudModels.some((model) => model.id === 'gpt-5.4-mini')).toBe(false);
+
     expect(isSelectableModelIdForCloudAccess('gpt-5.4-mini', false)).toBe(false);
     expect(isSelectableModelIdForCloudAccess('gpt-5.4-mini', true)).toBe(true);
   });
