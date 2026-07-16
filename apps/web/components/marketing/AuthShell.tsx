@@ -6,10 +6,11 @@ import { MarketingFooter } from './MarketingFooter';
 /**
  * AuthShell · shared chrome for /login and /signup.
  *
- * Split layout: a brand panel carrying the trust-mode story on the left,
- * the Clerk card on the right. Collapses to a single centered column on
- * small screens. Styled by the `agi-auth-*` classes in globals.css
- * (token-driven, follows the light/dark marketing theme).
+ * Split layout: the Clerk card first in the DOM (auth is the page's job, so
+ * it leads focus order and stacks first on small screens), the brand panel
+ * carrying the trust-mode story placed in the left column on desktop via
+ * grid. Styled by the `agi-auth-*` classes in globals.css (token-driven,
+ * follows the light/dark marketing theme).
  */
 export function AuthShell({
   title,
@@ -27,9 +28,10 @@ export function AuthShell({
       <main className="agi-shell">
         <Header minimal />
         <section className="agi-auth-page agi-auth-split">
+          <div className="agi-auth-card">{children}</div>
           <aside className="agi-auth-brand" aria-label="Why AGI">
             <div className="agi-auth-logo">
-              <AgiMark size={52} spinning />
+              <AgiMark size={36} spinning />
               <span className="agi-auth-logo-name">AGI</span>
             </div>
             <h2 className="agi-auth-title">{title}</h2>
@@ -41,7 +43,6 @@ export function AuthShell({
             </ul>
             <p className="agi-auth-meta">Web · Desktop · Mobile · CLI · Chrome · VS Code</p>
           </aside>
-          <div className="agi-auth-card">{children}</div>
         </section>
         <MarketingFooter />
       </main>
