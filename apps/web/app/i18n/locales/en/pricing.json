@@ -88,7 +88,7 @@
 
   "compareEyebrow": "Compare",
   "compareHeading": "Compare plans",
-  "compareSubheading": "Local and BYOK run on Desktop and CLI. Free, Basic, Pro, and Max are the individual cloud on-ramp. Team and Enterprise are built for shared, governed access.",
+  "compareSubheading": "Local and BYOK run on Desktop and CLI. Free, Pro, and Max are the individual cloud on-ramp. Team and Enterprise are built for shared, governed access.",
   "compareColPlan": "Plan",
   "compareColPrice": "Price",
   "compareColBillingInterval": "Billing",
