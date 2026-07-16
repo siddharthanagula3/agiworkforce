@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Pricing | Local & BYOK free forever, AGI Cloud for Teams & Enterprise',
   description:
-    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, managed cloud is open in public alpha (Free/Basic/Pro/Max as the individual on-ramp), and Team & Enterprise plans give your org shared, governed access to frontier models.',
+    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, managed cloud is open in public alpha (Free/Pro/Max as the individual on-ramp), and Team & Enterprise plans give your org shared, governed access to frontier models.',
   keywords: [
     'AI pricing',
     'AI agent plans',
