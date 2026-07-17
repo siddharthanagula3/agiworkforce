@@ -1,7 +1,7 @@
 'use client';
 
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { useSettingsStore, type Theme, type ChatFontSize } from '@/stores/settingsStore';
+import { useSettingsStore, type Theme, type ChatFontSize } from '@shared/stores/web-settings-store';
 import { cn } from '@shared/utils/cn';
 
 const THEMES: { value: Theme; label: string; icon: React.ElementType }[] = [

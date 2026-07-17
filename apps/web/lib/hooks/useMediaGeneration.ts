@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useMediaStore } from '@/stores/mediaStore';
+import { useMediaStore } from '@shared/stores/media-store';
 
 async function getAuthToken(): Promise<string> {
   const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');

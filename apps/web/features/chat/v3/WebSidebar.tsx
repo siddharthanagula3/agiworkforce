@@ -16,7 +16,7 @@ import {
   Settings,
   CalendarClock,
 } from 'lucide-react';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import type { ChatHostConversation } from '@agiworkforce/unified-chat';
 import type { V3Mode } from './WebShellV3';
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
 import { getPlanUsageBudgetCents } from '@agiworkforce/types';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 
 type UsageResponse = {
   plan_tier: string;

@@ -6,7 +6,7 @@ import { Button } from '@agiworkforce/ui';
 import type { SharedArtifact } from '@agiworkforce/types';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArtifactPreview } from './ArtifactPreview';
 import { StreamingArtifactView } from './StreamingArtifactView';
 

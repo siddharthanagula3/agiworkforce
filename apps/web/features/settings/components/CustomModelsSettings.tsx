@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import type { CustomModelConfig } from '@agiworkforce/types';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import {
   Button,
   Dialog,

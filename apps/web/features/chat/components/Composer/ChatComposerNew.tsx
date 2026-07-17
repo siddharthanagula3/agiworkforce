@@ -22,7 +22,7 @@ import {
   Telescope,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
 import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';

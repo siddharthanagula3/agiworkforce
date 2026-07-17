@@ -7,7 +7,7 @@ import {
   shouldForkLocalToByok,
   type WebLocalToByokPreview,
 } from './localByokHandoff';
-import type { Conversation, Message } from '@/stores/chatStore';
+import type { Conversation, Message } from '@shared/stores/web-chat-store';
 
 const conversation: Conversation = {
   id: 'conv-local',

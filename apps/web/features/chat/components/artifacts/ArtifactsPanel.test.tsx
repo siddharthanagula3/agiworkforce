@@ -4,7 +4,7 @@ import { computeDerivedArtifactId } from '@agiworkforce/artifacts';
 import { ArtifactsPanel } from './ArtifactsPanel';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 
 // The full ArtifactPreview drags in the sandbox/iframe stack; the handoff test
 // only needs to know WHICH viewer the panel chose, so stub it.

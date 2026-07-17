@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
+import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   ManagedCloudConversationListResponseSchema,

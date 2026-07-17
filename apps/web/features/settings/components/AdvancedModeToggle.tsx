@@ -37,7 +37,7 @@ import { Badge } from '@agiworkforce/ui';
 import { getTierPolicy, SLOT_REGISTRY } from '@agiworkforce/types';
 import type { RoutingSlot } from '@agiworkforce/types';
 import { getModelMetadata } from '@shared/config/llm';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 // ---------------------------------------------------------------------------
 // Module-scope constants (rerender-memo-with-default-value)

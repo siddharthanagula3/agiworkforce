@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { HostBridgeContext, type ChatHostBridge } from '@agiworkforce/unified-chat';
 import { WebChatRuntime } from '@/lib/runtime/WebChatRuntime';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { WebShellV3 } from '../v3/WebShellV3';
 
 /** Adapts the existing web chatStore into the unified-chat host bridge contract. */

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { WebSidebar } from './WebSidebar';
 
-vi.mock('@/stores/unified/auth', () => ({
+vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       user: {

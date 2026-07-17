@@ -11,12 +11,12 @@ import {
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
 } from '../lib/imageGenerationPersistence';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
@@ -97,7 +97,7 @@ import {
   type PendingEditRollback,
 } from '../lib/pendingEdit';
 import { isStaleActiveConversation } from '../lib/staleActiveConversation';
-import type { Message, MessageMetadata } from '@/stores/chatStore';
+import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
