@@ -10,7 +10,7 @@
 //! served through the shared web API boundary, NOT this local Tauri runtime. The
 //! desktop seam lives entirely in TypeScript:
 //!
-//! - client: `packages/unified-chat` `createCloudChatPersistenceClient`.
+//! - client: `packages/ui/unified-chat` `createCloudChatPersistenceClient`.
 //! - wiring: `apps/desktop/src/lib/cloudChatPersistence.ts` (managed-cloud only).
 //! - egress: `apps/desktop/src/lib/egressGuard.ts` `guardedFetch` allows the call
 //!   ONLY in managed mode and BLOCKS it in Local/BYOK.

@@ -1365,6 +1365,7 @@ pub async fn execute_chat_tool(
     app_handle: Option<&tauri::AppHandle>,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    persist_internal_resources: bool,
     tool_call_id: Option<&str>,
     prebuilt_registry: Option<Arc<ToolRegistry>>,
     conversation_id: Option<i64>,
@@ -1397,6 +1398,7 @@ pub async fn execute_chat_tool(
     executor.set_conversation_mode(conversation_mode);
     executor.set_conversation_id(conversation_id);
     executor.set_frontend_message_id(frontend_message_id);
+    executor.set_persist_internal_resources(persist_internal_resources);
 
     let tool_call_id = tool_call_id
         .map(str::trim)

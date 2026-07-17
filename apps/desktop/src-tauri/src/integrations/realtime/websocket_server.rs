@@ -4,7 +4,9 @@ use crate::automation::browser::{AccessibilityAnalyzer, AdvancedBrowserOps, CdpC
 use crate::integrations::native_messaging::manifest::{
     install_manifests, is_valid_chrome_extension_id,
 };
-use crate::integrations::native_messaging::{ConnectionState, NativeMessage};
+use crate::integrations::native_messaging::{
+    stage_selected_context_handoff, ConnectionState, NativeMessage,
+};
 use crate::sys::commands::BrowserStateWrapper;
 use crate::ui::events::tool_stream::{emit_tool_completed, emit_tool_error, emit_tool_started};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
@@ -1159,12 +1161,8 @@ impl RealtimeServer {
             NativeMessage::Ping => Ok(json!({ "pong": true })),
 
             NativeMessage::Connect { extension_id } => {
-                if let Err(error) = install_manifests(Some(extension_id.as_str())) {
-                    tracing::warn!(
-                        "Failed to refresh native messaging manifests for extension {}: {}",
-                        extension_id,
-                        error
-                    );
+                if !is_valid_chrome_extension_id(&extension_id) {
+                    return Err("Invalid Chrome extension destination".to_string());
                 }
 
                 if let Some(app) = app_handle {
@@ -1750,65 +1748,32 @@ impl RealtimeServer {
                     .map_err(|e| format!("Failed to serialize task_result response: {}", e))
             }
 
-            NativeMessage::SelectedTextQuery {
-                selected_text,
-                context_url,
-                tab_id,
-            } => {
+            NativeMessage::SelectedTextQuery(payload) => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_millis() as u64)
+                    .unwrap_or(0);
+                let staged = stage_selected_context_handoff(payload, now_ms)
+                    .map_err(|error| error.to_string())?;
 
-                // Store the selected text in the latest page context so the LLM prompt
-                // builder can include it when the user next sends a message.
-                if let Ok(mut guard) = crate::sys::commands::extension::LATEST_PAGE_CONTEXT.lock() {
-                    match *guard {
-                        Some(ref mut ctx) => {
-                            // If tab_id or context_url differ from stored context,
-                            // clear stale title/html so they are not attributed to
-                            // the wrong page.
-                            if let Some(new_tab_id) = tab_id.and_then(|id| u32::try_from(id).ok()) {
-                                if ctx.tab_id != new_tab_id {
-                                    ctx.title.clear();
-                                    ctx.html.clear();
-                                    ctx.tab_id = new_tab_id;
-                                }
-                            }
-                            if let Some(ref url) = context_url {
-                                if ctx.url != *url {
-                                    ctx.url = url.clone();
-                                    ctx.title.clear();
-                                    ctx.html.clear();
-                                }
-                            }
-                            ctx.selected_text = Some(selected_text.clone());
-                        }
-                        None => {
-                            let now_ms = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| d.as_millis() as u64)
-                                .unwrap_or(0);
-                            *guard = Some(crate::sys::commands::extension::PageContext {
-                                url: context_url.clone().unwrap_or_default(),
-                                title: String::new(),
-                                html: String::new(),
-                                selected_text: Some(selected_text.clone()),
-                                tab_id: tab_id.unwrap_or(0).max(0) as u32,
-                                timestamp: now_ms,
-                            });
-                        }
-                    }
-                }
-
-                // Emit a Tauri event so the frontend can open the chat and pre-fill context.
+                // Notify the Desktop UI. This does not mutate LATEST_PAGE_CONTEXT or any
+                // conversation; insertion remains an explicit frontend/user action.
                 let _ = app.emit(
                     "extension:selected_text_query",
                     &json!({
-                        "text": selected_text,
-                        "context_url": context_url,
-                        "tab_id": tab_id,
+                        "text": staged.selected_text,
+                        "context_url": staged.context_url,
+                        "tab_id": staged.tab_id,
+                        "selected_at": staged.selected_at,
                     }),
                 );
 
-                Ok(json!({ "success": true }))
+                Ok(json!({
+                    "success": true,
+                    "staged": true,
+                    "destination": "desktop_context_preview"
+                }))
             }
 
             NativeMessage::ExecuteScript { script, tab_id } => {
@@ -1986,6 +1951,19 @@ impl RealtimeServer {
 mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    #[test]
+    fn selected_context_receiver_stages_without_touching_auto_injected_chat_context() {
+        let source = include_str!("websocket_server.rs");
+        let branch = source
+            .split("NativeMessage::SelectedTextQuery")
+            .nth(1)
+            .and_then(|tail| tail.split("NativeMessage::ExecuteScript").next())
+            .expect("selected-context receiver branch must exist");
+
+        assert!(!branch.contains("extension::LATEST_PAGE_CONTEXT"));
+        assert!(branch.contains("stage_selected_context_handoff"));
+    }
 
     // ── E2: /pair endpoint tests ──────────────────────────────────────────────
 

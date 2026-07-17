@@ -104,6 +104,101 @@ pub async fn media_get_history(app: tauri::AppHandle) -> Result<Vec<MediaHistory
     load_history(&app).map_err(|e| format!("Failed to load history: {}", e))
 }
 
+// Compatibility normalization lives only at this privileged HTTP boundary.
+// Desktop presentation ids are never valid managed-cloud wire values.
+fn normalize_legacy_desktop_image_provider(provider: Option<&str>) -> Option<&str> {
+    match provider {
+        Some("google_imagen") | Some("google_imagen_lite") => Some("google"),
+        Some("dalle") => Some("openai"),
+        Some("stable_diffusion") => Some("stability"),
+        other => other,
+    }
+}
+
+fn normalize_legacy_desktop_image_size(size: Option<&str>) -> Option<&str> {
+    match size {
+        Some("small") => Some("512x512"),
+        Some("medium") => Some("1024x1024"),
+        Some("large") | Some("square") => Some("1536x1536"),
+        Some("wide") => Some("1792x1024"),
+        Some("portrait") => Some("1024x1792"),
+        other => other,
+    }
+}
+
+fn normalize_legacy_desktop_image_quality(quality: Option<&str>) -> Option<&str> {
+    match quality {
+        Some("premium") => Some("hd"),
+        other => other,
+    }
+}
+
+fn normalize_legacy_desktop_video_provider(provider: Option<&str>) -> Option<&str> {
+    match provider {
+        Some("veo3") => Some("google"),
+        other => other,
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct ManagedMediaImagePayload<'a> {
+    prompt: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    negative_prompt: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    style: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quality: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    n: Option<u32>,
+}
+
+fn build_managed_media_image_payload(
+    request: &MediaImageRequest,
+) -> Result<serde_json::Value, serde_json::Error> {
+    serde_json::to_value(ManagedMediaImagePayload {
+        prompt: &request.prompt,
+        negative_prompt: request.negative_prompt.as_deref(),
+        provider: normalize_legacy_desktop_image_provider(request.provider.as_deref()),
+        model: request.model.as_deref(),
+        size: normalize_legacy_desktop_image_size(request.size.as_deref()),
+        style: request.style.as_deref(),
+        quality: normalize_legacy_desktop_image_quality(request.quality.as_deref()),
+        n: request.n,
+    })
+}
+
+#[derive(Debug, Serialize)]
+struct ManagedMediaVideoPayload<'a> {
+    prompt: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration_secs: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resolution: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<&'a str>,
+}
+
+fn build_managed_media_video_payload(
+    request: &MediaVideoRequest,
+) -> Result<serde_json::Value, serde_json::Error> {
+    serde_json::to_value(ManagedMediaVideoPayload {
+        prompt: &request.prompt,
+        duration_secs: request.duration_secs,
+        resolution: request.resolution.as_deref(),
+        provider: normalize_legacy_desktop_video_provider(request.provider.as_deref()),
+        model: request.model.as_deref(),
+    })
+}
+
 #[tauri::command]
 pub async fn media_generate_image(
     app: tauri::AppHandle,
@@ -113,16 +208,8 @@ pub async fn media_generate_image(
     let base_url = get_api_base_url();
     let url = format!("{}/api/media/image/generate", base_url);
 
-    let payload = serde_json::json!({
-        "prompt": request.prompt,
-        "negative_prompt": request.negative_prompt,
-        "provider": request.provider,
-        "model": request.model,
-        "size": request.size,
-        "style": request.style,
-        "quality": request.quality,
-        "n": request.n
-    });
+    let payload = build_managed_media_image_payload(&request)
+        .map_err(|e| format!("Failed to serialize image generation request: {e}"))?;
 
     let started = Instant::now();
     // 90s timeout: the web API route has maxDuration=60 and a 55s AbortSignal per provider
@@ -219,18 +306,8 @@ pub async fn media_generate_video(
     let base_url = get_api_base_url();
     let generate_url = format!("{}/api/media/video/generate", base_url);
 
-    let provider = request.provider.as_deref().unwrap_or("google");
-    let provider_for_api = if provider == "veo3" {
-        "google"
-    } else {
-        provider
-    };
-    let payload = serde_json::json!({
-        "prompt": request.prompt,
-        "duration_secs": request.duration_secs,
-        "resolution": request.resolution,
-        "provider": provider_for_api,
-    });
+    let payload = build_managed_media_video_payload(&request)
+        .map_err(|e| format!("Failed to serialize video generation request: {e}"))?;
 
     let started = Instant::now();
     // Task-creation call: the web route has maxDuration=60 and a 30s AbortSignal,
@@ -266,6 +343,17 @@ pub async fn media_generate_video(
         .and_then(|v| v.as_str())
         .ok_or_else(|| "Missing task_id in response".to_string())?
         .to_string();
+    let resolved_provider = body
+        .get("provider")
+        .and_then(|value| value.as_str())
+        .or_else(|| normalize_legacy_desktop_video_provider(request.provider.as_deref()))
+        .unwrap_or("managed_cloud")
+        .to_string();
+    let resolved_model = body
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+        .or_else(|| request.model.clone());
 
     let status_url = format!("{}/api/media/video/status?task_id={}", base_url, task_id);
 
@@ -357,8 +445,8 @@ pub async fn media_generate_video(
         duration_secs: request.duration_secs,
         cost_estimate: None,
         latency_ms,
-        provider: provider_for_api.to_string(),
-        model: request.model,
+        provider: resolved_provider,
+        model: resolved_model,
     })
 }
 
@@ -394,3 +482,149 @@ fn save_history(app: &tauri::AppHandle, history: &[MediaHistoryItem]) -> anyhow:
 
 // plan_allows_video removed: plan tier validation is now performed server-side
 // by the web API based on authenticated user subscription state.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression test for a confirmed request-shape bug: media_generate_image
+    // previously forwarded the desktop UI's internal ImageProviderId straight
+    // through as the web API's `provider` field. None of the four options the
+    // UI offers ('google_imagen', 'google_imagen_lite', 'dalle',
+    // 'stable_diffusion') are in the shared managed-media provider contract,
+    // so every image generation request failed validation regardless of which
+    // provider was selected. The accepted wire values are owned by
+    // packages/contracts/cloud-contracts/src/managed-media.ts.
+    #[test]
+    fn maps_every_desktop_image_provider_option_to_a_web_api_accepted_value() {
+        const WEB_API_ACCEPTED: [&str; 3] = ["google", "openai", "stability"];
+
+        for desktop_id in [
+            "google_imagen",
+            "google_imagen_lite",
+            "dalle",
+            "stable_diffusion",
+        ] {
+            let mapped = normalize_legacy_desktop_image_provider(Some(desktop_id));
+            assert!(
+                mapped.is_some_and(|m| WEB_API_ACCEPTED.contains(&m)),
+                "desktop provider id '{desktop_id}' mapped to {mapped:?}, \
+                 which is not one of the web API's accepted values {WEB_API_ACCEPTED:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn maps_each_desktop_image_provider_to_its_specific_expected_value() {
+        assert_eq!(
+            normalize_legacy_desktop_image_provider(Some("google_imagen")),
+            Some("google")
+        );
+        assert_eq!(
+            normalize_legacy_desktop_image_provider(Some("google_imagen_lite")),
+            Some("google")
+        );
+        assert_eq!(
+            normalize_legacy_desktop_image_provider(Some("dalle")),
+            Some("openai")
+        );
+        assert_eq!(
+            normalize_legacy_desktop_image_provider(Some("stable_diffusion")),
+            Some("stability")
+        );
+    }
+
+    #[test]
+    fn passes_through_unrecognized_or_missing_provider_unchanged() {
+        // Defensive fallback, matching media_generate_video's equivalent
+        // `else { provider }` branch: an already-correct or future value
+        // should not be silently mangled.
+        assert_eq!(
+            normalize_legacy_desktop_image_provider(Some("google")),
+            Some("google")
+        );
+        assert_eq!(normalize_legacy_desktop_image_provider(None), None);
+    }
+
+    #[test]
+    fn normalizes_desktop_image_size_and_quality_aliases_at_the_cloud_boundary() {
+        for (desktop_size, cloud_size) in [
+            ("small", "512x512"),
+            ("medium", "1024x1024"),
+            ("large", "1536x1536"),
+            ("square", "1536x1536"),
+            ("wide", "1792x1024"),
+            ("portrait", "1024x1792"),
+        ] {
+            assert_eq!(
+                normalize_legacy_desktop_image_size(Some(desktop_size)),
+                Some(cloud_size)
+            );
+        }
+        assert_eq!(
+            normalize_legacy_desktop_image_quality(Some("premium")),
+            Some("hd")
+        );
+    }
+
+    fn managed_media_golden() -> serde_json::Value {
+        serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../packages/contracts/cloud-contracts/src/__fixtures__/managed-media-requests.golden.json"
+        )))
+        .expect("managed-media golden fixture must be valid JSON")
+    }
+
+    #[test]
+    fn image_payload_matches_the_shared_cloud_contract_and_omits_absent_values() {
+        let fixture = managed_media_golden();
+        let image = fixture
+            .get("image")
+            .expect("golden fixture must contain an image request");
+        let request = MediaImageRequest {
+            prompt: image["prompt"].as_str().unwrap().to_string(),
+            negative_prompt: image["negative_prompt"].as_str().map(str::to_string),
+            provider: Some("google_imagen".to_string()),
+            model: image["model"].as_str().map(str::to_string),
+            size: Some("large".to_string()),
+            quality: Some("premium".to_string()),
+            style: Some("photorealistic".to_string()),
+            n: image["n"].as_u64().map(|value| value as u32),
+        };
+
+        assert_eq!(build_managed_media_image_payload(&request).unwrap(), *image);
+
+        let minimal = build_managed_media_image_payload(&MediaImageRequest {
+            prompt: "minimal".to_string(),
+            negative_prompt: None,
+            provider: None,
+            model: None,
+            size: None,
+            quality: None,
+            style: None,
+            n: None,
+        })
+        .unwrap();
+        assert_eq!(minimal, serde_json::json!({ "prompt": "minimal" }));
+    }
+
+    #[test]
+    fn video_payload_preserves_the_selected_catalog_model_and_contract_fields() {
+        let fixture = managed_media_golden();
+        let video = fixture
+            .get("video")
+            .expect("golden fixture must contain a video request");
+        let request = MediaVideoRequest {
+            prompt: video["prompt"].as_str().unwrap().to_string(),
+            negative_prompt: None,
+            duration_secs: video["duration_secs"].as_u64().map(|value| value as u32),
+            resolution: video["resolution"].as_str().map(str::to_string),
+            style: None,
+            model: video["model"].as_str().map(str::to_string),
+            provider: Some("veo3".to_string()),
+            input_image_url: None,
+        };
+
+        assert_eq!(build_managed_media_video_payload(&request).unwrap(), *video);
+    }
+}

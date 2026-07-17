@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// v3 brand palette — mirrors packages/design-tokens/src/tokens.ts
+// v3 brand palette — mirrors packages/ui/design-tokens/src/tokens.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// AGI v3 teal accent (#21808d)

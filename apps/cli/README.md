@@ -200,10 +200,10 @@ agi help
 
 Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `app-server`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
-`auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`, plus
-deferred-to-Phase-2 surfaces (`cloud`, `plugin`, `sync`, `marketplace`,
-`ecosystem`) currently dispatched to gated stubs — these surfaces will be
-wired or removed as the CLI parity work stabilizes.
+`auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`,
+`models`, `plugin`, `sync`, `marketplace`, and `ecosystem`. Managed-cloud
+models use the normal model/session path after the explicit privacy handoff;
+there is no separate cloud-task command.
 
 ```bash
 agi doctor
@@ -212,11 +212,23 @@ agi doctor --json
 
 ## Architecture
 
-- Pure Rust workspace (12 utility crates + `apps/cli` + `apps/desktop/src-tauri`).
-  `cargo build --release -p agiworkforce-cli --bin agi` produces the primary 5.7 MB binary.
-- TUI: ratatui + crossterm. 171 source files; 29 TUI files (run
-  `find apps/cli/src -name '*.rs' | wc -l` to recount). 914+ `#[test]` /
-  `#[tokio::test]` cases.
+- `agi app-server` is the canonical local developer-session runtime used by
+  AGI for VS Code. Its default stdio transport is a typed JSONL thread/turn
+  protocol; the CLI owns persistence, agent execution, streaming, approvals,
+  cancellation, model resolution, and workspace isolation while VS Code owns
+  IDE presentation and context selection.
+- CLI and VS Code sessions share `~/.agiworkforce/managed_sessions/`; they do
+  not join Web/Mobile/Desktop Cloud chat sync. App-server reads never expose
+  the internal system prompt, and cross-workspace read/fork/archive operations
+  fail closed.
+- MCP discovery starts asynchronously so a stalled project MCP server cannot
+  freeze thread creation. Clients receive `mcp/loading`, `mcp/ready`, or
+  `mcp/unavailable` status notifications for that local thread.
+- Rust workspace with shared protocol, model-registry, sandbox, MCP, and runtime
+  crates used by `apps/cli` and the Tauri backend. Build the primary binary with
+  `cargo build --release -p agiworkforce-cli --bin agi`.
+- TUI: ratatui + crossterm. The live module set is locked in
+  `apps/cli/AGENTS.md` and guarded by the repository module-reachability check.
 - Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
   Landlock are enum stubs (Phase 2).
 - MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).

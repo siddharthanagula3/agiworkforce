@@ -3,10 +3,10 @@
 
 pub(crate) mod app_event;
 pub(crate) mod approval_broker;
-pub(crate) mod fuzzy;
 #[allow(dead_code, unused_imports)]
 mod color;
 mod cost_hud;
+pub(crate) mod fuzzy;
 pub(crate) mod icons;
 pub(crate) mod pane_view;
 #[allow(dead_code, unused_imports)]

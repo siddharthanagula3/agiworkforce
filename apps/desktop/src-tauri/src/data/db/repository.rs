@@ -51,16 +51,61 @@ pub fn create_conversation_with_mode(
         "cloud" => "cloud",
         _ => "local", // default to local for unknown values
     };
+    let execution_mode = if safe_mode == "cloud" {
+        "cloud_managed"
+    } else {
+        "local_only"
+    };
     conn.execute(
-        "INSERT INTO conversations (title, user_id, app_mode) VALUES (?1, ?2, ?3)",
-        params![title, user_id, safe_mode],
+        "INSERT INTO conversations (title, user_id, app_mode, execution_mode) VALUES (?1, ?2, ?3, ?4)",
+        params![title, user_id, safe_mode, execution_mode],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn create_conversation_with_execution_mode(
+    conn: &Connection,
+    title: String,
+    user_id: String,
+    app_mode: &str,
+    execution_mode: &str,
+) -> Result<i64> {
+    let safe_mode = match app_mode {
+        "local" | "cloud" => app_mode,
+        _ => {
+            return Err(rusqlite::Error::InvalidParameterName(
+                "invalid app_mode".to_string(),
+            ))
+        }
+    };
+    let safe_execution_mode = match execution_mode {
+        "local_only" | "byok" | "cloud_managed" => execution_mode,
+        _ => {
+            return Err(rusqlite::Error::InvalidParameterName(
+                "invalid execution_mode".to_string(),
+            ))
+        }
+    };
+    let expected_mode = if safe_execution_mode == "cloud_managed" {
+        "cloud"
+    } else {
+        "local"
+    };
+    if safe_mode != expected_mode {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "app_mode and execution_mode disagree".to_string(),
+        ));
+    }
+    conn.execute(
+        "INSERT INTO conversations (title, user_id, app_mode, execution_mode) VALUES (?1, ?2, ?3, ?4)",
+        params![title, user_id, safe_mode, safe_execution_mode],
     )?;
     Ok(conn.last_insert_rowid())
 }
 
 pub fn get_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<Conversation> {
     conn.query_row(
-        "SELECT id, title, created_at, updated_at, user_id FROM conversations WHERE id = ?1 AND user_id = ?2",
+        "SELECT id, title, created_at, updated_at, user_id, execution_mode FROM conversations WHERE id = ?1 AND user_id = ?2",
         params![id, user_id],
         map_conversation,
     )
@@ -73,7 +118,7 @@ pub fn list_conversations(
     user_id: &str,
 ) -> Result<Vec<Conversation>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, created_at, updated_at, user_id
+        "SELECT id, title, created_at, updated_at, user_id, execution_mode
          FROM conversations
          WHERE user_id = ?3
          ORDER BY updated_at DESC
@@ -105,7 +150,7 @@ pub fn list_conversations_by_mode(
         _ => "local",
     };
     let mut stmt = conn.prepare(
-        "SELECT id, title, created_at, updated_at, user_id
+        "SELECT id, title, created_at, updated_at, user_id, execution_mode
          FROM conversations
          WHERE user_id = ?3
            AND (app_mode = ?4 OR app_mode IS NULL)
@@ -169,6 +214,7 @@ fn map_conversation(row: &Row) -> Result<Conversation> {
         created_at: parse_datetime(&row.get::<_, String>(2)?),
         updated_at: parse_datetime(&row.get::<_, String>(3)?),
         user_id: row.get(4)?,
+        execution_mode: row.get(5)?,
     })
 }
 
@@ -1035,7 +1081,7 @@ mod tests {
         )
         .with_metrics(100, 0.5);
         message_a.provider = Some("openai".to_string());
-        // Catalog: see packages/types/src/models.json
+        // Catalog: see packages/contracts/types/src/models.json
         message_a.model = Some(models_config::get_default_model(&Provider::OpenAI).to_string());
         create_message(&conn, &message_a).unwrap();
 

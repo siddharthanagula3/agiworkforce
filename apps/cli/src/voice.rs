@@ -35,7 +35,7 @@ const MAX_RECORDING_SECS: u64 = 120;
 
 /// OpenAI Whisper speech-to-text model id used for the transcription endpoint.
 /// This is an STT model on the `/v1/audio/transcriptions` endpoint, not a
-/// chat/completion model in `packages/types/src/models.json`, so it is owned
+/// chat/completion model in `packages/contracts/types/src/models.json`, so it is owned
 /// here as a single named constant rather than routed through the model
 /// catalog. Update this in one place if OpenAI retires `whisper-1`.
 const OPENAI_STT_MODEL: &str = "whisper-1";

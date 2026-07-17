@@ -32,7 +32,10 @@ fn provider_spec_debug_redacts_key_material() {
     };
     let rendered = format!("{bearer_spec:?}");
     assert!(!rendered.contains(SECRET), "Bearer key leaked: {rendered}");
-    assert!(rendered.contains("[redacted]"), "expected redaction marker: {rendered}");
+    assert!(
+        rendered.contains("[redacted]"),
+        "expected redaction marker: {rendered}"
+    );
 
     let header_spec = ProviderSpec {
         id: "anthropic".into(),
@@ -46,7 +49,10 @@ fn provider_spec_debug_redacts_key_material() {
     };
     let rendered = format!("{header_spec:?}");
     assert!(!rendered.contains(SECRET), "header key leaked: {rendered}");
-    assert!(rendered.contains("x-api-key"), "header NAME stays visible: {rendered}");
+    assert!(
+        rendered.contains("x-api-key"),
+        "header NAME stays visible: {rendered}"
+    );
 }
 
 /// Shared buffer the tracing subscriber writes into.

@@ -29,11 +29,7 @@ async fn http_request_times_out_when_server_never_answers() {
 
     // tools/list hangs on the server → per-op timeout fires here.
     let err = client
-        .request(
-            "tools/list",
-            None,
-            Duration::from_millis(300),
-        )
+        .request("tools/list", None, Duration::from_millis(300))
         .await
         .expect_err("stale request must time out");
     assert!(

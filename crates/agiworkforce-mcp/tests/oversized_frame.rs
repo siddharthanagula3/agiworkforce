@@ -32,10 +32,7 @@ async fn sse_upgrade_frame_over_cap_is_rejected() {
         .call_tool_value("echo", serde_json::json!({ "text": "x" }))
         .await
         .expect_err("oversized frame must be rejected");
-    assert!(
-        format!("{err}").contains("frame exceeded"),
-        "got: {err}"
-    );
+    assert!(format!("{err}").contains("frame exceeded"), "got: {err}");
 }
 
 #[tokio::test]

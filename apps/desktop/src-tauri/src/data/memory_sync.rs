@@ -8,10 +8,11 @@
 //! memories can never acquire a cloud_id or have needs_push=1. The trust boundary
 //! is the same as chat: `derive_cloud_sync_enabled` in `send_message_setup.rs`.
 //!
-//! Wire protocol (frozen — do NOT change the server):
-//!   POST /api/memory/sync  { memories: [{ id, content, category?, source?,
-//!                             isDeleted?, createdAt?, updatedAt }] }
-//!                        → { applied: [{ id, server_version }], cursor }
+//! Wire protocol v2 (server-version compare-and-swap):
+//!   POST /api/memory/sync  { protocolVersion: 2,
+//!                            memories: [{ id, content, category?, source?,
+//!                              pinned?, baseVersion, isDeleted? }] }
+//!                        → { protocolVersion: 2, applied, conflicts, cursor }
 //!   GET  /api/memory/sync?since=<cursor>
 //!                        → { memories: [{ id, content, category, source,
 //!                             is_deleted, created_at, updated_at,
@@ -20,7 +21,7 @@
 //! INTEGER PKs are never sent over the wire; only `cloud_id` (UUIDv7).
 //! `user_id` is never sent in a push body — the server derives it from session.
 //!
-//! Known contract gaps (frozen route — fix NOT possible client-side):
+//! Known local-schema gaps:
 //!   - `topic` is NOT in the wire protocol. Pull-insert synthesizes it from
 //!     `cloud_id` to satisfy the `NOT NULL` + `UNIQUE(category,topic)` constraint.
 //!     Semantic loss: the topic is meaningless for pulled rows; local topic is
@@ -56,27 +57,29 @@ use uuid::Uuid;
 ///
 /// `category` and `source` are `.nullable().optional()` on the server, so null
 /// is technically OK there — but omitting them is equally safe and simpler.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PushMemory {
-    id: String,              // cloud_id (UUIDv7)
+    id: String, // cloud_id (UUIDv7)
     content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     category: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     source: Option<String>,
+    /// Desktop does not store cloud `pinned`; omission preserves the server value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pinned: Option<bool>,
+    base_version: String,
     /// Only emitted when `true` (tombstone). Non-deleted rows omit the key.
     #[serde(skip_serializing_if = "Option::is_none")]
     is_deleted: Option<bool>,
-    /// Omitted when NULL in the DB. Server accepts absent as undefined.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    created_at: Option<String>,
-    updated_at: String,
 }
 
 /// POST body.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MemoryPushBody {
+    protocol_version: u8,
     memories: Vec<PushMemory>,
 }
 
@@ -90,10 +93,19 @@ struct AckedMemory {
 /// POST response.
 #[derive(Debug, Deserialize)]
 struct MemoryPushResponse {
+    #[serde(rename = "protocolVersion")]
+    protocol_version: u8,
     applied: Vec<AckedMemory>,
+    conflicts: Vec<MemoryConflict>,
     // cursor present but unused for push — pull has its own cursor.
     #[allow(dead_code)]
     cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MemoryConflict {
+    id: String,
+    current: Option<MemoryDelta>,
 }
 
 /// Pulled memory delta (snake_case, matching server SELECT columns).
@@ -103,6 +115,9 @@ struct MemoryDelta {
     content: String,
     category: Option<String>,
     source: Option<String>,
+    #[allow(dead_code)]
+    #[serde(default)]
+    pinned: bool,
     is_deleted: bool,
     created_at: String,
     updated_at: String,
@@ -163,7 +178,9 @@ fn to_z_datetime(s: &str) -> String {
         return dt.to_rfc3339_opts(SecondsFormat::Millis, true);
     }
     if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-        return dt.with_timezone(&Utc).to_rfc3339_opts(SecondsFormat::Millis, true);
+        return dt
+            .with_timezone(&Utc)
+            .to_rfc3339_opts(SecondsFormat::Millis, true);
     }
     if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
         return dt.and_utc().to_rfc3339_opts(SecondsFormat::Millis, true);
@@ -171,7 +188,10 @@ fn to_z_datetime(s: &str) -> String {
     if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
         return dt.and_utc().to_rfc3339_opts(SecondsFormat::Millis, true);
     }
-    warn!(raw_ts = s, "memory_sync: to_z_datetime: unparseable timestamp — using now_z()");
+    warn!(
+        raw_ts = s,
+        "memory_sync: to_z_datetime: unparseable timestamp — using now_z()"
+    );
     now_z()
 }
 
@@ -286,8 +306,7 @@ pub fn soft_delete_memory_by_topic_for_push(
 /// Tombstoned rows (deleted_at_utc IS NOT NULL) are included so deletes propagate.
 fn gather_push_memories(conn: &Connection) -> SqlResult<Vec<PushMemory>> {
     let mut stmt = conn.prepare(
-        "SELECT cloud_id, content, category, source, \
-                created_at_utc, updated_at, deleted_at_utc \
+        "SELECT cloud_id, content, category, source, server_version, deleted_at_utc \
          FROM user_memory \
          WHERE needs_push = 1 AND app_mode = 'cloud' AND cloud_id IS NOT NULL",
     )?;
@@ -296,12 +315,8 @@ fn gather_push_memories(conn: &Connection) -> SqlResult<Vec<PushMemory>> {
         let content: String = row.get(1)?;
         let category: Option<String> = row.get(2)?;
         let source: Option<String> = row.get(3)?;
-        let created_at_utc: Option<String> = row.get(4)?;
-        let updated_at_raw: String = row.get(5)?;
-        let deleted_at_utc: Option<String> = row.get(6)?;
-
-        let updated_at = to_z_datetime(&updated_at_raw);
-        let created_at = created_at_utc.as_deref().map(to_z_datetime);
+        let server_version: Option<String> = row.get(4)?;
+        let deleted_at_utc: Option<String> = row.get(5)?;
         let is_deleted = deleted_at_utc.is_some().then_some(true);
 
         Ok(PushMemory {
@@ -309,22 +324,81 @@ fn gather_push_memories(conn: &Connection) -> SqlResult<Vec<PushMemory>> {
             content,
             category,
             source,
+            pinned: None,
+            base_version: server_version.unwrap_or_else(|| "0".to_string()),
             is_deleted,
-            created_at,
-            updated_at,
         })
     })?;
     rows.collect()
 }
 
-/// Ack-clear: mark acked memories as needs_push=0 and store server_version.
-fn ack_clear_memories(conn: &Connection, acked: &[AckedMemory]) {
+fn memory_sync_content_matches(conn: &Connection, sent: &PushMemory) -> bool {
+    conn.query_row(
+        "SELECT content, category, source, deleted_at_utc FROM user_memory WHERE cloud_id = ?1",
+        params![sent.id],
+        |row| {
+            let deleted_at: Option<String> = row.get(3)?;
+            Ok(row.get::<_, String>(0)? == sent.content
+                && row.get::<_, Option<String>>(1)? == sent.category
+                && row.get::<_, Option<String>>(2)? == sent.source
+                && deleted_at.is_some() == sent.is_deleted.unwrap_or(false))
+        },
+    )
+    .unwrap_or(false)
+}
+
+/// Store every acknowledged revision, but clear only the exact snapshot sent.
+fn ack_clear_memories(conn: &Connection, acked: &[AckedMemory], sent: &[PushMemory]) {
     for row in acked {
+        let unchanged = sent
+            .iter()
+            .find(|item| item.id == row.id)
+            .is_some_and(|item| memory_sync_content_matches(conn, item));
         let _ = conn.execute(
-            "UPDATE user_memory SET needs_push = 0, server_version = ?1 \
-             WHERE cloud_id = ?2",
-            params![row.server_version, row.id],
+            "UPDATE user_memory SET server_version = ?1, \
+             needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END WHERE cloud_id = ?3",
+            params![row.server_version, unchanged, row.id],
         );
+    }
+}
+
+fn resolve_memory_conflicts(
+    conn: &Connection,
+    user_id: &str,
+    conflicts: &[MemoryConflict],
+    sent: &[PushMemory],
+) {
+    for conflict in conflicts {
+        let sent_item = sent.iter().find(|item| item.id == conflict.id);
+        match &conflict.current {
+            None => {
+                let _ = conn.execute(
+                    "UPDATE user_memory SET deleted_at_utc = COALESCE(deleted_at_utc, ?1), \
+                     needs_push = 0 WHERE cloud_id = ?2",
+                    params![now_z(), conflict.id],
+                );
+            }
+            Some(current) if current.is_deleted => {
+                apply_memory_deltas(conn, user_id, std::slice::from_ref(current));
+            }
+            Some(current) => {
+                let preserve_local = sent_item.is_some_and(|item| {
+                    item.base_version == "0" || !memory_sync_content_matches(conn, item)
+                });
+                if preserve_local {
+                    let _ = conn.execute(
+                        "UPDATE user_memory SET server_version = ?1 WHERE cloud_id = ?2",
+                        params![current.server_version, conflict.id],
+                    );
+                } else {
+                    let _ = conn.execute(
+                        "UPDATE user_memory SET needs_push = 0 WHERE cloud_id = ?1",
+                        params![conflict.id],
+                    );
+                    apply_memory_deltas(conn, user_id, std::slice::from_ref(current));
+                }
+            }
+        }
     }
 }
 
@@ -338,11 +412,11 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
     let mut applied = 0usize;
     for d in deltas {
         // Dedup: find existing local row.
-        let existing: Option<(i64, Option<String>)> = conn
+        let existing: Option<(i64, i64)> = conn
             .query_row(
-                "SELECT id, deleted_at_utc FROM user_memory WHERE cloud_id = ?1",
+                "SELECT id, needs_push FROM user_memory WHERE cloud_id = ?1",
                 params![d.id],
-                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?)),
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
             )
             .ok();
 
@@ -350,15 +424,23 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
             // Tombstone: soft-delete locally if we have the row.
             if let Some((local_id, _)) = existing {
                 let _ = conn.execute(
-                    "UPDATE user_memory SET deleted_at_utc = ?1, server_version = ?2 \
+                    "UPDATE user_memory SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![d.updated_at, d.server_version, local_id],
                 );
                 applied += 1;
             }
             // If we don't have the row, the delete already propagated — no-op.
-        } else if let Some((local_id, _)) = existing {
-            // LWW update: content + category + source may change.
+        } else if let Some((local_id, needs_push)) = existing {
+            if needs_push != 0 {
+                let _ = conn.execute(
+                    "UPDATE user_memory SET server_version = ?1 WHERE id = ?2",
+                    params![d.server_version, local_id],
+                );
+                applied += 1;
+                continue;
+            }
+            // Clean local row: apply the server winner.
             let _ = conn.execute(
                 "UPDATE user_memory \
                  SET content = ?1, category = COALESCE(?2, category), \
@@ -405,7 +487,9 @@ fn apply_memory_deltas(conn: &Connection, user_id: &str, deltas: &[MemoryDelta])
                 ],
             );
             match r {
-                Ok(_) => { applied += 1; }
+                Ok(_) => {
+                    applied += 1;
+                }
                 Err(e) => {
                     // Partial UNIQUE index on cloud_id catches a race; log and skip.
                     debug!(cloud_id = %d.id, error = %e, "memory_sync: skipping pulled memory — insert failed");
@@ -493,6 +577,7 @@ async fn sync_memories_now_inner(
 
     if n_pushed > 0 {
         let body = MemoryPushBody {
+            protocol_version: 2,
             memories: push_memories,
         };
 
@@ -514,10 +599,17 @@ async fn sync_memories_now_inner(
             .json()
             .await
             .map_err(|e| format!("memory_sync: failed to parse push response: {e}"))?;
+        if push_resp.protocol_version != 2 {
+            return Err(format!(
+                "memory_sync: unsupported protocol response {}",
+                push_resp.protocol_version
+            ));
+        }
 
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            ack_clear_memories(&conn, &push_resp.applied);
+            ack_clear_memories(&conn, &push_resp.applied, &body.memories);
+            resolve_memory_conflicts(&conn, user_id, &push_resp.conflicts, &body.memories);
         }
     }
 
@@ -532,11 +624,7 @@ async fn sync_memories_now_inner(
     };
 
     for _page in 0..PULL_PAGE_GUARD {
-        let pull_url = format!(
-            "{}?since={}",
-            sync_url,
-            urlencoding::encode(&cursor)
-        );
+        let pull_url = format!("{}?since={}", sync_url, urlencoding::encode(&cursor));
 
         let resp = client
             .get(&pull_url)
@@ -629,7 +717,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap_or(false);
-        assert!(mc_exists, "cloud_sync_state.memory_cursor must exist after v68");
+        assert!(
+            mc_exists,
+            "cloud_sync_state.memory_cursor must exist after v68"
+        );
     }
 
     // ── Test 2: Mint — sets cloud_id + needs_push on cloud memory ────────────
@@ -694,7 +785,11 @@ mod tests {
 
         // Push gather also excludes it.
         let push_mems = gather_push_memories(&conn).unwrap();
-        assert_eq!(push_mems.len(), 0, "local memory must not appear in push gather");
+        assert_eq!(
+            push_mems.len(),
+            0,
+            "local memory must not appear in push gather"
+        );
     }
 
     // ── Test 4: Push gather excludes local ────────────────────────────────────
@@ -722,7 +817,11 @@ mod tests {
         .unwrap();
 
         let push_mems = gather_push_memories(&conn).unwrap();
-        assert_eq!(push_mems.len(), 1, "only cloud memory should be gathered for push");
+        assert_eq!(
+            push_mems.len(),
+            1,
+            "only cloud memory should be gathered for push"
+        );
     }
 
     // ── Test 5: Pull dedup updates not inserts on existing cloud_id ───────────
@@ -741,8 +840,17 @@ mod tests {
         let mem_id: i64 = conn.last_insert_rowid();
         mark_memory_for_push(&conn, mem_id).unwrap();
         let cid: String = conn
-            .query_row("SELECT cloud_id FROM user_memory WHERE id = ?1", params![mem_id], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM user_memory WHERE id = ?1",
+                params![mem_id],
+                |r| r.get(0),
+            )
             .unwrap();
+        conn.execute(
+            "UPDATE user_memory SET needs_push = 0, server_version = '99' WHERE id = ?1",
+            params![mem_id],
+        )
+        .unwrap();
 
         // Pull delta for the same cloud_id (from another device).
         let delta = MemoryDelta {
@@ -750,6 +858,7 @@ mod tests {
             content: "updated content".to_string(),
             category: Some("Fact".to_string()),
             source: None,
+            pinned: false,
             is_deleted: false,
             created_at: "2026-06-20T00:00:00.000Z".to_string(),
             updated_at: "2026-06-22T00:00:00.000Z".to_string(),
@@ -766,7 +875,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1, "DEDUP: must not insert a second row for the same cloud_id");
+        assert_eq!(
+            count, 1,
+            "DEDUP: must not insert a second row for the same cloud_id"
+        );
 
         // Content updated.
         let content: String = conn
@@ -804,6 +916,7 @@ mod tests {
             content: "content".to_string(),
             category: Some("Fact".to_string()),
             source: None,
+            pinned: false,
             is_deleted: true,
             created_at: "2026-06-20T00:00:00.000Z".to_string(),
             updated_at: "2026-06-22T01:00:00.000Z".to_string(),
@@ -821,7 +934,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(still_exists, 1, "tombstone must NOT hard-delete the row");
-        assert!(deleted_at_utc.is_some(), "tombstone must set deleted_at_utc");
+        assert!(
+            deleted_at_utc.is_some(),
+            "tombstone must set deleted_at_utc"
+        );
     }
 
     // ── Test 7: Cursor advances ───────────────────────────────────────────────
@@ -838,40 +954,48 @@ mod tests {
 
     #[test]
     fn select_next_memory_cursor_trusts_server_cursor() {
-        assert_eq!(select_next_memory_cursor("0", &Some("10".to_string())), "10");
+        assert_eq!(
+            select_next_memory_cursor("0", &Some("10".to_string())),
+            "10"
+        );
         // Never moves backwards.
-        assert_eq!(select_next_memory_cursor("50", &Some("10".to_string())), "50");
+        assert_eq!(
+            select_next_memory_cursor("50", &Some("10".to_string())),
+            "50"
+        );
         // No cursor → hold position.
         assert_eq!(select_next_memory_cursor("7", &None), "7");
     }
 
     // ── Test 8a: Push wire shape — non-deleted memory (common case) ──────────
     //
-    // Zod schema: isDeleted: z.boolean().optional()   → optional (not nullable)
-    //             createdAt: z.string().datetime().optional() → optional (not nullable)
+    // Zod schema: isDeleted: z.boolean().optional() → optional (not nullable)
     //
     // When these fields are None, serde MUST omit the key entirely (skip_serializing_if).
     // Emitting `"isDeleted": null` would fail Zod and 400 the push.
 
     #[test]
     fn push_body_serializes_to_camelcase_schema() {
-        // Case A: normal (non-deleted) memory — isDeleted + createdAt must be ABSENT.
+        // Case A: normal (non-deleted) memory — isDeleted and client clocks are absent.
         let body_normal = MemoryPushBody {
+            protocol_version: 2,
             memories: vec![PushMemory {
                 id: "m1".into(),
                 content: "some memory".into(),
                 category: Some("Fact".into()),
                 source: Some("desktop".into()),
-                is_deleted: None,      // must be omitted (key absent → Zod undefined OK)
-                created_at: None,      // must be omitted
-                updated_at: "2026-06-22T00:00:00.000Z".into(),
+                pinned: None,
+                base_version: "7".into(),
+                is_deleted: None, // must be omitted (key absent → Zod undefined OK)
             }],
         };
         let v_normal = serde_json::to_value(&body_normal).unwrap();
         let mem_normal = &v_normal["memories"][0];
 
-        // Required fields present.
-        assert!(mem_normal.get("updatedAt").is_some(), "updatedAt must be present");
+        assert_eq!(v_normal["protocolVersion"], 2);
+        assert_eq!(mem_normal["baseVersion"], "7");
+        assert!(mem_normal.get("updatedAt").is_none());
+        assert!(mem_normal.get("pinned").is_none());
         assert_eq!(mem_normal["id"], "m1");
         assert_eq!(mem_normal["content"], "some memory");
 
@@ -886,22 +1010,29 @@ mod tests {
         );
 
         // snake_case keys must never appear.
-        assert!(mem_normal.get("is_deleted").is_none(), "must not emit is_deleted");
-        assert!(mem_normal.get("created_at").is_none(), "must not emit created_at");
+        assert!(
+            mem_normal.get("is_deleted").is_none(),
+            "must not emit is_deleted"
+        );
+        assert!(
+            mem_normal.get("created_at").is_none(),
+            "must not emit created_at"
+        );
 
         // user_id must not be in push body.
         assert!(mem_normal.get("userId").is_none() && mem_normal.get("user_id").is_none());
 
         // Case B: tombstone — isDeleted must be present and true.
         let body_tombstone = MemoryPushBody {
+            protocol_version: 2,
             memories: vec![PushMemory {
                 id: "m2".into(),
                 content: "deleted memory".into(),
                 category: None,
                 source: None,
+                pinned: None,
+                base_version: "8".into(),
                 is_deleted: Some(true),
-                created_at: Some("2026-06-20T00:00:00.000Z".into()),
-                updated_at: "2026-06-22T01:00:00.000Z".into(),
             }],
         };
         let v_tomb = serde_json::to_value(&body_tombstone).unwrap();
@@ -911,10 +1042,7 @@ mod tests {
             Some(true),
             "tombstone must emit isDeleted: true"
         );
-        assert!(
-            mem_tomb.get("createdAt").is_some(),
-            "createdAt must be present when Some"
-        );
+        assert!(mem_tomb.get("createdAt").is_none());
         // category/source absent when None (nullable optional — omitting is fine).
         assert!(mem_tomb.get("category").is_none());
         assert!(mem_tomb.get("source").is_none());
@@ -935,11 +1063,19 @@ mod tests {
         let mem_id: i64 = conn.last_insert_rowid();
         mark_memory_for_push(&conn, mem_id).unwrap();
         let cid: String = conn
-            .query_row("SELECT cloud_id FROM user_memory WHERE id = ?1", params![mem_id], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM user_memory WHERE id = ?1",
+                params![mem_id],
+                |r| r.get(0),
+            )
             .unwrap();
 
-        let acked = vec![AckedMemory { id: cid.clone(), server_version: "99".to_string() }];
-        ack_clear_memories(&conn, &acked);
+        let acked = vec![AckedMemory {
+            id: cid.clone(),
+            server_version: "99".to_string(),
+        }];
+        let sent = gather_push_memories(&conn).unwrap();
+        ack_clear_memories(&conn, &acked, &sent);
 
         let (needs_push, sv): (i64, Option<String>) = conn
             .query_row(
@@ -949,7 +1085,126 @@ mod tests {
             )
             .unwrap();
         assert_eq!(needs_push, 0, "needs_push must be 0 after ack");
-        assert_eq!(sv.as_deref(), Some("99"), "server_version must be set from ack");
+        assert_eq!(
+            sv.as_deref(),
+            Some("99"),
+            "server_version must be set from ack"
+        );
+    }
+
+    #[test]
+    fn memory_ack_preserves_an_edit_made_after_the_sent_snapshot() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO user_memory (category, topic, content, importance, app_mode, created_at, updated_at) \
+             VALUES ('Fact', 'ack_race', 'sent content', 5, 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let mem_id = conn.last_insert_rowid();
+        mark_memory_for_push(&conn, mem_id).unwrap();
+        let sent = gather_push_memories(&conn).unwrap();
+        let cloud_id = sent[0].id.clone();
+
+        conn.execute(
+            "UPDATE user_memory SET content = 'later edit', needs_push = 1 WHERE id = ?1",
+            params![mem_id],
+        )
+        .unwrap();
+        ack_clear_memories(
+            &conn,
+            &[AckedMemory {
+                id: cloud_id,
+                server_version: "12".to_string(),
+            }],
+            &sent,
+        );
+
+        let (content, needs_push, server_version): (String, i64, Option<String>) = conn
+            .query_row(
+                "SELECT content, needs_push, server_version FROM user_memory WHERE id = ?1",
+                params![mem_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(content, "later edit");
+        assert_eq!(needs_push, 1, "the unsent edit must remain dirty");
+        assert_eq!(server_version.as_deref(), Some("12"));
+    }
+
+    #[test]
+    fn memory_conflict_rebases_an_in_flight_local_edit() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO user_memory (category, topic, content, importance, app_mode, created_at, updated_at) \
+             VALUES ('Fact', 'conflict_race', 'sent content', 5, 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let mem_id = conn.last_insert_rowid();
+        mark_memory_for_push(&conn, mem_id).unwrap();
+        conn.execute(
+            "UPDATE user_memory SET server_version = '5' WHERE id = ?1",
+            params![mem_id],
+        )
+        .unwrap();
+        let sent = gather_push_memories(&conn).unwrap();
+        let cloud_id = sent[0].id.clone();
+        conn.execute(
+            "UPDATE user_memory SET content = 'later edit', needs_push = 1 WHERE id = ?1",
+            params![mem_id],
+        )
+        .unwrap();
+
+        resolve_memory_conflicts(
+            &conn,
+            "u1",
+            &[MemoryConflict {
+                id: cloud_id.clone(),
+                current: Some(MemoryDelta {
+                    id: cloud_id,
+                    content: "server winner".to_string(),
+                    category: Some("Fact".to_string()),
+                    source: Some("web".to_string()),
+                    pinned: false,
+                    is_deleted: false,
+                    created_at: "2026-07-14T00:00:00.000Z".to_string(),
+                    updated_at: "2026-07-15T00:00:00.000Z".to_string(),
+                    server_version: "6".to_string(),
+                }),
+            }],
+            &sent,
+        );
+
+        let (content, needs_push, version): (String, i64, Option<String>) = conn
+            .query_row(
+                "SELECT content, needs_push, server_version FROM user_memory WHERE id = ?1",
+                params![mem_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(content, "later edit");
+        assert_eq!(needs_push, 1);
+        assert_eq!(version.as_deref(), Some("6"));
+    }
+
+    #[test]
+    fn memory_v2_wire_matches_the_shared_cross_language_golden_fixture() {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Golden {
+            memory_push: MemoryPushBody,
+            memory_push_response: MemoryPushResponse,
+        }
+
+        let fixture: Golden = serde_json::from_str(include_str!(
+            "../../../../../packages/contracts/cloud-contracts/src/__fixtures__/chat-memory-sync-cas.golden.json"
+        ))
+        .unwrap();
+        assert_eq!(fixture.memory_push.protocol_version, 2);
+        assert_eq!(fixture.memory_push.memories[0].base_version, "7");
+        assert_eq!(fixture.memory_push_response.protocol_version, 2);
+        assert_eq!(fixture.memory_push_response.conflicts.len(), 1);
     }
 
     // ── Test 10: Token-empty gate (no network egress) ─────────────────────────
@@ -988,6 +1243,9 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(needs_push, 1, "no push happened, dirty flag must be untouched");
+        assert_eq!(
+            needs_push, 1,
+            "no push happened, dirty flag must be untouched"
+        );
     }
 }

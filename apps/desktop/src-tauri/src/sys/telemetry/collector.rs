@@ -85,7 +85,10 @@ impl TelemetryCollector {
     /// (user-supplied keys, client-direct). Managed cloud and the `None`
     /// pre-sync default are NOT Local boundaries here.
     fn is_local_trust_boundary(&self) -> bool {
-        matches!(self.config.privacy_mode.as_deref(), Some("local") | Some("byok"))
+        matches!(
+            self.config.privacy_mode.as_deref(),
+            Some("local") | Some("byok")
+        )
     }
 
     pub async fn track(&self, event: TelemetryEvent) -> Result<()> {

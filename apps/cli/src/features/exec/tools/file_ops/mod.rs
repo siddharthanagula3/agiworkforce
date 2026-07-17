@@ -83,7 +83,7 @@ fn saved_denial_message(action: &str) -> String {
 fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
     eprintln!(
         "{}",
-        ts::danger(&format!(
+        ts::danger(format!(
             "{action} requires approval, but no --full-auto/-y/--dangerously-skip-permissions \
              flag was passed and stdin is not a terminal, so no confirmation is possible."
         ))

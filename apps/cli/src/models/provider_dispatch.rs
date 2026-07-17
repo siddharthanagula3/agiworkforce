@@ -25,6 +25,9 @@ use super::{
 pub fn provider_from_name(name: &str) -> Option<Provider> {
     let lower = name.to_lowercase();
     match lower.as_str() {
+        "agi" | "agiworkforce" | "managed-cloud" | "managed_cloud" | "managedcloud" => {
+            Some(Provider::ManagedCloud)
+        }
         "anthropic" => Some(Provider::Anthropic),
         "openai" => Some(openai_provider()),
         "google" => Some(Provider::Google),
@@ -99,7 +102,7 @@ fn provider_allows_uncataloged_models(provider: &Provider) -> bool {
     match provider {
         Provider::Ollama(_) | Provider::Custom { .. } => true,
         Provider::OpenAICompatible { name, .. } => matches!(*name, "lmstudio" | "openrouter"),
-        Provider::Anthropic | Provider::Google => false,
+        Provider::ManagedCloud | Provider::Anthropic | Provider::Google => false,
     }
 }
 
@@ -122,6 +125,16 @@ pub fn resolve_selected_provider(model: &str, provider_override: Option<&str>) -
         })?;
 
         if let Some(catalog_model) = crate::model_catalog::find(model) {
+            if provider == Provider::ManagedCloud {
+                if !catalog_model.cloud_eligible {
+                    return Err(CliError::config(format!(
+                        "Model '{}' is not eligible for AGI Workforce managed cloud.",
+                        model
+                    ))
+                    .into());
+                }
+                return Ok(provider);
+            }
             let catalog_provider =
                 provider_from_name(&catalog_model.provider).ok_or_else(|| {
                     CliError::config(format!(
@@ -208,6 +221,18 @@ pub fn selection_provider_override<'a>(
 pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Option<String>> {
     let name = provider_name(provider);
     match provider {
+        Provider::ManagedCloud => {
+            let token = crate::tier_cache::load_jwt();
+            if token.is_none() {
+                return Err(CliError::auth(
+                    name,
+                    "No AGI Workforce session found. Run `agi login` to use managed cloud."
+                        .to_string(),
+                )
+                .into());
+            }
+            Ok(token)
+        }
         Provider::Ollama(OllamaMode::Local) => Ok(None), // no key needed
         Provider::Ollama(OllamaMode::Cloud) => {
             let key = resolve_config_env_auth_key(config, name, "OLLAMA_API_KEY");
@@ -372,6 +397,7 @@ pub(crate) fn auth_store_keys(provider_name: &str) -> Vec<&'static str> {
 
 pub fn provider_name(provider: &Provider) -> &'static str {
     match provider {
+        Provider::ManagedCloud => "managed_cloud",
         Provider::Anthropic => "anthropic",
         Provider::Google => "google",
         Provider::Ollama(OllamaMode::Local) => "ollama",
@@ -409,6 +435,11 @@ static CUSTOM_PROVIDERS: once_cell::sync::Lazy<std::sync::RwLock<HashMap<String,
 /// appended automatically so users can provide either form.
 pub fn register_custom_providers(config: &CliConfig) {
     const RESERVED: &[&str] = &[
+        "agi",
+        "agiworkforce",
+        "managed-cloud",
+        "managed_cloud",
+        "managedcloud",
         "anthropic",
         "openai",
         "google",
@@ -712,6 +743,14 @@ mod tests {
     #[test]
     fn test_provider_from_name_canonical_names() {
         assert!(matches!(
+            provider_from_name("agiworkforce"),
+            Some(Provider::ManagedCloud)
+        ));
+        assert!(matches!(
+            provider_from_name("managed_cloud"),
+            Some(Provider::ManagedCloud)
+        ));
+        assert!(matches!(
             provider_from_name("anthropic"),
             Some(Provider::Anthropic)
         ));
@@ -779,6 +818,24 @@ mod tests {
         ));
         // Unknown returns None (and no custom registered)
         assert!(provider_from_name("definitely-not-a-provider").is_none());
+    }
+
+    #[test]
+    fn managed_cloud_override_accepts_a_cloud_eligible_catalog_model() {
+        let model = sample_model_for("anthropic");
+        let provider = resolve_selected_provider(&model, Some("agiworkforce"))
+            .expect("managed cloud must accept concrete upstream catalog models");
+
+        assert_eq!(provider, Provider::ManagedCloud);
+        assert_eq!(provider_name(&provider), "managed_cloud");
+    }
+
+    #[test]
+    fn managed_cloud_override_rejects_an_uncataloged_model() {
+        let error = resolve_selected_provider("invented-frontier-model", Some("managed_cloud"))
+            .expect_err("managed cloud must not forward invented model ids");
+
+        assert!(error.to_string().contains("Unknown model"), "{error}");
     }
 
     #[test]

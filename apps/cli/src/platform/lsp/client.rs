@@ -164,8 +164,8 @@ impl LspClient {
         // Upper bound on a single LSP frame to cap memory: a malicious/buggy
         // server could otherwise send a multi-GB Content-Length and OOM us.
         const MAX_CONTENT_LENGTH: usize = 32 * 1024 * 1024; // 32 MiB
-        // Bound how many interleaved notifications/other responses we skip
-        // before giving up on finding our id.
+                                                            // Bound how many interleaved notifications/other responses we skip
+                                                            // before giving up on finding our id.
         const MAX_FRAMES: usize = 1024;
         for _ in 0..MAX_FRAMES {
             // Read this frame's headers.

@@ -8,11 +8,11 @@
 //! projects can never acquire a cloud_id or have needs_push=1. The trust boundary
 //! is the same as chat: `derive_cloud_sync_enabled` in `send_message_setup.rs`.
 //!
-//! Wire protocol (frozen — do NOT change the server):
+//! Wire protocol:
 //!   POST /api/projects/sync  { projects: [{ id, name, description?, instructions?,
-//!                               color?, isArchived?, metadata?, createdAt?,
-//!                               updatedAt, deletedAt? }] }
-//!                          → { applied: [{ id, server_version }], cursor }
+//!                               color?, isArchived?, metadata?, baseVersion,
+//!                               deletedAt? }] }
+//!                          → { applied: [{ id, server_version }], conflicts, cursor }
 //!   GET  /api/projects/sync?since=<cursor>
 //!                          → { projects: [{ id, name, description, instructions,
 //!                               color, is_archived, metadata, created_at,
@@ -32,9 +32,12 @@
 //!   files, conversation_ids, icon, icon_emoji, accent_color,
 //!   default_privacy_mode, knowledge_base_files
 //!
+//! Conflict resolution is compare-and-swap against `baseVersion`, a server-owned
+//! monotonic revision. Client timestamps never cross the wire or choose a winner.
+//!
 //! PUSH: `#[serde(skip_serializing_if = "Option::is_none")]` on ALL optional
 //! fields. The server Zod schema uses `.optional()` (not `.nullable()`) for
-//! description, instructions, color, isArchived, metadata, createdAt, deletedAt —
+//! description, instructions, color, isArchived, metadata, deletedAt —
 //! meaning `undefined` (key absent) is accepted but `null` (key present) fails
 //! validation. Same camelCase + skip_serializing_if discipline as memory_sync.
 //! Exception: `deletedAt` is `.nullable().optional()` on the server, so null is
@@ -43,7 +46,7 @@
 use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Client;
 use rusqlite::{params, Connection, Result as SqlResult};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -59,27 +62,24 @@ use uuid::Uuid;
 /// omits the key entirely rather than emitting `"field": null`. The server Zod
 /// schema uses `.optional()` which rejects JSON `null` but accepts an absent key.
 ///
-/// `updatedAt` is required (non-Option) per the Zod schema.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PushProject {
-    id: String,              // cloud_id (UUIDv7, same as projects.id for origin rows)
+    id: String, // cloud_id (UUIDv7, same as projects.id for origin rows)
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    instructions: Option<String>,  // maps to local custom_instructions
+    instructions: Option<String>, // maps to local custom_instructions
     #[serde(skip_serializing_if = "Option::is_none")]
     color: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    is_archived: Option<bool>,     // bool on wire, INTEGER 0/1 in local DB
+    is_archived: Option<bool>, // bool on wire, INTEGER 0/1 in local DB
     #[serde(skip_serializing_if = "Option::is_none")]
     metadata: Option<serde_json::Value>,
+    base_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    created_at: Option<String>,
-    updated_at: String,            // required
-    #[serde(skip_serializing_if = "Option::is_none")]
-    deleted_at: Option<String>,    // tombstone timestamp (not a bool, unlike memory)
+    deleted_at: Option<String>, // tombstone timestamp (not a bool, unlike memory)
 }
 
 /// POST body.
@@ -92,6 +92,7 @@ struct ProjectPushBody {
 #[derive(Debug, Deserialize)]
 struct AckedProject {
     id: String,
+    #[serde(deserialize_with = "deserialize_server_version")]
     server_version: String,
 }
 
@@ -99,8 +100,17 @@ struct AckedProject {
 #[derive(Debug, Deserialize)]
 struct ProjectPushResponse {
     applied: Vec<AckedProject>,
+    #[serde(default)]
+    conflicts: Vec<ProjectConflict>,
     #[allow(dead_code)]
-    cursor: Option<String>,
+    #[serde(deserialize_with = "deserialize_server_version")]
+    cursor: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectConflict {
+    id: String,
+    current: Option<ProjectDelta>,
 }
 
 /// Pulled project delta (snake_case, matching server SELECT columns).
@@ -116,6 +126,7 @@ struct ProjectDelta {
     created_at: String,
     updated_at: String,
     deleted_at: Option<String>,
+    #[serde(deserialize_with = "deserialize_server_version")]
     server_version: String,
 }
 
@@ -124,7 +135,8 @@ struct ProjectDelta {
 #[serde(rename_all = "camelCase")]
 struct ProjectPullResponse {
     projects: Vec<ProjectDelta>,
-    cursor: Option<String>,
+    #[serde(deserialize_with = "deserialize_server_version")]
+    cursor: String,
     has_more: bool,
 }
 
@@ -168,12 +180,35 @@ fn now_z() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
+fn valid_server_version(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 19
+        && value.bytes().all(|byte| byte.is_ascii_digit())
+        && (value.len() < 19 || value <= "9223372036854775807")
+}
+
+fn deserialize_server_version<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    if valid_server_version(&value) {
+        Ok(value)
+    } else {
+        Err(serde::de::Error::custom(
+            "server version must fit a non-negative PostgreSQL bigint",
+        ))
+    }
+}
+
 fn to_z_datetime(s: &str) -> String {
     if let Ok(dt) = s.parse::<DateTime<Utc>>() {
         return dt.to_rfc3339_opts(SecondsFormat::Millis, true);
     }
     if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-        return dt.with_timezone(&Utc).to_rfc3339_opts(SecondsFormat::Millis, true);
+        return dt
+            .with_timezone(&Utc)
+            .to_rfc3339_opts(SecondsFormat::Millis, true);
     }
     if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
         return dt.and_utc().to_rfc3339_opts(SecondsFormat::Millis, true);
@@ -181,7 +216,10 @@ fn to_z_datetime(s: &str) -> String {
     if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
         return dt.and_utc().to_rfc3339_opts(SecondsFormat::Millis, true);
     }
-    warn!(raw_ts = s, "projects_sync: to_z_datetime: unparseable timestamp — using now_z()");
+    warn!(
+        raw_ts = s,
+        "projects_sync: to_z_datetime: unparseable timestamp — using now_z()"
+    );
     now_z()
 }
 
@@ -266,7 +304,7 @@ pub fn soft_delete_project_for_push(conn: &Connection, project_id: &str) -> SqlR
 fn gather_push_projects(conn: &Connection) -> SqlResult<Vec<PushProject>> {
     let mut stmt = conn.prepare(
         "SELECT cloud_id, name, description, custom_instructions, color, is_archived, \
-                metadata, created_at_utc, updated_at, deleted_at_utc \
+                metadata, deleted_at_utc, COALESCE(server_version, '0') \
          FROM projects \
          WHERE needs_push = 1 AND app_mode = 'cloud' AND cloud_id IS NOT NULL",
     )?;
@@ -278,12 +316,8 @@ fn gather_push_projects(conn: &Connection) -> SqlResult<Vec<PushProject>> {
         let color: Option<String> = row.get(4)?;
         let is_archived_int: i64 = row.get(5)?;
         let metadata_json: Option<String> = row.get(6)?;
-        let created_at_utc: Option<String> = row.get(7)?;
-        let updated_at_raw: String = row.get(8)?;
-        let deleted_at_utc: Option<String> = row.get(9)?;
-
-        let updated_at = to_z_datetime(&updated_at_raw);
-        let created_at = created_at_utc.as_deref().map(to_z_datetime);
+        let deleted_at_utc: Option<String> = row.get(7)?;
+        let server_version: String = row.get(8)?;
         // is_archived: convert INTEGER 0/1 → bool; only emit when true (skip false via None trick)
         // The server accepts isArchived as optional; we emit it always as a bool.
         let is_archived = Some(is_archived_int != 0);
@@ -302,23 +336,90 @@ fn gather_push_projects(conn: &Connection) -> SqlResult<Vec<PushProject>> {
             color,
             is_archived,
             metadata,
-            created_at,
-            updated_at,
+            base_version: server_version,
             deleted_at,
         })
     })?;
     rows.collect()
 }
 
+fn project_sync_content_matches(left: &PushProject, right: &PushProject) -> bool {
+    left.id == right.id
+        && left.name == right.name
+        && left.description == right.description
+        && left.instructions == right.instructions
+        && left.color == right.color
+        && left.is_archived == right.is_archived
+        && left.metadata == right.metadata
+        && left.deleted_at == right.deleted_at
+}
+
 /// Ack-clear: mark acked projects as needs_push=0 and store server_version.
-fn ack_clear_projects(conn: &Connection, acked: &[AckedProject]) {
+fn ack_clear_projects(conn: &Connection, acked: &[AckedProject], sent: &[PushProject]) {
+    let current = gather_push_projects(conn).unwrap_or_default();
     for row in acked {
+        let unchanged = sent
+            .iter()
+            .find(|project| project.id == row.id)
+            .zip(current.iter().find(|project| project.id == row.id))
+            .is_some_and(|(sent_project, current_project)| {
+                project_sync_content_matches(sent_project, current_project)
+            });
         let _ = conn.execute(
-            "UPDATE projects SET needs_push = 0, server_version = ?1 \
-             WHERE cloud_id = ?2",
-            params![row.server_version, row.id],
+            "UPDATE projects \
+                SET server_version = ?1, \
+                    needs_push = CASE WHEN ?3 THEN 0 ELSE needs_push END \
+              WHERE cloud_id = ?2 AND app_mode = 'cloud'",
+            params![row.server_version, row.id, unchanged],
         );
     }
+}
+
+/// Resolve stale CAS writes with the current server winner. If the user changed
+/// the project again while the request was in flight, preserve that newer local
+/// content, advance only its base revision, and leave it dirty for the next cycle.
+fn apply_project_conflicts(
+    conn: &Connection,
+    conflicts: &[ProjectConflict],
+    sent: &[PushProject],
+) -> usize {
+    let mut resolved = 0;
+    let current_local = gather_push_projects(conn).unwrap_or_default();
+    for conflict in conflicts {
+        let Some(current) = &conflict.current else {
+            let _ = conn.execute(
+                "DELETE FROM projects WHERE cloud_id = ?1 AND app_mode = 'cloud'",
+                params![conflict.id],
+            );
+            resolved += 1;
+            continue;
+        };
+
+        let unchanged = sent
+            .iter()
+            .find(|project| project.id == conflict.id)
+            .zip(
+                current_local
+                    .iter()
+                    .find(|project| project.id == conflict.id),
+            )
+            .is_some_and(|(sent_project, current_project)| {
+                // A base-zero conflict means this persisted row predates CAS (or
+                // an earlier create response was lost). Preserve and rebase it;
+                // accepting the server winner here would discard an offline edit.
+                sent_project.base_version != "0"
+                    && project_sync_content_matches(sent_project, current_project)
+            });
+        if unchanged {
+            let _ = conn.execute(
+                "UPDATE projects SET needs_push = 0 \
+                  WHERE cloud_id = ?1 AND app_mode = 'cloud'",
+                params![conflict.id],
+            );
+        }
+        resolved += apply_project_deltas(conn, std::slice::from_ref(current));
+    }
+    resolved
 }
 
 // ---------------------------------------------------------------------------
@@ -337,30 +438,42 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
     let mut applied = 0usize;
     for d in deltas {
         // Dedup: find existing local row by cloud_id.
-        let existing: Option<String> = conn
+        let existing: Option<(String, i64)> = conn
             .query_row(
-                "SELECT id FROM projects WHERE cloud_id = ?1",
+                "SELECT id, needs_push FROM projects WHERE cloud_id = ?1",
                 params![d.id],
-                |row| row.get::<_, String>(0),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
             )
             .ok();
 
         if d.deleted_at.is_some() {
             // Tombstone: soft-delete locally if we have the row.
-            if let Some(local_id) = existing {
+            if let Some((local_id, _)) = existing {
                 let deleted_at = d.deleted_at.as_deref().map(to_z_datetime);
                 let _ = conn.execute(
-                    "UPDATE projects SET deleted_at_utc = ?1, server_version = ?2 \
+                    "UPDATE projects SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
                 );
                 applied += 1;
             }
             // If we don't have the row, the delete already propagated — no-op.
-        } else if let Some(local_id) = existing {
-            // LWW update: sync-able fields may change.
-            let metadata_json: Option<String> =
-                d.metadata.as_ref().and_then(|v| serde_json::to_string(v).ok());
+        } else if let Some((local_id, needs_push)) = existing {
+            if needs_push != 0 {
+                // A newer local edit exists. Preserve its content and only rebase
+                // the next CAS attempt onto the server revision we just observed.
+                let _ = conn.execute(
+                    "UPDATE projects SET server_version = ?1 WHERE id = ?2",
+                    params![d.server_version, local_id],
+                );
+                applied += 1;
+                continue;
+            }
+            // No pending local edit: accept the server-revision winner.
+            let metadata_json: Option<String> = d
+                .metadata
+                .as_ref()
+                .and_then(|v| serde_json::to_string(v).ok());
             let is_archived_int = d.is_archived as i64;
             let _ = conn.execute(
                 "UPDATE projects \
@@ -388,8 +501,10 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
         } else {
             // New row from another device — INSERT.
             // Use cloud id as the local TEXT PK (projects already use UUIDv7 PKs).
-            let metadata_json: Option<String> =
-                d.metadata.as_ref().and_then(|v| serde_json::to_string(v).ok());
+            let metadata_json: Option<String> = d
+                .metadata
+                .as_ref()
+                .and_then(|v| serde_json::to_string(v).ok());
             let is_archived_int = d.is_archived as i64;
             let created_at = to_z_datetime(&d.created_at);
             let updated_at = to_z_datetime(&d.updated_at);
@@ -400,7 +515,7 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
                   created_at_utc, server_version, needs_push, app_mode, cloud_id) \
                  VALUES (?1, ?2, ?3, ?4, '[]', '[]', ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, 'cloud', ?1)",
                 params![
-                    d.id,           // id = cloud_id (TEXT PK)
+                    d.id, // id = cloud_id (TEXT PK)
                     d.name,
                     // description is NOT NULL DEFAULT '' — server may send null (nullable optional),
                     // so we must not bind NULL into a NOT NULL column.
@@ -412,12 +527,14 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
                     metadata_json.as_deref(),
                     created_at,
                     updated_at,
-                    d.created_at,   // created_at_utc (raw from server)
+                    d.created_at, // created_at_utc (raw from server)
                     d.server_version,
                 ],
             );
             match r {
-                Ok(_) => { applied += 1; }
+                Ok(_) => {
+                    applied += 1;
+                }
                 Err(e) => {
                     debug!(cloud_id = %d.id, error = %e, "projects_sync: skipping pulled project — insert failed");
                 }
@@ -428,11 +545,8 @@ fn apply_project_deltas(conn: &Connection, deltas: &[ProjectDelta]) -> usize {
 }
 
 /// Select the next cursor for the projects pull.
-fn select_next_project_cursor(current: &str, resp_cursor: &Option<String>) -> String {
-    match resp_cursor {
-        Some(c) => max_cursor(current, std::slice::from_ref(c)),
-        None => current.to_string(),
-    }
+fn select_next_project_cursor(current: &str, resp_cursor: &str) -> String {
+    max_cursor(current, &[resp_cursor.to_string()])
 }
 
 // ---------------------------------------------------------------------------
@@ -525,7 +639,8 @@ async fn sync_projects_now_inner(
 
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            ack_clear_projects(&conn, &push_resp.applied);
+            ack_clear_projects(&conn, &push_resp.applied, &body.projects);
+            apply_project_conflicts(&conn, &push_resp.conflicts, &body.projects);
         }
     }
 
@@ -540,11 +655,7 @@ async fn sync_projects_now_inner(
     };
 
     for _page in 0..PULL_PAGE_GUARD {
-        let pull_url = format!(
-            "{}?since={}",
-            sync_url,
-            urlencoding::encode(&cursor)
-        );
+        let pull_url = format!("{}?since={}", sync_url, urlencoding::encode(&cursor));
 
         let resp = client
             .get(&pull_url)
@@ -602,6 +713,22 @@ mod tests {
         conn
     }
 
+    fn live_delta(id: &str, name: &str, server_version: &str) -> ProjectDelta {
+        ProjectDelta {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: None,
+            instructions: None,
+            color: None,
+            is_archived: false,
+            metadata: None,
+            created_at: "2026-07-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-07-02T00:00:00.000Z".to_string(),
+            deleted_at: None,
+            server_version: server_version.to_string(),
+        }
+    }
+
     // ── Test 1: Migration v69 columns/indexes exist ──────────────────────────
 
     #[test]
@@ -638,7 +765,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap_or(false);
-        assert!(pc_exists, "cloud_sync_state.project_cursor must exist after v69");
+        assert!(
+            pc_exists,
+            "cloud_sync_state.project_cursor must exist after v69"
+        );
     }
 
     // ── Test 2: Mint — sets cloud_id + needs_push on cloud project ────────────
@@ -705,7 +835,11 @@ mod tests {
 
         // Push gather also excludes it.
         let push_projs = gather_push_projects(&conn).unwrap();
-        assert_eq!(push_projs.len(), 0, "local project must not appear in push gather");
+        assert_eq!(
+            push_projs.len(),
+            0,
+            "local project must not appear in push gather"
+        );
     }
 
     // ── Test 4: Push gather excludes local projects ───────────────────────────
@@ -736,7 +870,11 @@ mod tests {
         .unwrap();
 
         let push_projs = gather_push_projects(&conn).unwrap();
-        assert_eq!(push_projs.len(), 1, "only cloud project should be gathered for push");
+        assert_eq!(
+            push_projs.len(),
+            1,
+            "only cloud project should be gathered for push"
+        );
     }
 
     // ── Test 5: Pull dedup updates not inserts on existing cloud_id ───────────
@@ -762,6 +900,13 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
+        // This test exercises clean-row deduplication. Dirty rows are covered by
+        // the rebase tests below and must preserve their newer local content.
+        conn.execute(
+            "UPDATE projects SET needs_push = 0, server_version = '99' WHERE id = 'proj-dedup'",
+            [],
+        )
+        .unwrap();
 
         // Pull delta for the same cloud_id (from another device).
         let delta = ProjectDelta {
@@ -788,7 +933,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1, "DEDUP: must not insert a second row for the same cloud_id");
+        assert_eq!(
+            count, 1,
+            "DEDUP: must not insert a second row for the same cloud_id"
+        );
 
         // Name updated.
         let name: String = conn
@@ -817,7 +965,7 @@ mod tests {
         .unwrap();
         let cloud_id_val = "tombstone-proj-uuid-1";
         conn.execute(
-            "UPDATE projects SET cloud_id = ?1 WHERE id = 'proj-tomb'",
+            "UPDATE projects SET cloud_id = ?1, needs_push = 1 WHERE id = 'proj-tomb'",
             params![cloud_id_val],
         )
         .unwrap();
@@ -839,15 +987,22 @@ mod tests {
         apply_project_deltas(&conn, &[delta]);
 
         // Row still exists (soft delete).
-        let (still_exists, deleted_at_utc): (i64, Option<String>) = conn
+        let (still_exists, deleted_at_utc, needs_push): (i64, Option<String>, i64) = conn
             .query_row(
-                "SELECT COUNT(*), deleted_at_utc FROM projects WHERE id = 'proj-tomb'",
+                "SELECT COUNT(*), deleted_at_utc, needs_push FROM projects WHERE id = 'proj-tomb'",
                 [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .unwrap();
         assert_eq!(still_exists, 1, "tombstone must NOT hard-delete the row");
-        assert!(deleted_at_utc.is_some(), "tombstone must set deleted_at_utc");
+        assert!(
+            deleted_at_utc.is_some(),
+            "tombstone must set deleted_at_utc"
+        );
+        assert_eq!(
+            needs_push, 0,
+            "server tombstone must clear the local dirty flag"
+        );
     }
 
     // ── Test 7: Pull INSERT new row — null description/instructions must land ──
@@ -871,13 +1026,16 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count_before, 0, "precondition: row must not exist before pull");
+        assert_eq!(
+            count_before, 0,
+            "precondition: row must not exist before pull"
+        );
 
         let delta = ProjectDelta {
             id: "new-cloud-uuid-1".to_string(),
             name: "Remote Project".to_string(),
-            description: None,        // server sends null — must not 500 on NOT NULL column
-            instructions: None,       // same
+            description: None, // server sends null — must not 500 on NOT NULL column
+            instructions: None, // same
             color: None,
             is_archived: false,
             metadata: None,
@@ -899,8 +1057,14 @@ mod tests {
             )
             .expect("row must be present after cross-device pull INSERT");
         assert_eq!(row_count, 1, "INSERT must create exactly one row");
-        assert_eq!(description, "", "null description must land as empty string");
-        assert_eq!(instructions, "", "null instructions must land as empty string");
+        assert_eq!(
+            description, "",
+            "null description must land as empty string"
+        );
+        assert_eq!(
+            instructions, "",
+            "null instructions must land as empty string"
+        );
     }
 
     // ── Test 8: Cursor advances ─────── (was 7; renumbered after INSERT test) ──
@@ -917,17 +1081,15 @@ mod tests {
 
     #[test]
     fn select_next_project_cursor_trusts_server_cursor() {
-        assert_eq!(select_next_project_cursor("0", &Some("10".to_string())), "10");
+        assert_eq!(select_next_project_cursor("0", "10"), "10");
         // Never moves backwards.
-        assert_eq!(select_next_project_cursor("50", &Some("10".to_string())), "50");
-        // No cursor → hold position.
-        assert_eq!(select_next_project_cursor("7", &None), "7");
+        assert_eq!(select_next_project_cursor("50", "10"), "50");
     }
 
     // ── Test 10: Push wire shape — camelCase + omit None fields ──────────────
     //
-    // Zod schema: description/instructions/color/isArchived/metadata/createdAt
-    //             all `.optional()` or `.nullable().optional()`.
+    // Zod schema: description/instructions/color/isArchived/metadata/deletedAt
+    //             are all `.optional()` or `.nullable().optional()`.
     //
     // When None, serde MUST omit the key entirely (skip_serializing_if).
     // Emitting `null` would fail Zod .optional() and 400 the push.
@@ -939,13 +1101,12 @@ mod tests {
             projects: vec![PushProject {
                 id: "p1".into(),
                 name: "My Project".into(),
+                base_version: "7".into(),
                 description: None,
                 instructions: None,
                 color: None,
                 is_archived: Some(false),
                 metadata: None,
-                created_at: None,
-                updated_at: "2026-06-22T00:00:00.000Z".into(),
                 deleted_at: None,
             }],
         };
@@ -953,22 +1114,53 @@ mod tests {
         let p_normal = &v_normal["projects"][0];
 
         // Required fields present.
-        assert!(p_normal.get("updatedAt").is_some(), "updatedAt must be present");
+        assert_eq!(p_normal["baseVersion"], "7");
+        assert!(
+            p_normal.get("updatedAt").is_none(),
+            "client clock must not cross the wire"
+        );
         assert_eq!(p_normal["id"], "p1");
         assert_eq!(p_normal["name"], "My Project");
 
         // None fields must be ABSENT (skip_serializing_if).
-        assert!(p_normal.get("description").is_none(), "description must be absent when None");
-        assert!(p_normal.get("instructions").is_none(), "instructions must be absent when None");
-        assert!(p_normal.get("color").is_none(), "color must be absent when None");
-        assert!(p_normal.get("metadata").is_none(), "metadata must be absent when None");
-        assert!(p_normal.get("createdAt").is_none(), "createdAt must be absent when None");
-        assert!(p_normal.get("deletedAt").is_none(), "deletedAt must be absent when None");
+        assert!(
+            p_normal.get("description").is_none(),
+            "description must be absent when None"
+        );
+        assert!(
+            p_normal.get("instructions").is_none(),
+            "instructions must be absent when None"
+        );
+        assert!(
+            p_normal.get("color").is_none(),
+            "color must be absent when None"
+        );
+        assert!(
+            p_normal.get("metadata").is_none(),
+            "metadata must be absent when None"
+        );
+        assert!(
+            p_normal.get("createdAt").is_none(),
+            "createdAt must be absent when None"
+        );
+        assert!(
+            p_normal.get("deletedAt").is_none(),
+            "deletedAt must be absent when None"
+        );
 
         // snake_case keys must never appear.
-        assert!(p_normal.get("is_archived").is_none(), "must not emit is_archived (snake)");
-        assert!(p_normal.get("created_at").is_none(), "must not emit created_at (snake)");
-        assert!(p_normal.get("deleted_at").is_none(), "must not emit deleted_at (snake)");
+        assert!(
+            p_normal.get("is_archived").is_none(),
+            "must not emit is_archived (snake)"
+        );
+        assert!(
+            p_normal.get("created_at").is_none(),
+            "must not emit created_at (snake)"
+        );
+        assert!(
+            p_normal.get("deleted_at").is_none(),
+            "must not emit deleted_at (snake)"
+        );
 
         // user_id must not be in push body.
         assert!(p_normal.get("userId").is_none() && p_normal.get("user_id").is_none());
@@ -978,13 +1170,12 @@ mod tests {
             projects: vec![PushProject {
                 id: "p2".into(),
                 name: "Deleted Project".into(),
+                base_version: "8".into(),
                 description: Some("was a project".into()),
                 instructions: None,
                 color: None,
                 is_archived: Some(false),
                 metadata: None,
-                created_at: Some("2026-06-20T00:00:00.000Z".into()),
-                updated_at: "2026-06-22T01:00:00.000Z".into(),
                 deleted_at: Some("2026-06-22T01:00:00.000Z".into()),
             }],
         };
@@ -996,16 +1187,267 @@ mod tests {
             p_tomb.get("deletedAt").and_then(|v| v.as_str()).is_some(),
             "tombstone must emit deletedAt as a timestamp string"
         );
-        assert!(
-            p_tomb.get("createdAt").is_some(),
-            "createdAt must be present when Some"
-        );
+        assert!(p_tomb.get("createdAt").is_none());
         assert!(
             p_tomb.get("description").is_some(),
             "description must be present when Some"
         );
         // instructions absent when None.
         assert!(p_tomb.get("instructions").is_none());
+    }
+
+    #[test]
+    fn cross_language_project_cas_golden_fixture_matches_rust_wire() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../../packages/contracts/cloud-contracts/src/__fixtures__/projects-sync-cas.golden.json"
+        ))
+        .expect("project CAS fixture must be valid JSON");
+
+        let expected_push = fixture.get("push").expect("fixture push");
+        let body = ProjectPushBody {
+            projects: vec![PushProject {
+                id: "018f6f2a-0000-7000-8000-000000000005".into(),
+                name: "Mobile launch".into(),
+                description: None,
+                instructions: Some("Ship it".into()),
+                color: Some("#ff0000".into()),
+                is_archived: Some(false),
+                metadata: None,
+                base_version: "3".into(),
+                deleted_at: None,
+            }],
+        };
+        assert_eq!(&serde_json::to_value(&body).unwrap(), expected_push);
+
+        let _: ProjectPushResponse = serde_json::from_value(
+            fixture
+                .get("pushResponse")
+                .expect("fixture pushResponse")
+                .clone(),
+        )
+        .expect("Rust must parse the canonical push response");
+        let _: ProjectPullResponse = serde_json::from_value(
+            fixture
+                .get("pullResponse")
+                .expect("fixture pullResponse")
+                .clone(),
+        )
+        .expect("Rust must parse the canonical pull response");
+
+        let mut missing_pull_cursor = fixture
+            .get("pullResponse")
+            .expect("fixture pullResponse")
+            .clone();
+        missing_pull_cursor
+            .as_object_mut()
+            .expect("pull response object")
+            .remove("cursor");
+        assert!(
+            serde_json::from_value::<ProjectPullResponse>(missing_pull_cursor).is_err(),
+            "Rust must reject a pull response that TypeScript rejects"
+        );
+
+        let mut missing_push_cursor = fixture
+            .get("pushResponse")
+            .expect("fixture pushResponse")
+            .clone();
+        missing_push_cursor
+            .as_object_mut()
+            .expect("push response object")
+            .remove("cursor");
+        assert!(
+            serde_json::from_value::<ProjectPushResponse>(missing_push_cursor).is_err(),
+            "Rust must reject a push response that TypeScript rejects"
+        );
+
+        let mut out_of_range_cursor = fixture
+            .get("pullResponse")
+            .expect("fixture pullResponse")
+            .clone();
+        out_of_range_cursor["cursor"] =
+            serde_json::Value::String("9999999999999999999".to_string());
+        assert!(
+            serde_json::from_value::<ProjectPullResponse>(out_of_range_cursor).is_err(),
+            "Rust must reject a cursor outside PostgreSQL bigint range"
+        );
+
+        let mut out_of_range_row = fixture
+            .get("pullResponse")
+            .expect("fixture pullResponse")
+            .clone();
+        out_of_range_row["projects"][0]["server_version"] =
+            serde_json::Value::String("9999999999999999999".to_string());
+        assert!(
+            serde_json::from_value::<ProjectPullResponse>(out_of_range_row).is_err(),
+            "Rust must reject an out-of-range row revision that TypeScript rejects"
+        );
+    }
+
+    #[test]
+    fn pulled_live_delta_preserves_newer_dirty_content_and_rebases_revision() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO projects (id, name, description, custom_instructions, files, \
+             conversation_ids, is_archived, app_mode, cloud_id, server_version, needs_push, \
+             created_at, updated_at) VALUES ('p-local-newer', 'new local edit', '', '', '[]', \
+             '[]', 0, 'cloud', 'cloud-race', '5', 1, CURRENT_TIMESTAMP, '2099-01-01 00:00:00')",
+            [],
+        )
+        .unwrap();
+
+        apply_project_deltas(
+            &conn,
+            &[live_delta("cloud-race", "stale server snapshot", "6")],
+        );
+
+        let (name, version, dirty): (String, String, i64) = conn
+            .query_row(
+                "SELECT name, server_version, needs_push FROM projects WHERE id='p-local-newer'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(name, "new local edit");
+        assert_eq!(version, "6");
+        assert_eq!(dirty, 1);
+    }
+
+    #[test]
+    fn cas_conflict_applies_server_winner_when_sent_snapshot_is_unchanged() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO projects (id, name, description, custom_instructions, files, \
+             conversation_ids, is_archived, app_mode, cloud_id, server_version, needs_push, \
+             created_at, updated_at) VALUES ('p-stale', 'stale edit', '', '', '[]', '[]', 0, \
+             'cloud', 'cloud-stale', '5', 1, CURRENT_TIMESTAMP, '2026-07-02 00:00:00')",
+            [],
+        )
+        .unwrap();
+        let sent = gather_push_projects(&conn).unwrap();
+        let conflicts = vec![ProjectConflict {
+            id: "cloud-stale".to_string(),
+            current: Some(live_delta("cloud-stale", "server winner", "6")),
+        }];
+
+        apply_project_conflicts(&conn, &conflicts, &sent);
+
+        let (name, version, dirty): (String, String, i64) = conn
+            .query_row(
+                "SELECT name, server_version, needs_push FROM projects WHERE id='p-stale'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(name, "server winner");
+        assert_eq!(version, "6");
+        assert_eq!(dirty, 0);
+    }
+
+    #[test]
+    fn cas_conflict_preserves_an_edit_made_while_the_request_was_in_flight() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO projects (id, name, description, custom_instructions, files, \
+             conversation_ids, is_archived, app_mode, cloud_id, server_version, needs_push, \
+             created_at, updated_at) VALUES ('p-raced', 'sent snapshot', '', '', '[]', '[]', 0, \
+             'cloud', 'cloud-raced', '5', 1, CURRENT_TIMESTAMP, '2026-07-02 00:00:00')",
+            [],
+        )
+        .unwrap();
+        let sent = gather_push_projects(&conn).unwrap();
+        conn.execute(
+            "UPDATE projects SET name='newer in-flight edit', updated_at='2099-01-01 00:00:00', \
+             needs_push=1 WHERE id='p-raced'",
+            [],
+        )
+        .unwrap();
+        let conflicts = vec![ProjectConflict {
+            id: "cloud-raced".to_string(),
+            current: Some(live_delta("cloud-raced", "server winner", "6")),
+        }];
+
+        apply_project_conflicts(&conn, &conflicts, &sent);
+
+        let (name, version, dirty): (String, String, i64) = conn
+            .query_row(
+                "SELECT name, server_version, needs_push FROM projects WHERE id='p-raced'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(name, "newer in-flight edit");
+        assert_eq!(version, "6");
+        assert_eq!(dirty, 1);
+    }
+
+    #[test]
+    fn cas_conflict_preserves_changed_content_even_when_timestamp_is_unchanged() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO projects (id, name, description, custom_instructions, files, \
+             conversation_ids, is_archived, app_mode, cloud_id, server_version, needs_push, \
+             created_at, updated_at) VALUES ('p-same-clock', 'sent snapshot', '', '', '[]', \
+             '[]', 0, 'cloud', 'cloud-same-clock', '5', 1, CURRENT_TIMESTAMP, \
+             '2026-07-02 00:00:00')",
+            [],
+        )
+        .unwrap();
+        let sent = gather_push_projects(&conn).unwrap();
+        conn.execute(
+            "UPDATE projects SET name='newer edit with same clock', needs_push=1 \
+             WHERE id='p-same-clock'",
+            [],
+        )
+        .unwrap();
+        let conflicts = vec![ProjectConflict {
+            id: "cloud-same-clock".to_string(),
+            current: Some(live_delta("cloud-same-clock", "server winner", "6")),
+        }];
+
+        apply_project_conflicts(&conn, &conflicts, &sent);
+
+        let (name, version, dirty): (String, String, i64) = conn
+            .query_row(
+                "SELECT name, server_version, needs_push FROM projects WHERE id='p-same-clock'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(name, "newer edit with same clock");
+        assert_eq!(version, "6");
+        assert_eq!(dirty, 1);
+    }
+
+    #[test]
+    fn cas_conflict_rebases_a_pre_cas_base_zero_edit_without_discarding_it() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO projects (id, name, description, custom_instructions, files, \
+             conversation_ids, is_archived, app_mode, cloud_id, server_version, needs_push, \
+             created_at, updated_at) VALUES ('p-legacy', 'legacy offline edit', '', '', '[]', \
+             '[]', 0, 'cloud', 'cloud-legacy', NULL, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let sent = gather_push_projects(&conn).unwrap();
+        assert_eq!(sent[0].base_version, "0");
+        let conflicts = vec![ProjectConflict {
+            id: "cloud-legacy".to_string(),
+            current: Some(live_delta("cloud-legacy", "server baseline", "6")),
+        }];
+
+        apply_project_conflicts(&conn, &conflicts, &sent);
+
+        let (name, version, dirty): (String, String, i64) = conn
+            .query_row(
+                "SELECT name, server_version, needs_push FROM projects WHERE id='p-legacy'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(name, "legacy offline edit");
+        assert_eq!(version, "6");
+        assert_eq!(dirty, 1);
     }
 
     // ── Test 9: Ack-clear ────────────────────────────────────────────────────
@@ -1024,11 +1466,19 @@ mod tests {
         .unwrap();
         mark_project_for_push(&conn, "proj-ack").unwrap();
         let cid: String = conn
-            .query_row("SELECT cloud_id FROM projects WHERE id = 'proj-ack'", [], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM projects WHERE id = 'proj-ack'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
 
-        let acked = vec![AckedProject { id: cid.clone(), server_version: "99".to_string() }];
-        ack_clear_projects(&conn, &acked);
+        let acked = vec![AckedProject {
+            id: cid.clone(),
+            server_version: "99".to_string(),
+        }];
+        let sent = gather_push_projects(&conn).unwrap();
+        ack_clear_projects(&conn, &acked, &sent);
 
         let (needs_push, sv): (i64, Option<String>) = conn
             .query_row(
@@ -1038,7 +1488,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(needs_push, 0, "needs_push must be 0 after ack");
-        assert_eq!(sv.as_deref(), Some("99"), "server_version must be set from ack");
+        assert_eq!(
+            sv.as_deref(),
+            Some("99"),
+            "server_version must be set from ack"
+        );
     }
 
     // ── Test 11: Token-empty gate (no network egress) ────────────────────────
@@ -1078,6 +1532,9 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(needs_push, 1, "no push happened, dirty flag must be untouched");
+        assert_eq!(
+            needs_push, 1,
+            "no push happened, dirty flag must be untouched"
+        );
     }
 }

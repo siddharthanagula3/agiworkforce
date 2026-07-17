@@ -205,6 +205,8 @@ impl LlmExecutor {
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         // Build LLM request

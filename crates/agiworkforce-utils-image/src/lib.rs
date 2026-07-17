@@ -2,9 +2,9 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::LazyLock;
 
+use crate::cache::BlockingLruCache;
+use crate::cache::sha1_digest;
 use crate::error::ImageProcessingError;
-use agiworkforce_utils_cache::BlockingLruCache;
-use agiworkforce_utils_cache::sha1_digest;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use image::ColorType;
@@ -21,6 +21,7 @@ pub const MAX_WIDTH: u32 = 2048;
 /// Maximum height used when resizing images before uploading.
 pub const MAX_HEIGHT: u32 = 768;
 
+pub mod cache;
 pub mod error;
 
 #[derive(Debug, Clone)]

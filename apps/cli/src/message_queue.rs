@@ -3,7 +3,7 @@
 //! Provides a priority-lane (`now > next > later`), FIFO-within-lane send
 //! pipeline shared by the CLI's REPL and SDK paths. The TypeScript surfaces
 //! (desktop, web, mobile, Chrome ext, VS Code ext) use the canonical
-//! implementation in `packages/runtime/src/queue/messageQueueManager.ts`;
+//! implementation in `packages/client/client-runtime/src/queue/messageQueueManager.ts`;
 //! this module is the Rust analog so the CLI participates in the same
 //! send-pipeline contract.
 //!

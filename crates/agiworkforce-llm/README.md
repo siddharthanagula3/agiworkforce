@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Rust platform + CLI lead
-Last updated: 2026-07-09
+Last updated: 2026-07-15
 Kind: rust-crate
 Criticality: high
 
@@ -12,17 +12,17 @@ Shared provider HTTP + SSE decode + tool-call assembly for AGI's Rust surfaces (
 
 ## Consumers
 
-`apps/cli` (adopted via a signature-preserving facade in `src/models/streaming.rs`). `apps/desktop/src-tauri` adopted the SSE/NDJSON decode path in stage c2 via the desktop facade `src/core/llm/stream_engine.rs`, which drives the crate's `run_{anthropic,openai_compat,gemini}_stream` byte-stream runners and re-projects `StreamEvent`s into desktop's app-local `StreamChunk` IPC type — desktop's duplicate `parse_anthropic_sse`/`parse_google_sse` decoders were deleted. Because desktop is on reqwest 0.13 (vs this crate's 0.12), it feeds `Response::bytes_stream()` into the byte-stream runners rather than the `stream_chat`/`Client` entry; request serialization (c2c) and the Ollama + managed-cloud decode paths remain desktop-local pending the reqwest convergence and the c3 managed-cloud/credits work.
+`apps/cli` (adopted via a signature-preserving facade in `src/models/streaming.rs`). `apps/desktop/src-tauri` adopted the SSE/NDJSON decode path in stage c2 via the desktop facade `src/core/llm/stream_engine.rs`, which drives the crate's `run_{anthropic,openai_compat,openai_responses,gemini}_stream` byte-stream runners and re-projects `StreamEvent`s into desktop's app-local `StreamChunk` IPC type — desktop's duplicate `parse_anthropic_sse`/`parse_google_sse` decoders were deleted. Because desktop is on reqwest 0.13 (vs this crate's 0.12), it feeds `Response::bytes_stream()` into the byte-stream runners rather than the `stream_chat`/`Client` entry; the Ollama + managed-cloud decode paths remain desktop-local pending the reqwest convergence and the c3 managed-cloud/credits work.
 
 ## Public API / Exports
 
-Rust library `agiworkforce_llm`: `Dialect`, `ProviderSpec`/`Auth`, `StreamEvent`, `Utf8StreamDecoder`, `ToolCallAssembler`, `IdleWatchdog`, `retry`/`LlmError` classification, `fallback`, and the per-dialect `run_{anthropic,openai_compat,gemini,ollama}_stream` byte-stream runners.
+Rust library `agiworkforce_llm`: `Dialect`, `ProviderSpec`/`Auth`, `StreamEvent`, `Utf8StreamDecoder`, `ToolCallAssembler`, `IdleWatchdog`, `retry`/`LlmError` classification, `fallback`, and the per-dialect `run_{anthropic,openai_compat,openai_responses,gemini,ollama}_stream` byte-stream runners.
 
 ## What Belongs Here
 
 - Provider request building + SSE decoding + tool-call delta assembly (mechanics).
 - Retry classification, idle watchdog, fallback chains.
-- Dialect-parameterized wire handling (Anthropic, Gemini, Ollama-native, OpenAI-compatible incl. Responses API).
+- Dialect-parameterized wire handling (Anthropic, Gemini, Ollama-native, OpenAI-compatible Chat Completions, and native OpenAI Responses API).
 
 ## What Does Not Belong Here
 

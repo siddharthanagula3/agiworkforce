@@ -30,9 +30,9 @@
 use std::time::Duration;
 
 use agiworkforce_agent_core::{
-    Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared, PreparedCall,
-    ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost, TurnParams, TurnPhase,
-    run_turn,
+    run_turn, Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared,
+    PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost,
+    TurnParams, TurnPhase,
 };
 use agiworkforce_llm::{ChatOutcome, ToolCall as CoreToolCall, Usage as CoreUsage};
 
@@ -79,6 +79,7 @@ pub(super) async fn run_local_chat_tool_loop(
     first_outcome: RouteOutcome,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    persist_internal_resources: bool,
     thinking_mode: Option<bool>,
     tool_registry: Option<std::sync::Arc<crate::core::agi::tools::ToolRegistry>>,
 ) -> LocalChatTurnResult {
@@ -96,6 +97,7 @@ pub(super) async fn run_local_chat_tool_loop(
         thinking_mode,
         project_folder,
         conversation_mode,
+        persist_internal_resources,
         tool_registry,
         first_outcome: Some(first_outcome.clone()),
         next_prefix_index: 1,
@@ -153,6 +155,7 @@ struct LocalChatTurnHost {
     thinking_mode: Option<bool>,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    persist_internal_resources: bool,
     tool_registry: Option<std::sync::Arc<crate::core::agi::tools::ToolRegistry>>,
     /// The pre-invoked first completion, consumed on the `First` phase.
     first_outcome: Option<RouteOutcome>,
@@ -267,7 +270,10 @@ impl TurnHost for LocalChatTurnHost {
                         Ok(self.graceful_stop())
                     }
                     Err(_) => {
-                        error!("[Chat] Follow-up LLM call timed out after {}s", timeout_secs);
+                        error!(
+                            "[Chat] Follow-up LLM call timed out after {}s",
+                            timeout_secs
+                        );
                         Ok(self.graceful_stop())
                     }
                 }
@@ -355,6 +361,7 @@ impl TurnHost for LocalChatTurnHost {
             &self.frontend_message_id_str(),
             self.project_folder.clone(),
             self.conversation_mode.clone(),
+            self.persist_internal_resources,
             0,
             self.tool_registry.clone(),
         )
@@ -852,16 +859,14 @@ mod tests {
         assert_eq!(h.committed[0][0].tool_use_id, "tool_call_1_0");
         assert_eq!(outcome.response, "final answer");
         // The engine bracketed the dispatch with iteration + tool events.
-        assert!(
-            h.events
-                .iter()
-                .any(|e| matches!(e, TurnEvent::IterationStarted { .. })),
-        );
-        assert!(
-            h.events
-                .iter()
-                .any(|e| matches!(e, TurnEvent::ToolStarted { .. })),
-        );
+        assert!(h
+            .events
+            .iter()
+            .any(|e| matches!(e, TurnEvent::IterationStarted { .. })),);
+        assert!(h
+            .events
+            .iter()
+            .any(|e| matches!(e, TurnEvent::ToolStarted { .. })),);
     }
 
     // Mid-turn cancellation halts before the next completion is requested.
@@ -938,8 +943,7 @@ mod tests {
             arguments: "{\"path\":\"a\"}".to_string(),
         }];
         // With a message id present.
-        let payload =
-            super::tool_calls_payload(42, &Some("fmid".to_string()), &calls, 1);
+        let payload = super::tool_calls_payload(42, &Some("fmid".to_string()), &calls, 1);
         assert_eq!(
             payload,
             serde_json::json!({
@@ -1037,7 +1041,10 @@ mod tests {
         assert_eq!(normalized[1].id, "explicit");
         assert_eq!(normalized[1].name, "unknown_tool");
         // Valid JSON args parse to an object; invalid ones fall back to a string.
-        assert_eq!(chat.tool_calls[0].arguments, serde_json::json!({"path": "x"}));
+        assert_eq!(
+            chat.tool_calls[0].arguments,
+            serde_json::json!({"path": "x"})
+        );
         assert_eq!(
             chat.tool_calls[1].arguments,
             serde_json::Value::String("not json".to_string())

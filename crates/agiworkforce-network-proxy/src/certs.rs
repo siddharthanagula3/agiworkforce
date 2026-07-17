@@ -1,4 +1,4 @@
-use agiworkforce_utils_home_dir::find_agiworkforce_home;
+use crate::home_dir::find_agiworkforce_home;
 use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::anyhow;

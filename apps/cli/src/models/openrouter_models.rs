@@ -77,9 +77,8 @@ fn map_entry(entry: &serde_json::Value, cutoff_unix: i64) -> Option<Model> {
         .and_then(|a| a.get("output_modalities"))
         .and_then(|v| v.as_array())
         .map(|mods| {
-            mods.iter().any(|m| {
-                matches!(m.as_str(), Some("audio") | Some("image") | Some("video"))
-            })
+            mods.iter()
+                .any(|m| matches!(m.as_str(), Some("audio") | Some("image") | Some("video")))
         })
         .unwrap_or(false);
     if outputs_media {
@@ -220,7 +219,10 @@ mod tests {
     fn map_entry_drops_old_models_and_keeps_new() {
         let cutoff = 1_700_000_000;
         let old = serde_json::json!({"id": "legacy/model", "created": 1_600_000_000});
-        assert!(map_entry(&old, cutoff).is_none(), "old model should be dropped");
+        assert!(
+            map_entry(&old, cutoff).is_none(),
+            "old model should be dropped"
+        );
 
         let new = serde_json::json!({
             "id": "vendor/new-model",

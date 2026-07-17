@@ -57,7 +57,8 @@ pub(crate) async fn connect(
 
     // Wait briefly for an endpoint hint. Most MCP SSE servers emit it within a
     // few hundred ms; on timeout, fall back to the original URL for POSTs.
-    let post_url = match tokio::time::timeout(Duration::from_millis(500), endpoint_rx.recv()).await {
+    let post_url = match tokio::time::timeout(Duration::from_millis(500), endpoint_rx.recv()).await
+    {
         Ok(Some(ep)) => ep,
         _ => url.to_string(),
     };
@@ -148,9 +149,7 @@ fn spawn_legacy_sse_supervisor(
         // unencrypted. POSTs are unaffected (they matched desktop's POST path,
         // which had no such check) — the transport degrades to POST-only.
         if let Err(e) = crate::security::enforce_https_for_remote(&sse_url) {
-            eprintln!(
-                "[{server_name}] SSE-legacy: {e:#}; continuing POST-only (no SSE listener)"
-            );
+            eprintln!("[{server_name}] SSE-legacy: {e:#}; continuing POST-only (no SSE listener)");
             std::future::pending::<()>().await;
         }
         let mut attempts: u32 = 0;
@@ -192,9 +191,7 @@ fn spawn_legacy_sse_supervisor(
                 .await;
             }
         }
-        eprintln!(
-            "[{server_name}] SSE-legacy: reconnection limit reached; continuing POST-only"
-        );
+        eprintln!("[{server_name}] SSE-legacy: reconnection limit reached; continuing POST-only");
         // Park holding `tx` so the correlator channel stays open (POST-only).
         std::future::pending::<()>().await;
     });

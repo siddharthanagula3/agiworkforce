@@ -1,77 +1,107 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-use std::time::Instant;
 
 use crate::core::agi::executors::ExecutorContext;
 use crate::core::agi::executors::ToolExecutor;
 use crate::core::agi::ExecutionContext;
+use crate::sys::commands::media::{
+    media_generate_image, media_generate_video, MediaImageRequest, MediaVideoRequest,
+};
 
-/// Response from image generation
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaImageResponse {
-    pub images: Vec<GeneratedImage>,
-    pub provider: String,
-    pub model: Option<String>,
-    pub created_at: u64,
-    #[serde(default)]
-    pub revised_prompt: Option<String>,
-    #[serde(default)]
-    pub cost_estimate: Option<f64>,
-    pub latency_ms: u64,
+fn image_request_from_parameters(
+    parameters: &HashMap<String, JsonValue>,
+) -> Result<MediaImageRequest> {
+    let prompt = parameters
+        .get("prompt")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: prompt"))?
+        .to_string();
+
+    Ok(MediaImageRequest {
+        prompt,
+        negative_prompt: parameters
+            .get("negative_prompt")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        provider: parameters
+            .get("provider")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        model: parameters
+            .get("model")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        size: parameters
+            .get("size")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        quality: parameters
+            .get("quality")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        style: parameters
+            .get("style")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        n: parameters
+            .get("n")
+            .and_then(JsonValue::as_u64)
+            .and_then(|value| u32::try_from(value).ok()),
+    })
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneratedImage {
-    #[serde(default)]
-    pub url: Option<String>,
-    #[serde(default)]
-    pub b64_json: Option<String>,
-}
+fn video_request_from_parameters(
+    parameters: &HashMap<String, JsonValue>,
+) -> Result<MediaVideoRequest> {
+    let prompt = parameters
+        .get("prompt")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| anyhow::anyhow!("Missing required parameter: prompt"))?
+        .to_string();
 
-/// Response from video generation
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MediaVideoResponse {
-    pub videos: Vec<GeneratedVideo>,
-    pub provider: String,
-    pub model: Option<String>,
-    pub created_at: u64,
-    #[serde(default)]
-    pub cost_estimate: Option<f64>,
-    pub latency_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneratedVideo {
-    #[serde(default)]
-    pub url: Option<String>,
+    Ok(MediaVideoRequest {
+        prompt,
+        negative_prompt: parameters
+            .get("negative_prompt")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        duration_secs: parameters
+            .get("duration_seconds")
+            .or_else(|| parameters.get("duration_secs"))
+            .or_else(|| parameters.get("duration"))
+            .and_then(JsonValue::as_u64)
+            .and_then(|value| u32::try_from(value).ok()),
+        resolution: parameters
+            .get("resolution")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        style: parameters
+            .get("style")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        model: parameters
+            .get("model")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        provider: parameters
+            .get("provider")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+        input_image_url: parameters
+            .get("input_image_url")
+            .and_then(JsonValue::as_str)
+            .map(str::to_string),
+    })
 }
 
 /// Executor for media generation tools (image and video generation)
-pub struct MediaExecutor {
-    http_client: reqwest::Client,
-}
+pub struct MediaExecutor;
 
 impl MediaExecutor {
     pub fn new() -> Self {
-        // Image generation: up to 60s per provider call (handled by web API route).
-        // Video generation: the web API creates the task (<30s) and the executor polls
-        // for completion — the entire poll loop can take up to 5 minutes (300s).
-        // We set the per-request timeout to 90s (generous for individual HTTP calls)
-        // and rely on the poll loop's internal 3s sleep + max_attempts for overall cap.
-        let http_client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(90))
-            .build()
-            .unwrap_or_else(|e| {
-                tracing::warn!("Failed to create HTTP client with timeout ({e}), using default");
-                reqwest::Client::new()
-            });
-
-        Self { http_client }
+        Self
     }
 
     /// Execute image generation
@@ -84,132 +114,12 @@ impl MediaExecutor {
             .app_handle
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("App handle not available for media generation"))?;
-
-        // Extract parameters
-        let prompt = parameters
-            .get("prompt")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: prompt"))?
-            .to_string();
-
-        let negative_prompt = parameters
-            .get("negative_prompt")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        let provider = parameters
-            .get("provider")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .unwrap_or_else(|| "google".to_string());
-
-        let model = parameters
-            .get("model")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .unwrap_or_else(|| "imagen3".to_string());
-
-        let size = parameters
-            .get("size")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .unwrap_or_else(|| "1024x1024".to_string());
-
-        let style = parameters
-            .get("style")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        let quality = parameters
-            .get("quality")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .unwrap_or_else(|| "standard".to_string());
-
-        let n = parameters
-            .get("n")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32)
-            .unwrap_or(1);
-
-        // Get auth token
-        let token = crate::sys::account::get_access_token()
-            .map_err(|e| anyhow::anyhow!("Authentication required: {}", e))?;
-        let base_url = crate::sys::account::get_api_base_url();
-        let url = format!("{}/api/media/image/generate", base_url);
-
-        let payload = serde_json::json!({
-            "prompt": prompt,
-            "negative_prompt": negative_prompt,
-            "provider": provider,
-            "model": model,
-            "size": size,
-            "style": style,
-            "quality": quality,
-            "n": n
-        });
-
-        let started = Instant::now();
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&token)
-            .json(&payload)
-            .send()
+        let request = image_request_from_parameters(parameters)?;
+        let response = media_generate_image(app_handle.clone(), request)
             .await
-            .map_err(|e| anyhow::anyhow!("Image generation request failed: {}", e))?;
+            .map_err(anyhow::Error::msg)?;
 
-        let latency_ms = started.elapsed().as_millis() as u64;
-
-        let status = response.status();
-        let body = response
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse image response: {}", e))?;
-
-        if !status.is_success() || body.get("success").and_then(|v| v.as_bool()) == Some(false) {
-            let error_msg = body
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Image generation failed");
-            return Err(anyhow::anyhow!("{}", error_msg));
-        }
-
-        let images: Vec<GeneratedImage> = serde_json::from_value(
-            body.get("images")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!([])),
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to parse images: {}", e))?;
-
-        let provider_str = body
-            .get("provider")
-            .and_then(|v| v.as_str())
-            .unwrap_or("google")
-            .to_string();
-        let model = body.get("model").and_then(|v| v.as_str()).map(String::from);
-        let cost_estimate = body.get("cost_estimate").and_then(|v| v.as_f64());
-
-        // Save to history
-        if let Err(e) = save_image_to_history(app_handle, &prompt, &images).await {
-            tracing::warn!("Failed to save image to history: {}", e);
-        }
-
-        let result = MediaImageResponse {
-            images,
-            provider: provider_str,
-            model,
-            created_at: chrono::Utc::now().timestamp() as u64,
-            revised_prompt: body
-                .get("revised_prompt")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            cost_estimate,
-            latency_ms,
-        };
-
-        Ok(serde_json::to_value(result)?)
+        Ok(serde_json::to_value(response)?)
     }
 
     /// Execute video generation
@@ -222,114 +132,12 @@ impl MediaExecutor {
             .app_handle
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("App handle not available for media generation"))?;
-
-        // Extract parameters
-        let prompt = parameters
-            .get("prompt")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: prompt"))?
-            .to_string();
-
-        let provider = parameters
-            .get("provider")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .unwrap_or_else(|| "runway".to_string());
-
-        let model = parameters
-            .get("model")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        let duration_secs = parameters
-            .get("duration_seconds")
-            .or_else(|| parameters.get("duration_secs"))
-            .or_else(|| parameters.get("duration"))
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32);
-
-        let resolution = parameters
-            .get("resolution")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        let style = parameters
-            .get("style")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        // Get auth token
-        let token = crate::sys::account::get_access_token()
-            .map_err(|e| anyhow::anyhow!("Authentication required: {}", e))?;
-        let base_url = crate::sys::account::get_api_base_url();
-        let url = format!("{}/api/media/video/generate", base_url);
-
-        let payload = serde_json::json!({
-            "prompt": prompt,
-            "provider": provider,
-            "model": model,
-            "duration_secs": duration_secs,
-            "resolution": resolution,
-            "style": style
-        });
-
-        let started = Instant::now();
-
-        let response = self
-            .http_client
-            .post(&url)
-            .bearer_auth(&token)
-            .json(&payload)
-            .send()
+        let request = video_request_from_parameters(parameters)?;
+        let response = media_generate_video(app_handle.clone(), request)
             .await
-            .map_err(|e| anyhow::anyhow!("Video generation request failed: {}", e))?;
+            .map_err(anyhow::Error::msg)?;
 
-        let latency_ms = started.elapsed().as_millis() as u64;
-
-        let status = response.status();
-        let body = response
-            .json::<serde_json::Value>()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse video response: {}", e))?;
-
-        if !status.is_success() || body.get("success").and_then(|v| v.as_bool()) == Some(false) {
-            let error_msg = body
-                .get("error")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Video generation failed");
-            return Err(anyhow::anyhow!("{}", error_msg));
-        }
-
-        let videos: Vec<GeneratedVideo> = serde_json::from_value(
-            body.get("videos")
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!([])),
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to parse videos: {}", e))?;
-
-        let provider_str = body
-            .get("provider")
-            .and_then(|v| v.as_str())
-            .unwrap_or("runway")
-            .to_string();
-        let model = body.get("model").and_then(|v| v.as_str()).map(String::from);
-        let cost_estimate = body.get("cost_estimate").and_then(|v| v.as_f64());
-
-        // Save to history
-        if let Err(e) = save_video_to_history(app_handle, &prompt, &videos).await {
-            tracing::warn!("Failed to save video to history: {}", e);
-        }
-
-        let result = MediaVideoResponse {
-            videos,
-            provider: provider_str,
-            model,
-            created_at: chrono::Utc::now().timestamp() as u64,
-            cost_estimate,
-            latency_ms,
-        };
-
-        Ok(serde_json::to_value(result)?)
+        Ok(serde_json::to_value(response)?)
     }
 }
 
@@ -373,92 +181,48 @@ impl ToolExecutor for MediaExecutor {
     }
 }
 
-/// Save generated image to history (file-based)
-async fn save_image_to_history(
-    app: &tauri::AppHandle,
-    prompt: &str,
-    images: &[GeneratedImage],
-) -> Result<()> {
-    use chrono::Utc;
-    use tauri::Manager;
-    use uuid::Uuid;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-    tokio::fs::create_dir_all(&app_dir)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    #[test]
+    fn image_tool_arguments_preserve_catalog_model_without_inventing_defaults() {
+        let parameters = HashMap::from([
+            ("prompt".to_string(), serde_json::json!("Generate an image")),
+            (
+                "model".to_string(),
+                serde_json::json!("catalog-image-model"),
+            ),
+        ]);
 
-    let history_path = app_dir.join("media_history.json");
-    let mut history: Vec<crate::sys::commands::media::MediaHistoryItem> = if history_path.exists() {
-        let content = tokio::fs::read_to_string(&history_path).await?;
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        vec![]
-    };
+        let request = image_request_from_parameters(&parameters).unwrap();
 
-    let now = Utc::now().to_rfc3339();
-    for img in images {
-        history.push(crate::sys::commands::media::MediaHistoryItem {
-            id: Uuid::new_v4().to_string(),
-            type_: "image".to_string(),
-            title: prompt.chars().take(30).collect(),
-            prompt: prompt.to_string(),
-            status: "completed".to_string(),
-            src: Some(img.url.clone().unwrap_or_default()),
-            created_at: now.clone(),
-        });
+        assert_eq!(request.prompt, "Generate an image");
+        assert_eq!(request.model.as_deref(), Some("catalog-image-model"));
+        assert_eq!(request.provider, None);
+        assert_eq!(request.size, None);
+        assert_eq!(request.quality, None);
     }
 
-    let content = serde_json::to_string_pretty(&history)?;
-    tokio::fs::write(history_path, content).await?;
+    #[test]
+    fn video_tool_arguments_preserve_model_provider_duration_and_resolution() {
+        let parameters = HashMap::from([
+            ("prompt".to_string(), serde_json::json!("Generate a video")),
+            (
+                "model".to_string(),
+                serde_json::json!("catalog-video-model"),
+            ),
+            ("provider".to_string(), serde_json::json!("google")),
+            ("duration_secs".to_string(), serde_json::json!(8)),
+            ("resolution".to_string(), serde_json::json!("1080p")),
+        ]);
 
-    Ok(())
-}
+        let request = video_request_from_parameters(&parameters).unwrap();
 
-/// Save generated video to history (file-based)
-async fn save_video_to_history(
-    app: &tauri::AppHandle,
-    prompt: &str,
-    videos: &[GeneratedVideo],
-) -> Result<()> {
-    use chrono::Utc;
-    use tauri::Manager;
-    use uuid::Uuid;
-
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-    tokio::fs::create_dir_all(&app_dir)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    let history_path = app_dir.join("media_history.json");
-    let mut history: Vec<crate::sys::commands::media::MediaHistoryItem> = if history_path.exists() {
-        let content = tokio::fs::read_to_string(&history_path).await?;
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        vec![]
-    };
-
-    let now = Utc::now().to_rfc3339();
-    for video in videos {
-        history.push(crate::sys::commands::media::MediaHistoryItem {
-            id: Uuid::new_v4().to_string(),
-            type_: "video".to_string(),
-            title: prompt.chars().take(30).collect(),
-            prompt: prompt.to_string(),
-            status: "completed".to_string(),
-            src: Some(video.url.clone().unwrap_or_default()),
-            created_at: now.clone(),
-        });
+        assert_eq!(request.prompt, "Generate a video");
+        assert_eq!(request.model.as_deref(), Some("catalog-video-model"));
+        assert_eq!(request.provider.as_deref(), Some("google"));
+        assert_eq!(request.duration_secs, Some(8));
+        assert_eq!(request.resolution.as_deref(), Some("1080p"));
     }
-
-    let content = serde_json::to_string_pretty(&history)?;
-    tokio::fs::write(history_path, content).await?;
-
-    Ok(())
 }

@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 71;
+const CURRENT_VERSION: i32 = 74;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -622,6 +622,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 71 {
         run_migration_in_transaction(conn, 71, apply_migration_v71)?;
+    }
+
+    if current_version < 72 {
+        run_migration_in_transaction(conn, 72, apply_migration_v72)?;
+    }
+
+    if current_version < 73 {
+        run_migration_in_transaction(conn, 73, apply_migration_v73)?;
+    }
+
+    if current_version < 74 {
+        run_migration_in_transaction(conn, 74, apply_migration_v74)?;
     }
 
     Ok(())
@@ -5755,7 +5767,7 @@ fn apply_migration_v69(conn: &Connection) -> Result<()> {
 }
 
 /// Migration v70: add `settings_cursor` column to `cloud_sync_state`.
-/// Settings sync (data/settings_sync.rs) persists a per-user server version
+/// The legacy native settings-sync path persisted a per-user server version
 /// cursor here so pull can skip unchanged documents.  No user-data table is
 /// altered — settings live in-memory (SettingsState) not in a dedicated table.
 fn apply_migration_v70(conn: &Connection) -> Result<()> {
@@ -5876,6 +5888,148 @@ fn apply_migration_v71(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration v72: Persist the immutable per-conversation execution boundary.
+///
+/// `app_mode` identifies the storage/workspace plane (`local` or `cloud`).
+/// `execution_mode` identifies provider admission (`local_only`, `byok`, or
+/// `cloud_managed`). Historical cloud rows are managed; historical local rows
+/// fail closed to local-only because old data cannot prove BYOK consent.
+fn apply_migration_v72(conn: &Connection) -> Result<()> {
+    ensure_column(
+        conn,
+        "conversations",
+        "execution_mode",
+        "execution_mode TEXT NOT NULL DEFAULT 'local_only'",
+    )?;
+    conn.execute(
+        "UPDATE conversations SET execution_mode = 'cloud_managed' WHERE app_mode = 'cloud'",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_execution_mode ON conversations(execution_mode)",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Migration v73: durably associate artifacts with their source message.
+///
+/// Artifacts are created while a tool loop is running, before the assistant
+/// message receives its SQLite id. The native runtime links them when the
+/// stream-end event supplies that id. Keeping the reference on the canonical
+/// artifact row lets chat reload reconstruct `message.artifacts` without
+/// copying artifact content into the legacy `messages.artifacts` JSON column.
+fn apply_migration_v73(conn: &Connection) -> Result<()> {
+    let artifacts_exists = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='artifacts'",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .unwrap_or(false);
+    if artifacts_exists {
+        ensure_column(conn, "artifacts", "message_id", "message_id INTEGER")?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_message ON artifacts(message_id)",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+/// Migration v74: persist the cross-device identity of an artifact's source message.
+///
+/// `artifacts.message_id` is the local SQLite INTEGER and therefore cannot be
+/// serialized or resolved on another device. `message_cloud_id` carries only
+/// the managed-cloud UUID. Local and BYOK rows keep it NULL and remain outside
+/// the cloud-sync gather predicate.
+fn apply_migration_v74(conn: &Connection) -> Result<()> {
+    let table_exists = |table: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name=?1",
+            [table],
+            |row| row.get::<_, bool>(0),
+        )
+        .unwrap_or(false)
+    };
+    let artifacts_exists = table_exists("artifacts");
+    if artifacts_exists {
+        ensure_column(
+            conn,
+            "artifacts",
+            "message_cloud_id",
+            "message_cloud_id TEXT",
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_message_cloud_id \
+             ON artifacts(message_cloud_id) WHERE message_cloud_id IS NOT NULL",
+            [],
+        )?;
+    }
+    // Durable journal for artifact deltas whose parent conversation is on a
+    // later pull page. Payloads are user-scoped and keyed by cloud identity so
+    // reordered/duplicate versions can collapse before replay.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cloud_sync_pending_artifacts ( \
+            cloud_id TEXT NOT NULL, \
+            conversation_cloud_id TEXT NOT NULL, \
+            user_id TEXT NOT NULL, \
+            message_cloud_id TEXT, \
+            title TEXT, \
+            artifact_type TEXT NOT NULL, \
+            language TEXT, \
+            content TEXT NOT NULL, \
+            current_version INTEGER, \
+            pinned INTEGER, \
+            tags TEXT NOT NULL DEFAULT '[]', \
+            created_at TEXT, \
+            updated_at TEXT, \
+            deleted_at TEXT, \
+            server_version TEXT NOT NULL, \
+            buffered_at TEXT NOT NULL, \
+            PRIMARY KEY (user_id, cloud_id) \
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_artifacts_user_version \
+         ON cloud_sync_pending_artifacts(user_id, server_version)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_artifacts_conversation \
+         ON cloud_sync_pending_artifacts(user_id, conversation_cloud_id)",
+        [],
+    )?;
+    // Backfill cloud artifacts linked while v73 was current. The source value
+    // comes only from messages.cloud_id; the local INTEGER is never converted
+    // to text or treated as a portable identity.
+    if artifacts_exists && table_exists("messages") {
+        conn.execute(
+            "UPDATE artifacts \
+             SET message_cloud_id = ( \
+                 SELECT m.cloud_id FROM messages m \
+                 WHERE m.id = artifacts.message_id \
+                   AND m.conversation_id = CAST(artifacts.conversation_id AS INTEGER) \
+             ), \
+                 needs_push = CASE \
+                     WHEN app_mode = 'cloud' THEN 1 \
+                     ELSE needs_push \
+                 END \
+             WHERE app_mode = 'cloud' \
+               AND message_id IS NOT NULL \
+               AND message_cloud_id IS NULL \
+               AND EXISTS ( \
+                 SELECT 1 FROM messages m \
+                 WHERE m.id = artifacts.message_id AND m.cloud_id IS NOT NULL \
+                   AND m.conversation_id = CAST(artifacts.conversation_id AS INTEGER) \
+               )",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5909,6 +6063,152 @@ mod tests {
         assert!(tables.contains(&"schema_version".to_string()));
         assert!(tables.contains(&"cache_entries".to_string()));
         assert!(tables.contains(&"calendar_accounts".to_string()));
+    }
+
+    #[test]
+    fn migration_v72_backfills_explicit_execution_boundaries() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                user_id TEXT,
+                app_mode TEXT NOT NULL DEFAULT 'local'
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode) VALUES
+             ('private', 'u1', 'local'), ('synced', 'u1', 'cloud')",
+            [],
+        )
+        .unwrap();
+
+        apply_migration_v72(&conn).unwrap();
+
+        let local: String = conn
+            .query_row(
+                "SELECT execution_mode FROM conversations WHERE title = 'private'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let cloud: String = conn
+            .query_row(
+                "SELECT execution_mode FROM conversations WHERE title = 'synced'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(local, "local_only");
+        assert_eq!(cloud, "cloud_managed");
+    }
+
+    #[test]
+    fn artifact_rows_have_a_durable_message_owner() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let has_message_id: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('artifacts') WHERE name = 'message_id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            has_message_id,
+            "artifacts.message_id is required to restore artifacts onto their source message"
+        );
+
+        let has_message_cloud_id: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('artifacts') \
+                 WHERE name = 'message_cloud_id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            has_message_cloud_id,
+            "artifacts.message_cloud_id is required to restore cloud artifacts across devices"
+        );
+        let pending_table_exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master \
+                 WHERE type = 'table' AND name = 'cloud_sync_pending_artifacts')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            pending_table_exists,
+            "parentless artifact deltas require a durable cross-page replay journal"
+        );
+    }
+
+    #[test]
+    fn migration_v74_backfills_only_cloud_artifacts_from_message_cloud_ids() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE messages ( \
+                id INTEGER PRIMARY KEY, conversation_id INTEGER NOT NULL, cloud_id TEXT \
+             )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "CREATE TABLE artifacts ( \
+                id TEXT PRIMARY KEY, conversation_id TEXT, message_id INTEGER, \
+                app_mode TEXT NOT NULL DEFAULT 'local', needs_push INTEGER NOT NULL DEFAULT 0 \
+             )",
+            [],
+        )
+        .unwrap();
+        let cloud_message_id = "019b7ba6-6d81-7000-8000-000000000020";
+        conn.execute(
+            "INSERT INTO messages (id, conversation_id, cloud_id) VALUES (10, 7, ?1)",
+            params![cloud_message_id],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO artifacts (id, conversation_id, message_id, app_mode) VALUES \
+             ('cloud-artifact', '7', 10, 'cloud'), \
+             ('local-artifact', '7', 10, 'local'), \
+             ('wrong-conversation', '8', 10, 'cloud')",
+            [],
+        )
+        .unwrap();
+
+        apply_migration_v74(&conn).unwrap();
+        apply_migration_v74(&conn).expect("v74 must remain restart/idempotency safe");
+
+        let cloud: (Option<String>, i64) = conn
+            .query_row(
+                "SELECT message_cloud_id, needs_push FROM artifacts WHERE id = 'cloud-artifact'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(cloud.0.as_deref(), Some(cloud_message_id));
+        assert_eq!(cloud.1, 1);
+        let local: (Option<String>, i64) = conn
+            .query_row(
+                "SELECT message_cloud_id, needs_push FROM artifacts WHERE id = 'local-artifact'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(local, (None, 0));
+        let wrong_conversation: Option<String> = conn
+            .query_row(
+                "SELECT message_cloud_id FROM artifacts WHERE id = 'wrong-conversation'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(wrong_conversation, None);
     }
 
     #[test]
@@ -5961,11 +6261,19 @@ mod tests {
 
         // Existing data survived intact.
         let title: String = conn
-            .query_row("SELECT title FROM conversations WHERE id=?1", params![conv_id], |r| r.get(0))
+            .query_row(
+                "SELECT title FROM conversations WHERE id=?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(title, "Existing");
         let msg_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM messages WHERE conversation_id=?1", params![conv_id], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE conversation_id=?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(msg_count, 1);
 
@@ -5979,7 +6287,11 @@ mod tests {
             .unwrap();
         assert!(has_cloud_id, "v67 must add cloud_id to a populated table");
         let pk_type: String = conn
-            .query_row("SELECT type FROM pragma_table_info('conversations') WHERE pk=1", [], |r| r.get(0))
+            .query_row(
+                "SELECT type FROM pragma_table_info('conversations') WHERE pk=1",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(pk_type, "INTEGER", "INTEGER PK must survive the upgrade");
         let has_buffer: bool = conn

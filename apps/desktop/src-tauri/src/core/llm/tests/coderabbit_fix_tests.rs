@@ -108,6 +108,11 @@ mod h1_contains_word {
 // ---------------------------------------------------------------------------
 // H13 -- resolve_model_for_strategy (llm_router.rs)
 // ---------------------------------------------------------------------------
+// Superseded by the cross-language canonical Auto policy tests in
+// `crates/agiworkforce-model-registry/tests/auto_routing.rs`. Keep this block
+// excluded only until the surrounding historical regression file is split by
+// owner; the production token-threshold resolver has been removed.
+#[cfg(any())]
 mod h13_resolve_model_for_strategy {
     use crate::core::llm::llm_router::LLMRouter;
     use crate::core::llm::models_config::get_task_model;
@@ -121,7 +126,10 @@ mod h13_resolve_model_for_strategy {
             500,
             "fallback-model",
         );
-        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::OpenAI, "fast_completion")
+        );
     }
 
     #[test]
@@ -135,7 +143,10 @@ mod h13_resolve_model_for_strategy {
             2000,
             "fallback-model",
         );
-        assert_eq!(model.as_str(), get_task_model(&Provider::ManagedCloud, "chat"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::ManagedCloud, "chat")
+        );
     }
 
     #[test]
@@ -161,7 +172,10 @@ mod h13_resolve_model_for_strategy {
             100,
             "fallback-model",
         );
-        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::OpenAI, "fast_completion")
+        );
     }
 
     #[test]
@@ -201,7 +215,10 @@ mod h13_resolve_model_for_strategy {
             20000,
             "fallback-model",
         );
-        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "complex_reasoning"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::Anthropic, "complex_reasoning")
+        );
     }
 
     #[test]
@@ -242,7 +259,10 @@ mod h13_resolve_model_for_strategy {
         // against the SSOT, not a hard-coded id.
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 1000, "fallback");
-        assert_eq!(model.as_str(), get_task_model(&Provider::ManagedCloud, "chat"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::ManagedCloud, "chat")
+        );
     }
 
     #[test]
@@ -268,21 +288,30 @@ mod h13_resolve_model_for_strategy {
     fn auto_premium_boundary_at_16000() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 16000, "fallback");
-        assert_eq!(model.as_str(), get_task_model(&Provider::Anthropic, "complex_reasoning"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::Anthropic, "complex_reasoning")
+        );
     }
 
     #[test]
     fn auto_economy_boundary_at_999() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoEconomy, 999, "fallback");
-        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::OpenAI, "fast_completion")
+        );
     }
 
     #[test]
     fn auto_balanced_boundary_at_499() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoBalanced, 499, "fallback");
-        assert_eq!(model.as_str(), get_task_model(&Provider::OpenAI, "fast_completion"));
+        assert_eq!(
+            model.as_str(),
+            get_task_model(&Provider::OpenAI, "fast_completion")
+        );
     }
 
     #[test]

@@ -33,7 +33,10 @@ async fn http_initialize_sends_protocol_version_and_host_client_info() {
     assert_eq!(params["clientInfo"]["version"], "9.9.9");
 
     // The initialized notification must follow the handshake.
-    assert!(rec.methods().contains(&"notifications/initialized".to_string()));
+    assert!(
+        rec.methods()
+            .contains(&"notifications/initialized".to_string())
+    );
 }
 
 #[tokio::test]
@@ -43,9 +46,14 @@ async fn stdio_initialize_and_handshake() {
         args: vec!["normal".to_string()],
         env: HashMap::new(),
     };
-    let mut client = McpClient::connect("stdio", cfg, McpTimeouts::default(), support::decline_hooks())
-        .await
-        .expect("stdio connect + initialize should succeed");
+    let mut client = McpClient::connect(
+        "stdio",
+        cfg,
+        McpTimeouts::default(),
+        support::decline_hooks(),
+    )
+    .await
+    .expect("stdio connect + initialize should succeed");
     // A follow-up list proves the handshake left the stream in a usable state.
     let tools = client.list_tools().await.expect("list_tools");
     assert_eq!(tools.len(), 1);

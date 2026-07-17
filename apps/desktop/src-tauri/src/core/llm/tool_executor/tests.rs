@@ -495,6 +495,21 @@ fn test_create_artifact_registry_matches_executor_contract() {
     assert!(params.contains(&"language"));
 }
 
+#[test]
+fn test_internal_resource_persistence_is_explicit_per_turn() {
+    let mut executor = ToolExecutor::new(create_registry_with_all_tools());
+    assert!(
+        executor.persist_internal_resources,
+        "normal turns must retain durable artifact behavior"
+    );
+
+    executor.set_persist_internal_resources(false);
+    assert!(
+        !executor.persist_internal_resources,
+        "temporary turns must be able to disable all app-owned resource persistence"
+    );
+}
+
 #[tokio::test]
 async fn test_create_artifact_is_policy_registered() {
     // Without a policy entry, ToolExecutionGuard::validate_tool_call rejects

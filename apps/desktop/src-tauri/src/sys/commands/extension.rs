@@ -11,6 +11,11 @@ use tauri::Manager;
 use tauri::State;
 use uuid::Uuid;
 
+use crate::integrations::native_messaging::{
+    clear_pending_selected_context_handoff, get_pending_selected_context_handoff,
+    SelectedContextHandoffIdentity,
+};
+
 /// Page context from the browser extension
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageContext {
@@ -325,6 +330,26 @@ pub async fn extension_task_result(
     process_task_result_event(result, &app_handle).await
 }
 
+/// Acknowledge an authenticated selected-context preview after an explicit Desktop decision.
+/// Exact-match clearing prevents an older dialog from erasing a newer staged handoff.
+#[tauri::command]
+pub fn extension_clear_selected_context_handoff(
+    handoff: SelectedContextHandoffIdentity,
+) -> Result<bool, String> {
+    clear_pending_selected_context_handoff(&handoff).map_err(|error| error.to_string())
+}
+
+/// Recover a fresh native stage when React mounted after the original event emission.
+#[tauri::command]
+pub fn extension_get_pending_selected_context_handoff(
+) -> Result<Option<SelectedContextHandoffIdentity>, String> {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0);
+    get_pending_selected_context_handoff(now_ms).map_err(|error| error.to_string())
+}
+
 /// Save extension screenshot to disk
 async fn save_extension_screenshot(
     app_handle: &tauri::AppHandle,
@@ -501,6 +526,8 @@ pub async fn extension_status(app_handle: tauri::AppHandle) -> Result<serde_json
             "extension_page_context",
             "extension_analyze_forms",
             "extension_task_result",
+            "extension_clear_selected_context_handoff",
+            "extension_get_pending_selected_context_handoff",
             "extension_status"
         ]
     }))

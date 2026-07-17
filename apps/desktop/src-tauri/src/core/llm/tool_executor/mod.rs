@@ -228,6 +228,10 @@ pub struct ToolExecutor {
     /// correlate the artifact with the streaming message, mirroring how
     /// `tool:event`/`chat:tool-result` already carry `message_id`.
     frontend_message_id: Option<String>,
+    /// Whether app-owned resources created by tools may be written to durable
+    /// storage. Normal conversations default to true; temporary/incognito
+    /// turns explicitly set this false before any tool executes.
+    persist_internal_resources: bool,
 }
 
 impl ToolExecutor {
@@ -470,6 +474,7 @@ impl ToolExecutor {
             timeout_config: ToolTimeoutConfig::default(),
             conversation_id: None,
             frontend_message_id: None,
+            persist_internal_resources: true,
         }
     }
 
@@ -484,6 +489,7 @@ impl ToolExecutor {
             timeout_config: ToolTimeoutConfig::default(),
             conversation_id: None,
             frontend_message_id: None,
+            persist_internal_resources: true,
         }
     }
 
@@ -511,6 +517,13 @@ impl ToolExecutor {
     /// the `frontend_message_id` field doc for context.
     pub fn set_frontend_message_id(&mut self, frontend_message_id: Option<String>) {
         self.frontend_message_id = frontend_message_id;
+    }
+
+    /// Set the per-turn persistence policy for resources owned by AGI (for
+    /// example artifacts). This is intentionally separate from execution mode:
+    /// Local/BYOK may persist, while an incognito turn in either mode may not.
+    pub fn set_persist_internal_resources(&mut self, persist: bool) {
+        self.persist_internal_resources = persist;
     }
 
     /// Set the project folder for this executor
@@ -664,9 +677,19 @@ impl ToolExecutor {
     async fn canonicalize_validated_path(&self, path_str: &str) -> Result<PathBuf> {
         if let Some(app_handle) = &self.app_handle {
             let settings_state = app_handle.state::<SettingsState>();
-            let settings = settings_state.settings.lock().await;
 
-            let allowed = if settings.allowed_directories.is_empty() {
+            // Extract only what's needed and drop the shared settings guard
+            // immediately. `SettingsState.settings` is a `tokio::sync::Mutex`
+            // shared by ~20 other commands app-wide; a `MutexGuard` is a
+            // `Drop` type so it otherwise lives to the end of this block
+            // (NLL doesn't shorten it), and the blocking filesystem work
+            // below must not run while holding an app-wide async mutex.
+            let configured_dirs: Vec<String> = {
+                let settings = settings_state.settings.lock().await;
+                settings.allowed_directories.clone()
+            };
+
+            let allowed = if configured_dirs.is_empty() {
                 let mut defaults = Vec::new();
 
                 if let Some(ref project_folder) = self.project_folder {
@@ -682,8 +705,7 @@ impl ToolExecutor {
 
                 defaults
             } else {
-                settings
-                    .allowed_directories
+                configured_dirs
                     .iter()
                     .map(PathBuf::from)
                     .collect::<Vec<_>>()
@@ -693,35 +715,48 @@ impl ToolExecutor {
                 return Err(anyhow!("Access denied: No allowed directories configured."));
             }
 
-            let allowed_canonical = allowed
-                .into_iter()
-                .map(|dir| std::fs::canonicalize(&dir).unwrap_or(dir))
-                .collect::<Vec<_>>();
+            // `std::fs::canonicalize` is a blocking syscall (symlink/metadata
+            // resolution) that can stall arbitrarily long on slow/networked/
+            // FUSE mounts or long symlink chains. Run all of it on the
+            // blocking pool instead of the async runtime's worker threads
+            // (mirrors the existing `spawn_blocking` usage elsewhere in this
+            // file, e.g. the PDF-extraction path).
+            let path_str_owned = path_str.to_string();
+            let (allowed_canonical, canonical_path) = tokio::task::spawn_blocking(move || {
+                let allowed_canonical = allowed
+                    .into_iter()
+                    .map(|dir| std::fs::canonicalize(&dir).unwrap_or(dir))
+                    .collect::<Vec<_>>();
 
-            // Canonicalize the input path to resolve symlinks and .. components.
-            // This prevents path traversal via symlinks or relative components.
-            let canonical_path = match std::fs::canonicalize(path_str) {
-                Ok(canon) => canon,
-                Err(_) => {
-                    // Path doesn't exist yet (e.g., file_write to a new file).
-                    // Canonicalize the parent directory and append the filename.
-                    let path = std::path::Path::new(path_str);
-                    if let Some(parent) = path.parent() {
-                        match std::fs::canonicalize(parent) {
-                            Ok(canon_parent) => {
-                                if let Some(filename) = path.file_name() {
-                                    canon_parent.join(filename)
-                                } else {
-                                    PathBuf::from(path_str)
+                // Canonicalize the input path to resolve symlinks and .. components.
+                // This prevents path traversal via symlinks or relative components.
+                let canonical_path = match std::fs::canonicalize(&path_str_owned) {
+                    Ok(canon) => canon,
+                    Err(_) => {
+                        // Path doesn't exist yet (e.g., file_write to a new file).
+                        // Canonicalize the parent directory and append the filename.
+                        let path = std::path::Path::new(&path_str_owned);
+                        if let Some(parent) = path.parent() {
+                            match std::fs::canonicalize(parent) {
+                                Ok(canon_parent) => {
+                                    if let Some(filename) = path.file_name() {
+                                        canon_parent.join(filename)
+                                    } else {
+                                        PathBuf::from(&path_str_owned)
+                                    }
                                 }
+                                Err(_) => PathBuf::from(&path_str_owned),
                             }
-                            Err(_) => PathBuf::from(path_str),
+                        } else {
+                            PathBuf::from(&path_str_owned)
                         }
-                    } else {
-                        PathBuf::from(path_str)
                     }
-                }
-            };
+                };
+
+                (allowed_canonical, canonical_path)
+            })
+            .await
+            .map_err(|e| anyhow!("Path validation task failed: {}", e))?;
 
             // Fail closed if the resolved path still contains a `..` component. The
             // fallback arms above can return an UN-canonicalized path (e.g. when an
@@ -1376,74 +1411,30 @@ impl ToolExecutor {
             }
         }
 
-        // Manual mode requires approval for dangerous/MCP tools
-        // Auto mode (default) executes autonomously
-        let in_manual_mode = self.conversation_mode.as_deref() == Some("manual");
-        // Check for MCP tool ID format: mcp__server__tool__
-        if tool_call.name.starts_with("mcp__") && in_manual_mode {
-            tracing::warn!(
-                "[Security] MCP tool '{}' requested in manual mode. Emitting approval request.",
-                tool_call.name
-            );
-
+        // MCP connector permission gate (audit C-rank 1: "per-tool connector
+        // permissions have no runtime effect"). Runs in EVERY conversation
+        // mode, not just "manual" — the block this replaced only gated MCP
+        // tools when `conversation_mode == "manual"`, so "auto" mode (the
+        // default) executed every MCP tool with zero permission or
+        // confirmation check at all, and even the stored per-tool
+        // permission (Settings → Connectors) was consulted nowhere in this
+        // loop. Mirrors the gate in `sys::commands::mcp::mcp_call_tool` (the
+        // direct-invoke Tauri command), which this agent loop never calls.
+        if tool_call.name.starts_with("mcp__") {
             if let Some(app_handle) = &self.app_handle {
-                if let Err(e) = app_handle.emit(
-                    "approval:request",
-                    json!({
-                        "id": uuid::Uuid::new_v4().to_string(),
-                        "type": "tool_execution",
-                        "toolName": tool_call.name,
-                        "description": format!("Agent wants to execute MCP tool: {}", tool_call.name),
-                        "riskLevel": "high",
-                        "details": {
-                            "tool": tool_call.name,
-                            "arguments": metadata_snapshot.clone(),
-                            "source": "mcp"
-                        },
-                        "status": "pending",
-                    }),
-                ) {
-                    tracing::error!("Failed to emit approval:request event for MCP tool: {}", e);
+                if let Some(blocked) = self
+                    .enforce_mcp_connector_permission(
+                        app_handle,
+                        tool_call,
+                        &metadata_snapshot,
+                        &action_id,
+                        start_time,
+                    )
+                    .await
+                {
+                    return Ok(blocked);
                 }
             }
-
-            let message = format!(
-                "User approval required to execute MCP tool: {}",
-                tool_call.name
-            );
-            self.emit_tool_action(
-                &action_id,
-                &tool_call.name,
-                "blocked",
-                &metadata_snapshot,
-                Some(message.clone()),
-            );
-            self.emit_tool_metrics(
-                &action_id,
-                &tool_call.name,
-                start_time.elapsed().as_millis() as u64,
-                false,
-            );
-            if let Some(app_handle) = &self.app_handle {
-                emit_tool_error(
-                    app_handle,
-                    &action_id,
-                    &message,
-                    start_time.elapsed().as_millis() as u64,
-                    true,
-                );
-            }
-
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "approval_required": true }),
-                error: Some(message),
-                metadata: HashMap::from([
-                    ("requires_approval".to_string(), json!(true)),
-                    ("tool_name".to_string(), json!(tool_call.name)),
-                    ("tool_source".to_string(), json!("mcp")),
-                ]),
-            });
         }
 
         // Route MCP tools (format: mcp__server__tool__) to MCP executor
@@ -1971,6 +1962,318 @@ impl ToolExecutor {
                     .as_ref()
                     .unwrap_or(&"Unknown error".to_string())
             )
+        }
+    }
+
+    /// Resolve and enforce the per-tool connector permission for an MCP tool
+    /// call before it reaches `execute_mcp_tool`. Returns `Some(ToolResult)`
+    /// when the call must be short-circuited (blocked outright, the
+    /// confirmation system is unavailable, or the user declined the
+    /// dialog); returns `None` when the call is cleared to proceed (either
+    /// "always allow" or the user approved).
+    ///
+    /// Resolves `(server_name, tool_name)` via the MCP tool registry — not a
+    /// hand-rolled decode — and maps `server_name` (e.g. "connector-github")
+    /// back to the connector catalog id (e.g. "github") that
+    /// `connectorPermissionStore.ts` writes permissions under, mirroring the
+    /// same fix applied to `sys::commands::mcp::mcp_call_tool`.
+    async fn enforce_mcp_connector_permission(
+        &self,
+        app_handle: &tauri::AppHandle,
+        tool_call: &ToolCall,
+        metadata_snapshot: &Value,
+        action_id: &str,
+        start_time: Instant,
+    ) -> Option<ToolResult> {
+        use crate::sys::commands::connector_permissions::{
+            encryption_from_state, resolve_permission, PermissionLevel,
+        };
+        use crate::sys::commands::master_password::MasterPasswordState;
+        use crate::sys::commands::mcp::McpState;
+        use crate::sys::commands::mcp_oauth::connector_id_for_server_name;
+        use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest};
+
+        let mcp_state = match app_handle.try_state::<McpState>() {
+            Some(s) => s,
+            None => {
+                // Fail closed, mirroring `check_safety_tier_and_confirm`'s
+                // handling of a missing `ToolConfirmationState`: an MCP call
+                // must never bypass the permission gate just because the
+                // subsystem it needs to check against isn't wired up.
+                let message = format!(
+                    "Cannot execute '{}': MCP subsystem unavailable.",
+                    tool_call.name
+                );
+                self.emit_tool_action(
+                    action_id,
+                    &tool_call.name,
+                    "blocked",
+                    metadata_snapshot,
+                    Some(message.clone()),
+                );
+                self.emit_tool_metrics(
+                    action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                emit_tool_error(
+                    app_handle,
+                    action_id,
+                    &message,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                return Some(ToolResult {
+                    success: false,
+                    data: json!({ "error": message }),
+                    error: Some(message),
+                    metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
+                });
+            }
+        };
+
+        let (server_name, tool_name) = match mcp_state.registry.resolve_tool_id(&tool_call.name) {
+            Ok(pair) => pair,
+            // Unresolvable tool id — let `execute_mcp_tool` produce its own
+            // "tool not found"-shaped error instead of duplicating it here.
+            Err(_) => return None,
+        };
+
+        let connector_id = connector_id_for_server_name(&server_name)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| server_name.clone());
+
+        let mp_state = match app_handle.try_state::<MasterPasswordState>() {
+            Some(s) => s,
+            None => {
+                let message = format!(
+                    "Cannot execute '{}': connector permission store unavailable.",
+                    tool_name
+                );
+                self.emit_tool_action(
+                    action_id,
+                    &tool_call.name,
+                    "blocked",
+                    metadata_snapshot,
+                    Some(message.clone()),
+                );
+                self.emit_tool_metrics(
+                    action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                emit_tool_error(
+                    app_handle,
+                    action_id,
+                    &message,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                return Some(ToolResult {
+                    success: false,
+                    data: json!({ "error": message }),
+                    error: Some(message),
+                    metadata: HashMap::from([("tool_name".to_string(), json!(tool_call.name))]),
+                });
+            }
+        };
+        let enc = encryption_from_state(&mp_state);
+
+        let is_destructive = tool_name.contains("delete")
+            || tool_name.contains("write")
+            || tool_name.contains("create")
+            || tool_name.contains("update")
+            || tool_name.contains("remove");
+
+        let perm = resolve_permission(&enc, &connector_id, &tool_name, is_destructive);
+
+        match perm {
+            PermissionLevel::Blocked => {
+                let message = format!(
+                    "Tool '{}' is blocked by your connector permission settings. Change the permission in Settings → Connectors to allow it.",
+                    tool_name
+                );
+                tracing::warn!(
+                    "[ToolExecutor] MCP tool '{}' blocked by connector permission policy (connector='{}')",
+                    tool_call.name,
+                    connector_id
+                );
+                self.emit_tool_action(
+                    action_id,
+                    &tool_call.name,
+                    "blocked",
+                    metadata_snapshot,
+                    Some(message.clone()),
+                );
+                self.emit_tool_metrics(
+                    action_id,
+                    &tool_call.name,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                emit_tool_error(
+                    app_handle,
+                    action_id,
+                    &message,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+                Some(ToolResult {
+                    success: false,
+                    data: json!({ "error": message, "connector_permission_blocked": true }),
+                    error: Some(message),
+                    metadata: HashMap::from([
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                        ("connector_permission_blocked".to_string(), json!(true)),
+                    ]),
+                })
+            }
+            PermissionLevel::AlwaysAllow => {
+                tracing::debug!(
+                    "[ToolExecutor] MCP tool '{}' auto-approved by connector permission policy (connector='{}')",
+                    tool_call.name,
+                    connector_id
+                );
+                None
+            }
+            PermissionLevel::NeedsApproval => {
+                let confirmation_state = match app_handle.try_state::<ToolConfirmationState>() {
+                    Some(s) => s,
+                    None => {
+                        let message = format!(
+                            "Cannot execute '{}': safety confirmation system unavailable.",
+                            tool_name
+                        );
+                        self.emit_tool_action(
+                            action_id,
+                            &tool_call.name,
+                            "blocked",
+                            metadata_snapshot,
+                            Some(message.clone()),
+                        );
+                        self.emit_tool_metrics(
+                            action_id,
+                            &tool_call.name,
+                            start_time.elapsed().as_millis() as u64,
+                            false,
+                        );
+                        emit_tool_error(
+                            app_handle,
+                            action_id,
+                            &message,
+                            start_time.elapsed().as_millis() as u64,
+                            false,
+                        );
+                        return Some(ToolResult {
+                            success: false,
+                            data: json!({ "error": message }),
+                            error: Some(message),
+                            metadata: HashMap::from([(
+                                "tool_name".to_string(),
+                                json!(tool_call.name),
+                            )]),
+                        });
+                    }
+                };
+
+                let confirmation = ToolConfirmationRequest {
+                    request_id: action_id.to_string(),
+                    tool_name: tool_call.name.clone(),
+                    tool_description: format!(
+                        "Execute MCP tool '{}' on server '{}'",
+                        tool_name, server_name
+                    ),
+                    parameters: metadata_snapshot.clone(),
+                    risk_level: RiskLevel::High,
+                    safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+                    reason: "MCP tools can access system resources and external APIs.".to_string(),
+                    reversible: false,
+                    undo_description: None,
+                };
+
+                let approved = match request_tool_confirmation(
+                    app_handle,
+                    &confirmation_state,
+                    confirmation,
+                    TOOL_CONFIRMATION_TIMEOUT_SECS,
+                )
+                .await
+                {
+                    Ok(approved) => approved,
+                    Err(e) => {
+                        let message = format!(
+                            "Couldn't get your confirmation for '{}': {}. Please try again.",
+                            tool_name, e
+                        );
+                        self.emit_tool_action(
+                            action_id,
+                            &tool_call.name,
+                            "blocked",
+                            metadata_snapshot,
+                            Some(message.clone()),
+                        );
+                        self.emit_tool_metrics(
+                            action_id,
+                            &tool_call.name,
+                            start_time.elapsed().as_millis() as u64,
+                            false,
+                        );
+                        emit_tool_error(
+                            app_handle,
+                            action_id,
+                            &message,
+                            start_time.elapsed().as_millis() as u64,
+                            true,
+                        );
+                        return Some(ToolResult {
+                            success: false,
+                            data: json!({ "error": message, "confirmation_denied": true }),
+                            error: Some(message),
+                            metadata: HashMap::from([
+                                ("requires_confirmation".to_string(), json!(true)),
+                                ("tool_name".to_string(), json!(tool_call.name)),
+                            ]),
+                        });
+                    }
+                };
+
+                if approved {
+                    None
+                } else {
+                    let message = format!("You declined to run '{}'.", tool_name);
+                    self.emit_tool_action(
+                        action_id,
+                        &tool_call.name,
+                        "blocked",
+                        metadata_snapshot,
+                        Some(message.clone()),
+                    );
+                    self.emit_tool_metrics(
+                        action_id,
+                        &tool_call.name,
+                        start_time.elapsed().as_millis() as u64,
+                        false,
+                    );
+                    emit_tool_error(
+                        app_handle,
+                        action_id,
+                        &message,
+                        start_time.elapsed().as_millis() as u64,
+                        true,
+                    );
+                    Some(ToolResult {
+                        success: false,
+                        data: json!({ "error": message, "confirmation_denied": true }),
+                        error: Some(message),
+                        metadata: HashMap::from([
+                            ("requires_confirmation".to_string(), json!(true)),
+                            ("tool_name".to_string(), json!(tool_call.name)),
+                        ]),
+                    })
+                }
+            }
         }
     }
 

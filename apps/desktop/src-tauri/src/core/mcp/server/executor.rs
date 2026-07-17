@@ -226,6 +226,7 @@ impl DesktopMcpServerExecutor {
             prefer_cloud_credits: false,
             // MCP server calls are treated as local (no ManagedCloud routing).
             active_mode: Some("local".to_string()),
+            execution_mode: None,
             frontend_message_id: None,
             custom_instructions: None,
             project_folder: None,
@@ -347,6 +348,7 @@ impl DesktopMcpServerExecutor {
             prefer_cloud_credits: false,
             // MCP server calls are treated as local (no ManagedCloud routing).
             active_mode: Some("local".to_string()),
+            execution_mode: None,
             frontend_message_id: None,
             custom_instructions: Some(custom_instructions),
             project_folder: None,

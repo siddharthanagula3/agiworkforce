@@ -20,8 +20,9 @@ use crate::wire::ToolCall;
 pub struct Usage {
     pub input_tokens: u32,
     pub output_tokens: u32,
-    /// Tokens read from prompt cache (Anthropic only). 0 when no cache hit or
-    /// the provider doesn't support caching.
+    /// Tokens read from prompt cache. Anthropic reports
+    /// `cache_read_input_tokens`; OpenAI Responses reports
+    /// `input_tokens_details.cached_tokens`. 0 when unavailable.
     pub cache_read_input_tokens: u32,
     /// Tokens written to prompt cache (Anthropic only).
     pub cache_creation_input_tokens: u32,
@@ -46,7 +47,11 @@ pub enum StreamEvent {
     /// carry whatever the wire delivered at that point and may be empty for
     /// pathological streams; [`crate::ToolCallAssembler`] output is
     /// authoritative.
-    ToolCallStart { index: usize, id: String, name: String },
+    ToolCallStart {
+        index: usize,
+        id: String,
+        name: String,
+    },
     /// A fragment of the JSON arguments for the call at `index`.
     ToolCallArgsDelta { index: usize, fragment: String },
     /// Usage snapshot as of this point in the stream (cumulative, not delta).
@@ -56,7 +61,10 @@ pub enum StreamEvent {
     /// Provider-specific event this crate does not interpret (e.g. Anthropic
     /// `message_stop`, managed-cloud billing frames). `event` is the vendor's
     /// event/type label; `data` is the raw JSON payload.
-    Vendor { event: String, data: serde_json::Value },
+    Vendor {
+        event: String,
+        data: serde_json::Value,
+    },
     /// Stream finished. Carries the final stop reason, if any was reported.
     End { stop_reason: Option<String> },
 }

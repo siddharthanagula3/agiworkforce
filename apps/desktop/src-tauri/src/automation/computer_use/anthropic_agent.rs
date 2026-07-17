@@ -450,6 +450,8 @@ impl AnthropicComputerUseAgent {
             }),
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let candidates = router.candidates(&request, &preferences);
@@ -713,15 +715,15 @@ impl AnthropicComputerUseAgent {
             "com.apple.keychainaccess",
         ];
 
-        // TODO: Wire WindowCoordinator::get_active_window_bundle_id() once
-        // platform-specific window detection is implemented, then call
+        // Tracked gap DESKTOP-COMPUTER-USE-FOREGROUND-GATE-01 (known-flaws.md):
+        // platform window detection cannot yet resolve the live foreground
+        // app's bundle ID, so this gate does not call
         // `self.app_permissions.decide(app_name, Some(bundle_id)).await`
-        // against the live foreground app's bundle ID here.
-        //
-        // Until native window detection is available, check all configured
-        // permissions: any app with an explicitly-Denied status or a bundle ID on
-        // the safety or financial deny-list is blocked now (previously discarded
-        // via `let _ = &self.app_permissions`).
+        // against the real foreground window. Until that lands, every
+        // configured permission is checked up front: any app with an
+        // explicitly-Denied status or a bundle ID on the safety/financial
+        // deny-list blocks the action (previously discarded via
+        // `let _ = &self.app_permissions`).
 
         // Check any explicitly-denied apps via the public API.
         let denied = self.app_permissions.denied_apps().await;
@@ -748,7 +750,8 @@ impl AnthropicComputerUseAgent {
         }
 
         // No configured permission matched — allow (default permissive until
-        // WindowCoordinator is wired to check the live foreground app).
+        // DESKTOP-COMPUTER-USE-FOREGROUND-GATE-01 closes and this gate checks
+        // the live foreground app).
         None
     }
 

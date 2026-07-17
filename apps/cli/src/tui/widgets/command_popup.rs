@@ -304,7 +304,10 @@ mod tests {
     fn leading_space_is_ignored() {
         let mut popup = make_popup();
         popup.handle_key(KeyAction::Char(' '));
-        assert_eq!(popup.filter, "", "a leading space (no command yet) is dropped");
+        assert_eq!(
+            popup.filter, "",
+            "a leading space (no command yet) is dropped"
+        );
     }
 
     #[test]
@@ -374,6 +377,9 @@ mod tests {
             .lines()
             .find(|l| l.contains("/sandbox"))
             .expect("sandbox row present");
-        assert!(sandbox_row.ends_with("…│"), "long row should be ellipsized: {sandbox_row:?}");
+        assert!(
+            sandbox_row.ends_with("…│"),
+            "long row should be ellipsized: {sandbox_row:?}"
+        );
     }
 }

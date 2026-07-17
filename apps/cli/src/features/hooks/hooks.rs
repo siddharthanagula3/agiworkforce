@@ -435,7 +435,8 @@ pub struct TriggerConfig {
     #[serde(default)]
     pub prompt: Option<String>,
 
-    /// Model to use for agent execution (e.g. "auto-balanced", "claude-opus-4-8").
+    /// Concrete model to use for agent execution. Auto profiles require an
+    /// explicit managed_cloud default provider.
     #[serde(default)]
     pub model: Option<String>,
 

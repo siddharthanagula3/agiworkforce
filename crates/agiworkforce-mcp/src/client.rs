@@ -155,11 +155,20 @@ impl McpClient {
                 TransportConn::Stdio { child }
             }
             TransportConfig::Sse { url, headers } => {
-                sse::connect(server_name, url, headers, timeouts.clone(), notif_tx.clone()).await?
+                sse::connect(
+                    server_name,
+                    url,
+                    headers,
+                    timeouts.clone(),
+                    notif_tx.clone(),
+                )
+                .await?
             }
-            TransportConfig::Http { url, headers, oauth } => {
-                http::connect(url, headers, oauth.as_ref(), &timeouts)?
-            }
+            TransportConfig::Http {
+                url,
+                headers,
+                oauth,
+            } => http::connect(url, headers, oauth.as_ref(), &timeouts)?,
             TransportConfig::SseLegacy { base_url, headers } => {
                 sse::connect_legacy(
                     server_name,
@@ -265,7 +274,10 @@ impl McpClient {
         }
 
         cmd.spawn().with_context(|| {
-            format!("[{name}] Failed to start MCP server: {command} {}", args.join(" "))
+            format!(
+                "[{name}] Failed to start MCP server: {command} {}",
+                args.join(" ")
+            )
         })
     }
 
@@ -391,7 +403,9 @@ impl McpClient {
             "name": tool_name,
             "arguments": arguments,
         });
-        let result = self.send_rpc("tools/call", Some(params.clone()), timeout).await;
+        let result = self
+            .send_rpc("tools/call", Some(params.clone()), timeout)
+            .await;
 
         // On connection error, try to reconnect once and retry.
         let result = match result {
@@ -512,12 +526,9 @@ impl McpClient {
                 match tokio::time::timeout(timeout, async {
                     loop {
                         line.clear();
-                        let bytes_read = reader
-                            .read_line(&mut line)
-                            .await
-                            .with_context(|| {
-                                format!("[{server_name}] Failed to read from MCP server")
-                            })?;
+                        let bytes_read = reader.read_line(&mut line).await.with_context(|| {
+                            format!("[{server_name}] Failed to read from MCP server")
+                        })?;
 
                         if bytes_read == 0 {
                             bail!("[{server_name}] MCP server closed connection");
@@ -537,15 +548,15 @@ impl McpClient {
                         };
 
                         // Detect server-initiated elicitation/create requests.
-                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame) {
+                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame)
+                        {
                             if srv_method == "elicitation/create" {
                                 if let Ok(elicit_req) = serde_json::from_value::<
                                     elicitation::ElicitationRequest,
                                 >(params)
                                 {
-                                    let resp = elicitation_handler
-                                        .handle(&server_name, elicit_req)
-                                        .await;
+                                    let resp =
+                                        elicitation_handler.handle(&server_name, elicit_req).await;
                                     let reply = serde_json::json!({
                                         "jsonrpc": "2.0",
                                         "id": req_id,
@@ -645,15 +656,15 @@ impl McpClient {
                             None => bail!("[{server_name}] SSE channel closed unexpectedly"),
                         };
 
-                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame) {
+                        if let Some((srv_method, req_id, params)) = Self::as_server_request(&frame)
+                        {
                             if srv_method == "elicitation/create" {
                                 if let Ok(elicit_req) = serde_json::from_value::<
                                     elicitation::ElicitationRequest,
                                 >(params)
                                 {
-                                    let elicit_resp = elicitation_handler
-                                        .handle(&server_name, elicit_req)
-                                        .await;
+                                    let elicit_resp =
+                                        elicitation_handler.handle(&server_name, elicit_req).await;
                                     Self::reply_elicitation_sse(
                                         &post_url_clone,
                                         &headers_clone,
@@ -886,7 +897,10 @@ impl McpClient {
                 self.inner = TransportConn::Stdio { child };
                 self.request_id = 0;
                 self.initialize().await.with_context(|| {
-                    format!("[{}] Re-initialization failed after reconnect", self.server_name)
+                    format!(
+                        "[{}] Re-initialization failed after reconnect",
+                        self.server_name
+                    )
                 })?;
                 Ok(())
             }
@@ -904,7 +918,11 @@ impl McpClient {
                 self.initialize().await?;
                 Ok(())
             }
-            TransportConfig::Http { url, headers, oauth } => {
+            TransportConfig::Http {
+                url,
+                headers,
+                oauth,
+            } => {
                 let inner = http::connect(&url, &headers, oauth.as_ref(), &self.timeouts)?;
                 self.inner = inner;
                 self.request_id = 0;
@@ -971,7 +989,9 @@ impl McpClient {
     /// Shut down the MCP server gracefully.
     pub async fn shutdown(&mut self) -> Result<(), McpError> {
         // Try graceful shutdown.
-        let _ = self.send_notification("notifications/cancelled", None).await;
+        let _ = self
+            .send_notification("notifications/cancelled", None)
+            .await;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -1167,7 +1187,13 @@ mod tests {
 
     #[test]
     fn env_blocks_http_proxy_family() {
-        for var in &["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY"] {
+        for var in &[
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "ALL_PROXY",
+        ] {
             let env = manifest_env(&[(var, "http://attacker.com")]);
             let (allowed, blocked) = filter_manifest_env(&env);
             assert!(!allowed.contains_key(*var), "{var} should be blocked");
@@ -1212,8 +1238,17 @@ mod tests {
     #[test]
     fn env_api_keys_not_in_parent_allowlist() {
         const ALLOWED_FROM_PARENT: &[&str] = &[
-            "PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TERM",
-            "SHELL", "XDG_RUNTIME_DIR",
+            "PATH",
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "TMPDIR",
+            "TERM",
+            "SHELL",
+            "XDG_RUNTIME_DIR",
         ];
         assert!(!ALLOWED_FROM_PARENT.contains(&"ANTHROPIC_API_KEY"));
         assert!(!ALLOWED_FROM_PARENT.contains(&"OPENAI_API_KEY"));

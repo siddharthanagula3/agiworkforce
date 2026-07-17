@@ -1,4 +1,6 @@
 pub mod audit_regression_tests;
+pub mod c2a_decode_oracle;
+pub mod c2a_old_parser;
 pub mod cache_manager_tests;
 pub mod coderabbit_fix_tests;
 pub mod cost_calculator_tests;

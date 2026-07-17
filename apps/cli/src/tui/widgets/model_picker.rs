@@ -239,9 +239,7 @@ impl ModelPickerState {
     /// knob. Gating on the provider alone wrongly showed the control for
     /// non-reasoning models such as claude-haiku-4-5.
     pub fn show_effort_bar(&self) -> bool {
-        let model_reasons = self
-            .selected_model()
-            .is_some_and(|m| m.supports_reasoning);
+        let model_reasons = self.selected_model().is_some_and(|m| m.supports_reasoning);
         let provider_has_effort = self
             .selected_provider_id()
             .map(|pid| provider_display(pid).supports_effort)
@@ -843,10 +841,7 @@ mod tests {
     ///     Existing catalog behavior: all models pass through rebuild_rows() unchanged.
     #[test]
     fn env_gate_none_models_unaffected() {
-        let models = vec![
-            model("claude-x", "anthropic"),
-            model("gpt-y", "openai"),
-        ];
+        let models = vec![model("claude-x", "anthropic"), model("gpt-y", "openai")];
         let mut state = ModelPickerState::default();
         state.rebuild_rows(&models);
 
@@ -875,7 +870,7 @@ mod tests {
     #[test]
     fn env_gate_e2b_model_filtered_when_unavailable() {
         let models = vec![
-            model("claude-normal", "anthropic"),           // no env gate — must appear
+            model("claude-normal", "anthropic"), // no env gate — must appear
             model_env_gated("claude-e2b", "anthropic", "e2b"), // e2b gate — must be hidden
         ];
         let mut state = ModelPickerState::default();

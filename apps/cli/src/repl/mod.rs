@@ -87,7 +87,10 @@ pub async fn run_repl(
                 eprintln!("Agent '{}' loaded.", agent_def.name);
             }
             None => {
-                eprintln!("Warning: agent '{}' not found. Run /agents to list available agents.", name);
+                eprintln!(
+                    "Warning: agent '{}' not found. Run /agents to list available agents.",
+                    name
+                );
             }
         }
     }
@@ -134,8 +137,9 @@ pub async fn run_repl(
     // known sibling — it is out of scope for this fix.
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
+        let privacy_mode = session.privacy_mode;
         Some(tokio::spawn(async move {
-            match crate::build_mcp_manager(&opts, true, true).await {
+            match crate::build_mcp_manager(&opts, true, true, privacy_mode).await {
                 Ok(mgr) => mgr,
                 Err(e) => {
                     crate::output::print_warn(&format!("MCP config/connect error: {e:#}"));
@@ -378,7 +382,8 @@ pub async fn run_repl(
                         }
                         SlashResult::Advisor(question) => {
                             let spinner = output::create_spinner("Advisor...");
-                            let answer = run_advisor_question(&question).await;
+                            let answer =
+                                run_advisor_question(&question, session.privacy_mode).await;
                             spinner.finish_and_clear();
                             match answer {
                                 Ok(text) => {
@@ -661,6 +666,7 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
         auto_approve_safe: session.auto_approve_safe,
         quiet: session.quiet,
         approval_callback: None,
+        privacy_mode: session.privacy_mode,
     };
 
     match crate::tools::execute_tool_with_opts(&call, &opts).await {
@@ -695,7 +701,10 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
     }
 }
 
-async fn run_advisor_question(question: &str) -> Result<String> {
+async fn run_advisor_question(
+    question: &str,
+    privacy_mode: crate::agent::PrivacyMode,
+) -> Result<String> {
     let call = crate::agent::ToolCall {
         name: "advisor".to_string(),
         args: std::collections::HashMap::from([("question".to_string(), question.to_string())]),
@@ -705,6 +714,7 @@ async fn run_advisor_question(question: &str) -> Result<String> {
         auto_approve_safe: true,
         quiet: false,
         approval_callback: None,
+        privacy_mode,
     };
     let result = crate::tools::execute_tool_with_opts(&call, &opts).await?;
     if result.success {

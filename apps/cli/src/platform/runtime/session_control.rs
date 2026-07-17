@@ -33,6 +33,16 @@ pub struct ManagedSessionSummary {
     pub updated_at: DateTime<Utc>,
     pub message_count: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<ManagedSessionForkMetadata>,
 }
 
@@ -42,6 +52,79 @@ pub struct ResolvedManagedSessionReference {
     pub reference: ManagedSessionReference,
     pub path: PathBuf,
     pub summary: ManagedSessionSummary,
+}
+
+/// One owner for managed developer-session persistence.
+///
+/// CLI commands and the local IDE app-server use the same store API so file
+/// naming, JSON/JSONL compatibility, sorting, deduplication, forking, and
+/// archival cannot drift between surfaces.
+#[derive(Debug, Clone)]
+pub struct ManagedSessionStore {
+    base_dir: PathBuf,
+}
+
+impl ManagedSessionStore {
+    pub fn new(base_dir: PathBuf) -> Self {
+        Self { base_dir }
+    }
+
+    pub fn user_config() -> Result<Self> {
+        Ok(Self::new(CliConfig::config_dir()?))
+    }
+
+    pub fn create(&self, messages: Vec<Message>) -> Result<ResolvedManagedSessionReference> {
+        create_managed_session_in(&self.base_dir, messages)
+    }
+
+    pub fn create_with_id(
+        &self,
+        session_id: impl Into<String>,
+        messages: Vec<Message>,
+    ) -> Result<ResolvedManagedSessionReference> {
+        create_managed_session_with_id_in(&self.base_dir, session_id.into(), messages)
+    }
+
+    pub fn list(&self) -> Result<Vec<ManagedSessionSummary>> {
+        list_managed_sessions_in(&self.base_dir)
+    }
+
+    pub fn resolve(
+        &self,
+        reference: ManagedSessionReference,
+    ) -> Result<ResolvedManagedSessionReference> {
+        resolve_managed_session_reference_in(&self.base_dir, reference)
+    }
+
+    pub fn load(&self, reference: ManagedSessionReference) -> Result<ManagedSession> {
+        load_managed_session_in(&self.base_dir, reference)
+    }
+
+    pub fn fork(
+        &self,
+        reference: ManagedSessionReference,
+    ) -> Result<ResolvedManagedSessionReference> {
+        fork_managed_session_in(&self.base_dir, reference)
+    }
+
+    pub fn save(&self, session: &ManagedSession) -> Result<PathBuf> {
+        save_session_in(&self.base_dir, session)
+    }
+
+    pub fn archive(&self, reference: ManagedSessionReference) -> Result<()> {
+        let resolved = self.resolve(reference)?;
+        let mut session = load_session_from_path(&resolved.path)?;
+        if session.archived_at.is_none() {
+            session.archived_at = Some(Utc::now());
+            session.touch();
+            self.save(&session)?;
+        }
+        Ok(())
+    }
+
+    pub fn delete(&self, reference: ManagedSessionReference) -> Result<()> {
+        delete_managed_session_in(&self.base_dir, reference)
+    }
 }
 
 impl ManagedSessionReference {
@@ -80,6 +163,11 @@ impl ManagedSessionSummary {
             created_at: session.created_at,
             updated_at: session.updated_at,
             message_count: session.messages.len(),
+            title: session.title.clone(),
+            model: session.model.clone(),
+            workspace_root: session.workspace_root.clone(),
+            created_by: session.created_by.clone(),
+            archived_at: session.archived_at,
             fork: session.fork.clone(),
         }
     }
@@ -294,7 +382,7 @@ pub fn managed_session_dir() -> Result<PathBuf> {
 
 /// Create a new managed session under the CLI config directory (UUID session id).
 pub fn create_managed_session(messages: Vec<Message>) -> Result<ResolvedManagedSessionReference> {
-    create_managed_session_in(&CliConfig::config_dir()?, messages)
+    ManagedSessionStore::user_config()?.create(messages)
 }
 
 /// Return true if a managed session with the given id already exists on disk
@@ -312,7 +400,7 @@ pub fn create_managed_session_with_id(
     session_id: impl Into<String>,
     messages: Vec<Message>,
 ) -> Result<ResolvedManagedSessionReference> {
-    create_managed_session_with_id_in(&CliConfig::config_dir()?, session_id.into(), messages)
+    ManagedSessionStore::user_config()?.create_with_id(session_id, messages)
 }
 
 fn create_managed_session_with_id_in(
@@ -330,7 +418,7 @@ fn create_managed_session_with_id_in(
 
 /// List managed sessions stored under the CLI config directory.
 pub fn list_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
-    list_managed_sessions_in(&CliConfig::config_dir()?)
+    ManagedSessionStore::user_config()?.list()
 }
 
 /// Return the newest managed session, if one exists.
@@ -343,25 +431,25 @@ pub fn resolve_managed_session_reference(
     reference: impl AsRef<str>,
 ) -> Result<ResolvedManagedSessionReference> {
     let reference = ManagedSessionReference::parse(reference)?;
-    resolve_managed_session_reference_in(&CliConfig::config_dir()?, reference)
+    ManagedSessionStore::user_config()?.resolve(reference)
 }
 
 /// Load a managed session from a session id, path, or the `latest` alias.
 pub fn load_managed_session(reference: impl AsRef<str>) -> Result<ManagedSession> {
     let reference = ManagedSessionReference::parse(reference)?;
-    load_managed_session_in(&CliConfig::config_dir()?, reference)
+    ManagedSessionStore::user_config()?.load(reference)
 }
 
 /// Fork a managed session and persist the copy as a new managed session.
 pub fn fork_managed_session(reference: impl AsRef<str>) -> Result<ResolvedManagedSessionReference> {
     let reference = ManagedSessionReference::parse(reference)?;
-    fork_managed_session_in(&CliConfig::config_dir()?, reference)
+    ManagedSessionStore::user_config()?.fork(reference)
 }
 
 /// Delete a managed session by id, path, or the `latest` alias.
 pub fn delete_managed_session(reference: impl AsRef<str>) -> Result<()> {
     let reference = ManagedSessionReference::parse(reference)?;
-    delete_managed_session_in(&CliConfig::config_dir()?, reference)
+    ManagedSessionStore::user_config()?.delete(reference)
 }
 
 #[cfg(test)]
@@ -422,6 +510,11 @@ mod tests {
             updated_at: Utc.with_ymd_and_hms(2025, 1, 1, 10, 30, 0).unwrap(),
             messages: vec![message("first")],
             fork: None,
+            title: None,
+            model: None,
+            workspace_root: None,
+            created_by: None,
+            archived_at: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -429,6 +522,7 @@ mod tests {
             fast_mode: None,
             output_style: None,
             fallback_model_ids: None,
+            auto_routing: None,
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -440,6 +534,11 @@ mod tests {
             updated_at: Utc.with_ymd_and_hms(2025, 1, 2, 11, 0, 0).unwrap(),
             messages: vec![message("second"), message("third")],
             fork: None,
+            title: Some("Second session".to_string()),
+            model: Some("registry/model-key".to_string()),
+            workspace_root: Some(base.to_path_buf()),
+            created_by: Some("vscode".to_string()),
+            archived_at: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -447,6 +546,7 @@ mod tests {
             fast_mode: None,
             output_style: None,
             fallback_model_ids: None,
+            auto_routing: None,
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));
@@ -454,6 +554,10 @@ mod tests {
         let sessions = list_managed_sessions_in(base).unwrap();
         assert_eq!(sessions.len(), 2);
         assert_eq!(sessions[0].session_id, "session-b");
+        assert_eq!(sessions[0].title.as_deref(), Some("Second session"));
+        assert_eq!(sessions[0].model.as_deref(), Some("registry/model-key"));
+        assert_eq!(sessions[0].workspace_root.as_deref(), Some(base));
+        assert_eq!(sessions[0].created_by.as_deref(), Some("vscode"));
         assert_eq!(sessions[1].session_id, "session-a");
 
         let latest = latest_managed_session_in(base).unwrap().unwrap();

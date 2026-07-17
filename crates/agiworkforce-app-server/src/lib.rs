@@ -17,6 +17,13 @@
 //! launched as an MCP server from another agent. That path does NOT use the
 //! `ToolDispatch` trait by design (it exposes a single, agent-facing entry).
 
+mod developer_sessions;
+
+pub use developer_sessions::{
+    run_developer_session_stdio, serve_developer_session_io, DeveloperSessionHost,
+    DeveloperSessionHostError, DeveloperSessionProcessor,
+};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};

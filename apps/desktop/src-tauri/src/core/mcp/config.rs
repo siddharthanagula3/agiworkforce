@@ -111,7 +111,9 @@ pub const PROJECT_FOLDER_ENV_VAR: &str = "AGIWORKFORCE_PROJECT_FOLDER";
 /// Returns the encrypted-at-rest form of a raw credential value, or `None` if the
 /// value is empty, already encrypted, or a resolve-on-load placeholder (`<from_…>`).
 fn maybe_encrypt_at_rest(value: &str) -> Option<String> {
-    if value.is_empty() || value.starts_with(ENCRYPTED_AT_REST_PREFIX) || value.starts_with("<from_")
+    if value.is_empty()
+        || value.starts_with(ENCRYPTED_AT_REST_PREFIX)
+        || value.starts_with("<from_")
     {
         return None;
     }
@@ -121,7 +123,9 @@ fn maybe_encrypt_at_rest(value: &str) -> Option<String> {
 /// Returns the decrypted plaintext for an `<enc:…>` value, or `None` if the value is
 /// not encrypted-at-rest (plaintext or a `<from_…>` placeholder are left untouched).
 fn maybe_decrypt_at_rest(value: &str) -> Option<String> {
-    let inner = value.strip_prefix(ENCRYPTED_AT_REST_PREFIX)?.strip_suffix('>')?;
+    let inner = value
+        .strip_prefix(ENCRYPTED_AT_REST_PREFIX)?
+        .strip_suffix('>')?;
     decrypt_mcp_credential(inner).ok()
 }
 
@@ -470,8 +474,9 @@ impl McpServersConfig {
             return Ok(0);
         }
 
-        let path = Self::dotfile_config_path()
-            .ok_or_else(|| "Could not resolve home directory for ~/.agiworkforce/mcp.json".to_string())?;
+        let path = Self::dotfile_config_path().ok_or_else(|| {
+            "Could not resolve home directory for ~/.agiworkforce/mcp.json".to_string()
+        })?;
 
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -481,7 +486,8 @@ impl McpServersConfig {
         let mut root: serde_json::Value = if path.exists() {
             let content = std::fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read mcp.json: {}", e))?;
-            serde_json::from_str(&content).map_err(|e| format!("Failed to parse mcp.json: {}", e))?
+            serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse mcp.json: {}", e))?
         } else {
             serde_json::json!({ "mcpServers": {} })
         };
@@ -1713,7 +1719,7 @@ mod tests {
 
     #[test]
     #[ignore] // llm-guardrail-allow: pre-existing reasoned skip predating this change and unrelated
-    // to DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01 — not touched or introduced here.
+              // to DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01 — not touched or introduced here.
     fn test_default_config() {
         let config = McpServersConfig::default();
         assert!(config.mcp_servers.contains_key("filesystem"));

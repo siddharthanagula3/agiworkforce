@@ -1,5 +1,5 @@
 //! The `agilicense-v1` / `agipolicy-v1` signed-container format and its
-//! verification primitive — a direct port of `packages/licensing/src/container.ts`.
+//! verification primitive — a direct port of `packages/contracts/licensing/src/container.ts`.
 //!
 //! A container is one UTF-8 JSON object:
 //!
@@ -143,7 +143,10 @@ pub fn verify_signed_container(
         // conservative choice for a security primitive. It agrees with the TS
         // side (`@noble/curves` `verify`) on this fixture corpus, which contains
         // only honest signatures and simple byte-flip tampering.
-        if verifying_key.verify_strict(signed_message, &signature).is_ok() {
+        if verifying_key
+            .verify_strict(signed_message, &signature)
+            .is_ok()
+        {
             return VerifiedContainer::Ok {
                 payload: payload_bytes,
             };

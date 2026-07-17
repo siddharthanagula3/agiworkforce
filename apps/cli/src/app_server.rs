@@ -2,7 +2,7 @@
 //!
 //! This module provides:
 //!
-//! 1. `CliToolDispatch` — concrete `ToolDispatch` impl that maps the 11 wired
+//! 1. `CliToolDispatch` — concrete `ToolDispatch` impl that maps the 7 wired
 //!    tool names to the CLI's real executors and injects them into the
 //!    `agiworkforce-app-server` crate's `Processor`.
 //!
@@ -13,7 +13,11 @@
 //! JSON-RPC types and `run_app_server` are re-exported from the crate;
 //! `run_mcp_server` is *not* re-exported — only this local version is used.
 
-pub use agiworkforce_app_server::run_app_server;
+mod developer_host;
+
+pub use developer_host::CliDeveloperSessionHost;
+
+pub use agiworkforce_app_server::{run_app_server, run_developer_session_stdio};
 pub use agiworkforce_app_server::{
     AppServerConfig, AppServerTransport, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
     WebSocketSecurity,
@@ -38,7 +42,7 @@ fn json_string_prop(desc: &str) -> serde_json::Value {
     serde_json::json!({"type": "string", "description": desc})
 }
 
-/// Build MCP-style `{name, description, inputSchema}` for the 11 tools we
+/// Build MCP-style `{name, description, inputSchema}` for the 7 tools we
 /// actually wire.  `task` is agent-runtime only and is deliberately excluded
 /// (see `NOT_AVAILABLE_VIA_APP_SERVER` below).
 fn cli_tool_catalog() -> Vec<serde_json::Value> {
@@ -235,6 +239,9 @@ impl ToolDispatch for CliToolDispatch {
             auto_approve_safe: true,
             quiet: true,
             approval_callback: None,
+            // The standalone read-only app-server has no user-selected trust
+            // boundary, so sessionless tools fail closed to Local.
+            privacy_mode: crate::agent::PrivacyMode::Local,
         };
 
         let result = execute_tool_with_opts(&call, &opts).await?;

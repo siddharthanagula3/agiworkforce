@@ -6,8 +6,8 @@
 //!
 //! - chat wire types ([`Message`], [`ContentBlock`], [`ToolDefinition`])
 //! - per-dialect request serialization ([`serialize`])
-//! - the four dialect stream drivers (Anthropic Messages, Gemini,
-//!   Ollama-native NDJSON, OpenAI-compatible Chat Completions) behind
+//! - the five dialect stream drivers (Anthropic Messages, Gemini,
+//!   Ollama-native NDJSON, OpenAI Responses, OpenAI-compatible Chat Completions) behind
 //!   [`ProviderSpec`] + [`Dialect`]
 //! - incremental UTF-8 stream decoding ([`Utf8StreamDecoder`])
 //! - tool-call delta assembly ([`ToolCallAssembler`])
@@ -37,7 +37,7 @@ pub use events::{ChatOutcome, StreamEvent, Usage};
 pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
 pub use stream::{
     ChatRequest, run_anthropic_stream, run_gemini_stream, run_ollama_stream,
-    run_openai_compat_stream, stream_chat,
+    run_openai_compat_stream, run_openai_responses_stream, stream_chat,
 };
 pub use watchdog::IdleWatchdog;
 pub use wire::{ContentBlock, Message, MessageContent, ToolCall, ToolDefinition};

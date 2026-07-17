@@ -303,8 +303,11 @@ pub trait TurnHost: Send {
 
     /// Finish a parallel tool: post-hooks for side-effects only (NO output
     /// transforms), returning the raw-output result block.
-    async fn finish_parallel_tool(&mut self, prepared: PreparedCall, result: ExecResult)
-    -> ResultBlock;
+    async fn finish_parallel_tool(
+        &mut self,
+        prepared: PreparedCall,
+        result: ExecResult,
+    ) -> ResultBlock;
 
     /// Execute a prepared sequential tool (update_plan / team / MCP / regular
     /// dispatch branch). May mutate session state.

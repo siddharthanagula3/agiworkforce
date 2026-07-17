@@ -95,7 +95,10 @@ async fn stdio_connect_without_handshake_host_drives_initialize() {
     assert_eq!(raw["content"][0]["text"], "host-driven");
 
     // Non-RPC liveness snapshot: alive while the child runs, dead after shutdown.
-    assert!(client.transport_alive(), "child should be alive mid-session");
+    assert!(
+        client.transport_alive(),
+        "child should be alive mid-session"
+    );
 
     let _ = client.shutdown().await;
     assert!(
@@ -174,11 +177,19 @@ async fn stdio_elicitation_reply_unblocks_response() {
         list_tools: Duration::from_secs(3),
         ..McpTimeouts::default()
     };
-    let mut client = McpClient::connect("stdio-elicit", stdio_cfg("elicit"), timeouts, support::decline_hooks())
-        .await
-        .expect("connect");
+    let mut client = McpClient::connect(
+        "stdio-elicit",
+        stdio_cfg("elicit"),
+        timeouts,
+        support::decline_hooks(),
+    )
+    .await
+    .expect("connect");
 
-    let tools = client.list_tools().await.expect("list_tools after elicitation");
+    let tools = client
+        .list_tools()
+        .await
+        .expect("list_tools after elicitation");
     assert_eq!(tools.len(), 1);
     let _ = client.shutdown().await;
 }

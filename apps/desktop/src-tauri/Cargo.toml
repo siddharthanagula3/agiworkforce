@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "agiworkforce-desktop"
 version = "1.2.0"
 edition = "2021"
@@ -31,6 +32,7 @@ await_holding_lock = "warn"
 agiworkforce-agent-core = { path = "../../../crates/agiworkforce-agent-core" }
 agiworkforce-execpolicy = { path = "../../../crates/agiworkforce-execpolicy" }
 agiworkforce-llm = { path = "../../../crates/agiworkforce-llm" }
+agiworkforce-model-registry = { path = "../../../crates/agiworkforce-model-registry" }
 agiworkforce-mcp = { path = "../../../crates/agiworkforce-mcp" }
 agiworkforce-sandbox-policy = { path = "../../../crates/agiworkforce-sandbox-policy" }
 

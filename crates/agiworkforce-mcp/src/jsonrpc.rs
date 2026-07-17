@@ -130,10 +130,7 @@ mod tests {
             "error": {"code": -32600, "message": "Invalid Request"}
         });
         let err = extract_matching_response(&frame, 3, "srv").unwrap_err();
-        assert_eq!(
-            format!("{err}"),
-            "[srv] MCP error -32600: Invalid Request"
-        );
+        assert_eq!(format!("{err}"), "[srv] MCP error -32600: Invalid Request");
     }
 
     #[test]

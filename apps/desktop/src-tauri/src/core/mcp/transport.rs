@@ -160,9 +160,8 @@ fn spawn_engine_actor(
     request_timeout: std::time::Duration,
 ) {
     tokio::spawn(async move {
-        let mut liveness = tokio::time::interval(
-            std::time::Duration::from_secs(STDIO_LIVENESS_POLL_SECS),
-        );
+        let mut liveness =
+            tokio::time::interval(std::time::Duration::from_secs(STDIO_LIVENESS_POLL_SECS));
         liveness.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
@@ -769,7 +768,6 @@ impl Default for HttpSseConfig {
 /// Separate from request timeout because SSE streams are open-ended.
 const SSE_CONNECT_TIMEOUT_SECS: u64 = 30;
 
-
 /// HTTP/SSE (legacy split-endpoint) MCP transport — a thin facade over the
 /// shared [`agiworkforce_mcp::McpClient`] engine speaking
 /// `TransportConfig::SseLegacy` (Wave 5 stage d2 of
@@ -918,9 +916,7 @@ impl HttpSseTransport {
             verify_tls: config.verify_ssl,
             max_response_bytes: Some(MAX_RESPONSE_BODY_BYTES),
             connect_timeout: Some(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS)),
-            sse_read_timeout: Some(std::time::Duration::from_secs(
-                SSE_STREAM_IDLE_TIMEOUT_SECS,
-            )),
+            sse_read_timeout: Some(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS)),
             ..agiworkforce_mcp::McpTimeouts::default()
         };
 
@@ -1242,8 +1238,8 @@ impl<'de> serde::Deserialize<'de> for HttpSseConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::protocol::{JsonRpcRequest, McpMessage};
+    use super::*;
     use std::time::Instant;
 
     #[tokio::test]

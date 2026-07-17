@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// retained as a backward-compat alias for legacy rows.  Any other string
 /// would deserialize-fail before the variants below were added.
 ///
-/// `basic` replaced `hobby` on 2026-07-02 (see `packages/types/src/design-system/user-identity.ts`);
+/// `basic` replaced `hobby` on 2026-07-02 (see `packages/contracts/types/src/design-system/user-identity.ts`);
 /// `pro_plus` was removed the same day with no successor.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum PlanTier {

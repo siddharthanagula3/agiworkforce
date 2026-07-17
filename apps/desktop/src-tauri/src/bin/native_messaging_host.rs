@@ -1,4 +1,6 @@
-use agiworkforce_desktop::integrations::native_messaging::host::NativeMessagingHost;
+use agiworkforce_desktop::integrations::native_messaging::host::{
+    extension_id_from_launch_origin, NativeMessagingHost,
+};
 use agiworkforce_desktop::integrations::native_messaging::manifest::install_manifests;
 use agiworkforce_desktop::integrations::native_messaging::NativeResponse;
 use agiworkforce_desktop::integrations::realtime::RealtimeEvent;
@@ -92,8 +94,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    // Chrome supplies the invoking extension origin as argv[1]. Bind the
+    // in-protocol connect claim to that OS-mediated destination.
+    let launch_origin = std::env::args().nth(1);
+    let expected_extension_id = extension_id_from_launch_origin(launch_origin.as_deref())?;
+
     // Create host instance
-    let (host, mut msg_rx, resp_tx) = NativeMessagingHost::new();
+    let (host, mut msg_rx, resp_tx) = NativeMessagingHost::new_for_extension(expected_extension_id);
 
     // Read auth token (supports both sandboxed and unsandboxed app data locations).
     let token = match read_realtime_token() {
