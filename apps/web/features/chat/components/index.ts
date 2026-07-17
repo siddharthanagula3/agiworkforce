@@ -21,9 +21,6 @@ export * from './workflows';
 // Tokens
 export * from './tokens';
 
-// Shortcuts
-export * from './shortcuts';
-
 // Main (re-export from Main folder)
 export * from './Main';
 
@@ -35,9 +32,6 @@ export * from './Composer';
 
 // Tools (re-export from Tools folder)
 export * from './Tools';
-
-// Branch Navigation
-export { BranchNavigator, BranchIndicator, MessageBranchIndicator } from './BranchNavigator';
 
 // ── New feature components ────────────────────────────────────────────────────
 // Feature 1: ToolCallCard · web-native tool call display (pending/running/complete/error)

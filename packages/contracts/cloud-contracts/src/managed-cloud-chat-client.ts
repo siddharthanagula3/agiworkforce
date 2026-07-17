@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import {
   MANAGED_CLOUD_CHAT_BASE_PATH,
-  ManagedCloudBranchConversationRequestSchema,
-  ManagedCloudBranchConversationResponseSchema,
   ManagedCloudConversationListQuerySchema,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationResponseSchema,
@@ -14,14 +12,11 @@ import {
   ManagedCloudDeleteMessageResponseSchema,
   ManagedCloudUpdateConversationRequestSchema,
   ManagedCloudUpdateConversationResponseSchema,
-  managedCloudBranchPath,
   managedCloudConversationMessagesPath,
   managedCloudConversationPath,
   managedCloudMessagePath,
   normalizeManagedCloudConversation,
   normalizeManagedCloudMessage,
-  type ManagedCloudBranchConversationRequest,
-  type ManagedCloudBranchConversationResponse,
   type ManagedCloudConversation,
   type ManagedCloudConversationListQuery,
   type ManagedCloudCreateConversationRequest,
@@ -86,9 +81,6 @@ export interface ManagedCloudChatClient {
     options?: ManagedCloudSaveMessageOptions,
   ): Promise<ManagedCloudSaveMessageResult>;
   deleteMessage(conversationId: string, messageId: string): Promise<void>;
-  branchConversation(
-    input: ManagedCloudBranchConversationRequest,
-  ): Promise<ManagedCloudBranchConversationResponse>;
 }
 
 const DEFAULT_SAVE_ATTEMPTS = 3;
@@ -309,20 +301,6 @@ export function createManagedCloudChatClient(
         response,
         ManagedCloudDeleteMessageResponseSchema,
         'message delete response',
-      );
-    },
-
-    async branchConversation(input) {
-      const body = ManagedCloudBranchConversationRequestSchema.parse(input);
-      const response = await request(managedCloudBranchPath(), {
-        method: 'POST',
-        headers: await mutationHeaders(true),
-        body: JSON.stringify(body),
-      });
-      return parseContract(
-        response,
-        ManagedCloudBranchConversationResponseSchema,
-        'branch response',
       );
     },
   };

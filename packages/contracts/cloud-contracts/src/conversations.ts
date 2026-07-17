@@ -119,41 +119,6 @@ export const ManagedCloudDeleteConversationResponseSchema = z.object({
 });
 export const ManagedCloudDeleteMessageResponseSchema = ManagedCloudDeleteConversationResponseSchema;
 
-export const ManagedCloudBranchConversationRequestSchema = z.object({
-  sessionId: z.string().uuid(),
-  branchPointMessageId: z.string().uuid(),
-  branchName: z.string().max(200).optional(),
-});
-export type ManagedCloudBranchConversationRequest = z.infer<
-  typeof ManagedCloudBranchConversationRequestSchema
->;
-
-export const ManagedCloudBranchSessionWireSchema = z.object({
-  id: z.string().min(1),
-  user_id: z.string().min(1),
-  title: z.string().nullable(),
-  created_at: z.string().min(1),
-  updated_at: z.string().min(1),
-});
-
-export const ManagedCloudBranchWireSchema = z.object({
-  id: z.string().min(1),
-  parent_session_id: z.string().min(1),
-  child_session_id: z.string().min(1),
-  branch_point_message_id: z.string().min(1),
-  branch_name: z.string().nullable(),
-  created_by: z.string().nullable(),
-  created_at: z.string().min(1),
-});
-
-export const ManagedCloudBranchConversationResponseSchema = z.object({
-  session: ManagedCloudBranchSessionWireSchema,
-  branch: ManagedCloudBranchWireSchema,
-});
-export type ManagedCloudBranchConversationResponse = z.infer<
-  typeof ManagedCloudBranchConversationResponseSchema
->;
-
 export interface ManagedCloudConversation {
   id: string;
   title: string;
@@ -227,8 +192,4 @@ export function managedCloudConversationMessagesPath(conversationId: string): st
 
 export function managedCloudMessagePath(conversationId: string, messageId: string): string {
   return `${managedCloudConversationMessagesPath(conversationId)}/${encodeURIComponent(messageId)}`;
-}
-
-export function managedCloudBranchPath(): string {
-  return '/api/chat/branch';
 }
