@@ -20,6 +20,23 @@ export {
 
 const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
 const CLOUD_CHAT_DEFAULT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? '';
+const NATIVE_AGENT_EXECUTION_COMMANDS = new Set([
+  'agi_submit_goal',
+  'agi_submit_goal_parallel',
+  'agi_submit_goal_auto',
+  'agi_submit_goal_swarm',
+]);
+
+export function shouldRejectNativeExecutionFallback(
+  command: string,
+  runtime: { test: boolean; cloudWeb: boolean; desktopUiDev: boolean },
+): boolean {
+  return (
+    !runtime.test &&
+    (runtime.cloudWeb || runtime.desktopUiDev) &&
+    NATIVE_AGENT_EXECUTION_COMMANDS.has(command)
+  );
+}
 
 function mockDocumentCreationResult(args: Record<string, unknown> | undefined, format: string) {
   const path = String(args?.['outputPath'] ?? '/tmp/mock-document');
@@ -227,6 +244,16 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     // Fall through to test-mode mock values for desktop-only commands
   }
 
+  if (
+    shouldRejectNativeExecutionFallback(command, {
+      test: isTestEnvironment,
+      cloudWeb: isCloudWeb,
+      desktopUiDev: isDesktopUiDevLocal,
+    })
+  ) {
+    throw new Error('Agent execution requires the AGI Workforce desktop application');
+  }
+
   // Test environment / cloud web fallthrough / explicit desktop UI QA: return mock values.
   if (!isTestEnvironment && !isCloudWeb && !isDesktopUiDevLocal) {
     const errorMessage = `This feature requires the AGI Workforce desktop application. Please download it from https://agiworkforce.com/download`;
@@ -424,7 +451,13 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'agi_submit_goal':
       return { goalId: `goal_mock_${Date.now()}` } as T;
     case 'agi_submit_goal_parallel':
-      return { bestResult: { score: 0.85 } } as T;
+      return {
+        goalId: `goal_mock_${Date.now()}`,
+        bestResult: {
+          score: 0.85,
+          result: { success: true, error: null },
+        },
+      } as T;
     case 'agi_list_goals':
       return [] as T;
     case 'agi_get_goal_status':
