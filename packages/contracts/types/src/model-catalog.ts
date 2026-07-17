@@ -1525,9 +1525,16 @@ export function requireProviderDefaultModel(provider: Provider | string): string
 }
 
 function normalizeProductTier(tier: string | null | undefined): ProductTier {
+  // Basic ($8/mo, formerly 'hobby') shares Pro's model access and tier
+  // policy; the tiers differ by usage budget only (founder ladder
+  // 2026-07-16: flagship is max/enterprise-only, basic tracks pro).
+  // Previously basic fell through to 'free', denying paying Basic
+  // subscribers the pro tier policy and model list.
   switch ((tier ?? '').toLowerCase()) {
     case 'pro':
     case 'team':
+    case 'basic':
+    case 'hobby':
       return 'pro';
     case 'max':
       return 'max';
@@ -1685,15 +1692,15 @@ export function isModelAllowedForTier(modelId: string, tier: TierKey): boolean {
 export type SubscriptionAccessTier = 'free' | 'pro' | 'max' | 'enterprise';
 
 function normalizeSubscriptionAccessTier(tier: string): SubscriptionAccessTier {
+  // Basic ($8/mo, formerly 'hobby') shares PRO's model access — see
+  // apps/web/lib/model-tiers.ts (usage budget, not allowlist, differentiates
+  // Basic from Pro). Flagship models stay max/enterprise-only.
   switch (tier.toLowerCase()) {
     case 'pro':
     case 'team':
-      return 'pro';
-    // Basic ($8/mo, formerly 'hobby') gets the same model access as Max — see
-    // apps/web/lib/model-tiers.ts for the rationale (usage budget, not model
-    // allowlist, differentiates Basic from Pro/Max).
     case 'basic':
     case 'hobby':
+      return 'pro';
     case 'max':
       return 'max';
     case 'enterprise':
