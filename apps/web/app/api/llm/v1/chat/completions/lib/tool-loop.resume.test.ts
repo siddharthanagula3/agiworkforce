@@ -16,6 +16,8 @@
  * mocked at its ReadableStream boundary); no real MCP server or network.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -68,6 +70,7 @@ const githubToolDef: WebMcpToolDef = {
   serverId: 'github',
   toolName: 'get_pull_request_diff',
   description: 'diff',
+  origin: 'connector',
   inputSchema: { type: 'object' },
 };
 
@@ -145,6 +148,19 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
+function agentEvents(output: string): AgentEventEnvelope[] {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .flatMap((line) => {
+      const payload = JSON.parse(line.slice('data: '.length)) as {
+        choices?: Array<{ delta?: { x_agent_event?: unknown } }>;
+      };
+      const event = parseAgentEventDelta(payload.choices?.[0]?.delta?.x_agent_event);
+      return event ? [event] : [];
+    });
+}
+
 describe('runToolLoop — manual approval suspend', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
@@ -194,6 +210,20 @@ describe('runToolLoop — manual approval suspend', () => {
     // Nothing executed.
     expect(connectorExecutor).not.toHaveBeenCalled();
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
+
+    expect(agentEvents(output).map((entry) => entry.event)).toEqual([
+      { type: 'lifecycle', phase: 'started' },
+      {
+        type: 'approval-requested',
+        approvalId: 'call_1',
+        toolCallId: 'call_1',
+        name: GITHUB_TOOL,
+        category: 'connector',
+        summary: 'Review GitHub action',
+        input: { owner: 'acme', repo: 'app', pull_number: 7 },
+      },
+      { type: 'lifecycle', phase: 'paused' },
+    ]);
   });
 });
 
@@ -250,6 +280,21 @@ describe('runToolLoop — manual approval resume', () => {
     expect(output).toContain('"status":"completed"');
     expect(output).toContain('The PR renames a function.');
     expect(output).toContain('data: [DONE]');
+
+    const activity = agentEvents(output);
+    expect(activity.map((entry) => entry.event.type)).toEqual([
+      'lifecycle',
+      'approval-resolved',
+      'tool-execution-start',
+      'tool-execution-end',
+      'stop',
+    ]);
+    expect(activity[0]?.event).toEqual({ type: 'lifecycle', phase: 'resumed' });
+    expect(activity[1]?.event).toEqual({
+      type: 'approval-resolved',
+      approvalId: 'call_1',
+      decision: 'approved',
+    });
   });
 
   it('rejects a mismatched/forged tool_call_id and executes nothing', async () => {
