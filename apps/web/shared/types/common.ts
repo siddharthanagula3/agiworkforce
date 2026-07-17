@@ -533,21 +533,6 @@ export interface CollaborationAgentCapability {
 }
 
 /**
- * Agent capability for collaboration protocol
- * Used for multi-agent conversations with tool usage
- */
-export interface ProtocolAgentCapability {
-  agentId: string;
-  name: string;
-  avatar?: string;
-  expertise: string[];
-  tools: string[];
-  systemPrompt: string;
-  model: string;
-  temperature: number;
-}
-
-/**
  * Real-time status of an agent during multi-agent orchestration.
  * Preserved from the deleted agent-collaboration-manager runtime; still
  * consumed by agent-metrics-store and company-hub-store.

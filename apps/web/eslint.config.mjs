@@ -51,7 +51,6 @@ const eslintConfig = defineConfig([
       'shared/**',
       'hooks/**',
       'lib/**',
-      'stores/**',
       'types/**',
       'utils/**',
       'handlers/**',
