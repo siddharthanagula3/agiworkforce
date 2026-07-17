@@ -91,9 +91,8 @@
       "ownerRole": "Web lead",
       "ownedWritePaths": [
         "apps/web/app/**",
-        "apps/web/components/**",
+        "apps/web/shared/**",
         "apps/web/features/**",
-        "apps/web/hooks/**",
         "apps/web/lib/**"
       ],
       "readOnlyContextPaths": [
@@ -115,7 +114,6 @@
       "ownerRole": "Web lead + Backend/data owner",
       "ownedWritePaths": [
         "apps/web/app/api/**",
-        "apps/web/api/**",
         "apps/web/features/billing/**",
         "apps/web/app/billing/**"
       ],
