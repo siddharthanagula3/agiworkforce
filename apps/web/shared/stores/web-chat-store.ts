@@ -16,6 +16,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
+import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 
 /**
@@ -110,6 +111,12 @@ export interface MessageMetadata {
   isExecutingCode?: boolean;
   /** Tool activity timeline rendered below assistant messages. */
   tools?: MessageToolEntry[];
+  /**
+   * Canonical Cloud agent-run activity projected from validated
+   * `delta.x_agent_event` envelopes. New clients render this one inline spine;
+   * `tools` remains only as a compatibility fallback while old emitters drain.
+   */
+  agentActivity?: AgentActivityState;
   /** Deep Research run state (activity header + persistence). */
   research?: MessageResearchState;
   /** Code execution result from server-managed code_execution_20260120 tool */

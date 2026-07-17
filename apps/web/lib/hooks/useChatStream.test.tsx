@@ -74,6 +74,232 @@ describe('useChatStream', () => {
     vi.restoreAllMocks();
   });
 
+  describe('canonical x_agent_event activity', () => {
+    it('validates, reduces, and keeps canonical activity on the assistant message', async () => {
+      const base = {
+        schemaVersion: 2,
+        sessionId: TEMP_CONVERSATION.id,
+        turnId: 'turn-activity-1',
+      };
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_agent_event: {
+                  ...base,
+                  sequence: 0,
+                  emittedAtMs: 1_000,
+                  event: { type: 'lifecycle', phase: 'started' },
+                },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                x_agent_event: {
+                  ...base,
+                  sequence: 1,
+                  emittedAtMs: 1_100,
+                  event: {
+                    type: 'tool-execution-start',
+                    toolCallId: 'search-1',
+                    name: 'web_search',
+                    category: 'web-search',
+                    summary: 'Searching official sources',
+                    input: { query: 'official docs' },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        // Duplicate sequence must not replace the accepted event.
+        {
+          choices: [
+            {
+              delta: {
+                x_agent_event: {
+                  ...base,
+                  sequence: 1,
+                  emittedAtMs: 1_150,
+                  event: { type: 'error', message: 'duplicate must be ignored' },
+                },
+              },
+            },
+          ],
+        },
+        // Invalid payload must be ignored without poisoning the stream.
+        { choices: [{ delta: { x_agent_event: { schemaVersion: 999 } } }] },
+        {
+          choices: [
+            {
+              delta: {
+                x_agent_event: {
+                  ...base,
+                  sequence: 2,
+                  emittedAtMs: 1_900,
+                  event: {
+                    type: 'tool-execution-end',
+                    toolCallId: 'search-1',
+                    name: 'web_search',
+                    output: { matches: 3 },
+                    isError: false,
+                    elapsedMs: 800,
+                  },
+                },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                content: 'Verified answer.',
+                x_agent_event: {
+                  ...base,
+                  sequence: 3,
+                  emittedAtMs: 2_000,
+                  event: { type: 'stop', reason: 'end-turn' },
+                },
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('research this', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistant?.metadata?.agentActivity).toMatchObject({
+        sessionId: TEMP_CONVERSATION.id,
+        turnId: 'turn-activity-1',
+        lastSequence: 3,
+        status: 'completed',
+        stopReason: 'end-turn',
+      });
+      expect(assistant?.metadata?.agentActivity?.entries).toEqual([
+        expect.objectContaining({
+          kind: 'tool',
+          toolCallId: 'search-1',
+          summary: 'Searching official sources',
+          status: 'completed',
+          elapsedMs: 800,
+        }),
+      ]);
+      expect(JSON.stringify(assistant?.metadata?.agentActivity)).not.toContain(
+        'duplicate must be ignored',
+      );
+    });
+
+    it('persists canonical activity in the assistant message payload', async () => {
+      const conversation = {
+        ...TEMP_CONVERSATION,
+        id: 'conv-agent-activity-persist',
+        isTemporary: false,
+      };
+      useChatStore.setState({
+        conversations: [conversation],
+        activeConversationId: conversation.id,
+      });
+
+      const base = {
+        schemaVersion: 2,
+        sessionId: conversation.id,
+        turnId: 'turn-persisted-activity',
+      };
+      const streamBody =
+        [
+          {
+            choices: [
+              {
+                delta: {
+                  x_agent_event: {
+                    ...base,
+                    sequence: 0,
+                    emittedAtMs: 1_000,
+                    event: { type: 'lifecycle', phase: 'started' },
+                  },
+                },
+              },
+            ],
+          },
+          {
+            choices: [
+              {
+                delta: {
+                  content: 'Done.',
+                  x_agent_event: {
+                    ...base,
+                    sequence: 1,
+                    emittedAtMs: 1_500,
+                    event: { type: 'stop', reason: 'end-turn' },
+                  },
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          },
+        ]
+          .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+          .join('') + 'data: [DONE]\n\n';
+
+      const saveBodies: Array<Record<string, unknown>> = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/api/llm/')) {
+          const encoder = new TextEncoder();
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(streamBody));
+                controller.close();
+              },
+            }),
+            { status: 200, headers: new Headers() },
+          );
+        }
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          saveBodies.push(body);
+          return new Response(JSON.stringify({ message: { id: body['id'] ?? 'saved-message' } }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('persist this run', { conversationId: conversation.id });
+      });
+
+      await vi.waitFor(() =>
+        expect(saveBodies.some((body) => body['role'] === 'assistant')).toBe(true),
+      );
+      const assistant = saveBodies.find((body) => body['role'] === 'assistant');
+      expect((assistant?.['metadata'] as Record<string, unknown>)?.['agentActivity']).toMatchObject(
+        {
+          schemaVersion: 1,
+          sessionId: conversation.id,
+          turnId: 'turn-persisted-activity',
+          status: 'completed',
+          stopReason: 'end-turn',
+        },
+      );
+    });
+  });
+
   describe('x_tool_result / mcp_tool_use wiring', () => {
     it('populates tool result and survives a trailing finishRunningTools flush', async () => {
       // Emit: mcp_tool_use running → x_tool_result → finish_reason (triggers finishRunningTools)
@@ -562,9 +788,53 @@ describe('useChatStream', () => {
             pull(controller) {
               if (pulls === 0) {
                 pulls += 1;
+                const activityBase = {
+                  schemaVersion: 2,
+                  sessionId: PERSISTED_CONV.id,
+                  turnId: 'turn-user-stopped',
+                };
                 controller.enqueue(
                   encoder.encode(
-                    `data: ${JSON.stringify({ choices: [{ delta: { content: 'partial answer' } }] })}\n\n`,
+                    [
+                      {
+                        choices: [
+                          {
+                            delta: {
+                              x_agent_event: {
+                                ...activityBase,
+                                sequence: 0,
+                                emittedAtMs: 1_000,
+                                event: { type: 'lifecycle', phase: 'started' },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                      {
+                        choices: [
+                          {
+                            delta: {
+                              content: 'partial answer',
+                              x_agent_event: {
+                                ...activityBase,
+                                sequence: 1,
+                                emittedAtMs: 1_100,
+                                event: {
+                                  type: 'tool-execution-start',
+                                  toolCallId: 'search-stop',
+                                  name: 'web_search',
+                                  category: 'web-search',
+                                  summary: 'Searching official sources',
+                                  input: { query: 'official sources' },
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    ]
+                      .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+                      .join(''),
                   ),
                 );
                 return;
@@ -593,6 +863,11 @@ describe('useChatStream', () => {
       const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('partial answer');
       expect(assistantMsg?.metadata?.finishReason).toBe('stopped');
+      expect(assistantMsg?.metadata?.agentActivity).toMatchObject({
+        status: 'cancelled',
+        stopReason: 'cancelled',
+        entries: [expect.objectContaining({ kind: 'tool', status: 'cancelled' })],
+      });
       expect(assistantMsg?.isStreaming).toBe(false);
 
       // The partial (with the 'stopped' marker) is persisted so it survives reload.
@@ -605,6 +880,9 @@ describe('useChatStream', () => {
       expect((assistantSave?.['metadata'] as Record<string, unknown>)?.['finishReason']).toBe(
         'stopped',
       );
+      expect(
+        (assistantSave?.['metadata'] as Record<string, unknown>)?.['agentActivity'],
+      ).toMatchObject({ status: 'cancelled', stopReason: 'cancelled' });
     });
 
     it('APPENDS the continuation to the same assistant message and persists the merged text', async () => {

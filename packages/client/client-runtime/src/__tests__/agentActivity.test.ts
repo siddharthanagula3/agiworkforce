@@ -1,0 +1,288 @@
+import { describe, expect, it } from 'vitest';
+import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { applyAgentActivityEvent, finishAgentActivityLocally } from '../agentActivity';
+
+function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
+  return {
+    schemaVersion: 2,
+    sessionId: 'session-1',
+    turnId: 'turn-1',
+    sequence,
+    emittedAtMs: 1_000 + sequence * 100,
+    event,
+  };
+}
+
+describe('portable agent activity projection', () => {
+  it('projects a tool run, sources, approval, artifact, and compaction into one ordered state', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(0, { type: 'lifecycle', phase: 'started' }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, {
+        type: 'progress-update',
+        progressId: 'plan',
+        summary: 'Planning the research pass',
+        detail: 'Selecting official sources only',
+        status: 'running',
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, {
+        type: 'tool-execution-start',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Searching official sources',
+        input: { query: 'official agent documentation' },
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(3, {
+        type: 'source-list',
+        toolCallId: 'search-1',
+        query: 'official agent documentation',
+        sources: [
+          {
+            url: 'https://example.com/docs',
+            title: 'Official documentation',
+            snippet: 'Primary source',
+          },
+        ],
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(4, {
+        type: 'approval-requested',
+        approvalId: 'approval-1',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Search official sources',
+        input: { query: 'official agent documentation' },
+        riskLevel: 'low',
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(5, {
+        type: 'approval-resolved',
+        approvalId: 'approval-1',
+        decision: 'approved-for-session',
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(6, {
+        type: 'tool-execution-end',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        output: { matches: 1 },
+        isError: false,
+        elapsedMs: 725,
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(7, {
+        type: 'context-compacted',
+        beforeTokens: 98_000,
+        afterTokens: 31_000,
+        summary: 'Kept the verified findings and open questions',
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(8, {
+        type: 'artifact-produced',
+        artifactId: 'report-1',
+        name: 'research-report.html',
+        mimeType: 'text/html',
+        uri: '/api/files/report-1',
+        sizeBytes: 2048,
+      }),
+    );
+    state = applyAgentActivityEvent(state, envelope(9, { type: 'stop', reason: 'end-turn' }));
+
+    expect(state).toMatchObject({
+      schemaVersion: 1,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      lastSequence: 9,
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 1_900,
+      stopReason: 'end-turn',
+    });
+    expect(state.entries).toHaveLength(4);
+    expect(state.entries[0]).toMatchObject({
+      kind: 'progress',
+      id: 'progress:plan',
+      summary: 'Planning the research pass',
+      status: 'running',
+    });
+    expect(state.entries[1]).toMatchObject({
+      kind: 'tool',
+      id: 'tool:search-1',
+      name: 'web_search',
+      category: 'web-search',
+      summary: 'Searching official sources',
+      status: 'completed',
+      elapsedMs: 725,
+      approval: {
+        id: 'approval-1',
+        decision: 'approved-for-session',
+        riskLevel: 'low',
+      },
+      query: 'official agent documentation',
+      sources: [{ url: 'https://example.com/docs', title: 'Official documentation' }],
+    });
+    expect(state.entries[2]).toMatchObject({
+      kind: 'context',
+      summary: 'Kept the verified findings and open questions',
+      beforeTokens: 98_000,
+      afterTokens: 31_000,
+    });
+    expect(state.entries[3]).toMatchObject({
+      kind: 'artifact',
+      artifactId: 'report-1',
+      name: 'research-report.html',
+    });
+  });
+
+  it('ignores duplicate and out-of-order envelopes', () => {
+    const first = applyAgentActivityEvent(
+      undefined,
+      envelope(2, {
+        type: 'progress-update',
+        progressId: 'p1',
+        summary: 'First accepted summary',
+        status: 'running',
+      }),
+    );
+
+    const duplicate = applyAgentActivityEvent(
+      first,
+      envelope(2, {
+        type: 'progress-update',
+        progressId: 'p1',
+        summary: 'Must be ignored',
+        status: 'failed',
+      }),
+    );
+    const older = applyAgentActivityEvent(
+      duplicate,
+      envelope(1, { type: 'error', message: 'Must also be ignored' }),
+    );
+
+    expect(older).toBe(first);
+    expect(older.entries).toEqual([
+      expect.objectContaining({ summary: 'First accepted summary', status: 'running' }),
+    ]);
+  });
+
+  it('starts a fresh projection when the server starts another turn', () => {
+    const previous = applyAgentActivityEvent(
+      undefined,
+      envelope(4, {
+        type: 'progress-update',
+        progressId: 'old',
+        summary: 'Old turn',
+        status: 'completed',
+      }),
+    );
+    const next = applyAgentActivityEvent(previous, {
+      ...envelope(0, { type: 'lifecycle', phase: 'started' }),
+      turnId: 'turn-2',
+      emittedAtMs: 5_000,
+    });
+
+    expect(next.turnId).toBe('turn-2');
+    expect(next.status).toBe('running');
+    expect(next.entries).toEqual([]);
+    expect(next.startedAtMs).toBe(5_000);
+  });
+
+  it('records a terminal error without exposing reasoning or text deltas as activity rows', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(0, { type: 'reasoning-delta', delta: 'private scratchpad' }),
+    );
+    state = applyAgentActivityEvent(state, envelope(1, { type: 'text-delta', delta: 'answer' }));
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, { type: 'error', message: 'Sandbox unavailable', retryable: true }),
+    );
+
+    expect(state.status).toBe('failed');
+    expect(state.entries).toEqual([
+      expect.objectContaining({
+        kind: 'error',
+        message: 'Sandbox unavailable',
+        retryable: true,
+      }),
+    ]);
+    expect(JSON.stringify(state)).not.toContain('private scratchpad');
+  });
+
+  it('honestly finalizes in-flight work when the local transport is cancelled or fails', () => {
+    let running = applyAgentActivityEvent(
+      undefined,
+      envelope(0, {
+        type: 'progress-update',
+        progressId: 'research',
+        summary: 'Researching official sources',
+        status: 'running',
+      }),
+    );
+    running = applyAgentActivityEvent(
+      running,
+      envelope(1, {
+        type: 'tool-execution-start',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Searching official sources',
+        input: { query: 'official sources' },
+      }),
+    );
+
+    const cancelled = finishAgentActivityLocally(running, {
+      status: 'cancelled',
+      completedAtMs: 2_000,
+    });
+    expect(cancelled).toMatchObject({
+      status: 'cancelled',
+      stopReason: 'cancelled',
+      completedAtMs: 2_000,
+      updatedAtMs: 2_000,
+    });
+    expect(cancelled.entries).toEqual([
+      expect.objectContaining({ kind: 'progress', status: 'cancelled', completedAtMs: 2_000 }),
+      expect.objectContaining({ kind: 'tool', status: 'cancelled', completedAtMs: 2_000 }),
+    ]);
+
+    const failed = finishAgentActivityLocally(running, {
+      status: 'failed',
+      completedAtMs: 2_100,
+      error: 'Connection lost',
+    });
+    expect(failed).toMatchObject({ status: 'failed', stopReason: 'error', completedAtMs: 2_100 });
+    expect(failed.entries).toEqual([
+      expect.objectContaining({ kind: 'progress', status: 'failed', completedAtMs: 2_100 }),
+      expect.objectContaining({
+        kind: 'tool',
+        status: 'failed',
+        error: 'Connection lost',
+        completedAtMs: 2_100,
+      }),
+      expect.objectContaining({ kind: 'error', message: 'Connection lost' }),
+    ]);
+    expect(failed.lastSequence).toBe(running.lastSequence);
+  });
+});
